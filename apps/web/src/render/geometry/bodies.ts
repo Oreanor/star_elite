@@ -120,3 +120,14 @@ export function starGeometry(): BufferGeometry {
   starCache ??= new IcosahedronGeometry(1, 4)
   return starCache
 }
+
+let atmosphereCache: BufferGeometry | null = null
+
+/**
+ * Оболочка атмосферы. Гладкая сфера чуть больше планеты: гранёный лимб выдал бы
+ * многоугольник там, где глаз ищет дугу, — а лимб здесь и есть весь эффект.
+ */
+export function atmosphereGeometry(): BufferGeometry {
+  atmosphereCache ??= new SphereGeometry(1, 96, 48)
+  return atmosphereCache
+}

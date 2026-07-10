@@ -3,8 +3,8 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Mesh, Quaternion, Sprite, Vector3, type Texture } from 'three'
 import type { BodyEntity, PlanetType } from '@elite/sim'
 import { useSession } from '../../app/GameContext'
-import { CORONA } from '../config'
-import { planetGeometry, starGeometry, type PlanetLook } from '../geometry/bodies'
+import { ATMOSPHERE, ATMOSPHERE_COLOR, CORONA } from '../config'
+import { atmosphereGeometry, planetGeometry, starGeometry, type PlanetLook } from '../geometry/bodies'
 import { coronaTexture } from '../geometry/corona'
 import { stationGeometry } from '../geometry/props'
 import {
@@ -14,6 +14,7 @@ import {
   starMaterial,
   stationMaterial,
 } from '../materials/materials'
+import { createAtmosphereMaterial } from '../materials/atmosphere'
 import { loadPlanetTexture, pickVariant } from '../sky/planets'
 
 /**
@@ -70,8 +71,11 @@ function place(mesh: Mesh, body: BodyEntity, time: number, rest: Vector3): void 
   mesh.quaternion.copy(_spinQuat).multiply(_tiltQuat)
 }
 
+const _toStar = new Vector3()
+
 function Planet({ body }: { body: BodyEntity }) {
   const ref = useRef<Mesh>(null)
+  const airRef = useRef<Mesh>(null)
   const session = useSession()
 
   const look = lookFor(body)
@@ -85,11 +89,45 @@ function Planet({ body }: { body: BodyEntity }) {
 
   const material = texture ? planetTexturedMaterial(texture) : planetMaterial()
 
+  // Воздух есть не у всех: у голой скалы его и не должно быть. Решают ДАННЫЕ.
+  const airColor = ATMOSPHERE_COLOR[look]
+  const airMaterial = useMemo(
+    () => (airColor === null ? null : createAtmosphereMaterial(airColor)),
+    [airColor],
+  )
+  useEffect(() => () => airMaterial?.dispose(), [airMaterial])
+
   useFrame(() => {
     if (ref.current) place(ref.current, body, session.world.time, REST_POLE)
+
+    const air = airRef.current
+    if (!air || !airMaterial) return
+
+    // Оболочка не вращается: она гладкая, и вращать в ней нечего. Позиция —
+    // из тела, свет — из звезды. Плавающее начало координат двигает и то и другое.
+    air.position.copy(body.pos)
+
+    const star = session.world.bodies.find((b) => b.kind === 'star')
+    if (star) {
+      _toStar.copy(star.pos).sub(body.pos).normalize()
+      airMaterial.uniforms.uLight!.value.copy(_toStar)
+    }
   })
 
-  return <mesh ref={ref} geometry={geometry} material={material} scale={body.radius} frustumCulled={false} />
+  return (
+    <>
+      <mesh ref={ref} geometry={geometry} material={material} scale={body.radius} frustumCulled={false} />
+      {airMaterial && (
+        <mesh
+          ref={airRef}
+          geometry={atmosphereGeometry()}
+          material={airMaterial}
+          scale={body.radius * ATMOSPHERE.SCALE}
+          frustumCulled={false}
+        />
+      )}
+    </>
+  )
 }
 
 /**

@@ -118,7 +118,25 @@ const PREVENT_DEFAULT = new Set(['Space', 'Tab', 'ArrowUp', 'ArrowDown', 'ArrowL
 export function attachInput(canvas: HTMLCanvasElement): () => void {
   lockTarget = canvas
 
+  /**
+   * Чужой захват, переживший свой канвас.
+   *
+   * Гиперпрыжок пересобирает сцену, HMR — всё дерево, и захват остаётся висеть
+   * на элементе, которого больше нет в DOM. Игра при этом считает себя на паузе
+   * (`pointerLocked` сравнивает с НЫНЕШНИМ канвасом), а браузер продолжает
+   * прижимать системный курсор к прямоугольнику покойника: мышь не доезжает до
+   * краёв экрана, и по кнопкам меню не попасть.
+   */
+  if (document.pointerLockElement && document.pointerLockElement !== canvas) {
+    document.exitPointerLock()
+  }
+
   const onKeyDown = (e: KeyboardEvent) => {
+    // Escape отпускает курсор и без нас — но только если захват принадлежит
+    // живому элементу. Зовём сами: это последняя кнопка, которой пилот может
+    // вернуть себе мышь, и она обязана работать всегда.
+    if (e.code === 'Escape') releaseLock()
+
     if (!held.has(e.code)) pressedThisFrame.add(e.code)
     held.add(e.code)
     if (PREVENT_DEFAULT.has(e.code)) e.preventDefault()
@@ -155,6 +173,10 @@ export function attachInput(canvas: HTMLCanvasElement): () => void {
 
   // Захват снят — гасим зажатые клавиши: иначе тяга «залипнет» на паузе.
   const onLockChange = () => {
+    const locked = document.pointerLockElement
+    // Захвачен НЕ наш канвас: игра такой захват не читает, а курсор он прижимает.
+    // Снимаем в том же событии, а не ждём, пока кто-нибудь заметит.
+    if (locked && locked !== canvas) document.exitPointerLock()
     if (!input.pointerLocked) release()
   }
 
