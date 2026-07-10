@@ -13,6 +13,7 @@ export {
 } from './galaxy'
 export { AI } from './ai'
 export { CRUISE } from './cruise'
+export { STAR_HEAT } from './heat'
 export { DIALOGUE } from './dialogue'
 export { BOMB, ECM, GUNNERY, IMPACT, SALVAGE } from './weapons'
 export { AUTODOCK, DOCKING, SHOP } from './station'

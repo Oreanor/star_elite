@@ -63,6 +63,7 @@ export function makeShip(
     controls: createControls(),
     hull: spec.hull.hull,
     shield: spec.hull.shield,
+    hullHeat: 0,
     lastHitAt: -1e9,
     energy: spec.power.capacity,
     ecmCooldown: 0,

@@ -24,6 +24,7 @@ import {
   spawnExplosion,
   spawnWreckage,
   stepCloak,
+  stepStarHeat,
   stepMissiles,
   toggleCloak,
   tractorPods,
@@ -111,6 +112,9 @@ function stepPhysics(world: World, dt: number): void {
   for (const ship of allShips(world)) {
     if (!ship.alive) continue
     stepShip(ship.state, ship.controls, ship.spec.tuning, dt)
+    // Нагрев звездой ДО регенерации щита: если корона течёт, `applyDamage`
+    // пометит попадание, и щит в этом же шаге восстанавливаться не станет.
+    stepStarHeat(ship, world, dt)
     regenShield(ship, dt, world.time)
   }
 }

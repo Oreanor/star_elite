@@ -4,6 +4,7 @@ import {
   CRUISE,
   DOCKING,
   GUNNERY,
+  STAR_HEAT,
   canDockAt,
   energyFraction,
   findBody,
@@ -520,8 +521,8 @@ function drawReadouts({ ctx, world, height }: HudFrame): void {
   const barHeight = 5 * S
   const step = 11 * S
 
-  // Шесть строк по `step`: шкала бомбы добавила ещё одну, и отсчёт снизу это учитывает.
-  let y = height - 88 * S
+  // Семь строк по `step`: к бомбе и нагреву ствола добавилась температура корпуса.
+  let y = height - 99 * S
 
   if (!player.controls.flightAssist) {
     text(ctx, 'АССИСТ ВЫКЛ', x, y - step, HUD_COLORS.WARN)
@@ -529,8 +530,9 @@ function drawReadouts({ ctx, world, height }: HudFrame): void {
 
   const shield = player.spec.hull.shield > 0 ? player.shield / player.spec.hull.shield : 0
   const hull = player.hull / player.spec.hull.hull
-  const heat = peakHeat(player)
+  const laser = peakHeat(player)
   const energy = energyFraction(player)
+  const temp = player.hullHeat
 
   const rows: [string, number, string][] = [
     ['ЩИТ', shield, HUD_COLORS.PRIMARY],
@@ -540,7 +542,10 @@ function drawReadouts({ ctx, world, height }: HudFrame): void {
     // Бомба копится поверх целого щита. Заряженная светится целью — её видно
     // боковым зрением, и это единственная шкала, которую пилот ждёт заполненной.
     ['БОМБА', player.bombCharge, bombReady(player) ? HUD_COLORS.TARGET : HUD_COLORS.DIM],
-    ['ТЕПЛО', heat, heat > 0.7 ? HUD_COLORS.DANGER : HUD_COLORS.WARN],
+    // Нагрев СТВОЛА от стрельбы — отдельно от нагрева корпуса звездой.
+    ['ЛАЗЕР', laser, laser > 0.7 ? HUD_COLORS.DANGER : HUD_COLORS.WARN],
+    // Температура КОРПУСА от близкой звезды. За порогом течёт щит, потом обшивка.
+    ['ТЕМП', temp, temp > STAR_HEAT.LEAK_THRESHOLD ? HUD_COLORS.DANGER : temp > 0.5 ? HUD_COLORS.WARN : HUD_COLORS.DIM],
     ['ТЯГА', player.controls.throttle, HUD_COLORS.PRIMARY],
   ]
 
@@ -560,6 +565,18 @@ function drawReadouts({ ctx, world, height }: HudFrame): void {
 /** Крейсер: множитель и причина, по которой он не включается. */
 function drawCruise({ ctx, world, width }: HudFrame): void {
   const cruise = world.player.cruise
+
+  // Перегрев корпуса важнее любой надписи про крейсер: он убивает. За порогом
+  // течи кричим красным, до него — предупреждаем жёлтым, что жар близок.
+  const temp = world.player.hullHeat
+  if (temp > STAR_HEAT.LEAK_THRESHOLD) {
+    text(ctx, 'ПЕРЕГРЕВ — ОТ ЗВЕЗДЫ', width / 2, 10 * S, HUD_COLORS.DANGER, 'center')
+    return
+  }
+  if (temp > 0.6) {
+    text(ctx, 'КОРПУС ГРЕЕТСЯ', width / 2, 10 * S, HUD_COLORS.WARN, 'center')
+    return
+  }
 
   if (cruise.block === 'mass-lock') {
     text(ctx, 'МАССОВАЯ БЛОКИРОВКА', width / 2, 10 * S, HUD_COLORS.DANGER, 'center')
