@@ -1,15 +1,17 @@
-import { STAR_HEAT } from '../../config/heat'
+import { HYPERDRIVE, STAR_HEAT } from '../../config/heat'
 import { clamp } from '../../core/math'
 import type { ShipEntity, World } from '../world/entities'
 import { applyDamage } from './damage'
 
 /**
- * Нагрев корпуса звездой.
+ * Что делает с кораблём близкая звезда: греет корпус и заряжает гипердвигатель.
  *
- * Не «урон от звезды», а температура: она копится у короны и спадает вдали, и
- * лишь за порогом превращается в потери. Считается для ЛЮБОГО корабля, а не
- * только для игрока, — правило мира одно на всех (см. CLAUDE.md). Торговцы к
- * светилам не летают, поэтому на них это не сказывается само собой.
+ * Обе стороны — про одно и то же: близость к светилу. Греется температура у
+ * короны и спадает вдали, лишь за порогом превращаясь в потери. Топливо прыжка
+ * черпается из той же близости, но раньше порога — узкая полка между «прогрелся
+ * достаточно, чтобы черпать» и «сгораешь». Считается для ЛЮБОГО корабля: правило
+ * мира одно на всех (см. CLAUDE.md). Торговцы к светилам не летают, поэтому на
+ * них это не сказывается само собой.
  */
 
 /**
@@ -49,4 +51,24 @@ export function stepStarHeat(ship: ShipEntity, world: World, dt: number): void {
   // Доля перегрева над порогом, 0..1. Квадрат даёт «медленно у порога, сильно у края».
   const over = (ship.hullHeat - STAR_HEAT.LEAK_THRESHOLD) / (1 - STAR_HEAT.LEAK_THRESHOLD)
   applyDamage(ship, STAR_HEAT.LEAK_MAX * over * over * dt, world.time)
+}
+
+/** Заряжается ли сейчас привод: прогрелись достаточно, но заряд ещё не полон. */
+export function scooping(ship: ShipEntity): boolean {
+  return (
+    ship.spec.jumpRange > 0 &&
+    ship.hullHeat >= HYPERDRIVE.CHARGE_HEAT &&
+    ship.jumpCharge < ship.spec.jumpRange - 1e-6
+  )
+}
+
+/**
+ * Зарядка гипердвигателя у звезды. Черпается, лишь когда корпус прогрет до
+ * `CHARGE_HEAT`, и растёт до предела модели (`spec.jumpRange`). Нагрев считается
+ * ДО этого шага — `stepStarHeat` уже обновил `hullHeat` в этом же кадре.
+ */
+export function chargeHyperdrive(ship: ShipEntity, dt: number): void {
+  if (!ship.alive || ship.spec.jumpRange <= 0) return
+  if (ship.hullHeat < HYPERDRIVE.CHARGE_HEAT) return
+  ship.jumpCharge = Math.min(ship.spec.jumpRange, ship.jumpCharge + HYPERDRIVE.CHARGE_RATE * dt)
 }

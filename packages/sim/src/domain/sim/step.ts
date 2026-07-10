@@ -21,6 +21,7 @@ import {
   resolveShipVsSphere,
   scoopAsteroid,
   shatter,
+  chargeHyperdrive,
   spawnExplosion,
   spawnWreckage,
   stepCloak,
@@ -115,6 +116,8 @@ function stepPhysics(world: World, dt: number): void {
     // Нагрев звездой ДО регенерации щита: если корона течёт, `applyDamage`
     // пометит попадание, и щит в этом же шаге восстанавливаться не станет.
     stepStarHeat(ship, world, dt)
+    // Зарядка привода — сразу после: она читает свежий `hullHeat` этого шага.
+    chargeHyperdrive(ship, dt)
     regenShield(ship, dt, world.time)
   }
 }

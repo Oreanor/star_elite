@@ -247,28 +247,45 @@ function YouAreHere({ at }: { at: Vector3 }) {
  */
 const JUMP_RING_SEGMENTS = 160
 
-function JumpSphere({ at, radius }: { at: Vector3; radius: number }) {
-  const geometry = useMemo(() => {
-    const points = new Float32Array(JUMP_RING_SEGMENTS * 3)
-    for (let i = 0; i < JUMP_RING_SEGMENTS; i++) {
-      const angle = (i / JUMP_RING_SEGMENTS) * Math.PI * 2
-      points[i * 3] = Math.cos(angle)
-      points[i * 3 + 1] = 0 // окружность лежит в плоскости диска
-      points[i * 3 + 2] = Math.sin(angle)
-    }
-    const g = new BufferGeometry()
-    g.setAttribute('position', new BufferAttribute(points, 3))
-    return g
-  }, [])
+const jumpRingGeometry = (() => {
+  const points = new Float32Array(JUMP_RING_SEGMENTS * 3)
+  for (let i = 0; i < JUMP_RING_SEGMENTS; i++) {
+    const angle = (i / JUMP_RING_SEGMENTS) * Math.PI * 2
+    points[i * 3] = Math.cos(angle)
+    points[i * 3 + 1] = 0 // окружность лежит в плоскости диска
+    points[i * 3 + 2] = Math.sin(angle)
+  }
+  const g = new BufferGeometry()
+  g.setAttribute('position', new BufferAttribute(points, 3))
+  return g
+})()
 
-  const material = useMemo(
-    () => new LineBasicMaterial({ color: UI.PRIMARY, transparent: true, opacity: 0.55, toneMapped: false }),
+/**
+ * Две окружности достижимости: сплошная — текущий ЗАРЯД (докуда долетишь сейчас),
+ * тусклая снаружи — предел МОДЕЛИ (докуда с полным баком). Разрыв между ними и
+ * есть израсходованное топливо; заправишься — сплошная дорастёт до тусклой.
+ */
+function JumpSphere({ at, charge, max }: { at: Vector3; charge: number; max: number }) {
+  const chargeMat = useMemo(
+    () => new LineBasicMaterial({ color: UI.PRIMARY, transparent: true, opacity: 0.6, toneMapped: false }),
+    [],
+  )
+  const maxMat = useMemo(
+    () => new LineBasicMaterial({ color: UI.PRIMARY, transparent: true, opacity: 0.16, toneMapped: false }),
     [],
   )
 
-  if (radius <= 0) return null
-  // Метка не мишень: указатель обязан проходить сквозь неё к звёздам.
-  return <lineLoop geometry={geometry} material={material} position={at} scale={radius} raycast={() => null} />
+  if (max <= 0) return null
+  return (
+    <>
+      {charge < max - 1e-6 && (
+        <lineLoop geometry={jumpRingGeometry} material={maxMat} position={at} scale={max} raycast={() => null} />
+      )}
+      {charge > 0 && (
+        <lineLoop geometry={jumpRingGeometry} material={chargeMat} position={at} scale={charge} raycast={() => null} />
+      )}
+    </>
+  )
 }
 
 /** Пунктир от текущей звезды к той, на которую навели. Отрезок, а не дуга: диск плоский. */
@@ -373,6 +390,7 @@ function formatRange(ly: number): string {
 const BLOCK_REASON: Record<string, string> = {
   'no-drive': 'ГИПЕРПРИВОД НЕ УСТАНОВЛЕН',
   'out-of-range': 'ВНЕ ДАЛЬНОСТИ ПРИВОДА',
+  'out-of-charge': 'ЗАРЯД ИЗРАСХОДОВАН · К ЗВЕЗДЕ ИЛИ СТАНЦИИ',
   'same-system': 'ВЫ УЖЕ ЗДЕСЬ',
   docked: 'СНАЧАЛА ОТЧАЛЬТЕ',
 }
@@ -465,7 +483,7 @@ export function GalaxyMap({ onClose }: { onClose: () => void }) {
             onHover={setHovered}
             onSelect={setSelected}
           />
-          <JumpSphere at={here} radius={world.player.spec.jumpRange} />
+          <JumpSphere at={here} charge={world.player.jumpCharge} max={world.player.spec.jumpRange} />
           <YouAreHere at={here} />
           <Route from={here} to={picked ? positionOf(picked.system) : null} />
           <StarLabel at={picked ? positionOf(picked.system) : null} box={label} />
@@ -522,7 +540,8 @@ function SystemPanel({
       {/* Название галактики уже стоит над картой. Здесь — только то, чего там нет:
           где ты и насколько далеко тебя увезёт привод. */}
       <p className="text-xs tracking-widest" style={{ color: UI.DIM }}>
-        ВЫ ЗДЕСЬ: {world.systemName.toUpperCase()} · ПРИВОД {world.player.spec.jumpRange.toFixed(0)} СВ.Г.
+        ВЫ ЗДЕСЬ: {world.systemName.toUpperCase()} · ЗАРЯД{' '}
+        {world.player.jumpCharge.toFixed(0)}/{world.player.spec.jumpRange.toFixed(0)} СВ.Г.
       </p>
 
       {!system ? (

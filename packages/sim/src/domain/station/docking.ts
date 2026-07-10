@@ -40,6 +40,9 @@ export function dock(world: World): boolean {
   world.player.state.angVel.set(0, 0, 0)
   world.player.controls.throttle = 0
   world.player.cruise.factor = 1
+  // Причал заправляет привод под завязку: заряжаться у звезды — риск, а станция
+  // берёт за это деньгами (когда появится счёт). Второй путь к тому же полному баку.
+  world.player.jumpCharge = world.player.spec.jumpRange
   return true
 }
 

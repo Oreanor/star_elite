@@ -138,6 +138,9 @@ describe('прыжок', () => {
     const target = neighbourWithin(world, world.player.spec.jumpRange)
 
     jump(world, target)
+    // Первый прыжок сжёг заряд; здесь проверяется адресация дома, а не топливо —
+    // доливаем бак, как это сделала бы звезда или причал.
+    world.player.jumpCharge = world.player.spec.jumpRange
     expect(jump(world, WORLD.HOME_INDEX)).toBe(true)
     expect(world.systemName).toBe('Тиррион')
   })

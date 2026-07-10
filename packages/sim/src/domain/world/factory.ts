@@ -64,6 +64,8 @@ export function makeShip(
     hull: spec.hull.hull,
     shield: spec.hull.shield,
     hullHeat: 0,
+    // Привод заряжен полностью: первый прыжок доступен без визита к звезде.
+    jumpCharge: spec.jumpRange,
     lastHitAt: -1e9,
     energy: spec.power.capacity,
     ecmCooldown: 0,
@@ -93,6 +95,8 @@ export function refreshSpec(e: ShipEntity): void {
   e.hull = Math.min(e.hull, spec.hull.hull)
   e.shield = Math.min(e.shield, spec.hull.shield)
   e.energy = Math.min(e.energy, spec.power.capacity)
+  // Сменили привод — заряд не может превышать дальность новой модели.
+  e.jumpCharge = Math.min(e.jumpCharge, spec.jumpRange)
 
   // Стволы могли смениться: сохраняем боезапас там, где подвеска осталась подвеской.
   e.guns = spec.mounts.map((mount, i) => {

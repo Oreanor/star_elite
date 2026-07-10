@@ -1,6 +1,5 @@
 import { Vector3 } from 'three'
 import { describe, expect, it } from 'vitest'
-import { STAR_HEAT } from '../../config/heat'
 import { createWorld, STARTER_SYSTEM, type World } from '../world'
 import { starExposure, stepStarHeat } from './starheat'
 

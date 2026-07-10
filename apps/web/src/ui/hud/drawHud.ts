@@ -18,6 +18,7 @@ import {
   missileAmmo,
   nearestPod,
   peakHeat,
+  scooping,
   isVisible,
   scoopReadiness,
   shipAxes,
@@ -521,8 +522,8 @@ function drawReadouts({ ctx, world, height }: HudFrame): void {
   const barHeight = 5 * S
   const step = 11 * S
 
-  // Семь строк по `step`: к бомбе и нагреву ствола добавилась температура корпуса.
-  let y = height - 99 * S
+  // Восемь строк по `step`: к прочим добавились нагрев корпуса и заряд привода.
+  let y = height - 110 * S
 
   if (!player.controls.flightAssist) {
     text(ctx, 'АССИСТ ВЫКЛ', x, y - step, HUD_COLORS.WARN)
@@ -533,6 +534,9 @@ function drawReadouts({ ctx, world, height }: HudFrame): void {
   const laser = peakHeat(player)
   const energy = energyFraction(player)
   const temp = player.hullHeat
+  // Заряд привода как доля предела модели. Нет привода — шкала пустая и тусклая.
+  const jump = player.spec.jumpRange > 0 ? player.jumpCharge / player.spec.jumpRange : 0
+  const jumpColor = player.spec.jumpRange <= 0 ? HUD_COLORS.DIM : scooping(player) ? HUD_COLORS.TARGET : HUD_COLORS.PRIMARY
 
   const rows: [string, number, string][] = [
     ['ЩИТ', shield, HUD_COLORS.PRIMARY],
@@ -546,6 +550,8 @@ function drawReadouts({ ctx, world, height }: HudFrame): void {
     ['ЛАЗЕР', laser, laser > 0.7 ? HUD_COLORS.DANGER : HUD_COLORS.WARN],
     // Температура КОРПУСА от близкой звезды. За порогом течёт щит, потом обшивка.
     ['ТЕМП', temp, temp > STAR_HEAT.LEAK_THRESHOLD ? HUD_COLORS.DANGER : temp > 0.5 ? HUD_COLORS.WARN : HUD_COLORS.DIM],
+    // Заряд гиперпривода: тратится прыжком, черпается у звезды (светится целью).
+    ['ГИПЕР', jump, jumpColor],
     ['ТЯГА', player.controls.throttle, HUD_COLORS.PRIMARY],
   ]
 
@@ -575,6 +581,11 @@ function drawCruise({ ctx, world, width }: HudFrame): void {
   }
   if (temp > 0.6) {
     text(ctx, 'КОРПУС ГРЕЕТСЯ', width / 2, 10 * S, HUD_COLORS.WARN, 'center')
+    return
+  }
+  // Прогрелся достаточно, чтобы черпать топливо, но ещё не горишь: удержись здесь.
+  if (scooping(world.player)) {
+    text(ctx, 'ЗАПРАВКА', width / 2, 10 * S, HUD_COLORS.TARGET, 'center')
     return
   }
 

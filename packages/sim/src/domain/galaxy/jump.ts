@@ -15,11 +15,13 @@ import { distanceLy, placeSystem } from './shape'
  * сервере и проверяются без всякого браузера. Карта лишь показывает то, что
  * посчитано тут, — сфера радиуса прыжка на ней и есть `spec.jumpRange`.
  *
- * Топлива пока нет: заправка от звезды придумывается отдельно. Единственные
- * ограничения — наличие привода и его дальность.
+ * Дальность прыжка — не постоянная привода, а его ЗАРЯД: сфера сжимается с каждым
+ * прыжком на пройденный путь и восполняется у звезды. Поэтому «слишком далеко»
+ * бывает двух родов: не хватит даже полного бака (нужен привод помощнее) или бак
+ * просто опустел (нужно к светилу).
  */
 
-export type JumpBlock = 'no-drive' | 'out-of-range' | 'same-system' | 'docked'
+export type JumpBlock = 'no-drive' | 'out-of-range' | 'out-of-charge' | 'same-system' | 'docked'
 
 /**
  * Описание системы по индексу.
@@ -48,9 +50,14 @@ export function jumpBlock(world: World, index: number): JumpBlock | null {
   if (world.docked) return 'docked'
   if (index === world.systemIndex) return 'same-system'
 
-  const range = world.player.spec.jumpRange
-  if (range <= 0) return 'no-drive'
-  if (jumpDistance(world, index) > range) return 'out-of-range'
+  const drive = world.player.spec.jumpRange
+  if (drive <= 0) return 'no-drive'
+
+  const distance = jumpDistance(world, index)
+  // Дальше предела МОДЕЛИ — не долетишь и с полным баком: нужен привод помощнее.
+  if (distance > drive) return 'out-of-range'
+  // В пределах модели, но заряд израсходован: к звезде за топливом.
+  if (distance > world.player.jumpCharge) return 'out-of-charge'
   return null
 }
 
@@ -68,8 +75,12 @@ export function reachableSystems(world: World, indices: readonly number[]): numb
  */
 export function jump(world: World, index: number, arrival: Arrival | null = null): boolean {
   if (jumpBlock(world, index) !== null) return false
+  // Дальность считаем ДО перехода: `enterSystem` сменит `systemIndex`, и отсчёт
+  // сорвётся. Заряд тратится ровно на пройденный путь — сфера сжимается на него.
+  const spent = jumpDistance(world, index)
   const def = systemDefFor(index, world.galaxySeed)
   enterSystem(world, def, index, arrivalPoint(def, arrival))
+  world.player.jumpCharge = Math.max(0, world.player.jumpCharge - spent)
   return true
 }
 
