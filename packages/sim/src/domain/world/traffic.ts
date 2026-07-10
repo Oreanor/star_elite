@@ -1,12 +1,14 @@
 import { Quaternion, Vector3 } from 'three'
-import { pirateLeaderLoadout, pirateLoadout, traderLoadout } from '../../config/loadouts'
+import { freighterLoadout, pirateLeaderLoadout, pirateLoadout, traderLoadout } from '../../config/loadouts'
 import { TITAN } from '../../config/titans'
 import { TRAFFIC } from '../../config/world'
 import { signed, type Rng } from '../../core/math'
 import type { Loadout } from '../loadout'
 import { createAIState } from '../ai/types'
+import { addCommodity } from '../cargo/hold'
+import { COMMODITIES } from '../cargo/items'
 import { isDroneShip } from '../combat/drones'
-import { makeShip } from './factory'
+import { makeShip, refreshSpec } from './factory'
 import { spawnTitan, titanCount } from './titans'
 import type { Faction, ShipEntity, World } from './entities'
 
@@ -46,6 +48,10 @@ interface EncounterKind {
   readonly max: number
   readonly weight: number
   readonly approach: boolean
+  /** Тонн товара в трюме. Груз высыпается при гибели — ради него и нападают. */
+  readonly cargo?: number
+  /** Прикрытие: сколько истребителей идёт рядом, на чём и чьей фракции. */
+  readonly escort?: { readonly count: number; readonly loadout: () => Loadout; readonly faction: Faction }
 }
 
 const ENCOUNTERS: readonly EncounterKind[] = [
@@ -55,6 +61,13 @@ const ENCOUNTERS: readonly EncounterKind[] = [
   { id: 'gang', faction: 'hostile', name: 'Стая', loadout: pirateLoadout, min: 3, max: 4, weight: 6, approach: true },
   { id: 'raider', faction: 'hostile', name: 'Налётчик', loadout: pirateLeaderLoadout, min: 1, max: 1, weight: 8, approach: true },
   { id: 'police', faction: 'police', name: 'Патруль', loadout: pirateLeaderLoadout, min: 1, max: 2, weight: 16, approach: false },
+  // Тяжёлый грузовик под прикрытием звена. Неповоротлив и набит товаром: сбей —
+  // и высыпется весь трюм. Эскорт полицейский: он сам ищет налётчиков рядом с баржей.
+  {
+    id: 'freighter', faction: 'neutral', name: 'Грузовик', loadout: freighterLoadout,
+    min: 1, max: 1, weight: 7, approach: false, cargo: 140,
+    escort: { count: 3, loadout: pirateLeaderLoadout, faction: 'police' },
+  },
 ]
 
 const _scratch = new Vector3()
@@ -128,6 +141,40 @@ function spawnOne(world: World, kind: EncounterKind, pos: Vector3, home: Vector3
   return ship
 }
 
+/**
+ * Набить трюм балк-грузом. Легальным: пират нападает ради тонн, а не контрабанды,
+ * а весь груз потом высыпается обломками. Два разных товара — чтобы добыча не была
+ * однообразной. `refreshSpec` пересчитывает массу: гружёная баржа летает ещё тяжелее.
+ */
+function stockFreighter(world: World, ship: ShipEntity, tons: number): void {
+  const goods = [COMMODITIES.MINERALS, COMMODITIES.METALS, COMMODITIES.MACHINERY, COMMODITIES.FOOD, COMMODITIES.ELECTRONICS]
+  const a = goods[Math.floor(world.rng() * goods.length)]!
+  const b = goods[Math.floor(world.rng() * goods.length)]!
+  addCommodity(ship.hold, a, Math.floor((tons * 0.6) / a.unitMass))
+  addCommodity(ship.hold, b, Math.floor((tons * 0.4) / b.unitMass))
+  refreshSpec(ship)
+}
+
+/**
+ * Прикрытие вокруг подопечного. Эскорт помечен `escortOf`: он держится у баржи
+ * (его дом — её место) и, если фракция боевая, сам ищет рядом врагов. Из потолка
+ * и вычистки трафика он исключён по этой же метке — прикрытие не бросают на полпути.
+ */
+function spawnEscort(world: World, escort: NonNullable<EncounterKind['escort']>, patron: ShipEntity): ShipEntity[] {
+  const born: ShipEntity[] = []
+  for (let i = 0; i < escort.count; i++) {
+    randomDirection(world, _offset).multiplyScalar(patron.spec.hull.radius * 2 + world.rng() * TRAFFIC.GROUP_SPREAD)
+    const pos = _scratch.copy(patron.state.pos).add(_offset)
+    const ship = makeShip(world.ids, escort.faction, 'Эскорт', escort.loadout(), pos.clone(), patron.state.quat.clone())
+    ship.ai = createAIState(patron.state.pos, world.rng)
+    ship.ai.escortOf = patron.id
+    ship.controls.throttle = 0.7
+    world.ships.push(ship)
+    born.push(ship)
+  }
+  return born
+}
+
 /** Одна встреча: от одиночки до стаи. Возвращает всех, кому нужен пилот. */
 function spawnEncounter(world: World): ShipEntity[] {
   const kind = weightedPick(world.rng, ENCOUNTERS)
@@ -142,6 +189,15 @@ function spawnEncounter(world: World): ShipEntity[] {
     if (trafficCount(world) >= TRAFFIC.MAX) break
     randomDirection(world, _offset).multiplyScalar(world.rng() * TRAFFIC.GROUP_SPREAD)
     born.push(spawnOne(world, kind, _scratch.copy(centre).add(_offset), home))
+  }
+
+  // Груз и прикрытие — после того, как туша родилась: эскорт строится вокруг неё,
+  // а трюм набивается ей же. Родившихся эскортников тоже отдаём приложению — им
+  // нужен пилот, иначе звено молча дрейфует.
+  const patron = born[0]
+  if (patron) {
+    if (kind.cargo) for (const ship of born) stockFreighter(world, ship, kind.cargo)
+    if (kind.escort) born.push(...spawnEscort(world, kind.escort, patron))
   }
   return born
 }

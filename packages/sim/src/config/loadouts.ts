@@ -1,5 +1,5 @@
 import { createLoadout, type Loadout } from '../domain/loadout'
-import { COBRA_MK3, SIDEWINDER } from './chassis'
+import { COBRA_MK3, LARGE_FREIGHTER, SIDEWINDER } from './chassis'
 import {
   ARMOUR_PLATE,
   BURST_LASER,
@@ -75,5 +75,18 @@ export function pirateLeaderLoadout(): Loadout {
     SIDEWINDER,
     [ENGINE_CIVILIAN, RCS_STANDARD, SHIELD_LIGHT],
     [PULSE_LASER, PULSE_LASER, MISSILE_PYLON],
+  )
+}
+
+/**
+ * Тяжёлый грузовик. Четыре полных контейнера — трюм за две сотни тонн, и весь он
+ * высыпается при гибели. Гражданские маневровые стоят намеренно: разворот баржи
+ * должен быть вялым не по прихоти ИИ, а по железу. Два ствола — только огрызаться.
+ */
+export function freighterLoadout(): Loadout {
+  return createLoadout(
+    LARGE_FREIGHTER,
+    [ENGINE_CIVILIAN, RCS_CIVILIAN, SHIELD_STANDARD, ARMOUR_PLATE, CARGO_LARGE, CARGO_LARGE, CARGO_LARGE, CARGO_LARGE, HYPERDRIVE_BASIC],
+    [PULSE_LASER_WORN, PULSE_LASER_WORN],
   )
 }

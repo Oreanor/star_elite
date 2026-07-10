@@ -344,3 +344,112 @@ export function droneGeometry(): BufferGeometry {
 }
 
 export const DRONE_NOZZLES: readonly Nozzle[] = [{ offset: [0, 0, 2.05], radius: 0.34 }]
+
+// ─── Тяжёлый грузовик «Тип-9» ────────────────────────────────────────────────
+//
+// Не клин, а КИРПИЧ: гружёная баржа выглядит гружёной баржей. Силуэт собран из
+// фаски-коробки (гранёный, но не остроносый), надстройки-рубки у носа, блока
+// двигателей с батареей сопел и навесных контейнеров по бортам. Читается издалека
+// как «большой и медленный», вблизи держит взгляд расшивкой и обвесом.
+//
+// Сфера столкновений — 34 м, значит корпус около 60 м в длину: втрое длиннее «Кобры».
+
+/** Полупрофиль сечения (правый борт, сверху вниз): фаска-коробка ширины w. */
+function freighterRing(w: number, yT: number, yB: number, c: number, z: number): Vec3[] {
+  return [
+    [0, yT, z],       // конёк
+    [w - c, yT, z],   // плечо крыши
+    [w, yT - c, z],   // верх борта
+    [w, yB + c, z],   // низ борта
+    [w - c, yB, z],   // скула днища
+    [0, yB, z],       // киль
+  ]
+}
+
+// Пять станций по длине: тупой нос → полный корпус → корма. Туша раздаётся к середине.
+const F_S0 = freighterRing(5.5, 3.0, -2.6, 1.6, -30)
+const F_S1 = freighterRing(11.5, 5.4, -5.0, 2.6, -20)
+const F_S2 = freighterRing(14.0, 6.6, -6.2, 3.0, -4)
+const F_S3 = freighterRing(13.6, 6.4, -6.2, 3.0, 20)
+const F_S4 = freighterRing(12.4, 5.8, -5.6, 2.8, 28)
+
+// Цвет по поясам: крыша светлая, борт вскользь освещён, днище тёмное.
+const F_BAND = [HULL, HULL, HULL_SHADE, HULL_DARK, HULL_DARK] as const
+
+/** Сшить две станции боковыми гранями (правый борт). Пояса красятся по F_BAND. */
+function freighterSkin(a: Vec3[], b: Vec3[]): Triangle[] {
+  const out: Triangle[] = []
+  for (let i = 0; i < 5; i++) out.push(...quad(a[i]!, a[i + 1]!, b[i + 1]!, b[i]!, F_BAND[i]!))
+  return out
+}
+
+/** Торцевая заглушка станции: веер на обе стороны от осевой линии. Полная, не зеркалим. */
+function freighterCap(s: Vec3[], z: number, color: number): Triangle[] {
+  const cy = (s[0]![1] + s[5]![1]) / 2
+  const centre: Vec3 = [0, cy, z]
+  const mir = (v: Vec3): Vec3 => [-v[0], v[1], v[2]]
+  const out: Triangle[] = []
+  for (let i = 0; i < 5; i++) {
+    out.push(tri(centre, s[i]!, s[i + 1]!, color))
+    out.push(tri(centre, mir(s[i + 1]!), mir(s[i]!), color))
+  }
+  return out
+}
+
+const freighterHalf: Triangle[] = [
+  // ─ Обшивка корпуса: четыре пролёта между станциями.
+  ...freighterSkin(F_S0, F_S1),
+  ...freighterSkin(F_S1, F_S2),
+  ...freighterSkin(F_S2, F_S3),
+  ...freighterSkin(F_S3, F_S4),
+
+  // ─ Навесные контейнеры по борту: грузовик тащит груз и снаружи. Три блока —
+  //   их и видно как «баржа», и на них ложится расшивка. Смещены за обвод борта.
+  ...beam(13.5, 16.5, 2.2, 5.0, -6, 2, HULL_TRIM),
+  ...beam(13.5, 16.5, -1.4, 1.4, -6, 2, HULL_PANEL),
+  ...beam(13.5, 16.5, 2.2, 5.0, 4, 12, HULL_PANEL),
+  ...beam(13.5, 16.5, -1.4, 1.4, 4, 12, HULL_TRIM),
+  // Крепёжная балка вдоль контейнеров: без неё они висят в воздухе.
+  ...beam(12.6, 13.6, -0.4, 0.6, -7, 13, HULL_DARK),
+
+  // ─ Расшивка на борту и на крыше.
+  ...panel([4, 6.7, -2], [10, 6.6, -2], [10, 6.55, 6], [4, 6.65, 6], HULL_PANEL, [0, 0.06, 0]),
+  ...panel([13.0, 3.0, -4], [13.0, -3.2, -4], [13.0, -3.4, 14], [13.0, 2.8, 14], HULL_LINE, [0.06, 0, 0]),
+
+  // ─ Антенна на борту рубки.
+  ...antenna(6.5, [-11, 6.4], [-9.5, 9.2], HULL_LINE),
+]
+
+const freighterCentre: Triangle[] = [
+  // ─ Торцы: нос тупой, корма — плита под сопла.
+  ...freighterCap(F_S0, -30, HULL_ACCENT),
+  ...freighterCap(F_S4, 28, HULL_TRIM),
+
+  // ─ Рубка-надстройка у носа: приподнятый блок с остеклением по фронту.
+  ...beam(-4.5, 4.5, 6.4, 10.4, -22, -12, HULL),
+  // Скошенный лоб рубки со «стеклом»: единственная тёмная деталь силуэта сверху.
+  ...quad([-4.2, 10.2, -21.6], [4.2, 10.2, -21.6], [4.6, 8.2, -23.4], [-4.6, 8.2, -23.4], COCKPIT_GLASS),
+  ...panel([-4.2, 10.25, -21], [4.2, 10.25, -21], [4.2, 10.2, -13], [-4.2, 10.2, -13], HULL_LINE, [0, 0.06, 0]),
+
+  // ─ Дорсальный хребет-магистраль: труба вдоль спины от рубки к корме.
+  ...beam(-1.2, 1.2, 6.6, 8.0, -12, 24, HULL_DARK),
+
+  // ─ Блок двигателей: широкая тумба на корме, из неё бьёт батарея сопел.
+  ...beam(-11, 11, -5.4, 5.6, 26, 31, HULL_DARK),
+  ...bell(-6.5, 0, 30.8, 1.5, 2.0, 2.4, 8, ENGINE, ENGINE_CORE),
+  ...bell(0, 0, 30.8, 1.7, 2.3, 2.6, 8, ENGINE, ENGINE_CORE),
+  ...bell(6.5, 0, 30.8, 1.5, 2.0, 2.4, 8, ENGINE, ENGINE_CORE),
+]
+
+let freighterCache: BufferGeometry | null = null
+
+export function freighterGeometry(): BufferGeometry {
+  freighterCache ??= buildGeometry([...symmetric(freighterHalf), ...freighterCentre])
+  return freighterCache
+}
+
+export const FREIGHTER_NOZZLES: readonly Nozzle[] = [
+  { offset: [-6.5, 0, 33.2], radius: 2.0 },
+  { offset: [0, 0, 33.2], radius: 2.3 },
+  { offset: [6.5, 0, 33.2], radius: 2.0 },
+]

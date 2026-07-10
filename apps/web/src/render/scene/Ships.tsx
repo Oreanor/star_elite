@@ -3,13 +3,19 @@ import { useMemo, useRef } from 'react'
 import { InstancedMesh, Mesh, Object3D } from 'three'
 import { isDroneShip, isVisible } from '@elite/sim'
 import { useSession } from '../../app/GameContext'
-import { cobraGeometry, droneGeometry, sidewinderGeometry } from '../geometry/ships'
+import { cobraGeometry, droneGeometry, freighterGeometry, sidewinderGeometry } from '../geometry/ships'
 import { cloakMaterial, hullMaterial } from '../materials/materials'
 
 /** Все враги — один InstancedMesh: 1 draw call вместо N. */
 const MAX_ENEMIES = 32
 /** Четыре у игрока — но врагам их однажды тоже выдадут. */
 const MAX_DRONES = 16
+/** Грузовики редки и одиночны: горсти инстансов хватает с запасом. */
+const MAX_FREIGHTERS = 8
+
+/** Грузовик — свой корпус, а не «Сайдвиндер»: отличаем по шасси, а не по фракции. */
+const isFreighter = (ship: { loadout: { chassis: { id: string } } }): boolean =>
+  ship.loadout.chassis.id === 'freighter'
 
 // Единственный объект для сборки матриц. `new Object3D()` в кадре — мусор для GC.
 const _dummy = new Object3D()
@@ -83,8 +89,8 @@ export function EnemyShips() {
     let count = 0
     for (const ship of session.world.ships) {
       // Замаскированный чужой не рисуется вовсе: правило видимости — из домена.
-      // Беспилотник — свой меш: корпус у него другой.
-      if (isDroneShip(ship) || !isVisible(ship) || count >= MAX_ENEMIES) continue
+      // Беспилотник и грузовик — свои меши: корпус у них другой.
+      if (isDroneShip(ship) || isFreighter(ship) || !isVisible(ship) || count >= MAX_ENEMIES) continue
 
       _dummy.position.copy(ship.state.pos)
       _dummy.quaternion.copy(ship.state.quat)
@@ -107,4 +113,37 @@ export function EnemyShips() {
       frustumCulled={false}
     />
   )
+}
+
+/**
+ * Тяжёлые грузовики. Свой InstancedMesh: у баржи другой корпус, вчетверо крупнее
+ * истребителя, — в общий батч её не сунуть. Их немного, но и один draw call на класс.
+ */
+export function FreighterShips() {
+  const session = useSession()
+  const ref = useRef<InstancedMesh>(null)
+
+  const geometry = useMemo(freighterGeometry, [])
+  const material = useMemo(hullMaterial, [])
+
+  useFrame(() => {
+    const mesh = ref.current
+    if (!mesh) return
+
+    let count = 0
+    for (const ship of session.world.ships) {
+      if (!isFreighter(ship) || !isVisible(ship) || count >= MAX_FREIGHTERS) continue
+
+      _dummy.position.copy(ship.state.pos)
+      _dummy.quaternion.copy(ship.state.quat)
+      _dummy.updateMatrix()
+      mesh.setMatrixAt(count, _dummy.matrix)
+      count++
+    }
+
+    mesh.count = count
+    mesh.instanceMatrix.needsUpdate = true
+  })
+
+  return <instancedMesh ref={ref} args={[geometry, material, MAX_FREIGHTERS]} frustumCulled={false} />
 }

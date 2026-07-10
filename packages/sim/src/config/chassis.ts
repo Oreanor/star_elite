@@ -74,7 +74,49 @@ export const SIDEWINDER: Chassis = {
   cost: 32000,
 }
 
-export const CHASSIS_CATALOGUE: readonly Chassis[] = [COBRA_MK3, SIDEWINDER]
+/**
+ * Тяжёлый грузовик. Не боевой корабль: он возит тонны и еле ворочается.
+ *
+ * Неповоротливость — не штраф в цифре урона, а следствие честной физики: большая
+ * масса и огромный момент инерции (inertiaFactor 5) при слабых гражданских
+ * маневровых дают угловое ускачение вчетверо ниже истребителя. Он не увернётся
+ * ни от кого — потому и летает под прикрытием. Живучий корпус нужен затем же:
+ * пока эскорт разбирается с налётчиком, туша должна выстоять.
+ *
+ * Четыре грузовых слота и один защитный ствол по борту: это мишень с трюмом,
+ * а не канонерка. Сбитый, он высыпает весь груз — ради него на него и нападают.
+ */
+export const LARGE_FREIGHTER: Chassis = {
+  id: 'freighter',
+  name: 'Грузовик «Тип-9»',
+  baseMass: 90, // т, пустой — на порядок тяжелее истребителя
+  baseHull: 320,
+  /** м. Втрое длиннее «Кобры»: тушу видно издалека, и попасть по ней нетрудно. */
+  radius: 34,
+  inertiaFactor: 5.0,
+  assistLateralDamp: 0.7, // 1/с — тяжёлую баржу лётный компьютер гасит вяло
+  assistSpeedDamp: 0.3,
+  hardpoints: [
+    // Пара оборонительных стволов по бортам. Отбиться не отобьётся, но огрызается.
+    { offset: [-3.4, -0.6, -2.0], kind: 'gun', maxClass: 2 },
+    { offset: [3.4, -0.6, -2.0], kind: 'gun', maxClass: 2 },
+  ],
+  slots: [
+    { kind: 'engine', maxClass: 2 },
+    { kind: 'thrusters', maxClass: 1 }, // только гражданские: вот откуда вялый разворот
+    { kind: 'shield', maxClass: 3 },
+    { kind: 'armour', maxClass: 3 },
+    // Четыре трюма: грузовик тем и живёт. С полными контейнерами трюм за две сотни тонн.
+    { kind: 'cargo', maxClass: 3 },
+    { kind: 'cargo', maxClass: 3 },
+    { kind: 'cargo', maxClass: 3 },
+    { kind: 'cargo', maxClass: 3 },
+    { kind: 'hyperdrive', maxClass: 3 },
+  ],
+  cost: 210000,
+}
+
+export const CHASSIS_CATALOGUE: readonly Chassis[] = [COBRA_MK3, SIDEWINDER, LARGE_FREIGHTER]
 
 export function findChassis(id: string): Chassis | null {
   return CHASSIS_CATALOGUE.find((c) => c.id === id) ?? null

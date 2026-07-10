@@ -218,10 +218,20 @@ function selectAndRemember(e: ShipEntity, world: World): ShipEntity | null {
     ai.targetId = ai.orderedTargetId
     return resolveTarget(e, world)
   }
-  // Ведомый без приказа не ищет драки сам: он просто держится рядом.
-  if (ai.escortOf !== null) {
+  // Наёмник ИГРОКА без приказа драки не ищет: иначе автобой перестал бы слушаться
+  // захвата, а звено бросалось бы на всё, что мимо пролетело.
+  if (ai.escortOf === world.player.id) {
     ai.targetId = null
     return null
+  }
+  // А вот СТРАЖ конвоя (сопровождает не игрока) волен защищать подопечного сам:
+  // у мирного грузовика своей цели нет, и без этого прикрытие лишь красиво летит,
+  // пока баржу разбирают на части. Цель выбирает по фракции — полицейский эскорт
+  // бьёт налётчика, потому что тот ему враг, а не потому что «так велено».
+  if (ai.escortOf !== null) {
+    const guard = selectTarget(e, world)
+    ai.targetId = guard?.id ?? null
+    return guard
   }
   const target = selectTarget(e, world)
   ai.targetId = target?.id ?? null
