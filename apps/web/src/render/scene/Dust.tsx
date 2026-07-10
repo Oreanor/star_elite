@@ -42,7 +42,7 @@ export function Dust() {
     return { geometry: g, points }
   }, [])
 
-  useFrame(() => {
+  useFrame((_, dt) => {
     const mesh = ref.current
     if (!mesh) return
 
@@ -50,10 +50,25 @@ export function Dust() {
     const origin = player.state.pos
     const velocity = player.state.vel
 
-    // Длина штриха пропорциональна скорости, но ограничена: на 15 км/с
-    // он иначе перечеркнул бы весь экран из угла в угол.
     const speed = velocity.length()
-    const streak = Math.min(speed * DUST.STREAK_SCALE * 0.016, DUST.STREAK_MAX)
+
+    /**
+     * Куб растёт вместе со скоростью, штрих — вместе с кубом.
+     *
+     * Иначе штрих упирается в стенку: на крейсере ×30 он подбирался к семистам
+     * метрам постоянного куба, частицы оборачивались прямо в кадре, и пыль
+     * читалась коробкой вокруг корабля. Держим штрих в трети куба — тогда за
+     * гранью всегда есть куда лететь.
+     *
+     * Выше `SPEED_CAP` не растёт ничего: пыль там всё равно слилась в рябь.
+     * Это ограничение ЗРЕНИЯ, а не двигателя — физика о нём не знает.
+     */
+    const shown = Math.min(speed, DUST.SPEED_CAP)
+    const box = DUST.BOX * (1 + shown / DUST.BOX_SPEED)
+    const streak = Math.min(shown * DUST.STREAK_SCALE * dt, box * DUST.STREAK_FRACTION)
+
+    // Хвост строится из ВЕКТОРА скорости, поэтому делим на настоящую длину,
+    // а не на урезанную: направление обязано остаться точным.
     const scale = speed > 1e-3 ? streak / speed : 0
 
     const attribute = mesh.geometry.getAttribute('position') as BufferAttribute
@@ -65,7 +80,7 @@ export function Dust() {
       // Оборачиваем частицу в куб вокруг игрока. Без этого пыль остаётся позади.
       for (let axis = 0; axis < 3; axis++) {
         const index = p + axis
-        points[index] = wrapAround(points[index] ?? 0, origin.getComponent(axis), DUST.BOX)
+        points[index] = wrapAround(points[index] ?? 0, origin.getComponent(axis), box)
       }
 
       const x = points[p] ?? 0
