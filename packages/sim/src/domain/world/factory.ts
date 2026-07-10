@@ -7,7 +7,7 @@ import { createAIState } from '../ai/types'
 import { cargoMass, createHold } from '../cargo/hold'
 import { createCruiseState } from '../cruise/drive'
 import { createControls, createShipState } from '../flight/types'
-import { deriveShipSpec, isMissile, type Loadout } from '../loadout'
+import { deriveShipSpec, isDrone, isMissile, type Loadout, type WeaponModule } from '../loadout'
 import type {
   AsteroidEntity,
   BodyEntity,
@@ -26,6 +26,9 @@ import { STARTER_SYSTEM } from './system'
  * из `SystemDef` — фабрику не нужно трогать, чтобы добавить новую систему.
  */
 
+/** Подвеска со счётным боезапасом: ракета или контейнер БПЛА, но не ствол. */
+const hasAmmo = (w: WeaponModule): w is Extract<WeaponModule, { ammo: number }> => isMissile(w) || isDrone(w)
+
 export function makeShip(
   ids: IdSource,
   faction: Faction,
@@ -41,7 +44,9 @@ export function makeShip(
   const guns: GunState[] = spec.mounts.map((mount) => ({
     cooldown: 0,
     heat: 0,
-    ammo: isMissile(mount.weapon) ? mount.weapon.ammo : 0,
+    // Боезапас есть у всего, что СХОДИТ с подвески: и у ракеты, и у контейнера
+    // БПЛА. Спрашивать «ракета ли это» значило бы оставить контейнер пустым.
+    ammo: hasAmmo(mount.weapon) ? mount.weapon.ammo : 0,
   }))
 
   return {
@@ -68,6 +73,8 @@ export function makeShip(
     alive: true,
     wreckAt: null,
     ai: null,
+    droneOf: null,
+    dieAt: null,
   }
 }
 
@@ -82,13 +89,13 @@ export function refreshSpec(e: ShipEntity): void {
   e.shield = Math.min(e.shield, spec.hull.shield)
   e.energy = Math.min(e.energy, spec.power.capacity)
 
-  // Стволы могли смениться: сохраняем боезапас там, где оружие осталось ракетным.
+  // Стволы могли смениться: сохраняем боезапас там, где подвеска осталась подвеской.
   e.guns = spec.mounts.map((mount, i) => {
     const prev = e.guns[i]
     return {
       cooldown: 0,
       heat: prev?.heat ?? 0,
-      ammo: isMissile(mount.weapon) ? (prev?.ammo ?? mount.weapon.ammo) : 0,
+      ammo: hasAmmo(mount.weapon) ? (prev?.ammo ?? mount.weapon.ammo) : 0,
     }
   })
 }

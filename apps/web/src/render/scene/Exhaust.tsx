@@ -5,7 +5,7 @@ import { clamp, shipAxes, type ShipEntity } from '@elite/sim'
 import { useSession } from '../../app/GameContext'
 import { EXHAUST } from '../config'
 import { flameGeometry } from '../geometry/flame'
-import { COBRA_NOZZLES, MISSILE_NOZZLE, SIDEWINDER_NOZZLES, type Nozzle } from '../geometry/ships'
+import { COBRA_NOZZLES, DRONE_NOZZLES, MISSILE_NOZZLE, SIDEWINDER_NOZZLES, type Nozzle } from '../geometry/ships'
 
 /**
  * Струи из сопел — как у турбо-зажигалки: узкий белый керн внутри голубого факела.
@@ -28,7 +28,8 @@ const _up = new Vector3()
 const MISSILE_FLAME: readonly Nozzle[] = [MISSILE_NOZZLE]
 
 function nozzlesFor(ship: ShipEntity): readonly Nozzle[] {
-  return ship.loadout.chassis.id === 'cobra_mk3' ? COBRA_NOZZLES : SIDEWINDER_NOZZLES
+  if (ship.loadout.chassis.id === 'cobra_mk3') return COBRA_NOZZLES
+  return ship.loadout.chassis.id === 'drone' ? DRONE_NOZZLES : SIDEWINDER_NOZZLES
 }
 
 /** Насколько открыт газ, 0..1+. Крейсер зажат: на ×90 факел был бы километровым. */

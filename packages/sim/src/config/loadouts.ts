@@ -4,6 +4,7 @@ import {
   ARMOUR_PLATE,
   BURST_LASER,
   CLOAK_FIELD,
+  DRONE_BAY,
   CARGO_SMALL,
   ENGINE_CIVILIAN,
   ENGINE_STANDARD,
@@ -38,7 +39,8 @@ export function playerStartLoadout(): Loadout {
     [ENGINE_STANDARD, RCS_STANDARD, SHIELD_STANDARD, ARMOUR_PLATE, CARGO_SMALL, HYPERDRIVE_BASIC, CLOAK_FIELD],
     // Два ствола и четыре пусковых на пилонах — по индексам точек подвески шасси.
     // Каждая несёт по две ракеты, итого восемь на вылет.
-    [BURST_LASER, BURST_LASER, MISSILE_PYLON, MISSILE_PYLON, MISSILE_PYLON, MISSILE_PYLON],
+    // Последний пилон отдан контейнеру БПЛА: три пилона ракет — шесть ракет.
+    [BURST_LASER, BURST_LASER, MISSILE_PYLON, MISSILE_PYLON, MISSILE_PYLON, DRONE_BAY],
   )
 }
 

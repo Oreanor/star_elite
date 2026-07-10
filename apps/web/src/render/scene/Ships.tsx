@@ -1,13 +1,15 @@
 import { useFrame } from '@react-three/fiber'
 import { useMemo, useRef } from 'react'
 import { InstancedMesh, Mesh, Object3D } from 'three'
-import { isVisible } from '@elite/sim'
+import { isDroneShip, isVisible } from '@elite/sim'
 import { useSession } from '../../app/GameContext'
-import { cobraGeometry, sidewinderGeometry } from '../geometry/ships'
+import { cobraGeometry, droneGeometry, sidewinderGeometry } from '../geometry/ships'
 import { cloakMaterial, hullMaterial } from '../materials/materials'
 
 /** Все враги — один InstancedMesh: 1 draw call вместо N. */
 const MAX_ENEMIES = 32
+/** Четыре у игрока — но врагам их однажды тоже выдадут. */
+const MAX_DRONES = 16
 
 // Единственный объект для сборки матриц. `new Object3D()` в кадре — мусор для GC.
 const _dummy = new Object3D()
@@ -34,6 +36,39 @@ export function PlayerShip() {
   return <mesh ref={ref} geometry={cobraGeometry()} material={hullMaterial()} frustumCulled={false} />
 }
 
+/**
+ * Беспилотники. Отдельный InstancedMesh, потому что у них своя геометрия, —
+ * а не потому, что они «особенные»: для симуляции это обычные корабли.
+ */
+export function Drones() {
+  const session = useSession()
+  const ref = useRef<InstancedMesh>(null)
+
+  const geometry = useMemo(droneGeometry, [])
+  const material = useMemo(hullMaterial, [])
+
+  useFrame(() => {
+    const mesh = ref.current
+    if (!mesh) return
+
+    let count = 0
+    for (const ship of session.world.ships) {
+      if (!isDroneShip(ship) || !isVisible(ship) || count >= MAX_DRONES) continue
+
+      _dummy.position.copy(ship.state.pos)
+      _dummy.quaternion.copy(ship.state.quat)
+      _dummy.updateMatrix()
+      mesh.setMatrixAt(count, _dummy.matrix)
+      count++
+    }
+
+    mesh.count = count
+    mesh.instanceMatrix.needsUpdate = true
+  })
+
+  return <instancedMesh ref={ref} args={[geometry, material, MAX_DRONES]} frustumCulled={false} />
+}
+
 export function EnemyShips() {
   const session = useSession()
   const ref = useRef<InstancedMesh>(null)
@@ -48,7 +83,8 @@ export function EnemyShips() {
     let count = 0
     for (const ship of session.world.ships) {
       // Замаскированный чужой не рисуется вовсе: правило видимости — из домена.
-      if (!isVisible(ship) || count >= MAX_ENEMIES) continue
+      // Беспилотник — свой меш: корпус у него другой.
+      if (isDroneShip(ship) || !isVisible(ship) || count >= MAX_ENEMIES) continue
 
       _dummy.position.copy(ship.state.pos)
       _dummy.quaternion.copy(ship.state.quat)

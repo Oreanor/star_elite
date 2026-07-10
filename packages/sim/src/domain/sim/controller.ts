@@ -27,6 +27,8 @@ export interface Controller {
    * секунду. Спрашивается ровно одно нажатие.
    */
   wantsCloak?(ship: ShipEntity, world: World): boolean
+  /** Хочет ли выпустить беспилотник (однократно). Боты пока не умеют. */
+  wantsDrone?(ship: ShipEntity, world: World): boolean
   /** Держит ли тяговый луч. Боты не жадные — им трофеи не нужны. */
   wantsTractor?(ship: ShipEntity, world: World): boolean
   /** Держит ли клавишу крейсерского хода. Боты пока не умеют — и не нужно. */

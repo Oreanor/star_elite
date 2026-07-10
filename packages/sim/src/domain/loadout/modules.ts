@@ -17,6 +17,7 @@ export type ModuleKind =
   | 'cargo'
   | 'hyperdrive'
   | 'cloak'
+  | 'drone'
 
 export interface ModuleBase {
   /** Стабильный идентификатор для сохранений и торговли. */
@@ -152,6 +153,28 @@ export interface MissileModule extends ModuleBase {
   lifetime: number
 }
 
+/**
+ * Пусковой контейнер БПЛА. Висит на пилоне, как ракета, но выпускает не боевую
+ * часть, а маленький корабль с собственным пилотом.
+ *
+ * Беспилотник не «ракета помощнее»: он существует РОВНО ПО ТЕМ ЖЕ правилам, что
+ * и все остальные корабли, — тот же `Controller`, тот же `stepShip`, тот же ИИ,
+ * что летает у пиратов. Отсюда и его ценность: враг не отличает его от корабля
+ * и переключается на него, а игрок в это время бьёт с фланга.
+ *
+ * Живёт минуту и самоликвидируется. Иначе за час боёв система зарастает
+ * беспилотниками, а бой превращается в осмотр чужой войны.
+ */
+export interface DroneModule extends ModuleBase {
+  kind: 'drone'
+  /** Сколько аппаратов в контейнере. */
+  ammo: number
+  /** Сколько живёт выпущенный, с. */
+  lifetime: number
+  /** Больше стольких одновременно у носителя не бывает. */
+  maxActive: number
+}
+
 export interface CargoModule extends ModuleBase {
   kind: 'cargo'
   /** Вместимость, тонн груза. */
@@ -188,6 +211,7 @@ export type ShipModule =
   | ArmourModule
   | LaserModule
   | MissileModule
+  | DroneModule
   | CargoModule
   | HyperdriveModule
   | CloakModule
@@ -202,6 +226,8 @@ export const isMissile = (m: ShipModule): m is MissileModule => m.kind === 'miss
 export const isCargo = (m: ShipModule): m is CargoModule => m.kind === 'cargo'
 export const isHyperdrive = (m: ShipModule): m is HyperdriveModule => m.kind === 'hyperdrive'
 export const isCloak = (m: ShipModule): m is CloakModule => m.kind === 'cloak'
+export const isDrone = (m: ShipModule): m is DroneModule => m.kind === 'drone'
 
-export type WeaponModule = LaserModule | MissileModule
-export const isWeapon = (m: ShipModule): m is WeaponModule => isLaser(m) || isMissile(m)
+/** Всё, что вешается на точку подвески. Пилон несёт ракету ИЛИ контейнер БПЛА. */
+export type WeaponModule = LaserModule | MissileModule | DroneModule
+export const isWeapon = (m: ShipModule): m is WeaponModule => isLaser(m) || isMissile(m) || isDrone(m)

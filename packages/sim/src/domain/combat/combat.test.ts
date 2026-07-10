@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { MISSILE_PYLON, MODULE_CATALOGUE } from '../../config/modules'
 import { ECM, GUNNERY } from '../../config/weapons'
 import { raySphere } from '../../core/math'
-import { hardpointIndices, isLaser, isMissile } from '../loadout'
+import { isLaser, isMissile } from '../loadout'
 import { createWorld, STARTER_SYSTEM } from '../world'
 import type { MissileEntity, ShipEntity, World } from '../world/entities'
 import { applyDamage, regenShield } from './damage'
@@ -142,18 +142,31 @@ describe('щит и корпус', () => {
   })
 })
 
+/** Пусковые ракет. Пилон может нести и контейнер БПЛА, а тот ракет не даёт. */
+function launcherIndices(ship: ShipEntity): number[] {
+  const out: number[] = []
+  ship.spec.mounts.forEach((m, i) => {
+    if (isMissile(m.weapon)) out.push(i)
+  })
+  return out
+}
+
 describe('ракеты на пилонах', () => {
   /**
    * Боезапас считается из данных, а не из числа пилонов: ракета сама объявляет
    * `ammo`. Раньше он был равен единице, и тест сравнивал запас с числом пилонов —
    * стоило зарядить по две, как проверка стала бы врать, ничего не заметив.
+   *
+   * И считать его надо по ПУСКОВЫМ, а не по подвескам: на пилоне может висеть
+   * контейнер БПЛА, ракет он не несёт. Тест, считавший пилоны, сломался ровно
+   * в тот день, когда последний пилон отдали беспилотникам.
    */
-  it('запас ракет равен пилонам, помноженным на боекомплект пусковой', () => {
+  it('запас ракет равен числу пусковых, помноженному на их боекомплект', () => {
     const { world, enemy } = withOneEnemy()
 
-    const pylons = hardpointIndices(world.player.loadout, 'pylon')
-    expect(pylons.length).toBe(4)
-    expect(missileAmmo(world.player)).toBe(pylons.length * MISSILE_PYLON.ammo)
+    const launchers = launcherIndices(world.player)
+    expect(launchers.length).toBeGreaterThan(0)
+    expect(missileAmmo(world.player)).toBe(launchers.length * MISSILE_PYLON.ammo)
 
     // Один вызов — одна ракета, независимо от того, сколько их на пилоне.
     const before = missileAmmo(world.player)
@@ -168,22 +181,22 @@ describe('ракеты на пилонах', () => {
    * При одной ракете на пилон баг спал: опустевший пилон выпадал из поиска сам.
    * Стоило зарядить по две — залп из четырёх превратился в одну ракету за 0.8 с.
    */
-  it('залп идёт с разных пилонов, пока они свободны', () => {
+  it('залп идёт с разных пусковых, пока они свободны', () => {
     const { world, enemy } = withOneEnemy()
-    const pylons = hardpointIndices(world.player.loadout, 'pylon')
+    const launchers = launcherIndices(world.player)
 
-    // Ни одного шага мира: перезарядка не тикает, значит каждый пуск — новый пилон.
-    for (let i = 0; i < pylons.length; i++) {
+    // Ни одного шага мира: перезарядка не тикает, значит каждый пуск — новая пусковая.
+    for (let i = 0; i < launchers.length; i++) {
       expect(fireMissile(world, world.player, enemy.id)).toBe(true)
     }
-    expect(world.missiles.length).toBe(pylons.length)
+    expect(world.missiles.length).toBe(launchers.length)
 
-    // Пилоны кончились, все на перезарядке — пятая ракета не уйдёт.
+    // Пусковые кончились, все на перезарядке — следующая ракета не уйдёт.
     expect(fireMissile(world, world.player, enemy.id)).toBe(false)
-    expect(world.missiles.length).toBe(pylons.length)
+    expect(world.missiles.length).toBe(launchers.length)
 
-    // Запас при этом остался: по второй ракете на каждом пилоне.
-    expect(missileAmmo(world.player)).toBe(pylons.length * (MISSILE_PYLON.ammo - 1))
+    // Запас при этом остался: по второй ракете на каждой пусковой.
+    expect(missileAmmo(world.player)).toBe(launchers.length * (MISSILE_PYLON.ammo - 1))
   })
 
   it('подвесная ракета сбивает «Сайдвиндера» одним попаданием', () => {

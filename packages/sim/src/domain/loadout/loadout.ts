@@ -91,7 +91,8 @@ export type InstallError = 'no-free-slot' | 'class-too-large' | 'wrong-kind' | '
 
 /** Ракета живёт на пилоне, ствол — в орудийной точке. Перепутать нельзя. */
 function fits(hardpointKind: 'gun' | 'pylon', weaponKind: WeaponModule['kind']): boolean {
-  return hardpointKind === 'pylon' ? weaponKind === 'missile' : weaponKind === 'laser'
+  // Пилон несёт и ракету, и контейнер БПЛА: и то и другое сходит с подвески.
+  return hardpointKind === 'pylon' ? weaponKind !== 'laser' : weaponKind === 'laser'
 }
 
 /** Проверка перед установкой. Возвращает null, если модуль влезает. */

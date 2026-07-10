@@ -301,3 +301,46 @@ export function missileGeometry(): BufferGeometry {
 
 /** Сопло ракеты. Радиус великоват для калибра — иначе факел не видно издали. */
 export const MISSILE_NOZZLE: Nozzle = { offset: [0, 0, 4.0], radius: 1.35 }
+
+// ─── БПЛА «Оса» ──────────────────────────────────────────────────────────────
+//
+// Три метра в поперечнике: на дистанции боя это несколько пикселей. Поэтому
+// силуэт, а не детали — гранёное ядро, два крылышка-плиты и сопло. Расшивку
+// сюда класть незачем: её не увидит никто, а полигоны сожрёт.
+
+const D_NOSE: Vec3 = [0, 0, -3.0]
+const D_TOP: Vec3 = [0, 0.55, -0.4]
+const D_BOT: Vec3 = [0, -0.5, -0.2]
+const D_SIDE: Vec3 = [0.75, 0.0, -0.3]
+const D_TAIL_T: Vec3 = [0, 0.45, 2.0]
+const D_TAIL_B: Vec3 = [0, -0.4, 2.0]
+const D_TAIL_S: Vec3 = [0.6, 0.0, 2.0]
+
+/** Крылышко-плита. Оно же радиатор: аппарат греется сильнее, чем остывает. */
+const D_WING_ROOT_F: Vec3 = [0.6, 0.05, -0.2]
+const D_WING_ROOT_B: Vec3 = [0.6, 0.05, 1.5]
+const D_WING_TIP: Vec3 = [2.3, 0.05, 1.1]
+
+const droneHalf: Triangle[] = [
+  tri(D_NOSE, D_SIDE, D_TOP, HULL),
+  tri(D_NOSE, D_BOT, D_SIDE, HULL_DARK),
+  ...quad(D_TOP, D_SIDE, D_TAIL_S, D_TAIL_T, HULL_SHADE),
+  ...quad(D_SIDE, D_BOT, D_TAIL_B, D_TAIL_S, HULL_DARK),
+
+  tri(D_WING_ROOT_F, D_WING_TIP, D_WING_ROOT_B, HULL_ACCENT),
+  tri(D_WING_ROOT_F, D_WING_ROOT_B, D_WING_TIP, HULL_TRIM),
+
+  // Торец кормы: срез, а не обшивка.
+  ...quad(D_TAIL_T, D_TAIL_S, D_TAIL_B, D_TAIL_B, HULL_TRIM),
+]
+
+const droneCentre: Triangle[] = [...bell(0, 0.0, 2.05, 0.28, 0.36, 0.5, 6, ENGINE, ENGINE_CORE)]
+
+let droneCache: BufferGeometry | null = null
+
+export function droneGeometry(): BufferGeometry {
+  droneCache ??= buildGeometry([...symmetric(droneHalf), ...droneCentre])
+  return droneCache
+}
+
+export const DRONE_NOZZLES: readonly Nozzle[] = [{ offset: [0, 0, 2.05], radius: 0.34 }]

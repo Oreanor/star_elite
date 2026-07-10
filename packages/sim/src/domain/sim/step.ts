@@ -5,11 +5,14 @@ import { ASTEROID, DEBRIS, SCORE } from '../../config/world'
 import {
   clearTractorMarks,
   coolGuns,
+  expireDrones,
   expirePods,
   fireBomb,
   fireEcm,
   fireLasers,
   fireMissile,
+  isDroneShip,
+  launchDrone,
   regenBomb,
   regenEnergy,
   regenShield,
@@ -129,6 +132,7 @@ function stepWeapons(world: World, controllers: ControllerMap, dt: number): void
     if (ship.cloaked) continue
 
     if (controller.wantsBomb?.(ship, world)) fireBomb(world, ship)
+    if (controller.wantsDrone?.(ship, world)) launchDrone(world, ship)
 
     // На крейсерском ходу корабль вне фазы: лазер с относительной скоростью
     // 20 км/с — не оружие, а недоразумение.
@@ -228,6 +232,10 @@ function stepScooping(world: World, controllers: ControllerMap, dt: number): voi
 function cleanup(world: World): void {
   const now = world.time
 
+  // Срок жизни беспилотника задан в СЕКУНДАХ, поэтому истекает раз в кадр,
+  // а не раз в шаг физики: от герцовки он зависеть не должен.
+  expireDrones(world)
+
   world.tracers = world.tracers.filter((t) => now - t.born < GUNNERY.TRACER_LIFE)
   world.explosions = world.explosions.filter((e) => now - e.born < DEBRIS.EXPLOSION_LIFE)
   world.shockwaves = world.shockwaves.filter((w) => now - w.born < BOMB.WAVE_LIFE)
@@ -236,6 +244,12 @@ function cleanup(world: World): void {
     if (ship.alive || ship.wreckAt !== null) continue
     // Момент гибели: взрыв и трофеи — ровно один раз.
     ship.wreckAt = now
+
+    // Беспилотник — расходник: ни взрыва корабельного калибра, ни трофеев.
+    // Иначе рой из четырёх аппаратов засыпал бы систему контейнерами с их же
+    // двигателями, и «прикрытие» превратилось бы в станок для печати денег.
+    if (isDroneShip(ship)) continue
+
     spawnExplosion(world, ship.state.pos, ship.state.vel, DEBRIS.SHIP_EXPLOSION_SCALE)
     spawnWreckage(world, ship)
     if (ship.faction === 'hostile') {

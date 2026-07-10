@@ -435,7 +435,10 @@ function drawRadar({ ctx, world, width, height }: HudFrame): void {
  */
 function radarColor(ship: ShipEntity, world: World): string {
   if (ship.id === world.lockedTargetId) return HUD_COLORS.TARGET
-  return ship.faction === 'hostile' ? HUD_COLORS.DANGER : HUD_COLORS.NEUTRAL
+  if (ship.faction === 'hostile') return HUD_COLORS.DANGER
+  // Свои — фосфорным цветом дисплея: беспилотник обязан читаться союзником,
+  // а не встречным торговцем. Различает их сторона, а не то, кем они рождены.
+  return ship.faction === world.player.faction ? HUD_COLORS.PRIMARY : HUD_COLORS.NEUTRAL
 }
 
 function drawReadouts({ ctx, world, height }: HudFrame): void {

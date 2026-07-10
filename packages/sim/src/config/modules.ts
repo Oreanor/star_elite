@@ -3,6 +3,7 @@ import type {
   ArmourModule,
   CargoModule,
   CloakModule,
+  DroneModule,
   EngineModule,
   HyperdriveModule,
   LaserModule,
@@ -420,6 +421,50 @@ export const HYPERDRIVE_DEEP: HyperdriveModule = {
   jumpRange: 28,
 }
 
+// ─── Беспилотники ────────────────────────────────────────────────────────────
+
+/**
+ * Ствол беспилотника. Слабее изношенного пиратского: аппарат берёт не уроном.
+ *
+ * Урон 3 против сорока живучести «Сайдвиндера» — минимум четырнадцать попаданий.
+ * Четверо за минуту пирата не убьют, и не должны: их дело — заставить его
+ * вертеться, пока стреляет игрок.
+ */
+export const DRONE_LASER: LaserModule = {
+  id: 'drone_gun',
+  name: 'Лазер БПЛА',
+  kind: 'laser',
+  class: 1,
+  mass: 0.05,
+  cost: 0,
+  // Сгорает вместе с аппаратом: снимать с обломка нечего.
+  salvageChance: 0,
+  damage: 3,
+  range: 1200,
+  cooldown: 0.4,
+  heatPerShot: 0.05,
+  heatCool: 0.4,
+}
+
+/**
+ * Пусковой контейнер. Четыре аппарата в контейнере и четыре же в воздухе:
+ * потолок одновременных совпадает с боезапасом не случайно — контейнер один,
+ * и выпустить пятого просто нечем.
+ */
+export const DRONE_BAY: DroneModule = {
+  id: 'drone_bay',
+  name: 'Контейнер БПЛА «Рой»',
+  kind: 'drone',
+  class: 1,
+  mass: 0.9,
+  cost: 38000,
+  salvageChance: 0.25,
+  ammo: 4,
+  /** Минута. Хватает на один бой и мало, чтобы жить в системе. */
+  lifetime: 60,
+  maxActive: 4,
+}
+
 // ────────────────────────────── Маскировка ───────────────────────────────
 //
 // Расход считан от батарей, а не назначен: у стандартного двигателя ёмкость 110
@@ -452,7 +497,7 @@ export const MODULE_CATALOGUE: readonly ShipModule[] = [
   MISSILE_PYLON, MISSILE_HOMING, MISSILE_HEAVY,
   CARGO_SMALL, CARGO_MEDIUM, CARGO_LARGE,
   HYPERDRIVE_BASIC, HYPERDRIVE_LONG, HYPERDRIVE_DEEP,
-  CLOAK_FIELD,
+  CLOAK_FIELD, DRONE_BAY,
 ]
 
 export function findModule(id: string): ShipModule | null {

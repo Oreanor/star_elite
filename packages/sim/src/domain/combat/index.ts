@@ -1,4 +1,5 @@
 export { canCloak, hasCloak, isVisible, stepCloak, toggleCloak } from './cloak'
+export { activeDrones, expireDrones, isDroneShip, launchDrone } from './drones'
 export { bombReady, fireBomb, regenBomb } from './bomb'
 export { resolveShipVsSphere } from './collision'
 export { applyDamage, healthFraction, regenShield, shieldFraction } from './damage'

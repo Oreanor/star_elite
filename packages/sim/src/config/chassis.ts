@@ -79,3 +79,32 @@ export const CHASSIS_CATALOGUE: readonly Chassis[] = [COBRA_MK3, SIDEWINDER]
 export function findChassis(id: string): Chassis | null {
   return CHASSIS_CATALOGUE.find((c) => c.id === id) ?? null
 }
+
+/**
+ * Беспилотник. Не корабль для полёта, а расходник: живёт минуту и сгорает.
+ *
+ * Лёгкий и вёрткий (inertiaFactor 0.4), но с картонным корпусом и без щита —
+ * слот под него просто не предусмотрен. Отсюда его роль: он не выигрывает бой,
+ * он оттягивает на себя чужой прицел, и пират тратит на него очередь, которая
+ * иначе досталась бы игроку.
+ *
+ * Один ствол по оси, без пилонов. Ракету беспилотник не понесёт: пусковая
+ * тяжелее его самого.
+ */
+export const DRONE: Chassis = {
+  id: 'drone',
+  name: 'БПЛА «Оса»',
+  baseMass: 0.9,
+  baseHull: 22,
+  /** м. Втрое мельче «Сайдвиндера»: попасть в него — отдельная задача. */
+  radius: 3,
+  inertiaFactor: 0.4,
+  assistLateralDamp: 1.4,
+  assistSpeedDamp: 0.4,
+  hardpoints: [{ offset: [0, 0, -0.8], kind: 'gun', maxClass: 1 }],
+  slots: [
+    { kind: 'engine', maxClass: 1 },
+    { kind: 'thrusters', maxClass: 1 },
+  ],
+  cost: 0,
+}

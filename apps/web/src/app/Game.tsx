@@ -11,7 +11,7 @@ import { Dust } from '../render/scene/Dust'
 import { CargoPods, Explosions, Missiles, TractorBeam, Tracers } from '../render/scene/Effects'
 import { Exhaust } from '../render/scene/Exhaust'
 import { Lighting } from '../render/scene/Lighting'
-import { EnemyShips, PlayerShip } from '../render/scene/Ships'
+import { Drones, EnemyShips, PlayerShip } from '../render/scene/Ships'
 import { Simulation } from '../render/scene/Simulation'
 import { Sky } from '../render/scene/Sky'
 import { Starfield } from '../render/scene/Starfield'
@@ -40,6 +40,7 @@ function Scene() {
       <PlayerShip />
       <WingMissiles />
       <EnemyShips />
+      <Drones />
       <CargoPods />
       <TractorBeam />
       <Missiles />

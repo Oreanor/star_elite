@@ -93,6 +93,8 @@ export interface PlayerIntent {
   bomb: boolean
   /** Хочет переключить маскировочное поле (однократно). Тумблер, а не удержание. */
   cloak: boolean
+  /** Хочет выпустить беспилотник (однократно). */
+  drone: boolean
   /** Держит тяговый луч (C). Не однократное действие — удержание. */
   tractor: boolean
   /** Тяга, 0..1. Живёт между кадрами, поэтому хранится тут, а не в ShipControls. */
@@ -120,6 +122,7 @@ export function createIntent(): PlayerIntent {
     ecm: false,
     bomb: false,
     cloak: false,
+    drone: false,
     tractor: false,
     throttle: 0.45,
     surge: 0,
@@ -433,6 +436,13 @@ export function createPlayerController(intent: PlayerIntent): Controller {
     wantsCloak(): boolean {
       if (!intent.cloak) return false
       intent.cloak = false
+      return true
+    },
+
+    /** Рой автобою не отдаём: он не знает, когда прикрытие нужнее ракеты. */
+    wantsDrone(): boolean {
+      if (!intent.drone) return false
+      intent.drone = false
       return true
     },
 
