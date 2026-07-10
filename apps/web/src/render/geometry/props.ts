@@ -116,8 +116,34 @@ function hub(): Triangle[] {
   return out
 }
 
+/**
+ * Иллюминаторы: шесть светящихся окошек по внешнему экватору обода.
+ *
+ * Обод и так вращается, поэтому огоньки, разнесённые по кругу, читаются как
+ * «станция жилая», а не мёртвая болванка. Приподняты над трубой на малую долю,
+ * иначе делят грань с обшивкой и мерцают в буфере глубины. Сдвинуты по фазе от
+ * спиц, чтобы окно не приходилось ровно на балку.
+ */
+function portholes(): Triangle[] {
+  const out: Triangle[] = []
+  const count = 6
+  const uHalf = 0.06 // полуширина окна по большому кругу, рад
+  const vHalf = 0.2 // полувысота по малому кругу, рад
+  const lift = TUBE_RADIUS + 0.006 // на экваторе (v=0) — наружу обода
+
+  for (let k = 0; k < count; k++) {
+    const u = (k / count) * Math.PI * 2 + Math.PI / count // между спицами
+    const at = (du: number, dv: number): Vec3 => {
+      const ring = RING_RADIUS + lift * Math.cos(dv)
+      return [ring * Math.cos(u + du), ring * Math.sin(u + du), lift * Math.sin(dv)]
+    }
+    out.push(...quad(at(-uHalf, -vHalf), at(uHalf, -vHalf), at(uHalf, vHalf), at(-uHalf, vHalf), STATION_LIT))
+  }
+  return out
+}
+
 function station(): Triangle[] {
-  const out: Triangle[] = [...torus(RING_RADIUS, TUBE_RADIUS, 24, 8), ...hub()]
+  const out: Triangle[] = [...torus(RING_RADIUS, TUBE_RADIUS, 24, 8), ...hub(), ...portholes()]
 
   for (let i = 0; i < SPOKES; i++) {
     const angle = (i / SPOKES) * Math.PI * 2
