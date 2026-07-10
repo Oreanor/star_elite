@@ -2,7 +2,9 @@ import { Quaternion, Vector3 } from 'three'
 import { PHYSICS } from '../../config/physics'
 import { BOMB, GUNNERY, SALVAGE } from '../../config/weapons'
 import { ASTEROID, DEBRIS, SCORE } from '../../config/world'
+import { DOCKING } from '../../config/station'
 import {
+  applyDamage,
   clearTractorMarks,
   coolGuns,
   expireDrones,
@@ -76,6 +78,7 @@ export function stepWorld(world: World, frameDt: number, controllers: Controller
     stepAsteroids(world, dt)
     stepMissiles(world, dt)
     stepCollisions(world)
+    stepBodyCollisions(world)
     stepScooping(world, controllers, dt)
     stepDocking(world)
   }
@@ -202,6 +205,52 @@ function stepCollisions(world: World): void {
        * угол, под которым корабль пришёл.
        */
       if (impact >= ASTEROID.SHATTER_DAMAGE) shatter(world, a)
+    }
+  }
+}
+
+/** Крупные тела неподвижны в масштабах удара: их скорость для физики — ноль. */
+const _still = /* @__PURE__ */ new Vector3()
+
+/**
+ * Масса станции, тонны. Точное число не важно: оно нужно лишь чтобы доля
+ * импульса, достающаяся кораблю, была практически единицей. Станция не отлетает.
+ */
+const STATION_MASS = 1e9
+
+/**
+ * Столкновение с крупным телом.
+ *
+ * Планета и звезда не «наносят урон» — они кончают полёт. Считать отскок от
+ * шара в шесть тысяч километров, у которого корабль вязнет на скорости в двести
+ * метров в секунду, значит моделировать вход в атмосферу, посадку и прочность
+ * корпуса. Ничего этого нет, и притворяться незачем: удар о твердь смертелен.
+ *
+ * Станция — другое дело. Об неё можно ЗАДЕТЬ, и это должно стоить корпуса, а не
+ * жизни. Порог ровно тот же, по которому станция принимает швартовку: идёшь
+ * медленнее — ты стыкуешься, быстрее — таранишь. Второго правила заводить нельзя,
+ * иначе однажды окажется, что стыковаться можно только тараня.
+ */
+function stepBodyCollisions(world: World): void {
+  for (const ship of allShips(world)) {
+    if (!ship.alive) continue
+    // Вне фазы: на крейсерском ходу шаг физики длиннее радиуса планеты, и
+    // столкновение всё равно не сработало бы. От тел крейсер уводит масс-лок.
+    if (isPhased(ship)) continue
+
+    for (const body of world.bodies) {
+      const reach = body.radius + ship.spec.hull.radius
+      if (body.pos.distanceToSquared(ship.state.pos) > reach * reach) continue
+
+      if (body.kind === 'station') {
+        if (ship.state.vel.length() <= DOCKING.MAX_SPEED) continue
+        resolveShipVsSphere(ship, body.pos, _still, body.radius, STATION_MASS, world.time)
+        continue
+      }
+
+      // Щит от планеты не спасает: он держит лучи и обломки, а не кору.
+      ship.shield = 0
+      applyDamage(ship, ship.hull, world.time)
     }
   }
 }

@@ -361,6 +361,26 @@ function offscreenArrow({ ctx, camera, width, height }: HudFrame, pos: Vector3, 
  * градусов неба, и кольцо уезжает за кадр, а вдали её и так видно как точку.
  * Метка обязана говорить «тело здесь», а не повторять его силуэт.
  */
+/**
+ * Рамка вокруг цели навигации: ромб, а не круг.
+ *
+ * Круг сливается и со звездой, и с диском планеты, к которому он приклеен.
+ * Ромб в кадре не встречается больше нигде, поэтому глаз находит его сразу —
+ * ровно как выделенную звезду на карте, откуда цель и назначена.
+ */
+function navReticle(ctx: CanvasRenderingContext2D, x: number, y: number): void {
+  const r = 8 * S
+  ctx.strokeStyle = HUD_COLORS.NAV
+  ctx.lineWidth = S
+  ctx.beginPath()
+  ctx.moveTo(x, y - r)
+  ctx.lineTo(x + r, y)
+  ctx.lineTo(x, y + r)
+  ctx.lineTo(x - r, y)
+  ctx.closePath()
+  ctx.stroke()
+}
+
 function drawBodyMarkers({ ctx, camera, world, width, height }: HudFrame): void {
   for (const body of world.bodies) {
     const p = projectPoint(body.pos, camera, width, height)
@@ -372,9 +392,12 @@ function drawBodyMarkers({ ctx, camera, world, width, height }: HudFrame): void 
     // Цель навигации — точка потолще: цвет на звёздном фоне различим плохо,
     // а разница в размере читается даже боковым зрением.
     dot(ctx, p.x, p.y, nav ? 2.5 * S : 1.5 * S, color)
+    if (nav) navReticle(ctx, p.x, p.y)
 
-    text(ctx, body.name, p.x + 6 * S, p.y - 5 * S, color)
-    text(ctx, formatDistance(p.distance), p.x + 6 * S, p.y + 5 * S, color)
+    // Подпись отодвинута за рамку: иначе имя ложится ей на грань и не читается.
+    const gap = (nav ? 12 : 6) * S
+    text(ctx, body.name, p.x + gap, p.y - 5 * S, color)
+    text(ctx, formatDistance(p.distance), p.x + gap, p.y + 5 * S, color)
   }
 }
 
@@ -418,8 +441,11 @@ function drawRadar({ ctx, world, width, height }: HudFrame): void {
     ctx.fillRect(Math.round(px - size / 2), Math.round(py - lift - size / 2), size, size)
   }
 
+  // Цель навигации крупнее вдвое: одним цветом на логарифмической шкале, где
+  // все тела жмутся к ободу, её не найти — отметки стоят вплотную.
   for (const body of world.bodies) {
-    plot(body.pos, body.id === world.navTargetId ? HUD_COLORS.NAV : HUD_COLORS.DIM, Math.round(3 * S))
+    const nav = body.id === world.navTargetId
+    plot(body.pos, nav ? HUD_COLORS.NAV : HUD_COLORS.DIM, Math.round((nav ? 6 : 3) * S))
   }
   for (const pod of world.pods) if (pod.alive) plot(pod.pos, HUD_COLORS.WARN, Math.round(2 * S))
   // Локатор невидимку не берёт — то же правило, что у захвата и у головки ракеты.
