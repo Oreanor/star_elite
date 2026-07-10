@@ -28,10 +28,17 @@ export interface Manoeuvre {
   phase: 0 | 1
   elapsed: number
   cooldown: number
+  /**
+   * Буфер на один ввод: фигура, заказанная, пока штурвал ещё занят прошлой (или
+   * остывает). Пускается, как только освободится. Так связку «влево-вправо»
+   * можно набить заранее, не подгадывая точный миг конца фигуры.
+   */
+  nextKind: ManoeuvreKind | null
+  nextDir: -1 | 1
 }
 
 export function createManoeuvre(): Manoeuvre {
-  return { kind: null, dir: 1, angle: 0, phase: 0, elapsed: 0, cooldown: 0 }
+  return { kind: null, dir: 1, angle: 0, phase: 0, elapsed: 0, cooldown: 0, nextKind: null, nextDir: 1 }
 }
 
 /** Идёт ли фигура. Спрашивают и контроллер, и камера — правило одно. */
@@ -46,26 +53,50 @@ export const manoeuvring = (m: Manoeuvre): boolean => m.kind !== null
  */
 export const manoeuvreHoldsCamera = (m: Manoeuvre): boolean => m.kind === 'loop' || m.kind === 'reversal'
 
-/** Начать фигуру. Отказывает, пока идёт другая или не остыла предыдущая. */
-export function beginManoeuvre(m: Manoeuvre, kind: ManoeuvreKind, dir: -1 | 1): boolean {
-  if (m.kind !== null || m.cooldown > 0) return false
+/** Взвести фигуру: сбросить счётчики и пустить. Проверки — на вызывающем. */
+function startManoeuvre(m: Manoeuvre, kind: ManoeuvreKind, dir: -1 | 1): void {
   m.kind = kind
   m.dir = dir
   m.angle = 0
   m.phase = 0
   m.elapsed = 0
+}
+
+/**
+ * Заказать фигуру. Свободен — начинает сразу. Занят или ещё остывает — кладёт в
+ * БУФЕР на один ввод и вернёт false: заказ не потерян, он пойдёт, как только
+ * освободится штурвал. Последний заказ вытесняет прежний — в буфере всегда самое
+ * свежее намерение пилота, а не то, что он передумал.
+ */
+export function beginManoeuvre(m: Manoeuvre, kind: ManoeuvreKind, dir: -1 | 1): boolean {
+  if (m.kind !== null || m.cooldown > 0) {
+    m.nextKind = kind
+    m.nextDir = dir
+    return false
+  }
+  startManoeuvre(m, kind, dir)
+  return true
+}
+
+/** Достать фигуру из буфера, если он есть. Возвращает, взяли ли. */
+function popBuffered(m: Manoeuvre): boolean {
+  if (m.nextKind === null) return false
+  const kind = m.nextKind
+  m.nextKind = null
+  startManoeuvre(m, kind, m.nextDir)
   return true
 }
 
 /** Остудить таймеры. Зовётся каждый шаг, даже когда фигуры нет. */
 export function coolManoeuvre(m: Manoeuvre, dt: number): void {
   m.cooldown = Math.max(0, m.cooldown - dt)
+  // Буфер, заказанный во время ОСТЫВАНИЯ, пускаем, как только пауза вышла. Буфер,
+  // заказанный в самой фигуре, пускает endManoeuvre — вплотную, без паузы вовсе.
+  if (m.kind === null && m.cooldown === 0) popBuffered(m)
 }
 
 function endManoeuvre(ship: ShipEntity, m: Manoeuvre): void {
   const c = ship.controls
-  m.kind = null
-  m.cooldown = MANOEUVRE.COOLDOWN
   c.roll = 0
   c.pitch = 0
   c.strafe = 0
@@ -75,6 +106,14 @@ function endManoeuvre(ship: ShipEntity, m: Manoeuvre): void {
   // за 360°, а камера, снова следя за креном, повторяла этот доворот. Фигура —
   // управляемый манёвр: кончилась — корабль стабилен, а не докручивается сам.
   ship.state.angVel.set(0, 0, 0)
+
+  // Заказанную ещё в этой фигуре следующую — пускаем ВПЛОТНУЮ, без паузы: так
+  // связка «влево-вправо» идёт слитно. Спамить из простоя всё равно нельзя —
+  // там, без буфера, ждёт COOLDOWN.
+  if (!popBuffered(m)) {
+    m.kind = null
+    m.cooldown = MANOEUVRE.COOLDOWN
+  }
 }
 
 /**
@@ -90,10 +129,10 @@ function driveBarrel(ship: ShipEntity, m: Manoeuvre, dt: number): void {
   const c = ship.controls
   // Ручка крена за упором: бочка крутится резко, как форсаж маневровых.
   c.roll = m.dir * MANOEUVRE.BARREL_ROLL_STICK
-  // Маневровые СНАПАЮТ на фигурную скорость сразу, а не раскачиваются от нуля:
-  // иначе первые кадры бочки — вялый доворот, и фигура «отзывается» с задержкой.
-  if (m.angle === 0) ship.state.angVel.z = c.roll * ship.spec.tuning.ROLL_RATE
-  // Угол берём из ФАКТИЧЕСКОЙ угловой скорости: раскрутка маневровых не мгновенна.
+  // Крен НЕ снапаем, в отличие от петли и разворота: сход с линии ∝ времени², и
+  // мгновенный разгон ужал бы один оборот до 0.8 с, а сход с 11 до 3 м — уклонение
+  // потеряло бы смысл. Пусть маневровые раскручиваются: оборот выходит за 1.6 с,
+  // сход — одиннадцать метров. Угол берём из ФАКТИЧЕСКОЙ угловой скорости.
   m.angle += Math.abs(ship.state.angVel.z) * dt
 
   const theta = m.angle * m.dir
@@ -101,7 +140,7 @@ function driveBarrel(ship: ShipEntity, m: Manoeuvre, dt: number): void {
   c.strafe = Math.cos(theta) * m.dir * MANOEUVRE.BARREL_STRAFE_STICK
   c.strafeUp = -Math.sin(theta) * m.dir * MANOEUVRE.BARREL_STRAFE_STICK
 
-  if (m.angle >= MANOEUVRE.FULL_TURN * MANOEUVRE.BARREL_ROTATIONS) endManoeuvre(ship, m)
+  if (m.angle >= MANOEUVRE.FULL_TURN) endManoeuvre(ship, m)
 }
 
 /**

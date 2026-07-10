@@ -4,7 +4,14 @@ import { MANOEUVRE } from '../../config/manoeuvre'
 import { PHYSICS } from '../../config/physics'
 import { stepWorld, type Controller } from '../sim'
 import { createWorld, STARTER_SYSTEM, type ShipEntity, type World } from '../world'
-import { beginManoeuvre, createManoeuvre, stepManoeuvre, type Manoeuvre, type ManoeuvreKind } from './aerobatics'
+import {
+  beginManoeuvre,
+  coolManoeuvre,
+  createManoeuvre,
+  stepManoeuvre,
+  type Manoeuvre,
+  type ManoeuvreKind,
+} from './aerobatics'
 import { forward } from './axes'
 
 /**
@@ -137,17 +144,84 @@ describe('фигуры пилотажа', () => {
   })
 
   it('бочка сохраняет и курс, и линию полёта', () => {
-    const { before, after, offset } = fly('barrel')
+    const { before, after, offset, seconds } = fly('barrel')
 
     expect(before.dot(after)).toBeGreaterThan(0.99)
     // Тяга маневровых удерживается в неподвижном направлении, поэтому корабль
     // СХОДИТ с прежней линии — в этом вся суть уклонения.
     expect(offset).toBeGreaterThan(10)
+    // Бочка — РОВНО один оборот (около 1.6 с), а не «крутись до предохранителя».
+    // Стереги регресс, где условие конца сломалось и фигура шла все девять секунд:
+    // курс и сход тогда тоже сходятся, и поймать это можно только по времени.
+    expect(seconds).toBeLessThan(MANOEUVRE.MAX_DURATION / 2)
   })
 
-  it('фигура остывает: вторую подряд не начать', () => {
+  it('фигура остывает: сразу из простоя вторую не начать', () => {
     const { m } = fly('loop')
     expect(m.cooldown).toBeGreaterThan(0)
+    // Из простоя, пока не остыла, — отказ (false), не мгновенный повтор.
     expect(beginManoeuvre(m, 'loop', 1)).toBe(false)
+  })
+
+  /**
+   * Но заказ во время паузы или самой фигуры НЕ теряется — он кладётся в буфер и
+   * идёт, как только освободится штурвал. Так связку «влево-вправо» можно набить
+   * заранее, не подгадывая точный миг конца первой фигуры.
+   */
+  it('заказ во время остывания буферизуется и пускается, едва пауза вышла', () => {
+    const { m } = fly('loop')
+    expect(m.cooldown).toBeGreaterThan(0)
+
+    beginManoeuvre(m, 'barrel', -1) // занято остыванием → в буфер
+    expect(m.nextKind).toBe('barrel')
+
+    coolManoeuvre(m, MANOEUVRE.COOLDOWN) // пауза вышла — буфер сам пустил фигуру
+    expect(m.kind).toBe('barrel')
+    expect(m.dir).toBe(-1)
+    expect(m.nextKind).toBeNull()
+  })
+
+  it('встречную бочку, заказанную посреди первой, крутит следом без паузы', () => {
+    const world = createWorld({ ...STARTER_SYSTEM, patrols: [], belt: null })
+    const ship = world.player
+    ship.state.pos.copy(DEEP_SPACE)
+    ship.state.quat.identity()
+    ship.state.vel.set(0, 0, -180)
+    ship.state.angVel.set(0, 0, 0)
+    ship.controls.throttle = 180 / ship.spec.tuning.MAX_SPEED
+
+    const m = createManoeuvre()
+    beginManoeuvre(m, 'barrel', 1)
+    let requested = false
+    let sawSecond = false
+
+    const pilot: Controller = {
+      update(s: ShipEntity, _w: World, dt: number) {
+        s.controls.flightAssist = true
+        s.controls.boost = 1
+        s.controls.yaw = 0
+        coolManoeuvre(m, dt)
+        // Посреди первой бочки заказываем встречную: штурвал занят — уйдёт в буфер.
+        if (!requested && m.angle > Math.PI) {
+          expect(beginManoeuvre(m, 'barrel', -1)).toBe(false)
+          requested = true
+        }
+        stepManoeuvre(s, m, dt)
+        // Буфер подхватился встык: kind снова 'barrel', но уже направлением −1,
+        // и БЕЗ паузы — cooldown между связкой не заводился.
+        if (requested && m.kind === 'barrel' && m.dir === -1) {
+          sawSecond = true
+          expect(m.cooldown).toBe(0)
+        }
+      },
+      wantsFire: () => false,
+    }
+
+    const controllers = new Map<number, Controller>([[ship.id, pilot]])
+    const dt = PHYSICS.FIXED_DT
+    for (let i = 0; i < 1500 && !sawSecond; i++) stepWorld(world, dt, controllers)
+
+    expect(requested).toBe(true)
+    expect(sawSecond).toBe(true)
   })
 })
