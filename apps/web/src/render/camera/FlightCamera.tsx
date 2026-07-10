@@ -102,6 +102,9 @@ export function FlightCamera() {
      * разворота хвост оказывается с другой стороны — это и есть «перебежать».
      */
     const held = !cockpit && manoeuvreHoldsCamera(session.intent)
+    // Бочка — крен без смены курса. Камера в ней не гонится ни за креном, ни за
+    // положением: она замирает за хвостом, а корабль крутится в центре кадра.
+    const barrel = !cockpit && session.intent.manoeuvre.kind === 'barrel'
 
     const offset = cockpit ? CAMERA.COCKPIT_OFFSET : CAMERA.CHASE_OFFSET
     _offset.set(offset[0], offset[1], offset[2])
@@ -113,15 +116,25 @@ export function FlightCamera() {
        *
        * Отъезд считается из радиуса, а не подбирается: на 60 м/с петля выходит
        * сорокапятиметровой, на боевых двухстах — полуторастаметровой, и никакая
-       * одна константа не годится сразу для обеих.
+       * одна константа не годится сразу для обеих. Но сверху он ограничен, иначе
+       * на быстрой фигуре корабль улетает в точку и не видно, что он делает.
        */
       const rate = Math.max(0.4, Math.abs(state.angVel.x))
       const loopRadius = state.vel.length() / rate
-      const pullback = clamp(1 + (3 * loopRadius) / _offset.length(), 1, 8)
+      const pullback = clamp(
+        1 + (CAMERA.LOOP_PULLBACK_GAIN * loopRadius) / _offset.length(),
+        1,
+        CAMERA.LOOP_PULLBACK_MAX,
+      )
       _offset.multiplyScalar(pullback)
 
       _camRot.copy(camSwing).multiply(camTwist)
       _offset.applyQuaternion(_camRot)
+    } else if (barrel) {
+      // Смещение считаем от ЗАСТЫВШЕГО курса камеры, а не от кватерниона корабля:
+      // иначе точка съёмки проворачивается вокруг оси крена и орбитой обходит
+      // корабль — та самая «камера сходит с ума» посреди бочки.
+      _offset.applyQuaternion(camSwing)
     } else {
       _offset.applyQuaternion(state.quat)
     }
@@ -146,14 +159,16 @@ export function FlightCamera() {
       swingTwist(state.quat, _rollAxis, _swing, _twist)
 
       // В бочке крен не передаём вовсе: это фигура пилотажа, а не вираж.
-      const wantTwist = session.intent.manoeuvre.kind === 'barrel' ? _identity : _twist
+      const wantTwist = barrel ? _identity : _twist
 
       if (held) {
         // Камера стоит и ждёт. Ориентацию не трогаем совсем — только позицию,
         // которая уже посчитана от этой самой ориентации.
         camera.position.lerp(_target, 1 - Math.exp(-CAMERA.CHASE_STIFFNESS * dt))
       } else if (running) {
-        camSwing.slerp(_swing, 1 - Math.exp(-CAMERA.CHASE_ROT_STIFFNESS * dt))
+        // В бочке курс камеры ЗАМИРАЕТ: он и так не меняется (бочка не поворачивает),
+        // а разложение крена у 180° вырождается и швыряет swing — отсюда рывок кадра.
+        if (!barrel) camSwing.slerp(_swing, 1 - Math.exp(-CAMERA.CHASE_ROT_STIFFNESS * dt))
         camTwist.slerp(wantTwist, 1 - Math.exp(-CAMERA.ROLL_STIFFNESS * dt))
         camera.position.lerp(_target, 1 - Math.exp(-CAMERA.CHASE_STIFFNESS * dt))
       } else {

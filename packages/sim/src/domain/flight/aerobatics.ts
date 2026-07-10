@@ -83,13 +83,15 @@ function endManoeuvre(ship: ShipEntity, m: Manoeuvre): void {
  */
 function driveBarrel(ship: ShipEntity, m: Manoeuvre, dt: number): void {
   const c = ship.controls
-  c.roll = m.dir
+  // Ручка крена за упором: бочка крутится резко, как форсаж маневровых.
+  c.roll = m.dir * MANOEUVRE.BARREL_ROLL_STICK
   // Угол берём из ФАКТИЧЕСКОЙ угловой скорости: раскрутка маневровых не мгновенна.
   m.angle += Math.abs(ship.state.angVel.z) * dt
 
   const theta = m.angle * m.dir
-  c.strafe = Math.cos(theta) * m.dir
-  c.strafeUp = -Math.sin(theta) * m.dir
+  // Тяга уклонения тем же форсажем: на быстром обороте сход с линии иначе исчезает.
+  c.strafe = Math.cos(theta) * m.dir * MANOEUVRE.BARREL_STRAFE_STICK
+  c.strafeUp = -Math.sin(theta) * m.dir * MANOEUVRE.BARREL_STRAFE_STICK
 
   if (m.angle >= MANOEUVRE.FULL_TURN) endManoeuvre(ship, m)
 }
