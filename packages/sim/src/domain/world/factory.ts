@@ -380,6 +380,8 @@ export function enterSystem(
 
   world.docked = false
   world.dockArmed = true
+  // Причал новой системы пуст: занявший его корабль остался в покинутой.
+  world.dockOccupantId = null
 
   // Выходим из прыжка на ходу и с нулём в началe координат: плавающее начало
   // отсчёта считалось от прежней системы, и переносить его сюда бессмысленно.
@@ -432,6 +434,7 @@ export function createWorld(def: SystemDef = STARTER_SYSTEM): World {
     shockwaves: [],
     docked: false,
     dockArmed: true,
+    dockOccupantId: null,
     lockedTargetId: null,
     navTargetId: station?.id ?? null,
     trafficTimer: TRAFFIC.FIRST_DELAY,

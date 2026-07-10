@@ -1,10 +1,14 @@
 import { Vector3 } from 'three'
 import { AI } from '../../config/ai'
+import { NPC_DOCK } from '../../config/station'
+import { TRAFFIC } from '../../config/world'
 import { clamp, signed } from '../../core/math'
 import { healthFraction, shieldFraction } from '../combat/damage'
 import { shipAxes } from '../flight/axes'
 import { bankToward, steerToward } from '../flight/steering'
+import { findStation } from '../station/docking'
 import type { Controller } from '../sim/controller'
+import type { ShipControls } from '../flight/types'
 import type { ShipEntity, World } from '../world/entities'
 import { breakWaypoint, leadPoint, patrolWaypoint } from './maneuvers'
 import { isEngageable } from '../combat/engage'
@@ -37,6 +41,9 @@ const _right = new Vector3()
 const _up = new Vector3()
 const _aim = new Vector3()
 const _toTarget = new Vector3()
+const _dockAim = new Vector3()
+const _depart = new Vector3()
+const _gate = new Vector3(NPC_DOCK.GATE[0], NPC_DOCK.GATE[1], NPC_DOCK.GATE[2])
 const _steer = { pitch: 0, yaw: 0 }
 
 function setMode(ai: AIState, mode: AIMode): void {
@@ -69,7 +76,9 @@ export const aiController: Controller = {
 
     const target = rethink ? selectAndRemember(e, world) : resolveTarget(e, world)
     if (!target) {
-      flyPatrol(e, ai, world.time)
+      // Стыкующийся к причалу правит на станцию по очереди; прочие — патрулируют.
+      if (ai.dock !== null) flyDock(e, ai, world, dt)
+      else flyPatrol(e, ai, world.time)
       return
     }
 
@@ -264,6 +273,97 @@ function flyPatrol(e: ShipEntity, ai: AIState, time: number): void {
   c.boost = 1
   c.throttle = 0.35
   c.flightAssist = true
+}
+
+/** Навести нос и крен на точку. Общий манёвр захода на причал и ожидания очереди. */
+function steerTo(e: ShipEntity, aim: Vector3, c: ShipControls): void {
+  steerToward(e.state, aim, 2.2, _steer)
+  c.pitch = _steer.pitch
+  c.yaw = _steer.yaw
+  c.roll = bankToward(e.state, aim)
+}
+
+/** Точка перед причальными воротами: заходят и швартуются здесь, а не в центре станции. */
+function berthPoint(stationPos: Vector3, radius: number, out: Vector3): Vector3 {
+  return out.copy(_gate).multiplyScalar(radius + NPC_DOCK.BERTH_RANGE * 0.5).add(stationPos)
+}
+
+/**
+ * Стыковка трафика к причалу — ПО ОДНОМУ. Причал держит `world.dockOccupantId`:
+ * занявший его заходит и швартуется, остальные ждут на кольце ожидания и займут
+ * место, едва оно освободится. Игрока это не касается: он стыкуется своим путём
+ * (`docked` замораживает мир). Здесь мир живёт, поэтому «стоянка» — не остановка
+ * мира, а корабль, гасящий ход у причала на несколько секунд.
+ */
+function flyDock(e: ShipEntity, ai: AIState, world: World, dt: number): void {
+  const station = findStation(world)
+  if (!station) {
+    // Стыковаться не к чему (прыгнули в систему без причала) — обычный полёт.
+    ai.dock = null
+    flyPatrol(e, ai, world.time)
+    return
+  }
+
+  const c = e.controls
+  c.flightAssist = true
+  c.boost = 1
+  c.rudder = 0
+
+  // Отчалил — уходит прочь как обычный трафик: `home` уже уводит от станции.
+  if (ai.dock === 'done') {
+    flyPatrol(e, ai, world.time)
+    return
+  }
+
+  if (ai.dock === 'berthed') {
+    e.clearance = true // у причала корабль под защитой станции: его не бьют
+    ai.dockTimer -= dt
+    steerTo(e, berthPoint(station.pos, station.radius, _dockAim), c)
+    c.throttle = 0
+    c.retro = e.state.vel.length() > 2 ? 1 : 0 // гасит остаточный ход, держась у ворот
+    if (ai.dockTimer <= 0) {
+      if (world.dockOccupantId === e.id) world.dockOccupantId = null
+      e.clearance = false
+      ai.dock = 'done'
+      // Уходит наружу от станции — прямо от своего места, чтобы не толкаться у причала.
+      _depart.copy(e.state.pos).sub(station.pos)
+      if (_depart.lengthSq() < 1) _depart.copy(_gate)
+      _depart.normalize()
+      ai.home.copy(station.pos).addScaledVector(_depart, station.radius + TRAFFIC.DESTINATION_RANGE)
+      ai.waypoint.copy(ai.home)
+    }
+    return
+  }
+
+  // inbound: занять причал, если свободен, иначе — в очередь.
+  const mine = world.dockOccupantId === e.id
+  if (world.dockOccupantId === null || mine) {
+    if (!mine) world.dockOccupantId = e.id
+    berthPoint(station.pos, station.radius, _dockAim)
+    steerTo(e, _dockAim, c)
+    const toBerth = e.state.pos.distanceTo(_dockAim)
+    // Ход тем меньше, чем ближе причал: влететь в кольцо на полном — таран.
+    c.throttle = toBerth > NPC_DOCK.BRAKE_RANGE ? 0.6 : clamp(toBerth / NPC_DOCK.BRAKE_RANGE, 0.06, 0.6)
+    c.retro = 0
+    if (toBerth < NPC_DOCK.BERTH_RANGE) {
+      e.clearance = true
+      if (e.state.vel.length() < NPC_DOCK.BERTH_SPEED) {
+        ai.dock = 'berthed'
+        ai.dockTimer = NPC_DOCK.DWELL
+      }
+    }
+    return
+  }
+
+  // Причал занят — ждём очередь на кольце поодаль, не претендуя на место.
+  e.clearance = false
+  _dockAim.copy(e.state.pos).sub(station.pos)
+  if (_dockAim.lengthSq() < 1) _dockAim.copy(_gate)
+  _dockAim.normalize().multiplyScalar(station.radius + NPC_DOCK.QUEUE_RANGE).add(station.pos)
+  steerTo(e, _dockAim, c)
+  const toHold = e.state.pos.distanceTo(_dockAim)
+  c.throttle = toHold > 200 ? 0.4 : 0
+  c.retro = toHold < 200 && e.state.vel.length() > 5 ? 1 : 0
 }
 
 /** Зовётся только в момент «размышления»: между ними режим держится. */

@@ -1,5 +1,6 @@
 import { Quaternion, Vector3 } from 'three'
 import { freighterLoadout, pirateLeaderLoadout, pirateLoadout, traderLoadout } from '../../config/loadouts'
+import { NPC_DOCK } from '../../config/station'
 import { TITAN } from '../../config/titans'
 import { TRAFFIC } from '../../config/world'
 import { signed, type Rng } from '../../core/math'
@@ -110,8 +111,11 @@ function spawnSite(world: World, kind: EncounterKind, outPos: Vector3, outHome: 
   const station = world.bodies.find((b) => b.kind === 'station')
 
   if (kind.faction === 'neutral' && station && world.rng() < TRAFFIC.STATION_SHARE) {
-    randomDirection(world, _scratch)
-    // Чуть в стороне от причала: рождённый в горловине корабль таранит станцию.
+    // Отчаливают с ПРОТИВОПОЛОЖНОЙ воротам стороны: на стыковку заходят с одной,
+    // вылетают с другой — станция работает на просвет, потоки не сходятся в горловине.
+    _scratch.set(-NPC_DOCK.GATE[0], -NPC_DOCK.GATE[1], -NPC_DOCK.GATE[2])
+    // Небольшой разброс, чтобы вылетающие не сыпались из одной точки.
+    _scratch.addScaledVector(randomDirection(world, _offset), 0.3).normalize()
     outPos.copy(station.pos).addScaledVector(_scratch, station.radius * 3)
     outHome.copy(station.pos).addScaledVector(_scratch, TRAFFIC.DESTINATION_RANGE)
     return
@@ -199,6 +203,14 @@ function spawnEncounter(world: World): ShipEntity[] {
     if (kind.cargo) for (const ship of born) stockFreighter(world, ship, kind.cargo)
     if (kind.escort) born.push(...spawnEscort(world, kind.escort, patron))
   }
+
+  // Часть мирных караванов идёт СТЫКОВАТЬСЯ, а не мимо: они выстраиваются в очередь
+  // к причалу и швартуются по одному. Гигант-грузовик к причалу не лезет — только
+  // лёгкие торговцы. Отмечаем весь борт: караван из троих и покажет очередь наглядно.
+  const station = world.bodies.find((b) => b.kind === 'station')
+  if (station && (kind.id === 'trader' || kind.id === 'convoy') && world.rng() < TRAFFIC.DOCK_SHARE) {
+    for (const ship of born) if (ship.ai) ship.ai.dock = 'inbound'
+  }
   return born
 }
 
@@ -218,8 +230,21 @@ function despawnDistant(world: World): void {
     if (!s.alive || isDroneShip(s)) return true
     if (s.id === world.lockedTargetId) return true
     if (s.ai?.escortOf != null) return true
+    // Стыкующегося у причала не бросаем: он привязан к станции, как захваченная цель.
+    // Иначе улетевший к причалу игрок вернулся бы к пустому причалу с зависшей очередью.
+    if (s.ai?.dock === 'berthed' || s.id === world.dockOccupantId) return true
     return s.state.pos.distanceToSquared(world.player.state.pos) <= limitSq
   })
+
+  // Причал держит только живой стыкующийся. Погиб, ушёл или уже отчалил — освобождаем
+  // место, иначе очередь встанет навсегда, а к причалу никто больше не подойдёт.
+  const occupant = world.dockOccupantId
+  if (occupant != null) {
+    const ship = world.ships.find((s) => s.id === occupant)
+    if (!ship || !ship.alive || ship.ai?.dock == null || ship.ai.dock === 'done') {
+      world.dockOccupantId = null
+    }
+  }
 }
 
 /**

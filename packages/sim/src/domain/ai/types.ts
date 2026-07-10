@@ -4,6 +4,14 @@ import type { Rng } from '../../core/math'
 export type AIMode = 'patrol' | 'pursue' | 'attack' | 'break' | 'evade'
 
 /**
+ * Фаза стыковки трафика. null — корабль не стыкуется вовсе.
+ *   inbound  — заходит на причал (или ждёт очередь, если он занят);
+ *   berthed  — стоит у причала положенное время;
+ *   done     — отчалил и уходит прочь, дальше живёт обычным трафиком.
+ */
+export type DockPhase = 'inbound' | 'berthed' | 'done' | null
+
+/**
  * Память пилота-бота. Он не двигает корабль — он заполняет тот же ShipControls,
  * что и игрок мышью. Всё, что он умеет, физически доступно и тебе.
  */
@@ -61,6 +69,11 @@ export interface AIState {
    * а не заниженным оружием. Ровно этим правилом живут и пираты.
    */
   skill: number
+
+  /** Стыкуется ли к причалу и на какой стадии. null — обычный трафик. */
+  dock: DockPhase
+  /** Секунд у причала до отчаливания. Тикает только в фазе `berthed`. */
+  dockTimer: number
 }
 
 export function createAIState(home: Vector3, rng: Rng): AIState {
@@ -82,5 +95,7 @@ export function createAIState(home: Vector3, rng: Rng): AIState {
     wantsEcm: false,
     escortOf: null,
     skill: 1,
+    dock: null,
+    dockTimer: 0,
   }
 }
