@@ -75,12 +75,23 @@ export const RU = {
   'key.pause': 'Esc',
   'key.pause.what': 'пауза и курсор',
 
+  // ─── Разделы таблицы клавиш ─────────────────────────────────────────────────
+  'keys.group.flight': 'ПИЛОТИРОВАНИЕ',
+  'keys.group.combat': 'БОЙ',
+  'keys.group.ship': 'КОРАБЛЬ И МИР',
+
   // ─── HUD ──────────────────────────────────────────────────────────────────
   'hud.shield': 'ЩИТ',
   'hud.hull': 'КОРП',
   'hud.energy': 'ЭНРГ',
   'hud.bomb': 'БОМБА',
   'hud.heat': 'ТЕПЛО',
+  'hud.laser': 'ЛАЗЕР',
+  'hud.temp': 'ТЕМП',
+  'hud.jump': 'ГИПЕР',
+  'hud.overheat': 'ПЕРЕГРЕВ — ОТ ЗВЕЗДЫ',
+  'hud.hullHot': 'КОРПУС ГРЕЕТСЯ',
+  'hud.refuel': 'ЗАПРАВКА',
   'hud.throttle': 'ТЯГА',
   'hud.missiles': 'РАКЕТ {ammo}',
   'hud.assistOff': 'АССИСТ ВЫКЛ',

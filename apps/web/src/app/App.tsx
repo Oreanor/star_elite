@@ -153,35 +153,51 @@ function Shell({ onRestart }: { onRestart: () => void }) {
 }
 
 /**
- * Таблица клавиш — теперь из словаря, а не хардкодом: одна правка в i18n меняет
- * и подсказку, и её перевод. Пары «клавиша / что делает» по ключам `key.X` и `key.X.what`.
+ * Таблица клавиш — из словаря и СГРУППИРОВАНА по смыслу: пилотирование, бой,
+ * корабль и мир. Пары «клавиша / что делает» по ключам `key.X` и `key.X.what`.
+ * Раскладка в две колонки: группы не рвутся, а перетекают целиком (break-inside).
  */
-const KEY_ROWS: [Key, Key][] = [
-  ['key.mouse', 'key.mouse.what'],
-  ['key.throttle', 'key.throttle.what'],
-  ['key.rmb', 'key.rmb.what'],
-  ['key.roll', 'key.roll.what'],
-  ['key.barrel', 'key.barrel.what'],
-  ['key.loop', 'key.loop.what'],
-  ['key.reversal', 'key.reversal.what'],
-  ['key.retro', 'key.retro.what'],
-  ['key.cruise', 'key.cruise.what'],
-  ['key.fire', 'key.fire.what'],
-  ['key.target', 'key.target.what'],
-  ['key.autofight', 'key.autofight.what'],
-  ['key.ship', 'key.ship.what'],
-  ['key.system', 'key.system.what'],
-  ['key.galaxy', 'key.galaxy.what'],
-  ['key.talk', 'key.talk.what'],
-  ['key.missile', 'key.missile.what'],
-  ['key.ecm', 'key.ecm.what'],
-  ['key.bomb', 'key.bomb.what'],
-  ['key.cloak', 'key.cloak.what'],
-  ['key.drone', 'key.drone.what'],
-  ['key.tractor', 'key.tractor.what'],
-  ['key.dock', 'key.dock.what'],
-  ['key.view', 'key.view.what'],
-  ['key.pause', 'key.pause.what'],
+const KEY_GROUPS: { title: Key; rows: [Key, Key][] }[] = [
+  {
+    title: 'keys.group.flight',
+    rows: [
+      ['key.mouse', 'key.mouse.what'],
+      ['key.throttle', 'key.throttle.what'],
+      ['key.rmb', 'key.rmb.what'],
+      ['key.roll', 'key.roll.what'],
+      ['key.barrel', 'key.barrel.what'],
+      ['key.loop', 'key.loop.what'],
+      ['key.reversal', 'key.reversal.what'],
+      ['key.retro', 'key.retro.what'],
+      ['key.cruise', 'key.cruise.what'],
+    ],
+  },
+  {
+    title: 'keys.group.combat',
+    rows: [
+      ['key.fire', 'key.fire.what'],
+      ['key.target', 'key.target.what'],
+      ['key.autofight', 'key.autofight.what'],
+      ['key.missile', 'key.missile.what'],
+      ['key.ecm', 'key.ecm.what'],
+      ['key.bomb', 'key.bomb.what'],
+      ['key.cloak', 'key.cloak.what'],
+      ['key.drone', 'key.drone.what'],
+    ],
+  },
+  {
+    title: 'keys.group.ship',
+    rows: [
+      ['key.tractor', 'key.tractor.what'],
+      ['key.dock', 'key.dock.what'],
+      ['key.ship', 'key.ship.what'],
+      ['key.system', 'key.system.what'],
+      ['key.galaxy', 'key.galaxy.what'],
+      ['key.talk', 'key.talk.what'],
+      ['key.view', 'key.view.what'],
+      ['key.pause', 'key.pause.what'],
+    ],
+  },
 ]
 
 /**
@@ -320,15 +336,22 @@ function Paused({ resuming, onBoot }: { resuming: boolean; onBoot: () => void })
       {screen === 'keys' ? (
         /* Таблица клавиш вчетверо выше пары кнопок. По центру экрана она бы
            наехала на логотип, поэтому у неё свой отсчёт — от него вниз. */
-        <div className="absolute inset-0 flex flex-col items-center overflow-y-auto px-8 pt-[26vh] pb-10">
-          <dl className="mb-8 space-y-1 text-left text-sm">
-            {KEY_ROWS.map(([keyLabel, keyWhat]) => (
-              <div key={keyLabel} className="flex gap-3">
-                <dt className="w-32 shrink-0 text-right text-[#7fd6ff]">{t(keyLabel)}</dt>
-                <dd className="text-[#3f7391]">{t(keyWhat)}</dd>
+        <div className="absolute inset-0 flex flex-col items-center overflow-y-auto px-8 pt-[22vh] pb-10">
+          <div className="mb-8 w-full max-w-4xl gap-x-12 sm:columns-2">
+            {KEY_GROUPS.map((group) => (
+              <div key={group.title} className="mb-6 break-inside-avoid">
+                <h3 className="mb-2 text-xs tracking-[0.3em] text-[#7fd6ff]">{t(group.title)}</h3>
+                <dl className="space-y-1 text-left text-sm">
+                  {group.rows.map(([keyLabel, keyWhat]) => (
+                    <div key={keyLabel} className="flex gap-3">
+                      <dt className="w-24 shrink-0 text-right text-[#7fd6ff]">{t(keyLabel)}</dt>
+                      <dd className="text-[#3f7391]">{t(keyWhat)}</dd>
+                    </div>
+                  ))}
+                </dl>
               </div>
             ))}
-          </dl>
+          </div>
           <MenuButton onClick={() => setScreen('main')}>{t('menu.back')}</MenuButton>
         </div>
       ) : screen === 'settings' ? (

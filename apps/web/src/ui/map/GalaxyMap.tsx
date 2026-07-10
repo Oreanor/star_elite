@@ -649,7 +649,7 @@ function SystemDetails({
         }`}
         style={{ borderColor: blocked ? UI.DIM : UI.PRIMARY, color: blocked ? UI.DIM : UI.PRIMARY }}
       >
-        {blocked ? BLOCK_REASON[blocked] : 'ПРЫЖОК'}
+        {blocked ? BLOCK_REASON[blocked] : core ? 'В ДРУГУЮ ГАЛАКТИКУ' : 'ПРЫЖОК'}
       </button>
     </div>
   )

@@ -30,6 +30,7 @@ import {
 import { bombFlash, bombRing } from '../../render/bombFeel'
 import { HUD_SCALE } from '../../render/config'
 import { HUD_COLORS, bar, circle, corners, dot, line, rect, text } from './draw'
+import { t } from '../i18n'
 import { drawFlare } from './drawFlare'
 import { angularSize, formatDistance, formatSpeed, projectPoint } from './project'
 
@@ -136,12 +137,12 @@ function drawPods(frame: HudFrame): void {
    */
   const label =
     readiness === 'full'
-      ? 'ТРЮМ ПОЛОН'
+      ? t('hud.holdFull')
       : readiness === null
-        ? `ЗАХВАТ · ${itemName(pod.item)}`
+        ? t('hud.podGrab', { item: itemName(pod.item) })
         : pod.tractored
-          ? `ЛУЧ · ${itemName(pod.item)}`
-          : `C — ПРИТЯНУТЬ · ${itemName(pod.item)}`
+          ? t('hud.podBeam', { item: itemName(pod.item) })
+          : t('hud.podPull', { item: itemName(pod.item) })
 
   const color = readiness === 'full' ? HUD_COLORS.WARN : HUD_COLORS.PRIMARY
   text(ctx, label, p.x, p.y + 12 * S, color, 'center')
@@ -198,12 +199,12 @@ function drawDocking(frame: HudFrame): void {
     state === 'engaged'
       ? // Не «автопилот»: пилот и так видит, что руль не его. Важнее, что станция
         // взяла его под защиту, — и это единственное место, где об этом говорят.
-        `КОРИДОР ОТКРЫТ · ${formatDistance(range)} · L — ОТМЕНА`
+        t('hud.dockCorridor', { range: formatDistance(range) })
       : state === 'ready'
-        ? 'ПРИЧАЛ СВОБОДЕН · L — СТЫКОВКА'
+        ? t('hud.dockReady')
         : state === 'too-fast'
-          ? `СБРОСЬ СКОРОСТЬ ДО ${DOCKING.MAX_SPEED} М/С`
-          : `L — АВТОСТЫКОВКА · ПРИЧАЛ ${formatDistance(range)}`
+          ? t('hud.dockTooFast', { speed: DOCKING.MAX_SPEED })
+          : t('hud.dockHint', { range: formatDistance(range) })
 
   const blinking = state === 'ready' || state === 'too-fast'
   const lit = !blinking || Math.sin(world.time * DOCK_BLINK_HZ * Math.PI * 2) > 0
@@ -587,7 +588,7 @@ function drawReadouts({ ctx, world, height }: HudFrame): void {
   let y = height - 110 * S
 
   if (!player.controls.flightAssist) {
-    text(ctx, 'АССИСТ ВЫКЛ', x, y - step, HUD_COLORS.WARN)
+    text(ctx, t('hud.assistOff'), x, y - step, HUD_COLORS.WARN)
   }
 
   const shield = player.spec.hull.shield > 0 ? player.shield / player.spec.hull.shield : 0
@@ -600,20 +601,20 @@ function drawReadouts({ ctx, world, height }: HudFrame): void {
   const jumpColor = player.spec.jumpRange <= 0 ? HUD_COLORS.DIM : scooping(player) ? HUD_COLORS.TARGET : HUD_COLORS.PRIMARY
 
   const rows: [string, number, string][] = [
-    ['ЩИТ', shield, HUD_COLORS.PRIMARY],
-    ['КОРП', hull, hull < 0.3 ? HUD_COLORS.DANGER : HUD_COLORS.PRIMARY],
+    [t('hud.shield'), shield, HUD_COLORS.PRIMARY],
+    [t('hud.hull'), hull, hull < 0.3 ? HUD_COLORS.DANGER : HUD_COLORS.PRIMARY],
     // Батареи: один импульс ПРО стоит десятой доли шкалы.
-    ['ЭНРГ', energy, energy < 0.15 ? HUD_COLORS.DANGER : HUD_COLORS.PRIMARY],
+    [t('hud.energy'), energy, energy < 0.15 ? HUD_COLORS.DANGER : HUD_COLORS.PRIMARY],
     // Бомба копится поверх целого щита. Заряженная светится целью — её видно
     // боковым зрением, и это единственная шкала, которую пилот ждёт заполненной.
-    ['БОМБА', player.bombCharge, bombReady(player) ? HUD_COLORS.TARGET : HUD_COLORS.DIM],
+    [t('hud.bomb'), player.bombCharge, bombReady(player) ? HUD_COLORS.TARGET : HUD_COLORS.DIM],
     // Нагрев СТВОЛА от стрельбы — отдельно от нагрева корпуса звездой.
-    ['ЛАЗЕР', laser, laser > 0.7 ? HUD_COLORS.DANGER : HUD_COLORS.WARN],
+    [t('hud.laser'), laser, laser > 0.7 ? HUD_COLORS.DANGER : HUD_COLORS.WARN],
     // Температура КОРПУСА от близкой звезды. За порогом течёт щит, потом обшивка.
-    ['ТЕМП', temp, temp > STAR_HEAT.LEAK_THRESHOLD ? HUD_COLORS.DANGER : temp > 0.5 ? HUD_COLORS.WARN : HUD_COLORS.DIM],
+    [t('hud.temp'), temp, temp > STAR_HEAT.LEAK_THRESHOLD ? HUD_COLORS.DANGER : temp > 0.5 ? HUD_COLORS.WARN : HUD_COLORS.DIM],
     // Заряд гиперпривода: тратится прыжком, черпается у звезды (светится целью).
-    ['ГИПЕР', jump, jumpColor],
-    ['ТЯГА', player.controls.throttle, HUD_COLORS.PRIMARY],
+    [t('hud.jump'), jump, jumpColor],
+    [t('hud.throttle'), player.controls.throttle, HUD_COLORS.PRIMARY],
   ]
 
   for (const [label, value, color] of rows) {
@@ -626,7 +627,7 @@ function drawReadouts({ ctx, world, height }: HudFrame): void {
   text(ctx, formatSpeed(player.state.vel.length()), x, y, HUD_COLORS.PRIMARY)
 
   const ammo = missileAmmo(player)
-  if (ammo > 0) text(ctx, `РАКЕТ ${ammo}`, x + barWidth, y, HUD_COLORS.WARN)
+  if (ammo > 0) text(ctx, t('hud.missiles', { ammo }), x + barWidth, y, HUD_COLORS.WARN)
 }
 
 /** Крейсер: множитель и причина, по которой он не включается. */
@@ -637,31 +638,31 @@ function drawCruise({ ctx, world, width }: HudFrame): void {
   // течи кричим красным, до него — предупреждаем жёлтым, что жар близок.
   const temp = world.player.hullHeat
   if (temp > STAR_HEAT.LEAK_THRESHOLD) {
-    text(ctx, 'ПЕРЕГРЕВ — ОТ ЗВЕЗДЫ', width / 2, 10 * S, HUD_COLORS.DANGER, 'center')
+    text(ctx, t('hud.overheat'), width / 2, 10 * S, HUD_COLORS.DANGER, 'center')
     return
   }
   if (temp > 0.6) {
-    text(ctx, 'КОРПУС ГРЕЕТСЯ', width / 2, 10 * S, HUD_COLORS.WARN, 'center')
+    text(ctx, t('hud.hullHot'), width / 2, 10 * S, HUD_COLORS.WARN, 'center')
     return
   }
   // Прогрелся достаточно, чтобы черпать топливо, но ещё не горишь: удержись здесь.
   if (scooping(world.player)) {
-    text(ctx, 'ЗАПРАВКА', width / 2, 10 * S, HUD_COLORS.TARGET, 'center')
+    text(ctx, t('hud.refuel'), width / 2, 10 * S, HUD_COLORS.TARGET, 'center')
     return
   }
 
   if (cruise.block === 'mass-lock') {
-    text(ctx, 'МАССОВАЯ БЛОКИРОВКА', width / 2, 10 * S, HUD_COLORS.DANGER, 'center')
+    text(ctx, t('hud.massLock'), width / 2, 10 * S, HUD_COLORS.DANGER, 'center')
     return
   }
   if (!isCruising(world.player)) return
 
   const fraction = (cruise.factor - 1) / (CRUISE.MAX_FACTOR - 1)
-  text(ctx, `КРЕЙСЕР ×${cruise.factor.toFixed(0)}`, width / 2, 10 * S, HUD_COLORS.PRIMARY, 'center')
+  text(ctx, t('hud.cruise', { factor: cruise.factor.toFixed(0) }), width / 2, 10 * S, HUD_COLORS.PRIMARY, 'center')
   bar(ctx, width / 2 - 40 * S, 22 * S, 80 * S, 4 * S, fraction, HUD_COLORS.PRIMARY)
 
   if (cruise.block === 'proximity') {
-    text(ctx, 'ТОРМОЖЕНИЕ У ТЕЛА', width / 2, 30 * S, HUD_COLORS.WARN, 'center')
+    text(ctx, t('hud.gravityBrake'), width / 2, 30 * S, HUD_COLORS.WARN, 'center')
   }
 }
 
@@ -740,12 +741,12 @@ function drawBombBurst({ ctx, world, width, height }: HudFrame): void {
 function drawAlerts({ ctx, world, width, height }: HudFrame): void {
   // Выше панели стыковки: она занимает низ по центру и перекрыла бы обе строки.
   if (autofightActive(world)) {
-    text(ctx, 'АВТОБОЙ · P — СНЯТЬ', width / 2, height - 64 * S, HUD_COLORS.TARGET, 'center')
+    text(ctx, t('hud.autofight'), width / 2, height - 64 * S, HUD_COLORS.TARGET, 'center')
   }
 
   // Под полем не стреляют, и пилот обязан знать, почему у него мёртвый гашетка.
   if (world.player.cloaked) {
-    text(ctx, 'МАСКИРОВКА · X — СНЯТЬ', width / 2, height - 76 * S, HUD_COLORS.NAV, 'center')
+    text(ctx, t('hud.cloak'), width / 2, height - 76 * S, HUD_COLORS.NAV, 'center')
   }
 
   const threat = incomingMissile(world)
@@ -756,5 +757,5 @@ function drawAlerts({ ctx, world, width, height }: HudFrame): void {
   const hz = 1.6 + urgency * 4.4
   if (Math.sin(world.time * hz * Math.PI * 2) < 0) return
 
-  text(ctx, `РАКЕТА · ${threat.seconds.toFixed(1)} С · E — ПРО`, width / 2, height - 50 * S, HUD_COLORS.DANGER, 'center')
+  text(ctx, t('hud.missileWarn', { seconds: threat.seconds.toFixed(1) }), width / 2, height - 50 * S, HUD_COLORS.DANGER, 'center')
 }
