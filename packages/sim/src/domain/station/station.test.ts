@@ -9,7 +9,7 @@ import { stepWorld, type Controller, type ControllerMap } from '../sim'
 import { createWorld, STARTER_SYSTEM, type World } from '../world'
 import { autodockController, canEngageAutodock } from './autopilot'
 import { canDockAt, dock, findStation, stationRange, undock } from './docking'
-import { buy, buyCommodity, canBuyCommodity, commodityPrice, repair, repairCost, sellItem } from './shop'
+import { buy, buyCommodity, canBuyCommodity, commodityBuyPrice, commoditySellPrice, repair, repairCost, sellItem } from './shop'
 
 function quiet(): World {
   return createWorld({ ...STARTER_SYSTEM, patrols: [], belt: null })
@@ -235,9 +235,10 @@ describe('торговля товаром', () => {
     world.credits = 10_000
     const player = world.player
 
+    const price = commodityBuyPrice(world, FOOD)
     const bought = buyCommodity(world, player, FOOD, 3)
     expect(bought).toBe(3)
-    expect(world.credits).toBe(10_000 - 3 * commodityPrice(FOOD))
+    expect(world.credits).toBe(10_000 - 3 * price)
     expect(cargoMass(player.hold)).toBeCloseTo(3 * FOOD.unitMass, 6)
   })
 
@@ -248,7 +249,7 @@ describe('торговля товаром', () => {
   it('денег хватает на часть — продают часть', () => {
     const world = quiet()
     const player = world.player
-    world.credits = commodityPrice(FOOD) * 2
+    world.credits = commodityBuyPrice(world, FOOD) * 2
 
     expect(buyCommodity(world, player, FOOD, 10)).toBe(2)
     expect(world.credits).toBe(0)
@@ -284,19 +285,21 @@ describe('торговля товаром', () => {
   })
 
   /**
-   * Трофей достаётся даром, поэтому продаётся в чистую прибыль — по каталогу,
-   * без наценки. Количество берём ФАКТИЧЕСКОЕ: трюм стартового «Кобры» мал,
-   * и подгонять его вместимость под тест значило бы тестировать не то.
+   * Трофей достаётся даром, поэтому продаётся в чистую прибыль — но по МЕСТНОЙ
+   * рыночной цене приёма, а не по каталогу: тот же груз в другой системе стоит
+   * иначе. Количество берём ФАКТИЧЕСКОЕ: трюм стартового «Кобры» мал, и подгонять
+   * его вместимость под тест значило бы тестировать не то.
    */
-  it('трофей из трюма продаётся по каталожной цене', () => {
+  it('трофей из трюма продаётся по рыночной цене приёма', () => {
     const world = quiet()
     const player = world.player
     const units = addCommodity(player.hold, FOOD, 5)
     expect(units).toBeGreaterThan(0)
 
+    const sell = commoditySellPrice(world, FOOD)
     const credits = world.credits
-    expect(sellItem(world, player, 0)).toBe(FOOD.basePrice * units)
-    expect(world.credits).toBe(credits + FOOD.basePrice * units)
+    expect(sellItem(world, player, 0)).toBe(sell * units)
+    expect(world.credits).toBe(credits + sell * units)
   })
 
   /** Проданный груз — минус тонны, значит плюс к ускорениям. Масса призрака недопустима. */

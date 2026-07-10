@@ -1,23 +1,32 @@
-import { cargoMass, cargoValue, itemName, itemValue, sellCargo, sellItem, type World } from '@elite/sim'
+import {
+  cargoMass,
+  holdSellValue,
+  itemName,
+  itemSellValue,
+  sellCargo,
+  sellItem,
+  type CargoItem,
+  type World,
+} from '@elite/sim'
+import { UI } from '../theme'
 import { Button, DIM, Panel, Row } from './chrome'
 
 /**
- * Трюм. Здесь трофеи превращаются в деньги: снятое с пирата досталось даром,
- * поэтому продаётся по каталогу — без наценки, но и без скидки.
- *
- * Продажа поштучная, а не только «всё разом»: контрабанду иногда выгоднее
- * довезти до другой системы, а лом сбыть немедленно.
+ * Трюм. Цена продажи — местная, рыночная: тот же груз в другой системе стоит иначе.
+ * У каждой позиции помечена ВЫГОДА, если её покупали: выручка минус уплаченное,
+ * зелёным в плюс, красным в минус. Добыча и трофеи достались даром — у них цены
+ * входа нет, они идут как находка и вся выручка в плюс.
  */
 export function Hold({ world, onChange }: { world: World; onChange: () => void }) {
   const player = world.player
   const used = cargoMass(player.hold)
-  const total = cargoValue(player)
+  const total = holdSellValue(world, player)
 
   return (
     <Panel title="ТРЮМ">
       <p className="mb-4 text-xs" style={{ color: DIM }}>
-        Занято {used.toFixed(1)} из {player.hold.capacity.toFixed(1)} т · груз на борту стоит {total} кр.
-        Тонны в трюме режут ускорения — это считается, а не назначается.
+        Занято {used.toFixed(1)} из {player.hold.capacity.toFixed(1)} т · продать здесь весь груз — {total} кр.
+        Выгода считается от цены, по которой ты купил; найденное — чистый плюс.
       </p>
 
       {player.hold.items.length === 0 ? (
@@ -27,24 +36,30 @@ export function Hold({ world, onChange }: { world: World; onChange: () => void }
       ) : (
         <>
           <ul className="space-y-1">
-            {player.hold.items.map((item, index) => (
-              <Row
-                // Индекс в ключе намеренно: одинаковые товары уже сложены в одну стопку,
-                // а разные модули различаются именем. Ключ обязан пережить продажу соседа.
-                key={`${itemName(item)}-${index}`}
-                name={itemName(item)}
-                price={`${itemValue(item)} кр.`}
-              >
-                <Button
-                  small
-                  onClick={() => {
-                    if (sellItem(world, player, index) > 0) onChange()
-                  }}
+            {player.hold.items.map((item, index) => {
+              const revenue = itemSellValue(world, item)
+              const mark = profitMark(item, revenue)
+              return (
+                <Row
+                  // Индекс в ключе намеренно: одинаковые товары уже сложены в одну стопку,
+                  // а разные модули различаются именем. Ключ обязан пережить продажу соседа.
+                  key={`${itemName(item)}-${index}`}
+                  name={itemName(item)}
+                  price={`${revenue} кр.`}
+                  note={mark.text}
+                  noteColor={mark.color}
                 >
-                  ПРОДАТЬ
-                </Button>
-              </Row>
-            ))}
+                  <Button
+                    small
+                    onClick={() => {
+                      if (sellItem(world, player, index) > 0) onChange()
+                    }}
+                  >
+                    ПРОДАТЬ
+                  </Button>
+                </Row>
+              )
+            })}
           </ul>
 
           <Button
@@ -58,4 +73,17 @@ export function Hold({ world, onChange }: { world: World; onChange: () => void }
       )}
     </Panel>
   )
+}
+
+/**
+ * Пометка выгоды на позиции. Куплено — показываем абсолютный выигрыш/проигрыш от
+ * продажи ЗДЕСЬ. Не куплено (добыча, трофейный модуль) — «находка»: сравнивать не с чем.
+ */
+function profitMark(item: CargoItem, revenue: number): { text: string; color: string } {
+  const basis = item.kind === 'commodity' ? item.costBasis : undefined
+  if (basis === undefined) return { text: 'находка', color: DIM }
+
+  const profit = revenue - basis
+  const sign = profit >= 0 ? '+' : '−'
+  return { text: `${sign}${Math.abs(profit)} кр.`, color: profit >= 0 ? UI.ALLY : UI.DANGER }
 }

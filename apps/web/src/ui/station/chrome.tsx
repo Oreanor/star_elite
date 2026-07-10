@@ -89,25 +89,31 @@ export function Panel({ title, children }: { title: string; children: React.Reac
   )
 }
 
-/** Строка прайса: название, число, действие. Одинаковая у товаров и у железа. */
+/**
+ * Строка прайса: название, число, пометка, действие. Одинаковая у товаров и у
+ * железа. Пометка по умолчанию погашена (DIM), но её цвет можно задать — на
+ * продаже им горит выгода: зелёным в плюс, красным в минус.
+ */
 export function Row({
   name,
   price,
   note,
+  noteColor,
   children,
 }: {
   name: string
   price: string
   note?: string
+  noteColor?: string
   children: React.ReactNode
 }) {
   return (
     <li className="flex items-baseline gap-3 text-sm">
-      <span className="w-64 shrink-0 truncate">{name}</span>
+      <span className="w-56 shrink-0 truncate">{name}</span>
       <span className="w-24 shrink-0 text-right" style={{ color: DIM }}>
         {price}
       </span>
-      <span className="w-20 shrink-0 text-right text-xs" style={{ color: DIM }}>
+      <span className="w-36 shrink-0 text-right text-xs" style={{ color: noteColor ?? DIM }}>
         {note ?? ''}
       </span>
       {children}

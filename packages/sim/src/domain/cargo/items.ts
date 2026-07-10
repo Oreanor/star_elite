@@ -13,6 +13,13 @@ export interface Commodity {
   /** Базовая цена за единицу, кредиты. */
   basePrice: number
   /**
+   * «Родной» тех-уровень товара, 1..15 — на нём его производят с избытком и дёшево.
+   * Из разрыва между ним и тех-уровнем системы рынок и выводит цену: у своего мира
+   * дёшево, чем дальше мир от него — тем дороже ввоз. Еда рождается внизу шкалы,
+   * электроника наверху; это единственное, чем категории различаются в формуле цены.
+   */
+  tier: number
+  /**
    * Запрещённый груз. Пока это только метка на товаре — досмотра в игре нет.
    * Но цена рабов и наркотиков назначена ИЗ-ЗА неё: они дороги именно потому,
    * что за них полагается штраф. Как только появится полиция, метка уже здесь.
@@ -24,6 +31,17 @@ export interface CommodityStack {
   kind: 'commodity'
   commodity: Commodity
   units: number
+  /**
+   * Сколько кредитов суммарно уплачено за единицы, лежащие в стопке. Нужно, чтобы
+   * на продаже показать выгоду: прибыль = выручка − costBasis. Добыча и трофеи
+   * достаются даром, у них basis нет (undefined) — значит вся выручка в плюс.
+   * Смешанная стопка (купил и подобрал) хранит basis только за купленное, и
+   * подобранные единицы честно считаются чистой прибылью.
+   *
+   * Это ЛИЧНАЯ история игрока, а не свойство рынка: в сетевой игре она не
+   * синхронизируется — у каждого своя цена входа.
+   */
+  costBasis?: number
 }
 
 export interface ModuleItem {
@@ -61,13 +79,15 @@ export function itemName(item: CargoItem): string {
  * ниже — иначе выбор товара сводился бы к «взять самое дорогое», и торговли нет.
  */
 export const COMMODITIES = {
-  SCRAP: { id: 'scrap', name: 'Лом', unitMass: 1, basePrice: 60, contraband: false },
-  FOOD: { id: 'food', name: 'Еда', unitMass: 1, basePrice: 42, contraband: false },
-  MINERALS: { id: 'minerals', name: 'Руда', unitMass: 1, basePrice: 180, contraband: false },
-  METALS: { id: 'metals', name: 'Металлы', unitMass: 1, basePrice: 420, contraband: false },
-  MACHINERY: { id: 'machinery', name: 'Машинерия', unitMass: 1, basePrice: 640, contraband: false },
-  ELECTRONICS: { id: 'electronics', name: 'Электроника', unitMass: 0.5, basePrice: 980, contraband: false },
-  SLAVES: { id: 'slaves', name: 'Рабы', unitMass: 1, basePrice: 1240, contraband: true },
-  LUXURIES: { id: 'luxuries', name: 'Роскошь', unitMass: 0.5, basePrice: 1850, contraband: false },
-  NARCOTICS: { id: 'narcotics', name: 'Наркотики', unitMass: 0.4, basePrice: 2900, contraband: true },
+  SCRAP: { id: 'scrap', name: 'Лом', unitMass: 1, basePrice: 60, tier: 1, contraband: false },
+  FOOD: { id: 'food', name: 'Еда', unitMass: 1, basePrice: 42, tier: 2, contraband: false },
+  MINERALS: { id: 'minerals', name: 'Руда', unitMass: 1, basePrice: 180, tier: 3, contraband: false },
+  METALS: { id: 'metals', name: 'Металлы', unitMass: 1, basePrice: 420, tier: 6, contraband: false },
+  MACHINERY: { id: 'machinery', name: 'Машинерия', unitMass: 1, basePrice: 640, tier: 8, contraband: false },
+  ELECTRONICS: { id: 'electronics', name: 'Электроника', unitMass: 0.5, basePrice: 980, tier: 11, contraband: false },
+  // Контрабанду плодят беззаконные окраины (низкий tier), а спрос на неё — в богатых
+  // законопослушных мирах: оттого её и возят снизу вверх, рискуя штрафом.
+  SLAVES: { id: 'slaves', name: 'Рабы', unitMass: 1, basePrice: 1240, tier: 3, contraband: true },
+  LUXURIES: { id: 'luxuries', name: 'Роскошь', unitMass: 0.5, basePrice: 1850, tier: 12, contraband: false },
+  NARCOTICS: { id: 'narcotics', name: 'Наркотики', unitMass: 0.4, basePrice: 2900, tier: 9, contraband: true },
 } as const satisfies Record<string, Commodity>

@@ -40,6 +40,10 @@ export function addItem(hold: CargoHold, item: CargoItem): boolean {
     )
     if (stack) {
       stack.units += item.units
+      // Складываем и уплаченное: иначе, докупив к уже лежащему товару, потеряли бы
+      // цену входа и не смогли бы показать выгоду. Стопка без basis + покупка с
+      // basis даёт basis только за купленное — подобранное так и остаётся даром.
+      if (item.costBasis !== undefined) stack.costBasis = (stack.costBasis ?? 0) + item.costBasis
       return true
     }
   }

@@ -1,10 +1,19 @@
-import { buyCommodity, canBuyCommodity, commodityPrice, commodityStock, type World } from '@elite/sim'
+import {
+  buyCommodity,
+  canBuyCommodity,
+  commodityBuyPrice,
+  commodityStock,
+  commodityStockAt,
+  type Commodity,
+  type World,
+} from '@elite/sim'
 import { Button, DIM, Panel, Row } from './chrome'
 
 /**
- * Прилавок. Станция продаёт дороже, чем принимает, поэтому купить и тут же
- * продать — всегда убыток. Прибыль обязана приходить из перевозки между
- * системами; пока их нет, товар покупают ради того, чтобы было что возить.
+ * Прилавок. Цена выведена из уровня развития системы и её строя плюс запаса на
+ * складе — не назначена вручную. Дёшево там, где товар производят; дорого, где
+ * его ввозят. Возить выгодно между системами, а не через этот же прилавок:
+ * покупка выше продажи на спред.
  */
 export function Market({ world, onChange }: { world: World; onChange: () => void }) {
   const player = world.player
@@ -12,19 +21,21 @@ export function Market({ world, onChange }: { world: World; onChange: () => void
   return (
     <Panel title="ТОВАРЫ">
       <p className="mb-4 text-xs" style={{ color: DIM }}>
-        Станция берёт наценку. Возить выгодно между системами, а не через прилавок.
-        Контрабанда дороже именно потому, что за неё полагается штраф.
+        Цена — от развития системы, строя и запаса. Мало на складе дороже, много дешевле.
+        Прибыль в перевозке: бери там, где дёшево, вези туда, где дорого.
       </p>
 
       <ul className="space-y-1">
         {commodityStock().map((commodity) => {
           const error = canBuyCommodity(world, player, commodity)
+          const price = commodityBuyPrice(world, commodity)
+          const stockN = commodityStockAt(world, commodity)
           return (
             <Row
               key={commodity.id}
               name={commodity.contraband ? `${commodity.name} ⚠` : commodity.name}
-              price={`${commodityPrice(commodity)} кр.`}
-              note={`${commodity.unitMass} т`}
+              price={`${price} кр.`}
+              note={priceHint(commodity, price, stockN)}
             >
               <Button
                 small
@@ -41,4 +52,11 @@ export function Market({ world, onChange }: { world: World; onChange: () => void
       </ul>
     </Panel>
   )
+}
+
+/** «дёшево / дорого» относительно каталога + сколько на складе — весь сигнал рынка в строке. */
+function priceHint(commodity: Commodity, price: number, stock: number): string {
+  const ratio = price / commodity.basePrice
+  const tag = ratio < 0.95 ? 'дёшево' : ratio > 1.3 ? 'дорого' : '·'
+  return `${commodity.unitMass} т · ${tag} · на складе ${stock}`
 }
