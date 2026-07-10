@@ -184,13 +184,24 @@ const KEYS: [string, string][] = [
  * нажатием и стартом игры лежит вся длина движения пальца вверх — кнопка кажется
  * тугой. Захвату курсора нажатия достаточно: это тот же жест пользователя.
  */
-function MenuButton({ children, onClick }: { children: React.ReactNode; onClick: () => void }) {
+function MenuButton({
+  children,
+  onClick,
+  disabled = false,
+}: {
+  children: React.ReactNode
+  onClick: () => void
+  disabled?: boolean
+}) {
   return (
     <button
       type="button"
+      disabled={disabled}
       onPointerDown={onClick}
       className="w-56 cursor-pointer border border-[#7fd6ff] px-8 py-3 text-base tracking-[0.3em]
-                 text-[#7fd6ff] transition-colors hover:bg-[#7fd6ff] hover:text-black"
+                 text-[#7fd6ff] transition-colors hover:bg-[#7fd6ff] hover:text-black
+                 disabled:cursor-wait disabled:border-[#3f7391] disabled:bg-transparent
+                 disabled:text-[#3f7391]"
     >
       {children}
     </button>
@@ -221,7 +232,7 @@ const LOCK_RETRY_MS = 150
 const LOCK_GIVE_UP_MS = 8000
 
 function Paused({ resuming, onBoot }: { resuming: boolean; onBoot: () => void }) {
-  const [denied, setDenied] = useState(false)
+  const [waiting, setWaiting] = useState(false)
   const [keysShown, setKeysShown] = useState(false)
   const timer = useRef<number | null>(null)
 
@@ -237,16 +248,37 @@ function Paused({ resuming, onBoot }: { resuming: boolean; onBoot: () => void })
    * Отсчёт до сдачи — от первого нажатия, а не от последней попытки: иначе цикл
    * крутился бы вечно, если окно потеряло фокус (там захват не дают никогда).
    */
-  const take = (deadline = performance.now() + LOCK_GIVE_UP_MS) => {
+  const poll = (deadline: number) => {
     timer.current = null
-    // Первое нажатие строит сцену. Пока её нет, захват не даётся, и цикл повторов
-    // ниже дожидается канваса — специально для этого он и заведён.
-    onBoot()
     void requestLock().then((ok) => {
-      setDenied(!ok)
-      if (ok || performance.now() >= deadline) return
-      timer.current = window.setTimeout(() => take(deadline), LOCK_RETRY_MS)
+      if (ok) return // захват получен: Paused сейчас размонтируется
+      if (performance.now() >= deadline) {
+        setWaiting(false) // сдались — пусть кнопка снова принимает нажатие
+        return
+      }
+      timer.current = window.setTimeout(() => poll(deadline), LOCK_RETRY_MS)
     })
+  }
+
+  /**
+   * Пока ждём захвата, меню НЕ ПРИНИМАЕТ нажатий: кнопка сообщила, что нужна
+   * секунда, и обязана эту секунду держать. Иначе второе нажатие уходит в тот же
+   * `take` и заводит второй цикл повторов, а «КЛАВИШИ» под ним раскрывают таблицу
+   * поверх уже начавшейся игры.
+   *
+   * Сборка сцены откладывается на макрозадачу. Она занимает главный поток на
+   * секунду с лишним, и запущенная прямо здесь не дала бы React отрисовать
+   * «СЕКУНДУ…»: надпись появилась бы ровно тогда, когда ждать уже нечего.
+   */
+  const take = () => {
+    if (waiting) return
+    setWaiting(true)
+    window.setTimeout(() => {
+      // Первое нажатие строит сцену. Пока её нет, захват не даётся, и цикл
+      // повторов дожидается канваса — специально для этого он и заведён.
+      onBoot()
+      poll(performance.now() + LOCK_GIVE_UP_MS)
+    }, 0)
   }
 
   return (
@@ -286,8 +318,12 @@ function Paused({ resuming, onBoot }: { resuming: boolean; onBoot: () => void })
         </div>
       ) : (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-4">
-          <MenuButton onClick={() => take()}>{denied ? 'СЕКУНДУ…' : resuming ? 'В ИГРУ' : 'СТАРТ'}</MenuButton>
-          <MenuButton onClick={() => setKeysShown(true)}>КЛАВИШИ</MenuButton>
+          <MenuButton onClick={take} disabled={waiting}>
+            {waiting ? 'СЕКУНДУ…' : resuming ? 'В ИГРУ' : 'СТАРТ'}
+          </MenuButton>
+          <MenuButton onClick={() => setKeysShown(true)} disabled={waiting}>
+            КЛАВИШИ
+          </MenuButton>
         </div>
       )}
     </div>
