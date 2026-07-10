@@ -317,6 +317,10 @@ export function createPlayerController(intent: PlayerIntent): Controller {
       const shiftL = consumePress('ShiftLeft')
       const shiftR = consumePress('ShiftRight')
       if (shiftL || shiftR) intent.cruise = !intent.cruise
+      // Тормоз гасит и крейсер: жмёшь ретро (Ctrl) — выходишь из разгона, и множитель
+      // сам стекает к единице. Так и ждёшь от тормоза; не надо помнить, что крейсер
+      // отдельно снимается шифтом. Ретро побеждает шифт того же кадра — тормоз важнее.
+      if (c.retro) intent.cruise = false
       // Луч — удержание, а не нажатие: пока держишь C, он тянет.
       intent.tractor = isHeld('KeyC')
     },
