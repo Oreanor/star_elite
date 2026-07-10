@@ -86,6 +86,27 @@ export function cloakMaterial(): MeshBasicMaterial {
   return cloak
 }
 
+let corridor: MeshBasicMaterial | null = null
+
+/**
+ * Направляющие стыковочного коридора. Светятся сами: это не металл, а огни.
+ *
+ * Аддитивно и без записи глубины — кольцо не должно ни затенять станцию, ни
+ * перекрывать корабль, сквозь который пролетает. Яркость каждого кольца
+ * приходит инстансным цветом: по ряду бежит волна к причалу, и она же говорит,
+ * куда лететь. Материал об этом не знает — он просто множит.
+ */
+export function corridorMaterial(): MeshBasicMaterial {
+  corridor ??= new MeshBasicMaterial({
+    color: 0xffffff,
+    blending: AdditiveBlending,
+    transparent: true,
+    depthWrite: false,
+    side: DoubleSide,
+  })
+  return corridor
+}
+
 let planet: MeshLambertMaterial | null = null
 
 /**

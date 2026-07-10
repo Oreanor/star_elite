@@ -7,6 +7,7 @@ import { PIXEL_SCALE, RENDER } from '../render/config'
 import { AsteroidField } from '../render/scene/Asteroids'
 import { Bodies } from '../render/scene/Bodies'
 import { Cockpit } from '../render/scene/Cockpit'
+import { DockingCorridor } from '../render/scene/DockingCorridor'
 import { Dust } from '../render/scene/Dust'
 import { CargoPods, Explosions, Missiles, TractorBeam, Tracers } from '../render/scene/Effects'
 import { Exhaust } from '../render/scene/Exhaust'
@@ -36,6 +37,7 @@ function Scene() {
 
       <Bodies />
       <AsteroidField />
+      <DockingCorridor />
 
       <PlayerShip />
       <WingMissiles />

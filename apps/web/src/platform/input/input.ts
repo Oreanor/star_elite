@@ -210,13 +210,31 @@ export function attachInput(canvas: HTMLCanvasElement): () => void {
     release()
     releaseLock()
   }
+
+  /**
+   * Возврат на вкладку — тоже повод отпустить курсор, и это не паранойя.
+   *
+   * `exitPointerLock`, позванный уже СКРЫТОЙ вкладкой, браузер имеет право
+   * проигнорировать: документ неактивен, менять состояние захвата ему нечем.
+   * Захват при этом остаётся, а вместе с ним и прижатие системного курсора —
+   * мышь не доезжает до краёв экрана во всём браузере, включая соседние вкладки.
+   *
+   * Первый момент, когда выход гарантированно сработает, — возвращение фокуса.
+   * Игра к этому времени и так на паузе, поэтому отпустить курсор нам ничего
+   * не стоит: пилот всё равно нажмёт «В ИГРУ».
+   */
+  const onRegainFocus = () => {
+    if (document.pointerLockElement) releaseLock()
+  }
   const onVisibility = () => {
     if (document.hidden) onBlur()
+    else onRegainFocus()
   }
 
   window.addEventListener('keydown', onKeyDown)
   window.addEventListener('keyup', onKeyUp)
   window.addEventListener('blur', onBlur)
+  window.addEventListener('focus', onRegainFocus)
   window.addEventListener('pagehide', onBlur)
   window.addEventListener('mouseup', onMouseUp)
   document.addEventListener('visibilitychange', onVisibility)
@@ -233,6 +251,7 @@ export function attachInput(canvas: HTMLCanvasElement): () => void {
     window.removeEventListener('keydown', onKeyDown)
     window.removeEventListener('keyup', onKeyUp)
     window.removeEventListener('blur', onBlur)
+    window.removeEventListener('focus', onRegainFocus)
     window.removeEventListener('pagehide', onBlur)
     window.removeEventListener('mouseup', onMouseUp)
     document.removeEventListener('visibilitychange', onVisibility)

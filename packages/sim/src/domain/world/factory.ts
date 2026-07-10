@@ -73,6 +73,7 @@ export function makeShip(
     alive: true,
     wreckAt: null,
     ai: null,
+    clearance: false,
     droneOf: null,
     dieAt: null,
   }
@@ -151,6 +152,7 @@ function makeBodies(ids: IdSource, def: SystemDef): BodyEntity[] {
       radius: def.star.radius,
       color: def.star.color,
       surface: null,
+      population: 0,
       spin: 0,
       spinAxis: new Vector3(0, 1, 0),
     },
@@ -165,6 +167,7 @@ function makeBodies(ids: IdSource, def: SystemDef): BodyEntity[] {
       radius: p.radius,
       color: p.color,
       surface: p.type,
+      population: p.population,
       spin: p.spin,
       spinAxis: spinAxis(p.tilt),
     })
@@ -179,6 +182,7 @@ function makeBodies(ids: IdSource, def: SystemDef): BodyEntity[] {
       radius: def.station.radius,
       color: 0x9fb3c8,
       surface: null,
+      population: 0,
       // Кориолис вращается вокруг продольной оси — так было в оригинале.
       spin: 0.08,
       spinAxis: new Vector3(0, 0, 1),

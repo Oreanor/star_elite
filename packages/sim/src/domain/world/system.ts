@@ -35,6 +35,8 @@ export interface SystemDef {
     spin: number
     /** Наклон оси, рад. Ноль — ось строго вертикальна. */
     tilt: number
+    /** Миллионы жителей. Ноль — мир необитаем, и ночью на нём темно. */
+    population: number
   }[]
   station: { name: string; pos: readonly [number, number, number]; radius: number } | null
   belt: { center: readonly [number, number, number]; radius: number; count: number } | null
@@ -100,6 +102,8 @@ export const STARTER_SYSTEM: SystemDef = {
       color: 0x2f7ba6,
       spin: 7.27e-5,
       tilt: 0.41,
+      // Столица системы: четыре миллиарда. Ночью её города видно с орбиты.
+      population: 4_100,
     },
     // Газовый гигант в 4.5 а.е. — цель крейсерского хода на добрую минуту.
     // Сутки короче земных (у Юпитера — десять часов), вращение обратное.
@@ -111,6 +115,7 @@ export const STARTER_SYSTEM: SystemDef = {
       color: 0x8a7a6a,
       spin: -1.76e-4,
       tilt: 0.12,
+      population: 0,
     },
   ],
   /**

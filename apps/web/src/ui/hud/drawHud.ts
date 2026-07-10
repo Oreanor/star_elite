@@ -194,7 +194,9 @@ function drawDocking(frame: HudFrame): void {
 
   const label =
     state === 'engaged'
-      ? `АВТОПИЛОТ · ПРИЧАЛ ${formatDistance(range)} · L — ОТМЕНА`
+      ? // Не «автопилот»: пилот и так видит, что руль не его. Важнее, что станция
+        // взяла его под защиту, — и это единственное место, где об этом говорят.
+        `КОРИДОР ОТКРЫТ · ${formatDistance(range)} · L — ОТМЕНА`
       : state === 'ready'
         ? 'ПРИЧАЛ СВОБОДЕН · L — СТЫКОВКА'
         : state === 'too-fast'

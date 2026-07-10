@@ -1,5 +1,5 @@
 import { AI } from '../../config/ai'
-import { isVisible } from '../combat/cloak'
+import { isEngageable } from '../combat/engage'
 import type { Faction, ShipEntity, World } from '../world/entities'
 
 /**
@@ -31,8 +31,8 @@ export function selectTarget(self: ShipEntity, world: World): ShipEntity | null 
   let bestDistance = AI.AWARENESS
 
   for (const other of candidates(world)) {
-    // Замаскированного пилот не видит — как не видит и мёртвого.
-    if (other === self || !isVisible(other)) continue
+    // Замаскированного пилот не видит, стыкующегося не трогает.
+    if (other === self || !isEngageable(other)) continue
     if (!isHostileTo(self.faction, other.faction)) continue
 
     const distance = other.state.pos.distanceTo(self.state.pos)

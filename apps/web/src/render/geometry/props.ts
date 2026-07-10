@@ -1,5 +1,5 @@
-import { BoxGeometry, CylinderGeometry, type BufferGeometry } from 'three'
-import { PALETTE } from '../config'
+import { BoxGeometry, CylinderGeometry, TorusGeometry, type BufferGeometry } from 'three'
+import { CORRIDOR, PALETTE } from '../config'
 import { buildGeometry, quad, symmetric, tri, type Triangle, type Vec3 } from './build'
 
 /**
@@ -186,4 +186,17 @@ let boltCache: BufferGeometry | null = null
 export function boltGeometry(): BufferGeometry {
   boltCache ??= new CylinderGeometry(1, 1, 1, 6, 1, true).rotateX(Math.PI / 2)
   return boltCache
+}
+
+let ringCache: BufferGeometry | null = null
+
+/**
+ * Направляющее кольцо стыковочного коридора: тор единичного радиуса, ось +Z.
+ *
+ * Обод гранёный намеренно (четыре сегмента трубы): вблизи он читается как
+ * металлический профиль, а не как резиновый шланг, и стоит вчетверо дешевле.
+ */
+export function corridorRingGeometry(): BufferGeometry {
+  ringCache ??= new TorusGeometry(1, CORRIDOR.TUBE, 4, 24)
+  return ringCache
 }

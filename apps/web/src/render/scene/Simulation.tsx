@@ -19,6 +19,10 @@ import { clearPresses, consumePress, input, releaseLock } from '../../platform/i
 function setPilot(session: Session, mode: Session['mode']): void {
   session.mode = mode
   session.controllers.set(session.world.player.id, mode === 'autodock' ? autodockController : session.pilot)
+
+  // Допуск в створ станции выдаётся вместе с автопилотом и снимается вместе с ним.
+  // Он живёт в МИРЕ, а не в сессии: по нему решает ИИ, а тот про сессию не знает.
+  session.world.player.clearance = mode === 'autodock'
 }
 
 export function Simulation() {

@@ -1,7 +1,7 @@
 import { Quaternion, Vector3 } from 'three'
 import { GUNNERY } from '../../config/weapons'
 import type { MissileEntity, ShipEntity, World } from '../world/entities'
-import { isVisible } from './cloak'
+import { isEngageable } from './engage'
 import { applyDamage } from './damage'
 import { spawnExplosion } from './effects'
 
@@ -37,10 +37,11 @@ const _forward = /* @__PURE__ */ new Vector3(0, 0, -1)
 
 function findTarget(world: World, id: number | null): ShipEntity | null {
   if (id === null) return null
-  // Головка теряет цель, поднявшую поле: ракета доживает свой срок по прямой.
-  if (world.player.id === id) return isVisible(world.player) ? world.player : null
+  // Головка теряет цель, поднявшую поле или вошедшую в створ станции:
+  // ракета доживает свой срок по прямой.
+  if (world.player.id === id) return isEngageable(world.player) ? world.player : null
   const ship = world.ships.find((s) => s.id === id)
-  return ship && isVisible(ship) ? ship : null
+  return ship && isEngageable(ship) ? ship : null
 }
 
 function detonate(world: World, m: MissileEntity, victim: ShipEntity | null): void {

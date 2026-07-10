@@ -7,7 +7,7 @@ import { bankToward, steerToward } from '../flight/steering'
 import type { Controller } from '../sim/controller'
 import type { ShipEntity, World } from '../world/entities'
 import { breakWaypoint, leadPoint, patrolWaypoint } from './maneuvers'
-import { isVisible } from '../combat/cloak'
+import { isEngageable } from '../combat/engage'
 import { isHostileTo, selectTarget } from './targeting'
 import type { AIMode, AIState } from './types'
 
@@ -203,9 +203,9 @@ function followEscort(e: ShipEntity, world: World): void {
 
   const wanted = patron === world.player ? world.lockedTargetId : (patron.ai?.targetId ?? null)
   const enemy = wanted === null ? null : world.ships.find((s) => s.id === wanted)
-  // Мирного по приказу не бьют. Наёмник — не убийца по найму.
-  // Мирного по приказу не бьют, невидимку — не находят.
-  ai.orderedTargetId = enemy && isVisible(enemy) && isHostileTo(e.faction, enemy.faction) ? enemy.id : null
+  // Мирного по приказу не бьют — наёмник не убийца по найму, — а невидимку
+  // и стыкующегося просто не берут на прицел.
+  ai.orderedTargetId = enemy && isEngageable(enemy) && isHostileTo(e.faction, enemy.faction) ? enemy.id : null
 }
 
 function selectAndRemember(e: ShipEntity, world: World): ShipEntity | null {
@@ -232,9 +232,9 @@ function selectAndRemember(e: ShipEntity, world: World): ShipEntity | null {
 function resolveTarget(e: ShipEntity, world: World): ShipEntity | null {
   const id = e.ai?.targetId
   if (id == null) return null
-  if (world.player.id === id) return isVisible(world.player) ? world.player : null
+  if (world.player.id === id) return isEngageable(world.player) ? world.player : null
   const target = world.ships.find((s) => s.id === id)
-  return target && isVisible(target) ? target : null
+  return target && isEngageable(target) ? target : null
 }
 
 function flyPatrol(e: ShipEntity, ai: AIState, time: number): void {
@@ -298,7 +298,7 @@ function updateAimJitter(ai: AIState, world: World, distance: number, dt: number
  * решение стрелять и направление луча обязаны совпадать.
  */
 function decideFire(e: ShipEntity, ai: AIState, target: ShipEntity, distance: number): void {
-  if (ai.mode !== 'attack' || !isVisible(target) || distance > AI.FIRE_RANGE) return
+  if (ai.mode !== 'attack' || !isEngageable(target) || distance > AI.FIRE_RANGE) return
 
   shipAxes(e.state.quat, _fwd, _right, _up)
   _toTarget.copy(target.state.pos).sub(e.state.pos).normalize()

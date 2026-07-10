@@ -67,6 +67,17 @@ const MANOEUVRE = {
   MAX_DURATION: 9,
   /** Пауза между фигурами, с. Без неё ими просто летают. */
   COOLDOWN: 2.2,
+  /**
+   * Радиус петли, м. Не тяга и не «доля газа»: у петли есть ровно один размер,
+   * и он считается, а не подбирается.
+   *
+   * Корабль на петле летит по кругу радиусом v/ω. На полном ходу (200 м/с) и
+   * тангаже 1.33 рад/с это 150 м — но `throttle` в момент двойного нажатия W
+   * стоит уже на единице, потому что W его и поднимает, и с форсажем круг
+   * распухает до полукилометра: корабль улетает вперёд вместо того, чтобы
+   * пропустить преследователя. Задаём радиус, из него выводим скорость: v = ω·R.
+   */
+  LOOP_RADIUS: 110,
 } as const
 
 /** Есть ли фигура, и какая. `null` — штурвал у пилота. */
@@ -113,6 +124,7 @@ export interface PlayerIntent {
   tapA: number
   tapD: number
   tapW: number
+  tapS: number
 }
 
 export function createIntent(): PlayerIntent {
@@ -131,6 +143,7 @@ export function createIntent(): PlayerIntent {
     tapA: 0,
     tapD: 0,
     tapW: 0,
+    tapS: 0,
   }
 }
 
@@ -157,12 +170,14 @@ function pollTap(intent: PlayerIntent, dt: number): { kind: ManoeuvreKind; dir: 
   intent.tapA = Math.max(0, intent.tapA - dt)
   intent.tapD = Math.max(0, intent.tapD - dt)
   intent.tapW = Math.max(0, intent.tapW - dt)
+  intent.tapS = Math.max(0, intent.tapS - dt)
   intent.manoeuvre.cooldown = Math.max(0, intent.manoeuvre.cooldown - dt)
 
   // consumePress гасит нажатие: на следующем шаге физики того же кадра его уже нет.
   const tappedA = consumePress('KeyA')
   const tappedD = consumePress('KeyD')
   const tappedW = consumePress('KeyW')
+  const tappedS = consumePress('KeyS')
 
   if (tappedA) {
     if (intent.tapA > 0) {
@@ -180,12 +195,23 @@ function pollTap(intent: PlayerIntent, dt: number): { kind: ManoeuvreKind; dir: 
     intent.tapD = MANOEUVRE.TAP_WINDOW
     intent.tapA = 0
   }
+  // W — петля через верх, S — через низ. Одна фигура, разный знак тангажа:
+  // отдельного `kind` для этого не нужно, различие живёт в данных.
   if (tappedW) {
     if (intent.tapW > 0) {
       intent.tapW = 0
       return { kind: 'loop', dir: 1 }
     }
     intent.tapW = MANOEUVRE.TAP_WINDOW
+    intent.tapS = 0
+  }
+  if (tappedS) {
+    if (intent.tapS > 0) {
+      intent.tapS = 0
+      return { kind: 'loop', dir: -1 }
+    }
+    intent.tapS = MANOEUVRE.TAP_WINDOW
+    intent.tapW = 0
   }
   return null
 }
@@ -223,16 +249,31 @@ function driveBarrel(ship: ShipEntity, m: Manoeuvre, dt: number): void {
 }
 
 /**
- * Петля: полный оборот вокруг тангажа. Корабль уходит вверх, обходит круг и
- * ложится на прежний курс.
+ * Тяга, при которой петля выходит заданного радиуса.
+ *
+ * Корабль на петле идёт по кругу радиусом v/ω, значит нужная скорость — ω·R.
+ * ω берётся ФАКТИЧЕСКАЯ: маневровые раскручиваются не мгновенно, и в начале
+ * фигуры (ω→0) формула сама просит нулевую тягу — то есть тормозит. Лётный
+ * компьютер (`flightAssist`) держит скорость по рукояти, поэтому достаточно
+ * подвинуть рукоять, а гасить скорость ретродвигателями не нужно.
+ */
+function loopThrottle(ship: ShipEntity): number {
+  const wanted = MANOEUVRE.LOOP_RADIUS * Math.abs(ship.state.angVel.x)
+  return clamp(wanted / Math.max(ship.spec.tuning.MAX_SPEED, 1), 0, 1)
+}
+
+/**
+ * Петля: полный оборот вокруг тангажа. Корабль уходит вверх (W) или вниз (S),
+ * обходит круг и ложится на прежний курс.
  *
  * Смысл фигуры — пропустить вперёд того, кто сидит на хвосте: он либо
  * проскакивает, либо повторяет петлю и остаётся сзади, потеряв дистанцию.
- * Ракету петля не срывает — от неё уходят бочкой, — но радиус петли (v/ω, при
- * 200 м/с и 1.33 рад/с это полторы сотни метров) уводит корабль с её линии.
+ * Ракету петля не срывает — от неё уходят бочкой, — но круг уводит корабль
+ * с её линии.
  */
 function driveLoop(ship: ShipEntity, m: Manoeuvre, dt: number): void {
-  ship.controls.pitch = 1
+  ship.controls.pitch = m.dir
+  ship.controls.throttle = loopThrottle(ship)
   m.angle += Math.abs(ship.state.angVel.x) * dt
   if (m.angle >= MANOEUVRE.FULL_TURN) endManoeuvre(ship, m)
 }
@@ -252,6 +293,9 @@ function driveReversal(ship: ShipEntity, m: Manoeuvre, dt: number): void {
 
   if (m.phase === 0) {
     c.pitch = 1
+    // Полупетля — та же петля: радиус у неё обязан быть тот же, иначе разворот
+    // уносит корабль вперёд ровно туда, откуда он разворачивается уйти.
+    c.throttle = loopThrottle(ship)
     m.angle += Math.abs(ship.state.angVel.x) * dt
     if (m.angle >= MANOEUVRE.HALF_TURN) {
       m.phase = 1
@@ -327,10 +371,19 @@ export function createPlayerController(intent: PlayerIntent): Controller {
 
       const c = ship.controls
 
-      // W/S двигают саму рукоять газа: выставленное ими держится, пока не сдвинешь.
-      if (isHeld('KeyW')) intent.throttle += THROTTLE_RATE * dt
-      if (isHeld('KeyS')) intent.throttle -= THROTTLE_RATE * dt
-      intent.throttle = clamp(intent.throttle, 0, 1)
+      /**
+       * W/S двигают саму рукоять газа: выставленное ими держится, пока не сдвинешь.
+       *
+       * Во время фигуры — не двигают. Петля заказывается двойным нажатием W, и
+       * второе нажатие остаётся ЗАЖАТЫМ на все четыре секунды оборота: рукоять
+       * успевала уехать на полный ход, петля раздувалась вдвое, а по выходе
+       * корабль уносился прочь на форсажном режиме, которого пилот не просил.
+       */
+      if (!manoeuvring(intent)) {
+        if (isHeld('KeyW')) intent.throttle += THROTTLE_RATE * dt
+        if (isHeld('KeyS')) intent.throttle -= THROTTLE_RATE * dt
+        intent.throttle = clamp(intent.throttle, 0, 1)
+      }
 
       /**
        * ПКМ — временный газ поверх рукояти, с той же скоростью, что и W.
@@ -384,7 +437,12 @@ export function createPlayerController(intent: PlayerIntent): Controller {
       // а E понадобилась под ПРО. Домен `rudder` сохраняет — им правит физика и тест.
       c.rudder = 0
 
-      c.flightAssist = intent.flightAssist
+      /**
+       * Фигуру ведёт лётный компьютер, даже если пилот летает по-ньютоновски.
+       * Без ассиста скорость на петле не падает, круг остаётся прежним, и
+       * заданный радиус превращается в пожелание.
+       */
+      c.flightAssist = intent.flightAssist || manoeuvring(intent)
 
       // Форсаж — свойство установленного двигателя, а не константа игры.
       // Поставил военный — форсаж стал мощнее, и это посчитано, а не назначено.

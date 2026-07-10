@@ -87,6 +87,9 @@ export function systemDefOf(system: StarSystem, galaxySeed: number): SystemDef {
     pos: planetPos(p, i),
     radius: p.radius * SCALE.PLANET_RADIUS,
     color: PLANET_COLORS[p.type],
+    // Ноль у необитаемого мира. Ночную сторону красит рендер, но КТО там живёт —
+    // знает галактика, и она же одна имеет право это сказать.
+    population: p.settlement?.population ?? 0,
     ...spinOf(i),
   }))
 

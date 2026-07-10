@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Mesh, Quaternion, Sprite, Vector3, type Texture } from 'three'
 import type { BodyEntity, PlanetType } from '@elite/sim'
 import { useSession } from '../../app/GameContext'
-import { ATMOSPHERE, ATMOSPHERE_COLOR, CORONA } from '../config'
+import { ATMOSPHERE, ATMOSPHERE_COLOR, CITY_LIGHTS, CORONA } from '../config'
 import { atmosphereGeometry, planetGeometry, starGeometry, type PlanetLook } from '../geometry/bodies'
 import { coronaTexture } from '../geometry/corona'
 import { stationGeometry } from '../geometry/props'
@@ -15,6 +15,7 @@ import {
   stationMaterial,
 } from '../materials/materials'
 import { createAtmosphereMaterial } from '../materials/atmosphere'
+import { createCityLightsMaterial } from '../materials/cityLights'
 import { loadPlanetTexture, pickVariant } from '../sky/planets'
 
 /**
@@ -76,6 +77,7 @@ const _toStar = new Vector3()
 function Planet({ body }: { body: BodyEntity }) {
   const ref = useRef<Mesh>(null)
   const airRef = useRef<Mesh>(null)
+  const lightsRef = useRef<Mesh>(null)
   const session = useSession()
 
   const look = lookFor(body)
@@ -97,26 +99,49 @@ function Planet({ body }: { body: BodyEntity }) {
   )
   useEffect(() => () => airMaterial?.dispose(), [airMaterial])
 
+  // Города — там, где есть кому в них жить. Решают ДАННЫЕ, а не тип поверхности:
+  // обитаемым однажды станет и ледяной мир, и рендер об этом даже не узнает.
+  const lightsMaterial = useMemo(
+    () => (body.population > 0 ? createCityLightsMaterial(body.population) : null),
+    [body.population],
+  )
+  useEffect(() => () => lightsMaterial?.dispose(), [lightsMaterial])
+
   useFrame(() => {
     if (ref.current) place(ref.current, body, session.world.time, REST_POLE)
 
-    const air = airRef.current
-    if (!air || !airMaterial) return
+    /**
+     * Оболочка огней вращается ВМЕСТЕ с планетой: сетка городов считается в её
+     * связанных осях. Оболочка воздуха — нет: она гладкая, и вращать в ней нечего.
+     */
+    if (lightsRef.current) place(lightsRef.current, body, session.world.time, REST_POLE)
 
-    // Оболочка не вращается: она гладкая, и вращать в ней нечего. Позиция —
-    // из тела, свет — из звезды. Плавающее начало координат двигает и то и другое.
-    air.position.copy(body.pos)
+    const air = airRef.current
+    // Позиция — из тела, свет — из звезды. Плавающее начало координат двигает
+    // и то и другое.
+    if (air) air.position.copy(body.pos)
+
+    if (!airMaterial && !lightsMaterial) return
 
     const star = session.world.bodies.find((b) => b.kind === 'star')
-    if (star) {
-      _toStar.copy(star.pos).sub(body.pos).normalize()
-      airMaterial.uniforms.uLight!.value.copy(_toStar)
-    }
+    if (!star) return
+    _toStar.copy(star.pos).sub(body.pos).normalize()
+    airMaterial?.uniforms.uLight!.value.copy(_toStar)
+    lightsMaterial?.uniforms.uLight!.value.copy(_toStar)
   })
 
   return (
     <>
       <mesh ref={ref} geometry={geometry} material={material} scale={body.radius} frustumCulled={false} />
+      {lightsMaterial && (
+        <mesh
+          ref={lightsRef}
+          geometry={atmosphereGeometry()}
+          material={lightsMaterial}
+          scale={body.radius * CITY_LIGHTS.SCALE}
+          frustumCulled={false}
+        />
+      )}
       {airMaterial && (
         <mesh
           ref={airRef}
