@@ -389,25 +389,81 @@ function navReticle(ctx: CanvasRenderingContext2D, x: number, y: number, color: 
   ctx.stroke()
 }
 
-function drawBodyMarkers({ ctx, camera, world, width, height }: HudFrame): void {
+/** Ближе этого порога (px HUD) две подписи мешаются — вторичную гасим. */
+const LABEL_MIN_GAP = 14 * S
+
+interface Marker {
+  pos: Vector3
+  name: string
+  color: string
+  /** Активная цель навигации — крупная точка, ромб и безусловная подпись. */
+  nav: boolean
+  /** Ориентир (звезда, планета, кит): подпись безусловна, соседям не уступает. */
+  primary: boolean
+}
+
+/** Приоритет подписи: цель важнее ориентира, ориентир важнее спутника. */
+function labelRank(m: Marker): number {
+  if (m.nav) return 0
+  if (m.primary) return 1
+  return 2
+}
+
+function collectMarkers(world: World): Marker[] {
+  const out: Marker[] = []
   for (const body of world.bodies) {
-    const p = projectPoint(body.pos, camera, width, height)
+    out.push({
+      pos: body.pos,
+      name: body.name,
+      // Тот же цвет, что и на локаторе: звезда жёлтая, причал белый, планета
+      // фосфорная. Пилот не переучивается, переводя взгляд с круга в окно.
+      color: bodyColor(body),
+      nav: body.id === world.navTargetId,
+      // Станция и спутник вторичны — их подпись уступает планете, к которой они
+      // липнут. Звезда и планета — ориентиры, подписаны всегда.
+      primary: body.kind === 'star' || body.kind === 'planet',
+    })
+  }
+  // Киты — тоже ориентиры: их МАРКУ пилот должен прочесть, это событие в системе.
+  for (const titan of world.titans) {
+    out.push({ pos: titan.pos, name: titan.name, color: HUD_COLORS.NEUTRAL, nav: false, primary: true })
+  }
+  return out
+}
+
+function drawBodyMarkers({ ctx, camera, world, width, height }: HudFrame): void {
+  const shown: Array<{ m: Marker; x: number; y: number; distance: number }> = []
+  for (const m of collectMarkers(world)) {
+    const p = projectPoint(m.pos, camera, width, height)
     if (p.behind || !isOnScreen(p.x, p.y, width, height)) continue
+    // projectPoint отдаёт переиспользуемый объект — копируем числа сразу.
+    shown.push({ m, x: p.x, y: p.y, distance: p.distance })
+  }
 
-    const nav = body.id === world.navTargetId
-    // Тот же цвет, что и на локаторе: звезда жёлтая, причал белый, планета
-    // фосфорная. Пилот не должен переучиваться, переводя взгляд с круга в окно.
-    const color = bodyColor(body)
+  // Подписываем по важности: сперва цель и ориентиры (они занимают место), затем
+  // вторичные — и только если рядом ещё не тесно. Так у далёкой планеты со
+  // станцией и роем спутников, слившихся в одну точку, остаётся одна подпись —
+  // планеты. Различишь их по отдельности (подлетев) — подписи разъедутся сами.
+  shown.sort((a, b) => labelRank(a.m) - labelRank(b.m))
 
-    // Цель навигации — точка потолще: цвет на звёздном фоне различим плохо,
-    // а разница в размере читается даже боковым зрением.
-    dot(ctx, p.x, p.y, nav ? 2.5 * S : 1.5 * S, color)
-    if (nav) navReticle(ctx, p.x, p.y, color)
+  const placed: Array<{ x: number; y: number }> = []
+  for (const { m, x, y, distance } of shown) {
+    // Цель навигации — точка потолще: цвет на звёздном фоне различим плохо, а
+    // разница в размере читается даже боковым зрением.
+    dot(ctx, x, y, m.nav ? 2.5 * S : 1.5 * S, m.color)
+    if (m.nav) navReticle(ctx, x, y, m.color)
+
+    // Ориентир и активная цель подпись не уступают: планету видно всегда, а
+    // выбранную станцию (пусть у другой планеты) — потому что это цель. Вторичный
+    // же объект вплотную к уже подписанному молчит, чтобы не плодить кашу.
+    const forced = m.primary || m.nav
+    if (!forced && placed.some((q) => Math.hypot(q.x - x, q.y - y) < LABEL_MIN_GAP)) continue
 
     // Подпись отодвинута за рамку: иначе имя ложится ей на грань и не читается.
-    const gap = (nav ? 12 : 6) * S
-    text(ctx, body.name, p.x + gap, p.y - 5 * S, color)
-    text(ctx, formatDistance(p.distance), p.x + gap, p.y + 5 * S, color)
+    const gap = (m.nav ? 12 : 6) * S
+    text(ctx, m.name, x + gap, y - 5 * S, m.color)
+    text(ctx, formatDistance(distance), x + gap, y + 5 * S, m.color)
+    placed.push({ x, y })
   }
 }
 
