@@ -1,4 +1,5 @@
 export { PHYSICS } from './physics'
+export { GRAVITY, MOON } from './bodies'
 export { ASTEROID, DEBRIS, SCORE, WORLD } from './world'
 export {
   ARRIVAL,

@@ -19,6 +19,16 @@ export interface PatrolDef {
   name: string
 }
 
+/** Спутник планеты. Орбита — от ЦЕНТРА планеты, метры. */
+export interface MoonDef {
+  name: string
+  radius: number
+  orbit: number
+  /** Угол в момент t = 0, рад. Разводит луны одной планеты по разным местам. */
+  phase: number
+  tilt: number
+}
+
 export interface SystemDef {
   name: string
   /** Одно число задаёт всю расстановку: пояс, патрули, разброс. */
@@ -37,6 +47,8 @@ export interface SystemDef {
     tilt: number
     /** Миллионы жителей. Ноль — мир необитаем, и ночью на нём темно. */
     population: number
+    /** Спутники. Их период выводится из массы планеты, поэтому здесь его нет. */
+    moons: readonly MoonDef[]
   }[]
   station: { name: string; pos: readonly [number, number, number]; radius: number } | null
   belt: { center: readonly [number, number, number]; radius: number; count: number } | null
@@ -104,6 +116,11 @@ export const STARTER_SYSTEM: SystemDef = {
       tilt: 0.41,
       // Столица системы: четыре миллиарда. Ночью её города видно с орбиты.
       population: 4_100,
+      /**
+       * Луна там же, где настоящая: 384 тысячи километров, наклон 5°. Оборот
+       * не задан — он выведется из массы Оссиании и совпадёт с земным месяцем.
+       */
+      moons: [{ name: 'Оссиания a', radius: 1_737_000, orbit: 384_400_000, phase: 0.7, tilt: 0.09 }],
     },
     // Газовый гигант в 4.5 а.е. — цель крейсерского хода на добрую минуту.
     // Сутки короче земных (у Юпитера — десять часов), вращение обратное.
@@ -116,6 +133,11 @@ export const STARTER_SYSTEM: SystemDef = {
       spin: -1.76e-4,
       tilt: 0.12,
       population: 0,
+      // Две луны на орбитах Ио и Ганимеда: у гиганта они и в природе водятся.
+      moons: [
+        { name: 'Тиррион IV a', radius: 1_821_000, orbit: 421_700_000, phase: 2.1, tilt: 0.02 },
+        { name: 'Тиррион IV b', radius: 2_634_000, orbit: 1_070_400_000, phase: 4.9, tilt: 0.18 },
+      ],
     },
   ],
   /**

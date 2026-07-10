@@ -1,3 +1,4 @@
+import { MOON } from '../../config/bodies'
 import { PLANET_COLORS, SCALE } from '../../config/galaxy'
 import { makeRng } from '../../core/math'
 import type { PatrolDef, SystemDef } from '../world/system'
@@ -77,21 +78,43 @@ function arrivalPoint(system: StarSystem, seat: number, planets: SystemDef['plan
   return [planet.pos[0] + planet.radius + altitude, planet.pos[1], planet.pos[2] + 2_000]
 }
 
+/**
+ * Луны в метрах. Радиус орбиты генератор хранит в радиусах своей планеты —
+ * так он не зависит от масштаба, которым мир переведут в метры.
+ *
+ * Фаза берётся золотым углом, а не броском кости: две луны одной планеты
+ * обязаны разойтись, а не слипнуться, и делать это они должны одинаково в любой
+ * системе. Наклон растёт с номером: дальняя луна всегда самая «косая».
+ */
+function moonsOf(planet: Planet, radius: number): SystemDef['planets'][number]['moons'] {
+  return planet.moons.map((m, i) => ({
+    name: m.name,
+    radius: m.radius * SCALE.PLANET_RADIUS,
+    orbit: m.orbit * radius,
+    phase: i * GOLDEN_ANGLE,
+    tilt: MOON.MAX_TILT * ((i + 1) / (planet.moons.length + 1)),
+  }))
+}
+
 /** Система карты, развёрнутая в мир. Детерминирована: индекс и зерно задают всё. */
 export function systemDefOf(system: StarSystem, galaxySeed: number): SystemDef {
   const rng = makeRng(galaxySeed ^ (system.index + 1))
 
-  const planets = system.planets.map((p, i) => ({
-    name: p.name,
-    type: p.type,
-    pos: planetPos(p, i),
-    radius: p.radius * SCALE.PLANET_RADIUS,
-    color: PLANET_COLORS[p.type],
-    // Ноль у необитаемого мира. Ночную сторону красит рендер, но КТО там живёт —
-    // знает галактика, и она же одна имеет право это сказать.
-    population: p.settlement?.population ?? 0,
-    ...spinOf(i),
-  }))
+  const planets = system.planets.map((p, i) => {
+    const radius = p.radius * SCALE.PLANET_RADIUS
+    return {
+      name: p.name,
+      type: p.type,
+      pos: planetPos(p, i),
+      radius,
+      color: PLANET_COLORS[p.type],
+      // Ноль у необитаемого мира. Ночную сторону красит рендер, но КТО там живёт —
+      // знает галактика, и она же одна имеет право это сказать.
+      population: p.settlement?.population ?? 0,
+      moons: moonsOf(p, radius),
+      ...spinOf(i),
+    }
+  })
 
   // Столица — мир с причалом и наибольшим населением. К ней и выходим.
   const capital = capitalOf(system)

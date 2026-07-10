@@ -1,4 +1,5 @@
 import { Euler, Quaternion, Vector3 } from 'three'
+import { GRAVITY, MOON } from '../../config/bodies'
 import { pirateLeaderLoadout, pirateLoadout, playerStartLoadout } from '../../config/loadouts'
 import { GALAXY } from '../../config/galaxy'
 import { ASTEROID, TRAFFIC, WORLD } from '../../config/world'
@@ -18,6 +19,7 @@ import type {
 } from './entities'
 import { createIdSource, type IdSource } from './ids'
 import { maybeShiftOrigin } from './origin'
+import { stepOrbits } from './orbits'
 import type { SystemDef } from './system'
 import { STARTER_SYSTEM } from './system'
 
@@ -162,6 +164,45 @@ function spinAxis(tilt: number): Vector3 {
   return new Vector3(Math.sin(tilt), Math.cos(tilt), 0).normalize()
 }
 
+/**
+ * Угловая скорость кругового обращения, рад/с: ω = √(GM/r³).
+ *
+ * Масса планеты выводится из радиуса и плотности — назначать период вручную
+ * нельзя. «Пусть оборот за десять минут» даёт луне сотни километров в секунду:
+ * она проносится мимо корабля быстрее ракеты и сшибает его на ровном месте.
+ * У настоящей Луны выходит месяц, и это следствие массы Земли, а не решения.
+ */
+function orbitRate(planetRadius: number, gas: boolean, orbitRadius: number): number {
+  const density = gas ? GRAVITY.GAS_DENSITY : GRAVITY.ROCK_DENSITY
+  const mass = density * (4 / 3) * Math.PI * planetRadius ** 3
+  return Math.sqrt((GRAVITY.G * mass) / orbitRadius ** 3)
+}
+
+function makeMoonBodies(ids: IdSource, planet: BodyEntity, def: SystemDef['planets'][number]): BodyEntity[] {
+  const gas = def.type === 'Газовый гигант'
+  return def.moons.map((moon) => ({
+    id: ids.next(),
+    kind: 'moon' as const,
+    name: moon.name,
+    // Точка на орбите досчитается первым же `stepOrbits`. Здесь — центр планеты:
+    // положение спутника нигде не ХРАНИТСЯ, оно следует из времени.
+    pos: new Vector3(...def.pos),
+    radius: moon.radius,
+    color: MOON.COLOR,
+    surface: 'Скалистая' as const,
+    population: 0,
+    spin: MOON.SPIN,
+    spinAxis: spinAxis(moon.tilt),
+    orbit: {
+      parentId: planet.id,
+      radius: moon.orbit,
+      phase: moon.phase,
+      rate: orbitRate(planet.radius, gas, moon.orbit),
+      tilt: moon.tilt,
+    },
+  }))
+}
+
 function makeBodies(ids: IdSource, def: SystemDef): BodyEntity[] {
   const bodies: BodyEntity[] = [
     {
@@ -175,11 +216,12 @@ function makeBodies(ids: IdSource, def: SystemDef): BodyEntity[] {
       population: 0,
       spin: 0,
       spinAxis: new Vector3(0, 1, 0),
+      orbit: null,
     },
   ]
 
   for (const p of def.planets) {
-    bodies.push({
+    const planet: BodyEntity = {
       id: ids.next(),
       kind: 'planet',
       name: p.name,
@@ -190,7 +232,9 @@ function makeBodies(ids: IdSource, def: SystemDef): BodyEntity[] {
       population: p.population,
       spin: p.spin,
       spinAxis: spinAxis(p.tilt),
-    })
+      orbit: null,
+    }
+    bodies.push(planet, ...makeMoonBodies(ids, planet, p))
   }
 
   if (def.station) {
@@ -206,6 +250,7 @@ function makeBodies(ids: IdSource, def: SystemDef): BodyEntity[] {
       // Кориолис вращается вокруг продольной оси — так было в оригинале.
       spin: 0.08,
       spinAxis: new Vector3(0, 0, 1),
+      orbit: null,
     })
   }
   return bodies
@@ -265,6 +310,8 @@ export function enterSystem(
 
   world.ships = makePatrols(rng, world.ids, def)
   world.bodies = makeBodies(world.ids, def)
+  // Спутник родится в центре своей планеты: место ему даёт время, а не фабрика.
+  stepOrbits(world)
   world.asteroids = makeAsteroids(rng, world.ids, def)
 
   world.pods = []
@@ -352,5 +399,7 @@ export function createWorld(def: SystemDef = STARTER_SYSTEM): World {
    * до того, как игрок возьмёт управление.
    */
   maybeShiftOrigin(world)
+  // Спутники родились в центрах своих планет: место им даёт время, а не фабрика.
+  stepOrbits(world)
   return world
 }

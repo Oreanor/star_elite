@@ -345,6 +345,9 @@ function Hologram({
                 <circle r={4} fill={colour} />
               ) : m.kind === 'station' ? (
                 <rect x={-4} y={-4} width={8} height={8} fill={colour} fillOpacity={active ? 0.9 : 0.55} />
+              ) : m.kind === 'moon' ? (
+                // Спутник вдвое мельче планеты: у своего мира он гость, а не ровня.
+                <circle r={active ? 5 : 3} fill={colour} fillOpacity={active ? 0.9 : 0.45} />
               ) : (
                 <circle r={active ? 8 : 6} fill={colour} fillOpacity={active ? 0.9 : 0.55} />
               )}

@@ -29,6 +29,8 @@ export interface Star {
 export interface Moon {
   readonly name: string
   readonly radius: number
+  /** Радиус орбиты в РАДИУСАХ своей планеты. У настоящей Луны — около шестидесяти. */
+  readonly orbit: number
 }
 
 /**

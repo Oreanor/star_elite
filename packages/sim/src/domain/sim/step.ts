@@ -33,6 +33,7 @@ import { isPhased, updateCruise } from '../cruise/drive'
 import { stepShip } from '../flight/model'
 import { stepDocking } from '../station/docking'
 import type { ShipEntity, World } from '../world/entities'
+import { stepOrbits } from '../world/orbits'
 import { maybeShiftOrigin } from '../world/origin'
 import { stepTraffic } from '../world/traffic'
 import { NULL_CONTROLLER, type ControllerMap } from './controller'
@@ -72,6 +73,9 @@ export function stepWorld(world: World, frameDt: number, controllers: Controller
     remaining -= dt
     world.time += dt
 
+    // Спутники расставляются ПЕРВЫМИ: и пилот, и столкновения, и крейсерский
+    // потолок должны видеть луну там, где она в это мгновение находится.
+    stepOrbits(world)
     stepControllers(world, controllers, dt)
     stepPhysics(world, dt)
     stepWeapons(world, controllers, dt)
