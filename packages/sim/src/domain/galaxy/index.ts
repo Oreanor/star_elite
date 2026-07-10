@@ -1,3 +1,4 @@
+export { arrivalBounds, arrivalPoint, stationSeat, type Arrival, type Point3 } from './arrival'
 export { systemDefOf } from './bridge'
 export { isCore, jump, jumpBlock, jumpDistance, reachableSystems, systemDefFor, type JumpBlock } from './jump'
 export { generateGalaxy, generateSystem } from './generate'

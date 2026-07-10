@@ -3,6 +3,7 @@ import { WORLD } from '../../config/world'
 import { enterSystem } from '../world/factory'
 import { STARTER_SYSTEM, type SystemDef } from '../world/system'
 import type { World } from '../world/entities'
+import { arrivalPoint, type Arrival } from './arrival'
 import { systemDefOf } from './bridge'
 import { generateSystem } from './generate'
 import { distanceLy, placeSystem } from './shape'
@@ -61,10 +62,14 @@ export function reachableSystems(world: World, indices: readonly number[]): numb
 /**
  * Прыгнуть. Возвращает false, если правила не пускают, — и мир при этом не тронут.
  * Проверка и действие обязаны быть одним решением, иначе они однажды разойдутся.
+ *
+ * `arrival` — куда именно выйти в той системе. `null` значит «куда обычно»:
+ * к столице. Само правило живёт в `arrival.ts`, здесь только протаскивается.
  */
-export function jump(world: World, index: number): boolean {
+export function jump(world: World, index: number, arrival: Arrival | null = null): boolean {
   if (jumpBlock(world, index) !== null) return false
-  enterSystem(world, systemDefFor(index, world.galaxySeed), index)
+  const def = systemDefFor(index, world.galaxySeed)
+  enterSystem(world, def, index, arrivalPoint(def, arrival))
   return true
 }
 

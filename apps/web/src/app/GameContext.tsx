@@ -1,5 +1,13 @@
 import { createContext, useContext, useMemo, type ReactNode } from 'react'
-import { aiController, autodockController, createWorld, jump, type Controller, type World } from '@elite/sim'
+import {
+  aiController,
+  autodockController,
+  createWorld,
+  jump,
+  type Arrival,
+  type Controller,
+  type World,
+} from '@elite/sim'
 import { createIntent, createPlayerController, type PlayerIntent } from './control/playerController'
 
 export type PilotMode = 'manual' | 'autodock'
@@ -118,8 +126,8 @@ export function syncControllers(session: Session): void {
  *
  * Возвращает false, если домен не пустил: причину спрашивают у `jumpBlock`.
  */
-export function jumpTo(session: Session, index: number): boolean {
-  if (!jump(session.world, index)) return false
+export function jumpTo(session: Session, index: number, arrival: Arrival | null = null): boolean {
+  if (!jump(session.world, index, arrival)) return false
 
   // Режим сбрасываем ДО раздачи: автопилот стыковки вёл к причалу, которого
   // в новой системе нет, а `bindControllers` сажает за штурвал того, кто в режиме.

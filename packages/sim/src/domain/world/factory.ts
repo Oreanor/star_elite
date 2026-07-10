@@ -137,6 +137,26 @@ function makeAsteroids(rng: Rng, ids: IdSource, def: SystemDef): AsteroidEntity[
   return asteroids
 }
 
+const _nose = /* @__PURE__ */ new Vector3(0, 0, -1)
+const _toward = /* @__PURE__ */ new Vector3()
+
+/**
+ * Развернуть нос на точку. Выход из прыжка в километре от причала спиной к нему —
+ * это не «свобода», это лишний разворот вслепую в каждой новой системе.
+ */
+function aimAt(ship: ShipEntity, target: Vector3 | null): void {
+  if (!target) {
+    ship.state.quat.identity()
+    return
+  }
+  _toward.copy(target).sub(ship.state.pos)
+  if (_toward.lengthSq() < 1e-6) {
+    ship.state.quat.identity()
+    return
+  }
+  ship.state.quat.setFromUnitVectors(_nose, _toward.normalize())
+}
+
 /** Ось вращения: вертикаль, наклонённая на `tilt` в плоскости XY. */
 function spinAxis(tilt: number): Vector3 {
   return new Vector3(Math.sin(tilt), Math.cos(tilt), 0).normalize()
@@ -229,7 +249,13 @@ function makePatrols(rng: Rng, ids: IdSource, def: SystemDef): ShipEntity[] {
  * `epoch` растёт при каждой смене. Рендер держит меши тел и пояса с момента
  * монтирования, и узнать, что мир под ним подменили, ему больше неоткуда.
  */
-export function enterSystem(world: World, def: SystemDef, systemIndex: number): void {
+export function enterSystem(
+  world: World,
+  def: SystemDef,
+  systemIndex: number,
+  /** Куда выйти. По умолчанию — туда, где система велит начинать. */
+  start: readonly [number, number, number] = def.playerStart,
+): void {
   const rng = makeRng(def.seed)
 
   world.rng = rng
@@ -257,10 +283,10 @@ export function enterSystem(world: World, def: SystemDef, systemIndex: number): 
   // отсчёта считалось от прежней системы, и переносить его сюда бессмысленно.
   const player = world.player
   player.ai = null
-  player.state.pos.set(...def.playerStart)
+  player.state.pos.set(...start)
   player.state.vel.set(0, 0, 0)
   player.state.angVel.set(0, 0, 0)
-  player.state.quat.identity()
+  aimAt(player, world.bodies.find((b) => b.id === world.navTargetId)?.pos ?? null)
   player.controls.throttle = WORLD.START_THROTTLE
   world.originOffset.set(0, 0, 0)
   world.originShift.set(0, 0, 0)

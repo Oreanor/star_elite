@@ -1,6 +1,7 @@
 export { PHYSICS } from './physics'
 export { ASTEROID, DEBRIS, SCORE, WORLD } from './world'
 export {
+  ARRIVAL,
   CORE_INDEX,
   GALAXY,
   GALAXY_SHAPES,

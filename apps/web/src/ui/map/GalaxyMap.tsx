@@ -14,15 +14,21 @@ import {
   Vector3,
 } from 'three'
 import {
+  ARRIVAL,
   CORE_INDEX,
   GALAXY,
+  arrivalBounds,
   capitalOf,
   galaxyName,
   galaxyShape,
   generateGalaxy,
   jumpBlock,
   jumpDistance,
+  stationSeat,
+  systemDefFor,
+  type Arrival,
   type StarSystem,
+  type SystemDef,
   type World,
 } from '@elite/sim'
 import { jumpTo, useSession } from '../../app/GameContext'
@@ -408,8 +414,8 @@ export function GalaxyMap({ onClose }: { onClose: () => void }) {
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose])
 
-  const doJump = (index: number) => {
-    if (jumpTo(session, index)) onClose()
+  const doJump = (index: number, arrival: Arrival | null) => {
+    if (jumpTo(session, index, arrival)) onClose()
   }
 
   return (
@@ -506,7 +512,7 @@ function SystemPanel({
   systems: StarSystem[]
   world: World
   selected: number | null
-  onJump: (index: number) => void
+  onJump: (index: number, arrival: Arrival | null) => void
   onClose: () => void
 }) {
   const system = selected != null ? systems[selected] : null
@@ -526,6 +532,8 @@ function SystemPanel({
         </p>
       ) : (
         <SystemDetails
+          // Выбор точки выхода принадлежит СИСТЕМЕ: сменил звезду — крестик снят.
+          key={selected}
           system={system}
           index={selected!}
           world={world}
@@ -554,12 +562,19 @@ function SystemDetails({
   system: StarSystem
   index: number
   world: World
-  onJump: (index: number) => void
+  onJump: (index: number, arrival: Arrival | null) => void
 }) {
   const distance = jumpDistance(world, index)
   const blocked = jumpBlock(world, index)
   const capital = capitalOf(system)
   const core = index === CORE_INDEX
+
+  /**
+   * Описание системы, по которому её и построят. Считается из индекса и зерна —
+   * ничего не хранится, поэтому и на карте, и в мире это одна и та же система.
+   */
+  const def = useMemo(() => systemDefFor(index, world.galaxySeed), [index, world.galaxySeed])
+  const [arrival, setArrival] = useState<Arrival | null>(null)
 
   return (
     <div className="mt-5 flex flex-1 flex-col">
@@ -580,12 +595,15 @@ function SystemDetails({
         </p>
       )}
 
-      <Orrery system={system} />
+      <Orrery def={def} arrival={arrival} onPick={setArrival} />
+      <p className="mt-2 text-[11px] leading-relaxed" style={{ color: UI.DIM }}>
+        {describeArrival(def, arrival)}
+      </p>
 
       <button
         type="button"
         disabled={blocked !== null}
-        onClick={() => onJump(index)}
+        onClick={() => onJump(index, arrival)}
         className={`mt-6 w-full border py-3 text-sm tracking-[0.3em] transition-colors ${
           blocked ? 'cursor-not-allowed opacity-40' : 'cursor-pointer hover:bg-[#7fd6ff] hover:text-black'
         }`}
@@ -609,11 +627,92 @@ function Row({ label, value }: { label: string; value: string }) {
 }
 
 /**
- * Схема системы: звезда и орбиты. Радиус логарифмический — иначе внутренние
- * миры слипаются в точку у светила, а внешний уезжает за край.
+ * Схема системы: звезда, орбиты и КРЕСТИК точки выхода.
+ *
+ * Схема строится из `SystemDef` — из того самого описания, по которому будет
+ * собран мир, а не из карточки генератора. Иначе крестик указывал бы на планету,
+ * которой в системе не окажется: родная система задана вручную и генератору не
+ * подчиняется, а прыгать домой можно, как в любую другую.
+ *
+ * Радиус логарифмический — иначе внутренние миры слипаются в точку у светила,
+ * а внешний уезжает за край. Азимут настоящий: `atan2(z, x)` от звезды, поэтому
+ * клик по схеме — это клик по месту в системе, а не по картинке.
  */
-function Orrery({ system }: { system: StarSystem }) {
-  if (system.planets.length === 0) {
+const ORRERY_VIEW = 160
+const ORRERY_CENTRE = ORRERY_VIEW / 2
+/** Внутренняя орбита ложится сюда, внешняя — на `HUB + REACH`. */
+const ORRERY_HUB = 12
+const ORRERY_REACH = 62
+/** Ближе этого к планете крестик прилипает к ней. Попасть в точку в 2 единицы мышью нельзя. */
+const SNAP = 7
+
+interface Ring {
+  name: string
+  orbit: number
+  angle: number
+  radius: number
+  giant: boolean
+  station: boolean
+  x: number
+  y: number
+}
+
+function rings(def: SystemDef): Ring[] {
+  const seat = stationSeat(def)
+  const bounds = arrivalBounds(def)
+  if (!bounds) return []
+
+  /**
+   * Логарифм берётся от ОТНОШЕНИЯ орбиты к внутренней, а не от неё самой.
+   *
+   * Орбиты расходятся геометрически, поэтому в логарифме они стоят через равные
+   * промежутки — но только если отсчитывать от первой. Абсолютный логарифм делил
+   * `lg(2.4e10)` на `lg(1e12)`, и внутренняя планета оказывалась сразу на семидесяти
+   * процентах радиуса: все миры любой системы жались к краю, а середина пустовала.
+   *
+   * Единственная планета отношения не имеет — ей отводится середина: рисовать её
+   * у самого светила было бы такой же ложью, как и на краю.
+   */
+  const span = Math.log(bounds.max / bounds.min)
+
+  return def.planets.map((p, i) => {
+    const orbit = Math.hypot(p.pos[0] - def.star.pos[0], p.pos[2] - def.star.pos[2])
+    const angle = Math.atan2(p.pos[2] - def.star.pos[2], p.pos[0] - def.star.pos[0])
+    const radius = ORRERY_HUB + (span > 1e-6 ? Math.log(orbit / bounds.min) / span : 0.5) * ORRERY_REACH
+    return {
+      name: p.name,
+      orbit,
+      angle,
+      radius,
+      giant: p.type === 'Газовый гигант',
+      station: i === seat,
+      x: ORRERY_CENTRE + radius * Math.cos(angle),
+      y: ORRERY_CENTRE + radius * Math.sin(angle),
+    }
+  })
+}
+
+/** Обратный ход шкалы: из радиуса на схеме — в орбиту в метрах. */
+function orbitAt(def: SystemDef, radius: number): number {
+  const bounds = arrivalBounds(def)
+  if (!bounds) return 0
+  const span = Math.log(bounds.max / bounds.min)
+  if (span <= 1e-6) return bounds.min
+  const k = (radius - ORRERY_HUB) / ORRERY_REACH
+  return bounds.min * Math.exp(k * span)
+}
+
+function Orrery({
+  def,
+  arrival,
+  onPick,
+}: {
+  def: SystemDef
+  arrival: Arrival | null
+  onPick: (arrival: Arrival | null) => void
+}) {
+  const plotted = rings(def)
+  if (plotted.length === 0) {
     return (
       <p className="mt-6 text-xs" style={{ color: UI.DIM }}>
         Планет нет. Лететь не к чему, кроме самой звезды.
@@ -621,45 +720,113 @@ function Orrery({ system }: { system: StarSystem }) {
     )
   }
 
-  const orbits = system.planets.map((p) => p.orbit)
-  const minOrbit = Math.min(...orbits)
-  const maxOrbit = Math.max(...orbits)
+  const bounds = arrivalBounds(def)!
+  const inner = ORRERY_HUB
+  const outer = ORRERY_HUB + ORRERY_REACH
 
-  /**
-   * Логарифм берётся от ОТНОШЕНИЯ орбиты к внутренней, а не от неё самой.
-   *
-   * Орбиты расходятся геометрически (6000·1.7ⁱ), поэтому в логарифме они стоят
-   * через равные промежутки — но только если отсчитывать от первой. Абсолютный
-   * логарифм делил `lg(6000) = 3.8` на `lg(245000) = 5.4`, и внутренняя планета
-   * оказывалась сразу на семидесяти процентах радиуса: все миры любой системы
-   * жались к краю, а середина схемы пустовала.
-   *
-   * Единственная планета отношения не имеет — ей отводится середина: рисовать её
-   * у самого светила было бы такой же ложью, как и на краю.
-   */
-  const span = Math.log(maxOrbit / minOrbit)
-  const scale = (orbit: number) =>
-    12 + (span > 1e-6 ? Math.log(orbit / minOrbit) / span : 0.5) * 62
+  const pick = (event: React.MouseEvent<SVGSVGElement>) => {
+    const box = event.currentTarget.getBoundingClientRect()
+    const x = ((event.clientX - box.left) / box.width) * ORRERY_VIEW - ORRERY_CENTRE
+    const y = ((event.clientY - box.top) / box.height) * ORRERY_VIEW - ORRERY_CENTRE
+
+    // Планета важнее пустоты: попасть мышью в точку в две единицы нельзя.
+    const near = plotted.findIndex((p) => Math.hypot(p.x - ORRERY_CENTRE - x, p.y - ORRERY_CENTRE - y) < SNAP)
+    if (near >= 0) {
+      onPick({ kind: 'body', planet: near })
+      return
+    }
+
+    const radius = Math.hypot(x, y)
+    // Пустое место — только внутри пояса. Домен зажмёт и сам, но крестик обязан
+    // встать туда, куда корабль в самом деле выйдет, а не туда, куда ткнули.
+    const clamped = Math.min(outer, Math.max(inner, radius))
+    onPick({ kind: 'point', orbit: orbitAt(def, clamped), angle: Math.atan2(y, x) })
+  }
+
+  const cross = crossAt(def, plotted, arrival)
 
   return (
-    <svg viewBox="0 0 160 160" className="mt-6 w-full" role="img" aria-label={`Схема системы ${system.name}`}>
-      <circle cx="80" cy="80" r="6" fill={`#${system.star.color.toString(16).padStart(6, '0')}`} />
-      {system.planets.map((p, i) => {
-        const r = scale(p.orbit)
-        const a = i * 2.399963
-        return (
-          <g key={p.name}>
-            <circle cx="80" cy="80" r={r} fill="none" stroke={UI.DIM} strokeWidth="0.4" opacity="0.5" />
-            <circle
-              cx={80 + r * Math.cos(a)}
-              cy={80 + r * Math.sin(a)}
-              // Газовый гигант виден гигантом и на схеме.
-              r={p.type === 'Газовый гигант' ? 3.4 : 2}
-              fill={p.station ? UI.PRIMARY : UI.DIM}
-            />
-          </g>
-        )
-      })}
+    <svg
+      viewBox={`0 0 ${ORRERY_VIEW} ${ORRERY_VIEW}`}
+      className="mt-6 w-full cursor-crosshair"
+      onClick={pick}
+      role="img"
+      aria-label={`Схема системы ${def.name}`}
+    >
+      {/* Пояс выхода: между этими окружностями можно ткнуть в пустоту. */}
+      <circle cx={ORRERY_CENTRE} cy={ORRERY_CENTRE} r={(inner + outer) / 2}
+        fill="none" stroke={UI.PRIMARY} strokeWidth={outer - inner} opacity="0.05" />
+
+      <circle cx={ORRERY_CENTRE} cy={ORRERY_CENTRE} r="6" fill={`#${def.star.color.toString(16).padStart(6, '0')}`} />
+      {plotted.map((p) => (
+        <g key={p.name}>
+          <circle cx={ORRERY_CENTRE} cy={ORRERY_CENTRE} r={p.radius} fill="none" stroke={UI.DIM} strokeWidth="0.4" opacity="0.5" />
+          {/* Газовый гигант виден гигантом и на схеме. */}
+          <circle cx={p.x} cy={p.y} r={p.giant ? 3.4 : 2} fill={p.station ? UI.PRIMARY : UI.DIM} />
+        </g>
+      ))}
+
+      {cross && <Cross x={cross.x} y={cross.y} />}
+      {/* Сброс выбора: клик по звезде. Отдельной кнопки он не стоит. */}
+      <circle cx={ORRERY_CENTRE} cy={ORRERY_CENTRE} r="8" fill="transparent"
+        onClick={(e) => { e.stopPropagation(); onPick(null) }} />
+      <title>{`Пояс выхода: ${formatOrbit(bounds.min)} — ${formatOrbit(bounds.max)}`}</title>
     </svg>
   )
+}
+
+/** Где стоит крестик. Тело — на своей отметке, пустое место — по орбите и азимуту. */
+function crossAt(def: SystemDef, plotted: Ring[], arrival: Arrival | null): { x: number; y: number } | null {
+  if (!arrival) return null
+  if (arrival.kind === 'body') {
+    const p = plotted[arrival.planet]
+    return p ? { x: p.x, y: p.y } : null
+  }
+  const bounds = arrivalBounds(def)
+  if (!bounds) return null
+  const span = Math.log(bounds.max / bounds.min)
+  const orbit = Math.min(bounds.max, Math.max(bounds.min, arrival.orbit))
+  const r = ORRERY_HUB + (span > 1e-6 ? Math.log(orbit / bounds.min) / span : 0.5) * ORRERY_REACH
+  return { x: ORRERY_CENTRE + r * Math.cos(arrival.angle), y: ORRERY_CENTRE + r * Math.sin(arrival.angle) }
+}
+
+function Cross({ x, y }: { x: number; y: number }) {
+  const arm = 5
+  return (
+    <g stroke={UI.TARGET} strokeWidth="0.8" style={{ pointerEvents: 'none' }}>
+      <line x1={x - arm} y1={y} x2={x - 1.5} y2={y} />
+      <line x1={x + 1.5} y1={y} x2={x + arm} y2={y} />
+      <line x1={x} y1={y - arm} x2={x} y2={y - 1.5} />
+      <line x1={x} y1={y + 1.5} x2={x} y2={y + arm} />
+      <circle cx={x} cy={y} r="6.5" fill="none" strokeDasharray="1.5 2" opacity="0.7" />
+    </g>
+  )
+}
+
+const AU = 149_597_870_700
+const formatOrbit = (metres: number) => `${(metres / AU).toFixed(2)} а.е.`
+
+/**
+ * Что пилот увидит, выйдя из прыжка. Слова, а не координаты: «в миллионе
+ * километров от причала» говорит о дороге больше, чем «x = 1.4·10¹¹».
+ */
+function describeArrival(def: SystemDef, arrival: Arrival | null): string {
+  if (!def.planets.length) return 'Выход у звезды: планет здесь нет.'
+  if (!arrival) return 'Крестик на схеме — точка выхода. Пустое место или мир; звезда снимает выбор.'
+
+  if (arrival.kind === 'body') {
+    const planet = def.planets[arrival.planet]
+    if (!planet) return ''
+    const berth = stationSeat(def) === arrival.planet
+    return berth
+      ? `Выход в ${(ARRIVAL.STANDOFF / 1000).toFixed(0)} тыс. км от причала: минута крейсерского хода.`
+      : `Выход у мира ${planet.name}, в ${(ARRIVAL.STANDOFF / 1000).toFixed(0)} тыс. км над поверхностью.`
+  }
+
+  return `Выход в пустоте, ${formatOrbit(arrivalOrbit(def, arrival.orbit))} от светила. Оттуда лететь самому.`
+}
+
+const arrivalOrbit = (def: SystemDef, orbit: number): number => {
+  const bounds = arrivalBounds(def)
+  return bounds ? Math.min(bounds.max, Math.max(bounds.min, orbit)) : orbit
 }
