@@ -113,6 +113,28 @@ export function planetGeometry(look: PlanetLook, seed: number, segments = 160): 
   return geometry
 }
 
+const moonCache = new Map<number, BufferGeometry>()
+
+/**
+ * Общий шарик для мелких лун. ОДНА геометрия на всю галактику: они рисуются
+ * инстансами, и своя сфера каждой не нужна — им не положено отличаться формой.
+ *
+ * Нормали гладкие, как у планеты: гранёный спутник читался бы как ошибка, а не
+ * как стиль. Цвета по вершинам нет — оттенок приходит инстансным цветом, иначе
+ * все луны системы вышли бы одинаковыми до пикселя.
+ *
+ * Кэш по числу меридианов, а не одиночка: одиночка приняла бы `segments` первого
+ * вызова и молча выбросила у всех следующих — та же ловушка, что у `starMaterial`.
+ */
+export function moonGeometry(segments: number): BufferGeometry {
+  let geometry = moonCache.get(segments)
+  if (!geometry) {
+    geometry = new SphereGeometry(1, segments, Math.round(segments * 0.66))
+    moonCache.set(segments, geometry)
+  }
+  return geometry
+}
+
 let starCache: BufferGeometry | null = null
 
 /** Звезда: гладкая сфера. Её всё равно рисуют без освещения, гранить нечего. */

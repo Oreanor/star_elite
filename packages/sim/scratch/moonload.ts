@@ -117,3 +117,24 @@ console.log('\n--- сколько тел добавится ---')
   console.log(`планет ${planets}, лун ${moons}, в среднем ${(moons / planets).toFixed(2)} на планету`)
   console.log(`худшая система: ${worstSystem} крупных тел`)
 }
+
+console.log('\n--- крупные луны: кому положена текстура ---')
+{
+  // Порог рендера — 2400 км: столько у Титана и Ганимеда, а это уже миры.
+  const BIG = 2_100_000
+  let decor = 0
+  let big = 0
+  let biggest = 0
+  for (let i = 0; i < 400; i++) {
+    for (const p of systemDefFor(i, GALAXY.SEED).planets) {
+      for (const m of p.moons) {
+        if (m.radius >= BIG) big++
+        else decor++
+        biggest = Math.max(biggest, m.radius)
+      }
+    }
+  }
+  console.log(`декоративных ${decor}, крупных ${big} (${((100 * big) / (big + decor)).toFixed(0)}%)`)
+  console.log(`самая крупная: ${(biggest / 1000).toFixed(0)} км`)
+  console.log(`треугольников на луну: было ${160 * 105 * 2}, стало ${32 * 21 * 2}`)
+}

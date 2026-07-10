@@ -118,6 +118,20 @@ export function planetMaterial(): MeshLambertMaterial {
   return planet
 }
 
+let moon: MeshLambertMaterial | null = null
+
+/**
+ * Мелкая луна. Тоже НЕ `flatShading` — по той же причине, что и планета.
+ *
+ * Ни карты, ни покраски по вершинам: оттенок каждой приходит инстансным цветом,
+ * а `MeshLambert` его домножает на свой белый `color`. Один материал на все луны
+ * галактики — один вызов отрисовки на систему.
+ */
+export function moonMaterial(): MeshLambertMaterial {
+  moon ??= new MeshLambertMaterial({ color: 0xffffff })
+  return moon
+}
+
 const texturedPlanets = new Map<Texture, MeshLambertMaterial>()
 
 /** Планета с картой. Материал на текстуру, а не на планету: их единицы. */

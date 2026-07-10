@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Mesh, Quaternion, Sprite, Vector3, type Texture } from 'three'
 import type { BodyEntity, PlanetType } from '@elite/sim'
 import { useSession } from '../../app/GameContext'
-import { ATMOSPHERE, ATMOSPHERE_COLOR, BODY_SEGMENTS, CITY_LIGHTS, CORONA } from '../config'
+import { ATMOSPHERE, ATMOSPHERE_COLOR, BODY_SEGMENTS, CITY_LIGHTS, CORONA, MOON_DECOR } from '../config'
 import { atmosphereGeometry, planetGeometry, starGeometry, type PlanetLook } from '../geometry/bodies'
 import { coronaTexture } from '../geometry/corona'
 import { stationGeometry } from '../geometry/props'
@@ -17,6 +17,7 @@ import {
 import { createAtmosphereMaterial } from '../materials/atmosphere'
 import { createCityLightsMaterial } from '../materials/cityLights'
 import { loadPlanetTexture, pickVariant } from '../sky/planets'
+import { MoonSwarm } from './Moons'
 
 /**
  * Крупные тела: звезда, планеты, станция. Их немного и они почти неподвижны,
@@ -214,21 +215,33 @@ function Station({ body }: { body: BodyEntity }) {
   return <mesh ref={ref} geometry={stationGeometry()} material={stationMaterial()} scale={body.radius} />
 }
 
+/**
+ * Мелкая луна — декорация, и рисуется роем инстансов. Крупная — уже мир: Ганимед
+ * больше Меркурия, и складки с картой поверхности он заслужил наравне с планетами.
+ * Решает РАЗМЕР, а не вид тела: порог — единственное, что их разделяет.
+ */
+const isDecor = (body: BodyEntity): boolean => body.kind === 'moon' && body.radius < MOON_DECOR.BIG_RADIUS
+
 export function Bodies() {
   const session = useSession()
   const bodies = session.world.bodies
 
+  // Свита пересчитывается на монтировании: прыжок пересобирает сцену целиком.
+  const swarm = useMemo(() => bodies.filter(isDecor), [bodies])
+
   return (
     <>
       {bodies.map((body) => {
+        if (isDecor(body)) return null
         if (body.kind === 'star') return <Star key={body.id} body={body} />
-        // Луна рисуется тем же компонентом, что и планета, и это не лень: она и
-        // ЕСТЬ маленькая скалистая планета. Ни воздуха, ни огней у неё не будет —
-        // не потому, что для луны написана отдельная ветка, а потому, что у голой
-        // скалы нет цвета атмосферы, а у ноля жителей — городов.
+        // Крупная луна рисуется тем же компонентом, что и планета, и это не лень:
+        // она и ЕСТЬ маленькая скалистая планета. Ни воздуха, ни огней у неё не
+        // будет — не потому, что для луны написана отдельная ветка, а потому, что
+        // у голой скалы нет цвета атмосферы, а у ноля жителей — городов.
         if (body.kind === 'planet' || body.kind === 'moon') return <Planet key={body.id} body={body} />
         return <Station key={body.id} body={body} />
       })}
+      <MoonSwarm moons={swarm} />
     </>
   )
 }
