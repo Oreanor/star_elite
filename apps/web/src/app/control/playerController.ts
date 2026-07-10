@@ -54,15 +54,26 @@ const STICK_DEADZONE = 0.02
  */
 
 /**
- * Второе нажатие должно уложиться в это окно, с. У клавиш крена оно короче.
+ * Второе нажатие должно уложиться в это окно, с. Окно ЩЕДРОЕ: в 0.18 с палец
+ * не всегда попадал. Ширину теперь можно позволить, потому что непрерывное
+ * действие клавиши держит ОТДЕЛЬНЫЙ порог удержания (HOLD_CONFIRM), а не это окно:
+ * широкое окно двойного тапа больше не растягивает задержку крена и газа.
  *
- * Обычный перехват крена (отпустил A, тут же нажал снова) при широком окне
- * читался двойным тапом и отправлял корабль в незаказанный оборот. С рукоятью
- * газа так не бывает: её двигают удержанием, а не дробью. Поэтому W и S могут
- * позволить себе окно вдвое шире — в 0.18 с попадал не всякий палец.
+ * У крена оно всё же чуть короче: перехват крена (отпустил A, тут же нажал снова)
+ * при слишком широком окне читался бы двойным тапом и слал в незаказанный оборот.
+ * Газ дробью не двигают — ему можно шире.
  */
-const TAP_WINDOW_ROLL = 0.18
-const TAP_WINDOW_THRUST = 0.34
+const TAP_WINDOW_ROLL = 0.3
+const TAP_WINDOW_THRUST = 0.42
+
+/**
+ * Сколько клавишу надо ПРОДЕРЖАТЬ, прежде чем счесть её удержанием, а не первой
+ * половиной двойного тапа, с. Двойной тап требует отпустить клавишу между
+ * нажатиями — значит непрерывно зажатая дольше этого порога заведомо удержание.
+ * Порог короткий: тап дробью — 50–80 мс, и 120 мс он не заденет, зато крен и газ
+ * трогаются почти сразу, не дожидаясь всего широкого окна двойного тапа.
+ */
+const HOLD_CONFIRM = 0.12
 
 /** Клавиша, её окно и что она заказывает вторым нажатием. Данные, а не `if` (OCP). */
 interface TapKey {
@@ -189,6 +200,9 @@ function pollAutofight(world: World, intent: PlayerIntent): boolean {
 }
 
 export function createPlayerController(intent: PlayerIntent): Controller {
+  /** Сколько каждая тап-клавиша зажата без отрыва, с. Обнуляется при отпускании. */
+  const heldFor = new Map<string, number>()
+
   return {
     update(ship: ShipEntity, world: World, dt: number): void {
       if (pollAutofight(world, intent)) {
@@ -203,22 +217,21 @@ export function createPlayerController(intent: PlayerIntent): Controller {
 
       const c = ship.controls
 
-      /**
-       * Опрос двойного тапа — ПЕРВЫМ делом. Он взводит окно ожидания второго
-       * нажатия, а газ и крен ниже это окно читают: пока оно открыто, клавиша
-       * молчит. Взводить его надо ДО них, иначе первый кадр нажатия проскакивал бы
-       * с открытым ещё вчерашним окном.
-       */
+      // Опрос двойного тапа — ПЕРВЫМ делом: он взводит окно и, если тап сложился,
+      // начинает фигуру, чтобы газ и крен ниже уже видели «идёт манёвр».
       const tap = pollTap(intent, dt)
       if (tap) beginManoeuvre(intent.manoeuvre, tap.kind, tap.dir)
 
       /**
-       * Клавиша ещё в окне двойного нажатия — значит неясно, одиночная это команда
-       * или первая половина фигуры. Пока не решилось, непрерывное действие клавиши
-       * (газ у W/S, крен у A/D) НЕ применяем: иначе первый тап AA/DD успевал качнуть
-       * корабль, а первый тап WW/SS — сдвинуть рукоять, ещё до опознания фигуры.
+       * Копим, сколько КАЖДАЯ тап-клавиша зажата без отрыва. Непрерывное действие
+       * (газ у W/S, крен у A/D) включаем, лишь когда удержание подтвердилось: пока
+       * не набралось HOLD_CONFIRM, это может быть первая половина двойного тапа —
+       * трогать корабль рано. Так первый тап AA/DD не качнёт корабль, а первый тап
+       * WW/SS не сдвинет рукоять, но зажал и держишь — крен с газом идут почти сразу,
+       * не дожидаясь всего окна тапа. Отпустил — счётчик обнулился.
        */
-      const awaitingTap = (code: string): boolean => (intent.taps.get(code) ?? 0) > 0
+      for (const t of TAPS) heldFor.set(t.code, isHeld(t.code) ? (heldFor.get(t.code) ?? 0) + dt : 0)
+      const confirmedHold = (code: string): boolean => (heldFor.get(code) ?? 0) >= HOLD_CONFIRM
 
       /**
        * W/S двигают саму рукоять газа: выставленное ими держится, пока не сдвинешь.
@@ -229,8 +242,8 @@ export function createPlayerController(intent: PlayerIntent): Controller {
        * корабль уносился прочь на форсажном режиме, которого пилот не просил.
        */
       if (!manoeuvring(intent)) {
-        if (isHeld('KeyW') && !awaitingTap('KeyW')) intent.throttle += THROTTLE_RATE * dt
-        if (isHeld('KeyS') && !awaitingTap('KeyS')) intent.throttle -= THROTTLE_RATE * dt
+        if (confirmedHold('KeyW')) intent.throttle += THROTTLE_RATE * dt
+        if (confirmedHold('KeyS')) intent.throttle -= THROTTLE_RATE * dt
         intent.throttle = clamp(intent.throttle, 0, 1)
       }
 
@@ -269,10 +282,10 @@ export function createPlayerController(intent: PlayerIntent): Controller {
         if (manoeuvreHoldsCamera(intent)) c.yaw = 0
       } else {
         // A/D — единственный источник крена. Ни физика, ни ассист его не трогают.
-        // Но пока открыто окно двойного нажатия, крен не даём: первый тап AA/DD не
+        // Крен даём лишь по ПОДТВЕРЖДЁННОМУ удержанию: первый быстрый тап AA/DD не
         // должен кренить корабль, пока не решится — бочка это или просто крен.
-        const bankLeft = isHeld('KeyA') && !awaitingTap('KeyA')
-        const bankRight = isHeld('KeyD') && !awaitingTap('KeyD')
+        const bankLeft = confirmedHold('KeyA')
+        const bankRight = confirmedHold('KeyD')
         c.roll = (bankLeft ? 1 : 0) - (bankRight ? 1 : 0)
         c.strafe = 0
         c.strafeUp = 0
