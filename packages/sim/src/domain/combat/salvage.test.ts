@@ -5,17 +5,22 @@ import { SALVAGE } from '../../config/weapons'
 import { cargoMass } from '../cargo/hold'
 import { stepWorld, type Controller } from '../sim'
 import { createWorld, STARTER_SYSTEM, type World } from '../world'
+import type { PatrolDef } from '../world/system'
 import { applyDamage } from './damage'
 import { canScoopAt, scoopBlock, scoopReadiness, spawnWreckage, tryScoop } from './salvage'
 
 /**
  * Мир без пояса, но с одним пиратом: астероиды тут только мешают, а обломок
  * взять неоткуда — трофеи рождаются из корабля.
+ *
+ * Пират ставится ЗДЕСЬ, а не берётся из стартовой системы: та давно пуста —
+ * её населяют встречи. Тест, зависящий от чужой расстановки, ломается от
+ * правки баланса, к которой он не имеет отношения.
  */
+const PIRATE: PatrolDef = { count: 1, at: [0, 0, -300], spread: 0, faction: 'hostile', name: 'Пират' }
+
 function quiet(): World {
-  const patrol = STARTER_SYSTEM.patrols[0]
-  if (!patrol) throw new Error('в стартовой системе нет патрулей')
-  return createWorld({ ...STARTER_SYSTEM, patrols: [patrol], belt: null })
+  return createWorld({ ...STARTER_SYSTEM, patrols: [PIRATE], belt: null })
 }
 
 /** Ставит одного пирата рядом с игроком и возвращает его. */
@@ -31,7 +36,7 @@ describe('награда за пирата', () => {
    * приносил только очки, и экономика держалась на одних трофеях.
    */
   it('сбитый пират платит награду и очки, и только один раз', () => {
-    const world = createWorld({ ...STARTER_SYSTEM, belt: null })
+    const world = quiet()
     const pirate = withPirate(world)
     expect(pirate.faction).toBe('hostile')
 

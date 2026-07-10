@@ -77,7 +77,10 @@ export function centerStick(): void {
  * Поэтому: сообщаем о неудаче честно, а вызывающий решает, что показать.
  */
 export async function requestLock(): Promise<boolean> {
-  if (!lockTarget || document.pointerLockElement === lockTarget) return true
+  // Канваса ещё нет: сцена строится. Это не успех, а «попробуй позже» — иначе
+  // вызывающий решит, что игра началась, и уберёт меню над пустотой.
+  if (!lockTarget) return false
+  if (document.pointerLockElement === lockTarget) return true
   // Захват без фокуса окна — как раз тот случай, когда браузер оставляет курсор
   // прижатым к канвасу, а снять его уже нечем: событий он больше не пришлёт.
   if (!document.hasFocus()) return false

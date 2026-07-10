@@ -38,6 +38,22 @@ function Shell({ onRestart }: { onRestart: () => void }) {
   const [chart, setChart] = useState<'none' | 'system' | 'galaxy' | 'talk'>('none')
 
   /**
+   * Сцена строится по нажатию СТАРТ, а не при загрузке страницы.
+   *
+   * Сборка занимает одну задачу на секунду с лишним: небо в полмиллиона пикселей,
+   * геометрия планет, компиляция шейдеров. Всё это время главный поток занят, а
+   * значит браузер НЕ ОБРАБАТЫВАЕТ движение мыши — и форма курсора, и `:hover`
+   * пересчитываются только по нему. Кнопка «СТАРТ» выглядела мёртвой ровно
+   * столько, сколько строилась сцена, которую под ней всё равно не видно:
+   * заставка непрозрачна.
+   *
+   * Теперь секунда ожидания приходится на ПОСЛЕ нажатия, где она читается как
+   * загрузка, а не как поломка. Захват курсора в это время не даётся (канваса
+   * ещё нет), и кнопка сама повторяет запрос, пока сцена не встанет.
+   */
+  const [booted, setBooted] = useState(false)
+
+  /**
    * Захват курсора браузер снимает не только по `pointerlockchange`: уход фокуса
    * и скрытие вкладки делают это молча. Не переспросив, оверлей паузы остался бы
    * невидимым — а мир при этом стоит, и игра выглядит намертво зависшей.
@@ -117,7 +133,7 @@ function Shell({ onRestart }: { onRestart: () => void }) {
 
   return (
     <div className="relative h-screen w-screen overflow-hidden bg-black">
-      <Game />
+      {booted && <Game />}
       {over ? (
         <GameOver score={session.world.score} onRestart={onRestart} />
       ) : chart === 'galaxy' ? (
@@ -129,7 +145,7 @@ function Shell({ onRestart }: { onRestart: () => void }) {
       ) : chart === 'talk' ? (
         <Dialogue onClose={closeChart} />
       ) : (
-        !locked && <Paused resuming={started} />
+        !locked && <Paused resuming={started} onBoot={() => setBooted(true)} />
       )}
     </div>
   )
@@ -197,11 +213,14 @@ function MenuButton({ children, onClick }: { children: React.ReactNode; onClick:
  * Браузер отказывает в захвате курсора около секунды после выхода из него, поэтому
  * отказ виден на самой кнопке: она сообщает, что надо подождать, а не молчит.
  */
-/** Через сколько повторять запрос захвата после отказа, мс, и сколько всего ждать. */
+/**
+ * Через сколько повторять запрос захвата после отказа, мс, и сколько всего ждать.
+ * Потолок щедрый: первое нажатие ещё и строит сцену, а на слабой машине это секунды.
+ */
 const LOCK_RETRY_MS = 150
-const LOCK_GIVE_UP_MS = 3000
+const LOCK_GIVE_UP_MS = 8000
 
-function Paused({ resuming }: { resuming: boolean }) {
+function Paused({ resuming, onBoot }: { resuming: boolean; onBoot: () => void }) {
   const [denied, setDenied] = useState(false)
   const [keysShown, setKeysShown] = useState(false)
   const timer = useRef<number | null>(null)
@@ -220,6 +239,9 @@ function Paused({ resuming }: { resuming: boolean }) {
    */
   const take = (deadline = performance.now() + LOCK_GIVE_UP_MS) => {
     timer.current = null
+    // Первое нажатие строит сцену. Пока её нет, захват не даётся, и цикл повторов
+    // ниже дожидается канваса — специально для этого он и заведён.
+    onBoot()
     void requestLock().then((ok) => {
       setDenied(!ok)
       if (ok || performance.now() >= deadline) return
@@ -229,7 +251,9 @@ function Paused({ resuming }: { resuming: boolean }) {
 
   return (
     <div
-      className="absolute inset-0 overflow-hidden bg-black bg-cover bg-center font-mono text-[#7fd6ff]"
+      // Форма курсора задаётся ЯВНО, а не наследуется: под оверлеем лежит канвас
+      // с прицелом, и до первого движения мыши браузер продолжает рисовать его.
+      className="absolute inset-0 cursor-default overflow-hidden bg-black bg-cover bg-center font-mono text-[#7fd6ff]"
       style={{ backgroundImage: 'url(/bhole.png)' }}
     >
       {/* Аккреционный диск раскалён ровно по центру — там же, где логотип и кнопки.

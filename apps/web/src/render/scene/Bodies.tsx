@@ -93,6 +93,16 @@ function Planet({ body }: { body: BodyEntity }) {
 
   // Воздух есть не у всех: у голой скалы его и не должно быть. Решают ДАННЫЕ.
   const airColor = ATMOSPHERE_COLOR[look]
+
+  /**
+   * Толщина своя у каждого мира, но выводится из его номера, а не из броска кости:
+   * планета, у которой атмосфера пухнет и опадает при каждом входе в систему,
+   * выглядит поломкой. Тот же приём, что у вращения: не хранить, а вычислять.
+   */
+  const airScale = useMemo(() => {
+    const wobble = Math.sin(body.id * 12.9898) // −1…1, но не случайно: детерминировано
+    return 1 + (ATMOSPHERE.SCALE - 1) * (1 + wobble * ATMOSPHERE.SCALE_SPREAD)
+  }, [body.id])
   const airMaterial = useMemo(
     () => (airColor === null ? null : createAtmosphereMaterial(airColor)),
     [airColor],
@@ -147,7 +157,7 @@ function Planet({ body }: { body: BodyEntity }) {
           ref={airRef}
           geometry={atmosphereGeometry()}
           material={airMaterial}
-          scale={body.radius * ATMOSPHERE.SCALE}
+          scale={body.radius * airScale}
           frustumCulled={false}
         />
       )}

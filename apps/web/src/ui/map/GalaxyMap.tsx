@@ -1,17 +1,16 @@
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
-  AdditiveBlending,
   BufferAttribute,
   BufferGeometry,
   Color,
   IcosahedronGeometry,
+  LineBasicMaterial,
   LineDashedMaterial,
   LineSegments,
   MeshBasicMaterial,
   PerspectiveCamera,
   ShaderMaterial,
-  SphereGeometry,
   Vector3,
 } from 'three'
 import {
@@ -120,14 +119,12 @@ const HOVER_LY = 0.9
 
 function Stars({
   systems,
-  world,
   hovered,
   selected,
   onHover,
   onSelect,
 }: {
   systems: StarSystem[]
-  world: World
   hovered: number | null
   selected: number | null
   onHover: (index: number | null) => void
@@ -179,19 +176,26 @@ function Stars({
   // обязаны вырасти вместе с ним, иначе звёзды худеют при полноэкранном режиме.
   material.uniforms.uHalfHeight!.value = size.height / 2
 
-  // Цвета: достижимое горит, недостижимое тускнеет. Пересчитываются только
-  // при смене наведения или выбора — не в кадре.
+  /**
+   * Цвета. Звезда горит своим светом независимо от того, дотянется ли до неё
+   * привод: галактика существует не ради него.
+   *
+   * Раньше недостижимые тускнели втрое, и карта распадалась на живой пузырь
+   * вокруг корабля и серую пыль вокруг. Дальность прыжка и без того нарисована
+   * сферой; гасить три четверти галактики ради того, что уже показано, — значит
+   * сказать одно и то же дважды, потеряв во второй раз всю картину.
+   *
+   * Пересчитываются только при смене наведения или выбора — не в кадре.
+   */
   useEffect(() => {
     const colors = geometry.getAttribute('color') as BufferAttribute
     systems.forEach((s, i) => {
-      const reachable = jumpBlock(world, i) === null
       _colour.setHex(s.star.color)
       if (i === hovered || i === selected) _colour.lerp(_white, 0.6)
-      else if (!reachable && i !== world.systemIndex) _colour.multiplyScalar(0.32)
       colors.setXYZ(i, _colour.r, _colour.g, _colour.b)
     })
     colors.needsUpdate = true
-  }, [geometry, systems, world, hovered, selected])
+  }, [geometry, systems, hovered, selected])
 
   return (
     <points
@@ -225,24 +229,38 @@ function YouAreHere({ at }: { at: Vector3 }) {
   return <mesh geometry={geometry} material={material} position={at} scale={0.8} raycast={() => null} />
 }
 
-/** Сфера дальности прыжка вокруг текущей звезды. Ровно то, что достаёт привод. */
+/**
+ * Дальность прыжка. Не сфера, а ОКРУЖНОСТЬ в плоскости диска.
+ *
+ * Прозрачный шар накрывал собой полгалактики и читался как туман: звёзды внутри
+ * него тонули, а граница — единственное, что он должен был показать, — не имела
+ * ни одной чёткой точки. Диск плоский, звёзды лежат в нём, и предел привода
+ * честно рисуется линией: вот сюда достаёт, а сюда уже нет.
+ */
+const JUMP_RING_SEGMENTS = 160
+
 function JumpSphere({ at, radius }: { at: Vector3; radius: number }) {
-  const geometry = useMemo(() => new SphereGeometry(1, 32, 20), [])
+  const geometry = useMemo(() => {
+    const points = new Float32Array(JUMP_RING_SEGMENTS * 3)
+    for (let i = 0; i < JUMP_RING_SEGMENTS; i++) {
+      const angle = (i / JUMP_RING_SEGMENTS) * Math.PI * 2
+      points[i * 3] = Math.cos(angle)
+      points[i * 3 + 1] = 0 // окружность лежит в плоскости диска
+      points[i * 3 + 2] = Math.sin(angle)
+    }
+    const g = new BufferGeometry()
+    g.setAttribute('position', new BufferAttribute(points, 3))
+    return g
+  }, [])
+
   const material = useMemo(
-    () =>
-      new MeshBasicMaterial({
-        color: UI.PRIMARY,
-        transparent: true,
-        opacity: 0.07,
-        depthWrite: false,
-        blending: AdditiveBlending,
-      }),
+    () => new LineBasicMaterial({ color: UI.PRIMARY, transparent: true, opacity: 0.55, toneMapped: false }),
     [],
   )
+
   if (radius <= 0) return null
-  // Сфера прозрачна и огромна: без этого она перехватывала бы наведение
-  // у каждой звезды внутри себя — то есть ровно у тех, куда можно прыгнуть.
-  return <mesh geometry={geometry} material={material} position={at} scale={radius} raycast={() => null} />
+  // Метка не мишень: указатель обязан проходить сквозь неё к звёздам.
+  return <lineLoop geometry={geometry} material={material} position={at} scale={radius} raycast={() => null} />
 }
 
 /** Пунктир от текущей звезды к той, на которую навели. Отрезок, а не дуга: диск плоский. */
@@ -370,7 +388,6 @@ export function GalaxyMap({ onClose }: { onClose: () => void }) {
           <OrbitCamera control={control.current} />
           <Stars
             systems={systems}
-            world={world}
             hovered={hovered}
             selected={selected}
             onHover={setHovered}
@@ -429,8 +446,8 @@ function SystemPanel({
 
       {!system ? (
         <p className="mt-10 text-sm leading-relaxed" style={{ color: UI.DIM }}>
-          Сфера показывает, куда достаёт гиперпривод. Тусклые звёзды — вне дальности:
-          их берут приводом помощнее, а не терпением.
+          Окружность — предел гиперпривода. Что за ней, берут приводом помощнее,
+          а не терпением.
         </p>
       ) : (
         <SystemDetails

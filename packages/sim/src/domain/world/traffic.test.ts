@@ -2,84 +2,164 @@ import { describe, expect, it } from 'vitest'
 import { TRAFFIC } from '../../config/world'
 import { isHostileTo } from '../ai/targeting'
 import { createWorld, STARTER_SYSTEM } from './index'
-import type { World } from './entities'
+import type { ShipEntity, World } from './entities'
 import { stepTraffic } from './traffic'
 
 /**
- * Мирное движение. Космос без него — тир, а не место, где живут.
+ * Встречи. Космос без них — тир, а не место, где живут; но и встреча по
+ * расписанию перестаёт быть встречей.
  */
 
 function quiet(): World {
   return createWorld({ ...STARTER_SYSTEM, patrols: [], belt: null })
 }
 
-const neutrals = (world: World) => world.ships.filter((s) => s.faction === 'neutral')
+/** Без станции: она рожает мирных у причала, и дистанция появления не проверяется. */
+function deepSpace(): World {
+  return createWorld({ ...STARTER_SYSTEM, patrols: [], belt: null, station: null })
+}
+
+const met = (world: World): ShipEntity[] => world.ships
 
 /** Прогоняет `seconds` секунд трафика кадрами по 1/60, не двигая мир. */
-function run(world: World, seconds: number): void {
-  const dt = 1 / 60
+function run(world: World, seconds: number, dt = 1 / 60): void {
   for (let t = 0; t < seconds; t += dt) stepTraffic(world, dt)
 }
 
-describe('мирный трафик', () => {
-  it('первый торговец появляется не сразу, а спустя задержку', () => {
+describe('встречи в космосе', () => {
+  it('до первой задержки не приходит никто', () => {
     const world = quiet()
     run(world, TRAFFIC.FIRST_DELAY - 1)
-    expect(neutrals(world).length).toBe(0)
-
-    run(world, 2)
-    expect(neutrals(world).length).toBe(1)
+    expect(met(world)).toHaveLength(0)
   })
 
   /**
    * Темп задан ПЕРЕЗАРЯДОМ В СЕКУНДАХ, а не броском кости в шаге. Иначе на 120 Гц
-   * торговцев рождалось бы вдвое больше, чем на 60, и трафик зависел бы от
-   * частоты кадров — как когда-то зависела вся вероятностная механика.
+   * кораблей рождалось бы вдвое больше, чем на 60, и трафик зависел бы от частоты
+   * кадров — как когда-то зависела вся вероятностная механика.
+   *
+   * Проверяется НИЖЕ потолка: упёршись в MAX, оба мира сравнялись бы сами,
+   * и восьмикратная разница в частоте осталась бы незамеченной.
    */
-  it('число торговцев не зависит от частоты кадров', () => {
+  it('число встреченных не зависит от частоты кадров', () => {
     const slow = quiet()
     const fast = quiet()
 
-    // Меряем НИЖЕ потолка: упёршись в MAX, оба мира сравнялись бы сами,
-    // и восьмикратная разница в частоте осталась бы незамеченной.
-    const seconds = TRAFFIC.FIRST_DELAY + TRAFFIC.INTERVAL + 1
-    for (let t = 0; t < seconds; t += 1 / 30) stepTraffic(slow, 1 / 30)
-    for (let t = 0; t < seconds; t += 1 / 240) stepTraffic(fast, 1 / 240)
+    const seconds = TRAFFIC.FIRST_DELAY + TRAFFIC.INTERVAL * 1.5
+    run(slow, seconds, 1 / 30)
+    run(fast, seconds, 1 / 240)
 
-    expect(neutrals(slow).length).toBe(2)
-    expect(neutrals(fast).length).toBe(2)
+    expect(met(slow).length).toBe(met(fast).length)
   })
 
   it('больше положенного в системе не летает', () => {
     const world = quiet()
-    run(world, TRAFFIC.INTERVAL * (TRAFFIC.MAX + 4))
-    expect(neutrals(world).length).toBe(TRAFFIC.MAX)
+    run(world, TRAFFIC.INTERVAL * (TRAFFIC.MAX + 10))
+    expect(met(world).length).toBeLessThanOrEqual(TRAFFIC.MAX)
   })
 
-  /** Улетевший за горизонт убирается: держать его в памяти незачем. */
-  it('улетевший далеко исчезает', () => {
+  /**
+   * Пустой космос — тоже событие. Если бы каждая попытка приводила корабль,
+   * встречи шли бы по метроному и перестали что-либо значить.
+   */
+  it('не всякая попытка кончается встречей', () => {
     const world = quiet()
-    run(world, TRAFFIC.FIRST_DELAY + 1)
-    const trader = neutrals(world)[0]!
+    let attempts = 0
+    let arrivals = 0
 
-    trader.state.pos.copy(world.player.state.pos).setX(TRAFFIC.DESPAWN_RANGE + 100)
+    for (let i = 0; i < 40; i++) {
+      // Дотягиваем таймер до нуля мгновенно и считаем, чем кончилась попытка.
+      world.trafficTimer = 0
+      const born = stepTraffic(world, 1 / 60)
+      attempts++
+      if (born.length > 0) arrivals++
+      // Освобождаем место: потолок не должен подменять собой вероятность.
+      world.ships = []
+    }
+
+    expect(arrivals).toBeGreaterThan(0)
+    expect(arrivals).toBeLessThan(attempts)
+  })
+
+  /** Не всегда пираты. За долгий прогон приходят и мирные, и враждебные. */
+  it('встречаются и мирные, и враждебные', () => {
+    const world = quiet()
+    const factions = new Set<string>()
+
+    for (let i = 0; i < 200; i++) {
+      world.trafficTimer = 0
+      for (const ship of stepTraffic(world, 1 / 60)) factions.add(ship.faction)
+      world.ships = []
+    }
+
+    expect(factions.has('neutral')).toBe(true)
+    expect(factions.has('hostile')).toBe(true)
+  })
+
+  /** Иногда приходят пачкой: стая пиратов и караван — это одна встреча, а не три. */
+  it('встреча бывает групповой', () => {
+    const world = quiet()
+    let biggest = 0
+
+    for (let i = 0; i < 200; i++) {
+      world.trafficTimer = 0
+      biggest = Math.max(biggest, stepTraffic(world, 1 / 60).length)
+      world.ships = []
+    }
+
+    expect(biggest).toBeGreaterThan(1)
+  })
+
+  /**
+   * Дистанция появления. Ближе — корабль возникает из ничего на глазах; дальше —
+   * он не попадает даже на локатор, и встречи не выходит.
+   */
+  it('приходят с дистанции, на которой их уже видно локатором', () => {
+    const world = deepSpace()
+
+    for (let i = 0; i < 40; i++) {
+      world.trafficTimer = 0
+      for (const ship of stepTraffic(world, 1 / 60)) {
+        const distance = ship.state.pos.distanceTo(world.player.state.pos)
+        // Группа расходится на GROUP_SPREAD от общего центра.
+        expect(distance).toBeGreaterThan(TRAFFIC.SPAWN_MIN - TRAFFIC.GROUP_SPREAD)
+        expect(distance).toBeLessThan(TRAFFIC.SPAWN_MAX + TRAFFIC.GROUP_SPREAD)
+      }
+      world.ships = []
+    }
+  })
+
+  /**
+   * Улетевший за горизонт убирается — ЛЮБОЙ фракции. Пират, потерявший игрока,
+   * не вернётся никогда: он просто копился бы в списке.
+   */
+  it('ушедший далеко исчезает, кем бы он ни был', () => {
+    const world = quiet()
+    run(world, TRAFFIC.FIRST_DELAY + TRAFFIC.INTERVAL * 2)
+    const ship = met(world)[0]
+    expect(ship).toBeDefined()
+    if (!ship) return
+
+    for (const s of met(world)) s.state.pos.copy(world.player.state.pos).setX(TRAFFIC.DESPAWN_RANGE + 100)
     stepTraffic(world, 1 / 60)
-    expect(neutrals(world).length).toBe(0)
+    expect(met(world)).toHaveLength(0)
   })
 
   /**
    * Захваченная цель не растворяется в рамке прицела: пилот на неё смотрит,
    * и исчезновение читается как поломка, а не как уход за пределы радара.
    */
-  it('захваченный торговец не исчезает, даже улетев далеко', () => {
+  it('захваченный не исчезает, даже улетев далеко', () => {
     const world = quiet()
-    run(world, TRAFFIC.FIRST_DELAY + 1)
-    const trader = neutrals(world)[0]!
-    world.lockedTargetId = trader.id
+    run(world, TRAFFIC.FIRST_DELAY + TRAFFIC.INTERVAL * 2)
+    const ship = met(world)[0]
+    expect(ship).toBeDefined()
+    if (!ship) return
 
-    trader.state.pos.copy(world.player.state.pos).setX(TRAFFIC.DESPAWN_RANGE * 3)
+    world.lockedTargetId = ship.id
+    ship.state.pos.copy(world.player.state.pos).setX(TRAFFIC.DESPAWN_RANGE * 3)
     stepTraffic(world, 1 / 60)
-    expect(neutrals(world).length).toBe(1)
+    expect(met(world).some((s) => s.id === ship.id)).toBe(true)
   })
 
   /** Нейтрал не воюет и не является добычей — это свойство фракции, а не трафика. */
@@ -89,24 +169,26 @@ describe('мирный трафик', () => {
     expect(isHostileTo('neutral', 'player')).toBe(false)
   })
 
-  it('торговец рождается с пилотом и с курсом на своё назначение', () => {
+  it('корабль рождается с пилотом и с курсом на своё назначение', () => {
     const world = quiet()
-    run(world, TRAFFIC.FIRST_DELAY + 1)
-    const trader = neutrals(world)[0]!
+    run(world, TRAFFIC.FIRST_DELAY + TRAFFIC.INTERVAL * 2)
+    const ship = met(world)[0]
+    expect(ship).toBeDefined()
+    if (!ship) return
 
-    expect(trader.ai).not.toBeNull()
-    expect(trader.controls.throttle).toBeGreaterThan(0)
+    expect(ship.ai).not.toBeNull()
+    expect(ship.controls.throttle).toBeGreaterThan(0)
     // Дом — это НАЗНАЧЕНИЕ, а не место рождения: иначе он закружит там, где возник.
-    expect(trader.ai!.home.distanceTo(trader.state.pos)).toBeGreaterThan(1000)
+    expect(ship.ai!.home.distanceTo(ship.state.pos)).toBeGreaterThan(1000)
   })
 
   /** Одно зерно — один трафик. Иначе ни сохранений, ни сети. */
   it('трафик детерминирован', () => {
     const a = quiet()
     const b = quiet()
-    run(a, TRAFFIC.INTERVAL * 2)
-    run(b, TRAFFIC.INTERVAL * 2)
+    run(a, TRAFFIC.INTERVAL * 3)
+    run(b, TRAFFIC.INTERVAL * 3)
 
-    expect(neutrals(a).map((s) => s.state.pos.toArray())).toEqual(neutrals(b).map((s) => s.state.pos.toArray()))
+    expect(met(a).map((s) => s.state.pos.toArray())).toEqual(met(b).map((s) => s.state.pos.toArray()))
   })
 })
