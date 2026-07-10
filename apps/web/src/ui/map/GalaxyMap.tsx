@@ -17,6 +17,8 @@ import {
   CORE_INDEX,
   GALAXY,
   capitalOf,
+  galaxyName,
+  galaxyShape,
   generateGalaxy,
   jumpBlock,
   jumpDistance,
@@ -297,6 +299,47 @@ function Route({ from, to }: { from: Vector3; to: Vector3 | null }) {
 }
 
 /**
+ * Подпись у самой звезды.
+ *
+ * Имя обязано стоять там, где смотрит глаз, — иначе взгляд ходит от курсора в
+ * угол экрана и обратно, и на карте из 2500 точек это единственное движение,
+ * которое приходится делать каждый раз.
+ *
+ * Подпись — это DOM поверх канваса, а не спрайт: текст в текстуре на карте с
+ * бесконечным зумом либо мылится, либо стоит атласа. Проекция считается в кадре
+ * и пишется прямо в `style.transform`: React о движении камеры не знает.
+ */
+const _screen = new Vector3()
+
+function StarLabel({ at, box }: { at: Vector3 | null; box: React.RefObject<HTMLDivElement | null> }) {
+  const { camera, size } = useThree()
+
+  useFrame(() => {
+    const el = box.current
+    if (!el) return
+    if (!at) {
+      el.style.opacity = '0'
+      return
+    }
+
+    _screen.copy(at).project(camera)
+    // Точка за спиной камеры проецируется зеркально: без этого подпись висела бы
+    // на противоположном краю экрана, будто звезда впереди.
+    if (_screen.z > 1) {
+      el.style.opacity = '0'
+      return
+    }
+
+    const x = (_screen.x * 0.5 + 0.5) * size.width
+    const y = (-_screen.y * 0.5 + 0.5) * size.height
+    el.style.opacity = '1'
+    el.style.transform = `translate(${Math.round(x + 12)}px, ${Math.round(y - 8)}px)`
+  })
+
+  return null
+}
+
+/**
  * Камера-орбита вокруг центра галактики. Своя, а не библиотечная: нужны ровно
  * три жеста, и тащить ради них зависимость незачем.
  */
@@ -334,11 +377,17 @@ export function GalaxyMap({ onClose }: { onClose: () => void }) {
 
   // 2500 систем строятся за миллисекунды, но не каждый кадр: зерно задаёт всё.
   const systems = useMemo(() => generateGalaxy(world.galaxySeed), [world.galaxySeed])
+  // Имя и форма выводятся из того же зерна: галактика не хранится нигде.
+  const galaxy = useMemo(
+    () => ({ name: galaxyName(world.galaxySeed), shape: galaxyShape(world.galaxySeed) }),
+    [world.galaxySeed],
+  )
 
   const [hovered, setHovered] = useState<number | null>(null)
   const [selected, setSelected] = useState<number | null>(null)
   const control = useRef({ yaw: 0.6, pitch: 0.5, distance: GALAXY.RADIUS_LY * 2.6 })
   const dragging = useRef(false)
+  const label = useRef<HTMLDivElement>(null)
 
   const here = positionOf(systems[world.systemIndex]!)
   const marked = hovered ?? selected
@@ -364,7 +413,22 @@ export function GalaxyMap({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <div className="absolute inset-0 flex bg-black font-mono" style={{ color: UI.PRIMARY }}>
+    <div
+      // Та же голограмма над консолью, что и у карты системы: обе карты — один
+      // прибор, и рамка у них обязана быть одна. Полотно звёзд прозрачно, поэтому
+      // диск галактики лежит прямо на подсвеченном стекле панели.
+      className="absolute inset-0 flex items-center justify-center backdrop-blur-md"
+      style={{ background: 'radial-gradient(ellipse at center, rgba(12,34,60,0.66), rgba(0,3,8,0.93))' }}
+    >
+      <div
+        className="flex h-[calc(100vh-3rem)] w-[calc(100vw-3rem)] items-stretch overflow-hidden rounded-2xl border font-mono"
+        style={{
+          color: UI.PRIMARY,
+          borderColor: 'rgba(124,196,255,0.3)',
+          background: 'linear-gradient(150deg, rgba(40,95,150,0.18), rgba(8,22,42,0.4))',
+          boxShadow: '0 0 70px rgba(60,150,255,0.16), inset 0 0 90px rgba(80,180,255,0.06)',
+        }}
+      >
       <div
         className="relative flex-1 cursor-grab active:cursor-grabbing"
         onPointerDown={() => (dragging.current = true)}
@@ -383,7 +447,9 @@ export function GalaxyMap({ onClose }: { onClose: () => void }) {
       >
         <Canvas
           camera={{ fov: 45, near: 0.1, far: 4000 }}
-          gl={{ antialias: true }}
+          // Полотно прозрачно: фон рисует панель, а не рендерер. Иначе чёрный
+          // прямоугольник вырезал бы дыру в подсвеченном стекле.
+          gl={{ antialias: true, alpha: true }}
         >
           <OrbitCamera control={control.current} />
           <Stars
@@ -396,27 +462,35 @@ export function GalaxyMap({ onClose }: { onClose: () => void }) {
           <JumpSphere at={here} radius={world.player.spec.jumpRange} />
           <YouAreHere at={here} />
           <Route from={here} to={picked ? positionOf(picked.system) : null} />
+          <StarLabel at={picked ? positionOf(picked.system) : null} box={label} />
         </Canvas>
 
-        <div className="pointer-events-none absolute inset-x-0 top-0 p-6 text-xs tracking-widest" style={{ color: UI.DIM }}>
-          ТАЩИТЬ — ВРАЩАТЬ · КОЛЕСО — МАСШТАБ · НАВЕСТИ — ЗАМЕРИТЬ · КЛИК — ВЫБРАТЬ
+        <div className="pointer-events-none absolute inset-x-0 top-0 p-6">
+          <div className="text-xl tracking-[0.3em]">ГАЛАКТИКА {galaxy.name.toUpperCase()}</div>
+          <div className="mt-1 text-xs tracking-widest" style={{ color: UI.DIM }}>
+            {galaxy.shape.name.toUpperCase()} · {systems.length} ЗВЁЗД
+          </div>
         </div>
 
-        {picked && (
-          <div className="pointer-events-none absolute bottom-6 left-6 text-sm">
-            <div className="text-base tracking-widest">{picked.system.name.toUpperCase()}</div>
-            <div style={{ color: UI.DIM }}>{formatRange(picked.distance)}</div>
-          </div>
-        )}
+        {/* Подпись живёт всегда: её двигает кадр, а не React. Пропадает — гаснет. */}
+        <div
+          ref={label}
+          className="pointer-events-none absolute left-0 top-0 text-sm leading-tight opacity-0"
+          style={{ willChange: 'transform' }}
+        >
+          <div className="tracking-widest">{picked?.system.name.toUpperCase() ?? ''}</div>
+          <div style={{ color: UI.DIM }}>{picked ? formatRange(picked.distance) : ''}</div>
+        </div>
       </div>
 
-      <SystemPanel
-        systems={systems}
-        world={world}
-        selected={selected}
-        onJump={doJump}
-        onClose={onClose}
-      />
+        <SystemPanel
+          systems={systems}
+          world={world}
+          selected={selected}
+          onJump={doJump}
+          onClose={onClose}
+        />
+      </div>
     </div>
   )
 }
@@ -439,9 +513,10 @@ function SystemPanel({
 
   return (
     <aside className="flex w-96 shrink-0 flex-col border-l p-6" style={{ borderColor: UI.DIM }}>
-      <h1 className="text-xl tracking-[0.3em]">ГАЛАКТИКА</h1>
-      <p className="mt-1 text-xs tracking-widest" style={{ color: UI.DIM }}>
-        {world.systemName.toUpperCase()} · ПРИВОД {world.player.spec.jumpRange.toFixed(0)} СВ.Г.
+      {/* Название галактики уже стоит над картой. Здесь — только то, чего там нет:
+          где ты и насколько далеко тебя увезёт привод. */}
+      <p className="text-xs tracking-widest" style={{ color: UI.DIM }}>
+        ВЫ ЗДЕСЬ: {world.systemName.toUpperCase()} · ПРИВОД {world.player.spec.jumpRange.toFixed(0)} СВ.Г.
       </p>
 
       {!system ? (
@@ -487,9 +562,9 @@ function SystemDetails({
   const core = index === CORE_INDEX
 
   return (
-    <div className="mt-6 flex flex-1 flex-col">
-      <h2 className="text-lg tracking-widest">{system.name.toUpperCase()}</h2>
-      <dl className="mt-3 space-y-1 text-sm">
+    <div className="mt-5 flex flex-1 flex-col">
+      <h1 className="text-3xl leading-none tracking-[0.2em]">{system.name.toUpperCase()}</h1>
+      <dl className="mt-5 space-y-1 text-sm">
         <Row label="СВЕТИЛО" value={system.star.className} />
         <Row label="РАССТОЯНИЕ" value={formatRange(distance)} />
         <Row label="ПЛАНЕТ" value={String(system.planets.length)} />

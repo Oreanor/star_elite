@@ -38,9 +38,19 @@ const LIFT_RANGE = 60_000
  * «вот во что ты стреляешь». Выбранное тело выделяется не цветом, а размером,
  * плотностью заливки и пунктирным кольцом — тем же, чем скобки выделяют его в кабине.
  */
-/** Тела — фосфором, корабли — другим тоном: это разные сущности, а не разная яркость. */
+/**
+ * Каждому роду тел — свой тон. Это не украшение: в списке из семи строк «звезда»
+ * и «планета» различаются только цветом, читать слово целиком не приходится.
+ * Звезда светит своим светом, причал — рукотворный и потому белый, планеты —
+ * фосфор консоли. Корабли — четвёртый тон: они не тела.
+ */
 const BODY = UI.PRIMARY
 const SHIP = UI.SALVAGE
+const STAR = '#ffe6a8'
+const STATION = '#ffffff'
+
+const colourOf = (kind: MarkerKind): string =>
+  kind === 'star' ? STAR : kind === 'station' ? STATION : kind === 'ship' ? SHIP : BODY
 
 
 type MarkerKind = BodyEntity['kind'] | 'ship'
@@ -57,12 +67,38 @@ interface Marker {
   lift: number
   /** До игрока, метры. */
   range: number
+  /** Тело не влезло в текущий обзор и прижато к ободу. */
+  beyond: boolean
 }
 
-/** Логарифм сжимает четыре порядка дистанций в радиус диска. */
-function radiusOf(flat: number, maxFlat: number): number {
-  const kMax = Math.log10(1 + maxFlat / 500)
-  return kMax > 0 ? (Math.log10(1 + flat / 500) / kMax) * DISC : 0
+/**
+ * Сколько порядков дистанции умещается на диске. Ближе `span/DEPTH` от корабля
+ * всё сливается в центральную точку — за этим и нужен масштаб.
+ *
+ * Шесть порядков — компромисс, и он честный. Система тянется от причала в двух
+ * километрах до гиганта в пяти астрономических единицах, а это восемь с половиной
+ * порядков: показать разом всё нельзя ничем, кроме лжи о расстояниях. Меньше
+ * порядков — колесо крутится резче, но при обзоре «вся система» планета у звезды
+ * падает в центральную точку вместе со станцией. Больше — картинка стоит на месте.
+ */
+const DEPTH = 1e6
+
+/**
+ * Логарифм сжимает шесть порядков дистанций в радиус диска.
+ *
+ * Логарифм берётся от ДОЛИ обзора (`flat/span`), а не от самой дистанции в метрах.
+ * Абсолютный логарифм не масштабировался вовсе: делить `lg(1+d/500)` на
+ * `lg(1+span/500)` — значит менять радиус планеты с 0.45 на 0.50 при восьмикратном
+ * сужении обзора. Колесо крутилось, картинка стояла.
+ *
+ * Теперь на ободе всегда `span`, а в центре — `span/DEPTH`, и сужение обзора
+ * честно разводит то, что в нём осталось. Уехавшее за обод прижимается к нему:
+ * тело не исчезает, просто дальше уже некуда.
+ */
+function radiusOf(flat: number, span: number): number {
+  if (span <= 0) return 0
+  const k = Math.log10(1 + (flat / span) * DEPTH) / Math.log10(1 + DEPTH)
+  return Math.min(1, k) * DISC
 }
 
 const _fwd = new Vector3()
@@ -76,7 +112,13 @@ function headingOf(world: World): { x: number; y: number } {
   return flat > 1e-6 ? { x: _fwd.x / flat, y: _fwd.z / flat } : { x: 0, y: 0 }
 }
 
-function markers(world: World): Marker[] {
+/** Что помещается на диск при масштабе «вся система», метры. */
+function systemSpan(world: World): number {
+  const origin = world.player.state.pos
+  return Math.max(...world.bodies.map((b) => Math.hypot(b.pos.x - origin.x, b.pos.z - origin.z)), 1)
+}
+
+function markers(world: World, span: number): Marker[] {
   const origin = world.player.state.pos
 
   const raw = world.bodies.map((body) => ({
@@ -89,11 +131,9 @@ function markers(world: World): Marker[] {
     range: body.pos.distanceTo(origin),
   }))
 
-  const maxFlat = Math.max(...raw.map((m) => Math.hypot(m.dx, m.dz)), 1)
-
   const plotted: Marker[] = raw.map((m) => {
     const flat = Math.hypot(m.dx, m.dz)
-    const r = radiusOf(flat, maxFlat)
+    const r = radiusOf(flat, span)
     // Высота сжата к пределу, а не отнормирована на максимум: иначе далёкий
     // гигант, ушедший на 58 км вверх, прижал бы все остальные штрихи к нулю.
     const lift = Math.max(-1, Math.min(1, m.dy / LIFT_RANGE)) * LIFT
@@ -105,28 +145,60 @@ function markers(world: World): Marker[] {
       y: flat > 1e-6 ? (m.dz / flat) * r : 0,
       lift,
       range: m.range,
+      beyond: flat > span,
     }
   })
 
-  plotted.push({ id: -1, name: 'ТЫ', kind: 'ship', x: 0, y: 0, lift: 0, range: 0 })
+  plotted.push({ id: -1, name: 'ТЫ', kind: 'ship', x: 0, y: 0, lift: 0, range: 0, beyond: false })
   return plotted
 }
 
+/** Астрономическая единица, м. Планетные дистанции в километрах нечитаемы. */
+const AU = 149_597_870_700
+
 function formatDistance(metres: number): string {
-  return metres >= 1000 ? `${(metres / 1000).toFixed(1)} км` : `${Math.round(metres)} м`
+  if (metres >= 0.02 * AU) return `${(metres / AU).toFixed(2)} а.е.`
+  if (metres >= 1e6) return `${Math.round(metres / 1000).toLocaleString('ru')} км`
+  if (metres >= 1000) return `${(metres / 1000).toFixed(1)} км`
+  return `${Math.round(metres)} м`
 }
 
-const selectable = (m: Marker) => m.kind === 'planet' || m.kind === 'station'
+/** Ближе этого обзор не сужается, м: пояс обломков и станция ещё различимы. */
+const MIN_SPAN = 2_000
+/** Дальше системы смотреть не на что: за последним телом пусто. */
+const MAX_SPAN_K = 1.6
+
+const clampSpan = (span: number, fit: number) => Math.max(MIN_SPAN, Math.min(fit * MAX_SPAN_K, span))
+
+/**
+ * Выбирается всё, что стоит на месте: звезда, планета, причал. Корабль — нет:
+ * он летит, и «цель навигации» на нём означала бы преследование, а не курс.
+ *
+ * Звезда тоже цель. Она нарисована, до неё летят за топливом, и запрещать её
+ * было бы правилом ради правила: крейсер сам не даст в неё врезаться — потолок
+ * множителя падает вместе с высотой над короной.
+ */
+const selectable = (m: Marker) => m.kind !== 'ship'
 
 export function SystemMap({ world, onClose }: { world: World; onClose: () => void }) {
   // Мир мутируется напрямую; React о нём не знает и сам перерисоваться не может.
   const [, bump] = useState(0)
 
-  const points = markers(world)
+  /**
+   * Обзор в метрах. `null` — «вся система»: карта открывается так, чтобы самое
+   * дальнее тело лежало на ободе. Хранить сюда сразу число нельзя — прыжок сменит
+   * систему, и обзор остался бы от прежней.
+   */
+  const fit = systemSpan(world)
+  const [span, setSpan] = useState<number | null>(null)
+  const shown = clampSpan(span ?? fit, fit)
+
+  const points = markers(world, shown)
   const select = (id: number) => {
     world.navTargetId = world.navTargetId === id ? null : id
     bump((n) => n + 1)
   }
+  const zoom = (deltaY: number) => setSpan(clampSpan(shown * (deltaY > 0 ? 1.3 : 1 / 1.3), fit))
 
   return (
     <div
@@ -146,13 +218,13 @@ export function SystemMap({ world, onClose }: { world: World; onClose: () => voi
           heading={headingOf(world)}
           navTargetId={world.navTargetId}
           onSelect={select}
+          onZoom={zoom}
         />
 
         <div className="flex w-72 shrink-0 flex-col" style={{ color: BODY }}>
           <h1 className="text-xl tracking-[0.3em]">{world.systemName.toUpperCase()}</h1>
-          <p className="mb-6 mt-1 text-[11px] tracking-widest opacity-50">
-            ОТ КОРАБЛЯ · ЛОГ. МАСШТАБ · ШТРИХ = ВЫСОТА
-          </p>
+          {/* Обод диска в метрах: без него колесо крутит масштаб вслепую. */}
+          <p className="mb-6 mt-1 text-[11px] tracking-widest opacity-50">ОБЗОР {formatDistance(shown)}</p>
 
           <ul className="space-y-1">
             {points.filter(selectable).map((m) => {
@@ -166,7 +238,7 @@ export function SystemMap({ world, onClose }: { world: World; onClose: () => voi
                     style={{
                       borderColor: active ? BODY : 'rgba(124,196,255,0.16)',
                       background: active ? 'rgba(124,196,255,0.12)' : 'transparent',
-                      color: BODY,
+                      color: colourOf(m.kind),
                     }}
                   >
                     <span className="flex-1 truncate">{m.name}</span>
@@ -176,11 +248,6 @@ export function SystemMap({ world, onClose }: { world: World; onClose: () => voi
               )
             })}
           </ul>
-
-          <p className="mt-6 text-[11px] leading-relaxed opacity-45">
-            Клик по телу назначает его целью навигации; повторный — снимает. В полёте
-            цель обведена рамкой, а из-за края кадра на неё указывает стрелка.
-          </p>
 
           <button
             type="button"
@@ -201,14 +268,21 @@ function Hologram({
   heading,
   navTargetId,
   onSelect,
+  onZoom,
 }: {
   points: Marker[]
   heading: { x: number; y: number }
   navTargetId: number | null
   onSelect: (id: number) => void
+  onZoom: (deltaY: number) => void
 }) {
   return (
-    <svg width={VIEW} height={VIEW} viewBox={`${-VIEW / 2} ${-VIEW / 2} ${VIEW} ${VIEW}`}>
+    <svg
+      width={VIEW}
+      height={VIEW}
+      viewBox={`${-VIEW / 2} ${-VIEW / 2} ${VIEW} ${VIEW}`}
+      onWheel={(e) => onZoom(e.deltaY)}
+    >
       <defs>
         <radialGradient id="map-disc">
           <stop offset="0%" stopColor="rgba(124,196,255,0.15)" />
@@ -219,7 +293,8 @@ function Hologram({
 
       <circle r={DISC} fill="url(#map-disc)" />
       {/* Кольца — деления логарифмической шкалы, не орбиты. Подписать их дистанцией
-          нельзя: она зависит от того, как далеко улетело самое дальнее тело. */}
+          нельзя: шкала логарифмическая, и деления не равноотстоят. Обод — обзор,
+          он подписан в панели. */}
       {[0.25, 0.5, 0.75, 1].map((k) => (
         <circle key={k} r={DISC * k} fill="none" stroke="rgba(124,196,255,0.15)" strokeDasharray="2 6" />
       ))}
@@ -240,7 +315,7 @@ function Hologram({
       {points.map((m) => {
         const active = m.id === navTargetId
         const clickable = selectable(m)
-        const colour = m.kind === 'ship' ? SHIP : BODY
+        const colour = colourOf(m.kind)
 
         return (
           <g
@@ -248,6 +323,9 @@ function Hologram({
             transform={`translate(${m.x} ${m.y})`}
             onClick={clickable ? () => onSelect(m.id) : undefined}
             style={{ cursor: clickable ? 'pointer' : 'default' }}
+            // Прижатое к ободу тело гаснет: иначе оно врёт о своей дистанции,
+            // притворяясь, что стоит там, где кончилась шкала.
+            opacity={m.beyond ? 0.4 : 1}
           >
             {/* Штрих от плоскости корабля к телу: единственный носитель высоты. */}
             {Math.abs(m.lift) > 1 && (
@@ -260,8 +338,8 @@ function Hologram({
 
               {m.kind === 'star' ? (
                 <>
-                  <circle r={15} fill="#ffdca0" fillOpacity={0.15} />
-                  <circle r={5.5} fill="#ffe6a8" />
+                  <circle r={15} fill={STAR} fillOpacity={0.15} />
+                  <circle r={5.5} fill={STAR} />
                 </>
               ) : m.kind === 'ship' ? (
                 <circle r={4} fill={colour} />

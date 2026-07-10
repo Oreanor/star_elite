@@ -304,14 +304,20 @@ function drawTargets({ ctx, camera, world, width, height }: HudFrame): void {
 function drawOffscreenArrows(frame: HudFrame): void {
   const { world } = frame
 
+  /**
+   * Стрелка нужна тому, кого ищут: врагу и захваченному. Мирный за спиной —
+   * не новость, а стрелка на каждого встречного превратила бы край кадра в частокол.
+   */
   for (const ship of world.ships) {
-    if (!ship.alive) continue
-    const color = ship.id === world.lockedTargetId ? HUD_COLORS.TARGET : HUD_COLORS.DANGER
-    offscreenArrow(frame, ship.state.pos, color)
+    if (!ship.alive || !isVisible(ship)) continue
+    if (ship.faction !== 'hostile' && ship.id !== world.lockedTargetId) continue
+    offscreenArrow(frame, ship.state.pos, radarColor(ship, world))
   }
 
+  // Цвет тела, а не отдельный «цвет навигации»: жёлтая стрелка ведёт к звезде,
+  // белая — к причалу. Пилот уже выучил это на локаторе.
   const nav = findBody(world, world.navTargetId)
-  if (nav) offscreenArrow(frame, nav.pos, HUD_COLORS.NAV)
+  if (nav) offscreenArrow(frame, nav.pos, bodyColor(nav))
 }
 
 /** Рисует треугольник у края кадра, если точка за кадром. Иначе молчит. */
@@ -368,9 +374,9 @@ function offscreenArrow({ ctx, camera, width, height }: HudFrame, pos: Vector3, 
  * Ромб в кадре не встречается больше нигде, поэтому глаз находит его сразу —
  * ровно как выделенную звезду на карте, откуда цель и назначена.
  */
-function navReticle(ctx: CanvasRenderingContext2D, x: number, y: number): void {
+function navReticle(ctx: CanvasRenderingContext2D, x: number, y: number, color: string): void {
   const r = 8 * S
-  ctx.strokeStyle = HUD_COLORS.NAV
+  ctx.strokeStyle = color
   ctx.lineWidth = S
   ctx.beginPath()
   ctx.moveTo(x, y - r)
@@ -387,12 +393,14 @@ function drawBodyMarkers({ ctx, camera, world, width, height }: HudFrame): void 
     if (p.behind || !isOnScreen(p.x, p.y, width, height)) continue
 
     const nav = body.id === world.navTargetId
-    const color = nav ? HUD_COLORS.NAV : HUD_COLORS.DIM
+    // Тот же цвет, что и на локаторе: звезда жёлтая, причал белый, планета
+    // фосфорная. Пилот не должен переучиваться, переводя взгляд с круга в окно.
+    const color = bodyColor(body)
 
     // Цель навигации — точка потолще: цвет на звёздном фоне различим плохо,
     // а разница в размере читается даже боковым зрением.
     dot(ctx, p.x, p.y, nav ? 2.5 * S : 1.5 * S, color)
-    if (nav) navReticle(ctx, p.x, p.y)
+    if (nav) navReticle(ctx, p.x, p.y, color)
 
     // Подпись отодвинута за рамку: иначе имя ложится ей на грань и не читается.
     const gap = (nav ? 12 : 6) * S
@@ -418,7 +426,8 @@ function drawRadar({ ctx, world, width, height }: HudFrame): void {
   const player = world.player
   shipAxes(player.state.quat, _fwd, _right, _up)
 
-  const plot = (worldPos: Vector3, color: string, size: number) => {
+  /** Отметка. `ring` — обвести кольцом: так показан захват и цель навигации. */
+  const plot = (worldPos: Vector3, color: string, size: number, ring = false) => {
     _point.copy(worldPos).sub(player.state.pos)
     const distance = _point.length()
     if (distance < 1) return
@@ -428,8 +437,16 @@ function drawRadar({ ctx, world, width, height }: HudFrame): void {
     const flat = Math.hypot(x, z)
     if (flat < 1e-3) return
 
-    // Логарифм сжимает пять порядков дистанций в радиус радара.
-    const scaled = (Math.log10(1 + distance / 50) / Math.log10(1 + 20_000 / 50)) * radius
+    /**
+     * Логарифм сжимает пять порядков дистанций в радиус радара — но только пять.
+     *
+     * Без зажима планета в четырёхстах тысячах километров давала `scaled` втрое
+     * больше радиуса, и её отметка уезжала на середину экрана: локатор рисовал
+     * тела ВНЕ собственного круга. Ушедшее за предел прижимается к ободу — это
+     * честнее, чем не показать вовсе: «оно там, дальше уже неважно насколько».
+     */
+    const k = Math.min(1, Math.log10(1 + distance / 50) / Math.log10(1 + RADAR_RANGE / 50))
+    const scaled = k * radius
     const px = cx + (x / flat) * scaled
     const py = cy - (z / flat) * scaled
 
@@ -439,34 +456,60 @@ function drawRadar({ ctx, world, width, height }: HudFrame): void {
 
     ctx.fillStyle = color
     ctx.fillRect(Math.round(px - size / 2), Math.round(py - lift - size / 2), size, size)
+    if (ring) circle(ctx, px, py - lift, size, color)
   }
 
-  // Цель навигации крупнее вдвое: одним цветом на логарифмической шкале, где
-  // все тела жмутся к ободу, её не найти — отметки стоят вплотную.
+  // Цель навигации обведена кольцом: на логарифмической шкале, где все тела жмутся
+  // к ободу, отметки стоят вплотную, и одного размера мало.
   for (const body of world.bodies) {
     const nav = body.id === world.navTargetId
-    plot(body.pos, nav ? HUD_COLORS.NAV : HUD_COLORS.DIM, Math.round((nav ? 6 : 3) * S))
+    plot(body.pos, bodyColor(body), Math.round((nav ? 5 : 3) * S), nav)
   }
+
+  // Камни — только ближние: пояс в двести шестьдесят отметок залил бы обод серым,
+  // а нужен он затем, чтобы не влететь в глыбу, то есть на дистанции боя.
+  for (const rock of world.asteroids) {
+    if (!rock.alive) continue
+    if (rock.pos.distanceToSquared(player.state.pos) > ROCK_RANGE * ROCK_RANGE) continue
+    plot(rock.pos, HUD_COLORS.ROCK, Math.round(2 * S))
+  }
+
   for (const pod of world.pods) if (pod.alive) plot(pod.pos, HUD_COLORS.WARN, Math.round(2 * S))
+
   // Локатор невидимку не берёт — то же правило, что у захвата и у головки ракеты.
   for (const ship of world.ships) {
     if (!isVisible(ship)) continue
-    plot(ship.state.pos, radarColor(ship, world), Math.round(4 * S))
+    plot(ship.state.pos, radarColor(ship, world), Math.round(4 * S), ship.id === world.lockedTargetId)
   }
 }
 
+/** Дальше этого локатор не разбирает дистанцию, м: отметка прижата к ободу. */
+const RADAR_RANGE = 20_000
+/** Ближе этого камни рисуются, м. Дальше они — не препятствие, а пейзаж. */
+const ROCK_RANGE = 4_000
+
+/** Что это. Звезда жёлтая, причал белый, планета — фосфор консоли. */
+function bodyColor(body: BodyEntity): string {
+  if (body.kind === 'star') return HUD_COLORS.STAR
+  if (body.kind === 'station') return HUD_COLORS.STATION
+  return HUD_COLORS.PRIMARY
+}
+
 /**
- * Цвет отметки на радаре отвечает на единственный вопрос боя: стрелять или нет.
- * Захваченная цель — жёлтая, враг — красный, мирный — спокойный серо-голубой.
+ * Цвет отметки корабля отвечает на единственный вопрос боя: стрелять или нет.
+ * Враг — красный, свой — зелёный, чужой-но-не-враг — спокойный серо-голубой.
  * Красить торговца в цвет пирата значит врать пилоту ровно в тот момент, когда
  * он смотрит на радар, а не в окно.
+ *
+ * Захваченная цель цвета не меняет: жёлтым горит звезда, и второй жёлтый на
+ * локаторе превратил бы каждый бой в вопрос «это цель или светило?». Захват —
+ * кольцо вокруг отметки: форма, а не цвет.
  */
 function radarColor(ship: ShipEntity, world: World): string {
-  if (ship.id === world.lockedTargetId) return HUD_COLORS.TARGET
   if (ship.faction === 'hostile') return HUD_COLORS.DANGER
-  // Свои — фосфорным цветом дисплея: беспилотник обязан читаться союзником,
-  // а не встречным торговцем. Различает их сторона, а не то, кем они рождены.
-  return ship.faction === world.player.faction ? HUD_COLORS.PRIMARY : HUD_COLORS.NEUTRAL
+  // Свои — зелёным: беспилотник обязан читаться союзником, а не встречным
+  // торговцем. Различает их сторона, а не то, кем они рождены.
+  return ship.faction === world.player.faction ? HUD_COLORS.ALLY : HUD_COLORS.NEUTRAL
 }
 
 function drawReadouts({ ctx, world, height }: HudFrame): void {
