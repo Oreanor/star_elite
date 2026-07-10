@@ -9,6 +9,7 @@ import { GalaxyMap } from '../ui/map/GalaxyMap'
 import { SystemMap } from '../ui/map/SystemMap'
 import { ShipScreen } from '../ui/ship/ShipScreen'
 import { StationMenu } from '../ui/station/StationMenu'
+import { Tabs } from '../ui/station/chrome'
 
 /**
  * Оболочка: заставка, пауза и экран гибели. Это единственное место,
@@ -91,8 +92,22 @@ function Shell({ onRestart }: { onRestart: () => void }) {
   const closeChart = useCallback(() => {
     session.mapOpen = false
     setChart('none')
-    void requestLock()
-  }, [session])
+    // У причала курсор нужен меню станции — захват не возвращаем; в полёте пауза
+    // снимается только повторным захватом.
+    if (!docked) void requestLock()
+  }, [session, docked])
+
+  /**
+   * Со стартового экрана станции открыть карту. Курсор у причала уже свободен,
+   * поэтому захват не трогаем — только показываем ту же карту, что и в полёте.
+   */
+  const openMap = useCallback(
+    (which: 'system' | 'galaxy') => {
+      session.mapOpen = true
+      setChart(which)
+    },
+    [session],
+  )
 
   /**
    * Оверлеи переключаются ЗДЕСЬ, а не в кадре симуляции: раскрыть карту или
@@ -138,16 +153,19 @@ function Shell({ onRestart }: { onRestart: () => void }) {
       {booted && <Game />}
       {over ? (
         <GameOver score={session.world.score} onRestart={onRestart} />
-      ) : chart === 'galaxy' ? (
+      ) : /* Карты — те же компоненты и в полёте, и у причала; их onClose возвращает
+             либо в игру, либо на экран станции (см. closeChart). */
+      chart === 'galaxy' ? (
         <GalaxyMap onClose={closeChart} />
-      ) : docked ? (
-        <StationMenu world={session.world} onUndock={() => void requestLock()} />
       ) : chart === 'system' ? (
         <SystemMap world={session.world} onClose={closeChart} />
       ) : chart === 'ship' ? (
+        // В полёте экран корабля — только витрина: docked не передаём.
         <ShipScreen world={session.world} onClose={closeChart} />
       ) : chart === 'talk' ? (
         <Dialogue onClose={closeChart} />
+      ) : docked ? (
+        <StationMenu world={session.world} onUndock={() => void requestLock()} onOpenMap={openMap} />
       ) : (
         !locked && <Paused resuming={started} onBoot={() => setBooted(true)} />
       )}
@@ -158,7 +176,8 @@ function Shell({ onRestart }: { onRestart: () => void }) {
 /**
  * Таблица клавиш — из словаря и СГРУППИРОВАНА по смыслу: пилотирование, бой,
  * корабль и мир. Пары «клавиша / что делает» по ключам `key.X` и `key.X.what`.
- * Раскладка в две колонки: группы не рвутся, а перетекают целиком (break-inside).
+ * Группы разложены по вкладкам: показываем один блок за раз, а не три колонки
+ * сразу — так на экране один связный список, а не стена из семнадцати строк.
  */
 const KEY_GROUPS: { title: Key; rows: [Key, Key][] }[] = [
   {
@@ -268,6 +287,7 @@ function Paused({ resuming, onBoot }: { resuming: boolean; onBoot: () => void })
   const session = useSession()
   const [waiting, setWaiting] = useState(false)
   const [screen, setScreen] = useState<PauseScreen>('main')
+  const [keyGroup, setKeyGroup] = useState(0)
   const timer = useRef<number | null>(null)
 
   // Захват получен — Paused размонтируется, и таймер обязан уйти вместе с ним.
@@ -338,23 +358,22 @@ function Paused({ resuming, onBoot }: { resuming: boolean; onBoot: () => void })
 
       {screen === 'keys' ? (
         /* Таблица клавиш вчетверо выше пары кнопок. По центру экрана она бы
-           наехала на логотип, поэтому у неё свой отсчёт — от него вниз. */
+           наехала на логотип, поэтому у неё свой отсчёт — от него вниз.
+           Группы — по вкладкам: один блок за раз, а не три колонки сразу. */
         <div className="absolute inset-0 flex flex-col items-center overflow-y-auto px-8 pt-[22vh] pb-10">
-          <div className="mb-8 w-full max-w-4xl gap-x-12 sm:columns-2">
-            {KEY_GROUPS.map((group) => (
-              <div key={group.title} className="mb-6 break-inside-avoid">
-                <h3 className="mb-2 text-xs tracking-[0.3em] text-[#7fd6ff]">{t(group.title)}</h3>
-                <dl className="space-y-1 text-left text-sm">
-                  {group.rows.map(([keyLabel, keyWhat]) => (
-                    <div key={keyLabel} className="flex gap-3">
-                      <dt className="w-24 shrink-0 text-right text-[#7fd6ff]">{t(keyLabel)}</dt>
-                      <dd className="text-[#3f7391]">{t(keyWhat)}</dd>
-                    </div>
-                  ))}
-                </dl>
+          <Tabs
+            tabs={KEY_GROUPS.map((g) => t(g.title))}
+            active={t(KEY_GROUPS[keyGroup]!.title)}
+            onSelect={(label) => setKeyGroup(KEY_GROUPS.findIndex((g) => t(g.title) === label))}
+          />
+          <dl className="mb-8 mt-6 w-full max-w-xl space-y-1 text-left text-sm">
+            {KEY_GROUPS[keyGroup]!.rows.map(([keyLabel, keyWhat]) => (
+              <div key={keyLabel} className="flex gap-3">
+                <dt className="w-24 shrink-0 text-right text-[#7fd6ff]">{t(keyLabel)}</dt>
+                <dd className="text-[#3f7391]">{t(keyWhat)}</dd>
               </div>
             ))}
-          </div>
+          </dl>
           <MenuButton onClick={() => setScreen('main')}>{t('menu.back')}</MenuButton>
         </div>
       ) : screen === 'settings' ? (

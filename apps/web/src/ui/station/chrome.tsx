@@ -1,3 +1,4 @@
+import { Fragment, useState } from 'react'
 import { UI } from '../theme'
 
 /**
@@ -90,33 +91,110 @@ export function Panel({ title, children }: { title: string; children: React.Reac
 }
 
 /**
- * Строка прайса: название, число, пометка, действие. Одинаковая у товаров и у
- * железа. Пометка по умолчанию погашена (DIM), но её цвет можно задать — на
- * продаже им горит выгода: зелёным в плюс, красным в минус.
+ * Колонка таблицы: заголовок, выравнивание, ширина и как из строки достать ячейку.
+ * `header: ''` — колонка без подписи (действие); если пусты ВСЕ, шапка не рисуется.
  */
-export function Row({
-  name,
-  price,
-  note,
-  noteColor,
-  children,
+export interface Column<Row> {
+  key: string
+  header: string
+  align?: 'left' | 'right' | 'center'
+  /** CSS-ширина колонки, напр. '6rem'. Прочее делит остаток. */
+  width?: string
+  cell: (row: Row) => React.ReactNode
+}
+
+const alignClass = (a?: Column<unknown>['align']) =>
+  a === 'right' ? 'text-right' : a === 'center' ? 'text-center' : 'text-left'
+
+/**
+ * Настоящая таблица прайса: колонки с заголовком, а не слепленная строка-заметка.
+ * Пользователь просил «1 т · дёшево · склад 213» разложить по столбцам — вот они.
+ *
+ * `detail` — раскрывающаяся карточка под строкой. Где она есть, имя (первая
+ * колонка) становится кнопкой: клик по снаряжению показывает его плюс и действия.
+ * Раскрытые ключи живут в обычном состоянии React — экран станции стоит, кадра нет,
+ * и это ровно тот случай, для которого React и заведён.
+ */
+export function Table<Row>({
+  columns,
+  rows,
+  rowKey,
+  detail,
 }: {
-  name: string
-  price: string
-  note?: string
-  noteColor?: string
-  children: React.ReactNode
+  columns: readonly Column<Row>[]
+  rows: readonly Row[]
+  rowKey: (row: Row, index: number) => string
+  detail?: (row: Row) => React.ReactNode | null
 }) {
+  const [open, setOpen] = useState<ReadonlySet<string>>(new Set())
+  const toggle = (k: string) =>
+    setOpen((prev) => {
+      const next = new Set(prev)
+      if (next.has(k)) next.delete(k)
+      else next.add(k)
+      return next
+    })
+
+  // Шапку прячем, когда все заголовки пусты (характеристики корабля): строка
+  // «НАЗВАНИЕ ЗНАЧЕНИЕ» там только шумит.
+  const showHead = columns.some((c) => c.header !== '')
+
   return (
-    <li className="flex items-baseline gap-3 text-sm">
-      <span className="w-56 shrink-0 truncate">{name}</span>
-      <span className="w-24 shrink-0 text-right" style={{ color: DIM }}>
-        {price}
-      </span>
-      <span className="w-36 shrink-0 text-right text-xs" style={{ color: noteColor ?? DIM }}>
-        {note ?? ''}
-      </span>
-      {children}
-    </li>
+    <table className="w-full border-collapse text-sm">
+      {showHead && (
+        <thead>
+          <tr className="border-b" style={{ borderColor: DIM }}>
+            {columns.map((c) => (
+              <th
+                key={c.key}
+                className={`pb-1 text-xs font-normal tracking-widest ${alignClass(c.align)}`}
+                style={{ color: DIM, width: c.width }}
+              >
+                {c.header}
+              </th>
+            ))}
+          </tr>
+        </thead>
+      )}
+      <tbody>
+        {rows.map((row, index) => {
+          const key = rowKey(row, index)
+          const card = detail?.(row) ?? null
+          const isOpen = card !== null && open.has(key)
+          return (
+            <Fragment key={key}>
+              <tr className="align-baseline">
+                {columns.map((c, ci) => (
+                  <td key={c.key} className={`py-1 ${alignClass(c.align)}`} style={{ width: c.width }}>
+                    {ci === 0 && card !== null ? (
+                      <button
+                        type="button"
+                        onClick={() => toggle(key)}
+                        className="cursor-pointer text-left tracking-wide hover:underline"
+                        style={{ color: ACCENT }}
+                      >
+                        {isOpen ? '▾ ' : '▸ '}
+                        {c.cell(row)}
+                      </button>
+                    ) : (
+                      c.cell(row)
+                    )}
+                  </td>
+                ))}
+              </tr>
+              {isOpen && (
+                <tr>
+                  <td colSpan={columns.length} className="pb-3">
+                    <div className="ml-1 border-l-2 pl-3" style={{ borderColor: DIM }}>
+                      {card}
+                    </div>
+                  </td>
+                </tr>
+              )}
+            </Fragment>
+          )
+        })}
+      </tbody>
+    </table>
   )
 }

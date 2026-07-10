@@ -1,9 +1,28 @@
-import { SHOP } from '../../config/station'
+import { SHOP, STOCK } from '../../config/station'
+import { clamp, makeRng } from '../../core/math'
 import { addCommodity, addItem, cargoMass, freeCapacity, removeItem } from '../cargo/hold'
 import { COMMODITIES, itemValue, type CargoItem, type Commodity } from '../cargo/items'
 import { settlementAt } from '../galaxy/generate'
 import type { Settlement } from '../galaxy/types'
-import { deriveShipSpec, isMissile, isWeapon, type Loadout, type ShipModule, type ShipSpec } from '../loadout'
+import { MODULE_CATALOGUE, findModule } from '../../config/modules'
+import {
+  deriveShipSpec,
+  isArmour,
+  isCargo,
+  isCloak,
+  isDrone,
+  isEngine,
+  isHyperdrive,
+  isLaser,
+  isMissile,
+  isShield,
+  isThrusters,
+  isWeapon,
+  type Loadout,
+  type ShipModule,
+  type ShipSpec,
+  type WeaponModule,
+} from '../loadout'
 import type { ShipEntity, World } from '../world/entities'
 import { refreshSpec } from '../world/factory'
 import { stockLevel, unitBuyPrice, unitSellPrice } from './market'
@@ -127,9 +146,41 @@ export function buy(
   return null
 }
 
-/** Что станция может предложить. Пока — весь каталог: ассортимент придёт из StarSystem. */
+/** Что станция может предложить из произвольного набора: бесплатный стартовый хлам не продаётся. */
 export function stock(catalogue: readonly ShipModule[]): readonly ShipModule[] {
   return catalogue.filter((m) => m.cost > 0)
+}
+
+/**
+ * Шанс, что модуль лежит на прилавке ЭТОГО поселения, 0..1. Чистая функция от
+ * (класс, тех-уровень): развитость двигает вверх, класс — вниз. Ею и решается,
+ * почему у столицы витрина ломится, а у окраины — пара стволов классом пониже.
+ */
+export function stockChance(module: ShipModule, settlement: Settlement): number {
+  const classPenalty = (module.class - 1) * STOCK.CLASS_PENALTY
+  const techBonus = (settlement.techLevel - STOCK.REF_TECH) * STOCK.TECH_BONUS
+  return clamp(STOCK.BASE_CHANCE - classPenalty + techBonus, STOCK.MIN_CHANCE, STOCK.MAX_CHANCE)
+}
+
+/**
+ * Ассортимент станции этой системы. Детерминирован из зерна и индекса системы,
+ * как и цены: два пилота в одной системе видят одну витрину, ничего не пересылая.
+ * Оттого магазин синхронизируется по сети даром. Решение по каждому модулю —
+ * независимый бросок от собственного зерна, поэтому список стабилен между вызовами.
+ */
+export function stationStock(world: World): readonly ShipModule[] {
+  const settlement = localSettlement(world)
+  return MODULE_CATALOGUE.filter((m) => {
+    if (m.cost <= 0) return false // бесплатный стартовый хлам не продают
+    const rng = makeRng(world.galaxySeed ^ Math.imul(world.systemIndex + 1, 0x9e3779b1) ^ hashModuleId(m.id))
+    return rng() < stockChance(m, settlement)
+  })
+}
+
+function hashModuleId(id: string): number {
+  let h = 2166136261
+  for (let i = 0; i < id.length; i++) h = Math.imul(h ^ id.charCodeAt(i), 16777619)
+  return h >>> 0
 }
 
 // ─── Перестановка железа: установить из трюма, сравнить с установленным ────────
@@ -288,6 +339,16 @@ export function fitDeltas(ship: ShipEntity, module: ShipModule): StatDelta[] {
  * Заголовочная характеристика модуля — «какой плюс он даёт» для списков: КЛЮЧ и
  * число. Слово и единицу подставит интерфейс, поэтому здесь ни того, ни другого.
  */
+/**
+ * Больше — это лучше? Для почти всех характеристик да, но не для всех: у расхода
+ * маскировки (и вообще у «затрат») меньшее число — выигрыш. UI обязан красить
+ * стрелку по СМЫСЛУ, а не по величине: «такой же, но цифра меньше» иногда и есть
+ * тот, что круче. Домен знает смысл каждой оси — пусть интерфейс не гадает.
+ */
+export function statHigherBetter(key: StatKey): boolean {
+  return key !== 'drain'
+}
+
 export function moduleStat(m: ShipModule): { key: StatKey; value: number } {
   switch (m.kind) {
     case 'engine': return { key: 'thrust', value: m.thrust }
@@ -301,6 +362,116 @@ export function moduleStat(m: ShipModule): { key: StatKey; value: number } {
     case 'hyperdrive': return { key: 'jump', value: m.jumpRange }
     case 'cloak': return { key: 'drain', value: m.drain }
   }
+}
+
+// ─── Прокачка модуля ──────────────────────────────────────────────────────────
+
+export type UpgradeError = 'maxed' | 'no-copy' | 'no-money'
+
+/** Накопленная прибавка модуля, доля к стоку: 0 — заводской, 0.5 — «+50%». */
+export function upgradeLevel(module: ShipModule): number {
+  return module.upgrade ?? 0
+}
+
+/**
+ * Индекс копии этого модуля в трюме — по тому же `id` (прокачка id не меняет).
+ * Ею и качают на +50%: копия честнее денег, оттого и сильнее. null — копии нет.
+ */
+export function upgradeCopyIndex(ship: ShipEntity, module: ShipModule): number | null {
+  const i = ship.hold.items.findIndex((it) => it.kind === 'module' && it.module.id === module.id)
+  return i >= 0 ? i : null
+}
+
+/** Цена ОДНОГО денежного шага прокачки. С копией денег не берут — платит трюм. */
+export function upgradeCashCost(module: ShipModule): number {
+  return Math.ceil(Math.max(module.cost, SHOP.UPGRADE_MIN_BASE) * SHOP.UPGRADE_CASH_FRACTION)
+}
+
+/** Проверка БЕЗ побочных эффектов: ею UI гасит кнопку, ею же `upgradeModule` решает. */
+export function canUpgrade(
+  world: World,
+  ship: ShipEntity,
+  module: ShipModule,
+  useCopy: boolean,
+): UpgradeError | null {
+  // Каждый модуль улучшается один раз: уже прокачанный дальше не берут.
+  if (upgradeLevel(module) > 1e-6) return 'maxed'
+  if (useCopy) return upgradeCopyIndex(ship, module) === null ? 'no-copy' : null
+  return world.credits < upgradeCashCost(module) ? 'no-money' : null
+}
+
+/**
+ * Множит характеристики модуля от СТОКА: clone.field = base.field × (1+level).
+ * От стока, а не от текущего значения, — чтобы показанное «+50%» точно равнялось
+ * правде, а не накопленной дроби с округлениями. Момент и лимиты множатся целиком:
+ * разворот растёт по всем осям. У маскировки растёт не расход, а экономичность —
+ * потому делится, а не множится: меньше жрёт батарей значит лучше.
+ */
+function scaleToBase(m: ShipModule, base: ShipModule, k: number): void {
+  if (isEngine(m) && isEngine(base)) { m.thrust = base.thrust * k; m.maxSpeed = base.maxSpeed * k; return }
+  if (isThrusters(m) && isThrusters(base)) {
+    m.torque = [base.torque[0] * k, base.torque[1] * k, base.torque[2] * k]
+    m.maxRate = [base.maxRate[0] * k, base.maxRate[1] * k, base.maxRate[2] * k]
+    return
+  }
+  if (isShield(m) && isShield(base)) { m.capacity = base.capacity * k; m.regen = base.regen * k; return }
+  if (isArmour(m) && isArmour(base)) { m.hull = base.hull * k; return }
+  if (isLaser(m) && isLaser(base)) { m.damage = base.damage * k; return }
+  if (isMissile(m) && isMissile(base)) { m.damage = base.damage * k; return }
+  if (isDrone(m) && isDrone(base)) { m.ammo = Math.round(base.ammo * k); return }
+  if (isCargo(m) && isCargo(base)) { m.capacity = Math.round(base.capacity * k); return }
+  if (isHyperdrive(m) && isHyperdrive(base)) { m.jumpRange = base.jumpRange * k; return }
+  if (isCloak(m) && isCloak(base)) { m.drain = base.drain / k }
+}
+
+/** Собственный прокачанный экземпляр модуля. Конфиг не трогаем — он общий на всех. */
+function withUpgrade(module: ShipModule, level: number): ShipModule {
+  const base = findModule(module.id) ?? module
+  const clone: ShipModule = { ...module, upgrade: level }
+  scaleToBase(clone, base, 1 + level)
+  return clone
+}
+
+/**
+ * Прокачать установленный модуль. Клон заменяет ИМЕННО тот экземпляр, что стоит в
+ * оснастке (сверяем по ссылке — UI передаёт реальный модуль из loadout). Копия из
+ * трюма расходуется; денежная дорога — списывает кредиты. Массу не трогаем: усиление
+ * характеристики не должно тайком менять манёвренность, только заявленную ось.
+ *
+ * Только на верфи — как и вся смена оснастки: правило держит UI, домен исполняет.
+ */
+export function upgradeModule(
+  world: World,
+  ship: ShipEntity,
+  module: ShipModule,
+  useCopy: boolean,
+): UpgradeError | null {
+  const error = canUpgrade(world, ship, module, useCopy)
+  if (error) return error
+
+  // Однократно: до сюда доходит только сток (canUpgrade отсекает уже прокачанный).
+  const level = useCopy ? SHOP.UPGRADE_COPY_STEP : SHOP.UPGRADE_CASH_STEP
+  const upgraded = withUpgrade(module, level)
+
+  const wi = ship.loadout.weapons.findIndex((w) => w === module)
+  if (wi >= 0) {
+    ship.loadout.weapons[wi] = upgraded as WeaponModule
+  } else {
+    const ii = ship.loadout.internals.indexOf(module)
+    if (ii < 0) return 'no-copy' // модуля нет на корабле — звать было неоткуда
+    ship.loadout.internals[ii] = upgraded
+  }
+
+  if (useCopy) {
+    const idx = upgradeCopyIndex(ship, module) // копия ещё в трюме — она и оплата
+    if (idx !== null) removeItem(ship.hold, idx)
+  } else {
+    world.credits -= upgradeCashCost(module)
+  }
+
+  // Характеристики сменились — пересобираем на СОБЫТИЕ, как и при покупке.
+  refreshSpec(ship)
+  return null
 }
 
 // ─── Груз ────────────────────────────────────────────────────────────────────
