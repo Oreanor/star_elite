@@ -216,7 +216,9 @@ export function createPlayerController(intent: PlayerIntent): Controller {
       }
 
       /**
-       * ПКМ — временный газ поверх рукояти, с той же скоростью, что и W.
+       * ПКМ — ФОРСАЖ, пока держишь. Он делает две вещи разом: гонит газ до отказа
+       * поверх рукояти (surge) и включает наддув двигателя (boost ниже). Отпустил —
+       * прибавка стекает обратно, и корабль возвращается на выставленный W/S ход.
        *
        * Прибавка ограничена сверху свободным ходом до единицы: копить её впустую
        * незачем, иначе после отпускания она полсекунды стекала бы с невидимого
@@ -267,13 +269,16 @@ export function createPlayerController(intent: PlayerIntent): Controller {
        */
       c.flightAssist = intent.flightAssist || manoeuvring(intent)
 
-      // Форсаж — свойство установленного двигателя, а не константа игры.
-      // Поставил военный — форсаж стал мощнее, и это посчитано, а не назначено.
-      const boosting = isHeld('ShiftLeft') || isHeld('ShiftRight')
-      c.boost = boosting ? boostMult(ship.loadout) : 1
+      // Форсаж на ПКМ, пока держишь: наддув двигателя вместе с газом до отказа
+      // выше. Сила наддува — свойство установленного двигателя, а не константа
+      // игры: поставил военный — форсаж стал мощнее, и это посчитано, а не назначено.
+      c.boost = input.throttleUp ? boostMult(ship.loadout) : 1
       c.retro = isHeld('ControlLeft') || isHeld('ControlRight') ? 1 : 0
 
-      intent.cruise = isHeld('KeyJ')
+      // Крейсерский ход — на Shift (удерживать): большая клавиша под мизинцем,
+      // её легко нащупать вслепую, а J приходилось искать. Форсаж съехал на ПКМ
+      // и Shift освободил.
+      intent.cruise = isHeld('ShiftLeft') || isHeld('ShiftRight')
       // Луч — удержание, а не нажатие: пока держишь C, он тянет.
       intent.tractor = isHeld('KeyC')
     },
