@@ -38,13 +38,12 @@ function wait(world: World, seconds: number): void {
 }
 
 describe('двойные звёзды', () => {
-  it('в галактике их заметная доля, но меньше половины', () => {
+  it('двойные — редкость: их единицы процентов, а не фон', () => {
     const galaxy = generateGalaxy(GALAXY.SEED)
     const share = galaxy.filter((s) => s.companion).length / galaxy.length
-    // Двойных должно быть много, чтобы встречаться, но не больше одиночек —
-    // иначе пара перестаёт быть особенностью и становится нормой.
-    expect(share).toBeGreaterThan(0.1)
-    expect(share).toBeLessThan(0.5)
+    // Достаточно, чтобы изредка попасться, но не настолько, чтобы примелькаться.
+    expect(share).toBeGreaterThan(0.01)
+    expect(share).toBeLessThan(0.1)
   })
 
   it('спутник того же класса, что главная: пары — ровесники из одного облака', () => {
