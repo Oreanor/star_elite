@@ -1,3 +1,4 @@
+import type { DysonSpec } from '../../config/dyson'
 import type {
   Economy,
   Government,
@@ -93,6 +94,11 @@ export interface StarSystem {
    * Позиции нет — обе кружат вокруг барицентра, и место каждой даёт время.
    */
   readonly companion: Star | null
+  /**
+   * Сфера Дайсона вокруг светила, или `null`, если её нет. Целую строят только на
+   * вершине прогресса — знак высокой технологии; руины остаются от павшей.
+   */
+  readonly dyson: DysonSpec | null
   readonly planets: readonly Planet[]
 
   /**

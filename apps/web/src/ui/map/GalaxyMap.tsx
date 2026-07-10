@@ -606,6 +606,12 @@ function SystemDetails({
         {capital && <Row label="СТОЛИЦА" value={`${capital.name} · ${capital.settlement.economy}`} />}
         {capital && <Row label="СТРОЙ" value={`${capital.settlement.government} · ТУ ${capital.settlement.techLevel}`} />}
         <Row label="ТОПЛИВО" value={system.star.scoopable ? 'зачерпнуть можно' : 'не зачерпнуть'} />
+        {system.dyson && (
+          <Row
+            label="МЕГАСТРУКТУРА"
+            value={system.dyson.ruined ? 'сфера Дайсона · руины' : 'сфера Дайсона'}
+          />
+        )}
       </dl>
 
       {core && (

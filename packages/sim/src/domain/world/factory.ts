@@ -357,6 +357,7 @@ export function enterSystem(
 
   world.rng = rng
   world.systemName = def.name
+  world.dyson = def.dyson
   world.systemIndex = systemIndex
   world.epoch += 1
 
@@ -436,6 +437,7 @@ export function createWorld(def: SystemDef = STARTER_SYSTEM): World {
     rng,
     ids,
     systemName: def.name,
+    dyson: def.dyson,
     galaxySeed: GALAXY.SEED,
     systemIndex: WORLD.HOME_INDEX,
     epoch: 0,

@@ -150,6 +150,7 @@ export function systemDefOf(system: StarSystem, galaxySeed: number): SystemDef {
     playerStart: start,
     star: { pos: [0, 0, 0], radius: starRadius, color: system.star.color },
     companion,
+    dyson: system.dyson,
     planets,
     station: stationDef,
     // Пояс есть не везде: он локален и живёт в масштабе километров, как бой.

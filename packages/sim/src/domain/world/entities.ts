@@ -1,5 +1,6 @@
 import { Quaternion, Vector3 } from 'three'
 import type { BodyKind } from '../../config/bodies'
+import type { DysonSpec } from '../../config/dyson'
 import type { PlanetType } from '../../config/galaxy'
 import type { Rng } from '../../core/math'
 import type { CargoHold } from '../cargo'
@@ -314,6 +315,8 @@ export interface World {
   ids: IdSource
 
   systemName: string
+  /** Сфера Дайсона вокруг светила, или `null`. Декорация рендера: облик и цела ли. */
+  dyson: DysonSpec | null
   /** Зерно ГАЛАКТИКИ. Все 2500 систем выводятся из него, ничего не хранится. */
   galaxySeed: number
   /** Индекс текущей системы в галактике. Он же вход генератора. */

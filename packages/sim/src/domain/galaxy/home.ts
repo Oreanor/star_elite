@@ -78,6 +78,8 @@ export function homeSystem(index: number, x: number, y: number, z: number): Star
     },
     // Родная система одиночная — как и её описание в STARTER_SYSTEM.
     companion: null,
+    // Сферы Дайсона у дома нет: она метит чужие вершины прогресса, не старт.
+    dyson: null,
     planets: planetsOf(),
     security: 'Высокая',
   }

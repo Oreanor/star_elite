@@ -14,6 +14,7 @@ export {
 } from './galaxy'
 export { AI } from './ai'
 export { CRUISE } from './cruise'
+export { DYSON, type DysonSpec } from './dyson'
 export { HYPERDRIVE, STAR_HEAT } from './heat'
 export { DIALOGUE } from './dialogue'
 export { BOMB, ECM, GUNNERY, IMPACT, SALVAGE } from './weapons'

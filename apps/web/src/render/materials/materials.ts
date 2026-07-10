@@ -207,6 +207,38 @@ export function starMaterial(color: number): MeshBasicMaterial {
   return material
 }
 
+let dysonPanels: MeshBasicMaterial | null = null
+let dysonLines: LineBasicMaterial | null = null
+
+/**
+ * Сфера Дайсона. Не металл и не освещается: свет звезды бьёт в неё изнутри, а
+ * снаружи она — тёмная решётка на фоне короны. Полупрозрачна, чтобы сквозь
+ * каркас просвечивало светило, и не пишет глубину — иначе гасила бы собственную
+ * звезду. Панели рисуются гранями, каркас — линиями: у них разные материалы.
+ */
+export function dysonPanelMaterial(): MeshBasicMaterial {
+  dysonPanels ??= new MeshBasicMaterial({
+    color: 0x1c2836,
+    transparent: true,
+    opacity: 0.72,
+    side: DoubleSide,
+    depthWrite: false,
+    fog: false,
+  })
+  return dysonPanels
+}
+
+export function dysonLineMaterial(): LineBasicMaterial {
+  dysonLines ??= new LineBasicMaterial({
+    color: 0x2a3a4c,
+    transparent: true,
+    opacity: 0.85,
+    depthWrite: false,
+    fog: false,
+  })
+  return dysonLines
+}
+
 let pod: MeshLambertMaterial | null = null
 
 export function podMaterial(): MeshLambertMaterial {

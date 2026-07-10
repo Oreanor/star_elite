@@ -1,3 +1,4 @@
+import type { DysonSpec } from '../../config/dyson'
 import type { PlanetType } from '../../config/galaxy'
 import type { Faction } from './entities'
 
@@ -42,6 +43,8 @@ export interface SystemDef {
    * из масс (обе выводятся из радиусов) считается период.
    */
   companion: { radius: number; color: number; separation: number } | null
+  /** Сфера Дайсона вокруг светила, или `null`. Только декорация: облик и цела ли. */
+  dyson: DysonSpec | null
   planets: readonly {
     name: string
     type: PlanetType
@@ -105,6 +108,7 @@ export const STARTER_SYSTEM: SystemDef = {
   star: { pos: [0, 0, 0], radius: SOLAR_RADIUS, color: 0xffd9a0 },
   // Родная система одиночная: с неё начинают, и лишних сущностей ей не нужно.
   companion: null,
+  dyson: null,
   planets: [
     /**
      * Обитаемый мир, вокруг которого висит станция. С орбиты в 500 км он

@@ -13,12 +13,13 @@ import {
   type SecurityLevel,
   type StationType,
 } from '../../config/galaxy'
+import { DYSON, type DysonSpec } from '../../config/dyson'
 import { WORLD } from '../../config/world'
 import { clamp, makeRng, type Rng } from '../../core/math'
 import { homeSystem } from './home'
 import { moonName, planetName, systemName } from './names'
 import { placeSystem } from './shape'
-import type { Moon, Planet, Settlement, Star, StarSystem, Station } from './types'
+import type { Moon, Planet, SettledPlanet, Settlement, Star, StarSystem, Station } from './types'
 import { capitalOf } from './types'
 
 /** Единственная чёрная дыра галактики. Ищется по классу, а не пишется числами дважды. */
@@ -301,7 +302,7 @@ export function generateSystem(index: number, seed: number = GALAXY.SEED): StarS
   // Центр галактики. Чёрная дыра не звезда: у неё нет ни планет, ни закона,
   // ни имени по общему словарю — это дверь, а не место жительства.
   if (index === CORE_INDEX) {
-    return { index, name: 'Ядро', x, y, z, star: BLACK_HOLE, companion: null, planets: [], security: SECURITY_LEVELS[0] }
+    return { index, name: 'Ядро', x, y, z, star: BLACK_HOLE, companion: null, dyson: null, planets: [], security: SECURITY_LEVELS[0] }
   }
 
   // Родная система задана руками — но только в СВОЕЙ галактике. В любой другой
@@ -318,13 +319,34 @@ export function generateSystem(index: number, seed: number = GALAXY.SEED): StarS
   const planets = makePlanets(rng, name, habitable)
 
   // Охрану пространства наводит тот, у кого флот, — самый населённый мир.
-  const draft: StarSystem = { index, name, x, y, z, star, companion, planets, security: SECURITY_LEVELS[0] }
+  const draft: StarSystem = { index, name, x, y, z, star, companion, dyson: null, planets, security: SECURITY_LEVELS[0] }
   const capital = capitalOf(draft)
   const security = capital
     ? securityFor(rng, GOVERNMENTS.indexOf(capital.settlement.government))
     : SECURITY_LEVELS[0]
 
-  return { ...draft, security }
+  return { ...draft, dyson: makeDyson(rng, capital), security }
+}
+
+/**
+ * Сфера Дайсона — или её останки, или ничего.
+ *
+ * ЦЕЛУЮ строят лишь на вершине прогресса: столица с высшим тех-уровнем. Оттого
+ * она редка и осмысленна — метит самые развитые системы. РУИНЫ достаются
+ * скромным обитаемым мирам: жизнь там есть, но невысокая, а над ней висят
+ * останки цивилизации, что однажды поднялась до звёзд и пала. Пустой роли у
+ * структуры нет: она либо чей-то триумф, либо чья-то могила.
+ */
+function makeDyson(rng: Rng, capital: SettledPlanet | null): DysonSpec | null {
+  const tech = capital?.settlement.techLevel ?? 0
+  const variant = () => Math.floor(rng() * DYSON.VARIANTS)
+
+  if (tech >= DYSON.MIN_TECH && rng() < DYSON.CHANCE) return { variant: variant(), ruined: false }
+  // Останки — только там, где ещё теплится жизнь, но до звёзд ей уже далеко.
+  if (tech > 0 && tech < DYSON.MIN_TECH && rng() < DYSON.RUINED_CHANCE) {
+    return { variant: variant(), ruined: true }
+  }
+  return null
 }
 
 /**
