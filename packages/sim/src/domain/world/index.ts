@@ -8,6 +8,7 @@ export {
   type GunState,
   type MissileEntity,
   type ShipEntity,
+  type TitanEntity,
   type Tracer,
   type World,
 } from './entities'
@@ -16,4 +17,5 @@ export { createIdSource, type IdSource } from './ids'
 export { maybeShiftOrigin } from './origin'
 export { cycleTarget, findBody, findShip, hostilesOf, incomingMissile, nearestPod } from './queries'
 export { stepTraffic } from './traffic'
+export { spawnTitan, stepTitans, titanCount } from './titans'
 export { STARTER_SYSTEM, type PatrolDef, type SystemDef } from './system'

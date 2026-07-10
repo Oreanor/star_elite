@@ -6,6 +6,7 @@ import { Post } from '../render/post/Post'
 import { PIXEL_SCALE, RENDER } from '../render/config'
 import { AsteroidField } from '../render/scene/Asteroids'
 import { Bodies } from '../render/scene/Bodies'
+import { Titans } from '../render/scene/Titans'
 import { Cockpit } from '../render/scene/Cockpit'
 import { DockingCorridor } from '../render/scene/DockingCorridor'
 import { Dust } from '../render/scene/Dust'
@@ -37,6 +38,7 @@ function Scene() {
 
       <Bodies />
       <AsteroidField />
+      <Titans />
       <DockingCorridor />
 
       <PlayerShip />

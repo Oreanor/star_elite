@@ -1,6 +1,7 @@
 export { PHYSICS } from './physics'
 export { BODY_KINDS, GRAVITY, MOON, type BodyKind } from './bodies'
 export { ASTEROID, DEBRIS, SCORE, WORLD } from './world'
+export { TITAN } from './titans'
 export {
   ARRIVAL,
   CORE_INDEX,

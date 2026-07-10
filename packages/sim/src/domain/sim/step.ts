@@ -38,6 +38,7 @@ import type { ShipEntity, World } from '../world/entities'
 import { stepOrbits } from '../world/orbits'
 import { maybeShiftOrigin } from '../world/origin'
 import { stepTraffic } from '../world/traffic'
+import { stepTitans } from '../world/titans'
 import { NULL_CONTROLLER, type ControllerMap } from './controller'
 
 /**
@@ -90,9 +91,11 @@ export function stepWorld(world: World, frameDt: number, controllers: Controller
   }
 
   cleanup(world)
-  // Трафик — раз в кадр и по СЕКУНДАМ, а не по шагам физики: иначе торговцы
-  // вылетали бы вдвое чаще на 120 Гц, чем на 60.
-  stepTraffic(world, Math.min(frameDt, PHYSICS.MAX_FRAME_DT))
+  // Трафик и киты — раз в кадр и по СЕКУНДАМ, а не по шагам физики: иначе они
+  // появлялись бы и двигались вдвое чаще на 120 Гц, чем на 60.
+  const frame = Math.min(frameDt, PHYSICS.MAX_FRAME_DT)
+  stepTraffic(world, frame)
+  stepTitans(world, frame)
   maybeShiftOrigin(world)
 }
 

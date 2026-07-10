@@ -1,11 +1,13 @@
 import { Quaternion, Vector3 } from 'three'
 import { pirateLeaderLoadout, pirateLoadout, traderLoadout } from '../../config/loadouts'
+import { TITAN } from '../../config/titans'
 import { TRAFFIC } from '../../config/world'
 import { signed, type Rng } from '../../core/math'
 import type { Loadout } from '../loadout'
 import { createAIState } from '../ai/types'
 import { isDroneShip } from '../combat/drones'
 import { makeShip } from './factory'
+import { spawnTitan, titanCount } from './titans'
 import type { Faction, ShipEntity, World } from './entities'
 
 /**
@@ -201,6 +203,15 @@ export function stepTraffic(world: World, dt: number): ShipEntity[] {
   // чем населённым, иначе корабли перестают что-либо значить. А вдали от миров
   // он пустее: маршруты сходятся у планет, и встречи вместе с ними.
   if (world.rng() >= TRAFFIC.CHANCE * crowding(world)) return []
+
+  // Раз в несколько встреч вместо кораблей приходит КИТ — город поколений. Он
+  // живёт своим списком и пилота не требует, поэтому возвращаем пусто. Кит редок
+  // и одинок: за его потолком встреча становится обычной.
+  if (world.rng() < TITAN.ENCOUNTER_SHARE && titanCount(world) < TITAN.MAX) {
+    spawnTitan(world)
+    return []
+  }
+
   if (trafficCount(world) >= TRAFFIC.MAX) return []
 
   return spawnEncounter(world)

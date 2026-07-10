@@ -1,6 +1,5 @@
 import { Vector3 } from 'three'
 import { describe, expect, it } from 'vitest'
-import { HYPERDRIVE } from '../../config/heat'
 import { chargeHyperdrive, scooping, stepStarHeat } from '../combat'
 import { dock } from '../station/docking'
 import { createWorld, type World } from '../world'

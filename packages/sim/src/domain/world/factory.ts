@@ -368,6 +368,7 @@ export function enterSystem(
 
   world.pods = []
   world.missiles = []
+  world.titans = []
   world.tracers = []
   world.explosions = []
   world.shockwaves = []
@@ -420,6 +421,7 @@ export function createWorld(def: SystemDef = STARTER_SYSTEM): World {
     asteroids: makeAsteroids(rng, ids, def),
     pods: [],
     missiles: [],
+    titans: [],
     bodies,
     tracers: [],
     explosions: [],

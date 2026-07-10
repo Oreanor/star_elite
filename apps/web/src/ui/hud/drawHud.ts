@@ -478,6 +478,11 @@ function drawRadar({ ctx, world, width, height }: HudFrame): void {
 
   for (const pod of world.pods) if (pod.alive) plot(pod.pos, HUD_COLORS.WARN, Math.round(2 * S))
 
+  // Киты — крупной нейтральной отметкой: их видно за десятки километров, и на
+  // локаторе они читаются как ориентир, а не как цель. Кольцом, чтобы не путать
+  // с рядовым нейтралом-торговцем: это не корабль, это город.
+  for (const titan of world.titans) plot(titan.pos, HUD_COLORS.NEUTRAL, Math.round(5 * S), true)
+
   // Локатор невидимку не берёт — то же правило, что у захвата и у головки ракеты.
   for (const ship of world.ships) {
     if (!isVisible(ship)) continue

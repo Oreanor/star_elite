@@ -39,6 +39,7 @@ export function maybeShiftOrigin(world: World): void {
   for (const p of world.pods) p.pos.add(_shift)
   for (const m of world.missiles) m.pos.add(_shift)
   for (const b of world.bodies) b.pos.add(_shift)
+  for (const t of world.titans) t.pos.add(_shift)
   for (const t of world.tracers) {
     t.from.add(_shift)
     t.to.add(_shift)

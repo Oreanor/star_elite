@@ -26,6 +26,18 @@ function run(world: World, seconds: number, dt = 1 / 60): void {
   for (let t = 0; t < seconds; t += dt) stepTraffic(world, dt)
 }
 
+/**
+ * Гоняет трафик, пока не родится хоть один КОРАБЛЬ. Нужен затем, что встречей
+ * иногда оказывается кит (см. TITAN): он приходит в свой список, а не в `ships`,
+ * и тест про корабли не должен спотыкаться о попавшийся первым город.
+ */
+function runUntilShip(world: World, cap = 400): ShipEntity {
+  for (let t = 0; t < cap && met(world).length === 0; t += TRAFFIC.INTERVAL) run(world, TRAFFIC.INTERVAL)
+  const ship = met(world)[0]
+  if (!ship) throw new Error('за отведённое время не родился ни один корабль')
+  return ship
+}
+
 describe('встречи в космосе', () => {
   it('до первой задержки не приходит никто', () => {
     const world = quiet()
@@ -165,10 +177,7 @@ describe('встречи в космосе', () => {
    */
   it('ушедший далеко исчезает, кем бы он ни был', () => {
     const world = quiet()
-    run(world, TRAFFIC.FIRST_DELAY + TRAFFIC.INTERVAL * 2)
-    const ship = met(world)[0]
-    expect(ship).toBeDefined()
-    if (!ship) return
+    runUntilShip(world)
 
     for (const s of met(world)) s.state.pos.copy(world.player.state.pos).setX(TRAFFIC.DESPAWN_RANGE + 100)
     stepTraffic(world, 1 / 60)
@@ -181,10 +190,7 @@ describe('встречи в космосе', () => {
    */
   it('захваченный не исчезает, даже улетев далеко', () => {
     const world = quiet()
-    run(world, TRAFFIC.FIRST_DELAY + TRAFFIC.INTERVAL * 2)
-    const ship = met(world)[0]
-    expect(ship).toBeDefined()
-    if (!ship) return
+    const ship = runUntilShip(world)
 
     world.lockedTargetId = ship.id
     ship.state.pos.copy(world.player.state.pos).setX(TRAFFIC.DESPAWN_RANGE * 3)
@@ -201,10 +207,7 @@ describe('встречи в космосе', () => {
 
   it('корабль рождается с пилотом и с курсом на своё назначение', () => {
     const world = quiet()
-    run(world, TRAFFIC.FIRST_DELAY + TRAFFIC.INTERVAL * 2)
-    const ship = met(world)[0]
-    expect(ship).toBeDefined()
-    if (!ship) return
+    const ship = runUntilShip(world)
 
     expect(ship.ai).not.toBeNull()
     expect(ship.controls.throttle).toBeGreaterThan(0)
