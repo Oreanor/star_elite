@@ -5,6 +5,7 @@ import {
   BURST_LASER,
   CLOAK_FIELD,
   DRONE_BAY,
+  CARGO_LARGE,
   CARGO_SMALL,
   ENGINE_CIVILIAN,
   ENGINE_STANDARD,
@@ -36,7 +37,7 @@ export function playerStartLoadout(): Loadout {
     // Базовый гиперпривод стоит с завода: без него не улететь из системы вообще,
     // а «заработай сорок пять тысяч, чтобы впервые куда-то полететь» — не начало игры.
     // Дальний рейс всё равно надо покупать: девять световых лет — это соседи.
-    [ENGINE_STANDARD, RCS_STANDARD, SHIELD_STANDARD, ARMOUR_PLATE, CARGO_SMALL, HYPERDRIVE_BASIC, CLOAK_FIELD],
+    [ENGINE_STANDARD, RCS_STANDARD, SHIELD_STANDARD, ARMOUR_PLATE, CARGO_LARGE, HYPERDRIVE_BASIC, CLOAK_FIELD],
     // Два ствола и четыре пусковых на пилонах — по индексам точек подвески шасси.
     // Каждая несёт по две ракеты, итого восемь на вылет.
     // Последний пилон отдан контейнеру БПЛА: три пилона ракет — шесть ракет.

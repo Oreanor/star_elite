@@ -7,7 +7,7 @@ import {
   type Commodity,
   type World,
 } from '@elite/sim'
-import { Button, DIM, Panel, Row } from './chrome'
+import { Button, Panel, Row } from './chrome'
 
 /**
  * Прилавок. Цена выведена из уровня развития системы и её строя плюс запаса на
@@ -20,11 +20,6 @@ export function Market({ world, onChange }: { world: World; onChange: () => void
 
   return (
     <Panel title="ТОВАРЫ">
-      <p className="mb-4 text-xs" style={{ color: DIM }}>
-        Цена — от развития системы, строя и запаса. Мало на складе дороже, много дешевле.
-        Прибыль в перевозке: бери там, где дёшево, вези туда, где дорого.
-      </p>
-
       <ul className="space-y-1">
         {commodityStock().map((commodity) => {
           const error = canBuyCommodity(world, player, commodity)

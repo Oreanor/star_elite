@@ -1,5 +1,4 @@
 import {
-  cargoMass,
   holdSellValue,
   itemName,
   itemSellValue,
@@ -19,16 +18,10 @@ import { Button, DIM, Panel, Row } from './chrome'
  */
 export function Hold({ world, onChange }: { world: World; onChange: () => void }) {
   const player = world.player
-  const used = cargoMass(player.hold)
   const total = holdSellValue(world, player)
 
   return (
     <Panel title="ТРЮМ">
-      <p className="mb-4 text-xs" style={{ color: DIM }}>
-        Занято {used.toFixed(1)} из {player.hold.capacity.toFixed(1)} т · продать здесь весь груз — {total} кр.
-        Выгода считается от цены, по которой ты купил; найденное — чистый плюс.
-      </p>
-
       {player.hold.items.length === 0 ? (
         <p className="text-sm" style={{ color: DIM }}>
           Пусто. Сбей пирата и подбери контейнер — он подберётся сам, если подойти тихо.
