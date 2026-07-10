@@ -4,6 +4,7 @@ import { GameProvider, useSession } from './GameContext'
 import { Game } from './Game'
 import { input, releaseLock, requestLock } from '../platform/input/input'
 import { Dialogue } from '../ui/dialogue/Dialogue'
+import { setLang, t, useLang, type Key, type Lang } from '../ui/i18n'
 import { GalaxyMap } from '../ui/map/GalaxyMap'
 import { SystemMap } from '../ui/map/SystemMap'
 import { StationMenu } from '../ui/station/StationMenu'
@@ -151,31 +152,36 @@ function Shell({ onRestart }: { onRestart: () => void }) {
   )
 }
 
-const KEYS: [string, string][] = [
-  ['Мышь', 'вести нос: тангаж и рыскание'],
-  ['W / S', 'тяга: рукоять газа стоит там, куда её поставили'],
-  ['ПКМ', 'форсаж, пока держишь: газ до отказа и наддув двигателя'],
-  ['A / D', 'крен. В космосе нет горизонта: корабль сам не выравнивается'],
-  ['AA / DD', 'бочка влево или вправо: уход вбок, сбивает наведение ракет'],
-  ['WW', 'петля: пропустить вперёд того, кто на хвосте, и лететь дальше'],
-  ['SS', 'разворот на 180°: он был на хвосте — и вот он в прицеле'],
-  ['Ctrl', 'ретро-тяга'],
-  ['Shift', 'крейсерский ход между планетами (вкл/выкл)'],
-  ['ЛКМ / Space', 'лазер'],
-  ['Tab', 'захват цели'],
-  ['P', 'автобой: пилот дерётся с захваченной целью (повторно — снять)'],
-  ['M', 'карта системы: выбрать цель навигации'],
-  ['G', 'карта галактики: гиперпрыжок к другой звезде'],
-  ['T', 'связь с захваченным кораблём: требовать, просить, нанять'],
-  ['R', 'ракета с пилона по захваченной цели'],
-  ['E', 'ПРО: подорвать ближайшую чужую ракету'],
-  ['B', 'энергобомба: жжёт врагов вокруг. Копится поверх целого щита'],
-  ['X', 'маскировка: тебя не видят и не стреляют. Жрёт энергию, стрелять нельзя'],
-  ['Q', 'выпустить БПЛА: дерётся сам, оттягивает огонь. Живёт минуту'],
-  ['C', 'тяговый луч: держи — притягивает груз по курсу'],
-  ['L', 'автостыковка со станцией (повторно — отмена)'],
-  ['V', 'вид: сзади / из кабины'],
-  ['Esc', 'пауза и курсор'],
+/**
+ * Таблица клавиш — теперь из словаря, а не хардкодом: одна правка в i18n меняет
+ * и подсказку, и её перевод. Пары «клавиша / что делает» по ключам `key.X` и `key.X.what`.
+ */
+const KEY_ROWS: [Key, Key][] = [
+  ['key.mouse', 'key.mouse.what'],
+  ['key.throttle', 'key.throttle.what'],
+  ['key.rmb', 'key.rmb.what'],
+  ['key.roll', 'key.roll.what'],
+  ['key.barrel', 'key.barrel.what'],
+  ['key.loop', 'key.loop.what'],
+  ['key.reversal', 'key.reversal.what'],
+  ['key.retro', 'key.retro.what'],
+  ['key.cruise', 'key.cruise.what'],
+  ['key.fire', 'key.fire.what'],
+  ['key.target', 'key.target.what'],
+  ['key.autofight', 'key.autofight.what'],
+  ['key.ship', 'key.ship.what'],
+  ['key.system', 'key.system.what'],
+  ['key.galaxy', 'key.galaxy.what'],
+  ['key.talk', 'key.talk.what'],
+  ['key.missile', 'key.missile.what'],
+  ['key.ecm', 'key.ecm.what'],
+  ['key.bomb', 'key.bomb.what'],
+  ['key.cloak', 'key.cloak.what'],
+  ['key.drone', 'key.drone.what'],
+  ['key.tractor', 'key.tractor.what'],
+  ['key.dock', 'key.dock.what'],
+  ['key.view', 'key.view.what'],
+  ['key.pause', 'key.pause.what'],
 ]
 
 /**
@@ -235,9 +241,14 @@ function MenuButton({
 const LOCK_RETRY_MS = 200
 const LOCK_GIVE_UP_MS = 8000
 
+/** Какой экран паузы раскрыт: главный, таблица клавиш или настройки. */
+type PauseScreen = 'main' | 'keys' | 'settings'
+
 function Paused({ resuming, onBoot }: { resuming: boolean; onBoot: () => void }) {
+  useLang() // подписка: смена языка перерисует меню
+  const session = useSession()
   const [waiting, setWaiting] = useState(false)
-  const [keysShown, setKeysShown] = useState(false)
+  const [screen, setScreen] = useState<PauseScreen>('main')
   const timer = useRef<number | null>(null)
 
   // Захват получен — Paused размонтируется, и таймер обязан уйти вместе с ним.
@@ -306,27 +317,32 @@ function Paused({ resuming, onBoot }: { resuming: boolean; onBoot: () => void })
         className="absolute inset-x-0 top-[8vh] mx-auto w-full max-w-lg px-8"
       />
 
-      {keysShown ? (
+      {screen === 'keys' ? (
         /* Таблица клавиш вчетверо выше пары кнопок. По центру экрана она бы
            наехала на логотип, поэтому у неё свой отсчёт — от него вниз. */
         <div className="absolute inset-0 flex flex-col items-center overflow-y-auto px-8 pt-[26vh] pb-10">
           <dl className="mb-8 space-y-1 text-left text-sm">
-            {KEYS.map(([key, description]) => (
-              <div key={key} className="flex gap-3">
-                <dt className="w-32 shrink-0 text-right text-[#7fd6ff]">{key}</dt>
-                <dd className="text-[#3f7391]">{description}</dd>
+            {KEY_ROWS.map(([keyLabel, keyWhat]) => (
+              <div key={keyLabel} className="flex gap-3">
+                <dt className="w-32 shrink-0 text-right text-[#7fd6ff]">{t(keyLabel)}</dt>
+                <dd className="text-[#3f7391]">{t(keyWhat)}</dd>
               </div>
             ))}
           </dl>
-          <MenuButton onClick={() => setKeysShown(false)}>НАЗАД</MenuButton>
+          <MenuButton onClick={() => setScreen('main')}>{t('menu.back')}</MenuButton>
         </div>
+      ) : screen === 'settings' ? (
+        <Settings session={session} onBack={() => setScreen('main')} />
       ) : (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-4">
           <MenuButton onClick={take} disabled={waiting}>
-            {waiting ? 'СЕКУНДУ…' : resuming ? 'В ИГРУ' : 'СТАРТ'}
+            {waiting ? t('menu.wait') : resuming ? t('menu.resume') : t('menu.start')}
           </MenuButton>
-          <MenuButton onClick={() => setKeysShown(true)} disabled={waiting}>
-            КЛАВИШИ
+          <MenuButton onClick={() => setScreen('keys')} disabled={waiting}>
+            {t('menu.keys')}
+          </MenuButton>
+          <MenuButton onClick={() => setScreen('settings')} disabled={waiting}>
+            {t('menu.settings')}
           </MenuButton>
         </div>
       )}
@@ -334,12 +350,82 @@ function Paused({ resuming, onBoot }: { resuming: boolean; onBoot: () => void })
   )
 }
 
+const ASSIST_STORAGE_KEY = 'elite.assist'
+
+/**
+ * Настройки: язык интерфейса и лётный компьютер.
+ *
+ * Язык живёт в модульной переменной i18n (его читает и HUD вне React), поэтому
+ * кнопки зовут `setLang`, а `useLang` в родителе перерисовывает меню. Лётный
+ * компьютер — поле `intent`, общее для всей сессии; его выбор запоминается в
+ * localStorage и подхватывается при следующем старте (см. createIntent).
+ */
+function Settings({ session, onBack }: { session: ReturnType<typeof useSession>; onBack: () => void }) {
+  const lang = useLang()
+  const [assist, setAssist] = useState(session.intent.flightAssist)
+
+  const pickLang = (next: Lang) => setLang(next)
+  const toggleAssist = (on: boolean) => {
+    session.intent.flightAssist = on
+    localStorage.setItem(ASSIST_STORAGE_KEY, on ? 'on' : 'off')
+    setAssist(on)
+  }
+
+  return (
+    <div className="absolute inset-0 flex flex-col items-center overflow-y-auto px-8 pt-[30vh] pb-10">
+      <div className="mb-10 flex w-full max-w-md flex-col gap-8">
+        <Choice label={t('menu.language')}>
+          <Toggle active={lang === 'ru'} onClick={() => pickLang('ru')}>Русский</Toggle>
+          <Toggle active={lang === 'en'} onClick={() => pickLang('en')}>English</Toggle>
+        </Choice>
+
+        <Choice label={t('menu.assist')} hint={t('menu.assist.hint')}>
+          <Toggle active={assist} onClick={() => toggleAssist(true)}>{t('menu.on')}</Toggle>
+          <Toggle active={!assist} onClick={() => toggleAssist(false)}>{t('menu.off')}</Toggle>
+        </Choice>
+      </div>
+      <MenuButton onClick={onBack}>{t('menu.back')}</MenuButton>
+    </div>
+  )
+}
+
+/** Строка настройки: подпись слева, варианты справа, необязательная сноска снизу. */
+function Choice({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <div className="flex items-center justify-between gap-4">
+        <span className="text-sm tracking-[0.2em] text-[#7fd6ff]">{label}</span>
+        <div className="flex gap-2">{children}</div>
+      </div>
+      {hint && <p className="mt-2 text-xs text-[#3f7391]">{hint}</p>}
+    </div>
+  )
+}
+
+/** Кнопка-переключатель: выбранный вариант залит, прочие — контур. */
+function Toggle({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      type="button"
+      onPointerDown={onClick}
+      className={`cursor-pointer border px-4 py-1.5 text-sm tracking-[0.2em] transition-colors ${
+        active
+          ? 'border-[#7fd6ff] bg-[#7fd6ff] text-black'
+          : 'border-[#3f7391] text-[#7fd6ff] hover:border-[#7fd6ff]'
+      }`}
+    >
+      {children}
+    </button>
+  )
+}
+
 function GameOver({ score, onRestart }: { score: number; onRestart: () => void }) {
+  useLang() // подписка: экран гибели тоже на выбранном языке
   return (
     <div className="absolute inset-0 flex items-center justify-center bg-black/85">
       <div className="px-8 text-center font-mono text-[#ff7a5c]">
-        <h1 className="mb-2 text-5xl tracking-[0.4em]">КОРАБЛЬ ПОТЕРЯН</h1>
-        <p className="mb-10 text-sm tracking-widest text-[#7a4438]">ОЧКОВ: {score}</p>
+        <h1 className="mb-2 text-5xl tracking-[0.4em]">{t('menu.lost')}</h1>
+        <p className="mb-10 text-sm tracking-widest text-[#7a4438]">{t('menu.score', { score })}</p>
 
         <button
           type="button"
@@ -347,7 +433,7 @@ function GameOver({ score, onRestart }: { score: number; onRestart: () => void }
           className="cursor-pointer border border-[#7fd6ff] px-8 py-3 text-base tracking-[0.3em] text-[#7fd6ff]
                      transition-colors hover:bg-[#7fd6ff] hover:text-black"
         >
-          НАЧАТЬ ЗАНОВО
+          {t('menu.restart')}
         </button>
       </div>
     </div>

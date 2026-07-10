@@ -123,6 +123,15 @@ export interface PlayerIntent {
   taps: Map<string, number>
 }
 
+/**
+ * Лётный компьютер по умолчанию. Хранится в localStorage меню настроек: выбор
+ * между аркадой и ньютоновским полётом — раз и надолго, а не каждую сессию заново.
+ * Ключ тот же, что пишет экран настроек (`elite.assist`). Значения нет — включён.
+ */
+function assistDefault(): boolean {
+  return localStorage.getItem('elite.assist') !== 'off'
+}
+
 export function createIntent(): PlayerIntent {
   return {
     cruise: false,
@@ -134,7 +143,7 @@ export function createIntent(): PlayerIntent {
     tractor: false,
     throttle: 0.45,
     surge: 0,
-    flightAssist: true,
+    flightAssist: assistDefault(),
     manoeuvre: createManoeuvre(),
     taps: new Map(TAPS.map((t) => [t.code, 0])),
   }

@@ -46,6 +46,8 @@ export const EN: Record<keyof typeof RU, string> = {
   'key.target.what': 'lock target',
   'key.autofight': 'P',
   'key.autofight.what': 'autopilot fights the locked target (press again to take over)',
+  'key.ship': 'I',
+  'key.ship.what': 'ship screen: blueprint, cargo, stats',
   'key.system': 'M',
   'key.system.what': 'system map: pick a navigation target',
   'key.galaxy': 'G',

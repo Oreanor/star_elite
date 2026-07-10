@@ -48,6 +48,8 @@ export const RU = {
   'key.target.what': 'захват цели',
   'key.autofight': 'P',
   'key.autofight.what': 'автобой: пилот дерётся с захваченной целью (повторно — снять)',
+  'key.ship': 'I',
+  'key.ship.what': 'экран корабля: чертёж, груз, характеристики',
   'key.system': 'M',
   'key.system.what': 'карта системы: выбрать цель навигации',
   'key.galaxy': 'G',
