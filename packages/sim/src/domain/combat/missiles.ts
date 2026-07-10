@@ -67,14 +67,21 @@ export function stepMissiles(world: World, dt: number): void {
       continue
     }
 
-    // Разгон после схода с пилона. Рули на этом участке не работают: ракета
-    // ещё не набрала скорость, и её аэродинамика — простите, газодинамика — никакая.
-    const boosting = world.time - m.born < m.module.boostTime
-    if (boosting) {
+    const age = world.time - m.born
+
+    // Разгон тяги после схода с пилона.
+    if (age < m.module.boostTime) {
       m.speed = Math.min(m.module.speed, m.speed + (m.module.speed / m.module.boostTime) * dt)
     }
 
-    const target = boosting ? null : findTarget(world, m.targetId)
+    /**
+     * Рули включаются по `armTime`, а не по концу разгона. Пока это было одним
+     * числом, ракета летела по прямой всю секунду разгона, линия визирования за
+     * это время раскручивалась, и головка срывалась на первом же кадре наведения —
+     * от Ω, которую ракета накопила сама. Отсчёт срыва обязан начинаться тогда же,
+     * когда начинается доворот, иначе головку судят за чужую вину.
+     */
+    const target = age < m.module.armTime ? null : findTarget(world, m.targetId)
     if (target) {
       _toTarget.copy(target.state.pos).sub(m.pos)
       const distance = _toTarget.length()

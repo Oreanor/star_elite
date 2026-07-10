@@ -1,9 +1,9 @@
 import { Quaternion, Vector3 } from 'three'
 import { describe, expect, it } from 'vitest'
-import { MISSILE_PYLON } from '../../config/modules'
-import { ECM } from '../../config/weapons'
+import { MISSILE_PYLON, MODULE_CATALOGUE } from '../../config/modules'
+import { ECM, GUNNERY } from '../../config/weapons'
 import { raySphere } from '../../core/math'
-import { hardpointIndices, isLaser } from '../loadout'
+import { hardpointIndices, isLaser, isMissile } from '../loadout'
 import { createWorld, STARTER_SYSTEM } from '../world'
 import type { MissileEntity, ShipEntity, World } from '../world/entities'
 import { applyDamage, regenShield } from './damage'
@@ -354,6 +354,54 @@ describe('срыв наведения', () => {
     expect(missile.targetId).toBeNull()
     // Ослепшая ракета цель не находит: она летит прямо, пока не самоликвидируется.
     expect(player.hull + player.shield).toBe(player.spec.hull.hull + player.spec.hull.shield)
+  })
+
+  /**
+   * Регрессия. Рули включались не по `armTime`, а по концу разгона: ракета 0.55 с
+   * летела по прямой, линия визирования успевала раскрутиться, и головка,
+   * проснувшись, срывалась на ПЕРВОМ же кадре наведения — от той угловой скорости,
+   * которую ракета накопила сама, ни разу не попробовав довернуть.
+   *
+   * Замер (`scratch/missile-500.ts`): срыв наступал ровно на 0.55 с, ни разу позже,
+   * и с 400 м не попадало ничего, кроме неподвижной цели. Судим головку по Ω,
+   * которую она получила уже с работающими рулями, — иначе судим за чужую вину.
+   */
+  it('головка не срывается на первом же кадре наведения', () => {
+    const { world, enemy } = withOneEnemy()
+    const player = world.player
+    player.state.pos.set(0, 0, 0)
+    player.state.vel.set(0, 0, -80)
+    player.state.quat.copy(new Quaternion())
+
+    // Цель идёт поперёк в 500 м: худший случай для головки и обычный для игрока.
+    enemy.ai = null
+    enemy.state.pos.set(0, 0, -500)
+    enemy.state.vel.set(120, 0, 0)
+
+    expect(fireMissile(world, player, enemy.id)).toBe(true)
+    const missile = world.missiles[0]!
+
+    let closest = Infinity
+    for (let i = 0; i < 120 * 6 && missile.alive; i++) {
+      tick(world, 1 / 120)
+      enemy.state.pos.addScaledVector(enemy.state.vel, 1 / 120)
+      closest = Math.min(closest, missile.pos.distanceTo(enemy.state.pos))
+    }
+
+    expect(missile.targetId).not.toBeNull()
+    expect(closest).toBeLessThanOrEqual(GUNNERY.MISSILE_PROXIMITY + 1)
+  })
+
+  /**
+   * Головка — зеркало на кардане, планер — полтонны железа. Пока было наоборот,
+   * предел планера (`turnRate`) не мог проявиться НИ РАЗУ: головка срывалась
+   * раньше, чем ракета успевала упереться в свой доворот.
+   */
+  it('у каждой ракеты головка быстрее планера', () => {
+    for (const m of MODULE_CATALOGUE.filter(isMissile)) {
+      expect(m.seekerRate, m.name).toBeGreaterThan(m.turnRate)
+      expect(m.armTime, m.name).toBeLessThan(m.boostTime)
+    }
   })
 
   it('пока идёт разгон, ракета не наводится и медленнее маршевой', () => {
