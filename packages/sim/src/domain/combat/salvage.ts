@@ -206,6 +206,15 @@ export function tryScoop(ship: ShipEntity, pod: CargoPodEntity): CargoItem | nul
 }
 
 /**
+ * Контейнер с рудой из расколотого камня. Тот же `spawnPod`, что и у трофеев:
+ * второй способ рождать контейнеры однажды разошёлся бы с первым в мелочах —
+ * в разлёте, в сроке жизни, в наследовании скорости.
+ */
+export function spawnOrePod(world: World, pos: Vector3, vel: Vector3, units: number): void {
+  spawnPod(world, pos, vel, { kind: 'commodity', commodity: COMMODITIES.MINERALS, units })
+}
+
+/**
  * Выбросить весь груз за борт. Тем же кодом, что высыпает трюм из обломка:
  * приказ «сбрось груз» не должен рождать второй способ терять контейнеры.
  *

@@ -78,12 +78,30 @@ export function centerStick(): void {
  */
 export async function requestLock(): Promise<boolean> {
   if (!lockTarget || document.pointerLockElement === lockTarget) return true
+  // Захват без фокуса окна — как раз тот случай, когда браузер оставляет курсор
+  // прижатым к канвасу, а снять его уже нечем: событий он больше не пришлёт.
+  if (!document.hasFocus()) return false
   try {
     await lockTarget.requestPointerLock()
     return true
   } catch {
     return false
   }
+}
+
+/**
+ * Отпустить курсор. Зовётся отовсюду, где мир встаёт: пауза, карта, док, гибель.
+ *
+ * Захват — это не только события мыши. На Windows браузер на время захвата
+ * ПРИЖИМАЕТ системный курсор к прямоугольнику канваса (`ClipCursor`), и снимает
+ * прижатие, только когда захват честно закончился. Пережил захват уход фокуса
+ * или размонтирование канваса — и курсор перестаёт доезжать до краёв экрана
+ * во всём браузере, пока не переключишься в другое приложение.
+ *
+ * Поэтому захват снимается явно и в тех местах, где на браузер надеяться нельзя.
+ */
+export function releaseLock(): void {
+  if (document.pointerLockElement) document.exitPointerLock()
 }
 
 const PREVENT_DEFAULT = new Set(['Space', 'Tab', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'])
@@ -149,10 +167,28 @@ export function attachInput(canvas: HTMLCanvasElement): () => void {
 
   const onContextMenu = (e: Event) => e.preventDefault()
 
+  /**
+   * Уход фокуса и скрытие вкладки: отпускаем курсор САМИ, пока окно ещё живо.
+   *
+   * Браузер снимает захват при потере фокуса и без нас — но прижатие системного
+   * курсора при этом снимается не всегда, и мышь по всему браузеру перестаёт
+   * доезжать до краёв экрана. Отпустить захват на кадр раньше браузера — дёшево,
+   * а мир и так стоит: пауза — это отпущенный курсор.
+   */
+  const onBlur = () => {
+    release()
+    releaseLock()
+  }
+  const onVisibility = () => {
+    if (document.hidden) onBlur()
+  }
+
   window.addEventListener('keydown', onKeyDown)
   window.addEventListener('keyup', onKeyUp)
-  window.addEventListener('blur', release)
+  window.addEventListener('blur', onBlur)
+  window.addEventListener('pagehide', onBlur)
   window.addEventListener('mouseup', onMouseUp)
+  document.addEventListener('visibilitychange', onVisibility)
   document.addEventListener('pointerlockchange', onLockChange)
   canvas.addEventListener('mousemove', onMouseMove)
   canvas.addEventListener('mousedown', onMouseDown)
@@ -160,10 +196,15 @@ export function attachInput(canvas: HTMLCanvasElement): () => void {
 
   return () => {
     if (lockTarget === canvas) lockTarget = null
+    // Канвас уходит из DOM (гиперпрыжок пересобирает сцену, HMR — всё дерево).
+    // Захват, переживший свой элемент, снять уже некому.
+    if (document.pointerLockElement === canvas) document.exitPointerLock()
     window.removeEventListener('keydown', onKeyDown)
     window.removeEventListener('keyup', onKeyUp)
-    window.removeEventListener('blur', release)
+    window.removeEventListener('blur', onBlur)
+    window.removeEventListener('pagehide', onBlur)
     window.removeEventListener('mouseup', onMouseUp)
+    document.removeEventListener('visibilitychange', onVisibility)
     document.removeEventListener('pointerlockchange', onLockChange)
     canvas.removeEventListener('mousemove', onMouseMove)
     canvas.removeEventListener('mousedown', onMouseDown)

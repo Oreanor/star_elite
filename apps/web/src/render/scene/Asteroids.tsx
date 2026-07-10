@@ -1,16 +1,21 @@
 import { useFrame } from '@react-three/fiber'
-import { useMemo, useRef } from 'react'
-import { InstancedMesh, Object3D } from 'three'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { InstancedMesh, Object3D, type Texture } from 'three'
+import { ASTEROID } from '@elite/sim'
 import { useSession } from '../../app/GameContext'
 import { asteroidShapes } from '../geometry/rocks'
-import { rockMaterial } from '../materials/materials'
+import { rockMaterial, rockTexturedMaterial } from '../materials/materials'
+import { loadRockTexture } from '../materials/rockTextures'
 
 /**
- * Пояс астероидов: по одному InstancedMesh на каждую из четырёх форм.
- * 260 камней рисуются четырьмя вызовами, а не двумястами шестьюдесятью.
+ * Пояс астероидов: по одному InstancedMesh на каждую форму.
+ * Сотни камней рисуются пятью вызовами, а не сотнями.
+ *
+ * Запас на форму взят не на глаз: расколотый камень рождает до SPLIT_MAX
+ * осколков, и за долгий бой пояс распухает в разы против начальных 260.
  */
 
-const MAX_PER_SHAPE = 200
+const MAX_PER_SHAPE = 320
 const _dummy = new Object3D()
 
 function ShapeBatch({ shapeIndex }: { shapeIndex: number }) {
@@ -18,7 +23,13 @@ function ShapeBatch({ shapeIndex }: { shapeIndex: number }) {
   const ref = useRef<InstancedMesh>(null)
 
   const geometry = useMemo(() => asteroidShapes()[shapeIndex]!, [shapeIndex])
-  const material = useMemo(rockMaterial, [])
+
+  // Единственный setState за всю жизнь партии — в момент загрузки картинки.
+  // В кадре React не участвует: матрицы пишутся прямо в буфер инстансов.
+  const [map, setMap] = useState<Texture | null>(null)
+  useEffect(() => loadRockTexture(shapeIndex, setMap), [shapeIndex])
+
+  const material = map ? rockTexturedMaterial(map) : rockMaterial()
 
   useFrame(() => {
     const mesh = ref.current
@@ -47,7 +58,7 @@ function ShapeBatch({ shapeIndex }: { shapeIndex: number }) {
 export function AsteroidField() {
   return (
     <>
-      {[0, 1, 2, 3].map((i) => (
+      {Array.from({ length: ASTEROID.SHAPES }, (_, i) => (
         <ShapeBatch key={i} shapeIndex={i} />
       ))}
     </>

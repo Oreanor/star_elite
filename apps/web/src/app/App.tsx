@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { interlocutor } from '@elite/sim'
 import { GameProvider, useSession } from './GameContext'
 import { Game } from './Game'
-import { input, requestLock } from '../platform/input/input'
+import { input, releaseLock, requestLock } from '../platform/input/input'
 import { Dialogue } from '../ui/dialogue/Dialogue'
 import { GalaxyMap } from '../ui/map/GalaxyMap'
 import { SystemMap } from '../ui/map/SystemMap'
@@ -100,7 +100,7 @@ function Shell({ onRestart }: { onRestart: () => void }) {
 
       session.mapOpen = true
       setChart(wanted)
-      document.exitPointerLock() // мир замирает сам: пауза — это отпущенный курсор
+      releaseLock() // мир замирает сам: пауза — это отпущенный курсор
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)

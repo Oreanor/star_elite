@@ -5,6 +5,7 @@ import { isLaser, isMissile } from '../loadout'
 import type { MissileEntity, ShipEntity, World } from '../world/entities'
 import { applyDamage } from './damage'
 import { spawnExplosion, spawnTracer } from './effects'
+import { damageAsteroid } from './mining'
 import { castLaser } from './raycast'
 
 const _fwd = new Vector3()
@@ -64,9 +65,10 @@ export function fireLasers(world: World, e: ShipEntity, hostile: boolean): boole
       applyDamage(hit.ship, laser.damage, world.time)
       spawnExplosion(world, _hitPos, hit.ship.state.vel, 0.6)
     } else if (hit.asteroid) {
-      hit.asteroid.hull -= laser.damage
       spawnExplosion(world, _hitPos, hit.asteroid.vel, 0.4)
-      if (hit.asteroid.hull <= 0) hit.asteroid.alive = false
+      // Камень не исчезает — он раскалывается. Правило дробления живёт в одном
+      // месте, `damageAsteroid`, а не переписывается у каждого, кто может его ударить.
+      damageAsteroid(world, hit.asteroid, laser.damage)
     } else if (hit.missile) {
       // Ракета не «повреждается»: у неё нет прочности, только боевая часть.
       hit.missile.alive = false

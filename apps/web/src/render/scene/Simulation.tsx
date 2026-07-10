@@ -1,7 +1,7 @@
 import { useFrame, useThree } from '@react-three/fiber'
 import { autodockController, canEngageAutodock, cycleTarget, stepWorld } from '@elite/sim'
 import { syncControllers, useSession, type Session } from '../../app/GameContext'
-import { clearPresses, consumePress, input } from '../../platform/input/input'
+import { clearPresses, consumePress, input, releaseLock } from '../../platform/input/input'
 
 /**
  * Ведущий кадра. Монтируется ПЕРВЫМ в сцене: R3F вызывает useFrame в порядке
@@ -40,7 +40,7 @@ export function Simulation() {
     // сессия просто стоит, пока React не смонтирует новую.
     if (!world.player.alive && !session.over) {
       session.over = true
-      document.exitPointerLock()
+      releaseLock()
       session.onOver?.()
     }
     if (session.over) return
@@ -50,7 +50,7 @@ export function Simulation() {
       session.dockedShown = world.docked
       if (world.docked) {
         if (session.mode === 'autodock') setPilot(session, 'manual')
-        document.exitPointerLock()
+        releaseLock()
       }
       session.onDockChange?.(world.docked)
     }

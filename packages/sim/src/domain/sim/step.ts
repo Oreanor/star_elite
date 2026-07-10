@@ -14,6 +14,8 @@ import {
   regenEnergy,
   regenShield,
   resolveShipVsSphere,
+  scoopAsteroid,
+  shatter,
   spawnExplosion,
   spawnWreckage,
   stepMissiles,
@@ -165,8 +167,24 @@ function stepCollisions(world: World): void {
       const reach = a.radius + ship.spec.hull.radius
       if (a.pos.distanceToSquared(ship.state.pos) > reach * reach) continue
 
+      // Мелкий камень уходит в трюм — если там есть место. Тогда удара не было вовсе.
+      // Черпает только игрок: боту руда не нужна, а корёжить его о камни — нужно.
+      if (ship === world.player && scoopAsteroid(ship, a)) continue
+
       // Астероид на порядок тяжелее: он почти не сдвигается, корабль отлетает.
-      resolveShipVsSphere(ship, a.pos, a.vel, a.radius, a.radius * ASTEROID.MASS_PER_RADIUS, world.time)
+      const impact = resolveShipVsSphere(
+        ship, a.pos, a.vel, a.radius, a.radius * ASTEROID.MASS_PER_RADIUS, world.time,
+      )
+
+      /**
+       * Настоящий удар колет камень. Касание — нет.
+       *
+       * Без порога пояс рассыпался бы в пыль от одного медленного прохода:
+       * осколки рождаются вплотную к корпусу, тут же снова касаются его и колются
+       * дальше. Порог по УРОНУ, а не по скорости: он уже учитывает и массу, и
+       * угол, под которым корабль пришёл.
+       */
+      if (impact >= ASTEROID.SHATTER_DAMAGE) shatter(world, a)
     }
   }
 }
@@ -217,10 +235,8 @@ function cleanup(world: World): void {
   // Обломок держим, пока взрыв не отыграет.
   world.ships = world.ships.filter((s) => s.alive || (s.wreckAt !== null && now - s.wreckAt < DEBRIS.WRECK_LIFE))
 
-  for (const a of world.asteroids) {
-    if (!a.alive) continue
-    if (a.hull <= 0) a.alive = false
-  }
+  // Убитый камень уже раскололся в `damageAsteroid` — здесь только выметаем мёртвых.
+  // Второе место, гасящее астероид по прочности, однажды забыло бы про осколки.
   world.asteroids = world.asteroids.filter((a) => a.alive)
 
   expirePods(world)

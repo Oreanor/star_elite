@@ -53,6 +53,24 @@ export function rockMaterial(): MeshLambertMaterial {
   return rock
 }
 
+const texturedRocks = new Map<Texture, MeshLambertMaterial>()
+
+/**
+ * Камень с картой. Материал на текстуру, а не на камень: текстур пять, камней сотни.
+ *
+ * `flatShading` остаётся: гранёность — следствие восьмидесяти граней, а текстура
+ * лишь заполняет их щебнем. Покраска по вершинам выключена — она множилась бы
+ * на фотографию и топила её в темноте.
+ */
+export function rockTexturedMaterial(map: Texture): MeshLambertMaterial {
+  let material = texturedRocks.get(map)
+  if (!material) {
+    material = new MeshLambertMaterial({ map, flatShading: true })
+    texturedRocks.set(map, material)
+  }
+  return material
+}
+
 let planet: MeshLambertMaterial | null = null
 
 /**

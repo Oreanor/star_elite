@@ -3,6 +3,7 @@ export { resolveShipVsSphere } from './collision'
 export { applyDamage, healthFraction, regenShield, shieldFraction } from './damage'
 export { energyFraction, fireEcm, regenEnergy } from './ecm'
 export { spawnExplosion, spawnShockwave, spawnTracer } from './effects'
+export { damageAsteroid, oreFits, oreUnits, scoopAsteroid, shatter, splittable } from './mining'
 export { stepMissiles } from './missiles'
 export { castLaser, type LaserHit } from './raycast'
 export {
@@ -11,6 +12,7 @@ export {
   expirePods,
   jettisonCargo,
   jettisonWeapons,
+  spawnOrePod,
   scoopBlock,
   scoopReadiness,
   spawnWreckage,

@@ -1,11 +1,11 @@
 import { BufferAttribute, BufferGeometry, Color, IcosahedronGeometry, Vector3 } from 'three'
-import { makeRng } from '@elite/sim'
+import { ASTEROID, makeRng } from '@elite/sim'
 import { PALETTE } from '../config'
 
 /**
- * Астероиды: икосаэдр, продавленный шумом. Четыре формы на весь пояс —
- * все 260 камней рисуются одним InstancedMesh, поэтому форм должно быть немного,
- * а разнообразие даёт случайный поворот и масштаб.
+ * Астероиды: икосаэдр, продавленный шумом. Горстка форм на весь пояс —
+ * камни одной формы рисуются одним InstancedMesh, поэтому форм должно быть
+ * немного, а разнообразие даёт случайный поворот, масштаб и своя текстура.
  *
  * Геометрия единичного радиуса: масштабируется матрицей инстанса.
  */
@@ -63,8 +63,11 @@ function deformed(seed: number): BufferGeometry {
 
 let shapes: BufferGeometry[] | null = null
 
-/** Четыре формы, разделяемые всеми астероидами. Создаются один раз. */
+/**
+ * Формы, разделяемые всеми астероидами. Создаются один раз.
+ * Сколько их — знает домен: он же раздаёт камням `shape`.
+ */
 export function asteroidShapes(): BufferGeometry[] {
-  shapes ??= [0x1111, 0x2222, 0x3333, 0x4444].map(deformed)
+  shapes ??= Array.from({ length: ASTEROID.SHAPES }, (_, i) => deformed(0x1111 * (i + 1)))
   return shapes
 }
