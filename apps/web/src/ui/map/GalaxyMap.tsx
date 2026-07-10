@@ -542,19 +542,10 @@ function SystemPanel({
 
   return (
     <aside className="flex w-96 shrink-0 flex-col border-l p-6" style={{ borderColor: UI.DIM }}>
-      {/* Название галактики уже стоит над картой. Здесь — только то, чего там нет:
-          где ты и насколько далеко тебя увезёт привод. */}
-      <p className="text-xs tracking-widest" style={{ color: UI.DIM }}>
-        ВЫ ЗДЕСЬ: {world.systemName.toUpperCase()} · ЗАРЯД{' '}
-        {world.player.jumpCharge.toFixed(0)}/{world.player.spec.jumpRange.toFixed(0)} СВ.Г.
-      </p>
-
-      {!system ? (
-        <p className="mt-10 text-sm leading-relaxed" style={{ color: UI.DIM }}>
-          Окружность — предел гиперпривода. Что за ней, берут приводом помощнее,
-          а не терпением.
-        </p>
-      ) : (
+      {/* Ни строки «ВЫ ЗДЕСЬ», ни подсказки про окружность: где ты — видно по метке
+          на карте, а окружность достижимости говорит за себя. Плашка высокая, и
+          лишние строки срезали кнопку прыжка и закрытия по нижнему краю. */}
+      {system && (
         <SystemDetails
           // Выбор точки выхода принадлежит СИСТЕМЕ: сменил звезду — крестик снят.
           key={selected}
@@ -601,7 +592,7 @@ function SystemDetails({
   const [arrival, setArrival] = useState<Arrival | null>(null)
 
   return (
-    <div className="mt-5 flex flex-1 flex-col">
+    <div className="flex flex-1 flex-col">
       <h1 className="text-3xl leading-none tracking-[0.2em]">{system.name.toUpperCase()}</h1>
       <dl className="mt-5 space-y-1 text-sm">
         <Row label="СВЕТИЛО" value={system.companion ? `${system.star.className} · двойная` : system.star.className} />
