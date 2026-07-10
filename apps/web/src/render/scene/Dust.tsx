@@ -1,7 +1,7 @@
 import { useFrame } from '@react-three/fiber'
 import { useMemo, useRef } from 'react'
 import { BufferAttribute, BufferGeometry, LineSegments, Vector3 } from 'three'
-import { makeRng, wrapAround } from '@elite/sim'
+import { makeRng } from '@elite/sim'
 import { useSession } from '../../app/GameContext'
 import { DUST } from '../config'
 import { dustMaterial } from '../materials/materials'
@@ -17,36 +17,48 @@ import { dustMaterial } from '../materials/materials'
  * Частицы неподвижны в мире, но ОБОРАЧИВАЮТСЯ вокруг игрока: улетевшая назад
  * появляется впереди. Поэтому их всегда ровно DUST.COUNT.
  *
- * Обёртка обязана быть МОДУЛЬНОЙ, а не пошаговой: плавающее начало координат
- * телепортирует игрока на FLOATING_ORIGIN_RADIUS (4 км) разом, а вычитание одного
- * BOX (700 м) за кадр возвращало пыль только за шесть кадров. Всё это время
- * единственный источник ощущения скорости висел вне куба и дёргался по 700 м —
- * читалось как удар о невидимую стену раз в двадцать секунд.
+ * Хранятся они не в метрах, а в ДОЛЯХ куба, −0.5..0.5 от его центра.
+ *
+ * Куб растёт со скоростью (иначе штрих упирается в стенку), и это ломало
+ * мировые координаты: точки, разбросанные в кубе на семьсот метров, оставались
+ * в нём и после того, как куб раздувался до десяти километров. Пыль сваливалась
+ * плитой набок, корабль уезжал от неё, а новую границу частица пересекала лишь
+ * через десять километров пути. В долях куба такого не бывает: разброс равномерен
+ * при любом размере, а рост куба лишь чуть разносит частицы — этого не видно.
+ *
+ * Смещение считается по ИСТИННОЙ позиции (`pos + originOffset`). Плавающее начало
+ * координат телепортирует игрока на четыре километра разом, и разность локальных
+ * позиций приняла бы этот скачок за полёт: вся пыль обернулась бы в одном кадре.
  */
 
+const _true = new Vector3()
 const _delta = new Vector3()
+
+/** В долю от −0.5 до 0.5. Обёртка модульная, а не пошаговая: скачок начала координат. */
+const wrapUnit = (u: number) => u - Math.round(u)
 
 export function Dust() {
   const session = useSession()
   const ref = useRef<LineSegments>(null)
 
-  const { geometry, points } = useMemo(() => {
+  const { geometry, offsets, previous } = useMemo(() => {
     const rng = makeRng(0x9dc51)
-    const points = new Float32Array(DUST.COUNT * 3)
-    for (let i = 0; i < DUST.COUNT * 3; i++) points[i] = (rng() - 0.5) * DUST.BOX
+    const offsets = new Float32Array(DUST.COUNT * 3)
+    for (let i = 0; i < DUST.COUNT * 3; i++) offsets[i] = rng() - 0.5
 
     // Два конца на отрезок: заранее выделено, в кадре только переписывается.
     const positions = new Float32Array(DUST.COUNT * 6)
     const g = new BufferGeometry()
     g.setAttribute('position', new BufferAttribute(positions, 3))
-    return { geometry: g, points }
+    return { geometry: g, offsets, previous: { at: new Vector3(), known: false } }
   }, [])
 
   useFrame((_, dt) => {
     const mesh = ref.current
     if (!mesh) return
 
-    const player = session.world.player
+    const world = session.world
+    const player = world.player
     const origin = player.state.pos
     const velocity = player.state.vel
 
@@ -71,32 +83,41 @@ export function Dust() {
     // а не на урезанную: направление обязано остаться точным.
     const scale = speed > 1e-3 ? streak / speed : 0
 
+    // Сколько прошёл корабль в НАСТОЯЩИХ координатах, в долях куба.
+    _true.copy(origin).add(world.originOffset)
+    if (!previous.known) {
+      previous.at.copy(_true)
+      previous.known = true
+    }
+    _delta.copy(_true).sub(previous.at).divideScalar(box)
+    previous.at.copy(_true)
+
     const attribute = mesh.geometry.getAttribute('position') as BufferAttribute
     const array = attribute.array as Float32Array
 
     for (let i = 0; i < DUST.COUNT; i++) {
       const p = i * 3
 
-      // Оборачиваем частицу в куб вокруг игрока. Без этого пыль остаётся позади.
-      for (let axis = 0; axis < 3; axis++) {
-        const index = p + axis
-        points[index] = wrapAround(points[index] ?? 0, origin.getComponent(axis), box)
-      }
+      // Частица стоит в мире — уезжает корабль. Значит вычитаем его смещение.
+      const ux = wrapUnit((offsets[p] ?? 0) - _delta.x)
+      const uy = wrapUnit((offsets[p + 1] ?? 0) - _delta.y)
+      const uz = wrapUnit((offsets[p + 2] ?? 0) - _delta.z)
+      offsets[p] = ux
+      offsets[p + 1] = uy
+      offsets[p + 2] = uz
 
-      const x = points[p] ?? 0
-      const y = points[p + 1] ?? 0
-      const z = points[p + 2] ?? 0
-
-      // Хвост тянется ПРОТИВ вектора скорости — как след на длинной выдержке.
-      _delta.copy(velocity).multiplyScalar(-scale)
+      const x = origin.x + ux * box
+      const y = origin.y + uy * box
+      const z = origin.z + uz * box
 
       const o = i * 6
       array[o] = x
       array[o + 1] = y
       array[o + 2] = z
-      array[o + 3] = x + _delta.x
-      array[o + 4] = y + _delta.y
-      array[o + 5] = z + _delta.z
+      // Хвост тянется ПРОТИВ вектора скорости — как след на длинной выдержке.
+      array[o + 3] = x - velocity.x * scale
+      array[o + 4] = y - velocity.y * scale
+      array[o + 5] = z - velocity.z * scale
     }
 
     attribute.needsUpdate = true
