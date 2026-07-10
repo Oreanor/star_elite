@@ -1,5 +1,5 @@
 import { createContext, useContext, useMemo, type ReactNode } from 'react'
-import { aiController, createWorld, jump, type Controller, type World } from '@elite/sim'
+import { aiController, autodockController, createWorld, jump, type Controller, type World } from '@elite/sim'
 import { createIntent, createPlayerController, type PlayerIntent } from './control/playerController'
 
 export type PilotMode = 'manual' | 'autodock'
@@ -82,12 +82,35 @@ function createSession(): Session {
   }
 }
 
-/** Раздать контроллеры: игроку — его, всем ботам — общий, без состояния. */
+/**
+ * Раздать контроллеры: игроку — его, всем ботам — общий, без состояния.
+ *
+ * За штурвалом игрока может сидеть автопилот стыковки. Пересборка обязана его
+ * сохранить: иначе торговец, улетевший за горизонт, молча отбирал бы управление
+ * у автопилота на подходе к причалу.
+ */
 function bindControllers(session: Session): void {
   session.controllers.clear()
-  session.controllers.set(session.world.player.id, session.pilot)
+  const atTheHelm = session.mode === 'autodock' ? autodockController : session.pilot
+  session.controllers.set(session.world.player.id, atTheHelm)
   for (const ship of session.world.ships) session.controllers.set(ship.id, aiController)
 }
+
+/**
+ * Симуляция сама рождает и убирает корабли — торговцы прилетают и улетают. Пилота
+ * новичку раздаёт слой приложения: домен не знает ни про ИИ, ни про ввод (DIP),
+ * а без контроллера корабль достаётся `NULL_CONTROLLER` и молча дрейфует.
+ *
+ * Раз в кадр и почти бесплатно: сверяем размер, и только при расхождении
+ * пересобираем карту целиком. Точечная вставка оставляла бы в ней мертвецов,
+ * а карта, растущая на каждого убитого пирата, — это утечка.
+ */
+export function syncControllers(session: Session): void {
+  if (session.controllers.size === session.world.ships.length + 1) return
+  bindControllers(session)
+}
+
+
 
 /**
  * Прыжок из слоя приложения. Правила — в домене (`jump`), здесь только последствия
@@ -98,9 +121,10 @@ function bindControllers(session: Session): void {
 export function jumpTo(session: Session, index: number): boolean {
   if (!jump(session.world, index)) return false
 
-  bindControllers(session)
-  // Автопилот стыковки вёл к причалу, которого в новой системе нет.
+  // Режим сбрасываем ДО раздачи: автопилот стыковки вёл к причалу, которого
+  // в новой системе нет, а `bindControllers` сажает за штурвал того, кто в режиме.
   session.mode = 'manual'
+  bindControllers(session)
   session.onSystemChange?.(session.world.epoch)
   return true
 }

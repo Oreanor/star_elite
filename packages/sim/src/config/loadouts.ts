@@ -50,6 +50,21 @@ export function pirateLoadout(): Loadout {
   )
 }
 
+/**
+ * Мирный торговец. Трюм вместо брони, один изношенный ствол на всякий случай.
+ *
+ * Он не безоружен намеренно: беззащитная мишень, которую нельзя даже спугнуть,
+ * превращает нейтралов в декорацию. Но драться ему нечем, и это видно по железу,
+ * а не назначено правилом.
+ */
+export function traderLoadout(): Loadout {
+  return createLoadout(
+    SIDEWINDER,
+    [ENGINE_CIVILIAN, RCS_CIVILIAN, SHIELD_LIGHT, CARGO_SMALL],
+    [PULSE_LASER_WORN],
+  )
+}
+
 /** Главарь: исправные стволы и одна ракета на пилоне. С него есть что снять. */
 export function pirateLeaderLoadout(): Loadout {
   return createLoadout(

@@ -267,7 +267,7 @@ function drawTargets({ ctx, camera, world, width, height }: HudFrame): void {
     if (p.behind || !isOnScreen(p.x, p.y, width, height, 20 * S)) continue
 
     const locked = ship.id === world.lockedTargetId
-    const color = locked ? HUD_COLORS.TARGET : HUD_COLORS.DANGER
+    const color = radarColor(ship, world)
 
     // Минимум крупный: корабль в 12 м на километре занимает меньше пикселя,
     // и без рамки его физически не найти глазом.
@@ -417,8 +417,19 @@ function drawRadar({ ctx, world, width, height }: HudFrame): void {
   for (const pod of world.pods) if (pod.alive) plot(pod.pos, HUD_COLORS.WARN, Math.round(2 * S))
   for (const ship of world.ships) {
     if (!ship.alive) continue
-    plot(ship.state.pos, ship.id === world.lockedTargetId ? HUD_COLORS.TARGET : HUD_COLORS.DANGER, Math.round(4 * S))
+    plot(ship.state.pos, radarColor(ship, world), Math.round(4 * S))
   }
+}
+
+/**
+ * Цвет отметки на радаре отвечает на единственный вопрос боя: стрелять или нет.
+ * Захваченная цель — жёлтая, враг — красный, мирный — спокойный серо-голубой.
+ * Красить торговца в цвет пирата значит врать пилоту ровно в тот момент, когда
+ * он смотрит на радар, а не в окно.
+ */
+function radarColor(ship: ShipEntity, world: World): string {
+  if (ship.id === world.lockedTargetId) return HUD_COLORS.TARGET
+  return ship.faction === 'hostile' ? HUD_COLORS.DANGER : HUD_COLORS.NEUTRAL
 }
 
 function drawReadouts({ ctx, world, height }: HudFrame): void {

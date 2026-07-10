@@ -1,7 +1,7 @@
 import { Euler, Quaternion, Vector3 } from 'three'
 import { pirateLeaderLoadout, pirateLoadout, playerStartLoadout } from '../../config/loadouts'
 import { GALAXY } from '../../config/galaxy'
-import { ASTEROID, WORLD } from '../../config/world'
+import { ASTEROID, TRAFFIC, WORLD } from '../../config/world'
 import { makeRng, range, signed, type Rng } from '../../core/math'
 import { createAIState } from '../ai/types'
 import { cargoMass, createHold } from '../cargo/hold'
@@ -236,6 +236,7 @@ export function enterSystem(world: World, def: SystemDef, systemIndex: number): 
   world.shockwaves = []
   world.lockedTargetId = null
   world.navTargetId = world.bodies.find((b) => b.kind === 'station')?.id ?? null
+  world.trafficTimer = TRAFFIC.FIRST_DELAY
 
   world.docked = false
   world.dockArmed = true
@@ -290,6 +291,7 @@ export function createWorld(def: SystemDef = STARTER_SYSTEM): World {
     dockArmed: true,
     lockedTargetId: null,
     navTargetId: station?.id ?? null,
+    trafficTimer: TRAFFIC.FIRST_DELAY,
     originOffset: new Vector3(),
     originShift: new Vector3(),
     rng,

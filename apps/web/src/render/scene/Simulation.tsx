@@ -1,6 +1,6 @@
 import { useFrame, useThree } from '@react-three/fiber'
 import { autodockController, canEngageAutodock, cycleTarget, stepWorld } from '@elite/sim'
-import { useSession, type Session } from '../../app/GameContext'
+import { syncControllers, useSession, type Session } from '../../app/GameContext'
 import { clearPresses, consumePress, input } from '../../platform/input/input'
 
 /**
@@ -86,6 +86,9 @@ export function Simulation() {
 
     // Отсюда и до конца кадра мир живёт: камера может догонять, факелы — дышать.
     session.running = true
+
+    // Торговцы могли улететь, а новые — прилететь: у каждого должен быть пилот.
+    syncControllers(session)
 
     // Накопитель и фиксированный шаг — внутри stepWorld.
     stepWorld(world, dt, controllers)

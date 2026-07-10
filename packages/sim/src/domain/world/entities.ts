@@ -195,6 +195,9 @@ export interface World {
   /** Куда летим по навигации. Мост к звёздной карте. */
   navTargetId: number | null
 
+  /** Секунд до следующей попытки выпустить мирный корабль. Темп трафика — в секундах. */
+  trafficTimer: number
+
   /** Сколько мир уже сдвигали. Истинная позиция = pos + originOffset. */
   originOffset: Vector3
   /**
