@@ -90,6 +90,9 @@ function driveBarrel(ship: ShipEntity, m: Manoeuvre, dt: number): void {
   const c = ship.controls
   // Ручка крена за упором: бочка крутится резко, как форсаж маневровых.
   c.roll = m.dir * MANOEUVRE.BARREL_ROLL_STICK
+  // Маневровые СНАПАЮТ на фигурную скорость сразу, а не раскачиваются от нуля:
+  // иначе первые кадры бочки — вялый доворот, и фигура «отзывается» с задержкой.
+  if (m.angle === 0) ship.state.angVel.z = c.roll * ship.spec.tuning.ROLL_RATE
   // Угол берём из ФАКТИЧЕСКОЙ угловой скорости: раскрутка маневровых не мгновенна.
   m.angle += Math.abs(ship.state.angVel.z) * dt
 
@@ -98,7 +101,7 @@ function driveBarrel(ship: ShipEntity, m: Manoeuvre, dt: number): void {
   c.strafe = Math.cos(theta) * m.dir * MANOEUVRE.BARREL_STRAFE_STICK
   c.strafeUp = -Math.sin(theta) * m.dir * MANOEUVRE.BARREL_STRAFE_STICK
 
-  if (m.angle >= MANOEUVRE.FULL_TURN) endManoeuvre(ship, m)
+  if (m.angle >= MANOEUVRE.FULL_TURN * MANOEUVRE.BARREL_ROTATIONS) endManoeuvre(ship, m)
 }
 
 /**
@@ -124,7 +127,11 @@ export function loopThrottle(ship: ShipEntity): number {
  * с её линии.
  */
 function driveLoop(ship: ShipEntity, m: Manoeuvre, dt: number): void {
-  ship.controls.pitch = m.dir
+  // Ручка тангажа за упором: петля идёт форсажем, а не ленивым перекатом.
+  ship.controls.pitch = m.dir * MANOEUVRE.LOOP_STICK
+  // Снап на фигурную скорость сразу: тангаж — самая инертная ось, и без этого
+  // добрая секунда уходила бы на раскрутку, а петля «отзывалась» с запозданием.
+  if (m.angle === 0) ship.state.angVel.x = ship.controls.pitch * ship.spec.tuning.PITCH_RATE
   ship.controls.throttle = loopThrottle(ship)
   m.angle += Math.abs(ship.state.angVel.x) * dt
   if (m.angle >= MANOEUVRE.FULL_TURN) endManoeuvre(ship, m)
