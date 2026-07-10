@@ -21,6 +21,7 @@ import type {
 import { createIdSource, type IdSource } from './ids'
 import { maybeShiftOrigin } from './origin'
 import { stepOrbits } from './orbits'
+import { placeShowcaseTitans } from './titans'
 import type { SystemDef } from './system'
 import { STARTER_SYSTEM } from './system'
 
@@ -393,6 +394,8 @@ export function enterSystem(
   world.originShift.set(0, 0, 0)
 
   maybeShiftOrigin(world)
+  // Вернулся домой — киты-экспонаты снова на местах: дома их выставляют напоказ.
+  if (systemIndex === WORLD.HOME_INDEX && world.galaxySeed === GALAXY.SEED) placeShowcaseTitans(world)
 }
 
 export function createWorld(def: SystemDef = STARTER_SYSTEM): World {
@@ -457,5 +460,8 @@ export function createWorld(def: SystemDef = STARTER_SYSTEM): World {
   maybeShiftOrigin(world)
   // Спутники родились в центрах своих планет: место им даёт время, а не фабрика.
   stepOrbits(world)
+  // В стартовой системе выставляем напоказ по одному киту каждого облика — их
+  // можно облететь и рассмотреть, не дожидаясь редкой случайной встречи.
+  placeShowcaseTitans(world)
   return world
 }

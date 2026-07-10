@@ -74,8 +74,18 @@ describe('киты', () => {
     spawnTitan(world)
     expect(titanCount(world)).toBeGreaterThan(0)
 
-    // enterSystem чистит эфемерное, включая китов: они принадлежали той системе.
-    enterSystem(world, { ...STARTER_SYSTEM, patrols: [], belt: null }, world.systemIndex)
+    // Входим в ЧУЖУЮ систему (не домашнюю, где стоят киты-экспонаты): эфемерные
+    // киты прежней системы должны исчезнуть, а новых тут никто не выставляет.
+    enterSystem(world, { ...STARTER_SYSTEM, patrols: [], belt: null }, world.systemIndex + 1)
     expect(titanCount(world)).toBe(0)
+  })
+
+  it('в стартовой системе выставлены напоказ все облики китов', () => {
+    // Дома по одному киту каждого вида стоит напоказ — их можно облететь, не
+    // дожидаясь редкой случайной встречи. Проверяем: ровно по одному на облик.
+    const world = quiet()
+    const variants = new Set(world.titans.map((t) => t.variant))
+    expect(world.titans.length).toBe(TITAN.VARIANTS)
+    expect(variants.size).toBe(TITAN.VARIANTS)
   })
 })

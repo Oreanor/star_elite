@@ -69,6 +69,41 @@ export function spawnTitan(world: World): TitanEntity {
   return titan
 }
 
+/**
+ * Показательная тройка — по одному киту КАЖДОГО облика поодаль от старта, чтобы
+ * их можно было облететь и рассмотреть. Стоят неподвижно, носом к точке старта.
+ * Детерминированно: те же места при том же зерне, никакого rng.
+ *
+ * Расставлены веером в разные стороны и на разной дальности, чтобы не слиплись
+ * друг с другом и читались тремя силуэтами, а не одной кучей.
+ */
+export function placeShowcaseTitans(world: World): void {
+  const origin = world.player.state.pos
+  const layout = [
+    { dir: new Vector3(0.85, 0.12, 0.5), dist: TITAN.RADIUS * 3.5 },
+    { dir: new Vector3(-0.8, 0.18, 0.55), dist: TITAN.RADIUS * 4.5 },
+    { dir: new Vector3(0.05, -0.15, 1), dist: TITAN.RADIUS * 4 },
+  ]
+  for (let variant = 0; variant < TITAN.VARIANTS; variant++) {
+    const { dir, dist } = layout[variant % layout.length]!
+    const pos = origin.clone().addScaledVector(_dir.copy(dir).normalize(), dist)
+    // Носом к точке старта: игрок сразу видит их «лицо», а не корму.
+    const facing = _side.copy(origin).sub(pos).normalize()
+    const quat = new Quaternion().setFromUnitVectors(new Vector3(0, 0, -1), facing)
+    world.titans.push({
+      id: world.ids.next(),
+      kind: 'titan',
+      variant,
+      name: 'Корабль поколений',
+      pos,
+      vel: new Vector3(),
+      quat,
+      spin: TITAN.SPIN,
+      radius: TITAN.RADIUS,
+    })
+  }
+}
+
 /** Движение китов. По секундам дрейфа — за кадр, как и трафик. */
 export function stepTitans(world: World, dt: number): void {
   for (const titan of world.titans) titan.pos.addScaledVector(titan.vel, dt)
