@@ -176,6 +176,39 @@ describe('прыжок', () => {
     expect(named.map((s) => s.index)).toEqual([WORLD.HOME_INDEX])
   })
 
+  /**
+   * Ядро — не система, а ворота. Прыжок в него меняет ЗЕРНО галактики (а с ним и
+   * все 2500 систем разом), и корабль выходит у чёрной дыры уже НОВОЙ галактики.
+   * Проверяем переход, а не топливо, поэтому доливаем бак и ставим дальний привод.
+   */
+  it('прыжок в ядро уводит в другую галактику через чёрную дыру', () => {
+    const world = createWorld()
+    world.player.spec.jumpRange = 1e6
+    world.player.jumpCharge = 1e6
+    const seedBefore = world.galaxySeed
+
+    expect(jump(world, CORE_INDEX)).toBe(true)
+    expect(world.galaxySeed).not.toBe(seedBefore) // галактика сменилась целиком
+    expect(world.systemIndex).toBe(CORE_INDEX) // вышли у чёрной дыры новой галактики
+    // В новой галактике под индексом дома стоит уже не рукописный Тиррион.
+    expect(systemDefFor(WORLD.HOME_INDEX, world.galaxySeed).name).not.toBe('Тиррион')
+  })
+
+  /** Цепочка галактик детерминирована: тот же старт — то же следующее зерно. */
+  it('следующая галактика за дырой одна и та же при том же старте', () => {
+    const mk = () => {
+      const w = createWorld()
+      w.player.spec.jumpRange = 1e6
+      w.player.jumpCharge = 1e6
+      return w
+    }
+    const a = mk()
+    const b = mk()
+    jump(a, CORE_INDEX)
+    jump(b, CORE_INDEX)
+    expect(a.galaxySeed).toBe(b.galaxySeed)
+  })
+
   it('расстояние симметрично и считается по трём осям', () => {
     const world = createWorld()
     const a = placeSystem(WORLD.HOME_INDEX)

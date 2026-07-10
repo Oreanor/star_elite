@@ -67,6 +67,22 @@ export function reachableSystems(world: World, indices: readonly number[]): numb
 }
 
 /**
+ * Зерно СЛЕДУЮЩЕЙ галактики из текущего.
+ *
+ * Детерминированная перемешка, а не `Math.random`: цепочка галактик за чёрными
+ * дырами обязана быть одной и той же при том же старте — иначе ни сохранений, ни
+ * сети. `>>> 0` держит результат беззнаковым 32-битным, как и `GALAXY.SEED`.
+ */
+function nextGalaxySeed(seed: number): number {
+  // Вариант splitmix32: одного умножения и сдвигов хватает, чтобы соседние зёрна
+  // давали непохожие галактики (иначе форма и имена «плывут» слабо от галактики к галактике).
+  let x = (seed + 0x9e3779b9) >>> 0
+  x = Math.imul(x ^ (x >>> 16), 0x21f0aaad) >>> 0
+  x = Math.imul(x ^ (x >>> 15), 0x735a2d97) >>> 0
+  return (x ^ (x >>> 15)) >>> 0
+}
+
+/**
  * Прыгнуть. Возвращает false, если правила не пускают, — и мир при этом не тронут.
  * Проверка и действие обязаны быть одним решением, иначе они однажды разойдутся.
  *
@@ -78,8 +94,16 @@ export function jump(world: World, index: number, arrival: Arrival | null = null
   // Дальность считаем ДО перехода: `enterSystem` сменит `systemIndex`, и отсчёт
   // сорвётся. Заряд тратится ровно на пройденный путь — сфера сжимается на него.
   const spent = jumpDistance(world, index)
-  const def = systemDefFor(index, world.galaxySeed)
-  enterSystem(world, def, index, arrivalPoint(def, arrival))
+
+  // Прыжок В ЯДРО — не перелёт внутри галактики, а проход сквозь чёрную дыру в
+  // СЛЕДУЮЩУЮ. Достаточно сменить зерно галактики: все 2500 систем, их имена,
+  // форма диска и цены — чистые функции зерна, и меняются разом. Выходим у чёрной
+  // дыры новой галактики (её ядро) — там же, где вошли: дыра ведёт в дыру.
+  const destIndex = isCore(index) ? CORE_INDEX : index
+  if (isCore(index)) world.galaxySeed = nextGalaxySeed(world.galaxySeed)
+
+  const def = systemDefFor(destIndex, world.galaxySeed)
+  enterSystem(world, def, destIndex, arrivalPoint(def, arrival))
   world.player.jumpCharge = Math.max(0, world.player.jumpCharge - spent)
   return true
 }
