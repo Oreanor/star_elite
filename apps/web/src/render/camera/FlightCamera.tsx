@@ -18,6 +18,7 @@ import { CAMERA, RENDER } from '../config'
 
 const _target = new Vector3()
 const _offset = new Vector3()
+const _rel = new Vector3()
 const _swing = new Quaternion()
 const _twist = new Quaternion()
 const _desiredQuat = new Quaternion()
@@ -26,7 +27,6 @@ const _bombShake = new Vector3()
 const _axis = new Vector3()
 const _camRot = new Quaternion()
 
-const _identity = /* @__PURE__ */ new Quaternion()
 /** Ось крена в связанных осях. Нос смотрит в −Z, значит крутимся вокруг Z. */
 const _rollAxis = /* @__PURE__ */ new Vector3(0, 0, 1)
 
@@ -73,6 +73,13 @@ export function FlightCamera() {
   const camSwing = useRef(new Quaternion()).current
   const camTwist = useRef(new Quaternion()).current
 
+  /**
+   * Поза камеры, застывшая на входе в бочку: смещение от корабля и ориентация.
+   * Пока фигура идёт, камеру не трогаем вовсе — только возим за кораблём от этой
+   * замороженной точки. `null` — бочки нет.
+   */
+  const frozen = useRef<{ offset: Vector3; quat: Quaternion } | null>(null)
+
   useFrame((_, dt) => {
     /**
      * Мир стоит — камера не ДОГОНЯЕТ, но встать на место обязана.
@@ -102,9 +109,35 @@ export function FlightCamera() {
      * разворота хвост оказывается с другой стороны — это и есть «перебежать».
      */
     const held = !cockpit && manoeuvreHoldsCamera(session.intent)
-    // Бочка — крен без смены курса. Камера в ней не гонится ни за креном, ни за
-    // положением: она замирает за хвостом, а корабль крутится в центре кадра.
+    // Бочка — крен без смены курса. Обрабатывается особо, сразу ниже.
     const barrel = !cockpit && session.intent.manoeuvre.kind === 'barrel'
+
+    /**
+     * БОЧКА: камеру не трогаем СОВСЕМ. Раньше она разбирала кватернион корабля на
+     * крен и курс — но у полного оборота разложение вырождается (у 180° крен
+     * меняет знак), и камера ныряла за носом на пол-оборота, а потом на пол-оборота
+     * обратно. Никакой пружиной это не лечится: вырождается сам источник.
+     *
+     * Поэтому в бочке разложения нет вовсе. На первом кадре фигуры запоминаем позу
+     * камеры относительно корабля и дальше лишь возим её за кораблём: ориентация
+     * стоит намертво, корабль крутится в центре кадра. Кончилась бочка — обычное
+     * слежение подхватывает с той же позы (курс не менялся), без рывка.
+     */
+    if (barrel) {
+      const f =
+        frozen.current ??
+        (frozen.current = {
+          offset: _rel.copy(camera.position).sub(state.pos).clone(),
+          quat: camera.quaternion.clone(),
+        })
+      camera.position.copy(state.pos).add(f.offset)
+      camera.quaternion.copy(f.quat)
+      // Множитель крейсера в бочке не читаем — чтобы на выходе тряска не дёрнулась
+      // от накопившейся «скорости роста», которой на деле не было.
+      previousFactor.current = player.cruise.factor
+      return
+    }
+    frozen.current = null
 
     const offset = cockpit ? CAMERA.COCKPIT_OFFSET : CAMERA.CHASE_OFFSET
     _offset.set(offset[0], offset[1], offset[2])
@@ -130,11 +163,6 @@ export function FlightCamera() {
 
       _camRot.copy(camSwing).multiply(camTwist)
       _offset.applyQuaternion(_camRot)
-    } else if (barrel) {
-      // Смещение считаем от ЗАСТЫВШЕГО курса камеры, а не от кватерниона корабля:
-      // иначе точка съёмки проворачивается вокруг оси крена и орбитой обходит
-      // корабль — та самая «камера сходит с ума» посреди бочки.
-      _offset.applyQuaternion(camSwing)
     } else {
       _offset.applyQuaternion(state.quat)
     }
@@ -158,22 +186,17 @@ export function FlightCamera() {
        */
       swingTwist(state.quat, _rollAxis, _swing, _twist)
 
-      // В бочке крен не передаём вовсе: это фигура пилотажа, а не вираж.
-      const wantTwist = barrel ? _identity : _twist
-
       if (held) {
         // Камера стоит и ждёт. Ориентацию не трогаем совсем — только позицию,
         // которая уже посчитана от этой самой ориентации.
         camera.position.lerp(_target, 1 - Math.exp(-CAMERA.CHASE_STIFFNESS * dt))
       } else if (running) {
-        // В бочке курс камеры ЗАМИРАЕТ: он и так не меняется (бочка не поворачивает),
-        // а разложение крена у 180° вырождается и швыряет swing — отсюда рывок кадра.
-        if (!barrel) camSwing.slerp(_swing, 1 - Math.exp(-CAMERA.CHASE_ROT_STIFFNESS * dt))
-        camTwist.slerp(wantTwist, 1 - Math.exp(-CAMERA.ROLL_STIFFNESS * dt))
+        camSwing.slerp(_swing, 1 - Math.exp(-CAMERA.CHASE_ROT_STIFFNESS * dt))
+        camTwist.slerp(_twist, 1 - Math.exp(-CAMERA.ROLL_STIFFNESS * dt))
         camera.position.lerp(_target, 1 - Math.exp(-CAMERA.CHASE_STIFFNESS * dt))
       } else {
         camSwing.copy(_swing)
-        camTwist.copy(wantTwist)
+        camTwist.copy(_twist)
         camera.position.copy(_target)
       }
 

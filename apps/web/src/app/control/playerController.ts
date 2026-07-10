@@ -204,6 +204,23 @@ export function createPlayerController(intent: PlayerIntent): Controller {
       const c = ship.controls
 
       /**
+       * Опрос двойного тапа — ПЕРВЫМ делом. Он взводит окно ожидания второго
+       * нажатия, а газ и крен ниже это окно читают: пока оно открыто, клавиша
+       * молчит. Взводить его надо ДО них, иначе первый кадр нажатия проскакивал бы
+       * с открытым ещё вчерашним окном.
+       */
+      const tap = pollTap(intent, dt)
+      if (tap) beginManoeuvre(intent.manoeuvre, tap.kind, tap.dir)
+
+      /**
+       * Клавиша ещё в окне двойного нажатия — значит неясно, одиночная это команда
+       * или первая половина фигуры. Пока не решилось, непрерывное действие клавиши
+       * (газ у W/S, крен у A/D) НЕ применяем: иначе первый тап AA/DD успевал качнуть
+       * корабль, а первый тап WW/SS — сдвинуть рукоять, ещё до опознания фигуры.
+       */
+      const awaitingTap = (code: string): boolean => (intent.taps.get(code) ?? 0) > 0
+
+      /**
        * W/S двигают саму рукоять газа: выставленное ими держится, пока не сдвинешь.
        *
        * Во время фигуры — не двигают. Петля заказывается двойным нажатием W, и
@@ -212,8 +229,8 @@ export function createPlayerController(intent: PlayerIntent): Controller {
        * корабль уносился прочь на форсажном режиме, которого пилот не просил.
        */
       if (!manoeuvring(intent)) {
-        if (isHeld('KeyW')) intent.throttle += THROTTLE_RATE * dt
-        if (isHeld('KeyS')) intent.throttle -= THROTTLE_RATE * dt
+        if (isHeld('KeyW') && !awaitingTap('KeyW')) intent.throttle += THROTTLE_RATE * dt
+        if (isHeld('KeyS') && !awaitingTap('KeyS')) intent.throttle -= THROTTLE_RATE * dt
         intent.throttle = clamp(intent.throttle, 0, 1)
       }
 
@@ -245,9 +262,6 @@ export function createPlayerController(intent: PlayerIntent): Controller {
       c.pitch = input.stickY * scale
       c.yaw = input.stickX * scale
 
-      const tap = pollTap(intent, dt)
-      if (tap) beginManoeuvre(intent.manoeuvre, tap.kind, tap.dir)
-
       if (stepManoeuvre(ship, intent.manoeuvre, dt)) {
         // Петлю фигура ведёт целиком: мышь не должна спорить с ней за тангаж
         // и уводить корабль с круга рысканием. В бочке ручка остаётся у пилота —
@@ -255,7 +269,11 @@ export function createPlayerController(intent: PlayerIntent): Controller {
         if (manoeuvreHoldsCamera(intent)) c.yaw = 0
       } else {
         // A/D — единственный источник крена. Ни физика, ни ассист его не трогают.
-        c.roll = (isHeld('KeyA') ? 1 : 0) - (isHeld('KeyD') ? 1 : 0)
+        // Но пока открыто окно двойного нажатия, крен не даём: первый тап AA/DD не
+        // должен кренить корабль, пока не решится — бочка это или просто крен.
+        const bankLeft = isHeld('KeyA') && !awaitingTap('KeyA')
+        const bankRight = isHeld('KeyD') && !awaitingTap('KeyD')
+        c.roll = (bankLeft ? 1 : 0) - (bankRight ? 1 : 0)
         c.strafe = 0
         c.strafeUp = 0
       }
