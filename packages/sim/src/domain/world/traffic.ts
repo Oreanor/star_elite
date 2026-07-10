@@ -164,6 +164,25 @@ function despawnDistant(world: World): void {
   })
 }
 
+/**
+ * Насколько людно там, где сейчас корабль, 0..1.
+ *
+ * Меряется по ближайшему МИРУ — планете или причалу, но не по звезде: у звезды
+ * не живут, к ней не возят руду, и висеть возле короны в ожидании торговца
+ * незачем. Расстояние берётся до поверхности: у газового гиганта радиус
+ * семьдесят тысяч километров, и от его центра «сто тысяч» означало бы «внутри».
+ */
+function crowding(world: World): number {
+  let nearest = Infinity
+  for (const body of world.bodies) {
+    if (body.kind === 'star') continue
+    const altitude = Math.max(0, body.pos.distanceTo(world.player.state.pos) - body.radius)
+    if (altitude < nearest) nearest = altitude
+  }
+  if (!Number.isFinite(nearest)) return 1
+  return 1 / (1 + nearest / TRAFFIC.QUIET_RANGE)
+}
+
 /** Следующая попытка — со случайным разбросом, чтобы встречи не шли по метроному. */
 function rearm(world: World): void {
   world.trafficTimer = TRAFFIC.INTERVAL * (1 + signed(world.rng) * TRAFFIC.INTERVAL_JITTER)
@@ -179,8 +198,9 @@ export function stepTraffic(world: World, dt: number): ShipEntity[] {
   rearm(world)
 
   // Не всякая попытка — встреча. Пустой космос обязан оставаться пустым чаще,
-  // чем населённым, иначе корабли перестают что-либо значить.
-  if (world.rng() >= TRAFFIC.CHANCE) return []
+  // чем населённым, иначе корабли перестают что-либо значить. А вдали от миров
+  // он пустее: маршруты сходятся у планет, и встречи вместе с ними.
+  if (world.rng() >= TRAFFIC.CHANCE * crowding(world)) return []
   if (trafficCount(world) >= TRAFFIC.MAX) return []
 
   return spawnEncounter(world)
