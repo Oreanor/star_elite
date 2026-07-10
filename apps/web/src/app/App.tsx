@@ -7,6 +7,7 @@ import { Dialogue } from '../ui/dialogue/Dialogue'
 import { setLang, t, useLang, type Key, type Lang } from '../ui/i18n'
 import { GalaxyMap } from '../ui/map/GalaxyMap'
 import { SystemMap } from '../ui/map/SystemMap'
+import { ShipScreen } from '../ui/ship/ShipScreen'
 import { StationMenu } from '../ui/station/StationMenu'
 
 /**
@@ -36,7 +37,7 @@ function Shell({ onRestart }: { onRestart: () => void }) {
    */
   const [started, setStarted] = useState(false)
   /** Какая карта раскрыта. Обе ставят мир на паузу, поэтому состояние одно. */
-  const [chart, setChart] = useState<'none' | 'system' | 'galaxy' | 'talk'>('none')
+  const [chart, setChart] = useState<'none' | 'system' | 'galaxy' | 'talk' | 'ship'>('none')
 
   /**
    * Сцена строится по нажатию СТАРТ, а не при загрузке страницы.
@@ -113,7 +114,7 @@ function Shell({ onRestart }: { onRestart: () => void }) {
       if (e.repeat || over) return
 
       const wanted =
-        e.code === 'KeyM' ? 'system' : e.code === 'KeyG' ? 'galaxy' : e.code === 'KeyT' ? 'talk' : null
+        e.code === 'KeyM' ? 'system' : e.code === 'KeyG' ? 'galaxy' : e.code === 'KeyT' ? 'talk' : e.code === 'KeyI' ? 'ship' : null
       if (!wanted) return
       if (wanted !== 'galaxy' && docked) return
 
@@ -143,6 +144,8 @@ function Shell({ onRestart }: { onRestart: () => void }) {
         <StationMenu world={session.world} onUndock={() => void requestLock()} />
       ) : chart === 'system' ? (
         <SystemMap world={session.world} onClose={closeChart} />
+      ) : chart === 'ship' ? (
+        <ShipScreen world={session.world} onClose={closeChart} />
       ) : chart === 'talk' ? (
         <Dialogue onClose={closeChart} />
       ) : (
