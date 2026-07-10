@@ -6,12 +6,11 @@ import {
   BufferGeometry,
   Color,
   IcosahedronGeometry,
-  InstancedMesh,
   LineDashedMaterial,
   LineSegments,
   MeshBasicMaterial,
-  Object3D,
   PerspectiveCamera,
+  ShaderMaterial,
   SphereGeometry,
   Vector3,
 } from 'three'
@@ -31,7 +30,7 @@ import { UI } from '../theme'
 /**
  * Карта галактики.
  *
- * 2500 звёзд — один `InstancedMesh`, то есть один вызов отрисовки. Узкое место
+ * 2500 звёзд — одно облако точек, то есть один вызов отрисовки. Узкое место
  * тут никогда не GPU: телефон нарисует и сто тысяч точек. Узкое место — ПОДПИСИ,
  * поэтому имя показывается ровно одно, под курсором.
  *
@@ -46,21 +45,78 @@ import { UI } from '../theme'
 /** Световых лет в парсеке. Астрономы меряют парсеками, пилоты — годами. */
 const LY_PER_PARSEC = 3.26156
 
-/** Радиус звезды на карте, св.г. Класс задаёт размер: гигант виден гигантом. */
+/**
+ * Радиус звезды на карте, св.г. Класс задаёт размер: гигант виден гигантом.
+ *
+ * Числа маленькие намеренно. Диск — шестьдесят световых лет, среднее расстояние
+ * между соседями около трёх; звезда радиусом в световой год закрывала собой
+ * треть этого промежутка, и карта читалась как каша из шариков, а не как звёздное
+ * поле. Настоящая звезда на таком масштабе — точка, и точкой ей и место.
+ */
 function starScale(radiusUnits: number): number {
   // Радиусы классов лежат от 60 (нейтронная) до 2400 (голубой гигант) — это
   // сорок раз. Корень сжимает разброс: иначе карлики становятся невидимы.
-  return 0.22 + Math.sqrt(radiusUnits / 2400) * 0.75
+  return 0.05 + Math.sqrt(radiusUnits / 2400) * 0.18
 }
 
-const _dummy = new Object3D()
+/**
+ * Звёзды рисуются ТОЧКАМИ, а не сферами.
+ *
+ * У сферы на карте нет ни одной честной точки: её полюса, грани и терминатор
+ * ничего не значат, а стоит она двадцать треугольников. Круглый спрайт передаёт
+ * ровно то, что известно, — положение, цвет и класс, — и не притворяется, будто
+ * с шестидесяти световых лет видна форма светила.
+ *
+ * Размер задаётся в СВЕТОВЫХ ГОДАХ и уменьшается с расстоянием: `projectionMatrix[1][1]`
+ * это 1/tg(fov/2), и вместе с полувысотой окна оно переводит размер в пиксели.
+ * Постоянный `gl_PointSize` дал бы наклейки на объективе — одинаковые и вблизи,
+ * и на другом краю галактики.
+ */
+const starVertex = /* glsl */ `
+attribute float size;
+
+uniform float uHalfHeight;
+/** Наименьший размер точки, пикселей: иначе дальний край галактики исчезает. */
+uniform float uMinPixels;
+
+varying vec3 vColor;
+
+void main() {
+  vColor = color;
+  vec4 mv = modelViewMatrix * vec4(position, 1.0);
+  gl_Position = projectionMatrix * mv;
+
+  float pixels = size * projectionMatrix[1][1] * uHalfHeight / max(-mv.z, 0.001);
+  gl_PointSize = max(pixels * 2.0, uMinPixels);
+}
+`
+
+const starFragment = /* glsl */ `
+varying vec3 vColor;
+
+void main() {
+  // Круг, а не квадрат. Мягкий край: точка в один-два пикселя без него мерцает.
+  float d = length(gl_PointCoord - vec2(0.5));
+  float alpha = 1.0 - smoothstep(0.34, 0.5, d);
+  if (alpha < 0.01) discard;
+  gl_FragColor = vec4(vColor, alpha);
+}
+`
+
 const _colour = new Color()
+const _white = /* @__PURE__ */ new Color(0xffffff)
 
 interface Picked {
   system: StarSystem
   distance: number
   blocked: ReturnType<typeof jumpBlock>
 }
+
+/**
+ * Порог наведения на точку, св. годы. По самой звезде курсором не попасть:
+ * она в четверть светового года, а на экране это два пикселя.
+ */
+const HOVER_LY = 0.9
 
 function Stars({
   systems,
@@ -77,63 +133,79 @@ function Stars({
   onHover: (index: number | null) => void
   onSelect: (index: number) => void
 }) {
-  const ref = useRef<InstancedMesh>(null)
+  const { size, raycaster } = useThree()
 
-  const geometry = useMemo(() => new IcosahedronGeometry(1, 1), [])
-  const material = useMemo(() => new MeshBasicMaterial({ toneMapped: false }), [])
-
-  // Матрицы и цвета ставятся ОДИН раз: галактика не шевелится, крутится камера.
+  // Порог живёт на самом луче: три пары скобок в пропсе Canvas требовали бы
+  // задать заодно и Mesh, и Line, и Sprite — то есть переписать то, что и так верно.
   useEffect(() => {
-    const mesh = ref.current
-    if (!mesh) return
+    if (raycaster.params.Points) raycaster.params.Points.threshold = HOVER_LY
+  }, [raycaster])
+
+  const geometry = useMemo(() => {
+    const g = new BufferGeometry()
+    const positions = new Float32Array(systems.length * 3)
+    const sizes = new Float32Array(systems.length)
 
     systems.forEach((s, i) => {
-      _dummy.position.set(s.x, s.z, s.y) // экран: Y вверх, диск лежит в XZ
-      _dummy.scale.setScalar(starScale(s.star.radius))
-      _dummy.updateMatrix()
-      mesh.setMatrixAt(i, _dummy.matrix)
-      mesh.setColorAt(i, _colour.setHex(s.star.color))
+      positions[i * 3] = s.x
+      positions[i * 3 + 1] = s.z // экран: Y вверх, диск лежит в XZ
+      positions[i * 3 + 2] = s.y
+      sizes[i] = starScale(s.star.radius)
     })
-    mesh.instanceMatrix.needsUpdate = true
-    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true
 
-    /**
-     * Ограничивающая сфера считается ОДИН раз и кэшируется. Первый кадр застаёт
-     * матрицы ещё единичными — все звёзды в начале координат, — и сфера остаётся
-     * радиусом в единицу. Луч в неё не попадает, и наведение молчит на всей карте.
-     */
-    mesh.computeBoundingSphere()
+    g.setAttribute('position', new BufferAttribute(positions, 3))
+    g.setAttribute('size', new BufferAttribute(sizes, 1))
+    g.setAttribute('color', new BufferAttribute(new Float32Array(systems.length * 3), 3))
+    g.computeBoundingSphere()
+    return g
   }, [systems])
 
-  // Подсветка: достижимое горит, недостижимое тускнеет. Пересчитывается только
+  const material = useMemo(
+    () =>
+      new ShaderMaterial({
+        vertexShader: starVertex,
+        fragmentShader: starFragment,
+        uniforms: { uHalfHeight: { value: 1 }, uMinPixels: { value: 1.6 } },
+        transparent: true,
+        depthWrite: false,
+        vertexColors: true,
+        toneMapped: false,
+      }),
+    [],
+  )
+  useEffect(() => () => material.dispose(), [material])
+
+  // Пиксели на световой год зависят от высоты окна. Растянули окно — точки
+  // обязаны вырасти вместе с ним, иначе звёзды худеют при полноэкранном режиме.
+  material.uniforms.uHalfHeight!.value = size.height / 2
+
+  // Цвета: достижимое горит, недостижимое тускнеет. Пересчитываются только
   // при смене наведения или выбора — не в кадре.
   useEffect(() => {
-    const mesh = ref.current
-    if (!mesh) return
-
+    const colors = geometry.getAttribute('color') as BufferAttribute
     systems.forEach((s, i) => {
       const reachable = jumpBlock(world, i) === null
       _colour.setHex(s.star.color)
-      if (i === hovered || i === selected) _colour.lerp(_colour.clone().setHex(0xffffff), 0.6)
+      if (i === hovered || i === selected) _colour.lerp(_white, 0.6)
       else if (!reachable && i !== world.systemIndex) _colour.multiplyScalar(0.32)
-      mesh.setColorAt(i, _colour)
+      colors.setXYZ(i, _colour.r, _colour.g, _colour.b)
     })
-    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true
-  }, [systems, world, hovered, selected])
+    colors.needsUpdate = true
+  }, [geometry, systems, world, hovered, selected])
 
   return (
-    <instancedMesh
-      ref={ref}
-      args={[geometry, material, systems.length]}
+    <points
+      geometry={geometry}
+      material={material}
       frustumCulled={false}
       onPointerMove={(e) => {
         e.stopPropagation()
-        onHover(e.instanceId ?? null)
+        onHover(e.index ?? null)
       }}
       onPointerOut={() => onHover(null)}
       onClick={(e) => {
         e.stopPropagation()
-        if (e.instanceId != null) onSelect(e.instanceId)
+        if (e.index != null) onSelect(e.index)
       }}
     />
   )
@@ -150,7 +222,7 @@ function YouAreHere({ at }: { at: Vector3 }) {
     [],
   )
   // Метка не мишень: указатель обязан проходить сквозь неё к звёздам.
-  return <mesh geometry={geometry} material={material} position={at} scale={1.9} raycast={() => null} />
+  return <mesh geometry={geometry} material={material} position={at} scale={0.8} raycast={() => null} />
 }
 
 /** Сфера дальности прыжка вокруг текущей звезды. Ровно то, что достаёт привод. */
@@ -291,7 +363,10 @@ export function GalaxyMap({ onClose }: { onClose: () => void }) {
           control.current.distance = Math.max(GALAXY.RADIUS_LY * 0.12, Math.min(GALAXY.RADIUS_LY * 5, d))
         }}
       >
-        <Canvas camera={{ fov: 45, near: 0.1, far: 4000 }} gl={{ antialias: true }}>
+        <Canvas
+          camera={{ fov: 45, near: 0.1, far: 4000 }}
+          gl={{ antialias: true }}
+        >
           <OrbitCamera control={control.current} />
           <Stars
             systems={systems}
@@ -454,9 +529,25 @@ function Orrery({ system }: { system: StarSystem }) {
     )
   }
 
-  const maxOrbit = Math.max(...system.planets.map((p) => p.orbit))
-  // Внешняя орбита обязана уместиться в квадрат 160: центр в 80, значит радиус ≤ 74.
-  const scale = (orbit: number) => 12 + (Math.log10(1 + orbit) / Math.log10(1 + maxOrbit)) * 62
+  const orbits = system.planets.map((p) => p.orbit)
+  const minOrbit = Math.min(...orbits)
+  const maxOrbit = Math.max(...orbits)
+
+  /**
+   * Логарифм берётся от ОТНОШЕНИЯ орбиты к внутренней, а не от неё самой.
+   *
+   * Орбиты расходятся геометрически (6000·1.7ⁱ), поэтому в логарифме они стоят
+   * через равные промежутки — но только если отсчитывать от первой. Абсолютный
+   * логарифм делил `lg(6000) = 3.8` на `lg(245000) = 5.4`, и внутренняя планета
+   * оказывалась сразу на семидесяти процентах радиуса: все миры любой системы
+   * жались к краю, а середина схемы пустовала.
+   *
+   * Единственная планета отношения не имеет — ей отводится середина: рисовать её
+   * у самого светила было бы такой же ложью, как и на краю.
+   */
+  const span = Math.log(maxOrbit / minOrbit)
+  const scale = (orbit: number) =>
+    12 + (span > 1e-6 ? Math.log(orbit / minOrbit) / span : 0.5) * 62
 
   return (
     <svg viewBox="0 0 160 160" className="mt-6 w-full" role="img" aria-label={`Схема системы ${system.name}`}>

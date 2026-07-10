@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { interlocutor } from '@elite/sim'
 import { GameProvider, useSession } from './GameContext'
 import { Game } from './Game'
@@ -141,7 +141,7 @@ const KEYS: [string, string][] = [
   ['ПКМ', 'газ до отказа, пока держишь; отпустил — вернулся на рукоять'],
   ['A / D', 'крен. В космосе нет горизонта: корабль сам не выравнивается'],
   ['AA', 'бочка: уход вбок, сбивает наведение ракет'],
-  ['WW', 'петля: пропустить вперёд того, кто на хвосте'],
+  ['WW / SS', 'петля через верх или через низ: пропустить вперёд того, кто на хвосте'],
   ['DD', 'разворот через петлю: он на хвосте — и вот он в прицеле'],
   ['Shift', 'форсаж'],
   ['Ctrl', 'ретро-тяга'],
@@ -163,11 +163,16 @@ const KEYS: [string, string][] = [
   ['Esc', 'пауза и курсор'],
 ]
 
+/**
+ * `onPointerDown`, а не `onClick`. Клик приходит по ОТПУСКАНИЮ кнопки, и между
+ * нажатием и стартом игры лежит вся длина движения пальца вверх — кнопка кажется
+ * тугой. Захвату курсора нажатия достаточно: это тот же жест пользователя.
+ */
 function MenuButton({ children, onClick }: { children: React.ReactNode; onClick: () => void }) {
   return (
     <button
       type="button"
-      onClick={onClick}
+      onPointerDown={onClick}
       className="w-56 cursor-pointer border border-[#7fd6ff] px-8 py-3 text-base tracking-[0.3em]
                  text-[#7fd6ff] transition-colors hover:bg-[#7fd6ff] hover:text-black"
     >
@@ -192,12 +197,34 @@ function MenuButton({ children, onClick }: { children: React.ReactNode; onClick:
  * Браузер отказывает в захвате курсора около секунды после выхода из него, поэтому
  * отказ виден на самой кнопке: она сообщает, что надо подождать, а не молчит.
  */
+/** Через сколько повторять запрос захвата после отказа, мс, и сколько всего ждать. */
+const LOCK_RETRY_MS = 150
+const LOCK_GIVE_UP_MS = 3000
+
 function Paused({ resuming }: { resuming: boolean }) {
   const [denied, setDenied] = useState(false)
   const [keysShown, setKeysShown] = useState(false)
+  const timer = useRef<number | null>(null)
 
-  const take = () => {
-    void requestLock().then((ok) => setDenied(!ok))
+  // Захват получен — Paused размонтируется, и таймер обязан уйти вместе с ним.
+  useEffect(() => () => void (timer.current !== null && window.clearTimeout(timer.current)), [])
+
+  /**
+   * Браузер отказывает в захвате примерно секунду после выхода из него — защита
+   * от игр, крадущих Escape. Одного нажатия поэтому не хватало: кнопка молча
+   * съедала клик, и приходилось жать ещё раз. Теперь запрос ПОВТОРЯЕТСЯ сам,
+   * пока запрет не спадёт: нажатие обязано срабатывать с первого раза.
+   *
+   * Отсчёт до сдачи — от первого нажатия, а не от последней попытки: иначе цикл
+   * крутился бы вечно, если окно потеряло фокус (там захват не дают никогда).
+   */
+  const take = (deadline = performance.now() + LOCK_GIVE_UP_MS) => {
+    timer.current = null
+    void requestLock().then((ok) => {
+      setDenied(!ok)
+      if (ok || performance.now() >= deadline) return
+      timer.current = window.setTimeout(() => take(deadline), LOCK_RETRY_MS)
+    })
   }
 
   return (
@@ -235,7 +262,7 @@ function Paused({ resuming }: { resuming: boolean }) {
         </div>
       ) : (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-4">
-          <MenuButton onClick={take}>{denied ? 'СЕКУНДУ…' : resuming ? 'В ИГРУ' : 'СТАРТ'}</MenuButton>
+          <MenuButton onClick={() => take()}>{denied ? 'СЕКУНДУ…' : resuming ? 'В ИГРУ' : 'СТАРТ'}</MenuButton>
           <MenuButton onClick={() => setKeysShown(true)}>КЛАВИШИ</MenuButton>
         </div>
       )}

@@ -406,7 +406,7 @@ export const HYPERDRIVE_LONG: HyperdriveModule = {
   mass: 2.8,
   cost: 155000,
   salvageChance: 0.12,
-  jumpRange: 16,
+  jumpRange: 48,
 }
 
 export const HYPERDRIVE_DEEP: HyperdriveModule = {
@@ -418,7 +418,7 @@ export const HYPERDRIVE_DEEP: HyperdriveModule = {
   mass: 5.0,
   cost: 420000,
   salvageChance: 0.06,
-  jumpRange: 28,
+  jumpRange: 84,
 }
 
 // ─── Беспилотники ────────────────────────────────────────────────────────────
