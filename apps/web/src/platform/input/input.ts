@@ -69,12 +69,29 @@ export function centerStick(): void {
 }
 
 /**
- * Запросить захват курсора.
+ * Сколько ждать между настоящими обращениями к браузеру, мс.
  *
- * Браузер отказывает, если после выхода из захвата прошло меньше секунды с
- * небольшим — это защита от игр, которые перехватывают Escape. Отказ прилетает
- * отклонённым промисом, и без обработки клик просто «не срабатывал» через раз.
- * Поэтому: сообщаем о неудаче честно, а вызывающий решает, что показать.
+ * После выхода из захвата Chrome держит защитный откат около секунды — это
+ * защита от игр, перехватывающих Escape. Вызывающий об этом не знает и честно
+ * повторяет запрос каждые полтораста миллисекунд, то есть полсотни раз за откат.
+ *
+ * Такая очередь отказанных запросов и оставляет систему с прижатым курсором:
+ * `ClipCursor` уже наложен, а `pointerLockElement` пуст, и снять прижатие
+ * `exitPointerLock` больше нечем — он не видит, что снимать. Курсор перестаёт
+ * доезжать до краёв экрана во всём браузере и переживает закрытие вкладки.
+ *
+ * Поэтому обращение к браузеру дросселируется ЗДЕСЬ, а не у вызывающего:
+ * повторять он может сколько угодно, до API дойдёт один запрос за откат.
+ */
+const LOCK_COOLDOWN_MS = 1300
+
+/** Идёт ли запрос прямо сейчас. Два одновременных — верный способ получить отказ. */
+let locking = false
+let lastAttempt = -Infinity
+
+/**
+ * Запросить захват курсора. Возвращает `false` и когда браузер отказал, и когда
+ * просить ещё рано: для вызывающего это одно и то же — «попробуй позже».
  */
 export async function requestLock(): Promise<boolean> {
   // Канваса ещё нет: сцена строится. Это не успех, а «попробуй позже» — иначе
@@ -83,12 +100,24 @@ export async function requestLock(): Promise<boolean> {
   if (document.pointerLockElement === lockTarget) return true
   // Захват без фокуса окна — как раз тот случай, когда браузер оставляет курсор
   // прижатым к канвасу, а снять его уже нечем: событий он больше не пришлёт.
-  if (!document.hasFocus()) return false
+  if (!document.hasFocus() || document.hidden) return false
+
+  if (locking) return false
+  const now = performance.now()
+  if (now - lastAttempt < LOCK_COOLDOWN_MS) return false
+
+  lastAttempt = now
+  locking = true
   try {
     await lockTarget.requestPointerLock()
     return true
   } catch {
+    // Отказ мог оставить прижатие без захвата. Снимаем его на всякий случай:
+    // холостой выход ничего не стоит, а зажатый курсор стоит перезапуска браузера.
+    document.exitPointerLock()
     return false
+  } finally {
+    locking = false
   }
 }
 
@@ -234,6 +263,24 @@ export function attachInput(canvas: HTMLCanvasElement): () => void {
     else onRegainFocus()
   }
 
+  /**
+   * Отказ в захвате. Браузер о нём сообщает событием, а не только отклонённым
+   * промисом, и приходит оно в том числе на запросы, которых мы не делали
+   * (повторный клик по канвасу во время отката). Прижатие курсора при отказе
+   * остаётся — снимаем его сами, иначе оно переживёт и вкладку.
+   */
+  const onLockError = () => document.exitPointerLock()
+
+  /**
+   * Закрытие вкладки. `pagehide` браузер шлёт не всегда (и не всегда до того,
+   * как отберёт у документа право что-то менять), а прижатый системный курсор
+   * переживает закрытие: чинится только перезапуском браузера. Второй, более
+   * ранний рубеж стоит одной строки.
+   */
+  const onUnload = () => releaseLock()
+
+  window.addEventListener('beforeunload', onUnload)
+  document.addEventListener('pointerlockerror', onLockError)
   window.addEventListener('keydown', onKeyDown)
   window.addEventListener('keyup', onKeyUp)
   window.addEventListener('blur', onBlur)
@@ -251,6 +298,8 @@ export function attachInput(canvas: HTMLCanvasElement): () => void {
     // Канвас уходит из DOM (гиперпрыжок пересобирает сцену, HMR — всё дерево).
     // Захват, переживший свой элемент, снять уже некому.
     releaseLock()
+    window.removeEventListener('beforeunload', onUnload)
+    document.removeEventListener('pointerlockerror', onLockError)
     window.removeEventListener('keydown', onKeyDown)
     window.removeEventListener('keyup', onKeyUp)
     window.removeEventListener('blur', onBlur)
