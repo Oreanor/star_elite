@@ -205,6 +205,40 @@ export function tryScoop(ship: ShipEntity, pod: CargoPodEntity): CargoItem | nul
   return pod.item
 }
 
+/**
+ * Выбросить весь груз за борт. Тем же кодом, что высыпает трюм из обломка:
+ * приказ «сбрось груз» не должен рождать второй способ терять контейнеры.
+ *
+ * Пересобираем характеристики: груз имеет массу, масса — ускорения. Освободившийся
+ * трюм обязан отразиться на манёвре сразу, а не при следующей стыковке.
+ */
+export function jettisonCargo(world: World, ship: ShipEntity): number {
+  const dropped = ship.hold.items.length
+  for (const item of ship.hold.items) spawnPod(world, ship.state.pos, ship.state.vel, item)
+  ship.hold.items = []
+  if (dropped > 0) refreshSpec(ship)
+  return dropped
+}
+
+/**
+ * Снять с корабля всё вооружение и выбросить его контейнерами.
+ *
+ * Разоружённый корабль остаётся живым и летающим: это не смерть, а капитуляция.
+ * Стволов у него больше нет физически, а не «запрещено стрелять» — иначе однажды
+ * кто-нибудь снял бы запрет, и безоружный пират открыл бы огонь.
+ */
+export function jettisonWeapons(world: World, ship: ShipEntity): number {
+  let dropped = 0
+  ship.loadout.weapons = ship.loadout.weapons.map((weapon) => {
+    if (!weapon) return null
+    spawnPod(world, ship.state.pos, ship.state.vel, { kind: 'module', module: weapon })
+    dropped += 1
+    return null
+  })
+  if (dropped > 0) refreshSpec(ship)
+  return dropped
+}
+
 /** Контейнеры не живут вечно: иначе система зарастает мусором за час боёв. */
 export function expirePods(world: World): void {
   const now = world.time

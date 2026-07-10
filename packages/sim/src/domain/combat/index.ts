@@ -9,6 +9,8 @@ export {
   canScoopAt,
   clearTractorMarks,
   expirePods,
+  jettisonCargo,
+  jettisonWeapons,
   scoopBlock,
   scoopReadiness,
   spawnWreckage,

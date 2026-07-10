@@ -7,7 +7,7 @@ import { bankToward, steerToward } from '../flight/steering'
 import type { Controller } from '../sim/controller'
 import type { ShipEntity, World } from '../world/entities'
 import { breakWaypoint, leadPoint, patrolWaypoint } from './maneuvers'
-import { selectTarget } from './targeting'
+import { isHostileTo, selectTarget } from './targeting'
 import type { AIMode, AIState } from './types'
 
 /**
@@ -60,7 +60,8 @@ export const aiController: Controller = {
     // и патрулировал вечно.
     ai.thinkTimer -= dt
     const rethink = ai.thinkTimer <= 0
-    if (rethink) ai.thinkTimer = AI.THINK_INTERVAL
+    // Выучка растягивает время реакции: слабый пилот думает дольше, а не бьёт слабее.
+    if (rethink) ai.thinkTimer = AI.THINK_INTERVAL / ai.skill
 
     // ПРО решается независимо от цели: ракета летит и в патрулирующего.
     if (rethink) decideEcm(e, ai, world)
@@ -175,13 +176,50 @@ function decideMissile(ai: AIState, world: World, distance: number): void {
   ai.missileCooldown = AI.MISSILE_INTERVAL
 }
 
+/**
+ * Наёмник живёт чужой волей: он держится рядом с нанимателем и бьёт того, кого
+ * тот захватил. Своей цели он не выбирает — он ведомый, а не второй пилот.
+ *
+ * Приказ переписывается КАЖДЫЙ такт размышления, а не выдаётся однажды: наниматель
+ * меняет захват в бою, и ведомый обязан узнавать об этом со своей задержкой
+ * реакции — не мгновенно и не никогда.
+ */
+function followEscort(e: ShipEntity, world: World): void {
+  const ai = e.ai!
+  if (ai.escortOf === null) return
+
+  const patron = ai.escortOf === world.player.id ? world.player : world.ships.find((s) => s.id === ai.escortOf)
+  if (!patron?.alive) {
+    // Нанимателя больше нет. Контракт с мёртвым не исполняют.
+    ai.escortOf = null
+    ai.orderedTargetId = null
+    return
+  }
+
+  // Дом наёмника — там, где наниматель: без этого он патрулирует место найма
+  // и остаётся позади, стоило игроку тронуться с места.
+  ai.home.copy(patron.state.pos)
+
+  const wanted = patron === world.player ? world.lockedTargetId : (patron.ai?.targetId ?? null)
+  const enemy = wanted === null ? null : world.ships.find((s) => s.id === wanted)
+  // Мирного по приказу не бьют. Наёмник — не убийца по найму.
+  ai.orderedTargetId = enemy?.alive && isHostileTo(e.faction, enemy.faction) ? enemy.id : null
+}
+
 function selectAndRemember(e: ShipEntity, world: World): ShipEntity | null {
   const ai = e.ai!
+  followEscort(e, world)
+
   // Приказ отменяет выбор. Иначе в такте размышления пилот перескочил бы
   // на ближайшего врага, и автобой перестал бы драться с тем, кого захватили.
   if (ai.orderedTargetId !== null) {
     ai.targetId = ai.orderedTargetId
     return resolveTarget(e, world)
+  }
+  // Ведомый без приказа не ищет драки сам: он просто держится рядом.
+  if (ai.escortOf !== null) {
+    ai.targetId = null
+    return null
   }
   const target = selectTarget(e, world)
   ai.targetId = target?.id ?? null
@@ -247,7 +285,8 @@ function updateAimJitter(ai: AIState, world: World, distance: number, dt: number
   if (ai.aimJitterTimer > 0) return
 
   ai.aimJitterTimer = AI.AIM_JITTER_INTERVAL
-  const spread = AI.FIRE_SPREAD * distance
+  // И шире промахивается. Оба следствия — от выучки, ни одно не от урона.
+  const spread = (AI.FIRE_SPREAD * distance) / ai.skill
   const rng = world.rng
   ai.aimJitter.set(signed(rng), signed(rng), signed(rng)).multiplyScalar(spread * 0.5)
 }

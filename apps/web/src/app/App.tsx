@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
+import { interlocutor } from '@elite/sim'
 import { GameProvider, useSession } from './GameContext'
 import { Game } from './Game'
 import { input, requestLock } from '../platform/input/input'
+import { Dialogue } from '../ui/dialogue/Dialogue'
 import { GalaxyMap } from '../ui/map/GalaxyMap'
 import { SystemMap } from '../ui/map/SystemMap'
 import { StationMenu } from '../ui/station/StationMenu'
@@ -28,7 +30,7 @@ function Shell({ onRestart }: { onRestart: () => void }) {
   const [over, setOver] = useState(false)
   const [docked, setDocked] = useState(false)
   /** Какая карта раскрыта. Обе ставят мир на паузу, поэтому состояние одно. */
-  const [chart, setChart] = useState<'none' | 'system' | 'galaxy'>('none')
+  const [chart, setChart] = useState<'none' | 'system' | 'galaxy' | 'talk'>('none')
 
   /**
    * Захват курсора браузер снимает не только по `pointerlockchange`: уход фокуса
@@ -66,32 +68,43 @@ function Shell({ onRestart }: { onRestart: () => void }) {
   }, [session])
 
   /**
-   * Карты переключаются ЗДЕСЬ, а не в кадре симуляции: открыть карту — значит
-   * отпустить курсор, а без курсора кадр до чтения клавиш не доходит (пауза).
-   * Тумблер, живущий внутри того, что он останавливает, закрыть себя не сможет.
+   * Оверлеи переключаются ЗДЕСЬ, а не в кадре симуляции: раскрыть карту или
+   * канал связи — значит отпустить курсор, а без курсора кадр до чтения клавиш
+   * не доходит (пауза). Тумблер, живущий внутри того, что он останавливает,
+   * закрыть себя не сможет.
+   *
+   * Раскрыт всегда РОВНО ОДИН оверлей, поэтому состояние одно: два флага паузы
+   * однажды разойдутся, и мир останется стоять под закрытым окном.
    *
    * Карта галактики открывается и в доке: прыгать из дока нельзя, но выбрать,
    * куда лететь после отчаливания, — можно и нужно.
+   *
+   * С кем можно говорить, решает домен (`interlocutor`): захваченный, живой и
+   * в пределах слышимости. Клавише этого правила знать не положено.
    */
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.repeat || over) return
 
-      const wanted = e.code === 'KeyM' ? 'system' : e.code === 'KeyG' ? 'galaxy' : null
+      const wanted =
+        e.code === 'KeyM' ? 'system' : e.code === 'KeyG' ? 'galaxy' : e.code === 'KeyT' ? 'talk' : null
       if (!wanted) return
-      if (wanted === 'system' && docked) return
+      if (wanted !== 'galaxy' && docked) return
 
+      // Та же клавиша закрывает своё окно и молчит под чужим.
       if (session.mapOpen) {
-        closeChart()
-      } else {
-        session.mapOpen = true
-        setChart(wanted)
-        document.exitPointerLock() // мир замирает сам: пауза — это отпущенный курсор
+        if (chart === wanted) closeChart()
+        return
       }
+      if (wanted === 'talk' && !interlocutor(session.world)) return
+
+      session.mapOpen = true
+      setChart(wanted)
+      document.exitPointerLock() // мир замирает сам: пауза — это отпущенный курсор
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [session, closeChart, over, docked])
+  }, [session, closeChart, over, docked, chart])
 
   return (
     <div className="relative h-screen w-screen overflow-hidden bg-black">
@@ -104,6 +117,8 @@ function Shell({ onRestart }: { onRestart: () => void }) {
         <StationMenu world={session.world} onUndock={() => void requestLock()} />
       ) : chart === 'system' ? (
         <SystemMap world={session.world} onClose={closeChart} />
+      ) : chart === 'talk' ? (
+        <Dialogue onClose={closeChart} />
       ) : (
         !locked && <Paused />
       )}
@@ -125,6 +140,7 @@ const KEYS: [string, string][] = [
   ['P', 'автобой: пилот дерётся с захваченной целью (повторно — снять)'],
   ['M', 'карта системы: выбрать цель навигации'],
   ['G', 'карта галактики: гиперпрыжок к другой звезде'],
+  ['T', 'связь с захваченным кораблём: требовать, просить, нанять'],
   ['R', 'ракета с пилона по захваченной цели'],
   ['E', 'ПРО: подорвать ближайшую чужую ракету'],
   ['B', 'энергобомба: жжёт врагов вокруг. Копится поверх целого щита'],
