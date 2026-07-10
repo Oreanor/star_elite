@@ -2,20 +2,26 @@ import type { BufferGeometry } from 'three'
 import { buildGeometry, quad, symmetric, tri, type Triangle, type Vec3 } from './build'
 
 /**
- * Корабли поколений — киты. Города в километры длиной, поэтому и геометрия
- * «наворочённая, но простая»: много коробок и призм, собранных в силуэт, а не
- * гладких форм. Плоский шейдинг делает из этого гранёный мегаполис почти даром.
+ * Корабли поколений — киты. Города-крейсеры в километры длиной: вытянутый корпус
+ * с ЗАОСТРЁННЫМ носом, центральная надстройка-рубка, а поверх — навешанная мелочь:
+ * блоки-секции, антенны, плоские солнечные панели. Геометрия «наворочённая, но
+ * простая»: много коробок и призм, собранных в силуэт. Плоский шейдинг делает из
+ * этого гранёный мегаполис почти даром.
  *
  * Всё строится в ЕДИНИЧНОМ масштабе (габарит порядка 1), настоящий размер задаёт
- * множитель меша. Три облика — три функции; новый вид это новая функция и строка
- * в таблице, а не ветка в существующей.
+ * множитель меша. Нос смотрит в +Z, корма с дюзами — в −Z.
+ *
+ * Три облика — три функции; новый вид это новая функция и строка в таблице, а не
+ * ветка в существующей.
  */
 
-// Палитра: корпус — холодный металл трёх оттенков, окна и дюзы — тёплый акцент.
+// Палитра: корпус — холодный металл трёх оттенков, панели и днище темнее,
+// окна и дюзы — тёплый и голубой акценты, солнечные крылья — синеватые.
 const HULL_DARK = 0x3b414c
 const HULL = 0x565d68
 const HULL_LIGHT = 0x767d88
 const PANEL = 0x2b3038
+const SOLAR = 0x263a5c
 const WINDOW = 0xffcf8a
 const GLOW = 0x86c8ff
 
@@ -61,7 +67,55 @@ function prism(sides: number, r: number, z0: number, z1: number, side: number, c
   return out
 }
 
-/** Ряд «окон» — узкие светящиеся коробочки вдоль Z по обоим бортам. */
+/** Сдвиг набора треугольников. Чистый перенос обход не переворачивает. */
+function translate(tris: Triangle[], dx: number, dy: number, dz: number): Triangle[] {
+  const m = (v: Vec3): Vec3 => [v[0] + dx, v[1] + dy, v[2] + dz]
+  return tris.map((t) => tri(m(t.a), m(t.b), m(t.c), t.color))
+}
+
+/**
+ * Заострённый нос: короб сечения (hx,hy) на zBase сходится к короткому
+ * ВЕРТИКАЛЬНОМУ ребру (полувысотой tipHy) на zTip. Клин острый в плане и тупой в
+ * профиль — так нос читается заострённым, оставаясь корпусом крейсера, а не иглой.
+ */
+function prow(zBase: number, zTip: number, hx: number, hy: number, tipHy: number, color: number): Triangle[] {
+  const b0: Vec3 = [-hx, -hy, zBase]
+  const b1: Vec3 = [hx, -hy, zBase]
+  const b2: Vec3 = [hx, hy, zBase]
+  const b3: Vec3 = [-hx, hy, zBase]
+  const tTop: Vec3 = [0, tipHy, zTip]
+  const tBot: Vec3 = [0, -tipHy, zTip]
+  return [
+    tri(b0, b1, tBot, color), // низ сходится к нижней точке ребра
+    tri(b2, b3, tTop, color), // верх — к верхней
+    ...quad(b1, b2, tTop, tBot, color), // +x борт
+    ...quad(b3, b0, tBot, tTop, color), // −x борт
+    ...quad(b0, b3, b2, b1, color), // задняя крышка (внутрь корпуса)
+  ]
+}
+
+/** Тонкая антенна-мачта вдоль +Y с блочком-обтекателем на конце. */
+function antenna(x: number, yBase: number, z: number, h: number): Triangle[] {
+  return [
+    ...box([x, yBase + h / 2, z], [0.005, h / 2, 0.005], HULL_LIGHT),
+    ...box([x, yBase + h, z], [0.018, 0.018, 0.018], HULL),
+  ]
+}
+
+/**
+ * Солнечное крыло на правый борт: штанга от x0 наружу и плоская панель за ней.
+ * Тонкая по Y — плита, а не брус. Через `symmetric` получаем и левое.
+ */
+function solarWing(x0: number, z: number, span: number, chord: number): Triangle[] {
+  const armEnd = x0 + 0.1
+  return [
+    ...box([x0 + 0.05, 0, z], [0.05, 0.006, 0.008], HULL_LIGHT), // штанга
+    ...box([armEnd + span / 2, 0, z], [span / 2, 0.004, chord / 2], SOLAR), // панель
+    ...box([armEnd + span / 2, 0, z], [span / 2, 0.006, 0.006], HULL_DARK), // продольная жилка
+  ]
+}
+
+/** Ряд «окон» — узкие светящиеся коробочки вдоль Z по борту. */
 function windowStrip(x: number, y: number, z0: number, z1: number, count: number): Triangle[] {
   const out: Triangle[] = []
   for (let i = 0; i < count; i++) {
@@ -71,90 +125,122 @@ function windowStrip(x: number, y: number, z0: number, z1: number, count: number
   return out
 }
 
-/** Облик 0: цилиндр О'Нила — восьмигранная труба с обручами и осевой антенной. */
-function cylinderColony(): Triangle[] {
+/** Четыре дюзы с голубым свечением на корме заданного блока. */
+function nozzles(z: number, spread: number, r: number): Triangle[] {
   const out: Triangle[] = []
-  // Корпус.
-  out.push(...prism(8, 0.3, -1, 1, HULL, HULL_DARK))
-  // Три обруча-ребра: чуть шире корпуса, тонкие.
-  for (const z of [-0.55, 0, 0.55]) out.push(...prism(8, 0.34, z - 0.03, z + 0.03, HULL_LIGHT, HULL_LIGHT))
-  // Носовой и кормовой узлы.
-  out.push(...prism(8, 0.16, 1, 1.18, HULL_LIGHT, HULL_DARK))
-  out.push(...prism(8, 0.2, -1.14, -1, PANEL, HULL_DARK))
-  // Осевая мачта с блоком связи.
-  out.push(...box([0, 0, 1.18], [0.01, 0.01, 0.14], HULL_LIGHT))
-  out.push(...box([0, 0, 1.34], [0.05, 0.05, 0.04], HULL))
-  // Пояса окон вдоль верхней и нижней грани.
-  out.push(...windowStrip(0, 0.3, -0.9, 0.9, 26))
-  out.push(...windowStrip(0, -0.3, -0.9, 0.9, 26))
-  return out
-}
-
-/** Облик 1: хребет-ковчег — центральная балка с блоками жилья и радиаторами. */
-function spineArk(): Triangle[] {
-  const out: Triangle[] = []
-  // Хребет.
-  out.push(...box([0, 0, 0], [0.06, 0.08, 1], HULL))
-  // Командный узел спереди — ступенчатый.
-  out.push(...box([0, 0, 1.02], [0.14, 0.12, 0.12], HULL_LIGHT))
-  out.push(...box([0, 0.14, 1.02], [0.08, 0.05, 0.08], HULL))
-  // Блоки жилья гроздьями по бортам — симметрично, разной длины.
-  const blocks: Triangle[] = []
-  for (let i = 0; i < 5; i++) {
-    const z = 0.6 - i * 0.32
-    const len = 0.1 + (i % 2) * 0.05
-    blocks.push(...box([0.18, 0, z], [0.12, 0.16, len], i % 2 ? HULL_LIGHT : HULL))
-    blocks.push(...box([0.32, 0, z], [0.03, 0.05, 0.05], WINDOW)) // фонарь на торце
+  for (const x of [-spread, spread]) {
+    for (const y of [-spread * 0.7, spread * 0.7]) {
+      out.push(...translate(prism(6, r, z - 0.06, z, PANEL, GLOW), x, y, 0))
+    }
   }
-  out.push(...symmetric(blocks))
-  // Радиаторные плавники у кормы — плоские крылья.
-  const fins: Triangle[] = []
-  for (const s of [-1, 1]) fins.push(...box([0, s * 0.34, -0.8], [0.005, 0.26, 0.22], PANEL))
-  out.push(...fins)
-  // Дюзовый блок сзади.
-  out.push(...box([0, 0, -1.06], [0.1, 0.1, 0.08], HULL_DARK))
-  out.push(...box([0, 0, -1.16], [0.05, 0.05, 0.03], GLOW))
-  return out
-}
-
-/** Облик 2: город-плита — широкое основание с башнями-зиккуратами и куполами. */
-function cityPlate(): Triangle[] {
-  const out: Triangle[] = []
-  // Плита-основание.
-  out.push(...box([0, 0, 0], [0.5, 0.06, 1], HULL_DARK))
-  out.push(...box([0, -0.1, 0], [0.4, 0.06, 0.85], PANEL)) // подбрюшье-ферма
-  // Ряды башен-зиккуратов на верхней палубе.
-  const towers: Triangle[] = []
-  const spots: Array<[number, number]> = [
-    [0.2, 0.55], [0.28, 0.05], [0.18, -0.5], [0.34, -0.72], [0.1, 0.78],
-  ]
-  for (const [x, z] of spots) {
-    towers.push(...box([x, 0.12, z], [0.09, 0.06, 0.09], HULL))
-    towers.push(...box([x, 0.22, z], [0.05, 0.06, 0.05], HULL_LIGHT))
-    towers.push(...box([x, 0.3, z], [0.02, 0.05, 0.02], WINDOW))
-  }
-  out.push(...symmetric(towers))
-  // Пара осевых куполов — низкие восьмигранники.
-  for (const z of [0.4, -0.3]) {
-    out.push(...prism(8, 0.16, 0.06, 0.2, HULL_LIGHT, HULL_LIGHT).map((t) => rotateXToZ(t, z)))
-  }
-  // Огни по кромке плиты.
-  out.push(...windowStrip(0.5, 0.02, -0.9, 0.9, 22))
-  out.push(...windowStrip(-0.5, 0.02, -0.9, 0.9, 22))
   return out
 }
 
 /**
- * Купол строится призмой вдоль Z; чтобы поставить его «шапкой» вверх на палубу,
- * меняем оси: локальная Z призмы становится мировой Y, а место — по (0,·,z).
+ * Облик 0: линейный крейсер. Вытянутый корпус с острым носом, ступенчатая рубка
+ * ближе к корме, ряды бортовых секций-модулей, дюзовый блок и антенны.
  */
-function rotateXToZ(t: Triangle, atZ: number): Triangle {
-  const map = (v: Vec3): Vec3 => [v[0], v[2], v[1] + atZ]
-  // Смена местами осей переворачивает обход — восстанавливаем, меняя b и c.
-  return tri(map(t.a), map(t.c), map(t.b), t.color)
+function battleCruiser(): Triangle[] {
+  const out: Triangle[] = []
+  // Основной корпус и киль.
+  out.push(...box([0, 0, -0.05], [0.16, 0.13, 0.85], HULL))
+  out.push(...box([0, -0.15, -0.1], [0.1, 0.05, 0.62], HULL_DARK))
+  // Острый нос.
+  out.push(...prow(0.8, 1.25, 0.16, 0.13, 0.03, HULL_LIGHT))
+  // Кормовой блок с дюзами.
+  out.push(...box([0, 0, -0.92], [0.15, 0.12, 0.1], HULL_DARK))
+  out.push(...nozzles(-0.98, 0.07, 0.04))
+  // Надстройка-рубка: ступенчатые блоки к корме на верхней палубе.
+  out.push(...box([0, 0.15, -0.35], [0.1, 0.05, 0.28], HULL_LIGHT))
+  out.push(...box([0, 0.24, -0.42], [0.07, 0.05, 0.16], HULL))
+  out.push(...box([0, 0.32, -0.46], [0.04, 0.045, 0.09], HULL_LIGHT))
+  out.push(...box([0, 0.38, -0.46], [0.025, 0.03, 0.03], WINDOW)) // фонарь мостика
+  // Бортовые секции-модули чередующихся оттенков.
+  const flank: Triangle[] = []
+  for (let i = 0; i < 5; i++) {
+    const z = 0.5 - i * 0.28
+    flank.push(...box([0.17, 0.02, z], [0.03, 0.05, 0.09], i % 2 ? HULL_LIGHT : HULL_DARK))
+  }
+  out.push(...symmetric(flank))
+  // Солнечные крылья у миделя и антенны на палубе.
+  out.push(...symmetric(solarWing(0.16, 0.15, 0.28, 0.5)))
+  out.push(...antenna(0.05, 0.2, 0.15, 0.18))
+  out.push(...antenna(-0.06, 0.2, -0.15, 0.14))
+  // Пояса окон по бортам.
+  out.push(...windowStrip(0.161, 0.03, -0.68, 0.7, 20))
+  out.push(...windowStrip(-0.161, 0.03, -0.68, 0.7, 20))
+  return out
 }
 
-const BUILDERS = [cylinderColony, spineArk, cityPlate]
+/**
+ * Облик 1: ковчег-хребет. Центральная балка с острым командным носом, высокая
+ * башня-рубка, гроздья жилых блоков по бортам, солнечные крылья и радиаторы.
+ */
+function spineArk(): Triangle[] {
+  const out: Triangle[] = []
+  // Хребет и нос.
+  out.push(...box([0, 0, -0.05], [0.06, 0.08, 0.92], HULL))
+  out.push(...prow(0.85, 1.2, 0.06, 0.08, 0.02, HULL_LIGHT))
+  // Командная башня — ступенчатая, с фонарём.
+  out.push(...box([0, 0.16, 0.5], [0.07, 0.1, 0.09], HULL_LIGHT))
+  out.push(...box([0, 0.3, 0.5], [0.04, 0.07, 0.04], HULL))
+  out.push(...box([0, 0.4, 0.5], [0.02, 0.04, 0.02], WINDOW))
+  out.push(...antenna(0, 0.44, 0.5, 0.14))
+  // Жилые блоки гроздьями по бортам — симметрично, разной длины.
+  const blocks: Triangle[] = []
+  for (let i = 0; i < 5; i++) {
+    const z = 0.55 - i * 0.3
+    const len = 0.09 + (i % 2) * 0.04
+    blocks.push(...box([0.16, 0, z], [0.1, 0.14, len], i % 2 ? HULL_LIGHT : HULL))
+    blocks.push(...box([0.28, 0, z], [0.02, 0.04, 0.04], WINDOW)) // фонарь на торце
+  }
+  out.push(...symmetric(blocks))
+  // Солнечные крылья и радиаторные плавники у кормы.
+  out.push(...symmetric(solarWing(0.06, 0.2, 0.34, 0.55)))
+  const fins: Triangle[] = []
+  for (const s of [-1, 1]) fins.push(...box([0, s * 0.3, -0.8], [0.005, 0.22, 0.2], PANEL))
+  out.push(...fins)
+  // Дюзовый блок сзади.
+  out.push(...box([0, 0, -1.02], [0.1, 0.1, 0.08], HULL_DARK))
+  out.push(...box([0, 0, -1.12], [0.05, 0.05, 0.03], GLOW))
+  return out
+}
+
+/**
+ * Облик 2: готический лайнер. Широкий корпус-плита, центральная мачта-шпиль и ряд
+ * башен вдоль палубы, крупные солнечные панели по бортам, россыпь окон.
+ */
+function gothicLiner(): Triangle[] {
+  const out: Triangle[] = []
+  // Корпус-плита и подбрюшье.
+  out.push(...box([0, 0, 0], [0.2, 0.09, 0.95], HULL_DARK))
+  out.push(...box([0, -0.11, 0], [0.14, 0.05, 0.8], PANEL))
+  // Тупой, но заострённый нос.
+  out.push(...prow(0.9, 1.15, 0.2, 0.09, 0.04, HULL))
+  // Центральная мачта-шпиль.
+  out.push(...box([0, 0.12, 0.05], [0.05, 0.11, 0.06], HULL_LIGHT))
+  out.push(...box([0, 0.27, 0.05], [0.025, 0.15, 0.03], HULL))
+  out.push(...box([0, 0.45, 0.05], [0.012, 0.09, 0.012], HULL_LIGHT))
+  // Ряд башен вдоль палубы — симметрично по бортам.
+  const spires: Triangle[] = []
+  for (const [x, z, h] of [[0.09, 0.5, 0.18], [0.12, -0.2, 0.24], [0.1, -0.62, 0.16], [0.06, 0.78, 0.12]] as const) {
+    spires.push(...box([x, 0.09 + h / 2, z], [0.03, h / 2, 0.03], HULL))
+    spires.push(...box([x, 0.09 + h, z], [0.012, 0.03, 0.012], WINDOW))
+  }
+  out.push(...symmetric(spires))
+  // Крупные солнечные панели по бортам.
+  out.push(...symmetric(solarWing(0.2, 0.4, 0.3, 0.6)))
+  out.push(...symmetric(solarWing(0.2, -0.5, 0.26, 0.5)))
+  // Дюзы.
+  out.push(...box([0, 0, -1.0], [0.16, 0.08, 0.06], HULL_DARK))
+  out.push(...nozzles(-1.0, 0.08, 0.045))
+  // Россыпь окон по бортам плиты.
+  out.push(...windowStrip(0.2, 0.02, -0.8, 0.85, 30))
+  out.push(...windowStrip(-0.2, 0.02, -0.8, 0.85, 30))
+  return out
+}
+
+const BUILDERS = [battleCruiser, spineArk, gothicLiner]
 
 const cache = new Map<number, BufferGeometry>()
 
