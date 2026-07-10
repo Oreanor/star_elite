@@ -580,7 +580,7 @@ function SystemDetails({
     <div className="mt-5 flex flex-1 flex-col">
       <h1 className="text-3xl leading-none tracking-[0.2em]">{system.name.toUpperCase()}</h1>
       <dl className="mt-5 space-y-1 text-sm">
-        <Row label="СВЕТИЛО" value={system.star.className} />
+        <Row label="СВЕТИЛО" value={system.companion ? `${system.star.className} · двойная` : system.star.className} />
         <Row label="РАССТОЯНИЕ" value={formatRange(distance)} />
         <Row label="ПЛАНЕТ" value={String(system.planets.length)} />
         <Row label="ОХРАНА" value={system.security} />
@@ -757,6 +757,15 @@ function Orrery({
       <circle cx={ORRERY_CENTRE} cy={ORRERY_CENTRE} r={(inner + outer) / 2}
         fill="none" stroke={UI.PRIMARY} strokeWidth={outer - inner} opacity="0.05" />
 
+      {/*
+        Двойная. Разнос пары — миллионы километров против миллиардов до планет:
+        в масштабе схемы они слились бы в одну точку. Поэтому спутник отрисован
+        условно рядом с главной — не по орбите, а как знак «здесь два солнца».
+      */}
+      {def.companion && (
+        <circle cx={ORRERY_CENTRE + 5} cy={ORRERY_CENTRE - 4} r="3.4"
+          fill={`#${def.companion.color.toString(16).padStart(6, '0')}`} />
+      )}
       <circle cx={ORRERY_CENTRE} cy={ORRERY_CENTRE} r="6" fill={`#${def.star.color.toString(16).padStart(6, '0')}`} />
       {plotted.map((p) => (
         <g key={p.name}>

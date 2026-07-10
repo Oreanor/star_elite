@@ -110,6 +110,29 @@ function makeMoons(rng: Rng, planet: string, type: PlanetType): Moon[] {
   })
 }
 
+/**
+ * Вторая звезда пары — или её отсутствие.
+ *
+ * Каждая четвёртая система двойная: настоящая доля у солнцеподобных выше, около
+ * половины, но галактика, где двойных больше, чем одиночек, читается как ошибка
+ * генератора. Спутник ТОГО ЖЕ класса — пары рождаются из одного облака и стареют
+ * вместе, оттого цвет, светимость и способность отдать топливо у них общие.
+ * Размер сопоставимый, но не равный: близнецы до пикселя выглядели бы штампом.
+ *
+ * Чёрная дыра пары не заводит: у неё и планет-то нет, это дверь, а не звезда.
+ */
+const BINARY_CHANCE = 0.25
+
+function makeCompanion(rng: Rng, primary: Star): Star | null {
+  if (!primary.scoopable && primary.class === 'H') return null
+  if (rng() >= BINARY_CHANCE) return null
+  return {
+    ...primary,
+    // От 55% до 95% главной: явно меньше, но одного с ней порядка.
+    radius: Math.round(primary.radius * (0.55 + rng() * 0.4)),
+  }
+}
+
 /** Описание расы собирается из частей: «Крупные зелёные чешуйчатые ящеры». */
 function makeSpecies(rng: Rng): string {
   // Больше половины галактики колонизировано людьми — иначе экзотика перестаёт быть экзотикой.
@@ -258,7 +281,7 @@ export function generateSystem(index: number, seed: number = GALAXY.SEED): StarS
   // Центр галактики. Чёрная дыра не звезда: у неё нет ни планет, ни закона,
   // ни имени по общему словарю — это дверь, а не место жительства.
   if (index === CORE_INDEX) {
-    return { index, name: 'Ядро', x, y, z, star: BLACK_HOLE, planets: [], security: SECURITY_LEVELS[0] }
+    return { index, name: 'Ядро', x, y, z, star: BLACK_HOLE, companion: null, planets: [], security: SECURITY_LEVELS[0] }
   }
 
   // Родная система задана руками — но только в СВОЕЙ галактике. В любой другой
@@ -267,12 +290,15 @@ export function generateSystem(index: number, seed: number = GALAXY.SEED): StarS
 
   const name = systemName(rng)
   const star = makeStar(rng)
+  // Спутник бросается СРАЗУ после главной звезды: порядок бросков — часть зерна,
+  // и вставить его позже значило бы сдвинуть все последующие свойства системы.
+  const companion = makeCompanion(rng, star)
 
   const habitable = rng() < habitationChance(star.scoopable, star.class)
   const planets = makePlanets(rng, name, habitable)
 
   // Охрану пространства наводит тот, у кого флот, — самый населённый мир.
-  const draft: StarSystem = { index, name, x, y, z, star, planets, security: SECURITY_LEVELS[0] }
+  const draft: StarSystem = { index, name, x, y, z, star, companion, planets, security: SECURITY_LEVELS[0] }
   const capital = capitalOf(draft)
   const security = capital
     ? securityFor(rng, GOVERNMENTS.indexOf(capital.settlement.government))

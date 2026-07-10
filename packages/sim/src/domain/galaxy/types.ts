@@ -87,6 +87,13 @@ export interface StarSystem {
   readonly z: number
 
   readonly star: Star
+  /**
+   * Вторая звезда двойной, или `null` у одиночной. Того же класса, что главная,
+   * и сопоставимого размера: настоящие пары обычно ровесники из одного облака,
+   * оттого и цвет у них общий. Позиции нет — обе кружат вокруг барицентра, и
+   * место каждой даёт время.
+   */
+  readonly companion: Star | null
   readonly planets: readonly Planet[]
 
   /**

@@ -1,5 +1,5 @@
 import { Vector3 } from 'three'
-import type { BodyEntity, World } from './entities'
+import type { OrbitDef, World } from './entities'
 
 /**
  * Обращение спутников.
@@ -13,19 +13,25 @@ import type { BodyEntity, World } from './entities'
  * Планеты вокруг звезды не обращаются, и это осознанно: год у настоящей планеты
  * длится годы, а перелёт занимает минуты. Двигать её на угловую секунду за партию
  * значило бы платить за то, чего никто не увидит.
+ *
+ * Звёзды двойной — обращаются: их период выводится из массы и выходит в дни, так
+ * же незаметный за партию. Но пару можно ОБЛЕТЕТЬ, увидев два солнца с разных
+ * сторон, и ради этого движение честное, а не назначенное.
  */
 
 const _radial = /* @__PURE__ */ new Vector3()
 const _out = /* @__PURE__ */ new Vector3()
+const _bary = /* @__PURE__ */ new Vector3()
 
 /**
- * Точка на наклонной круговой орбите. Наклон берётся вокруг оси X: орбита при
- * нулевом наклоне лежит в плоскости XZ — там же, где эклиптика системы.
+ * Точка на наклонной круговой орбите вокруг `parentPos`. Наклон берётся вокруг
+ * оси X: орбита при нулевом наклоне лежит в плоскости XZ — там же, где эклиптика.
+ *
+ * Родитель приходит ПОЗИЦИЕЙ, а не телом: у барицентра двойной звезды тела нет,
+ * есть только точка. Это заодно и делает всё правильным при плавающем начале —
+ * позицию родителя двигает мир, а орбита лишь добавляется к ней.
  */
-export function orbitPoint(body: BodyEntity, parent: BodyEntity, time: number, out: Vector3): Vector3 {
-  const orbit = body.orbit
-  if (!orbit) return out.copy(body.pos)
-
+export function orbitPoint(orbit: OrbitDef, parentPos: Vector3, time: number, out: Vector3): Vector3 {
   const angle = orbit.phase + orbit.rate * time
   _radial.set(Math.cos(angle) * orbit.radius, 0, Math.sin(angle) * orbit.radius)
 
@@ -33,15 +39,30 @@ export function orbitPoint(body: BodyEntity, parent: BodyEntity, time: number, o
   const sin = Math.sin(orbit.tilt)
   _out.set(_radial.x, _radial.z * sin, _radial.z * cos)
 
-  return out.copy(parent.pos).add(_out)
+  return out.copy(parentPos).add(_out)
 }
 
-/** Расставить спутники по их орбитам на момент `world.time`. */
+/**
+ * Позиция барицентра системы в ЛОКАЛЬНЫХ координатах. Барицентр стоит в истинном
+ * нуле мира; локальная = истинная − originOffset = −originOffset. Так двойная
+ * звезда остаётся на месте относительно планет, куда бы ни уехало начало отсчёта.
+ */
+function barycentre(world: World): Vector3 {
+  return _bary.set(0, 0, 0).sub(world.originOffset)
+}
+
+/** Расставить спутники и звёзды двойной по их орбитам на момент `world.time`. */
 export function stepOrbits(world: World): void {
   for (const body of world.bodies) {
-    if (!body.orbit) continue
-    const parent = world.bodies.find((b) => b.id === body.orbit!.parentId)
-    // Планету могло не оказаться только в кривых данных: молча оставляем на месте.
-    if (parent) orbitPoint(body, parent, world.time, body.pos)
+    const orbit = body.orbit
+    if (!orbit) continue
+
+    if (orbit.parentId === null) {
+      orbitPoint(orbit, barycentre(world), world.time, body.pos)
+      continue
+    }
+    const parent = world.bodies.find((b) => b.id === orbit.parentId)
+    // Родителя могло не оказаться только в кривых данных: молча оставляем на месте.
+    if (parent) orbitPoint(orbit, parent.pos, world.time, body.pos)
   }
 }

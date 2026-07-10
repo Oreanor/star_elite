@@ -1,6 +1,7 @@
 import { useFrame, useThree } from '@react-three/fiber'
 import { useRef } from 'react'
 import { DirectionalLight, Vector3 } from 'three'
+import type { BodyEntity } from '@elite/sim'
 import { useSession } from '../../app/GameContext'
 
 /**
@@ -18,6 +19,25 @@ import { useSession } from '../../app/GameContext'
 const _sunDirection = new Vector3()
 const _fillOffset = new Vector3()
 
+/**
+ * Какая звезда светит. У одиночной выбор очевиден; у двойной свет и терминатор
+ * задаёт БЛИЖАЙШАЯ — среди пары корабль освещает то солнце, к которому подошёл,
+ * а не то, что первым попалось в списке тел.
+ */
+function litBy(world: ReturnType<typeof useSession>['world'], from: Vector3): BodyEntity | null {
+  let best: BodyEntity | null = null
+  let nearest = Infinity
+  for (const body of world.bodies) {
+    if (body.kind !== 'star') continue
+    const d = body.pos.distanceToSquared(from)
+    if (d < nearest) {
+      nearest = d
+      best = body
+    }
+  }
+  return best
+}
+
 export function Lighting() {
   const session = useSession()
   const camera = useThree((state) => state.camera)
@@ -29,7 +49,7 @@ export function Lighting() {
     const player = session.world.player.state.pos
 
     const sun = sunRef.current
-    const star = session.world.bodies.find((b) => b.kind === 'star')
+    const star = litBy(session.world, player)
     if (sun && star) {
       // Направленному свету важно только направление. Держим источник рядом
       // с игроком, чтобы дальность не имела значения, а терминатор был верен.

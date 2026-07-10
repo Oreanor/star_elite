@@ -116,6 +116,20 @@ export function systemDefOf(system: StarSystem, galaxySeed: number): SystemDef {
     }
   })
 
+  const starRadius = system.star.radius * SCALE.STAR_RADIUS
+  /**
+   * Спутник двойной. Расстояние между центрами — несколько сумм радиусов:
+   * ближе они бы касались (контактная пара), дальше — уже не читались бы как
+   * одна система. Число детерминировано: та же система при том же зерне.
+   */
+  const companion = system.companion
+    ? {
+        radius: system.companion.radius * SCALE.STAR_RADIUS,
+        color: system.companion.color,
+        separation: (starRadius + system.companion.radius * SCALE.STAR_RADIUS) * (3 + rng() * 4),
+      }
+    : null
+
   // Столица — мир с причалом и наибольшим населением. К ней и выходим.
   const capital = capitalOf(system)
   const seat = capital ? system.planets.indexOf(capital) : 0
@@ -134,7 +148,8 @@ export function systemDefOf(system: StarSystem, galaxySeed: number): SystemDef {
     name: system.name,
     seed: Math.floor(rng() * 2 ** 31),
     playerStart: start,
-    star: { pos: [0, 0, 0], radius: system.star.radius * SCALE.STAR_RADIUS, color: system.star.color },
+    star: { pos: [0, 0, 0], radius: starRadius, color: system.star.color },
+    companion,
     planets,
     station: stationDef,
     // Пояс есть не везде: он локален и живёт в масштабе километров, как бой.

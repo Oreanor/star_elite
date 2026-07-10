@@ -92,7 +92,18 @@ export function drawFlare(
   width: number,
   height: number,
 ): void {
-  const star = world.bodies.find((b) => b.kind === 'star')
+  // У двойной блик даёт ближайшая к камере звезда: их разнос — миллионы
+  // километров, и с близи одна из пары явно крупнее и ярче другой.
+  let star: BodyEntity | null = null
+  let nearest = Infinity
+  for (const body of world.bodies) {
+    if (body.kind !== 'star') continue
+    const d = body.pos.distanceToSquared(camera.position)
+    if (d < nearest) {
+      nearest = d
+      star = body
+    }
+  }
   if (!star) return
 
   const p = projectPoint(star.pos, camera, width, height)

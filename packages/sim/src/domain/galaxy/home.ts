@@ -76,6 +76,8 @@ export function homeSystem(index: number, x: number, y: number, z: number): Star
       radius: Math.round(STARTER_SYSTEM.star.radius / SCALE.STAR_RADIUS),
       scoopable: G_CLASS.scoopable,
     },
+    // Родная система одиночная — как и её описание в STARTER_SYSTEM.
+    companion: null,
     planets: planetsOf(),
     security: 'Высокая',
   }

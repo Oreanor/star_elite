@@ -35,6 +35,13 @@ export interface SystemDef {
   seed: number
   playerStart: readonly [number, number, number]
   star: { pos: readonly [number, number, number]; radius: number; color: number }
+  /**
+   * Спутник двойной звезды, или `null` у одиночной. Позиции нет: обе звезды
+   * обращаются вокруг барицентра (истинного нуля системы), и место каждой даёт
+   * время, а не запись. `separation` — расстояние между центрами, м; из него и
+   * из масс (обе выводятся из радиусов) считается период.
+   */
+  companion: { radius: number; color: number; separation: number } | null
   planets: readonly {
     name: string
     type: PlanetType
@@ -96,6 +103,8 @@ export const STARTER_SYSTEM: SystemDef = {
    */
   playerStart: [STATION_ORBIT, 0, -AU + 2_000],
   star: { pos: [0, 0, 0], radius: SOLAR_RADIUS, color: 0xffd9a0 },
+  // Родная система одиночная: с неё начинают, и лишних сущностей ей не нужно.
+  companion: null,
   planets: [
     /**
      * Обитаемый мир, вокруг которого висит станция. С орбиты в 500 км он

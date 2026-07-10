@@ -14,6 +14,7 @@ import type {
   BodyEntity,
   Faction,
   GunState,
+  OrbitDef,
   ShipEntity,
   World,
 } from './entities'
@@ -203,22 +204,68 @@ function makeMoonBodies(ids: IdSource, planet: BodyEntity, def: SystemDef['plane
   }))
 }
 
+/** Масса звезды из радиуса: ρ·(4/3)πR³. Как у планеты, только плотность звёздная. */
+function starMass(radius: number): number {
+  return GRAVITY.STAR_DENSITY * (4 / 3) * Math.PI * radius ** 3
+}
+
+/**
+ * Орбита одной звезды двойной вокруг барицентра.
+ *
+ * Радиус обратен массе: лёгкая звезда описывает большой круг, тяжёлая — малый,
+ * центр масс между ними неподвижен. Обе идут с одной угловой скоростью
+ * ω = √(G·(M₁+M₂)/d³) — иначе они разъехались бы, а не кружили парой.
+ */
+function binaryOrbit(selfMass: number, otherMass: number, separation: number, phase: number): OrbitDef {
+  const total = selfMass + otherMass
+  return {
+    parentId: null,
+    radius: separation * (otherMass / total),
+    phase,
+    rate: Math.sqrt((GRAVITY.G * total) / separation ** 3),
+    // Плоскость пары задаёт эклиптику: наклон ей ни к чему, планеты и так рядом с ней.
+    tilt: 0,
+  }
+}
+
 function makeBodies(ids: IdSource, def: SystemDef): BodyEntity[] {
-  const bodies: BodyEntity[] = [
-    {
+  const comp = def.companion
+  const m1 = starMass(def.star.radius)
+  const m2 = comp ? starMass(comp.radius) : 0
+
+  const primary: BodyEntity = {
+    id: ids.next(),
+    kind: 'star',
+    name: def.name,
+    pos: new Vector3(...def.star.pos),
+    radius: def.star.radius,
+    color: def.star.color,
+    surface: null,
+    population: 0,
+    spin: 0,
+    spinAxis: new Vector3(0, 1, 0),
+    // Одиночная стоит в центре; главная звезда двойной обращается вокруг барицентра.
+    orbit: comp ? binaryOrbit(m1, m2, comp.separation, 0) : null,
+  }
+  const bodies: BodyEntity[] = [primary]
+
+  if (comp) {
+    bodies.push({
       id: ids.next(),
+      // Имя со звёздочкой B — так метят спутник двойной в каталогах (Сириус B).
       kind: 'star',
-      name: def.name,
+      name: `${def.name} B`,
       pos: new Vector3(...def.star.pos),
-      radius: def.star.radius,
-      color: def.star.color,
+      radius: comp.radius,
+      color: comp.color,
       surface: null,
       population: 0,
       spin: 0,
       spinAxis: new Vector3(0, 1, 0),
-      orbit: null,
-    },
-  ]
+      // Спутник на противоположной стороне барицентра: фаза π.
+      orbit: binaryOrbit(m2, m1, comp.separation, Math.PI),
+    })
+  }
 
   for (const p of def.planets) {
     const planet: BodyEntity = {
