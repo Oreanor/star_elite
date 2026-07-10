@@ -2,12 +2,14 @@ import type { Chassis } from './chassis'
 import {
   isArmour,
   isCargo,
+  isCloak,
   isEngine,
   isHyperdrive,
   isShield,
   isThrusters,
   type ArmourModule,
   type CargoModule,
+  type CloakModule,
   type EngineModule,
   type HyperdriveModule,
   type ShieldModule,
@@ -51,6 +53,11 @@ export function findArmour(l: Loadout): ArmourModule[] {
 }
 export function findCargoRacks(l: Loadout): CargoModule[] {
   return l.internals.filter(isCargo)
+}
+
+/** Маскировки может не быть: это дорогая роскошь, а не часть корабля. */
+export function findCloak(l: Loadout): CloakModule | null {
+  return l.internals.find(isCloak) ?? null
 }
 
 /** Без привода межзвёздный прыжок невозможен вовсе — это правило, а не штраф. */

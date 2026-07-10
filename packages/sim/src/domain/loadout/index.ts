@@ -15,6 +15,7 @@ export {
   dryMass,
   findArmour,
   findCargoRacks,
+  findCloak,
   findEngine,
   findHyperdrive,
   findShield,
@@ -27,6 +28,7 @@ export {
 export {
   isArmour,
   isCargo,
+  isCloak,
   isHyperdrive,
   isEngine,
   isLaser,
@@ -36,6 +38,7 @@ export {
   isWeapon,
   type ArmourModule,
   type CargoModule,
+  type CloakModule,
   type HyperdriveModule,
   type EngineModule,
   type LaserModule,

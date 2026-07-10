@@ -1,9 +1,10 @@
 import { useFrame } from '@react-three/fiber'
 import { useMemo, useRef } from 'react'
 import { InstancedMesh, Mesh, Object3D } from 'three'
+import { isVisible } from '@elite/sim'
 import { useSession } from '../../app/GameContext'
 import { cobraGeometry, sidewinderGeometry } from '../geometry/ships'
-import { hullMaterial } from '../materials/materials'
+import { cloakMaterial, hullMaterial } from '../materials/materials'
 
 /** Все враги — один InstancedMesh: 1 draw call вместо N. */
 const MAX_ENEMIES = 32
@@ -24,6 +25,10 @@ export function PlayerShip() {
     mesh.quaternion.copy(player.state.quat)
     // Из кабины камера внутри корпуса — меш только мешал бы.
     mesh.visible = player.alive && session.view === 'chase'
+
+    // Свой корабль под полем видно — иначе пилот теряет собственный нос.
+    // Чужой не видно вовсе, и это разные вещи: одна про интерфейс, другая про мир.
+    mesh.material = player.cloaked ? cloakMaterial() : hullMaterial()
   })
 
   return <mesh ref={ref} geometry={cobraGeometry()} material={hullMaterial()} frustumCulled={false} />
@@ -42,7 +47,8 @@ export function EnemyShips() {
 
     let count = 0
     for (const ship of session.world.ships) {
-      if (!ship.alive || count >= MAX_ENEMIES) continue
+      // Замаскированный чужой не рисуется вовсе: правило видимости — из домена.
+      if (!isVisible(ship) || count >= MAX_ENEMIES) continue
 
       _dummy.position.copy(ship.state.pos)
       _dummy.quaternion.copy(ship.state.quat)

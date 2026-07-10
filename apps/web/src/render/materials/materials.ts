@@ -71,6 +71,21 @@ export function rockTexturedMaterial(map: Texture): MeshLambertMaterial {
   return material
 }
 
+let cloak: MeshBasicMaterial | null = null
+
+/**
+ * Корабль под маскировочным полем. Не металл, а дыра в кадре: свет он не
+ * отражает вовсе, поэтому материал не участвует в освещении (`MeshBasic`).
+ *
+ * Не чёрный намертво: сквозь поле чуть просвечивают звёзды. Полностью
+ * непрозрачный силуэт читался бы как ошибка отрисовки, а не как невидимка,
+ * и пилот перестал бы понимать, где его собственный нос.
+ */
+export function cloakMaterial(): MeshBasicMaterial {
+  cloak ??= new MeshBasicMaterial({ color: 0x05070b, transparent: true, opacity: 0.72, side: DoubleSide })
+  return cloak
+}
+
 let planet: MeshLambertMaterial | null = null
 
 /**

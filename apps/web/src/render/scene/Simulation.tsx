@@ -77,6 +77,7 @@ export function Simulation() {
     if (consumePress('KeyR')) intent.missile = true
     if (consumePress('KeyE')) intent.ecm = true
     if (consumePress('KeyB')) intent.bomb = true
+    if (consumePress('KeyX')) intent.cloak = true
     if (consumePress('Tab')) world.lockedTargetId = cycleTarget(world, world.lockedTargetId)
 
     if (consumePress('KeyL')) {

@@ -5,6 +5,7 @@ import {
   dryMass,
   findArmour,
   findCargoRacks,
+  findCloak,
   findEngine,
   findHyperdrive,
   findShield,
@@ -53,6 +54,8 @@ export interface ShipSpec {
   cargoCapacity: number
   /** Дальность прыжка, св. лет. Ноль — привода нет, межзвёздный перелёт невозможен. */
   jumpRange: number
+  /** Расход батарей на маскировку, ед/с. Ноль — поля нет, корабль виден всегда. */
+  cloakDrain: number
 }
 
 /** Двигатель без корабля не бывает: эти значения означают «летать нельзя». */
@@ -123,7 +126,11 @@ export function deriveShipSpec(loadout: Loadout, cargoMass = 0): ShipSpec {
   let cargoCapacity = 0
   for (const rack of findCargoRacks(loadout)) cargoCapacity += rack.capacity
 
-  return { tuning, hull, power, mounts, mass, cargoCapacity, jumpRange: findHyperdrive(loadout)?.jumpRange ?? 0 }
+  return {
+    tuning, hull, power, mounts, mass, cargoCapacity,
+    jumpRange: findHyperdrive(loadout)?.jumpRange ?? 0,
+    cloakDrain: findCloak(loadout)?.drain ?? 0,
+  }
 }
 
 function safeAccel(torque: number, inertia: number): number {

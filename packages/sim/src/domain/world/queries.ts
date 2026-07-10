@@ -1,4 +1,5 @@
 import { Vector3 } from 'three'
+import { isVisible } from '../combat/cloak'
 import { shipAxes } from '../flight/axes'
 import type { BodyEntity, ShipEntity, World } from './entities'
 
@@ -18,8 +19,12 @@ export function findBody(world: World, id: number | null): BodyEntity | null {
   return world.bodies.find((b) => b.id === id) ?? null
 }
 
+/**
+ * Враги, которых видно. Замаскированного в этом списке нет, поэтому его нельзя
+ * ни захватить, ни перебрать клавишей: правило видимости одно на всех.
+ */
 export function hostilesOf(world: World): ShipEntity[] {
-  return world.ships.filter((s) => s.alive && s.faction === 'hostile')
+  return world.ships.filter((s) => isVisible(s) && s.faction === 'hostile')
 }
 
 const _fwd = new Vector3()

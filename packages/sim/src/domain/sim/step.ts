@@ -18,7 +18,9 @@ import {
   shatter,
   spawnExplosion,
   spawnWreckage,
+  stepCloak,
   stepMissiles,
+  toggleCloak,
   tractorPods,
   tryScoop,
 } from '../combat'
@@ -113,8 +115,19 @@ function stepWeapons(world: World, controllers: ControllerMap, dt: number): void
 
     const controller = controllerFor(controllers, ship)
 
-    // ПРО работает и на крейсерском ходу: ракета догоняет, а стволы вне фазы.
+    // Одна клавиша поднимает поле и она же опускает. Расход считается ПОСЛЕ
+    // `regenEnergy`: иначе поле питалось бы восполнением того же шага.
+    if (controller.wantsCloak?.(ship, world)) toggleCloak(ship)
+    stepCloak(ship, dt)
+
+    // ПРО работает и на крейсерском ходу, и под полем: ракета уже летит, а
+    // импульс никого не убивает — он лишь снимает то, что летит в тебя.
     if (controller.wantsEcm?.(ship, world)) fireEcm(world, ship)
+
+    // Под маскировкой не стреляют: излучатели обесточены, вся мощность в поле.
+    // Иначе невидимка бьёт без ответа, и поле перестаёт быть побегом.
+    if (ship.cloaked) continue
+
     if (controller.wantsBomb?.(ship, world)) fireBomb(world, ship)
 
     // На крейсерском ходу корабль вне фазы: лазер с относительной скоростью

@@ -16,6 +16,7 @@ export type ModuleKind =
   | 'missile'
   | 'cargo'
   | 'hyperdrive'
+  | 'cloak'
 
 export interface ModuleBase {
   /** Стабильный идентификатор для сохранений и торговли. */
@@ -167,6 +168,19 @@ export interface HyperdriveModule extends ModuleBase {
   jumpRange: number
 }
 
+/**
+ * Маскировочное поле. Корабль перестаёт отражать свет и исчезает с чужих экранов.
+ *
+ * Плата — главные батареи, те же, из которых бьёт ПРО. Поле держится, пока их
+ * хватает, и опадает само, когда не хватило: таймера у маскировки нет, есть
+ * счёт за электричество. Отсюда и единственная характеристика — расход.
+ */
+export interface CloakModule extends ModuleBase {
+  kind: 'cloak'
+  /** Расход батарей, ед/с. */
+  drain: number
+}
+
 export type ShipModule =
   | EngineModule
   | ThrusterModule
@@ -176,6 +190,7 @@ export type ShipModule =
   | MissileModule
   | CargoModule
   | HyperdriveModule
+  | CloakModule
 
 /** Сужение по виду — вместо `as`, чтобы `any` не понадобился нигде. */
 export const isEngine = (m: ShipModule): m is EngineModule => m.kind === 'engine'
@@ -186,6 +201,7 @@ export const isLaser = (m: ShipModule): m is LaserModule => m.kind === 'laser'
 export const isMissile = (m: ShipModule): m is MissileModule => m.kind === 'missile'
 export const isCargo = (m: ShipModule): m is CargoModule => m.kind === 'cargo'
 export const isHyperdrive = (m: ShipModule): m is HyperdriveModule => m.kind === 'hyperdrive'
+export const isCloak = (m: ShipModule): m is CloakModule => m.kind === 'cloak'
 
 export type WeaponModule = LaserModule | MissileModule
 export const isWeapon = (m: ShipModule): m is WeaponModule => isLaser(m) || isMissile(m)

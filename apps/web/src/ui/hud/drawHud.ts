@@ -17,6 +17,7 @@ import {
   missileAmmo,
   nearestPod,
   peakHeat,
+  isVisible,
   scoopReadiness,
   shipAxes,
   stationRange,
@@ -419,8 +420,9 @@ function drawRadar({ ctx, world, width, height }: HudFrame): void {
     plot(body.pos, body.id === world.navTargetId ? HUD_COLORS.NAV : HUD_COLORS.DIM, Math.round(3 * S))
   }
   for (const pod of world.pods) if (pod.alive) plot(pod.pos, HUD_COLORS.WARN, Math.round(2 * S))
+  // Локатор невидимку не берёт — то же правило, что у захвата и у головки ракеты.
   for (const ship of world.ships) {
-    if (!ship.alive) continue
+    if (!isVisible(ship)) continue
     plot(ship.state.pos, radarColor(ship, world), Math.round(4 * S))
   }
 }
@@ -576,6 +578,11 @@ function drawAlerts({ ctx, world, width, height }: HudFrame): void {
   // Выше панели стыковки: она занимает низ по центру и перекрыла бы обе строки.
   if (autofightActive(world)) {
     text(ctx, 'АВТОБОЙ · P — СНЯТЬ', width / 2, height - 64 * S, HUD_COLORS.TARGET, 'center')
+  }
+
+  // Под полем не стреляют, и пилот обязан знать, почему у него мёртвый гашетка.
+  if (world.player.cloaked) {
+    text(ctx, 'МАСКИРОВКА · X — СНЯТЬ', width / 2, height - 76 * S, HUD_COLORS.NAV, 'center')
   }
 
   const threat = incomingMissile(world)

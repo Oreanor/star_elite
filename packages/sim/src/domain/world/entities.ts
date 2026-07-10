@@ -44,6 +44,11 @@ export interface ShipEntity {
   ecmCooldown: number
   /** Накопитель энергетической бомбы, 0..1. Копится сам, но только поверх целого щита. */
   bombCharge: number
+  /**
+   * Маскировочное поле поднято. Корабль не отражает свет и не виден чужим:
+   * ни локатору, ни ИИ, ни головке ракеты.
+   */
+  cloaked: boolean
 
   hold: CargoHold
   guns: GunState[]

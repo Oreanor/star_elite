@@ -61,6 +61,7 @@ export function makeShip(
     // Бомба есть только у игрока, и это НЕ привилегия физики: пират, снимающий
     // звено одной кнопкой, — не бой, а лотерея. Заряжена с первого кадра.
     bombCharge: faction === 'player' ? 1 : 0,
+    cloaked: false,
     hold,
     guns,
     cruise: createCruiseState(),

@@ -2,6 +2,7 @@ import { GALAXY } from './galaxy'
 import type {
   ArmourModule,
   CargoModule,
+  CloakModule,
   EngineModule,
   HyperdriveModule,
   LaserModule,
@@ -419,6 +420,29 @@ export const HYPERDRIVE_DEEP: HyperdriveModule = {
   jumpRange: 28,
 }
 
+// ────────────────────────────── Маскировка ───────────────────────────────
+//
+// Расход считан от батарей, а не назначен: у стандартного двигателя ёмкость 110
+// и восполнение 7 ед/с. Расход 15 ед/с даёт чистые 8 ед/с убыли, то есть около
+// четырнадцати секунд под полем с полных батарей — ровно чтобы разорвать
+// контакт и уйти, но не чтобы жить в невидимости.
+//
+// Поле не оружие: под ним не стреляют (см. `domain/combat/cloak.ts`). Иначе
+// маскировка перестала бы быть побегом и стала бы безнаказанностью.
+
+export const CLOAK_FIELD: CloakModule = {
+  id: 'cloak_1',
+  name: 'Маскировочное поле «Вуаль»',
+  kind: 'cloak',
+  class: 3,
+  /** Тяжелее гиперпривода: невидимость оплачивается манёвром, как и всё остальное. */
+  mass: 6.5,
+  cost: 260000,
+  /** С обломка почти не снимается: сгорает вместе с кораблём, который прятал. */
+  salvageChance: 0.04,
+  drain: 15,
+}
+
 export const MODULE_CATALOGUE: readonly ShipModule[] = [
   ENGINE_CIVILIAN, ENGINE_STANDARD, ENGINE_MILITARY,
   RCS_CIVILIAN, RCS_STANDARD, RCS_MILITARY,
@@ -428,6 +452,7 @@ export const MODULE_CATALOGUE: readonly ShipModule[] = [
   MISSILE_PYLON, MISSILE_HOMING, MISSILE_HEAVY,
   CARGO_SMALL, CARGO_MEDIUM, CARGO_LARGE,
   HYPERDRIVE_BASIC, HYPERDRIVE_LONG, HYPERDRIVE_DEEP,
+  CLOAK_FIELD,
 ]
 
 export function findModule(id: string): ShipModule | null {

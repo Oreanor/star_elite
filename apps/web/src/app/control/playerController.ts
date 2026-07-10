@@ -73,6 +73,8 @@ export interface PlayerIntent {
   ecm: boolean
   /** Хочет подорвать энергетическую бомбу (однократно). */
   bomb: boolean
+  /** Хочет переключить маскировочное поле (однократно). Тумблер, а не удержание. */
+  cloak: boolean
   /** Держит тяговый луч (C). Не однократное действие — удержание. */
   tractor: boolean
   /** Тяга, 0..1. Живёт между кадрами, поэтому хранится тут, а не в ShipControls. */
@@ -103,6 +105,7 @@ export function createIntent(): PlayerIntent {
     missile: false,
     ecm: false,
     bomb: false,
+    cloak: false,
     tractor: false,
     throttle: 0.45,
     surge: 0,
@@ -310,6 +313,16 @@ export function createPlayerController(intent: PlayerIntent): Controller {
     wantsBomb(): boolean {
       if (!intent.bomb) return false
       intent.bomb = false
+      return true
+    },
+
+    /**
+     * Поле — тоже дело пилота. Бот, которому «страшно», прятался бы вечно:
+     * под полем не стреляют, и автобой перестал бы быть боем.
+     */
+    wantsCloak(): boolean {
+      if (!intent.cloak) return false
+      intent.cloak = false
       return true
     },
 

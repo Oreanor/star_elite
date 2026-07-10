@@ -21,6 +21,12 @@ export interface Controller {
   wantsEcm?(ship: ShipEntity, world: World): boolean
   /** Хочет ли подорвать энергетическую бомбу. Боты не умеют — и не надо. */
   wantsBomb?(ship: ShipEntity, world: World): boolean
+  /**
+   * Переключить маскировочное поле. Это ПЕРЕКЛЮЧАТЕЛЬ, а не «держит клавишу»:
+   * возвращать true каждый кадр значит поднимать и опускать поле по 120 раз в
+   * секунду. Спрашивается ровно одно нажатие.
+   */
+  wantsCloak?(ship: ShipEntity, world: World): boolean
   /** Держит ли тяговый луч. Боты не жадные — им трофеи не нужны. */
   wantsTractor?(ship: ShipEntity, world: World): boolean
   /** Держит ли клавишу крейсерского хода. Боты пока не умеют — и не нужно. */

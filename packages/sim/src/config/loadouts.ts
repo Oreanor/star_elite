@@ -3,6 +3,7 @@ import { COBRA_MK3, SIDEWINDER } from './chassis'
 import {
   ARMOUR_PLATE,
   BURST_LASER,
+  CLOAK_FIELD,
   CARGO_SMALL,
   ENGINE_CIVILIAN,
   ENGINE_STANDARD,
@@ -34,7 +35,7 @@ export function playerStartLoadout(): Loadout {
     // Базовый гиперпривод стоит с завода: без него не улететь из системы вообще,
     // а «заработай сорок пять тысяч, чтобы впервые куда-то полететь» — не начало игры.
     // Дальний рейс всё равно надо покупать: девять световых лет — это соседи.
-    [ENGINE_STANDARD, RCS_STANDARD, SHIELD_STANDARD, ARMOUR_PLATE, CARGO_SMALL, HYPERDRIVE_BASIC],
+    [ENGINE_STANDARD, RCS_STANDARD, SHIELD_STANDARD, ARMOUR_PLATE, CARGO_SMALL, HYPERDRIVE_BASIC, CLOAK_FIELD],
     // Два ствола и четыре пусковых на пилонах — по индексам точек подвески шасси.
     // Каждая несёт по две ракеты, итого восемь на вылет.
     [BURST_LASER, BURST_LASER, MISSILE_PYLON, MISSILE_PYLON, MISSILE_PYLON, MISSILE_PYLON],

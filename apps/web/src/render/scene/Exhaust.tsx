@@ -136,7 +136,8 @@ function Flames({ cone }: { cone: Cone }) {
     }
 
     const emitShip = (ship: ShipEntity) => {
-      if (!ship.alive) {
+      // Под полем дюзы не горят: факел выдал бы невидимку вернее корпуса.
+      if (!ship.alive || ship.cloaked) {
         surges.delete(ship.id)
         return
       }
