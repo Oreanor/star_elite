@@ -1,0 +1,15 @@
+import { chromium } from 'playwright'
+const b = await chromium.launch()
+const p = await b.newPage({ viewport: { width: 1400, height: 860 } })
+p.on('console', m => console.log('[', m.type(), ']', m.text().slice(0,120)))
+p.on('pageerror', e => console.log('PAGEERROR', e.message))
+await p.goto('http://localhost:5240/', { waitUntil: 'networkidle' })
+await p.waitForTimeout(1000)
+await p.getByRole('button', { name: 'СТАРТ' }).click()
+await p.waitForTimeout(1000)
+await p.keyboard.press('KeyG')
+await p.waitForTimeout(1500)
+for (let x = 376; x < 396; x += 2) for (const y of [574,580,586]) { await p.mouse.move(x, y); await p.waitForTimeout(40) }
+await p.mouse.click(385, 580)
+await p.waitForTimeout(400)
+await b.close()

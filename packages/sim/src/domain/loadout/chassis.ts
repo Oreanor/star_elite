@@ -1,0 +1,51 @@
+import type { ModuleKind } from './modules'
+
+/**
+ * Что вешается в точку подвески. Пилон под крылом не орудийная турель:
+ * туда влезает ракета и только ракета. Это данные, а не `if` в стрельбе.
+ */
+export type HardpointKind = 'gun' | 'pylon'
+
+/** Точка подвески оружия: позиция ствола (или ракеты) в связанных осях, м. */
+export interface Hardpoint {
+  /** [x вправо, y вверх, z назад]. Нос корабля смотрит в -Z. */
+  offset: readonly [number, number, number]
+  kind: HardpointKind
+  /** Максимальный класс орудия, который влезет. */
+  maxClass: 1 | 2 | 3 | 4
+}
+
+export interface Slot {
+  kind: ModuleKind
+  maxClass: 1 | 2 | 3 | 4
+}
+
+/**
+ * Корпус: то, что нельзя снять. Определяет пустую массу, слоты и геометрию.
+ * Новый корабль в игре — это новая запись в каталоге шасси плюс фабрика геометрии
+ * в слое рендера. Симуляция не меняется.
+ */
+export interface Chassis {
+  id: string
+  name: string
+  /** Масса пустого корпуса, т. */
+  baseMass: number
+  /** Прочность голого корпуса, до брони. */
+  baseHull: number
+  /** Радиус сферы столкновений, м. */
+  radius: number
+  /**
+   * Момент инерции = mass * inertiaFactor.
+   * Грубая, но честная модель: длинный корабль поворачивается тяжелее компактного
+   * при той же массе.
+   */
+  inertiaFactor: number
+  /** Лётный компьютер: гашение сноса и подтяжка скорости, 1/с. */
+  assistLateralDamp: number
+  assistSpeedDamp: number
+  /** Максимальный крен в координированном вираже, рад, и коэффициенты ПД. */
+  hardpoints: readonly Hardpoint[]
+  /** Слоты под внутренние модули. Оружие живёт на hardpoints, не здесь. */
+  slots: readonly Slot[]
+  cost: number
+}

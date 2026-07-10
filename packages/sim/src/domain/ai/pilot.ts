@@ -1,0 +1,270 @@
+import { Vector3 } from 'three'
+import { AI } from '../../config/ai'
+import { clamp, signed } from '../../core/math'
+import { healthFraction, shieldFraction } from '../combat/damage'
+import { shipAxes } from '../flight/axes'
+import { bankToward, steerToward } from '../flight/steering'
+import type { Controller } from '../sim/controller'
+import type { ShipEntity, World } from '../world/entities'
+import { breakWaypoint, leadPoint, patrolWaypoint } from './maneuvers'
+import { selectTarget } from './targeting'
+import type { AIMode, AIState } from './types'
+
+/**
+ * Пилот-бот. Реализует тот же `Controller`, что и игрок: заполняет ShipControls
+ * и ничего больше. Физика у него ровно та же — превзойти тебя он может только
+ * решением, не привилегией.
+ *
+ * Слабости смоделированы честно:
+ *   • решение пересматривается раз в THINK_INTERVAL — это время реакции;
+ *   • прицел дрожит, и дрожание меняется медленно — это рука, а не белый шум;
+ *   • разворот ограничен угловым ускорением его же корабля.
+ */
+
+/**
+ * Горизонт упреждения для СБЛИЖЕНИЯ, не для стрельбы.
+ *
+ * Лазер попадает в тот же шаг, в котором выпущен, поэтому стрелять надо ПРЯМО в цель.
+ * Упреждение при мгновенном оружии — систематический промах: на 300 м оно уводит
+ * луч на 16 м при радиусе корабля 12 м. Оно осмысленно только для ракет
+ * и на кривой погони, где срезает угол.
+ */
+const PURSUIT_HORIZON = 900
+
+const _fwd = new Vector3()
+const _right = new Vector3()
+const _up = new Vector3()
+const _aim = new Vector3()
+const _toTarget = new Vector3()
+const _steer = { pitch: 0, yaw: 0 }
+
+function setMode(ai: AIState, mode: AIMode): void {
+  if (ai.mode === mode) return
+  ai.mode = mode
+  ai.modeTimer = 0
+}
+
+export const aiController: Controller = {
+  update(e: ShipEntity, world: World, dt: number): void {
+    const ai = e.ai
+    if (!ai || !e.alive) return
+
+    const c = e.controls
+    ai.modeTimer += dt
+    ai.wantsFire = false
+    ai.wantsMissile = false
+    ai.missileCooldown = Math.max(0, ai.missileCooldown - dt)
+
+    // Единственные «часы размышления». Раньше таймер уменьшался внутри decideMode,
+    // а decideMode вызывался только при наличии цели — бот без цели не мог её выбрать
+    // и патрулировал вечно.
+    ai.thinkTimer -= dt
+    const rethink = ai.thinkTimer <= 0
+    if (rethink) ai.thinkTimer = AI.THINK_INTERVAL
+
+    // ПРО решается независимо от цели: ракета летит и в патрулирующего.
+    if (rethink) decideEcm(e, ai, world)
+
+    const target = rethink ? selectAndRemember(e, world) : resolveTarget(e, world)
+    if (!target) {
+      flyPatrol(e, ai, world.time)
+      return
+    }
+
+    _toTarget.copy(target.state.pos).sub(e.state.pos)
+    const distance = _toTarget.length()
+
+    if (rethink) {
+      decideMode(e, ai, target, distance)
+      decideMissile(ai, world, distance)
+    }
+    updateAimJitter(ai, world, distance, dt)
+
+    let throttle: number
+    switch (ai.mode) {
+      case 'patrol':
+        flyPatrol(e, ai, world.time)
+        return
+
+      case 'pursue':
+        // Кривая погони: срезаем угол, целясь туда, где цель окажется.
+        leadPoint(e, target, PURSUIT_HORIZON, _aim)
+        throttle = 1
+        break
+
+      case 'attack':
+        // Оружие мгновенное — ведём нос ПРЯМО в цель. Дрожание руки добавляется здесь.
+        _aim.copy(target.state.pos).add(ai.aimJitter)
+        // Медленно: ω = v/d, и на боевой скорости цель не удержать в прицеле.
+        throttle = distance > AI.ATTACK_SLOW_RANGE ? AI.ATTACK_THROTTLE_FAR : AI.ATTACK_THROTTLE_NEAR
+        break
+
+      case 'break':
+      case 'evade':
+        _aim.copy(ai.waypoint)
+        throttle = 1
+        break
+    }
+
+    steerToward(e.state, _aim, 2.2, _steer)
+    c.pitch = _steer.pitch
+    c.yaw = _steer.yaw
+    c.rudder = 0
+    // Крен в цель: тангаж вдвое быстрее рыскания, и разворот выгоднее делать им.
+    c.roll = bankToward(e.state, _aim)
+    c.flightAssist = true
+    c.retro = 0
+    c.throttle = throttle
+
+    const escaping = ai.mode === 'break' || ai.mode === 'evade'
+    c.boost = escaping ? AI.ESCAPE_BOOST : 1
+
+    // Уклонение змейкой: прямолинейный бот — мишень.
+    if (escaping) {
+      c.pitch = clamp(c.pitch + Math.sin(world.time * 2.6 + ai.phase) * 0.45, -1, 1)
+      c.yaw = clamp(c.yaw + Math.cos(world.time * 1.9 + ai.phase) * 0.3, -1, 1)
+    }
+
+    decideFire(e, ai, target, distance)
+  },
+
+  wantsFire(e: ShipEntity): boolean {
+    return e.ai?.wantsFire ?? false
+  },
+
+  wantsMissile(e: ShipEntity): boolean {
+    return e.ai?.wantsMissile ?? false
+  },
+
+  wantsEcm(e: ShipEntity): boolean {
+    return e.ai?.wantsEcm ?? false
+  },
+}
+
+/**
+ * Бить ли по ракете противоракетным импульсом.
+ *
+ * Ждём, пока ракета подойдёт: `fireEcm` жжёт заряд батарей за каждый подрыв,
+ * а на дальней дистанции от ракеты дешевле увернуться. Порог реакции — тот же
+ * такт размышления, поэтому идеально вовремя бот не успевает никогда.
+ */
+function decideEcm(e: ShipEntity, ai: AIState, world: World): void {
+  ai.wantsEcm = false
+  if (e.ecmCooldown > 0) return
+
+  for (const m of world.missiles) {
+    if (!m.alive || m.ownerId === e.id) continue
+    if (m.pos.distanceToSquared(e.state.pos) > AI.ECM_RANGE * AI.ECM_RANGE) continue
+    // Не всегда: иначе ракета по боту не долетает никогда и перестаёт быть оружием.
+    if (world.rng() < AI.ECM_CHANCE) ai.wantsEcm = true
+    return
+  }
+}
+
+/**
+ * Пуск ракеты. Решение принимается ТОЛЬКО в такте размышления и не чаще, чем
+ * раз в MISSILE_INTERVAL секунд. Вероятность «за шаг физики» дала бы темп,
+ * зависящий от частоты симуляции, и бот высыпал бы всю пусковую за десять секунд.
+ */
+function decideMissile(ai: AIState, world: World, distance: number): void {
+  if (ai.mode !== 'attack' || ai.missileCooldown > 0) return
+  if (distance < AI.MISSILE_MIN_RANGE || distance > AI.MISSILE_MAX_RANGE) return
+  if (world.rng() >= AI.MISSILE_CHANCE) return
+
+  ai.wantsMissile = true
+  ai.missileCooldown = AI.MISSILE_INTERVAL
+}
+
+function selectAndRemember(e: ShipEntity, world: World): ShipEntity | null {
+  const ai = e.ai!
+  // Приказ отменяет выбор. Иначе в такте размышления пилот перескочил бы
+  // на ближайшего врага, и автобой перестал бы драться с тем, кого захватили.
+  if (ai.orderedTargetId !== null) {
+    ai.targetId = ai.orderedTargetId
+    return resolveTarget(e, world)
+  }
+  const target = selectTarget(e, world)
+  ai.targetId = target?.id ?? null
+  return target
+}
+
+/** Между размышлениями цель не пересматривается — только проверяется, что она жива. */
+function resolveTarget(e: ShipEntity, world: World): ShipEntity | null {
+  const id = e.ai?.targetId
+  if (id == null) return null
+  if (world.player.id === id) return world.player.alive ? world.player : null
+  const target = world.ships.find((s) => s.id === id)
+  return target?.alive ? target : null
+}
+
+function flyPatrol(e: ShipEntity, ai: AIState, time: number): void {
+  setMode(ai, 'patrol')
+  if (ai.modeTimer > 8 || ai.waypoint.distanceTo(e.state.pos) < 120) {
+    ai.modeTimer = 0
+    patrolWaypoint(ai, time, ai.waypoint)
+  }
+
+  steerToward(e.state, ai.waypoint, 2.2, _steer)
+  const c = e.controls
+  c.pitch = _steer.pitch
+  c.yaw = _steer.yaw
+  c.rudder = 0
+  c.roll = bankToward(e.state, ai.waypoint)
+  c.retro = 0
+  c.boost = 1
+  c.throttle = 0.35
+  c.flightAssist = true
+}
+
+/** Зовётся только в момент «размышления»: между ними режим держится. */
+function decideMode(e: ShipEntity, ai: AIState, target: ShipEntity, distance: number): void {
+  if (healthFraction(e) < AI.EVADE_HULL_FRAC && shieldFraction(e) < AI.EVADE_SHIELD_FRAC) {
+    // Подбит — рвёт дистанцию, а не гибнет героически.
+    setMode(ai, 'evade')
+  } else if (ai.mode === 'break') {
+    if (ai.modeTimer > AI.BREAK_TIME) setMode(ai, 'pursue')
+  } else if (ai.mode === 'evade') {
+    if (ai.modeTimer > 5 || shieldFraction(e) > 0.5) setMode(ai, 'pursue')
+  } else if (distance < AI.BREAK_OFF) {
+    // Слишком близко: проскок неизбежен, надо разводить, иначе таран.
+    setMode(ai, 'break')
+    breakWaypoint(e.state, target.state.pos, ai, ai.waypoint)
+  } else if (distance < AI.ENGAGE) {
+    setMode(ai, 'attack')
+  } else {
+    setMode(ai, 'pursue')
+  }
+
+  if (ai.mode === 'evade' && ai.modeTimer > 2.5) {
+    ai.modeTimer = 0
+    breakWaypoint(e.state, target.state.pos, ai, ai.waypoint)
+  }
+}
+
+/** Дрожание прицела обновляется медленно: чаще — получится белый шум, а не рука. */
+function updateAimJitter(ai: AIState, world: World, distance: number, dt: number): void {
+  ai.aimJitterTimer -= dt
+  if (ai.aimJitterTimer > 0) return
+
+  ai.aimJitterTimer = AI.AIM_JITTER_INTERVAL
+  const spread = AI.FIRE_SPREAD * distance
+  const rng = world.rng
+  ai.aimJitter.set(signed(rng), signed(rng), signed(rng)).multiplyScalar(spread * 0.5)
+}
+
+/**
+ * Открывать ли огонь. Угол меряется до САМОЙ цели, а не до точки упреждения:
+ * решение стрелять и направление луча обязаны совпадать.
+ */
+function decideFire(e: ShipEntity, ai: AIState, target: ShipEntity, distance: number): void {
+  if (ai.mode !== 'attack' || !target.alive || distance > AI.FIRE_RANGE) return
+
+  shipAxes(e.state.quat, _fwd, _right, _up)
+  _toTarget.copy(target.state.pos).sub(e.state.pos).normalize()
+
+  const cone = Math.acos(clamp(_fwd.dot(_toTarget), -1, 1))
+  // Угловой размер цели падает как 1/d. Стрелять «примерно туда» издали —
+  // значит просто греть стволы.
+  const angularSize = Math.atan2(target.spec.hull.radius, Math.max(distance, 1))
+  ai.wantsFire = cone < Math.min(AI.FIRE_CONE, angularSize * 2.2)
+}

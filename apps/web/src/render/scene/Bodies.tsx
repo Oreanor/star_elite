@@ -1,0 +1,154 @@
+import { useFrame } from '@react-three/fiber'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { Mesh, Quaternion, Sprite, Vector3, type Texture } from 'three'
+import type { BodyEntity, PlanetType } from '@elite/sim'
+import { useSession } from '../../app/GameContext'
+import { CORONA } from '../config'
+import { planetGeometry, starGeometry, type PlanetLook } from '../geometry/bodies'
+import { coronaTexture } from '../geometry/corona'
+import { stationGeometry } from '../geometry/props'
+import {
+  coronaMaterial,
+  planetMaterial,
+  planetTexturedMaterial,
+  starMaterial,
+  stationMaterial,
+} from '../materials/materials'
+import { loadPlanetTexture, pickVariant } from '../sky/planets'
+
+/**
+ * Крупные тела: звезда, планеты, станция. Их немного и они почти неподвижны,
+ * поэтому инстансинг тут не нужен — обычные меши.
+ *
+ * Плавающее начало координат сдвигает мир, поэтому позиции читаются каждый кадр.
+ * Свет живёт в Lighting: у него своя причина меняться.
+ *
+ * Вращение берётся как `spin * world.time`, а не накапливается сложением за кадр:
+ * накопленный угол зависит от частоты кадров, ползёт после паузы и не совпадёт
+ * с тем, что насчитает сервер. Тот же приём, что и с фиксированным шагом физики.
+ */
+
+/**
+ * Что за мир — говорит домен (`body.surface`), во что его красить — знает рендер.
+ * Ровно один словарь; новый тип планеты не требует ни единого `if` в сцене.
+ */
+const LOOK_BY_SURFACE: Record<PlanetType, PlanetLook> = {
+  'Скалистая': 'rocky',
+  'Ледяная': 'ice',
+  'Газовый гигант': 'gas',
+  'Океаническая': 'ocean',
+  'Земного типа': 'terra',
+}
+
+function lookFor(body: BodyEntity): PlanetLook {
+  // `noUncheckedIndexedAccess` не верит даже полному Record — и правильно делает:
+  // тип поверхности приходит из домена и однажды может там появиться новый.
+  return (body.surface && LOOK_BY_SURFACE[body.surface]) || 'rocky'
+}
+
+const _spinQuat = new Quaternion()
+const _tiltQuat = new Quaternion()
+
+/** Ось симметрии геометрии в покое: у сферы это полюс, у кориолиса — продольная. */
+const REST_POLE = new Vector3(0, 1, 0)
+const REST_BARREL = new Vector3(0, 0, 1)
+
+/**
+ * Ставит тело на место и поворачивает его на угол, однозначно заданный временем.
+ *
+ * Поворотов ДВА, и порядок важен. `spinAxis` — это не только ось, вокруг которой
+ * тело крутится, но и та, на которую обязана лечь ось симметрии геометрии (`rest`).
+ * Повернуть лишь вокруг `spinAxis`, оставив полюс сферы смотреть в Y, значит
+ * заставить полюс описывать конус: планета не вращалась бы, а кувыркалась, и
+ * наклон оси читался бы как болтанка. Сначала кладём полюс на ось, потом крутим
+ * вокруг неё — тогда полюс неподвижен, каким он в природе и бывает.
+ */
+function place(mesh: Mesh, body: BodyEntity, time: number, rest: Vector3): void {
+  mesh.position.copy(body.pos)
+  _tiltQuat.setFromUnitVectors(rest, body.spinAxis)
+  _spinQuat.setFromAxisAngle(body.spinAxis, body.spin * time)
+  mesh.quaternion.copy(_spinQuat).multiply(_tiltQuat)
+}
+
+function Planet({ body }: { body: BodyEntity }) {
+  const ref = useRef<Mesh>(null)
+  const session = useSession()
+
+  const look = lookFor(body)
+  const seed = body.id * 7919
+  const geometry = useMemo(() => planetGeometry(look, seed), [look, seed])
+
+  // Текстура приходит поздно или не приходит вовсе. Одна перерисовка React
+  // на планету за всю игру — не игровой кадр, здесь это допустимо.
+  const [texture, setTexture] = useState<Texture | null>(null)
+  useEffect(() => loadPlanetTexture(look, pickVariant(look, seed), setTexture), [look, seed])
+
+  const material = texture ? planetTexturedMaterial(texture) : planetMaterial()
+
+  useFrame(() => {
+    if (ref.current) place(ref.current, body, session.world.time, REST_POLE)
+  })
+
+  return <mesh ref={ref} geometry={geometry} material={material} scale={body.radius} frustumCulled={false} />
+}
+
+/**
+ * Звезда и её корона. Корона — билборд: свечение не имеет поверхности,
+ * его нельзя смоделировать мешем. Сфера светится сама, освещать её нечем.
+ */
+function Star({ body }: { body: BodyEntity }) {
+  const ref = useRef<Mesh>(null)
+  const glowRef = useRef<Sprite>(null)
+
+  const texture = useMemo(coronaTexture, [])
+  const material = useMemo(() => coronaMaterial(texture, body.color), [texture, body.color])
+  const glowSize = body.radius * CORONA.SCALE
+
+  useFrame(() => {
+    ref.current?.position.copy(body.pos)
+    glowRef.current?.position.copy(body.pos)
+  })
+
+  return (
+    <>
+      <mesh
+        ref={ref}
+        geometry={starGeometry()}
+        material={starMaterial(body.color)}
+        scale={body.radius}
+        frustumCulled={false}
+      />
+      {/* Спрайт стоит в центре звезды, поэтому диск сам закрывает середину ореола:
+          остаётся кольцо вокруг него — ровно то, чем корона и является. */}
+      <sprite ref={glowRef} material={material} scale={[glowSize, glowSize, 1]} renderOrder={2} frustumCulled={false} />
+    </>
+  )
+}
+
+function Station({ body }: { body: BodyEntity }) {
+  const ref = useRef<Mesh>(null)
+  const session = useSession()
+
+  // Кориолис вращается вокруг продольной оси — так было в оригинале. Домен задаёт
+  // ей `spinAxis = Z`, поэтому наклон здесь вырождается в тождество, а не в поворот.
+  useFrame(() => {
+    if (ref.current) place(ref.current, body, session.world.time, REST_BARREL)
+  })
+
+  return <mesh ref={ref} geometry={stationGeometry()} material={stationMaterial()} scale={body.radius} />
+}
+
+export function Bodies() {
+  const session = useSession()
+  const bodies = session.world.bodies
+
+  return (
+    <>
+      {bodies.map((body) => {
+        if (body.kind === 'star') return <Star key={body.id} body={body} />
+        if (body.kind === 'planet') return <Planet key={body.id} body={body} />
+        return <Station key={body.id} body={body} />
+      })}
+    </>
+  )
+}

@@ -1,0 +1,254 @@
+import {
+  AdditiveBlending,
+  Color,
+  DoubleSide,
+  LineBasicMaterial,
+  MeshBasicMaterial,
+  MeshLambertMaterial,
+  MeshStandardMaterial,
+  PointsMaterial,
+  SpriteMaterial,
+  type Texture,
+} from 'three'
+import { MATERIAL, PALETTE } from '../config'
+
+/**
+ * Материалы создаются один раз на модуль. Каждый новый материал — это новая
+ * компиляция шейдера и новый draw call; в кадре их создавать нельзя.
+ *
+ * Везде `flatShading` и `vertexColors`: гранёность и покраска — свойства геометрии,
+ * а не постобработки.
+ *
+ * Корпуса — `MeshStandard`: у металла обязан быть блик, иначе гранёность не читается,
+ * а корабль превращается в плоскую аппликацию. Отражает он `scene.environment` —
+ * то самое небо, что стоит фоном (см. Sky.tsx). Планеты, камни и пыль остались
+ * на `Lambert`: они не металл, а PBR стоит заметно дороже — платим только там,
+ * где это видно.
+ */
+
+let hull: MeshStandardMaterial | null = null
+
+/**
+ * Корпуса кораблей. `DoubleSide` намеренно: корпуса собраны вручную из
+ * треугольников, и следить за обходом вершин у каждой грани — источник
+ * невидимых дыр. На двух сотнях треугольников цена нулевая, а грань,
+ * повёрнутая наизнанку, всё равно освещается верно.
+ */
+export function hullMaterial(): MeshStandardMaterial {
+  hull ??= new MeshStandardMaterial({
+    vertexColors: true,
+    flatShading: true,
+    side: DoubleSide,
+    metalness: MATERIAL.HULL_METALNESS,
+    roughness: MATERIAL.HULL_ROUGHNESS,
+  })
+  return hull
+}
+
+let rock: MeshLambertMaterial | null = null
+
+/** Астероиды выпуклы, обход правильный — обратные грани можно отсекать. */
+export function rockMaterial(): MeshLambertMaterial {
+  rock ??= new MeshLambertMaterial({ vertexColors: true, flatShading: true })
+  return rock
+}
+
+let planet: MeshLambertMaterial | null = null
+
+/**
+ * Планета без текстуры. НЕ `flatShading`: гранёный шар в тысячи километров
+ * читается как ошибка, а не как стиль. Нормали гладкие, цвет — по вершинам.
+ */
+export function planetMaterial(): MeshLambertMaterial {
+  planet ??= new MeshLambertMaterial({ vertexColors: true })
+  return planet
+}
+
+const texturedPlanets = new Map<Texture, MeshLambertMaterial>()
+
+/** Планета с картой. Материал на текстуру, а не на планету: их единицы. */
+export function planetTexturedMaterial(map: Texture): MeshLambertMaterial {
+  let material = texturedPlanets.get(map)
+  if (!material) {
+    material = new MeshLambertMaterial({ map })
+    texturedPlanets.set(map, material)
+  }
+  return material
+}
+
+let station: MeshStandardMaterial | null = null
+
+/**
+ * Станция — тоже металл, но крупный и потёртый: блик мягче корабельного.
+ *
+ * `DoubleSide` по той же причине, что и у корпусов: тор, спицы и горловина
+ * причала собраны вручную из треугольников, и следить за обходом вершин у каждой
+ * грани — верный способ получить невидимые дыры. На пяти сотнях треугольников
+ * цена нулевая, а изнанка причального зева обязана быть видна: в него влетают.
+ */
+export function stationMaterial(): MeshStandardMaterial {
+  station ??= new MeshStandardMaterial({
+    vertexColors: true,
+    flatShading: true,
+    side: DoubleSide,
+    metalness: 0.4,
+    roughness: 0.6,
+  })
+  return station
+}
+
+const coronas = new Map<number, SpriteMaterial>()
+
+/**
+ * Корона звезды. Аддитивная и без записи глубины: свечение ничего не заслоняет,
+ * оно складывается с тем, что за ним. Цвет берётся от самой звезды.
+ */
+export function coronaMaterial(map: Texture, color: number): SpriteMaterial {
+  let material = coronas.get(color)
+  if (!material) {
+    material = new SpriteMaterial({
+      map,
+      color: new Color(color),
+      transparent: true,
+      blending: AdditiveBlending,
+      // Глубину не пишет, но проверяет: планета, вставшая между тобой и звездой,
+      // обязана закрыть ореол — иначе он читается как наклейка на объективе.
+      depthWrite: false,
+      fog: false,
+    })
+    coronas.set(color, material)
+  }
+  return material
+}
+
+const starDiscs = new Map<number, MeshBasicMaterial>()
+
+/**
+ * Звезда светится сама: освещать источник света бессмысленно.
+ *
+ * Кэш по ЦВЕТУ, а не одиночка: одиночка приняла бы `color` от первой звезды и
+ * молча выбросила у всех следующих. Систем в галактике много, и красная звезда
+ * соседней светила бы жёлтым — из-за `??=`, а не из-за данных.
+ */
+export function starMaterial(color: number): MeshBasicMaterial {
+  let material = starDiscs.get(color)
+  if (!material) {
+    material = new MeshBasicMaterial({ color: new Color(color), fog: false })
+    starDiscs.set(color, material)
+  }
+  return material
+}
+
+let pod: MeshLambertMaterial | null = null
+
+export function podMaterial(): MeshLambertMaterial {
+  pod ??= new MeshLambertMaterial({ color: PALETTE.POD, flatShading: true })
+  return pod
+}
+
+let missile: MeshStandardMaterial | null = null
+
+export function missileMaterial(): MeshStandardMaterial {
+  missile ??= new MeshStandardMaterial({
+    vertexColors: true,
+    flatShading: true,
+    metalness: 0.5,
+    roughness: 0.45,
+  })
+  return missile
+}
+
+let explosion: MeshBasicMaterial | null = null
+
+export function explosionMaterial(): MeshBasicMaterial {
+  explosion ??= new MeshBasicMaterial({
+    color: PALETTE.EXPLOSION,
+    transparent: true,
+    blending: AdditiveBlending,
+    depthWrite: false,
+    fog: false,
+  })
+  return explosion
+}
+
+const tracers = new Map<string, MeshBasicMaterial>()
+
+/**
+ * Материал болта. Ключ — цвет и прозрачность: сколько разных лазеров в бою,
+ * столько материалов, и ни одним больше. Создаются один раз на модуль.
+ *
+ * `MeshBasicMaterial`, а не `LineBasicMaterial`: болт стал цилиндром, потому что
+ * толщину линии WebGL не поддерживает.
+ */
+export function tracerMaterial(color: number, opacity: number): MeshBasicMaterial {
+  const key = `${color}:${opacity}`
+  let material = tracers.get(key)
+  if (!material) {
+    material = new MeshBasicMaterial({
+      color,
+      transparent: true,
+      opacity,
+      blending: AdditiveBlending,
+      depthWrite: false,
+      fog: false,
+    })
+    tracers.set(key, material)
+  }
+  return material
+}
+
+let dust: LineBasicMaterial | null = null
+
+/** Пыль рисуется отрезками: на крейсере они вытягиваются в штрихи. */
+export function dustMaterial(): LineBasicMaterial {
+  dust ??= new LineBasicMaterial({
+    color: 0xb9c6d4,
+    transparent: true,
+    opacity: 0.55,
+    depthWrite: false,
+    fog: false,
+  })
+  return dust
+}
+
+let stars: PointsMaterial | null = null
+
+export function starfieldMaterial(size: number): PointsMaterial {
+  stars ??= new PointsMaterial({
+    color: 0xffffff,
+    size,
+    // Далёкие звёзды не должны уменьшаться с расстоянием — они бесконечно далеко.
+    sizeAttenuation: false,
+    depthWrite: false,
+    fog: false,
+  })
+  return stars
+}
+
+let cockpit: MeshStandardMaterial | null = null
+
+export function cockpitMaterial(): MeshStandardMaterial {
+  cockpit ??= new MeshStandardMaterial({
+    vertexColors: true,
+    flatShading: true,
+    side: DoubleSide,
+    metalness: MATERIAL.HULL_METALNESS,
+    roughness: MATERIAL.HULL_ROUGHNESS,
+  })
+  return cockpit
+}
+
+let tractor: LineBasicMaterial | null = null
+
+/** Луч захвата. Аддитивный и без записи глубины: это свет, а не трос. */
+export function tractorMaterial(): LineBasicMaterial {
+  tractor ??= new LineBasicMaterial({
+    color: PALETTE.TRACTOR,
+    transparent: true,
+    opacity: 0.55,
+    blending: AdditiveBlending,
+    depthWrite: false,
+    fog: false,
+  })
+  return tractor
+}

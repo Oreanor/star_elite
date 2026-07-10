@@ -1,0 +1,16 @@
+@import 'tailwindcss';
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  background: #000;
+  overflow: hidden;
+}
+
+body {
+  font-family: 'Consolas', 'DejaVu Sans Mono', monospace;
+  /* Курсор не нужен: игра живёт в pointer lock. */
+  cursor: crosshair;
+}
