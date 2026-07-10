@@ -5,11 +5,10 @@ import {
   BufferAttribute,
   BufferGeometry,
   Color,
-  IcosahedronGeometry,
   LineBasicMaterial,
   LineDashedMaterial,
+  LineLoop,
   LineSegments,
-  MeshBasicMaterial,
   PerspectiveCamera,
   ShaderMaterial,
   Vector3,
@@ -224,18 +223,38 @@ function Stars({
   )
 }
 
+/** Единичная окружность в плоскости XY (нормаль +Z) — для метки, что смотрит в камеру. */
+const markerRingGeometry = (() => {
+  const N = 64
+  const points = new Float32Array(N * 3)
+  for (let i = 0; i < N; i++) {
+    const a = (i / N) * Math.PI * 2
+    points[i * 3] = Math.cos(a)
+    points[i * 3 + 1] = Math.sin(a)
+    points[i * 3 + 2] = 0
+  }
+  const g = new BufferGeometry()
+  g.setAttribute('position', new BufferAttribute(points, 3))
+  return g
+})()
+
 /**
- * Где ты сам. Каркасная клетка вокруг родной звезды: закрасить её было бы нечестно —
- * звезда там своего класса и своего цвета, а метка не должна его подменять.
+ * Где ты сам. Раньше была каркасная клетка (икосаэдр) — рябила проволокой поверх
+ * звёзд. Силуэт сферы со всех сторон — ОКРУЖНОСТЬ, ей и метим: кольцо, повёрнутое
+ * к камере, читается как обвод звезды с любого угла. Закрасить нельзя — звезда
+ * там своего класса и цвета, метка не должна его подменять.
  */
 function YouAreHere({ at }: { at: Vector3 }) {
-  const geometry = useMemo(() => new IcosahedronGeometry(1, 1), [])
-  const material = useMemo(
-    () => new MeshBasicMaterial({ color: UI.TARGET, wireframe: true, toneMapped: false }),
-    [],
-  )
+  const ref = useRef<LineLoop>(null)
+  const material = useMemo(() => new LineBasicMaterial({ color: UI.TARGET, toneMapped: false }), [])
+  // Кольцо всегда лицом к камере: копируем её поворот — плоскость XY встаёт в экран.
+  useFrame((state) => {
+    if (ref.current) ref.current.quaternion.copy(state.camera.quaternion)
+  })
   // Метка не мишень: указатель обязан проходить сквозь неё к звёздам.
-  return <mesh geometry={geometry} material={material} position={at} scale={0.8} raycast={() => null} />
+  return (
+    <lineLoop ref={ref} geometry={markerRingGeometry} material={material} position={at} scale={0.9} raycast={() => null} />
+  )
 }
 
 /**
