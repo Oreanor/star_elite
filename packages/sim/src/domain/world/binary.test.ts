@@ -38,23 +38,42 @@ function wait(world: World, seconds: number): void {
 }
 
 describe('двойные звёзды', () => {
-  it('двойные — редкость: их единицы процентов, а не фон', () => {
+  it('двойные встречаются примерно у пятой части систем', () => {
     const galaxy = generateGalaxy(GALAXY.SEED)
     const share = galaxy.filter((s) => s.companion).length / galaxy.length
-    // Достаточно, чтобы изредка попасться, но не настолько, чтобы примелькаться.
-    expect(share).toBeGreaterThan(0.01)
-    expect(share).toBeLessThan(0.1)
+    expect(share).toBeGreaterThan(0.12)
+    expect(share).toBeLessThan(0.28)
   })
 
-  it('спутник того же класса, что главная: пары — ровесники из одного облака', () => {
+  it('спутник не крупнее главной и не экзотический', () => {
     for (const s of generateGalaxy(GALAXY.SEED)) {
       if (!s.companion) continue
-      expect(s.companion.class).toBe(s.star.class)
-      expect(s.companion.color).toBe(s.star.color)
-      // Сопоставимого, но не равного размера: близнецы до пикселя — штамп.
-      expect(s.companion.radius).toBeLessThan(s.star.radius)
-      expect(s.companion.radius).toBeGreaterThan(s.star.radius * 0.5)
+      // Главной зовут более массивную — значит и более крупную.
+      expect(s.companion.radius).toBeLessThanOrEqual(s.star.radius)
+      // Только главная последовательность: топливо у пары есть у обеих.
+      expect(s.companion.scoopable).toBe(true)
     }
+  })
+
+  it('бывают и близнецы, и разноцветные пары — три сорта, а не один штамп', () => {
+    let twins = 0
+    let mixed = 0
+    let redDwarfPairs = 0
+    for (const s of generateGalaxy(GALAXY.SEED)) {
+      if (!s.companion) continue
+      if (s.companion.class === s.star.class) {
+        twins++
+        if (s.star.class === 'M') redDwarfPairs++
+      } else {
+        mixed++
+        // Спутник всегда холоднее (дальше по списку), а не горячее главной.
+        expect(s.companion.radius).toBeLessThan(s.star.radius)
+      }
+    }
+    // Все три сорта должны встречаться, иначе «разнообразие» — пустой звук.
+    expect(twins).toBeGreaterThan(0)
+    expect(mixed).toBeGreaterThan(0)
+    expect(redDwarfPairs).toBeGreaterThan(0)
   })
 
   it('обе обращаются вокруг барицентра, а не одна вокруг другой', () => {
