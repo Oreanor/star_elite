@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { UI } from '../theme'
 import { Vector3 } from 'three'
 import { shipAxes, type BodyEntity, type World } from '@elite/sim'
+import { useWheelZoom } from './useWheelZoom'
 
 /**
  * Карта системы — голограмма над консолью.
@@ -276,12 +277,16 @@ function Hologram({
   onSelect: (id: number) => void
   onZoom: (deltaY: number) => void
 }) {
+  // Зум колесом/щипком — только карта, а не окно браузера (см. useWheelZoom).
+  const svgRef = useRef<SVGSVGElement>(null)
+  useWheelZoom(svgRef, onZoom)
+
   return (
     <svg
+      ref={svgRef}
       width={VIEW}
       height={VIEW}
       viewBox={`${-VIEW / 2} ${-VIEW / 2} ${VIEW} ${VIEW}`}
-      onWheel={(e) => onZoom(e.deltaY)}
     >
       <defs>
         <radialGradient id="map-disc">

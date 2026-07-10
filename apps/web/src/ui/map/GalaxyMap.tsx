@@ -1,5 +1,6 @@
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useWheelZoom } from './useWheelZoom'
 import {
   BufferAttribute,
   BufferGeometry,
@@ -412,6 +413,13 @@ export function GalaxyMap({ onClose }: { onClose: () => void }) {
   const control = useRef({ yaw: 0.6, pitch: 0.5, distance: GALAXY.RADIUS_LY * 2.6 })
   const dragging = useRef(false)
   const label = useRef<HTMLDivElement>(null)
+  const viewport = useRef<HTMLDivElement>(null)
+
+  // Зум колесом/щипком — только карта. Нативный слушатель гасит браузерный зум.
+  useWheelZoom(viewport, (deltaY) => {
+    const d = control.current.distance * (1 + Math.sign(deltaY) * 0.12)
+    control.current.distance = Math.max(GALAXY.RADIUS_LY * 0.12, Math.min(GALAXY.RADIUS_LY * 5, d))
+  })
 
   const here = positionOf(systems[world.systemIndex]!)
   const marked = hovered ?? selected
@@ -454,6 +462,7 @@ export function GalaxyMap({ onClose }: { onClose: () => void }) {
         }}
       >
       <div
+        ref={viewport}
         className="relative flex-1 cursor-grab active:cursor-grabbing"
         onPointerDown={() => (dragging.current = true)}
         onPointerUp={() => (dragging.current = false)}
@@ -463,10 +472,6 @@ export function GalaxyMap({ onClose }: { onClose: () => void }) {
           control.current.yaw -= e.movementX * 0.005
           // Не даём перевернуться через полюс: карта — не кабина.
           control.current.pitch = Math.max(-1.4, Math.min(1.4, control.current.pitch + e.movementY * 0.005))
-        }}
-        onWheel={(e) => {
-          const d = control.current.distance * (1 + Math.sign(e.deltaY) * 0.12)
-          control.current.distance = Math.max(GALAXY.RADIUS_LY * 0.12, Math.min(GALAXY.RADIUS_LY * 5, d))
         }}
       >
         <Canvas
