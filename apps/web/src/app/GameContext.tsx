@@ -3,7 +3,12 @@ import {
   aiController,
   autodockController,
   createWorld,
+  enterSystem,
   jump,
+  systemDefFor,
+  CORE_INDEX,
+  GALAXY,
+  WORLD,
   type Arrival,
   type Controller,
   type World,
@@ -63,8 +68,32 @@ export interface Session {
 
 const GameContext = createContext<Session | null>(null)
 
+/**
+ * Случайная обитаемая система из нагенерированных — новая игра начинается не дома,
+ * а в незнакомом месте галактики.
+ *
+ * Ядро (чёрная дыра) и дом исключены намеренно: ядро — не система, а дом мы как раз
+ * и хотим оставить позади. Станция обязательна: игрок стартует с торговым трюмом, и
+ * забросить его в беззаконную пустоту без причала и рынка — это отнять смысл старта.
+ * Math.random здесь уместен: это слой приложения, а не детерминированная симуляция.
+ */
+function randomStartIndex(): number {
+  let fallback = CORE_INDEX
+  for (let tries = 0; tries < 64; tries++) {
+    const index = Math.floor(Math.random() * GALAXY.COUNT)
+    if (index === CORE_INDEX || index === WORLD.HOME_INDEX) continue
+    fallback = index
+    if (systemDefFor(index, GALAXY.SEED).station) return index
+  }
+  // Не нашли со станцией за разумное число попыток — берём последнюю годную.
+  return fallback === CORE_INDEX ? WORLD.HOME_INDEX : fallback
+}
+
 function createSession(): Session {
   const world = createWorld()
+  const start = randomStartIndex()
+  enterSystem(world, systemDefFor(start, world.galaxySeed), start)
+
   const intent = createIntent()
   const pilot = createPlayerController(intent)
 
