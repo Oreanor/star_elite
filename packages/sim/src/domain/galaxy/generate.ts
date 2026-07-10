@@ -13,7 +13,9 @@ import {
   type SecurityLevel,
   type StationType,
 } from '../../config/galaxy'
+import { WORLD } from '../../config/world'
 import { clamp, makeRng, type Rng } from '../../core/math'
+import { homeSystem } from './home'
 import { moonName, planetName, systemName } from './names'
 import { placeSystem } from './shape'
 import type { Moon, Planet, Settlement, Star, StarSystem, Station } from './types'
@@ -233,6 +235,10 @@ export function generateSystem(index: number, seed: number = GALAXY.SEED): StarS
     return { index, name: 'Ядро', x, y, z, star: BLACK_HOLE, planets: [], security: SECURITY_LEVELS[0] }
   }
 
+  // Родная система задана руками — но только в СВОЕЙ галактике. В любой другой
+  // под этим индексом стоит обычная звезда: Тиррион существует в одном экземпляре.
+  if (index === WORLD.HOME_INDEX && seed === GALAXY.SEED) return homeSystem(index, x, y, z)
+
   const name = systemName(rng)
   const star = makeStar(rng)
 
@@ -260,11 +266,18 @@ export function generateGalaxy(seed: number = GALAXY.SEED): StarSystem[] {
   const systems: StarSystem[] = []
   const taken = new Set<string>()
 
+  // Имена «Ядро» и «Тиррион» заняты до первого броска: их дали руками, и
+  // переименовать их разведение коллизий не вправе. Иначе случайный сосед с тем
+  // же именем, стоящий по индексу раньше, вытеснил бы родную систему из её имени.
+  // Чёрная дыра есть у каждой галактики, Тиррион — только у родной.
+  const fixed = new Set(seed === GALAXY.SEED ? [CORE_INDEX, WORLD.HOME_INDEX] : [CORE_INDEX])
+  for (const i of fixed) taken.add(generateSystem(i, seed).name)
+
   for (let i = 0; i < count; i++) {
     const system = generateSystem(i, seed)
 
     let name = system.name
-    if (taken.has(name)) {
+    if (taken.has(name) && !fixed.has(i)) {
       // Переброс из отдельного потока: сдвигать основной нельзя,
       // иначе изменится вся система, а не только её имя.
       const retry = makeRng(seed ^ Math.imul(i + 1, 0x85ebca6b))

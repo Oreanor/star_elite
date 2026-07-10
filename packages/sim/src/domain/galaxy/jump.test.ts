@@ -5,7 +5,8 @@ import { WORLD } from '../../config/world'
 import { isHyperdrive } from '../loadout'
 import { COMMODITIES, addCommodity } from '../cargo'
 import { refreshSpec, createWorld, type World } from '../world'
-import { jump, jumpBlock, jumpDistance } from './jump'
+import { generateGalaxy, generateSystem } from './generate'
+import { jump, jumpBlock, jumpDistance, systemDefFor } from './jump'
 import { placeSystem, distanceLy } from './shape'
 
 /**
@@ -139,6 +140,37 @@ describe('прыжок', () => {
     jump(world, target)
     expect(jump(world, WORLD.HOME_INDEX)).toBe(true)
     expect(world.systemName).toBe('Тиррион')
+  })
+
+  /**
+   * Карта читает каталог (`generateSystem`), сцена строит мир из `SystemDef`.
+   * Это два описания ОДНОЙ звезды, и разойтись им нельзя: пока они расходились,
+   * карта звала родную систему «Альовас», а причал под ногами — «Тиррион».
+   */
+  it('каталог и сцена описывают родную систему одинаково', () => {
+    const catalogue = generateSystem(WORLD.HOME_INDEX, GALAXY.SEED)
+    const def = systemDefFor(WORLD.HOME_INDEX, GALAXY.SEED)
+
+    expect(catalogue.name).toBe(def.name)
+    expect(catalogue.planets.length).toBe(def.planets.length)
+    expect(catalogue.planets.map((p) => p.name)).toEqual(def.planets.map((p) => p.name))
+    expect(catalogue.planets.map((p) => p.type)).toEqual(def.planets.map((p) => p.type))
+
+    const capital = catalogue.planets.find((p) => p.station)
+    expect(capital?.station?.name).toBe(def.station?.name)
+    expect(catalogue.star.color).toBe(def.star.color)
+  })
+
+  /** Тиррион существует в одном экземпляре: чужая галактика о нём не знает. */
+  it('в другой галактике под тем же индексом стоит обычная звезда', () => {
+    const alien = generateSystem(WORLD.HOME_INDEX, GALAXY.SEED ^ 0x1234)
+    expect(alien.name).not.toBe('Тиррион')
+  })
+
+  /** Имя, данное руками, не отбирает разведение коллизий: оно занято до бросков. */
+  it('в галактике ровно одна система с родным именем', () => {
+    const named = generateGalaxy(GALAXY.SEED).filter((s) => s.name === 'Тиррион')
+    expect(named.map((s) => s.index)).toEqual([WORLD.HOME_INDEX])
   })
 
   it('расстояние симметрично и считается по трём осям', () => {
