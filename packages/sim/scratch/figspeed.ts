@@ -8,7 +8,7 @@ import { MANOEUVRE } from '../src/config/manoeuvre'
 import { stepWorld, type Controller } from '../src/domain/sim'
 import { createWorld, STARTER_SYSTEM, type ShipEntity, type World } from '../src/domain/world'
 import { beginManoeuvre, createManoeuvre, stepManoeuvre, type ManoeuvreKind } from '../src/domain/flight/aerobatics'
-import { forward } from '../src/domain/flight/axes'
+import { forward, shipAxes } from '../src/domain/flight/axes'
 
 function measure(kind: ManoeuvreKind, speed = 180) {
   const world = createWorld({ ...STARTER_SYSTEM, patrols: [], belt: null })
@@ -47,13 +47,18 @@ function measure(kind: ManoeuvreKind, speed = 180) {
   const advance = travel.dot(before)
   const offset = travel.clone().addScaledVector(before, -advance).length()
   const after = forward(ship.state.quat, new Vector3())
-  return { seconds, advance, offset, dot: before.dot(after), peak }
+  // Остаточный крен: правый борт стартовал в (1,0,0), поворот вокруг носа уводит его.
+  const right = new Vector3()
+  shipAxes(ship.state.quat, new Vector3(), right, new Vector3())
+  const bank = (Math.atan2(right.y, right.x) * 180) / Math.PI
+  return { seconds, advance, offset, dot: before.dot(after), peak, bank }
 }
 
 for (const kind of ['barrel', 'loop', 'reversal'] as const) {
   const r = measure(kind)
   console.log(
     `${kind.padEnd(9)} ${r.seconds.toFixed(2)} с  сход ${r.offset.toFixed(0).padStart(4)} м  ` +
-    `вперёд ${r.advance.toFixed(0).padStart(4)} м  курс·курс ${r.dot.toFixed(3)}  пик ${r.peak.toFixed(2)} рад/с`,
+    `вперёд ${r.advance.toFixed(0).padStart(4)} м  курс·курс ${r.dot.toFixed(3)}  ` +
+    `крен ${r.bank.toFixed(1).padStart(6)}°  пик ${r.peak.toFixed(2)} рад/с`,
   )
 }

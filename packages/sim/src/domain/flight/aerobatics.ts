@@ -127,12 +127,15 @@ function endManoeuvre(ship: ShipEntity, m: Manoeuvre): void {
  */
 function driveBarrel(ship: ShipEntity, m: Manoeuvre, dt: number): void {
   const c = ship.controls
-  // Ручка крена за упором: бочка крутится резко, как форсаж маневровых.
-  c.roll = m.dir * MANOEUVRE.BARREL_ROLL_STICK
-  // Крен НЕ снапаем, в отличие от петли и разворота: сход с линии ∝ времени², и
-  // мгновенный разгон ужал бы один оборот до 0.8 с, а сход с 11 до 3 м — уклонение
-  // потеряло бы смысл. Пусть маневровые раскручиваются: оборот выходит за 1.6 с,
-  // сход — одиннадцать метров. Угол берём из ФАКТИЧЕСКОЙ угловой скорости.
+
+  // Вторую половину оборота — БЕЗ заказанной следующей — тормозим ВСТРЕЧНЫМ креном:
+  // корабль плавно замедляется и мягко встаёт у ровного, а не клинит на полном
+  // ходу. Успел за это время нажать бочку снова (буфер) — торможения нет, добираем
+  // оборот на полном ходу и уходим в следующую вплотную (endManoeuvre пустит её).
+  const braking = m.nextKind === null && m.angle > MANOEUVRE.FULL_TURN / 2
+  // Крен НЕ снапаем (в отличие от петли и разворота): сход с линии ∝ времени², и
+  // мгновенный разгон ужал бы оборот и обнулил сход. Пусть маневровые раскручиваются.
+  c.roll = (braking ? -m.dir : m.dir) * MANOEUVRE.BARREL_ROLL_STICK
   m.angle += Math.abs(ship.state.angVel.z) * dt
 
   const theta = m.angle * m.dir
@@ -140,7 +143,10 @@ function driveBarrel(ship: ShipEntity, m: Manoeuvre, dt: number): void {
   c.strafe = Math.cos(theta) * m.dir * MANOEUVRE.BARREL_STRAFE_STICK
   c.strafeUp = -Math.sin(theta) * m.dir * MANOEUVRE.BARREL_STRAFE_STICK
 
-  if (m.angle >= MANOEUVRE.FULL_TURN) endManoeuvre(ship, m)
+  // Конец: добрали оборот (при заказанной следующей endManoeuvre пустит её встык),
+  // либо на торможении крен сошёл почти в ноль — мягко встали, не уйдя в реверс.
+  const stopped = braking && Math.abs(ship.state.angVel.z) < MANOEUVRE.BARREL_BRAKE_STOP
+  if (m.angle >= MANOEUVRE.FULL_TURN || stopped) endManoeuvre(ship, m)
 }
 
 /**
