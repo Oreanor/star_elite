@@ -27,6 +27,7 @@ import {
 import { bombFlash, bombRing } from '../../render/bombFeel'
 import { HUD_SCALE } from '../../render/config'
 import { HUD_COLORS, bar, circle, corners, dot, line, rect, text } from './draw'
+import { drawFlare } from './drawFlare'
 import { angularSize, formatDistance, formatSpeed, projectPoint } from './project'
 
 /**
@@ -61,6 +62,9 @@ export function drawHud(frame: HudFrame): void {
 
   ctx.clearRect(0, 0, width, height)
   ctx.font = `${Math.round(9 * S)}px "Consolas", "DejaVu Sans Mono", monospace`
+
+  // Блик объектива — первым: он лежит на кадре, а приборы лежат на нём.
+  drawFlare(ctx, frame.camera, world, width, height)
 
   // Счётчик кадров рисуется ДО проверки на гибель: узнать, во что превратилась
   // частота, важнее всего именно тогда, когда на экране взрыв.
