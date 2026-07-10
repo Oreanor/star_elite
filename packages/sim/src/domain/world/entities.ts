@@ -1,4 +1,5 @@
 import { Quaternion, Vector3 } from 'three'
+import type { BodyKind } from '../../config/bodies'
 import type { PlanetType } from '../../config/galaxy'
 import type { Rng } from '../../core/math'
 import type { CargoHold } from '../cargo'
@@ -153,7 +154,7 @@ export interface OrbitDef {
 /** Крупные тела: статичны в масштабах боя, но реальны в координатах. */
 export interface BodyEntity {
   id: number
-  kind: 'star' | 'planet' | 'station' | 'moon'
+  kind: BodyKind
   /**
    * Чем планета является: скала, лёд, океан. Домен говорит, ЧТО это за мир;
    * во что его покрасить, решает рендер. Раньше он гадал по имени — «есть ли

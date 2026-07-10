@@ -60,17 +60,19 @@ function massLocked(ship: ShipEntity, world: World): boolean {
 
 /**
  * Предельный множитель рядом с телами: высота над поверхностью, делённая
- * на зону торможения. У самой планеты — единица, в пустоте — полный ход.
+ * на зону торможения этого вида тел. У самой планеты — единица, в пустоте — полный ход.
  *
  * Решает БЛИЖАЙШЕЕ тело, а не самое большое: высота уже содержит радиус в себе,
  * и звезде в 696 000 км не нужны поблажки, чтобы удержать корабль у своей короны.
+ * Побеждает не наименьшая высота, а наименьший ПОТОЛОК: у луны зона вчетверо
+ * меньше, и она уступает планете даже тогда, когда висит ближе.
  */
 function proximityCap(ship: ShipEntity, world: World): number {
   let cap: number = CRUISE.MAX_FACTOR
 
   for (const body of world.bodies) {
     const altitude = Math.max(0, body.pos.distanceTo(ship.state.pos) - body.radius)
-    const allowed = altitude / CRUISE.BRAKE_ZONE
+    const allowed = altitude / CRUISE.BRAKE_ZONE[body.kind]
     if (allowed < cap) cap = allowed
   }
   return clamp(cap, 1, CRUISE.MAX_FACTOR)

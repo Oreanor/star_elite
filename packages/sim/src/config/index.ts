@@ -1,5 +1,5 @@
 export { PHYSICS } from './physics'
-export { GRAVITY, MOON } from './bodies'
+export { BODY_KINDS, GRAVITY, MOON, type BodyKind } from './bodies'
 export { ASTEROID, DEBRIS, SCORE, WORLD } from './world'
 export {
   ARRIVAL,

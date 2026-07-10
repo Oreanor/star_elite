@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Mesh, Quaternion, Sprite, Vector3, type Texture } from 'three'
 import type { BodyEntity, PlanetType } from '@elite/sim'
 import { useSession } from '../../app/GameContext'
-import { ATMOSPHERE, ATMOSPHERE_COLOR, CITY_LIGHTS, CORONA } from '../config'
+import { ATMOSPHERE, ATMOSPHERE_COLOR, BODY_SEGMENTS, CITY_LIGHTS, CORONA } from '../config'
 import { atmosphereGeometry, planetGeometry, starGeometry, type PlanetLook } from '../geometry/bodies'
 import { coronaTexture } from '../geometry/corona'
 import { stationGeometry } from '../geometry/props'
@@ -82,7 +82,10 @@ function Planet({ body }: { body: BodyEntity }) {
 
   const look = lookFor(body)
   const seed = body.id * 7919
-  const geometry = useMemo(() => planetGeometry(look, seed), [look, seed])
+  // Луна получает грубую сферу: с расстояния, на котором её видно, шестьдесят
+  // меридианов не отличить от ста шестидесяти, а у гиганта их шесть штук.
+  const segments = BODY_SEGMENTS[body.kind]
+  const geometry = useMemo(() => planetGeometry(look, seed, segments), [look, seed, segments])
 
   // Текстура приходит поздно или не приходит вовсе. Одна перерисовка React
   // на планету за всю игру — не игровой кадр, здесь это допустимо.
