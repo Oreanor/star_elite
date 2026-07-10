@@ -70,6 +70,11 @@ function endManoeuvre(ship: ShipEntity, m: Manoeuvre): void {
   c.pitch = 0
   c.strafe = 0
   c.strafeUp = 0
+  // Гасим ОСТАТОЧНУЮ угловую скорость: на пике бочка крутится под 8 рад/с, и
+  // одного обнуления ручки мало — корабль по инерции доворачивал ещё пол-оборота
+  // за 360°, а камера, снова следя за креном, повторяла этот доворот. Фигура —
+  // управляемый манёвр: кончилась — корабль стабилен, а не докручивается сам.
+  ship.state.angVel.set(0, 0, 0)
 }
 
 /**
@@ -139,7 +144,14 @@ function driveReversal(ship: ShipEntity, m: Manoeuvre, dt: number): void {
   const c = ship.controls
 
   if (m.phase === 0) {
-    c.pitch = m.dir
+    // Ручку тангажа за упор: разворот идёт резче. Радиус держит loopThrottle,
+    // считая тягу от фактической угловой скорости, — быстрее, но не шире.
+    c.pitch = m.dir * MANOEUVRE.REVERSAL_STICK
+    // Маневровые СНАПАЮТ на фигурную скорость сразу, не раскачиваясь: тангаж —
+    // самая инертная ось (низкий PITCH_ACCEL), и без этого разгон съедал бы всю
+    // полупетлю, а «вдвое быстрее» упиралось бы в ускорение. Разворот — фигура,
+    // а не вираж: камера в нём удержана, рывок скорости кадр не дёргает.
+    if (m.angle === 0) ship.state.angVel.x = c.pitch * ship.spec.tuning.PITCH_RATE
     // Полупетля — та же петля: радиус у неё обязан быть тот же, иначе разворот
     // уносит корабль вперёд ровно туда, откуда он разворачивается уйти.
     c.throttle = loopThrottle(ship)
@@ -148,11 +160,15 @@ function driveReversal(ship: ShipEntity, m: Manoeuvre, dt: number): void {
       m.phase = 1
       m.angle = 0
       c.pitch = 0
+      // Гасим ОСТАТОЧНЫЙ тангаж перед докруткой крена: наложившись на крен, он
+      // уводил нос с линии разворота. Второй приём обязан быть чистым креном.
+      ship.state.angVel.x = 0
     }
     return
   }
 
-  c.roll = m.dir
+  c.roll = m.dir * MANOEUVRE.REVERSAL_STICK
+  if (m.angle === 0) ship.state.angVel.z = c.roll * ship.spec.tuning.ROLL_RATE
   m.angle += Math.abs(ship.state.angVel.z) * dt
   if (m.angle >= MANOEUVRE.HALF_TURN) endManoeuvre(ship, m)
 }

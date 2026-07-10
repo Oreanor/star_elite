@@ -39,7 +39,7 @@ export const EN: Record<keyof typeof RU, string> = {
   'key.retro': 'Ctrl',
   'key.retro.what': 'retro thrust',
   'key.cruise': 'Shift',
-  'key.cruise.what': 'interplanetary cruise drive (hold)',
+  'key.cruise.what': 'interplanetary cruise drive (toggle)',
   'key.fire': 'LMB / Space',
   'key.fire.what': 'lasers',
   'key.target': 'Tab',

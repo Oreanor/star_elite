@@ -41,7 +41,7 @@ export const RU = {
   'key.retro': 'Ctrl',
   'key.retro.what': 'ретро-тяга',
   'key.cruise': 'Shift',
-  'key.cruise.what': 'крейсерский ход между планетами (удерживать)',
+  'key.cruise.what': 'крейсерский ход между планетами (вкл/выкл)',
   'key.fire': 'ЛКМ / Space',
   'key.fire.what': 'лазер',
   'key.target': 'Tab',

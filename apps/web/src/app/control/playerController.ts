@@ -73,8 +73,10 @@ interface TapKey {
 }
 
 const TAPS: readonly TapKey[] = [
-  { code: 'KeyA', window: TAP_WINDOW_ROLL, kind: 'barrel', dir: -1 },
-  { code: 'KeyD', window: TAP_WINDOW_ROLL, kind: 'barrel', dir: 1 },
+  // Направление бочки совпадает с ручным креном той же клавиши: удержание A кренит
+  // в ту же сторону, что и двойное нажатие AA. Раньше они были встречными.
+  { code: 'KeyA', window: TAP_WINDOW_ROLL, kind: 'barrel', dir: 1 },
+  { code: 'KeyD', window: TAP_WINDOW_ROLL, kind: 'barrel', dir: -1 },
   { code: 'KeyW', window: TAP_WINDOW_THRUST, kind: 'loop', dir: 1 },
   { code: 'KeyS', window: TAP_WINDOW_THRUST, kind: 'reversal', dir: 1 },
 ]
@@ -275,10 +277,15 @@ export function createPlayerController(intent: PlayerIntent): Controller {
       c.boost = input.throttleUp ? boostMult(ship.loadout) : 1
       c.retro = isHeld('ControlLeft') || isHeld('ControlRight') ? 1 : 0
 
-      // Крейсерский ход — на Shift (удерживать): большая клавиша под мизинцем,
-      // её легко нащупать вслепую, а J приходилось искать. Форсаж съехал на ПКМ
-      // и Shift освободил.
-      intent.cruise = isHeld('ShiftLeft') || isHeld('ShiftRight')
+      // Крейсерский ход — ТУМБЛЕР на Shift: нажал — включился, нажал — выключился.
+      // Держать нельзя намеренно: долгое удержание Shift будит Sticky/Filter Keys
+      // Windows, и клавиши начинают залипать (отключить это из браузера нельзя —
+      // оно в самой ОС). Тумблер и удобнее: межпланетный перелёт длинный, держать
+      // палец на клавише незачем. Гасим оба Shift, чтобы непрочитанное нажатие не
+      // переключило режим лишний раз следующим кадром.
+      const shiftL = consumePress('ShiftLeft')
+      const shiftR = consumePress('ShiftRight')
+      if (shiftL || shiftR) intent.cruise = !intent.cruise
       // Луч — удержание, а не нажатие: пока держишь C, он тянет.
       intent.tractor = isHeld('KeyC')
     },
