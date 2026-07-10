@@ -19,6 +19,8 @@ export interface Controller {
   wantsMissile?(ship: ShipEntity, world: World): boolean
   /** Хочет ли пустить противоракетный импульс. */
   wantsEcm?(ship: ShipEntity, world: World): boolean
+  /** Хочет ли подорвать энергетическую бомбу. Боты не умеют — и не надо. */
+  wantsBomb?(ship: ShipEntity, world: World): boolean
   /** Держит ли тяговый луч. Боты не жадные — им трофеи не нужны. */
   wantsTractor?(ship: ShipEntity, world: World): boolean
   /** Держит ли клавишу крейсерского хода. Боты пока не умеют — и не нужно. */

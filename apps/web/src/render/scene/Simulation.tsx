@@ -76,6 +76,7 @@ export function Simulation() {
     if (consumePress('KeyF')) intent.flightAssist = !intent.flightAssist
     if (consumePress('KeyR')) intent.missile = true
     if (consumePress('KeyE')) intent.ecm = true
+    if (consumePress('KeyB')) intent.bomb = true
     if (consumePress('Tab')) world.lockedTargetId = cycleTarget(world, world.lockedTargetId)
 
     if (consumePress('KeyL')) {

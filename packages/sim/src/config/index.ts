@@ -11,7 +11,7 @@ export {
 } from './galaxy'
 export { AI } from './ai'
 export { CRUISE } from './cruise'
-export { ECM, GUNNERY, IMPACT, SALVAGE } from './weapons'
+export { BOMB, ECM, GUNNERY, IMPACT, SALVAGE } from './weapons'
 export { AUTODOCK, DOCKING, SHOP } from './station'
 export { CHASSIS_CATALOGUE, COBRA_MK3, SIDEWINDER, findChassis } from './chassis'
 export { MODULE_CATALOGUE, findModule } from './modules'

@@ -1,14 +1,16 @@
 import { Quaternion, Vector3 } from 'three'
 import { PHYSICS } from '../../config/physics'
-import { GUNNERY, SALVAGE } from '../../config/weapons'
+import { BOMB, GUNNERY, SALVAGE } from '../../config/weapons'
 import { ASTEROID, DEBRIS, SCORE } from '../../config/world'
 import {
   clearTractorMarks,
   coolGuns,
   expirePods,
+  fireBomb,
   fireEcm,
   fireLasers,
   fireMissile,
+  regenBomb,
   regenEnergy,
   regenShield,
   resolveShipVsSphere,
@@ -99,12 +101,15 @@ function stepWeapons(world: World, controllers: ControllerMap, dt: number): void
   for (const ship of allShips(world)) {
     coolGuns(ship, dt)
     regenEnergy(ship, dt)
+    // После щита: `regenShield` уже отработал в этом шаге, в `stepPhysics`.
+    regenBomb(ship, dt)
     if (!ship.alive) continue
 
     const controller = controllerFor(controllers, ship)
 
     // ПРО работает и на крейсерском ходу: ракета догоняет, а стволы вне фазы.
     if (controller.wantsEcm?.(ship, world)) fireEcm(world, ship)
+    if (controller.wantsBomb?.(ship, world)) fireBomb(world, ship)
 
     // На крейсерском ходу корабль вне фазы: лазер с относительной скоростью
     // 20 км/с — не оружие, а недоразумение.
@@ -190,6 +195,7 @@ function cleanup(world: World): void {
 
   world.tracers = world.tracers.filter((t) => now - t.born < GUNNERY.TRACER_LIFE)
   world.explosions = world.explosions.filter((e) => now - e.born < DEBRIS.EXPLOSION_LIFE)
+  world.shockwaves = world.shockwaves.filter((w) => now - w.born < BOMB.WAVE_LIFE)
 
   for (const ship of world.ships) {
     if (ship.alive || ship.wreckAt !== null) continue

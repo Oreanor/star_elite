@@ -236,6 +236,8 @@ export function rearmCost(ship: ShipEntity): number {
 /**
  * Пополнить ракеты во всех пусковых. Пусковая — модуль, ракета — расходник:
  * без этой операции ракетное вооружение работало ровно один вылет.
+ *
+ * Бомбы здесь нет намеренно: она копится от реактора, а не покупается.
  */
 export function rearm(world: World, ship: ShipEntity): boolean {
   const cost = rearmCost(ship)

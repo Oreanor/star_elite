@@ -58,6 +58,9 @@ export function makeShip(
     lastHitAt: -1e9,
     energy: spec.power.capacity,
     ecmCooldown: 0,
+    // Бомба есть только у игрока, и это НЕ привилегия физики: пират, снимающий
+    // звено одной кнопкой, — не бой, а лотерея. Заряжена с первого кадра.
+    bombCharge: faction === 'player' ? 1 : 0,
     hold,
     guns,
     cruise: createCruiseState(),
@@ -230,6 +233,7 @@ export function enterSystem(world: World, def: SystemDef, systemIndex: number): 
   world.missiles = []
   world.tracers = []
   world.explosions = []
+  world.shockwaves = []
   world.lockedTargetId = null
   world.navTargetId = world.bodies.find((b) => b.kind === 'station')?.id ?? null
 
@@ -281,6 +285,7 @@ export function createWorld(def: SystemDef = STARTER_SYSTEM): World {
     bodies,
     tracers: [],
     explosions: [],
+    shockwaves: [],
     docked: false,
     dockArmed: true,
     lockedTargetId: null,

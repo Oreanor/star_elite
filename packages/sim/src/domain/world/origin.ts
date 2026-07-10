@@ -44,4 +44,6 @@ export function maybeShiftOrigin(world: World): void {
     t.to.add(_shift)
   }
   for (const e of world.explosions) e.pos.add(_shift)
+  // `shockwaves` здесь нет намеренно: у вспышки бомбы нет места в мире.
+  // Это экранный эффект, а не тело, — ей нечего сдвигать.
 }

@@ -3,6 +3,7 @@ export {
   type BodyEntity,
   type CargoPodEntity,
   type Explosion,
+  type Shockwave,
   type Faction,
   type GunState,
   type MissileEntity,

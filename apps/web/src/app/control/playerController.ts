@@ -71,6 +71,8 @@ export interface PlayerIntent {
   missile: boolean
   /** Хочет пустить противоракетный импульс (однократно). */
   ecm: boolean
+  /** Хочет подорвать энергетическую бомбу (однократно). */
+  bomb: boolean
   /** Держит тяговый луч (C). Не однократное действие — удержание. */
   tractor: boolean
   /** Тяга, 0..1. Живёт между кадрами, поэтому хранится тут, а не в ShipControls. */
@@ -100,6 +102,7 @@ export function createIntent(): PlayerIntent {
     cruise: false,
     missile: false,
     ecm: false,
+    bomb: false,
     tractor: false,
     throttle: 0.45,
     surge: 0,
@@ -297,6 +300,16 @@ export function createPlayerController(intent: PlayerIntent): Controller {
       if (autofightActive(world)) return aiController.wantsEcm?.(ship, world) ?? false
       if (!intent.ecm) return false
       intent.ecm = false
+      return true
+    },
+
+    /**
+     * Бомбу автобою не отдаём: их три на вылет, и решать, когда сжечь одну,
+     * обязан пилот. Бот, у которого «сложно», нажал бы её в первом же бою.
+     */
+    wantsBomb(): boolean {
+      if (!intent.bomb) return false
+      intent.bomb = false
       return true
     },
 

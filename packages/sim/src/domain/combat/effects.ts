@@ -11,3 +11,11 @@ export function spawnTracer(world: World, from: Vector3, to: Vector3, hostile: b
 export function spawnExplosion(world: World, pos: Vector3, vel: Vector3, scale: number): void {
   world.explosions.push({ pos: pos.clone(), vel: vel.clone(), born: world.time, scale })
 }
+
+/**
+ * Вспышка энергетической бомбы. Ни позиции, ни скорости: это экранный эффект,
+ * а не тело. Рисуется поверх корабля и живёт пару секунд.
+ */
+export function spawnShockwave(world: World, power: number): void {
+  world.shockwaves.push({ born: world.time, power })
+}

@@ -42,6 +42,8 @@ export interface ShipEntity {
   energy: number
   /** Перезаряд ПРО, с. */
   ecmCooldown: number
+  /** Накопитель энергетической бомбы, 0..1. Копится сам, но только поверх целого щита. */
+  bombCharge: number
 
   hold: CargoHold
   guns: GunState[]
@@ -152,6 +154,20 @@ export interface Explosion {
   scale: number
 }
 
+/**
+ * Вспышка энергетической бомбы. Позиции у неё НЕТ: поражение мгновенно, а всё,
+ * что видит пилот, — экранный эффект на пару секунд. Тела в мире она не образует,
+ * ни с чем не пересекается и никого не задевает; урон уже нанесён в `fireBomb`.
+ *
+ * Радиус тоже не хранится — он выводится из возраста. Хранить то, что следует
+ * из времени, значит однажды это рассинхронизировать.
+ */
+export interface Shockwave {
+  born: number
+  /** Доля мощности, 0..1. Слабый импульс и светит слабее — иначе вспышка врёт. */
+  power: number
+}
+
 export interface World {
   time: number
 
@@ -164,6 +180,7 @@ export interface World {
 
   tracers: Tracer[]
   explosions: Explosion[]
+  shockwaves: Shockwave[]
 
   /** Захваченная цель боя. */
   /** Корабль стоит в доке. Мир при этом не шагает: стыковка — это остановка. */

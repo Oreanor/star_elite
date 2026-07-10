@@ -11,7 +11,13 @@ import {
 } from 'three'
 import { useSession } from '../../app/GameContext'
 import { LASER, LASER_GLOW, LASER_GLOW_FALLBACK } from '../config'
-import { explosionMaterial, missileMaterial, podMaterial, tracerMaterial, tractorMaterial } from '../materials/materials'
+import {
+  explosionMaterial,
+  missileMaterial,
+  podMaterial,
+  tracerMaterial,
+  tractorMaterial,
+} from '../materials/materials'
 import { missileGeometry } from '../geometry/ships'
 import { boltGeometry, podGeometry } from '../geometry/props'
 

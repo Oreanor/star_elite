@@ -9,6 +9,7 @@ import {
   findBody,
   findStation,
   autofightActive,
+  bombReady,
   clamp,
   incomingMissile,
   isCruising,
@@ -23,6 +24,7 @@ import {
   type ShipEntity,
   type World,
 } from '@elite/sim'
+import { bombFlash, bombRing } from '../../render/bombFeel'
 import { HUD_SCALE } from '../../render/config'
 import { HUD_COLORS, bar, circle, corners, dot, line, rect, text } from './draw'
 import { angularSize, formatDistance, formatSpeed, projectPoint } from './project'
@@ -78,6 +80,9 @@ export function drawHud(frame: HudFrame): void {
   drawCruise(frame)
   drawDocking(frame)
   drawAlerts(frame)
+
+  // Последним: круг бомбы бьёт поверх всего, включая прицел.
+  drawBombBurst(frame)
 }
 
 /** Ракета ближе этого по времени — тревога. Дальше пилоту не о чем волноваться, с. */
@@ -424,7 +429,8 @@ function drawReadouts({ ctx, world, height }: HudFrame): void {
   const barHeight = 5 * S
   const step = 11 * S
 
-  let y = height - 77 * S
+  // Шесть строк по `step`: шкала бомбы добавила ещё одну, и отсчёт снизу это учитывает.
+  let y = height - 88 * S
 
   if (!player.controls.flightAssist) {
     text(ctx, 'АССИСТ ВЫКЛ', x, y - step, HUD_COLORS.WARN)
@@ -440,6 +446,9 @@ function drawReadouts({ ctx, world, height }: HudFrame): void {
     ['КОРП', hull, hull < 0.3 ? HUD_COLORS.DANGER : HUD_COLORS.PRIMARY],
     // Батареи: один импульс ПРО стоит десятой доли шкалы.
     ['ЭНРГ', energy, energy < 0.15 ? HUD_COLORS.DANGER : HUD_COLORS.PRIMARY],
+    // Бомба копится поверх целого щита. Заряженная светится целью — её видно
+    // боковым зрением, и это единственная шкала, которую пилот ждёт заполненной.
+    ['БОМБА', player.bombCharge, bombReady(player) ? HUD_COLORS.TARGET : HUD_COLORS.DIM],
     ['ТЕПЛО', heat, heat > 0.7 ? HUD_COLORS.DANGER : HUD_COLORS.WARN],
     ['ТЯГА', player.controls.throttle, HUD_COLORS.PRIMARY],
   ]
@@ -474,6 +483,67 @@ function drawCruise({ ctx, world, width }: HudFrame): void {
   if (cruise.block === 'proximity') {
     text(ctx, 'ТОРМОЖЕНИЕ У ТЕЛА', width / 2, 30 * S, HUD_COLORS.WARN, 'center')
   }
+}
+
+/**
+ * Энергетическая бомба: круг, резко расходящийся из корабля, и двойная засветка.
+ *
+ * Всё рисуется на HUD, а не в сцене и не постобработкой. Причина не в лени: круг
+ * обязан попасть в ту же пиксельную сетку, что и остальной кадр, — иначе он один
+ * окажется в полном разрешении экрана и выдаст, что «пиксельность» нарисованная.
+ * А сфера в сцене здесь и не нужна: поражение мгновенно, пересекать ей нечего.
+ *
+ * Центр — середина кадра, там же, где корабль. Радиус, яркость края и заливки
+ * приходят из `bombRing`, функции от возраста вспышки. Своего таймера у HUD нет
+ * и быть не должно: он рисует кадр, а не помнит его.
+ */
+function drawBombBurst({ ctx, world, width, height }: HudFrame): void {
+  const ring = bombRing(world)
+  if (ring) {
+    const cx = width / 2
+    const cy = height / 2
+    // Круг уходит за угол кадра: энергия обязана накрыть экран, а не упереться в него.
+    const radius = Math.max(1, ring.radius * Math.hypot(width, height) * 0.62)
+
+    ctx.save()
+    ctx.globalCompositeOperation = 'lighter'
+
+    if (ring.fill > 0.01) {
+      ctx.globalAlpha = ring.fill
+      ctx.fillStyle = '#ffffff'
+      ctx.beginPath()
+      ctx.arc(cx, cy, radius, 0, Math.PI * 2)
+      ctx.fill()
+    }
+
+    // Кромка: три кольца, от широкого тусклого к тонкому яркому. Аддитивное
+    // наложение складывает их в свечение — размытие холсту не по карману.
+    if (ring.edge > 0.01) {
+      const glow: [number, number, string][] = [
+        [9 * S, 0.22, HUD_COLORS.PRIMARY],
+        [4 * S, 0.4, HUD_COLORS.PRIMARY],
+        [1.5 * S, 0.95, '#ffffff'],
+      ]
+      for (const [lineWidth, strength, color] of glow) {
+        ctx.globalAlpha = Math.min(1, ring.edge * strength)
+        ctx.lineWidth = lineWidth
+        ctx.strokeStyle = color
+        ctx.beginPath()
+        ctx.arc(cx, cy, radius, 0, Math.PI * 2)
+        ctx.stroke()
+      }
+    }
+    ctx.restore()
+  }
+
+  const flash = bombFlash(world)
+  if (flash < 0.01) return
+
+  ctx.save()
+  ctx.globalAlpha = Math.min(0.8, flash)
+  ctx.fillStyle = HUD_COLORS.PRIMARY
+  ctx.fillRect(0, 0, width, height)
+  ctx.restore()
 }
 
 /**

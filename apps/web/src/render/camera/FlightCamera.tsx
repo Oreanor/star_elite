@@ -3,6 +3,7 @@ import { useRef } from 'react'
 import { PerspectiveCamera, Quaternion, Vector3 } from 'three'
 import { CRUISE, clamp } from '@elite/sim'
 import { useSession } from '../../app/GameContext'
+import { bombShake } from '../bombFeel'
 import { CAMERA, RENDER } from '../config'
 
 /**
@@ -20,6 +21,7 @@ const _swing = new Quaternion()
 const _twist = new Quaternion()
 const _desiredQuat = new Quaternion()
 const _shake = new Vector3()
+const _bombShake = new Vector3()
 const _axis = new Vector3()
 
 const _identity = /* @__PURE__ */ new Quaternion()
@@ -147,6 +149,12 @@ export function FlightCamera() {
       // Смещение в связанных осях: трясёт кабину, а не мир.
       _shake.applyQuaternion(camera.quaternion)
       camera.position.add(_shake)
+    }
+
+    // Удар энергетической бомбы. Тоже в связанных осях и тоже мимо физики:
+    // амплитуда выведена из возраста волны, своего таймера у неё нет.
+    if (bombShake(session.world, _bombShake).lengthSq() > 1e-8) {
+      camera.position.add(_bombShake.applyQuaternion(camera.quaternion))
     }
 
     const baseFov = cockpit ? RENDER.FOV_COCKPIT : RENDER.FOV_CHASE
