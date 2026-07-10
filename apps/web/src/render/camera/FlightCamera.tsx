@@ -2,6 +2,7 @@ import { useFrame, useThree } from '@react-three/fiber'
 import { useRef } from 'react'
 import { PerspectiveCamera, Quaternion, Vector3 } from 'three'
 import { CRUISE, clamp } from '@elite/sim'
+import { manoeuvreHoldsCamera } from '../../app/control/playerController'
 import { useSession } from '../../app/GameContext'
 import { bombShake } from '../bombFeel'
 import { CAMERA, RENDER } from '../config'
@@ -23,6 +24,7 @@ const _desiredQuat = new Quaternion()
 const _shake = new Vector3()
 const _bombShake = new Vector3()
 const _axis = new Vector3()
+const _camRot = new Quaternion()
 
 const _identity = /* @__PURE__ */ new Quaternion()
 /** Ось крена в связанных осях. Нос смотрит в −Z, значит крутимся вокруг Z. */
@@ -90,8 +92,39 @@ export function FlightCamera() {
     const state = player.state
     const cockpit = session.view === 'cockpit'
 
+    /**
+     * В петле камера НЕ едет за носом: она держит свою ориентацию и просто
+     * сопровождает корабль, пока тот обходит круг. Поэтому и смещение считается
+     * от ориентации КАМЕРЫ, а не корабля — иначе точка съёмки уходила бы вместе
+     * с носом, и петли не было бы видно вовсе.
+     *
+     * Когда фигура кончится, пружина сама перенесёт камеру в хвост. После
+     * разворота хвост оказывается с другой стороны — это и есть «перебежать».
+     */
+    const held = !cockpit && manoeuvreHoldsCamera(session.intent)
+
     const offset = cockpit ? CAMERA.COCKPIT_OFFSET : CAMERA.CHASE_OFFSET
-    _offset.set(offset[0], offset[1], offset[2]).applyQuaternion(state.quat)
+    _offset.set(offset[0], offset[1], offset[2])
+    if (held) {
+      /**
+       * И отодвигается — ровно на петлю. Радиус петли есть v/ω, и с обычных
+       * двадцати четырёх метров камера оказывается ВНУТРИ круга: корабль
+       * пролетает сквозь неё и заслоняет кадр собственным брюхом.
+       *
+       * Отъезд считается из радиуса, а не подбирается: на 60 м/с петля выходит
+       * сорокапятиметровой, на боевых двухстах — полуторастаметровой, и никакая
+       * одна константа не годится сразу для обеих.
+       */
+      const rate = Math.max(0.4, Math.abs(state.angVel.x))
+      const loopRadius = state.vel.length() / rate
+      const pullback = clamp(1 + (3 * loopRadius) / _offset.length(), 1, 8)
+      _offset.multiplyScalar(pullback)
+
+      _camRot.copy(camSwing).multiply(camTwist)
+      _offset.applyQuaternion(_camRot)
+    } else {
+      _offset.applyQuaternion(state.quat)
+    }
     _target.copy(state.pos).add(_offset)
 
     if (cockpit) {
@@ -113,9 +146,13 @@ export function FlightCamera() {
       swingTwist(state.quat, _rollAxis, _swing, _twist)
 
       // В бочке крен не передаём вовсе: это фигура пилотажа, а не вираж.
-      const wantTwist = session.intent.barrelDir !== 0 ? _identity : _twist
+      const wantTwist = session.intent.manoeuvre.kind === 'barrel' ? _identity : _twist
 
-      if (running) {
+      if (held) {
+        // Камера стоит и ждёт. Ориентацию не трогаем совсем — только позицию,
+        // которая уже посчитана от этой самой ориентации.
+        camera.position.lerp(_target, 1 - Math.exp(-CAMERA.CHASE_STIFFNESS * dt))
+      } else if (running) {
         camSwing.slerp(_swing, 1 - Math.exp(-CAMERA.CHASE_ROT_STIFFNESS * dt))
         camTwist.slerp(wantTwist, 1 - Math.exp(-CAMERA.ROLL_STIFFNESS * dt))
         camera.position.lerp(_target, 1 - Math.exp(-CAMERA.CHASE_STIFFNESS * dt))

@@ -101,7 +101,16 @@ export async function requestLock(): Promise<boolean> {
  * Поэтому захват снимается явно и в тех местах, где на браузер надеяться нельзя.
  */
 export function releaseLock(): void {
-  if (document.pointerLockElement) document.exitPointerLock()
+  /**
+   * Зовём БЕЗУСЛОВНО, не спрашивая `pointerLockElement`.
+   *
+   * Браузер снимает захват сам — при потере фокуса, при уходе элемента из DOM —
+   * и `pointerLockElement` становится пустым. А прижатие курсора остаётся: оно
+   * живёт в системе, и снять его нечем, кроме честного выхода из захвата.
+   * Проверка «а захвачено ли» ровно в этом случае и мешала: она видела пустоту
+   * и не делала ничего. Холостой вызов ничего не стоит.
+   */
+  document.exitPointerLock()
 }
 
 const PREVENT_DEFAULT = new Set(['Space', 'Tab', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'])
@@ -198,7 +207,7 @@ export function attachInput(canvas: HTMLCanvasElement): () => void {
     if (lockTarget === canvas) lockTarget = null
     // Канвас уходит из DOM (гиперпрыжок пересобирает сцену, HMR — всё дерево).
     // Захват, переживший свой элемент, снять уже некому.
-    if (document.pointerLockElement === canvas) document.exitPointerLock()
+    releaseLock()
     window.removeEventListener('keydown', onKeyDown)
     window.removeEventListener('keyup', onKeyUp)
     window.removeEventListener('blur', onBlur)
@@ -211,3 +220,13 @@ export function attachInput(canvas: HTMLCanvasElement): () => void {
     canvas.removeEventListener('contextmenu', onContextMenu)
   }
 }
+
+/**
+ * Горячая перезагрузка выбрасывает этот модуль вместе с `lockTarget`, а захват
+ * курсора остаётся на канвасе, которого уже нет. Снять его после этого нечем:
+ * новый модуль про старый элемент не знает, и мышь до конца сеанса разработки
+ * ездит в прямоугольнике покойного канваса.
+ *
+ * В сборке этой ветки нет — `import.meta.hot` есть только у dev-сервера.
+ */
+if (import.meta.hot) import.meta.hot.dispose(() => releaseLock())

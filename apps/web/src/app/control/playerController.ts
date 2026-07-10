@@ -33,36 +33,54 @@ const THROTTLE_RATE = 0.9
 const STICK_DEADZONE = 0.02
 
 /**
- * «Бочка» — двойное нажатие A или D.
+ * Фигуры пилотажа — двойное нажатие клавиши.
  *
- * Домен про неё ничего не знает: это просто контроллер, который на время
- * прижимает крен и поперечную тягу. Уклонение получается физикой, а не
- * неуязвимостью — ракета промахивается потому, что корабль сошёл с её линии.
+ * Домен про них ничего не знает: это просто контроллер, который на время сам
+ * держит ручку. Уклонение получается ФИЗИКОЙ, а не неуязвимостью — ракета
+ * промахивается потому, что корабль сошёл с её линии, а преследователь
+ * проскакивает вперёд потому, что не смог повторить.
  *
- * Меряется УГЛОМ, а не секундами. По времени бочка при крене 3.08 рад/с
- * успевала провернуть 220° и замирала вверх ногами. Полный оборот заканчивается
- * ровно там, где начался, при любых маневровых.
- *
- * Тяга держится в НЕПОДВИЖНОМ направлении: в связанных осях она вращается
- * навстречу крену. Иначе за оборот корабль опишет окружность радиусом a/ω²
- * (метра три) и вернётся на прежнюю линию — красиво и бесполезно.
+ * Каждая фигура меряется УГЛОМ, а не секундами. По времени бочка при крене
+ * 3.08 рад/с успевала провернуть 220° и замирала вверх ногами. Оборот,
+ * отмеренный углом, кончается ровно там, где начался, при любых маневровых.
  */
-const BARREL = {
+
+/** Что именно крутим. Новая фигура — новая запись здесь, а не новый `if`. */
+export type ManoeuvreKind = 'barrel' | 'loop' | 'reversal'
+
+const MANOEUVRE = {
   /**
    * Второе нажатие должно уложиться в это окно, с.
    *
    * Было 0.3 — и обычный перехват крена (отпустил A, тут же нажал снова) читался
-   * как двойной тап, отправляя корабль в незаказанный оборот. Намеренную бочку
+   * как двойной тап, отправляя корабль в незаказанный оборот. Намеренную фигуру
    * крутят быстро, случайную — нет.
    */
   TAP_WINDOW: 0.18,
-  /** Ровно один оборот. */
+  HALF_TURN: Math.PI,
   FULL_TURN: Math.PI * 2,
-  /** Предохранитель: если крена нет вовсе, бочка не должна длиться вечно. */
-  MAX_DURATION: 3.5,
-  /** Пауза между бочками, с. Без неё ими просто летают боком. */
+  /**
+   * Предохранитель по времени, с. Петля идёт вокруг тангажа, а он самая
+   * медленная ось: 2π при 1.33 рад/с — почти пять секунд. Бочке хватило бы 3.5,
+   * но общий потолок проще одного на фигуру и ничего не портит: он аварийный.
+   */
+  MAX_DURATION: 9,
+  /** Пауза между фигурами, с. Без неё ими просто летают. */
   COOLDOWN: 2.2,
 } as const
+
+/** Есть ли фигура, и какая. `null` — штурвал у пилота. */
+export interface Manoeuvre {
+  kind: ManoeuvreKind | null
+  /** Направление бочки: −1 влево, +1 вправо. Для петель роли не играет. */
+  dir: -1 | 1
+  /** Сколько провернули по текущей оси, рад. */
+  angle: number
+  /** Разворот идёт в два приёма: полупетля, затем докрутка крена. */
+  phase: 0 | 1
+  elapsed: number
+  cooldown: number
+}
 
 export interface PlayerIntent {
   /** Держит ли клавишу крейсерского хода. */
@@ -87,16 +105,12 @@ export interface PlayerIntent {
   surge: number
   flightAssist: boolean
 
-  /** Направление бочки: −1 влево (A), +1 вправо (D). 0 — не крутимся. */
-  barrelDir: -1 | 0 | 1
-  /** Сколько уже провернули, рад. Бочка кончается на полном обороте. */
-  barrelAngle: number
-  /** Предохранитель по времени, с. */
-  barrelElapsed: number
-  barrelCooldown: number
-  /** Окна ожидания второго нажатия. */
-  tapLeft: number
-  tapRight: number
+  /** Текущая фигура пилотажа. Пока она идёт, ручку держит контроллер. */
+  manoeuvre: Manoeuvre
+  /** Окна ожидания второго нажатия, по клавише. */
+  tapA: number
+  tapD: number
+  tapW: number
 }
 
 export function createIntent(): PlayerIntent {
@@ -110,71 +124,161 @@ export function createIntent(): PlayerIntent {
     throttle: 0.45,
     surge: 0,
     flightAssist: true,
-    barrelDir: 0,
-    barrelAngle: 0,
-    barrelElapsed: 0,
-    barrelCooldown: 0,
-    tapLeft: 0,
-    tapRight: 0,
+    manoeuvre: { kind: null, dir: 1, angle: 0, phase: 0, elapsed: 0, cooldown: 0 },
+    tapA: 0,
+    tapD: 0,
+    tapW: 0,
   }
 }
 
-/** Двойной тап. Возвращает направление бочки или 0. */
-function pollBarrelTap(intent: PlayerIntent, dt: number): -1 | 0 | 1 {
-  intent.tapLeft = Math.max(0, intent.tapLeft - dt)
-  intent.tapRight = Math.max(0, intent.tapRight - dt)
-  intent.barrelCooldown = Math.max(0, intent.barrelCooldown - dt)
+/** Идёт ли фигура. Спрашивает и контроллер, и камера — правило одно. */
+export const manoeuvring = (intent: PlayerIntent): boolean => intent.manoeuvre.kind !== null
+
+/**
+ * Держит ли фигура камеру неподвижной.
+ *
+ * Петля и разворот — фигуры, а не вираж: камера в них не гонится за носом,
+ * а спокойно ждёт, пока корабль обойдёт круг. У бочки другое лекарство —
+ * ей не передаётся крен, но курс камера подхватывает как обычно.
+ */
+export const manoeuvreHoldsCamera = (intent: PlayerIntent): boolean =>
+  intent.manoeuvre.kind === 'loop' || intent.manoeuvre.kind === 'reversal'
+
+/**
+ * Двойной тап. Возвращает начатую фигуру или null.
+ *
+ * Окно у каждой клавиши своё, но взводится ТОЛЬКО оно: A после D — это не
+ * двойное нажатие, а смена намерения. Иначе перекладка крена читалась бы фигурой.
+ */
+function pollTap(intent: PlayerIntent, dt: number): { kind: ManoeuvreKind; dir: -1 | 1 } | null {
+  intent.tapA = Math.max(0, intent.tapA - dt)
+  intent.tapD = Math.max(0, intent.tapD - dt)
+  intent.tapW = Math.max(0, intent.tapW - dt)
+  intent.manoeuvre.cooldown = Math.max(0, intent.manoeuvre.cooldown - dt)
 
   // consumePress гасит нажатие: на следующем шаге физики того же кадра его уже нет.
   const tappedA = consumePress('KeyA')
   const tappedD = consumePress('KeyD')
+  const tappedW = consumePress('KeyW')
 
   if (tappedA) {
-    if (intent.tapLeft > 0) {
-      intent.tapLeft = 0
-      return -1
+    if (intent.tapA > 0) {
+      intent.tapA = 0
+      return { kind: 'barrel', dir: -1 }
     }
-    intent.tapLeft = BARREL.TAP_WINDOW
-    intent.tapRight = 0 // A после D — это не двойное нажатие
+    intent.tapA = MANOEUVRE.TAP_WINDOW
+    intent.tapD = 0
   }
   if (tappedD) {
-    if (intent.tapRight > 0) {
-      intent.tapRight = 0
-      return 1
+    if (intent.tapD > 0) {
+      intent.tapD = 0
+      return { kind: 'reversal', dir: 1 }
     }
-    intent.tapRight = BARREL.TAP_WINDOW
-    intent.tapLeft = 0
+    intent.tapD = MANOEUVRE.TAP_WINDOW
+    intent.tapA = 0
   }
-  return 0
+  if (tappedW) {
+    if (intent.tapW > 0) {
+      intent.tapW = 0
+      return { kind: 'loop', dir: 1 }
+    }
+    intent.tapW = MANOEUVRE.TAP_WINDOW
+  }
+  return null
+}
+
+function endManoeuvre(ship: ShipEntity, m: Manoeuvre): void {
+  const c = ship.controls
+  m.kind = null
+  m.cooldown = MANOEUVRE.COOLDOWN
+  c.roll = 0
+  c.pitch = 0
+  c.strafe = 0
+  c.strafeUp = 0
 }
 
 /**
- * Ведёт бочку до полного оборота, толкая корабль в неподвижную сторону.
+ * Бочка: полный оборот вокруг носа, с тягой в НЕПОДВИЖНОМ направлении.
  *
  * Крен идёт вокруг связанной оси Z, поэтому неподвижное в мире направление
  * в связанных осях поворачивается на −θ. Отсюда синус с косинусом: маневровые
  * перекладывают тягу с бортовых на верхние и обратно, удерживая её на месте.
+ * Без этого за оборот корабль опишет окружность радиусом a/ω² (метра три)
+ * и вернётся на прежнюю линию — красиво и бесполезно.
  */
-function driveBarrelRoll(ship: ShipEntity, intent: PlayerIntent, dt: number): void {
+function driveBarrel(ship: ShipEntity, m: Manoeuvre, dt: number): void {
   const c = ship.controls
-  const dir = intent.barrelDir
-
-  c.roll = dir
-  intent.barrelElapsed += dt
+  c.roll = m.dir
   // Угол берём из ФАКТИЧЕСКОЙ угловой скорости: раскрутка маневровых не мгновенна.
-  intent.barrelAngle += Math.abs(ship.state.angVel.z) * dt
+  m.angle += Math.abs(ship.state.angVel.z) * dt
 
-  const theta = intent.barrelAngle * dir
-  c.strafe = Math.cos(theta) * dir
-  c.strafeUp = -Math.sin(theta) * dir
+  const theta = m.angle * m.dir
+  c.strafe = Math.cos(theta) * m.dir
+  c.strafeUp = -Math.sin(theta) * m.dir
 
-  if (intent.barrelAngle >= BARREL.FULL_TURN || intent.barrelElapsed >= BARREL.MAX_DURATION) {
-    intent.barrelDir = 0
-    intent.barrelCooldown = BARREL.COOLDOWN
-    c.roll = 0
-    c.strafe = 0
-    c.strafeUp = 0
+  if (m.angle >= MANOEUVRE.FULL_TURN) endManoeuvre(ship, m)
+}
+
+/**
+ * Петля: полный оборот вокруг тангажа. Корабль уходит вверх, обходит круг и
+ * ложится на прежний курс.
+ *
+ * Смысл фигуры — пропустить вперёд того, кто сидит на хвосте: он либо
+ * проскакивает, либо повторяет петлю и остаётся сзади, потеряв дистанцию.
+ * Ракету петля не срывает — от неё уходят бочкой, — но радиус петли (v/ω, при
+ * 200 м/с и 1.33 рад/с это полторы сотни метров) уводит корабль с её линии.
+ */
+function driveLoop(ship: ShipEntity, m: Manoeuvre, dt: number): void {
+  ship.controls.pitch = 1
+  m.angle += Math.abs(ship.state.angVel.x) * dt
+  if (m.angle >= MANOEUVRE.FULL_TURN) endManoeuvre(ship, m)
+}
+
+/**
+ * Разворот через петлю (иммельман): полупетля, затем полбочки.
+ *
+ * Полупетля разворачивает корабль на 180°, но вверх ногами — поэтому вторым
+ * приёмом идёт докрутка крена. Разворот считается по РАЗНЫМ осям в разных
+ * приёмах: тангаж в первом, крен во втором. Общий счётчик угла обнуляется на
+ * переходе, иначе быстрый крен «дорисовал» бы недостающий тангаж.
+ *
+ * Фигура нужна для контратаки: тот, кто был на хвосте, оказывается в прицеле.
+ */
+function driveReversal(ship: ShipEntity, m: Manoeuvre, dt: number): void {
+  const c = ship.controls
+
+  if (m.phase === 0) {
+    c.pitch = 1
+    m.angle += Math.abs(ship.state.angVel.x) * dt
+    if (m.angle >= MANOEUVRE.HALF_TURN) {
+      m.phase = 1
+      m.angle = 0
+      c.pitch = 0
+    }
+    return
   }
+
+  c.roll = m.dir
+  m.angle += Math.abs(ship.state.angVel.z) * dt
+  if (m.angle >= MANOEUVRE.HALF_TURN) endManoeuvre(ship, m)
+}
+
+/** Ведёт начатую фигуру. Возвращает false, когда штурвал снова у пилота. */
+function driveManoeuvre(ship: ShipEntity, m: Manoeuvre, dt: number): boolean {
+  if (m.kind === null) return false
+
+  m.elapsed += dt
+  // Предохранитель: без маневровых фигура не должна длиться вечно.
+  if (m.elapsed >= MANOEUVRE.MAX_DURATION) {
+    endManoeuvre(ship, m)
+    return false
+  }
+
+  if (m.kind === 'barrel') driveBarrel(ship, m, dt)
+  else if (m.kind === 'loop') driveLoop(ship, m, dt)
+  else driveReversal(ship, m, dt)
+
+  return true
 }
 
 /**
@@ -190,7 +294,7 @@ function pollAutofight(world: World, intent: PlayerIntent): boolean {
     if (autofightActive(world)) {
       disengageAutofight(world)
     } else if (engageAutofight(world)) {
-      intent.barrelDir = 0
+      intent.manoeuvre.kind = null
       intent.surge = 0
     }
   }
@@ -251,15 +355,21 @@ export function createPlayerController(intent: PlayerIntent): Controller {
       c.pitch = input.stickY * scale
       c.yaw = input.stickX * scale
 
-      const tap = pollBarrelTap(intent, dt)
-      if (tap !== 0 && intent.barrelDir === 0 && intent.barrelCooldown <= 0) {
-        intent.barrelDir = tap
-        intent.barrelAngle = 0
-        intent.barrelElapsed = 0
+      const m = intent.manoeuvre
+      const tap = pollTap(intent, dt)
+      if (tap && m.kind === null && m.cooldown <= 0) {
+        m.kind = tap.kind
+        m.dir = tap.dir
+        m.angle = 0
+        m.phase = 0
+        m.elapsed = 0
       }
 
-      if (intent.barrelDir !== 0) {
-        driveBarrelRoll(ship, intent, dt)
+      if (driveManoeuvre(ship, m, dt)) {
+        // Петлю фигура ведёт целиком: мышь не должна спорить с ней за тангаж
+        // и уводить корабль с круга рысканием. В бочке ручка остаётся у пилота —
+        // она и задумана как уклонение НА ходу, с сохранением прицела.
+        if (manoeuvreHoldsCamera(intent)) c.yaw = 0
       } else {
         // A/D — единственный источник крена. Ни физика, ни ассист его не трогают.
         c.roll = (isHeld('KeyA') ? 1 : 0) - (isHeld('KeyD') ? 1 : 0)

@@ -73,7 +73,6 @@ export function Simulation() {
     // без курсора не шагает — до этой строки кадр уже не доходит. Её тумблер живёт
     // в Shell, на обычном слушателе окна.
     if (consumePress('KeyV')) session.view = session.view === 'chase' ? 'cockpit' : 'chase'
-    if (consumePress('KeyF')) intent.flightAssist = !intent.flightAssist
     if (consumePress('KeyR')) intent.missile = true
     if (consumePress('KeyE')) intent.ecm = true
     if (consumePress('KeyB')) intent.bomb = true

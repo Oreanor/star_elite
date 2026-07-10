@@ -29,6 +29,11 @@ function Shell({ onRestart }: { onRestart: () => void }) {
   const [locked, setLocked] = useState(false)
   const [over, setOver] = useState(false)
   const [docked, setDocked] = useState(false)
+  /**
+   * Игра уже начиналась. Тогда та же заставка — это ПАУЗА, и кнопка на ней
+   * возвращает в игру, а не начинает её. Экран один, смысл разный.
+   */
+  const [started, setStarted] = useState(false)
   /** Какая карта раскрыта. Обе ставят мир на паузу, поэтому состояние одно. */
   const [chart, setChart] = useState<'none' | 'system' | 'galaxy' | 'talk'>('none')
 
@@ -38,7 +43,11 @@ function Shell({ onRestart }: { onRestart: () => void }) {
    * невидимым — а мир при этом стоит, и игра выглядит намертво зависшей.
    */
   useEffect(() => {
-    const sync = () => setLocked(input.pointerLocked)
+    const sync = () => {
+      const now = input.pointerLocked
+      setLocked(now)
+      if (now) setStarted(true)
+    }
     document.addEventListener('pointerlockchange', sync)
     document.addEventListener('visibilitychange', sync)
     window.addEventListener('focus', sync)
@@ -120,7 +129,7 @@ function Shell({ onRestart }: { onRestart: () => void }) {
       ) : chart === 'talk' ? (
         <Dialogue onClose={closeChart} />
       ) : (
-        !locked && <Paused />
+        !locked && <Paused resuming={started} />
       )}
     </div>
   )
@@ -131,7 +140,9 @@ const KEYS: [string, string][] = [
   ['W / S', 'тяга: рукоять газа стоит там, куда её поставили'],
   ['ПКМ', 'газ до отказа, пока держишь; отпустил — вернулся на рукоять'],
   ['A / D', 'крен. В космосе нет горизонта: корабль сам не выравнивается'],
-  ['AA / DD', 'бочка: уход вбок, сбивает наведение ракет'],
+  ['AA', 'бочка: уход вбок, сбивает наведение ракет'],
+  ['WW', 'петля: пропустить вперёд того, кто на хвосте'],
+  ['DD', 'разворот через петлю: он на хвосте — и вот он в прицеле'],
   ['Shift', 'форсаж'],
   ['Ctrl', 'ретро-тяга'],
   ['J', 'крейсерский ход (удерживать)'],
@@ -148,7 +159,6 @@ const KEYS: [string, string][] = [
   ['C', 'тяговый луч: держи — притягивает груз по курсу'],
   ['L', 'автостыковка со станцией (повторно — отмена)'],
   ['V', 'вид: сзади / из кабины'],
-  ['F', 'flight assist (выкл = чистый Ньютон)'],
   ['Esc', 'пауза и курсор'],
 ]
 
@@ -181,7 +191,7 @@ function MenuButton({ children, onClick }: { children: React.ReactNode; onClick:
  * Браузер отказывает в захвате курсора около секунды после выхода из него, поэтому
  * отказ виден на самой кнопке: она сообщает, что надо подождать, а не молчит.
  */
-function Paused() {
+function Paused({ resuming }: { resuming: boolean }) {
   const [denied, setDenied] = useState(false)
   const [keysShown, setKeysShown] = useState(false)
 
@@ -224,7 +234,7 @@ function Paused() {
         </div>
       ) : (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-4">
-          <MenuButton onClick={take}>{denied ? 'СЕКУНДУ…' : 'СТАРТ'}</MenuButton>
+          <MenuButton onClick={take}>{denied ? 'СЕКУНДУ…' : resuming ? 'В ИГРУ' : 'СТАРТ'}</MenuButton>
           <MenuButton onClick={() => setKeysShown(true)}>КЛАВИШИ</MenuButton>
         </div>
       )}
