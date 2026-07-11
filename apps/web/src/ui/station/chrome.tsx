@@ -120,11 +120,17 @@ export function Table<Row>({
   rows,
   rowKey,
   detail,
+  onRowClick,
+  selectedKey,
 }: {
   columns: readonly Column<Row>[]
   rows: readonly Row[]
   rowKey: (row: Row, index: number) => string
   detail?: (row: Row) => React.ReactNode | null
+  /** Клик по строке ВЫБИРАЕТ её (вместо раскрытия): подробности уходят в соседнюю колонку. */
+  onRowClick?: (row: Row) => void
+  /** Ключ выбранной строки — она подсвечена. */
+  selectedKey?: string | null
 }) {
   const [open, setOpen] = useState<ReadonlySet<string>>(new Set())
   const toggle = (k: string) =>
@@ -147,7 +153,7 @@ export function Table<Row>({
             {columns.map((c) => (
               <th
                 key={c.key}
-                className={`pb-1 text-xs font-normal tracking-widest ${alignClass(c.align)}`}
+                className={`px-2 pb-1 text-xs font-normal tracking-widest first:pl-0 last:pr-0 ${alignClass(c.align)}`}
                 style={{ color: DIM, width: c.width }}
               >
                 {c.header}
@@ -161,19 +167,27 @@ export function Table<Row>({
           const key = rowKey(row, index)
           const card = detail?.(row) ?? null
           const isOpen = card !== null && open.has(key)
+          // Клик по имени либо ВЫБИРАЕТ строку (колонка-компаньон), либо раскрывает карточку.
+          const select = onRowClick !== undefined
+          const interactive = select || card !== null
+          const onName = select ? () => onRowClick(row) : () => toggle(key)
+          const marker = select ? '' : isOpen ? '▾ ' : '▸ '
           return (
             <Fragment key={key}>
-              <tr className="align-baseline">
+              <tr
+                className="align-baseline"
+                style={selectedKey === key ? { backgroundColor: 'rgba(127,214,255,0.10)' } : undefined}
+              >
                 {columns.map((c, ci) => (
-                  <td key={c.key} className={`py-1 ${alignClass(c.align)}`} style={{ width: c.width }}>
-                    {ci === 0 && card !== null ? (
+                  <td key={c.key} className={`px-2 py-1 first:pl-0 last:pr-0 ${alignClass(c.align)}`} style={{ width: c.width }}>
+                    {ci === 0 && interactive ? (
                       <button
                         type="button"
-                        onClick={() => toggle(key)}
+                        onClick={onName}
                         className="cursor-pointer text-left tracking-wide hover:underline"
                         style={{ color: ACCENT }}
                       >
-                        {isOpen ? '▾ ' : '▸ '}
+                        {marker}
                         {c.cell(row)}
                       </button>
                     ) : (

@@ -81,6 +81,22 @@ describe('прыжок', () => {
     expect(jumpBlock(world, target)).toBe('docked')
   })
 
+  /**
+   * На крейсерском ходу прыжок заперт: сначала сбрось скорость. Иначе привод бьёт
+   * из разгона в семьдесят тысяч км за шаг — кино прыжка не за что зацепить.
+   */
+  it('на крейсерском ходу не прыгнуть, пока не сбросишь ход', () => {
+    const world = createWorld()
+    const target = neighbourWithin(world, world.player.spec.jumpRange)
+
+    world.player.cruise.factor = 20
+    expect(jumpBlock(world, target)).toBe('cruising')
+    expect(jump(world, target)).toBe(false)
+
+    world.player.cruise.factor = 1
+    expect(jumpBlock(world, target)).toBeNull()
+  })
+
   it('прыжок в пределах дальности меняет систему', () => {
     const world = createWorld()
     const target = neighbourWithin(world, world.player.spec.jumpRange)

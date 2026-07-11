@@ -16,6 +16,7 @@ import {
   stepManoeuvre,
 } from '@elite/sim'
 import { consumePress, input, isHeld } from '../../platform/input/input'
+import { chargeThrottle, jumpFx } from './jumpFx'
 
 /**
  * Игрок. Реализует тот же `Controller`, что и бот: заполняет ShipControls.
@@ -214,6 +215,24 @@ export function createPlayerController(intent: PlayerIntent): Controller {
 
   return {
     update(ship: ShipEntity, world: World, dt: number): void {
+      // Отправление в прыжок ведёт кино, не пилот: корабль разгоняется строго вперёд
+      // с наддувом (как на разгоне разворота) и влетает в кольцо. Ввод не читаем вовсе.
+      // На зарядке газ идёт рывками — факел разгорается толчками, пока корабль дрожит.
+      if (jumpFx().phase === 'depart') {
+        const c = ship.controls
+        c.throttle = chargeThrottle()
+        c.boost = boostMult(ship.loadout)
+        c.pitch = 0
+        c.yaw = 0
+        c.roll = 0
+        c.rudder = 0
+        c.strafe = 0
+        c.strafeUp = 0
+        c.retro = 0
+        c.flightAssist = true
+        return
+      }
+
       if (pollAutofight(world, intent)) {
         // Тот же пилот, что и у пиратов. Никаких привилегий: он ведёт корабль
         // через тот же ShipControls, и физика не знает, кто за штурвалом.

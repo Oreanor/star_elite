@@ -4,6 +4,7 @@ import { PerspectiveCamera, Quaternion, Vector3 } from 'three'
 import { CRUISE, clamp } from '@elite/sim'
 import { manoeuvreHoldsCamera } from '../../app/control/playerController'
 import { useSession } from '../../app/GameContext'
+import { jumpFx, jumpShake } from '../../app/control/jumpFx'
 import { bombShake } from '../bombFeel'
 import { CAMERA, RENDER } from '../config'
 
@@ -24,6 +25,7 @@ const _twist = new Quaternion()
 const _desiredQuat = new Quaternion()
 const _shake = new Vector3()
 const _bombShake = new Vector3()
+const _jumpShake = new Vector3()
 const _axis = new Vector3()
 const _camRot = new Quaternion()
 
@@ -98,6 +100,36 @@ export function FlightCamera() {
     const player = session.world.player
     const state = player.state
     const cockpit = session.view === 'cockpit'
+
+    /**
+     * ОТПРАВЛЕНИЕ В ПРЫЖОК: камера НАБЛЮДАЕТ, а не преследует. Она встаёт за точкой
+     * старта и оттуда смотрит, как корабль срывается, уходит к далёкому кольцу и тает
+     * в нём, — поэтому поза считается от ЗАМОРОЖЕННОЙ позы старта (`shipStart`/`ringQuat`),
+     * а не от живого корабля, и не едет за носом. На зарядке добавляется дрожь.
+     */
+    if (jumpFx().phase === 'depart') {
+      const fx = jumpFx()
+      const off = CAMERA.CHASE_OFFSET
+      _offset.set(off[0], off[1], off[2]).applyQuaternion(fx.ringQuat)
+      _target.copy(fx.shipStart).add(_offset)
+      _desiredQuat.copy(fx.ringQuat).multiply(_pitchDown)
+
+      const a = running ? 1 - Math.exp(-CAMERA.CHASE_STIFFNESS * dt) : 1
+      camera.position.lerp(_target, a)
+      camera.quaternion.slerp(_desiredQuat, a)
+
+      const js = jumpShake()
+      if (js > 1e-4) {
+        const time = session.world.time
+        _jumpShake
+          .set(shakeAt(time, 2.3), shakeAt(time, 5.1), shakeAt(time, 9.7))
+          .multiplyScalar(js * CAMERA.JUMP_SHAKE_MAX)
+        camera.position.add(_jumpShake.applyQuaternion(camera.quaternion))
+      }
+
+      previousFactor.current = player.cruise.factor
+      return
+    }
 
     /**
      * В петле камера НЕ едет за носом: она держит свою ориентацию и просто

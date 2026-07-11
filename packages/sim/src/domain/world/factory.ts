@@ -376,6 +376,9 @@ export function enterSystem(
   world.shockwaves = []
   world.lockedTargetId = null
   world.navTargetId = world.bodies.find((b) => b.kind === 'station')?.id ?? null
+  // Прибыли — выбранная для прыжка система достигнута, метку и точку выхода снимаем.
+  world.jumpTargetIndex = null
+  world.jumpArrivalPlanet = null
   world.trafficTimer = TRAFFIC.FIRST_DELAY
 
   world.docked = false
@@ -437,6 +440,8 @@ export function createWorld(def: SystemDef = STARTER_SYSTEM): World {
     dockOccupantId: null,
     lockedTargetId: null,
     navTargetId: station?.id ?? null,
+    jumpTargetIndex: null,
+    jumpArrivalPlanet: null,
     trafficTimer: TRAFFIC.FIRST_DELAY,
     originOffset: new Vector3(),
     originShift: new Vector3(),

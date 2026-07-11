@@ -3,6 +3,7 @@ import { useMemo, useRef } from 'react'
 import { InstancedMesh, Mesh, Object3D } from 'three'
 import { isDroneShip, isVisible } from '@elite/sim'
 import { useSession } from '../../app/GameContext'
+import { shipHidden } from '../../app/control/jumpFx'
 import { cobraGeometry, droneGeometry, freighterGeometry, sidewinderGeometry } from '../geometry/ships'
 import { cloakMaterial, hullMaterial } from '../materials/materials'
 
@@ -31,8 +32,9 @@ export function PlayerShip() {
 
     mesh.position.copy(player.state.pos)
     mesh.quaternion.copy(player.state.quat)
-    // Из кабины камера внутри корпуса — меш только мешал бы.
-    mesh.visible = player.alive && session.view === 'chase'
+    // Из кабины камера внутри корпуса — меш только мешал бы. И корабль исчезает,
+    // канув в кольцо прыжка: с этого мига его в старой системе уже нет.
+    mesh.visible = player.alive && session.view === 'chase' && !shipHidden()
 
     // Свой корабль под полем видно — иначе пилот теряет собственный нос.
     // Чужой не видно вовсе, и это разные вещи: одна про интерфейс, другая про мир.

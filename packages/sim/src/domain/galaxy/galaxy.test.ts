@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { CORE_INDEX, GALAXY } from '../../config/galaxy'
 import { generateGalaxy, generateSystem } from './generate'
 import { distanceLy, galaxyShape, placeSystem } from './shape'
-import { capitalOf, isInhabited, settledPlanets, stationsOf } from './types'
+import { capitalOf, isInhabited, settledPlanets, stationsOf, systemLife } from './types'
 
 /**
  * Генератор обязан быть статичным: одно зерно — одна и та же галактика.
@@ -116,6 +116,27 @@ describe('инварианты системы', () => {
       expect(settledPlanets(s)).toHaveLength(0)
       expect(stationsOf(s)).toHaveLength(0)
     }
+  })
+
+  it('ступень жизни следует за обитаемостью и тех-уровнем, а не задана отдельно', () => {
+    // Свойство карты, но правило домена: «нет» тогда и только тогда, когда жить негде;
+    // у обитаемых — ступень растёт с САМЫМ развитым миром, а не с первым попавшимся.
+    for (const s of galaxy) {
+      const life = systemLife(s)
+      if (!isInhabited(s)) {
+        expect(life).toBe('none')
+        continue
+      }
+      expect(life).not.toBe('none')
+      const tech = Math.max(...settledPlanets(s).map((p) => p.settlement.techLevel))
+      const expected = tech <= 4 ? 'primitive' : tech <= 9 ? 'developed' : 'advanced'
+      expect(life).toBe(expected)
+    }
+  })
+
+  it('по галактике встречается не одна ступень жизни', () => {
+    // Иначе строка на карте — константа и информации не несёт.
+    expect(new Set(galaxy.map(systemLife)).size).toBeGreaterThan(1)
   })
 
   it('тех-уровень растёт от анархии к корпорации', () => {

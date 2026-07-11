@@ -25,6 +25,8 @@ import { commodityName } from '../i18n/dataNames'
  */
 export function Market({ world, onChange }: { world: World; onChange: () => void }) {
   useLang() // перерисоваться при смене языка: заголовки и метки идут через t()
+  // Строка не раскрывается вниз — клик открывает МАЛЕНЬКУЮ модалку выбора количества.
+  const [buying, setBuying] = useState<Commodity | null>(null)
 
   const columns: Column<Commodity>[] = [
     {
@@ -42,7 +44,7 @@ export function Market({ world, onChange }: { world: World; onChange: () => void
       key: 'mass',
       header: t('station.col.mass'),
       align: 'right',
-      cell: (c) => <span style={{ color: DIM }}>{formatStat('mass', c.unitMass)}</span>,
+      cell: (c) => <span style={{ color: DIM }}>{commodityMass(c)}</span>,
     },
     {
       key: 'market',
@@ -60,14 +62,20 @@ export function Market({ world, onChange }: { world: World; onChange: () => void
 
   return (
     <Panel title={t('station.market.title')}>
-      <Table
-        columns={columns}
-        rows={commodityStock()}
-        rowKey={(c) => c.id}
-        detail={(c) => <BuyPanel world={world} commodity={c} onChange={onChange} />}
-      />
+      <Table columns={columns} rows={commodityStock()} rowKey={(c) => c.id} onRowClick={(c) => setBuying(c)} />
+      {buying && (
+        <BuyModal world={world} commodity={buying} onChange={onChange} onClose={() => setBuying(null)} />
+      )}
     </Panel>
   )
+}
+
+/** Единица массы товара: обычные — в тоннах, роскошь и наркотики — в килограммах,
+ *  иначе их доли тонны читаются как ноль. Масса в домене всегда в тоннах. */
+const KG_GOODS = new Set(['luxuries', 'narcotics'])
+function commodityMass(c: Commodity): string {
+  if (KG_GOODS.has(c.id)) return `${Math.round(c.unitMass * 1000)} ${t('unit.kg')}`
+  return formatStat('mass', c.unitMass)
 }
 
 /** «дёшево / дорого» относительно каталога — сигнал рынка одной клеткой, не строкой. */
@@ -79,11 +87,21 @@ function MarketTag({ world, commodity }: { world: World; commodity: Commodity })
 }
 
 /**
- * Выбор количества: ползунок + числовое поле, границы 1..макс. Макс — это меньшее
- * из трёх: на что хватает денег, что влезает в трюм, что есть на складе. Итоговая
- * цена и занятость трюма считаются на лету, пока тянешь.
+ * Маленькая модалка выбора количества: название товара, число и горизонтальный
+ * ползунок 1..макс, кнопки «купить» и «отмена». Макс — меньшее из трёх: на что
+ * хватает денег, что влезает в трюм, что есть на складе. Итог считается на лету.
  */
-function BuyPanel({ world, commodity, onChange }: { world: World; commodity: Commodity; onChange: () => void }) {
+function BuyModal({
+  world,
+  commodity,
+  onChange,
+  onClose,
+}: {
+  world: World
+  commodity: Commodity
+  onChange: () => void
+  onClose: () => void
+}) {
   const hold = world.player.hold
   const price = commodityBuyPrice(world, commodity)
   const affordable = price > 0 ? Math.floor(world.credits / price) : 0
@@ -95,59 +113,69 @@ function BuyPanel({ world, commodity, onChange }: { world: World; commodity: Com
   // Границы могли сузиться после покупки — держим ползунок в них, не заводя вторую истину.
   const value = Math.min(Math.max(1, qty), Math.max(1, max))
   const usedAfter = Math.round(cargoMass(hold) + value * commodity.unitMass)
-
   const disabled = max < 1
 
   return (
-    <div className="space-y-2 text-xs">
-      <div className="flex items-center gap-3">
-        <span className="tracking-widest" style={{ color: DIM }}>
-          {t('station.qty')}
-        </span>
-        <input
-          type="range"
-          min={1}
-          max={Math.max(1, max)}
-          value={value}
-          disabled={disabled}
-          onChange={(e) => setQty(Number(e.target.value))}
-          className="h-1 flex-1 cursor-pointer accent-[#7fd6ff]"
-        />
-        <input
-          type="number"
-          min={1}
-          max={Math.max(1, max)}
-          value={value}
-          disabled={disabled}
-          onChange={(e) => setQty(Number(e.target.value))}
-          className="w-16 border bg-transparent px-2 py-1 text-right"
-          style={{ borderColor: DIM, color: ACCENT }}
-        />
-        <button
-          type="button"
-          disabled={disabled}
-          onClick={() => setQty(max)}
-          className="cursor-pointer tracking-widest hover:underline disabled:opacity-40"
-          style={{ color: DIM }}
-        >
-          {t('station.max')} {max}
-        </button>
-      </div>
-
-      <p style={{ color: DIM }}>
-        {t('station.total')} <span style={{ color: ACCENT }}>{credits(value * price)}</span> ·{' '}
-        {t('ship.cargo.used', { used: usedAfter, cap: hold.capacity })}
-      </p>
-
-      <Button
-        small
-        disabled={disabled}
-        onClick={() => {
-          if (buyCommodity(world, world.player, commodity, value) > 0) onChange()
-        }}
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-6 font-mono"
+      onClick={onClose}
+      style={{ color: ACCENT }}
+    >
+      <div
+        className="w-full max-w-sm border bg-black/90 p-6 backdrop-blur-sm"
+        onClick={(e) => e.stopPropagation()}
+        style={{ borderColor: ACCENT, boxShadow: '0 0 40px rgba(127,214,255,0.2)' }}
       >
-        {t('station.buyN', { n: value })}
-      </Button>
+        <div className="mb-4 flex items-baseline justify-between gap-3">
+          <h3 className="text-base tracking-[0.2em]">{commodityName(commodity)}</h3>
+          <span className="text-xs" style={{ color: DIM }}>
+            {credits(price)}
+          </span>
+        </div>
+
+        <div className="flex items-center gap-3 text-sm">
+          <input
+            type="range"
+            min={1}
+            max={Math.max(1, max)}
+            value={value}
+            disabled={disabled}
+            onChange={(e) => setQty(Number(e.target.value))}
+            className="h-1 flex-1 cursor-pointer accent-[#7fd6ff]"
+          />
+          <span className="w-12 text-right tabular-nums">{value}</span>
+          <button
+            type="button"
+            disabled={disabled}
+            onClick={() => setQty(max)}
+            className="cursor-pointer text-xs tracking-widest hover:underline disabled:opacity-40"
+            style={{ color: DIM }}
+          >
+            {t('station.max')} {max}
+          </button>
+        </div>
+
+        <p className="mt-3 text-xs" style={{ color: DIM }}>
+          {t('station.total')} <span style={{ color: ACCENT }}>{credits(value * price)}</span> ·{' '}
+          {t('ship.cargo.used', { used: usedAfter, cap: hold.capacity })}
+        </p>
+
+        <div className="mt-5 flex justify-end gap-2">
+          <Button
+            small
+            disabled={disabled}
+            onClick={() => {
+              if (buyCommodity(world, world.player, commodity, value) > 0) onChange()
+              onClose()
+            }}
+          >
+            {t('station.buyN', { n: value })}
+          </Button>
+          <Button small onClick={onClose}>
+            {t('ship.cancel')}
+          </Button>
+        </div>
+      </div>
     </div>
   )
 }

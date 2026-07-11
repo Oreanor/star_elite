@@ -22,3 +22,28 @@ body {
 canvas {
   cursor: crosshair;
 }
+
+/*
+ * Скроллбар — тонкий и фосфорный, под цвет консоли (#7fd6ff), а не серый квадрат
+ * по умолчанию: списки внутри стеклянных панелей прокручиваются, и их полоса
+ * обязана быть частью того же прибора, а не деталью ОС поверх него. Трек прозрачен,
+ * ползунок — приглушённый голубой, ярче под курсором.
+ */
+* {
+  scrollbar-width: thin; /* Firefox */
+  scrollbar-color: rgba(127, 214, 255, 0.35) transparent;
+}
+*::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+  background: rgba(127, 214, 255, 0.3);
+  border-radius: 9999px;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: rgba(127, 214, 255, 0.55);
+}

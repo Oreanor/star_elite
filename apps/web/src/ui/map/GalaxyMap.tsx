@@ -1,5 +1,5 @@
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import { useWheelZoom } from './useWheelZoom'
 import {
   BufferAttribute,
@@ -7,32 +7,36 @@ import {
   Color,
   LineBasicMaterial,
   LineDashedMaterial,
-  LineLoop,
   LineSegments,
+  Mesh,
+  MeshBasicMaterial,
   PerspectiveCamera,
   ShaderMaterial,
   Vector3,
 } from 'three'
 import {
-  ARRIVAL,
   CORE_INDEX,
   GALAXY,
   arrivalBounds,
-  capitalOf,
   galaxyName,
   galaxyShape,
   generateGalaxy,
   jumpBlock,
   jumpDistance,
   stationSeat,
+  stationsOf,
   systemDefFor,
+  systemLife,
   type Arrival,
   type StarSystem,
   type SystemDef,
   type World,
 } from '@elite/sim'
-import { jumpTo, useSession } from '../../app/GameContext'
+import { useSession } from '../../app/GameContext'
+import { jumping, startDepart } from '../../app/control/jumpFx'
 import { UI } from '../theme'
+import { t, useLang } from '../i18n'
+import { galaxyShapeName, lifeName, properName } from '../i18n/dataNames'
 
 /**
  * Карта галактики.
@@ -223,38 +227,52 @@ function Stars({
   )
 }
 
-/** Единичная окружность в плоскости XY (нормаль +Z) — для метки, что смотрит в камеру. */
-const markerRingGeometry = (() => {
-  const N = 64
-  const points = new Float32Array(N * 3)
-  for (let i = 0; i < N; i++) {
-    const a = (i / N) * Math.PI * 2
-    points[i * 3] = Math.cos(a)
-    points[i * 3 + 1] = Math.sin(a)
-    points[i * 3 + 2] = 0
-  }
+/** Треугольник-указатель «ВЫ»: вершиной вниз, к звезде, телом над ней. В плоскости XY. */
+const youMarkerGeometry = (() => {
   const g = new BufferGeometry()
-  g.setAttribute('position', new BufferAttribute(points, 3))
+  // Остриё чуть выше звезды (0,1), основание ещё выше (2.6) — капля-указатель над точкой.
+  g.setAttribute(
+    'position',
+    new BufferAttribute(new Float32Array([-0.9, 2.6, 0, 0.9, 2.6, 0, 0.0, 1.0, 0]), 3),
+  )
   return g
 })()
 
 /**
- * Где ты сам. Раньше была каркасная клетка (икосаэдр) — рябила проволокой поверх
- * звёзд. Силуэт сферы со всех сторон — ОКРУЖНОСТЬ, ей и метим: кольцо, повёрнутое
- * к камере, читается как обвод звезды с любого угла. Закрасить нельзя — звезда
- * там своего класса и цвета, метка не должна его подменять.
+ * Где ты сам. Синий треугольник над звездой да подпись «ВЫ»: жёлтое кольцо путалось
+ * с боевым захватом, а обвести звезду цветом «цели» — сказать «стреляй сюда». Синий —
+ * фосфор навигации; треугольник вершиной к звезде читается указателем с любого угла.
  */
 function YouAreHere({ at }: { at: Vector3 }) {
-  const ref = useRef<LineLoop>(null)
-  const material = useMemo(() => new LineBasicMaterial({ color: UI.TARGET, toneMapped: false }), [])
-  // Кольцо всегда лицом к камере: копируем её поворот — плоскость XY встаёт в экран.
+  const ref = useRef<Mesh>(null)
+  const material = useMemo(() => new MeshBasicMaterial({ color: UI.PRIMARY, toneMapped: false }), [])
+  useEffect(() => () => material.dispose(), [material])
+  // Билборд: копируем поворот камеры — треугольник стоит остриём к звезде, телом вверх
+  // экрана, каким бы боком ни повернули карту.
   useFrame((state) => {
     if (ref.current) ref.current.quaternion.copy(state.camera.quaternion)
   })
-  // Метка не мишень: указатель обязан проходить сквозь неё к звёздам.
-  return (
-    <lineLoop ref={ref} geometry={markerRingGeometry} material={material} position={at} scale={0.9} raycast={() => null} />
-  )
+  return <mesh ref={ref} geometry={youMarkerGeometry} material={material} position={at} raycast={() => null} />
+}
+
+/** Подпись «ВЫ» у своей звезды. DOM поверх канваса: её двигает кадр, а не React. */
+function YouLabel({ at, box }: { at: Vector3; box: React.RefObject<HTMLDivElement | null> }) {
+  const { camera, size } = useThree()
+  useFrame(() => {
+    const el = box.current
+    if (!el) return
+    _screen.copy(at).project(camera)
+    if (_screen.z > 1) {
+      el.style.opacity = '0'
+      return
+    }
+    const x = (_screen.x * 0.5 + 0.5) * size.width
+    const y = (-_screen.y * 0.5 + 0.5) * size.height
+    el.style.opacity = '1'
+    // Над остриём треугольника; центрируем на точку своим же transform.
+    el.style.transform = `translate(${Math.round(x)}px, ${Math.round(y - 34)}px) translate(-50%, -50%)`
+  })
+  return null
 }
 
 /**
@@ -404,18 +422,25 @@ function OrbitCamera({ control }: { control: { yaw: number; pitch: number; dista
 const positionOf = (s: StarSystem) => new Vector3(s.x, s.z, s.y)
 
 function formatRange(ly: number): string {
-  return `${ly.toFixed(1)} св.г. · ${(ly / LY_PER_PARSEC).toFixed(2)} пк`
+  return `${ly.toFixed(1)} ${t('unit.ly')} · ${(ly / LY_PER_PARSEC).toFixed(2)} ${t('unit.pc')}`
 }
 
-const BLOCK_REASON: Record<string, string> = {
-  'no-drive': 'ГИПЕРПРИВОД НЕ УСТАНОВЛЕН',
-  'out-of-range': 'ВНЕ ДАЛЬНОСТИ ПРИВОДА',
-  'out-of-charge': 'ЗАРЯД ИЗРАСХОДОВАН · К ЗВЕЗДЕ ИЛИ СТАНЦИИ',
-  'same-system': 'ВЫ УЖЕ ЗДЕСЬ',
-  docked: 'СНАЧАЛА ОТЧАЛЬТЕ',
+/** Почему прыжок запрещён — код домена в строку интерфейса. */
+const BLOCK_KEY = {
+  'no-drive': 'map.block.noDrive',
+  'out-of-range': 'map.block.range',
+  'out-of-charge': 'map.block.charge',
+  'same-system': 'map.block.here',
+  docked: 'map.block.docked',
+  cruising: 'map.block.cruising',
+} as const
+
+function blockLabel(reason: NonNullable<ReturnType<typeof jumpBlock>>): string {
+  return t(BLOCK_KEY[reason])
 }
 
-export function GalaxyMap({ onClose }: { onClose: () => void }) {
+export function GalaxyMap({ onClose, embedded = false }: { onClose: () => void; embedded?: boolean }) {
+  useLang()
   const session = useSession()
   const world = session.world
 
@@ -427,11 +452,27 @@ export function GalaxyMap({ onClose }: { onClose: () => void }) {
     [world.galaxySeed],
   )
 
+  const [, bump] = useReducer((n: number) => n + 1, 0)
   const [hovered, setHovered] = useState<number | null>(null)
-  const [selected, setSelected] = useState<number | null>(null)
+  // Выбор берётся из МИРА и туда же пишется: намеченная у причала цель обязана
+  // пережить закрытие карты и отчаливание — прыгать-то можно только отчалив.
+  const [selected, setSelected] = useState<number | null>(world.jumpTargetIndex)
+  const [popup, setPopup] = useState<{ x: number; y: number; w: number; h: number } | null>(null)
+  const pointer = useRef({ x: 0, y: 0, w: 0, h: 0 })
+
+  const chooseSystem = (index: number) => {
+    setSelected(index)
+    // Затаргетились: выбор переживёт закрытие карты и отчаливание. Точку выхода по
+    // умолчанию ставим на причал системы (место станции), если он там есть.
+    world.jumpTargetIndex = index
+    const seat = stationSeat(systemDefFor(index, world.galaxySeed))
+    world.jumpArrivalPlanet = seat >= 0 ? seat : null
+    setPopup({ ...pointer.current })
+  }
   const control = useRef({ yaw: 0.6, pitch: 0.5, distance: GALAXY.RADIUS_LY * 2.6 })
   const dragging = useRef(false)
   const label = useRef<HTMLDivElement>(null)
+  const you = useRef<HTMLDivElement>(null)
   const viewport = useRef<HTMLDivElement>(null)
 
   // Зум колесом/щипком — только карта. Нативный слушатель гасит браузерный зум.
@@ -451,39 +492,35 @@ export function GalaxyMap({ onClose }: { onClose: () => void }) {
         }
       : null
 
+  // Встроенной в консоль клавишами заведует сама консоль — второго слушателя не вешаем.
   useEffect(() => {
+    if (embedded) return
     const onKey = (e: KeyboardEvent) => {
       if (e.code === 'Escape') onClose()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [onClose])
+  }, [onClose, embedded])
 
   const doJump = (index: number, arrival: Arrival | null) => {
-    if (jumpTo(session, index, arrival)) onClose()
+    // Кино уже идёт — второй запуск пересобрал бы позу на середине. Отсекаем.
+    if (jumping()) return
+    // Не прыгаем мгновенно: запускаем кино отправления и закрываем карту, чтобы мир
+    // снова пошёл. Сам прыжок исполнит постановщик под чёрным экраном.
+    startDepart(session.world, index, arrival)
+    onClose()
   }
 
-  return (
-    <div
-      // Та же голограмма над консолью, что и у карты системы: обе карты — один
-      // прибор, и рамка у них обязана быть одна. Полотно звёзд прозрачно, поэтому
-      // диск галактики лежит прямо на подсвеченном стекле панели.
-      className="absolute inset-0 flex items-center justify-center backdrop-blur-md"
-      style={{ background: 'radial-gradient(ellipse at center, rgba(12,34,60,0.66), rgba(0,3,8,0.93))' }}
-    >
-      <div
-        className="flex h-[calc(100vh-3rem)] w-[calc(100vw-3rem)] items-stretch overflow-hidden rounded-2xl border font-mono"
-        style={{
-          color: UI.PRIMARY,
-          borderColor: 'rgba(124,196,255,0.3)',
-          background: 'linear-gradient(150deg, rgba(40,95,150,0.18), rgba(8,22,42,0.4))',
-          boxShadow: '0 0 70px rgba(60,150,255,0.16), inset 0 0 90px rgba(80,180,255,0.06)',
-        }}
-      >
+  const content = (
+    <>
       <div
         ref={viewport}
         className="relative flex-1 cursor-grab active:cursor-grabbing"
-        onPointerDown={() => (dragging.current = true)}
+        onPointerDown={(e) => {
+          dragging.current = true
+          const box = e.currentTarget.getBoundingClientRect()
+          pointer.current = { x: e.clientX - box.left, y: e.clientY - box.top, w: box.width, h: box.height }
+        }}
         onPointerUp={() => (dragging.current = false)}
         onPointerLeave={() => (dragging.current = false)}
         onPointerMove={(e) => {
@@ -505,152 +542,238 @@ export function GalaxyMap({ onClose }: { onClose: () => void }) {
             hovered={hovered}
             selected={selected}
             onHover={setHovered}
-            onSelect={setSelected}
+            onSelect={chooseSystem}
           />
           <JumpSphere at={here} charge={world.player.jumpCharge} max={world.player.spec.jumpRange} />
           <YouAreHere at={here} />
+          <YouLabel at={here} box={you} />
           <Route from={here} to={picked ? positionOf(picked.system) : null} />
           <StarLabel at={picked ? positionOf(picked.system) : null} box={label} />
         </Canvas>
 
         <div className="pointer-events-none absolute inset-x-0 top-0 p-6">
-          <div className="text-xl tracking-[0.3em]">ГАЛАКТИКА {galaxy.name.toUpperCase()}</div>
+          <div className="text-xl tracking-[0.3em]">
+            {t('map.galaxy')} {properName(galaxy.name).toUpperCase()}
+          </div>
           <div className="mt-1 text-xs tracking-widest" style={{ color: UI.DIM }}>
-            {galaxy.shape.name.toUpperCase()} · {systems.length} ЗВЁЗД
+            {galaxyShapeName(galaxy.shape).toUpperCase()} · {t('map.starsCount', { n: systems.length })}
           </div>
         </div>
 
-        {/* Подпись живёт всегда: её двигает кадр, а не React. Пропадает — гаснет. */}
+        {/* Подпись «ВЫ» и имя под курсором живут всегда: их двигает кадр, а не React. */}
+        <div
+          ref={you}
+          className="pointer-events-none absolute left-0 top-0 text-[11px] font-bold tracking-widest opacity-0"
+          style={{ color: UI.PRIMARY, willChange: 'transform' }}
+        >
+          {t('map.you')}
+        </div>
         <div
           ref={label}
           className="pointer-events-none absolute left-0 top-0 text-sm leading-tight opacity-0"
           style={{ willChange: 'transform' }}
         >
-          <div className="tracking-widest">{picked?.system.name.toUpperCase() ?? ''}</div>
+          <div className="tracking-widest">{picked ? properName(picked.system.name).toUpperCase() : ''}</div>
           <div style={{ color: UI.DIM }}>{picked ? formatRange(picked.distance) : ''}</div>
         </div>
-      </div>
 
-        <SystemPanel
-          systems={systems}
-          world={world}
-          selected={selected}
-          onJump={doJump}
-          onClose={onClose}
-        />
+        {/* Плашка выбранной системы — прямо у курсора. Правой колонки больше нет:
+            карта звёзд занимает всё поле и центрируется сама. */}
+        {popup && selected != null && systems[selected] && (
+          <SystemPopup
+            key={selected}
+            system={systems[selected]!}
+            world={world}
+            index={selected}
+            docked={world.docked}
+            at={popup}
+            onArrival={(planet) => {
+              world.jumpArrivalPlanet = planet
+              bump()
+            }}
+            onJump={() => doJump(selected, world.jumpArrivalPlanet != null ? { kind: 'body', planet: world.jumpArrivalPlanet } : null)}
+            onClose={() => setPopup(null)}
+          />
+        )}
+      </div>
+    </>
+  )
+
+  // Встроена в консоль: рамку и фон даёт стеклянная панель, карте — заполнить её.
+  if (embedded) {
+    return (
+      <div className="flex h-full min-h-[30rem] items-stretch overflow-hidden font-mono" style={{ color: UI.PRIMARY }}>
+        {content}
+      </div>
+    )
+  }
+
+  return (
+    <div
+      // Та же голограмма над консолью, что и у карты системы: обе карты — один
+      // прибор, и рамка у них обязана быть одна. Полотно звёзд прозрачно, поэтому
+      // диск галактики лежит прямо на подсвеченном стекле панели.
+      className="absolute inset-0 flex items-center justify-center backdrop-blur-md"
+      style={{ background: 'radial-gradient(ellipse at center, rgba(12,34,60,0.66), rgba(0,3,8,0.93))' }}
+    >
+      <div
+        className="flex h-[calc(100vh-3rem)] w-[calc(100vw-3rem)] items-stretch overflow-hidden rounded-2xl border font-mono"
+        style={{
+          color: UI.PRIMARY,
+          borderColor: 'rgba(124,196,255,0.3)',
+          background: 'linear-gradient(150deg, rgba(40,95,150,0.18), rgba(8,22,42,0.4))',
+          boxShadow: '0 0 70px rgba(60,150,255,0.16), inset 0 0 90px rgba(80,180,255,0.06)',
+        }}
+      >
+        {content}
       </div>
     </div>
   )
 }
 
-/** Плашка выбранной системы: что за звезда, кто там живёт, и можно ли долететь. */
-function SystemPanel({
-  systems,
+/**
+ * Плашка выбранной системы — всплывает У КУРСОРА по клику на звезду. Показывает лишь
+ * то, ради чего систему выбирают: имя, сколько миров и причалов, до чего дошла жизнь,
+ * и СХЕМКУ, где точку выхода ставят ТОЛЬКО у планеты со станцией — в пустоту больше
+ * не прыгают. У причала прыжка нет: там только метят цель, а метка переживёт отчаливание;
+ * прыгают уже в полёте — кнопкой здесь или клавишей H в кабине.
+ */
+function SystemPopup({
+  system,
   world,
-  selected,
+  index,
+  docked,
+  at,
+  onArrival,
   onJump,
   onClose,
 }: {
-  systems: StarSystem[]
+  system: StarSystem
   world: World
-  selected: number | null
-  onJump: (index: number, arrival: Arrival | null) => void
+  index: number
+  docked: boolean
+  at: { x: number; y: number; w: number; h: number }
+  onArrival: (planet: number | null) => void
+  onJump: () => void
   onClose: () => void
 }) {
-  const system = selected != null ? systems[selected] : null
+  const def = useMemo(() => systemDefFor(index, world.galaxySeed), [index, world.galaxySeed])
+  const core = index === CORE_INDEX
+  const blocked = docked ? null : jumpBlock(world, index)
+
+  // Прижимаем плашку к полю карты: у краёв растёт внутрь, но верх не заходит за верхний
+  // край (там срезалось). Плашка широкая — данные слева, схемка справа.
+  const PW = 384
+  const PH = 220
+  const left = Math.max(8, Math.min(at.x + 12, at.w - PW - 8))
+  const top = Math.max(8, Math.min(at.y, at.h - PH - 8))
 
   return (
-    <aside className="flex w-96 shrink-0 flex-col border-l p-6" style={{ borderColor: UI.DIM }}>
-      {/* Ни строки «ВЫ ЗДЕСЬ», ни подсказки про окружность: где ты — видно по метке
-          на карте, а окружность достижимости говорит за себя. Плашка высокая, и
-          лишние строки срезали кнопку прыжка и закрытия по нижнему краю. */}
-      {system && (
-        <SystemDetails
-          // Выбор точки выхода принадлежит СИСТЕМЕ: сменил звезду — крестик снят.
-          key={selected}
-          system={system}
-          index={selected!}
-          world={world}
-          onJump={onJump}
-        />
-      )}
+    <div
+      className="absolute z-30 w-96 rounded-lg border p-4 backdrop-blur-md"
+      style={{
+        left,
+        top,
+        borderColor: 'rgba(124,196,255,0.4)',
+        background: 'rgba(8,22,42,0.88)',
+        boxShadow: '0 0 30px rgba(60,150,255,0.2)',
+        color: UI.PRIMARY,
+      }}
+      onPointerDown={(e) => e.stopPropagation()}
+      onClick={(e) => e.stopPropagation()}
+    >
+      <div className="flex gap-4">
+        {/* Слева — данные и действие. */}
+        <div className="flex min-w-0 flex-1 flex-col">
+          <div className="flex items-start justify-between gap-3">
+            <h3 className="text-base leading-tight tracking-[0.2em]">{properName(system.name).toUpperCase()}</h3>
+            <button type="button" onClick={onClose} className="cursor-pointer text-lg leading-none" style={{ color: UI.DIM }}>
+              ×
+            </button>
+          </div>
 
-      <button
-        type="button"
-        onClick={onClose}
-        className="mt-auto w-full cursor-pointer border py-2 text-sm tracking-[0.3em] transition-colors hover:bg-[#7fd6ff] hover:text-black"
-        style={{ borderColor: UI.PRIMARY }}
-      >
-        G — ЗАКРЫТЬ
-      </button>
-    </aside>
+          <dl className="mt-3 space-y-1 text-sm">
+            <Row label={t('map.planets')} value={String(system.planets.length)} />
+            <Row label={t('map.stations')} value={String(stationsOf(system).length)} />
+            <Row label={t('map.life')} value={lifeName(systemLife(system))} />
+          </dl>
+
+          {core && <p className="mt-3 text-[11px] leading-relaxed" style={{ color: UI.WARN }}>{t('map.core')}</p>}
+
+          {!docked && (
+            <button
+              type="button"
+              disabled={blocked !== null}
+              onClick={onJump}
+              className={`mt-auto w-full border py-2 text-sm tracking-[0.3em] transition-colors ${
+                blocked ? 'cursor-not-allowed opacity-40' : 'cursor-pointer hover:bg-[#7fd6ff] hover:text-black'
+              }`}
+              style={{ borderColor: blocked ? UI.DIM : UI.PRIMARY, color: blocked ? UI.DIM : UI.PRIMARY }}
+            >
+              {blocked ? blockLabel(blocked) : core ? t('map.jumpGalaxy') : t('map.jump')}
+            </button>
+          )}
+        </div>
+
+        {/* Справа — схемка выхода. */}
+        <div className="w-40 shrink-0">
+          <StationPicker def={def} selected={world.jumpArrivalPlanet} onPick={onArrival} />
+        </div>
+      </div>
+    </div>
   )
 }
 
-function SystemDetails({
-  system,
-  index,
-  world,
-  onJump,
+/**
+ * Схемка выхода: звезда в центре, планеты по орбитам. Кликается ТОЛЬКО планета со
+ * станцией — туда и выйдешь, к причалу. Клик по звезде — выход у светила (без причала).
+ * Произвольную точку больше не ставят: прыгать имеет смысл лишь туда, где есть жизнь.
+ */
+function StationPicker({
+  def,
+  selected,
+  onPick,
 }: {
-  system: StarSystem
-  index: number
-  world: World
-  onJump: (index: number, arrival: Arrival | null) => void
+  def: SystemDef
+  /** Индекс планеты-со-станцией, у которой назначен выход, или null — у звезды. */
+  selected: number | null
+  onPick: (planet: number | null) => void
 }) {
-  const distance = jumpDistance(world, index)
-  const blocked = jumpBlock(world, index)
-  const capital = capitalOf(system)
-  const core = index === CORE_INDEX
-
-  /**
-   * Описание системы, по которому её и построят. Считается из индекса и зерна —
-   * ничего не хранится, поэтому и на карте, и в мире это одна и та же система.
-   */
-  const def = useMemo(() => systemDefFor(index, world.galaxySeed), [index, world.galaxySeed])
-  const [arrival, setArrival] = useState<Arrival | null>(null)
+  const plotted = rings(def)
+  if (plotted.length === 0) {
+    return (
+      <p className="text-[11px]" style={{ color: UI.DIM }}>
+        {t('map.noPlanets')}
+      </p>
+    )
+  }
+  const marked = selected != null ? plotted[selected] : null
 
   return (
-    <div className="flex flex-1 flex-col">
-      <h1 className="text-3xl leading-none tracking-[0.2em]">{system.name.toUpperCase()}</h1>
-      <dl className="mt-5 space-y-1 text-sm">
-        <Row label="СВЕТИЛО" value={system.companion ? `${system.star.className} · двойная` : system.star.className} />
-        <Row label="РАССТОЯНИЕ" value={formatRange(distance)} />
-        <Row label="ПЛАНЕТ" value={String(system.planets.length)} />
-        <Row label="ОХРАНА" value={system.security} />
-        {capital && <Row label="СТОЛИЦА" value={`${capital.name} · ${capital.settlement.economy}`} />}
-        {capital && <Row label="СТРОЙ" value={`${capital.settlement.government} · ТУ ${capital.settlement.techLevel}`} />}
-        <Row label="ТОПЛИВО" value={system.star.scoopable ? 'зачерпнуть можно' : 'не зачерпнуть'} />
-        {system.dyson && (
-          <Row
-            label="МЕГАСТРУКТУРА"
-            value={system.dyson.ruined ? 'сфера Дайсона · руины' : 'сфера Дайсона'}
-          />
-        )}
-      </dl>
-
-      {core && (
-        <p className="mt-4 text-xs leading-relaxed" style={{ color: UI.WARN }}>
-          ЯДРО ГАЛАКТИКИ. За горизонтом событий — выход из чёрной дыры другой галактики.
-        </p>
-      )}
-
-      <Orrery def={def} arrival={arrival} onPick={setArrival} />
-      <p className="mt-2 text-[11px] leading-relaxed" style={{ color: UI.DIM }}>
-        {describeArrival(def, arrival)}
-      </p>
-
-      <button
-        type="button"
-        disabled={blocked !== null}
-        onClick={() => onJump(index, arrival)}
-        className={`mt-6 w-full border py-3 text-sm tracking-[0.3em] transition-colors ${
-          blocked ? 'cursor-not-allowed opacity-40' : 'cursor-pointer hover:bg-[#7fd6ff] hover:text-black'
-        }`}
-        style={{ borderColor: blocked ? UI.DIM : UI.PRIMARY, color: blocked ? UI.DIM : UI.PRIMARY }}
-      >
-        {blocked ? BLOCK_REASON[blocked] : core ? 'В ДРУГУЮ ГАЛАКТИКУ' : 'ПРЫЖОК'}
-      </button>
+    <div>
+      <svg viewBox={`0 0 ${ORRERY_VIEW} ${ORRERY_VIEW}`} className="w-full" role="img" aria-label={`Схема ${def.name}`}>
+        {/* Звезда — и точка выхода у светила: клик по ней снимает причал. */}
+        <circle
+          cx={ORRERY_CENTRE}
+          cy={ORRERY_CENTRE}
+          r="6"
+          fill={`#${def.star.color.toString(16).padStart(6, '0')}`}
+          className="cursor-pointer"
+          onClick={() => onPick(null)}
+        />
+        {plotted.map((p, i) => (
+          <g key={p.name}>
+            <circle cx={ORRERY_CENTRE} cy={ORRERY_CENTRE} r={p.radius} fill="none" stroke={UI.DIM} strokeWidth="0.4" opacity="0.5" />
+            {/* Планета со станцией светит фосфором и кликается; прочие — тусклые, мимо них. */}
+            <circle cx={p.x} cy={p.y} r={p.giant ? 3.4 : 2} fill={p.station ? UI.PRIMARY : UI.DIM} opacity={p.station ? 1 : 0.4} />
+            {/* Зона под палец: в точку в 2 единицы мышью не попасть. Только у станций. */}
+            {p.station && (
+              <circle cx={p.x} cy={p.y} r="7" fill="transparent" className="cursor-pointer" onClick={() => onPick(i)} />
+            )}
+          </g>
+        ))}
+        {marked && <Cross x={marked.x} y={marked.y} />}
+      </svg>
     </div>
   )
 }
@@ -683,8 +806,6 @@ const ORRERY_CENTRE = ORRERY_VIEW / 2
 /** Внутренняя орбита ложится сюда, внешняя — на `HUB + REACH`. */
 const ORRERY_HUB = 12
 const ORRERY_REACH = 62
-/** Ближе этого к планете крестик прилипает к ней. Попасть в точку в 2 единицы мышью нельзя. */
-const SNAP = 7
 
 interface Ring {
   name: string
@@ -732,113 +853,6 @@ function rings(def: SystemDef): Ring[] {
   })
 }
 
-/** Обратный ход шкалы: из радиуса на схеме — в орбиту в метрах. */
-function orbitAt(def: SystemDef, radius: number): number {
-  const bounds = arrivalBounds(def)
-  if (!bounds) return 0
-  const span = Math.log(bounds.max / bounds.min)
-  if (span <= 1e-6) return bounds.min
-  const k = (radius - ORRERY_HUB) / ORRERY_REACH
-  return bounds.min * Math.exp(k * span)
-}
-
-function Orrery({
-  def,
-  arrival,
-  onPick,
-}: {
-  def: SystemDef
-  arrival: Arrival | null
-  onPick: (arrival: Arrival | null) => void
-}) {
-  const plotted = rings(def)
-  if (plotted.length === 0) {
-    return (
-      <p className="mt-6 text-xs" style={{ color: UI.DIM }}>
-        Планет нет. Лететь не к чему, кроме самой звезды.
-      </p>
-    )
-  }
-
-  const bounds = arrivalBounds(def)!
-  const inner = ORRERY_HUB
-  const outer = ORRERY_HUB + ORRERY_REACH
-
-  const pick = (event: React.MouseEvent<SVGSVGElement>) => {
-    const box = event.currentTarget.getBoundingClientRect()
-    const x = ((event.clientX - box.left) / box.width) * ORRERY_VIEW - ORRERY_CENTRE
-    const y = ((event.clientY - box.top) / box.height) * ORRERY_VIEW - ORRERY_CENTRE
-
-    // Планета важнее пустоты: попасть мышью в точку в две единицы нельзя.
-    const near = plotted.findIndex((p) => Math.hypot(p.x - ORRERY_CENTRE - x, p.y - ORRERY_CENTRE - y) < SNAP)
-    if (near >= 0) {
-      onPick({ kind: 'body', planet: near })
-      return
-    }
-
-    const radius = Math.hypot(x, y)
-    // Пустое место — только внутри пояса. Домен зажмёт и сам, но крестик обязан
-    // встать туда, куда корабль в самом деле выйдет, а не туда, куда ткнули.
-    const clamped = Math.min(outer, Math.max(inner, radius))
-    onPick({ kind: 'point', orbit: orbitAt(def, clamped), angle: Math.atan2(y, x) })
-  }
-
-  const cross = crossAt(def, plotted, arrival)
-
-  return (
-    <svg
-      viewBox={`0 0 ${ORRERY_VIEW} ${ORRERY_VIEW}`}
-      className="mt-6 w-full cursor-crosshair"
-      onClick={pick}
-      role="img"
-      aria-label={`Схема системы ${def.name}`}
-    >
-      {/* Пояс выхода: между этими окружностями можно ткнуть в пустоту. */}
-      <circle cx={ORRERY_CENTRE} cy={ORRERY_CENTRE} r={(inner + outer) / 2}
-        fill="none" stroke={UI.PRIMARY} strokeWidth={outer - inner} opacity="0.05" />
-
-      {/*
-        Двойная. Разнос пары — миллионы километров против миллиардов до планет:
-        в масштабе схемы они слились бы в одну точку. Поэтому спутник отрисован
-        условно рядом с главной — не по орбите, а как знак «здесь два солнца».
-      */}
-      {def.companion && (
-        <circle cx={ORRERY_CENTRE + 5} cy={ORRERY_CENTRE - 4} r="3.4"
-          fill={`#${def.companion.color.toString(16).padStart(6, '0')}`} />
-      )}
-      <circle cx={ORRERY_CENTRE} cy={ORRERY_CENTRE} r="6" fill={`#${def.star.color.toString(16).padStart(6, '0')}`} />
-      {plotted.map((p) => (
-        <g key={p.name}>
-          <circle cx={ORRERY_CENTRE} cy={ORRERY_CENTRE} r={p.radius} fill="none" stroke={UI.DIM} strokeWidth="0.4" opacity="0.5" />
-          {/* Газовый гигант виден гигантом и на схеме. */}
-          <circle cx={p.x} cy={p.y} r={p.giant ? 3.4 : 2} fill={p.station ? UI.PRIMARY : UI.DIM} />
-        </g>
-      ))}
-
-      {cross && <Cross x={cross.x} y={cross.y} />}
-      {/* Сброс выбора: клик по звезде. Отдельной кнопки он не стоит. */}
-      <circle cx={ORRERY_CENTRE} cy={ORRERY_CENTRE} r="8" fill="transparent"
-        onClick={(e) => { e.stopPropagation(); onPick(null) }} />
-      <title>{`Пояс выхода: ${formatOrbit(bounds.min)} — ${formatOrbit(bounds.max)}`}</title>
-    </svg>
-  )
-}
-
-/** Где стоит крестик. Тело — на своей отметке, пустое место — по орбите и азимуту. */
-function crossAt(def: SystemDef, plotted: Ring[], arrival: Arrival | null): { x: number; y: number } | null {
-  if (!arrival) return null
-  if (arrival.kind === 'body') {
-    const p = plotted[arrival.planet]
-    return p ? { x: p.x, y: p.y } : null
-  }
-  const bounds = arrivalBounds(def)
-  if (!bounds) return null
-  const span = Math.log(bounds.max / bounds.min)
-  const orbit = Math.min(bounds.max, Math.max(bounds.min, arrival.orbit))
-  const r = ORRERY_HUB + (span > 1e-6 ? Math.log(orbit / bounds.min) / span : 0.5) * ORRERY_REACH
-  return { x: ORRERY_CENTRE + r * Math.cos(arrival.angle), y: ORRERY_CENTRE + r * Math.sin(arrival.angle) }
-}
-
 function Cross({ x, y }: { x: number; y: number }) {
   const arm = 5
   return (
@@ -852,30 +866,3 @@ function Cross({ x, y }: { x: number; y: number }) {
   )
 }
 
-const AU = 149_597_870_700
-const formatOrbit = (metres: number) => `${(metres / AU).toFixed(2)} а.е.`
-
-/**
- * Что пилот увидит, выйдя из прыжка. Слова, а не координаты: «в миллионе
- * километров от причала» говорит о дороге больше, чем «x = 1.4·10¹¹».
- */
-function describeArrival(def: SystemDef, arrival: Arrival | null): string {
-  if (!def.planets.length) return 'Выход у звезды: планет здесь нет.'
-  if (!arrival) return 'Крестик на схеме — точка выхода. Пустое место или мир; звезда снимает выбор.'
-
-  if (arrival.kind === 'body') {
-    const planet = def.planets[arrival.planet]
-    if (!planet) return ''
-    const berth = stationSeat(def) === arrival.planet
-    return berth
-      ? `Выход в ${(ARRIVAL.STANDOFF / 1000).toFixed(0)} тыс. км от причала: минута крейсерского хода.`
-      : `Выход у мира ${planet.name}, в ${(ARRIVAL.STANDOFF / 1000).toFixed(0)} тыс. км над поверхностью.`
-  }
-
-  return `Выход в пустоте, ${formatOrbit(arrivalOrbit(def, arrival.orbit))} от светила. Оттуда лететь самому.`
-}
-
-const arrivalOrbit = (def: SystemDef, orbit: number): number => {
-  const bounds = arrivalBounds(def)
-  return bounds ? Math.min(bounds.max, Math.max(bounds.min, orbit)) : orbit
-}

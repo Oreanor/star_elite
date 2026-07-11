@@ -1,5 +1,6 @@
 import { CORE_INDEX, GALAXY } from '../../config/galaxy'
 import { WORLD } from '../../config/world'
+import { isCruising } from '../cruise/drive'
 import { enterSystem } from '../world/factory'
 import { STARTER_SYSTEM, type SystemDef } from '../world/system'
 import type { World } from '../world/entities'
@@ -21,7 +22,7 @@ import { distanceLy, placeSystem } from './shape'
  * просто опустел (нужно к светилу).
  */
 
-export type JumpBlock = 'no-drive' | 'out-of-range' | 'out-of-charge' | 'same-system' | 'docked'
+export type JumpBlock = 'no-drive' | 'out-of-range' | 'out-of-charge' | 'same-system' | 'docked' | 'cruising'
 
 /**
  * Описание системы по индексу.
@@ -48,6 +49,8 @@ export function jumpDistance(world: World, index: number): number {
  */
 export function jumpBlock(world: World, index: number): JumpBlock | null {
   if (world.docked) return 'docked'
+  // На крейсерском ходу привод не пускает: сначала сбрось скорость до обычной.
+  if (isCruising(world.player)) return 'cruising'
   if (index === world.systemIndex) return 'same-system'
 
   const drive = world.player.spec.jumpRange

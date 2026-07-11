@@ -104,6 +104,10 @@ const trafficCount = (world: World): number =>
  * покинутой. Остальные приходят из пустоты на таком удалении, с которого их видно
  * только на локаторе.
  *
+ * Враждебные у самого причала не рождаются: над станцией полиция, и пират, всплывший
+ * из ничего у ворот, — это баг на вид. Если игрок у причала, налётчик приходит с кромки
+ * зоны и правит внутрь; пока летит, его встречает патруль.
+ *
  * Пролетающий правит НА ПРОТИВОПОЛОЖНУЮ сторону от игрока: маршрут проходит мимо,
  * а не вокруг. Идущий на сближение правит на самого игрока.
  */
@@ -118,6 +122,19 @@ function spawnSite(world: World, kind: EncounterKind, outPos: Vector3, outHome: 
     _scratch.addScaledVector(randomDirection(world, _offset), 0.3).normalize()
     outPos.copy(station.pos).addScaledVector(_scratch, station.radius * 3)
     outHome.copy(station.pos).addScaledVector(_scratch, TRAFFIC.DESTINATION_RANGE)
+    return
+  }
+
+  // Пират у причала — только с дальней кромки: рождается на фиксированном удалении ОТ
+  // СТАНЦИИ (не от игрока), чтобы не всплыть над воротами, и правит на игрока.
+  if (
+    kind.faction === 'hostile' &&
+    station &&
+    station.pos.distanceTo(world.player.state.pos) < TRAFFIC.STATION_KEEPOUT
+  ) {
+    randomDirection(world, _scratch)
+    outPos.copy(station.pos).addScaledVector(_scratch, TRAFFIC.PIRATE_STATION_DIST)
+    outHome.copy(world.player.state.pos)
     return
   }
 

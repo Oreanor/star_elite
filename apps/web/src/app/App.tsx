@@ -1,14 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { interlocutor } from '@elite/sim'
+import { interlocutor, jumpBlock, undock } from '@elite/sim'
 import { GameProvider, useSession } from './GameContext'
+import { jumping, startDepart } from './control/jumpFx'
 import { Game } from './Game'
+import { TitleStars } from './TitleStars'
 import { input, releaseLock, requestLock } from '../platform/input/input'
+import { Console, type ConsoleTab } from '../ui/console/Console'
 import { Dialogue } from '../ui/dialogue/Dialogue'
 import { setLang, t, useLang, type Key, type Lang } from '../ui/i18n'
-import { GalaxyMap } from '../ui/map/GalaxyMap'
-import { SystemMap } from '../ui/map/SystemMap'
-import { ShipScreen } from '../ui/ship/ShipScreen'
-import { StationMenu } from '../ui/station/StationMenu'
 import { Tabs } from '../ui/station/chrome'
 
 /**
@@ -37,8 +36,14 @@ function Shell({ onRestart }: { onRestart: () => void }) {
    * возвращает в игру, а не начинает её. Экран один, смысл разный.
    */
   const [started, setStarted] = useState(false)
-  /** Какая карта раскрыта. Обе ставят мир на паузу, поэтому состояние одно. */
-  const [chart, setChart] = useState<'none' | 'system' | 'galaxy' | 'talk' | 'ship'>('none')
+  /**
+   * Открытая вкладка консоли, или `null` — консоль закрыта. У причала открыта всегда;
+   * в полёте её раскрывают M/G/I на нужной вкладке. Оверлей ставит мир на паузу
+   * (отпускает курсор), поэтому одно состояние на всю панель.
+   */
+  const [tab, setTab] = useState<ConsoleTab | null>(null)
+  /** Открыт ли канал связи. Отдельный оверлей: ни вкладок, ни причала у него нет. */
+  const [talking, setTalking] = useState(false)
 
   /**
    * Сцена строится по нажатию СТАРТ, а не при загрузке страницы.
@@ -82,90 +87,112 @@ function Shell({ onRestart }: { onRestart: () => void }) {
   // Симуляция сообщает о событиях один раз, из кадра. React узнаёт о них отсюда.
   useEffect(() => {
     session.onOver = () => setOver(true)
-    session.onDockChange = setDocked
+    session.onDockChange = (d) => {
+      setDocked(d)
+      // Пристыковались — консоль открыта на планете; отчалили — закрыта.
+      setTab(d ? 'planet' : null)
+    }
     return () => {
       session.onOver = null
       session.onDockChange = null
     }
   }, [session])
 
-  const closeChart = useCallback(() => {
-    session.mapOpen = false
-    setChart('none')
-    // У причала курсор нужен меню станции — захват не возвращаем; в полёте пауза
-    // снимается только повторным захватом.
-    if (!docked) void requestLock()
-  }, [session, docked])
+  // Раскрыть консоль — отпустить курсор: без него кадр до чтения клавиш не доходит
+  // (пауза это и есть отпущенный курсор). Закрыть — вернуть захват, мир оживает.
+  const openConsole = useCallback((next: ConsoleTab) => {
+    setTab(next)
+    releaseLock()
+  }, [])
+  const closeConsole = useCallback(() => {
+    setTab(null)
+    void requestLock()
+  }, [])
+  const closeTalk = useCallback(() => {
+    setTalking(false)
+    void requestLock()
+  }, [])
+  // У причала кнопка шапки отчаливает: отойдя от кольца, корабль оживает захватом.
+  const undockAndResume = useCallback(() => {
+    undock(session.world)
+    void requestLock()
+  }, [session])
 
   /**
-   * Со стартового экрана станции открыть карту. Курсор у причала уже свободен,
-   * поэтому захват не трогаем — только показываем ту же карту, что и в полёте.
-   */
-  const openMap = useCallback(
-    (which: 'system' | 'galaxy') => {
-      session.mapOpen = true
-      setChart(which)
-    },
-    [session],
-  )
-
-  /**
-   * Оверлеи переключаются ЗДЕСЬ, а не в кадре симуляции: раскрыть карту или
-   * канал связи — значит отпустить курсор, а без курсора кадр до чтения клавиш
-   * не доходит (пауза). Тумблер, живущий внутри того, что он останавливает,
-   * закрыть себя не сможет.
+   * Оверлеи переключаются ЗДЕСЬ, а не в кадре симуляции: тумблер, живущий внутри
+   * того, что он останавливает, закрыть себя не сможет. Раскрыт всегда РОВНО ОДИН
+   * оверлей (консоль ИЛИ канал связи): два флага паузы однажды разошлись бы, и мир
+   * остался бы стоять под закрытым окном.
    *
-   * Раскрыт всегда РОВНО ОДИН оверлей, поэтому состояние одно: два флага паузы
-   * однажды разойдутся, и мир останется стоять под закрытым окном.
-   *
-   * Карта галактики открывается и в доке: прыгать из дока нельзя, но выбрать,
-   * куда лететь после отчаливания, — можно и нужно.
-   *
-   * С кем можно говорить, решает домен (`interlocutor`): захваченный, живой и
-   * в пределах слышимости. Клавише этого правила знать не положено.
+   * У причала консоль открыта всегда — M/G/I там молчат, вкладки жмут мышью. В полёте
+   * та же клавиша открывает консоль на своей вкладке, при открытой переводит на неё,
+   * а повторная своя — закрывает. С кем говорить, решает домен (`interlocutor`).
    */
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.repeat || over) return
+      // Пока идёт кино прыжка — клавиши молчат: ни консоли, ни второго прыжка.
+      if (jumping()) return
 
-      const wanted =
-        e.code === 'KeyM' ? 'system' : e.code === 'KeyG' ? 'galaxy' : e.code === 'KeyT' ? 'talk' : e.code === 'KeyI' ? 'ship' : null
-      if (!wanted) return
-      if (wanted !== 'galaxy' && docked) return
-
-      // Та же клавиша закрывает своё окно и молчит под чужим.
-      if (session.mapOpen) {
-        if (chart === wanted) closeChart()
+      // Браузер уже снял захват под оверлеем, так что закрыть его без Escape нечем.
+      if (e.code === 'Escape') {
+        if (talking) closeTalk()
+        else if (!docked && tab !== null) closeConsole()
         return
       }
-      if (wanted === 'talk' && !interlocutor(session.world)) return
 
-      session.mapOpen = true
-      setChart(wanted)
-      releaseLock() // мир замирает сам: пауза — это отпущенный курсор
+      if (e.code === 'KeyT') {
+        if (docked || tab !== null) return
+        if (talking) return
+        if (!interlocutor(session.world)) return
+        setTalking(true)
+        releaseLock()
+        return
+      }
+
+      // H — гиперпрыжок к цели, намеченной на карте галактики. Прыгать можно только
+      // в полёте (у причала карта лишь метит цель), поэтому у станции клавиша молчит.
+      // Точку выхода домен возьмёт из мира (`jumpArrivalPlanet`): причал или звезда.
+      if (e.code === 'KeyH') {
+        if (docked || talking) return
+        const target = session.world.jumpTargetIndex
+        if (target == null || jumpBlock(session.world, target) !== null) return
+        const planet = session.world.jumpArrivalPlanet
+        startDepart(session.world, target, planet != null ? { kind: 'body', planet } : null)
+        if (tab !== null) closeConsole()
+        return
+      }
+
+      const wanted: ConsoleTab | null =
+        e.code === 'KeyM' ? 'system' : e.code === 'KeyG' ? 'galaxy' : e.code === 'KeyI' ? 'ship' : null
+      if (!wanted || talking || docked) return
+
+      if (tab === wanted) closeConsole()
+      else if (tab === null) openConsole(wanted)
+      else setTab(wanted) // консоль уже открыта, курсор отпущен — просто меняем вкладку
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [session, closeChart, over, docked, chart])
+  }, [session, over, docked, tab, talking, openConsole, closeConsole, closeTalk])
 
   return (
     <div className="relative h-screen w-screen overflow-hidden bg-black">
       {booted && <Game />}
       {over ? (
         <GameOver score={session.world.score} onRestart={onRestart} />
-      ) : /* Карты — те же компоненты и в полёте, и у причала; их onClose возвращает
-             либо в игру, либо на экран станции (см. closeChart). */
-      chart === 'galaxy' ? (
-        <GalaxyMap onClose={closeChart} />
-      ) : chart === 'system' ? (
-        <SystemMap world={session.world} onClose={closeChart} />
-      ) : chart === 'ship' ? (
-        // В полёте экран корабля — только витрина: docked не передаём.
-        <ShipScreen world={session.world} onClose={closeChart} />
-      ) : chart === 'talk' ? (
-        <Dialogue onClose={closeChart} />
-      ) : docked ? (
-        <StationMenu world={session.world} onUndock={() => void requestLock()} onOpenMap={openMap} />
+      ) : talking ? (
+        <Dialogue onClose={closeTalk} />
+      ) : docked || tab !== null ? (
+        // Одна консоль и в полёте, и у причала: планета, корабль, груз, карты (плюс
+        // верфь и магазин у причала). «Открыть карту» — раскрыть эту панель на нужной
+        // вкладке, а не окно поверх окна.
+        <Console
+          world={session.world}
+          docked={docked}
+          tab={tab ?? 'planet'}
+          onTab={setTab}
+          onClose={docked ? undockAndResume : closeConsole}
+        />
       ) : (
         !locked && <Paused resuming={started} onBoot={() => setBooted(true)} />
       )}
@@ -227,6 +254,25 @@ const KEY_GROUPS: { title: Key; rows: [Key, Key][] }[] = [
  * нажатием и стартом игры лежит вся длина движения пальца вверх — кнопка кажется
  * тугой. Захвату курсора нажатия достаточно: это тот же жест пользователя.
  */
+/**
+ * Голубоватая панель-модалка заставки — общая для меню, клавиш и настроек. Размер
+ * фиксированный и с запасом: переключение экранов не должно её ресайзить, а на бликах
+ * корабля тексту нужна ровная подложка. Полупрозрачна, с размытием и скруглением;
+ * корабль просвечивает, но шрифт держится на своём фоне. Самый высокий экран (клавиши)
+ * влезает целиком, оттого высота задана заранее, а не тянется по содержимому.
+ */
+function MenuPanel({ children }: { children: React.ReactNode }) {
+  return (
+    <div
+      className="flex h-[29rem] w-[34rem] max-w-[92vw] flex-col items-center justify-center gap-4
+                 overflow-y-auto rounded-2xl border p-8 backdrop-blur-md"
+      style={{ borderColor: 'rgba(63,115,145,0.7)', background: 'rgba(20,44,74,0.38)' }}
+    >
+      {children}
+    </div>
+  )
+}
+
 function MenuButton({
   children,
   onClick,
@@ -241,8 +287,11 @@ function MenuButton({
       type="button"
       disabled={disabled}
       onPointerDown={onClick}
-      className="w-56 cursor-pointer border border-[#7fd6ff] px-8 py-3 text-base tracking-[0.3em]
-                 text-[#7fd6ff] transition-colors hover:bg-[#7fd6ff] hover:text-black
+      // Заливка и размытие — как у стеклянной плашки (rgba(20,44,74,0.38)): на пёстром
+      // фоне титула 8%-я муть тонула, а эта читается. Наведение по-прежнему заливает целиком.
+      className="w-56 cursor-pointer border border-[#7fd6ff] bg-[#142c4a]/[0.38] px-8 py-3 text-base
+                 backdrop-blur-md tracking-[0.3em] text-[#7fd6ff] transition-colors
+                 hover:bg-[#7fd6ff] hover:text-black
                  disabled:cursor-wait disabled:border-[#3f7391] disabled:bg-transparent
                  disabled:text-[#3f7391]"
     >
@@ -340,11 +389,25 @@ function Paused({ resuming, onBoot }: { resuming: boolean; onBoot: () => void })
       // Форма курсора задаётся ЯВНО, а не наследуется: под оверлеем лежит канвас
       // с прицелом, и до первого движения мыши браузер продолжает рисовать его.
       className="absolute inset-0 cursor-default overflow-hidden bg-black bg-cover bg-center font-mono text-[#7fd6ff]"
-      style={{ backgroundImage: 'url(/bhole.png)' }}
+      style={{ backgroundImage: 'url(/bg.png)' }}
     >
-      {/* Аккреционный диск раскалён ровно по центру — там же, где логотип и кнопки.
-          Без затемнения фосфорный текст на нём не читается вовсе. */}
-      <div className="absolute inset-0 bg-black/70" />
+      {/* Затемнение ради читаемости фосфорного текста поверх звёзд bg.png.
+          Слабее прежнего: bg.png сам тёмный, топить его в черноте незачем. */}
+      <div className="absolute inset-0 bg-black/45" />
+
+      {/* Мерцание неба — ПОВЕРХ затемнения, иначе scrim гасит его в невидимость. Точки
+          редкие и мелкие, лягут в пустотах между логотипом и кнопками, не мешая тексту. */}
+      <TitleStars />
+
+      {/* Корабль — часть фона, но ПОВЕРХ звёзд: стоит по центру, чуть ниже, ловит провал
+          звёздного поля в bg.png и заслоняет собой мерцание — небо мигает вокруг него, а
+          не сквозь корпус. Курсор его не трогает, кнопки рисуются поверх. */}
+      <img
+        src="/ship.png"
+        alt=""
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 top-[calc(55%+50px)] mx-auto w-full max-w-[48rem] -translate-y-1/2 px-8"
+      />
 
       {/* Логотип — СВОЙ контейнер, вне общего потока: сдвинуть его нечем, что бы
           ни выросло ниже. Растр, поэтому у него собственная ширина. Заголовок
@@ -353,33 +416,13 @@ function Paused({ resuming, onBoot }: { resuming: boolean; onBoot: () => void })
       <img
         src="/logo.png"
         alt="STAR ELITE"
-        className="absolute inset-x-0 top-[8vh] mx-auto w-full max-w-lg px-8"
+        className="absolute inset-x-0 top-[6vh] mx-auto w-full max-w-[54rem] px-8"
       />
 
-      {screen === 'keys' ? (
-        /* Таблица клавиш вчетверо выше пары кнопок. По центру экрана она бы
-           наехала на логотип, поэтому у неё свой отсчёт — от него вниз.
-           Группы — по вкладкам: один блок за раз, а не три колонки сразу. */
-        <div className="absolute inset-0 flex flex-col items-center overflow-y-auto px-8 pt-[22vh] pb-10">
-          <Tabs
-            tabs={KEY_GROUPS.map((g) => t(g.title))}
-            active={t(KEY_GROUPS[keyGroup]!.title)}
-            onSelect={(label) => setKeyGroup(KEY_GROUPS.findIndex((g) => t(g.title) === label))}
-          />
-          <dl className="mb-8 mt-6 w-full max-w-xl space-y-1 text-left text-sm">
-            {KEY_GROUPS[keyGroup]!.rows.map(([keyLabel, keyWhat]) => (
-              <div key={keyLabel} className="flex gap-3">
-                <dt className="w-24 shrink-0 text-right text-[#7fd6ff]">{t(keyLabel)}</dt>
-                <dd className="text-[#3f7391]">{t(keyWhat)}</dd>
-              </div>
-            ))}
-          </dl>
-          <MenuButton onClick={() => setScreen('main')}>{t('menu.back')}</MenuButton>
-        </div>
-      ) : screen === 'settings' ? (
-        <Settings session={session} onBack={() => setScreen('main')} />
-      ) : (
-        <div className="absolute inset-0 flex flex-col items-center justify-center gap-4">
+      {/* Главное меню — просто кнопки на фоне корабля, без плашки: обводка тут ни к чему.
+          Клавиши и настройки не живут на этом экране, а всплывают поверх отдельной панелью. */}
+      <div className="absolute inset-0 flex flex-col items-center justify-start pt-[calc(32vh+40px)]">
+        <div className="flex flex-col items-center gap-4">
           <MenuButton onClick={take} disabled={waiting}>
             {waiting ? t('menu.wait') : resuming ? t('menu.resume') : t('menu.start')}
           </MenuButton>
@@ -389,6 +432,40 @@ function Paused({ resuming, onBoot }: { resuming: boolean; onBoot: () => void })
           <MenuButton onClick={() => setScreen('settings')} disabled={waiting}>
             {t('menu.settings')}
           </MenuButton>
+        </div>
+      </div>
+
+      {/* Панель клавиш/настроек — оверлей ПОВЕРХ меню: всплыла, прочитал, закрыл и вернулся.
+          Клик мимо неё (по затемнению) или «назад» возвращает к кнопкам старта. */}
+      {(screen === 'keys' || screen === 'settings') && (
+        <div
+          className="absolute inset-0 z-20 flex items-center justify-center bg-black/50 px-8"
+          onClick={() => setScreen('main')}
+        >
+          <div onClick={(e) => e.stopPropagation()}>
+            <MenuPanel>
+              {screen === 'keys' ? (
+                <>
+                  <Tabs
+                    tabs={KEY_GROUPS.map((g) => t(g.title))}
+                    active={t(KEY_GROUPS[keyGroup]!.title)}
+                    onSelect={(label) => setKeyGroup(KEY_GROUPS.findIndex((g) => t(g.title) === label))}
+                  />
+                  <dl className="w-full max-w-md space-y-1 text-left text-sm">
+                    {KEY_GROUPS[keyGroup]!.rows.map(([keyLabel, keyWhat]) => (
+                      <div key={keyLabel} className="flex gap-3">
+                        <dt className="w-24 shrink-0 text-right text-[#7fd6ff]">{t(keyLabel)}</dt>
+                        <dd className="flex-1 truncate text-[#3f7391]">{t(keyWhat)}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                  <MenuButton onClick={() => setScreen('main')}>{t('menu.back')}</MenuButton>
+                </>
+              ) : (
+                <Settings session={session} onBack={() => setScreen('main')} />
+              )}
+            </MenuPanel>
+          </div>
         </div>
       )}
     </div>
@@ -416,9 +493,11 @@ function Settings({ session, onBack }: { session: ReturnType<typeof useSession>;
     setAssist(on)
   }
 
+  // Возвращаем СОДЕРЖИМОЕ панели, а не свой оверлей: рамку, фон и центрирование даёт
+  // общий MenuPanel заставки — настройки такой же экран на нём, как меню и клавиши.
   return (
-    <div className="absolute inset-0 flex flex-col items-center overflow-y-auto px-8 pt-[30vh] pb-10">
-      <div className="mb-10 flex w-full max-w-md flex-col gap-8">
+    <>
+      <div className="flex w-full max-w-md flex-col gap-8">
         <Choice label={t('menu.language')}>
           <Toggle active={lang === 'ru'} onClick={() => pickLang('ru')}>Русский</Toggle>
           <Toggle active={lang === 'en'} onClick={() => pickLang('en')}>English</Toggle>
@@ -430,7 +509,7 @@ function Settings({ session, onBack }: { session: ReturnType<typeof useSession>;
         </Choice>
       </div>
       <MenuButton onClick={onBack}>{t('menu.back')}</MenuButton>
-    </div>
+    </>
   )
 }
 

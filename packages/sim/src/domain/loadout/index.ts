@@ -30,6 +30,7 @@ export {
   isCargo,
   isCloak,
   isDrone,
+  isEssential,
   isHyperdrive,
   isEngine,
   isLaser,

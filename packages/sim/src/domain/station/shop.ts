@@ -12,6 +12,7 @@ import {
   isCloak,
   isDrone,
   isEngine,
+  isEssential,
   isHyperdrive,
   isLaser,
   isMissile,
@@ -470,6 +471,73 @@ export function upgradeModule(
   }
 
   // Характеристики сменились — пересобираем на СОБЫТИЕ, как и при покупке.
+  refreshSpec(ship)
+  return null
+}
+
+// ─── Снятие и продажа установленного модуля ───────────────────────────────────
+
+export type StripError = 'not-installed' | 'no-room' | 'essential'
+
+/** Где стоит модуль: точка подвески, внутренний слот, или нигде (уже снят). */
+function locateInstalled(ship: ShipEntity, module: ShipModule): { weapon: number } | { internal: number } | null {
+  const wi = ship.loadout.weapons.findIndex((w) => w === module)
+  if (wi >= 0) return { weapon: wi }
+  const ii = ship.loadout.internals.indexOf(module)
+  if (ii >= 0) return { internal: ii }
+  return null
+}
+
+function detach(ship: ShipEntity, at: { weapon: number } | { internal: number }): void {
+  if ('weapon' in at) ship.loadout.weapons[at.weapon] = null
+  else ship.loadout.internals.splice(at.internal, 1)
+}
+
+/**
+ * Снять установленный модуль В ТРЮМ — своё железо, назад бесплатно. Не влезет в трюм
+ * (тяжелее свободного места) — операция не идёт. Точка подвески становится пустой,
+ * внутренний просто уходит из списка. Только на верфи: правило держит UI.
+ */
+export function unfitModule(ship: ShipEntity, module: ShipModule): StripError | null {
+  const at = locateInstalled(ship, module)
+  if (!at) return 'not-installed'
+  // Двигатель и маневровые в пустоту не снимают — без них корабль не сдвинется.
+  // Заменить другим того же вида можно (см. fitFromHold/buy), остаться без — нет.
+  if (isEssential(module)) return 'essential'
+  if (freeCapacity(ship.hold) < module.mass) return 'no-room'
+  detach(ship, at)
+  addItem(ship.hold, { kind: 'module', module })
+  refreshSpec(ship)
+  return null
+}
+
+/**
+ * Выкупная цена установленного модуля. Сток × RESALE, поднятая ПРОКАЧКОЙ (+50%/+25%
+ * дороже — за неё платили) и сбитая ПОВРЕЖДЕНИЕМ: у брони по недостающему корпусу,
+ * ведь чинят именно его. Продают дешевле, чем покупают, — спред и есть плата за то,
+ * что сбыть железо можно тут же, не ища покупателя.
+ */
+export function moduleResaleValue(ship: ShipEntity, module: ShipModule): number {
+  let value = module.cost * SHOP.RESALE * (1 + upgradeLevel(module))
+  if (isArmour(module) && ship.spec.hull.hull > 0) {
+    value *= 1 - hullDamage(ship) / ship.spec.hull.hull
+  }
+  return Math.max(0, Math.floor(value))
+}
+
+/**
+ * Продать установленный модуль: снять и получить кредиты по выкупной цене. В трюм
+ * не кладём — сразу в деньги, поэтому места он не требует (в отличие от «снять»).
+ */
+export function sellModule(world: World, ship: ShipEntity, module: ShipModule): StripError | null {
+  const at = locateInstalled(ship, module)
+  if (!at) return 'not-installed'
+  // Продать — это снять: последний двигатель или маневровые продавать нельзя, иначе
+  // корабль останется недвижимым прямо на верфи. Только замена (см. buy) их сбывает.
+  if (isEssential(module)) return 'essential'
+  const value = moduleResaleValue(ship, module)
+  detach(ship, at)
+  world.credits += value
   refreshSpec(ship)
   return null
 }

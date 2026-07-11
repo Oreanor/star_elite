@@ -1,4 +1,5 @@
 import { Vector3, type Camera } from 'three'
+import { t } from '../i18n'
 
 /**
  * Проекция мира на экран HUD.
@@ -53,16 +54,16 @@ const LIGHT_SECOND = C
  * сразу говорит, сколько лететь. Так же считает Elite Dangerous, и по той же причине.
  */
 export function formatDistance(metres: number): string {
-  if (metres >= 1e9) return `${(metres / LIGHT_SECOND).toFixed(0)} св.с`
-  if (metres >= 1e6) return `${(metres / 1000).toFixed(0)} км`
-  if (metres >= 100_000) return `${(metres / 1000).toFixed(0)} км`
-  if (metres >= 1000) return `${(metres / 1000).toFixed(1)} км`
-  return `${metres.toFixed(0)} м`
+  if (metres >= 1e9) return `${(metres / LIGHT_SECOND).toFixed(0)} ${t('unit.ls')}`
+  if (metres >= 1e6) return `${(metres / 1000).toFixed(0)} ${t('unit.km')}`
+  if (metres >= 100_000) return `${(metres / 1000).toFixed(0)} ${t('unit.km')}`
+  if (metres >= 1000) return `${(metres / 1000).toFixed(1)} ${t('unit.km')}`
+  return `${metres.toFixed(0)} ${t('unit.m')}`
 }
 
 /** Крейсер идёт быстрее света, и мерить его в км/с — писать девять знаков. */
 export function formatSpeed(metresPerSecond: number): string {
   if (metresPerSecond >= 0.01 * C) return `${(metresPerSecond / C).toFixed(2)}c`
-  if (metresPerSecond >= 1000) return `${(metresPerSecond / 1000).toFixed(1)} км/с`
-  return `${metresPerSecond.toFixed(0)} м/с`
+  if (metresPerSecond >= 1000) return `${(metresPerSecond / 1000).toFixed(1)} ${t('unit.kmps')}`
+  return `${metresPerSecond.toFixed(0)} ${t('unit.mps')}`
 }

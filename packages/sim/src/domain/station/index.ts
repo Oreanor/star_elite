@@ -10,6 +10,7 @@ export {
   cargoValue,
   fitDeltas,
   fitFromHold,
+  moduleResaleValue,
   moduleStat,
   upgradeCashCost,
   upgradeCopyIndex,
@@ -36,11 +37,14 @@ export {
   resaleOf,
   sellCargo,
   sellItem,
+  sellModule,
   stationStock,
   statHigherBetter,
   stock,
   stockChance,
+  unfitModule,
   type PurchaseError,
+  type StripError,
   type TradeError,
 } from './shop'
 export {

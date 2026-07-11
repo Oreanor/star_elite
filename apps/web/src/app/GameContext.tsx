@@ -34,11 +34,6 @@ export interface Session {
   intent: PlayerIntent
   view: ViewMode
   /**
-   * Показывать ли карту системы. Мир под ней СТОИТ: карта отпускает курсор,
-   * а пауза в этой игре и есть отпущенный курсор — второго флага паузы нет.
-   */
-  mapOpen: boolean
-  /**
    * Шагнул ли мир в этом кадре. Не второй флаг паузы: решение принимает один
    * `Simulation`, остальные его читают. Всё, что движется по `dt` реального
    * времени, а не по `world.time` — камера-пружина и мерцание факелов, — обязано
@@ -109,7 +104,6 @@ function createSession(): Session {
     mode: 'manual',
     intent,
     view: 'chase',
-    mapOpen: false,
     running: false,
     over: false,
     onOver: null,

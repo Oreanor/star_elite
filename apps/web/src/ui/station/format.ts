@@ -14,7 +14,7 @@ import { t, type Key } from '../i18n'
  * что домен не отдаёт отдельным типом, — оси, масса, энергия: их считает и
  * подписывает только UI, симуляции они как «характеристика» не нужны.
  */
-export type StatId = StatKey | 'mass' | 'pitch' | 'yaw' | 'roll' | 'energy'
+export type StatId = StatKey | 'mass' | 'pitch' | 'yaw' | 'roll' | 'maneuver' | 'energy'
 
 /** Единица измерения на характеристику. Отсутствует — величина безразмерная (щит, урон, класс). */
 const STAT_UNIT: Partial<Record<StatId, Key>> = {
@@ -23,6 +23,7 @@ const STAT_UNIT: Partial<Record<StatId, Key>> = {
   pitch: 'unit.rads',
   yaw: 'unit.rads',
   roll: 'unit.rads',
+  maneuver: 'unit.rads',
   cargo: 'unit.t',
   mass: 'unit.t',
   jump: 'unit.ly',
@@ -33,7 +34,7 @@ const STAT_UNIT: Partial<Record<StatId, Key>> = {
 }
 
 /** Где доли важны: угловые ускорения и дальность прыжка. Прочее округляем — целое читается быстрее. */
-const STAT_DECIMALS: Partial<Record<StatId, number>> = { turn: 2, jump: 2, pitch: 2, yaw: 2, roll: 2 }
+const STAT_DECIMALS: Partial<Record<StatId, number>> = { turn: 2, jump: 2, pitch: 2, yaw: 2, roll: 2, maneuver: 2 }
 
 /** «значение единица» на языке интерфейса. */
 export function formatStat(id: StatId, value: number): string {

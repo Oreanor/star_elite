@@ -140,6 +140,24 @@ export function totalPopulation(s: StarSystem): number {
   return Math.round(total * 100) / 100
 }
 
+/**
+ * Ступень жизни в системе — по САМОМУ развитому её миру. На карте важно не «сколько
+ * тут людей», а «до чего они дошли»: анклав рудокопов и звёздная метрополия — разные
+ * встречи. Отдельной оси «жизни» в домене нет и выдумывать её нечестно: обитаемость
+ * задаёт поселение, а его глубину — тех-уровень (1..15). Пороги здесь, а не в UI, —
+ * это правило мира, которое переживёт перебалансировку названий.
+ */
+export type LifeLevel = 'none' | 'primitive' | 'developed' | 'advanced'
+
+export function systemLife(s: StarSystem): LifeLevel {
+  let tech = 0
+  for (const p of settledPlanets(s)) tech = Math.max(tech, p.settlement.techLevel)
+  if (tech === 0) return 'none' // ни одного обитаемого мира
+  if (tech <= 4) return 'primitive'
+  if (tech <= 9) return 'developed'
+  return 'advanced'
+}
+
 /** Все причалы системы. У каждого свой тех-уровень — свой ассортимент. */
 export function stationsOf(s: StarSystem): { planet: Planet; station: Station }[] {
   const out: { planet: Planet; station: Station }[] = []

@@ -237,3 +237,11 @@ export const isDrone = (m: ShipModule): m is DroneModule => m.kind === 'drone'
 /** Всё, что вешается на точку подвески. Пилон несёт ракету ИЛИ контейнер БПЛА. */
 export type WeaponModule = LaserModule | MissileModule | DroneModule
 export const isWeapon = (m: ShipModule): m is WeaponModule => isLaser(m) || isMissile(m) || isDrone(m)
+
+/**
+ * Модули, без которых корабль НЕ ЛЕТИТ: двигатель (нет тяги — стоишь) и маневровые
+ * (нет момента — не повернуть). Их нельзя снять в пустоту, только заменить другим
+ * того же вида. Гиперпривод сюда не входит: без него не прыгнуть между звёздами,
+ * но сублайт-полёт цел, а значит корабль всё ещё летит.
+ */
+export const isEssential = (m: ShipModule): boolean => m.kind === 'engine' || m.kind === 'thrusters'

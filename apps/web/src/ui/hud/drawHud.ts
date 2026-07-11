@@ -31,6 +31,7 @@ import { bombFlash, bombRing } from '../../render/bombFeel'
 import { HUD_SCALE } from '../../render/config'
 import { HUD_COLORS, bar, circle, corners, dot, line, rect, text } from './draw'
 import { t } from '../i18n'
+import { properName, shipTypeName } from '../i18n/dataNames'
 import { drawFlare } from './drawFlare'
 import { angularSize, formatDistance, formatSpeed, projectPoint } from './project'
 
@@ -289,7 +290,7 @@ function drawTargets({ ctx, camera, world, width, height }: HudFrame): void {
     text(ctx, formatDistance(p.distance), p.x, p.y + size / 2 + 3 * S, color, 'center')
 
     if (locked) {
-      text(ctx, ship.name, p.x, p.y + size / 2 + 13 * S, color, 'center')
+      text(ctx, shipTypeName(ship.name), p.x, p.y + size / 2 + 13 * S, color, 'center')
 
       const shield = ship.spec.hull.shield > 0 ? ship.shield / ship.spec.hull.shield : 0
       const hull = ship.hull / ship.spec.hull.hull
@@ -415,7 +416,8 @@ function collectMarkers(world: World): Marker[] {
   for (const body of world.bodies) {
     out.push({
       pos: body.pos,
-      name: body.name,
+      // Имена планет/лун/причалов собраны из слогов — в англ. локали романизируем.
+      name: properName(body.name),
       // Тот же цвет, что и на локаторе: звезда жёлтая, причал белый, планета
       // фосфорная. Пилот не переучивается, переводя взгляд с круга в окно.
       color: bodyColor(body),
@@ -427,7 +429,7 @@ function collectMarkers(world: World): Marker[] {
   }
   // Киты — тоже ориентиры: их МАРКУ пилот должен прочесть, это событие в системе.
   for (const titan of world.titans) {
-    out.push({ pos: titan.pos, name: titan.name, color: HUD_COLORS.NEUTRAL, nav: false, primary: true })
+    out.push({ pos: titan.pos, name: properName(titan.name), color: HUD_COLORS.NEUTRAL, nav: false, primary: true })
   }
   return out
 }

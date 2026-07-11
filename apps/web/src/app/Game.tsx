@@ -19,8 +19,10 @@ import { Simulation } from '../render/scene/Simulation'
 import { Sky } from '../render/scene/Sky'
 import { Starfield } from '../render/scene/Starfield'
 import { WingMissiles } from '../render/scene/WingMissiles'
+import { JumpDirector, JumpHold, JumpRing } from '../render/scene/JumpFx'
 import { attachInput } from '../platform/input/input'
 import { Hud } from '../ui/hud/Hud'
+import { JumpVeil } from './JumpVeil'
 
 /**
  * Сборка сцены. Порядок компонентов важен: R3F зовёт useFrame в порядке
@@ -31,6 +33,8 @@ function Scene() {
   return (
     <>
       <Simulation />
+      {/* Сразу после шага мира: держит корабль на зарядке прыжка, до отрисовки и камеры. */}
+      <JumpHold />
 
       <Sky />
       <Lighting />
@@ -58,6 +62,7 @@ function Scene() {
 
       <Tracers />
       <Explosions />
+      <JumpRing />
       <Cockpit />
 
       <FlightCamera />
@@ -108,6 +113,8 @@ export function Game() {
         camera={{ fov: RENDER.FOV_CHASE, near: RENDER.NEAR, far: RENDER.FAR }}
         style={{ imageRendering: PIXEL_SCALE > 1 ? 'pixelated' : 'auto' }}
       >
+        {/* Постановщик — ВНЕ ключа: подмена мира не должна его размонтировать. */}
+        <JumpDirector />
         <Scene key={epoch} />
       </Canvas>
 
@@ -117,6 +124,9 @@ export function Game() {
         className="pointer-events-none absolute inset-0 h-full w-full"
         style={{ imageRendering: PIXEL_SCALE > 1 ? 'pixelated' : 'auto' }}
       />
+
+      {/* Затемнение и титр прыжка — поверх всего. */}
+      <JumpVeil />
     </div>
   )
 }
