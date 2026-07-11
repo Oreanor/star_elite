@@ -63,6 +63,23 @@ describe('разговор', () => {
     expect(linesFor(trader.world, trader.other).map((l) => l.topic)).toEqual(['escort', 'plunder', 'greet'])
   })
 
+  /**
+   * В доке станции реакции «из боя» отпадают: ты под охраной, вокруг закон. Грабёж
+   * (`plunder`) и требования уходят, остаётся мирный разговор — иначе у причала
+   * торговцу предлагали бы «сбрось груз и оружие», что абсурдно. Регрессия: заметили
+   * ровно это — угрозу из боя в мирном доке.
+   */
+  it('на станции нет боевых реакций — только мирный разговор', () => {
+    const trader = withShip('neutral')
+    trader.world.docked = true
+    expect(linesFor(trader.world, trader.other).map((l) => l.topic)).toEqual(['escort', 'greet'])
+
+    const pirate = withShip('hostile')
+    pirate.world.docked = true
+    // У пирата обе реплики боевые — в доке не остаётся ничего механического.
+    expect(linesFor(pirate.world, pirate.other)).toEqual([])
+  })
+
   /** Невредимый пират не бросает добычу. Сначала сбей ему щит — потом требуй. */
   it('целого пирата не уговорить сдаться', () => {
     const { world, other } = withShip('hostile')
