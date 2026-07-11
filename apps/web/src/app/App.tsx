@@ -408,7 +408,7 @@ function Paused({ resuming, onBoot }: { resuming: boolean; onBoot: () => void })
         src="/ship.png"
         alt=""
         aria-hidden
-        className="pointer-events-none absolute inset-x-0 top-[calc(55%+50px)] mx-auto w-full max-w-[48rem] -translate-y-1/2 px-8"
+        className="pointer-events-none absolute inset-x-0 top-[calc(55%+50px)] mx-auto w-full max-w-[43.2rem] -translate-y-1/2 px-8"
       />
 
       {/* Логотип — СВОЙ контейнер, вне общего потока: сдвинуть его нечем, что бы
