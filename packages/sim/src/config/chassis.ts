@@ -147,7 +147,7 @@ export const APOLLO: Chassis = {
     { kind: 'cargo', maxClass: 1 },
     { kind: 'hyperdrive', maxClass: 2 },
   ],
-  cost: 0,
+  cost: 58_000,
 }
 
 /** «Артемида» — ударный истребитель: крепче и тяжелее, два разнесённых киля. */
@@ -174,7 +174,7 @@ export const ARTEMIS: Chassis = {
     { kind: 'cargo', maxClass: 2 },
     { kind: 'hyperdrive', maxClass: 2 },
   ],
-  cost: 0,
+  cost: 88_000,
 }
 
 /** «Афина» — «летающее крыло»: вёрткий стелс с маскировкой на борту. */
@@ -201,7 +201,7 @@ export const ATHENA: Chassis = {
     { kind: 'hyperdrive', maxClass: 2 },
     { kind: 'cloak', maxClass: 3 },
   ],
-  cost: 0,
+  cost: 132_000,
 }
 
 export const CHASSIS_CATALOGUE: readonly Chassis[] = [
@@ -246,5 +246,5 @@ export const DRONE: Chassis = {
     // скорострельный скаут, и улететь на нём из системы должно быть можно.
     { kind: 'hyperdrive', maxClass: 1 },
   ],
-  cost: 0,
+  cost: 9_000,
 }

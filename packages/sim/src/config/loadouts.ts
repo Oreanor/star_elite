@@ -152,11 +152,11 @@ export interface HullOffer {
 }
 
 export const SHIPYARD: readonly HullOffer[] = [
-  { chassis: AURORA_MK3, loadout: playerStartLoadout, cost: 0 },
-  { chassis: APOLLO, loadout: apolloLoadout, cost: 0 },
-  { chassis: ARTEMIS, loadout: artemisLoadout, cost: 0 },
-  { chassis: ATHENA, loadout: athenaLoadout, cost: 0 },
-  { chassis: SIDEWINDER, loadout: aresLoadout, cost: 0 },
-  { chassis: LARGE_FREIGHTER, loadout: freighterLoadout, cost: 0 },
-  { chassis: DRONE, loadout: calliopeLoadout, cost: 0 },
+  { chassis: AURORA_MK3, loadout: playerStartLoadout, cost: AURORA_MK3.cost },
+  { chassis: APOLLO, loadout: apolloLoadout, cost: APOLLO.cost },
+  { chassis: ARTEMIS, loadout: artemisLoadout, cost: ARTEMIS.cost },
+  { chassis: ATHENA, loadout: athenaLoadout, cost: ATHENA.cost },
+  { chassis: SIDEWINDER, loadout: aresLoadout, cost: SIDEWINDER.cost },
+  { chassis: LARGE_FREIGHTER, loadout: freighterLoadout, cost: LARGE_FREIGHTER.cost },
+  { chassis: DRONE, loadout: calliopeLoadout, cost: DRONE.cost },
 ]

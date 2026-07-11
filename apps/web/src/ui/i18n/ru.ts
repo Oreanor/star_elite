@@ -282,6 +282,7 @@ export const RU = {
   'ship.tab.cargo': 'ГРУЗ',
   'ship.slotEmpty': 'СВОБОДНО',
   'ship.hulls': 'КОРПУСА',
+  'ship.hulls.hint': 'выбери корпус справа → «ВЗЯТЬ»',
   'ship.free': 'даром',
   'ship.current': 'вы на нём',
   'ship.take': 'ВЗЯТЬ КОРПУС',

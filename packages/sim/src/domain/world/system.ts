@@ -112,7 +112,7 @@ export const STARTER_SYSTEM: SystemDef = {
    * километр превращался в долгое вязкое подползание. Планета всё так же уходит
    * влево и занимает полнеба: масштаб виден с первого кадра, до всякого движения.
    */
-  playerStart: [STATION_ORBIT, 0, -AU + 1_000],
+  playerStart: [STATION_ORBIT, 0, -AU + 2_000],
   star: { pos: [0, 0, 0], radius: SOLAR_RADIUS, color: 0xffd9a0 },
   // Родная система одиночная: с неё начинают, и лишних сущностей ей не нужно.
   companion: null,

@@ -264,6 +264,7 @@ export const EN: Record<keyof typeof RU, string> = {
   'ship.free': 'free',
   'ship.current': 'current',
   'ship.take': 'TAKE HULL',
+  'ship.hulls.hint': 'pick a hull on the right → “TAKE”',
   'ship.selectSlot': 'Pick a module on the left to repair, replace or upgrade it.',
   'ship.modules.internal': 'INTERNALS',
   'ship.modules.weapons': 'WEAPONS',

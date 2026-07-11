@@ -281,11 +281,21 @@ export function HullShop({ world, onChange }: { world: World; onChange: () => vo
   // Паспорт стоковой сборки предложения — та же чистая функция, что кормит живой корабль.
   const spec = useMemo(() => deriveShipSpec(selected.loadout()), [selected])
 
+  const take = () => {
+    if (buyHull(world, selected.loadout(), selected.cost) === null) onChange()
+  }
+
   return (
     <section className="border p-5" style={{ borderColor: DIM }}>
-      <h2 className="mb-3 text-sm tracking-[0.3em]">{t('ship.hulls')}</h2>
+      <div className="mb-3 flex items-baseline justify-between gap-3">
+        <h2 className="text-sm tracking-[0.3em]">{t('ship.hulls')}</h2>
+        <span className="text-[0.7rem]" style={{ color: DIM }}>
+          {t('ship.hulls.hint')}
+        </span>
+      </div>
       <div className="grid gap-5 lg:grid-cols-[minmax(0,18rem)_1fr]">
-        {/* Слева — чертёж выбранного корпуса, под ним паспорт и кнопка «взять». */}
+        {/* Слева — чертёж выбранного корпуса, СРАЗУ под ним кнопка «взять» (чтобы её не
+            прятал за собой паспорт), а уже потом статы. */}
         <div className="space-y-3">
           <div
             className="aspect-[15/8] w-full border"
@@ -296,17 +306,21 @@ export function HullShop({ world, onChange }: { world: World; onChange: () => vo
           >
             <Blueprint chassisId={selected.chassis.id} />
           </div>
-          <Stats spec={spec} name={chassisName(selected.chassis.name)} />
-          <Button
+          {/* Кнопка на всю ширину и с именем корпуса: видно, что именно берёшь. */}
+          <button
+            type="button"
             disabled={owned}
-            onClick={() => {
-              if (buyHull(world, selected.loadout(), selected.cost) === null) onChange()
-            }}
+            onClick={take}
+            className={`w-full border px-4 py-2.5 text-sm tracking-[0.2em] transition-colors ${
+              owned ? 'cursor-not-allowed opacity-40' : 'cursor-pointer hover:bg-[#7fd6ff] hover:text-black'
+            }`}
+            style={{ borderColor: owned ? DIM : ACCENT, color: owned ? DIM : ACCENT }}
           >
             {owned
               ? t('ship.current')
-              : `${t('ship.take')} · ${selected.cost === 0 ? t('ship.free') : credits(selected.cost)}`}
-          </Button>
+              : `${t('ship.take')}: ${chassisName(selected.chassis.name)} · ${credits(selected.cost)}`}
+          </button>
+          <Stats spec={spec} name={chassisName(selected.chassis.name)} />
         </div>
 
         {/* Справа — плитки корпусов. Клик выбирает для показа, не покупает. */}
@@ -334,7 +348,7 @@ export function HullShop({ world, onChange }: { world: World; onChange: () => vo
                   {formatStat('hull', c.baseHull)} · {formatStat('mass', c.baseMass)}
                 </span>
                 <span className="text-[0.7rem]" style={{ color: isCurrent ? ACCENT : DIM }}>
-                  {isCurrent ? t('ship.current') : offer.cost === 0 ? t('ship.free') : credits(offer.cost)}
+                  {isCurrent ? t('ship.current') : credits(offer.cost)}
                 </span>
               </button>
             )
