@@ -33,6 +33,8 @@ export interface Session {
   controllers: Map<number, Controller>
   /** Контроллер игрока. Автопилот его временно подменяет — и только его. */
   pilot: Controller
+  /** Новая игра (сейва не было): UI покажет экран создания персонажа перед стартом. */
+  isNewGame: boolean
   mode: PilotMode
   intent: PlayerIntent
   view: ViewMode
@@ -114,6 +116,7 @@ function createSession(): Session {
     world,
     controllers,
     pilot,
+    isNewGame: save === null,
     mode: 'manual',
     intent,
     view: 'chase',

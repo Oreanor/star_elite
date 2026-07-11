@@ -22,6 +22,13 @@ export const EN: Record<keyof typeof RU, string> = {
   'menu.score': 'SCORE: {score}',
   'menu.restart': 'START OVER',
 
+  'create.title': 'CREATE PILOT',
+  'create.name': 'NAME',
+  'create.name.placeholder': 'Your name…',
+  'create.species': 'SPECIES',
+  'create.portrait': 'FACE',
+  'create.launch': 'LAUNCH',
+
   'key.mouse': 'Mouse',
   'key.mouse.what': 'nose: pitch and yaw',
   'key.throttle': 'W / S',

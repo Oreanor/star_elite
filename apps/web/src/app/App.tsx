@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { interlocutor, jumpBlock, pendingHail, undock } from '@elite/sim'
+import { applyPilotProfile, interlocutor, jumpBlock, pendingHail, serializePlayer, undock, type PilotProfile } from '@elite/sim'
 import { GameProvider, useSession } from './GameContext'
 import { jumping, startDepart } from './control/jumpFx'
 import { negotiate, negotiatorAvailable } from './control/negotiator'
 import { Game } from './Game'
+import { writeSave } from './save/saveStore'
 import { TitleStars } from './TitleStars'
 import { input, releaseLock, requestLock } from '../platform/input/input'
 import { Console, type ConsoleTab } from '../ui/console/Console'
+import { CharacterCreation } from '../ui/create/CharacterCreation'
 import { Dialogue } from '../ui/dialogue/Dialogue'
 import { setLang, t, useLang, type Key, type Lang } from '../ui/i18n'
 import { Tabs } from '../ui/station/chrome'
@@ -61,6 +63,13 @@ function Shell({ onRestart }: { onRestart: () => void }) {
    * ещё нет), и кнопка сама повторяет запрос, пока сцена не встанет.
    */
   const [booted, setBooted] = useState(false)
+
+  /**
+   * Персонаж уже создан. Новичку (сейва не было) сперва показываем экран создания —
+   * до всякого старта сцены; вернувшемуся игроку создавать нечего. Экран — не пауза:
+   * он живёт вместо титульного меню, пока личность не выбрана.
+   */
+  const [created, setCreated] = useState(!session.isNewGame)
 
   /**
    * Захват курсора браузер снимает не только по `pointerlockchange`: уход фокуса
@@ -139,6 +148,18 @@ function Shell({ onRestart }: { onRestart: () => void }) {
     undock(session.world)
     void requestLock()
   }, [session])
+  // Создание пилота завершено: накладываем профиль на борт игрока и пишем стартовый
+  // сейв (личность + начальная позиция), чтобы вернувшийся игрок не создавал заново.
+  // Дальше прогресс сохраняется по стыковке. Мутирует мир слой app, не ui-форма.
+  const createPilot = useCallback(
+    (profile: PilotProfile) => {
+      applyPilotProfile(session.world.player, profile)
+      writeSave(serializePlayer(session.world))
+      session.isNewGame = false
+      setCreated(true)
+    },
+    [session],
+  )
 
   /**
    * Оверлеи переключаются ЗДЕСЬ, а не в кадре симуляции: тумблер, живущий внутри
@@ -230,6 +251,9 @@ function Shell({ onRestart }: { onRestart: () => void }) {
           onLocate={locateShip}
           onRoute={routeTo}
         />
+      ) : !created ? (
+        // Новичок сначала лепит пилота — экран стоит вместо титульного меню, до старта.
+        <CharacterCreation onSubmit={createPilot} />
       ) : (
         !locked && <Paused resuming={started} onBoot={() => setBooted(true)} />
       )}
