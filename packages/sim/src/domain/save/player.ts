@@ -51,7 +51,9 @@ export interface PlayerSave {
   systemIndex: number
   credits: number
   score: number
-  /** Вид/статы/имя пилота — чистые данные, кладутся как есть. */
+  /** Выбранное имя пилота. Не выводится ниоткуда — только хранением, иначе «ты» безымянен. */
+  name: string
+  /** Вид/статы/портрет пилота — чистые данные, кладутся как есть. */
   persona: Persona
   /** Личный реестр знакомств: с кем виделся и отношение. Чистые данные. */
   acquaintances: Acquaintance[]
@@ -136,6 +138,8 @@ export function serializePlayer(world: World): PlayerSave {
     systemIndex: world.systemIndex,
     credits: world.credits,
     score: world.score,
+    // Игрок знает своё имя всегда — храним истинное (`pilotName`), оно же открытое.
+    name: p.pilotName,
     // Плоские данные — мелкий клон, чтобы сейв не держал ссылку на живой мир.
     persona: { ...p.persona },
     acquaintances: world.acquaintances.map((a) => ({ ...a })),
@@ -168,6 +172,9 @@ export function applyPlayerSave(world: World, save: PlayerSave): void {
   world.acquaintances = save.acquaintances.map((a) => ({ ...a }))
 
   const p = world.player
+  // Имя игрока открыто — это он сам. Ставим и отображаемое, и истинное.
+  p.name = save.name
+  p.pilotName = save.name
   p.persona = { ...save.persona }
   p.loadout = rehydrateLoadout(save.loadout)
 

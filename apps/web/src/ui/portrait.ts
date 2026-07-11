@@ -66,6 +66,8 @@ function hashString(s: string): number {
  * и «превращалось» в другого человека, стоило заговорить.
  */
 export function portraitIndex(ship: ShipEntity): number {
+  // Игрок ВЫБРАЛ лицо в создании персонажа — оно и есть, без хеша имени.
+  if (ship.persona.portrait !== undefined) return ship.persona.portrait
   const h = hashString(ship.pilotName || String(ship.id))
   return h % (PORTRAIT_GRID * PORTRAIT_GRID)
 }

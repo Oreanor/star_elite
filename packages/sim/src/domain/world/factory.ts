@@ -19,7 +19,7 @@ import type {
   World,
 } from './entities'
 import { createIdSource, type IdSource } from './ids'
-import { DEFAULT_PERSONA, makePersona } from './persona'
+import { DEFAULT_PERSONA, makePersona, type PilotProfile } from './persona'
 import { makePilotName } from './names'
 import { maybeShiftOrigin } from './origin'
 import { stepOrbits } from './orbits'
@@ -488,7 +488,18 @@ export function enterSystem(
   if (systemIndex === WORLD.HOME_INDEX && world.galaxySeed === GALAXY.SEED) placeShowcaseTitans(world)
 }
 
-export function createWorld(def: SystemDef = STARTER_SYSTEM): World {
+/**
+ * Наложить выбор из создания персонажа. Имя открыто сразу — это ТЫ, не незнакомец
+ * с радара. Личность (вид/статы/нрав/портрет) — из профиля. Корабль не трогаем:
+ * он дефолтный у всех, различается только пилот.
+ */
+export function applyPilotProfile(player: ShipEntity, profile: PilotProfile): void {
+  player.name = profile.name
+  player.pilotName = profile.name
+  player.persona = { ...profile.persona }
+}
+
+export function createWorld(def: SystemDef = STARTER_SYSTEM, profile?: PilotProfile): World {
   const rng = makeRng(def.seed)
   const ids = createIdSource()
 
@@ -503,9 +514,10 @@ export function createWorld(def: SystemDef = STARTER_SYSTEM): World {
   )
   // Стартуем на ходу: висеть в пустоте — плохое первое впечатление.
   player.controls.throttle = WORLD.START_THROTTLE
-  // Игрок — человек: протагонист не должен родиться случайным инопланетянином.
-  // Выбор расы игрока — дело будущего создания персонажа, а не броска при спавне.
-  player.persona.species = HUMAN_SPECIES
+  // Есть выбор из создания персонажа — накладываем его; нет (тесты, быстрый старт) —
+  // землянин по умолчанию: протагонист не должен родиться случайным инопланетянином.
+  if (profile) applyPilotProfile(player, profile)
+  else player.persona.species = HUMAN_SPECIES
 
   const ships = makePatrols(rng, ids, def)
 

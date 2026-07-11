@@ -15,10 +15,11 @@ export {
   type WarpFlash,
   type World,
 } from './entities'
-export { enterSystem, createWorld, makeShip, refreshSpec, startAtStation } from './factory'
+export { enterSystem, createWorld, makeShip, refreshSpec, startAtStation, applyPilotProfile } from './factory'
 export { createIdSource, type IdSource } from './ids'
 export {
   type Persona,
+  type PilotProfile,
   type Disposition,
   DISPOSITIONS,
   DEFAULT_PERSONA,
