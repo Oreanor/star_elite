@@ -7,6 +7,7 @@ export {
   type Faction,
   type GunState,
   type MissileEntity,
+  type Notice,
   type PlatformEntity,
   type ShipEntity,
   type TitanEntity,
@@ -23,10 +24,22 @@ export {
   DEFAULT_PERSONA,
   makePersona,
 } from './persona'
-export { type Acquaintance, type Relationship, rememberPilot, recurringAcquaintance, applyStance } from './acquaintance'
+export {
+  type Acquaintance,
+  type Contact,
+  type Relationship,
+  rememberPilot,
+  residentAcquaintances,
+  applyStance,
+  livingContacts,
+  sendContactTo,
+  holdContact,
+  roamContact,
+  markContactLost,
+} from './acquaintance'
 export { maybeShiftOrigin } from './origin'
 export { cycleTarget, findBody, findShip, hostilesOf, incomingMissile, nearestPod } from './queries'
-export { stepTraffic } from './traffic'
+export { stepTraffic, spawnResidentContacts } from './traffic'
 export { spawnTitan, stepTitans, titanCount } from './titans'
 export { spawnPlatform, stepPlatforms } from './platforms'
 export { jumpOut, spawnWarpFlash } from './warp'

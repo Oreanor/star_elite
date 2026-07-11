@@ -37,16 +37,17 @@ export interface Reply {
   agreed: boolean
 }
 
-/** С кем вообще можно говорить: захваченный, живой и в пределах слышимости. */
+/**
+ * С кем вообще можно говорить: захваченный и живой. Дистанцию НЕ учитываем — связь
+ * по радио не знает километров: захватил цель (Tab, хоть за полсистемы), нажал T —
+ * говоришь. Так и с боевым противником на разлёте, и со знакомым из вкладки «Люди».
+ */
 export function interlocutor(world: World): ShipEntity | null {
   const id = world.lockedTargetId
   if (id === null) return null
 
   const ship = world.ships.find((s) => s.id === id)
   if (!ship?.alive) return null
-  // Дистанция важна в ПОЛЁТЕ: докричаться можно лишь до ближнего. У причала же ты
-  // говоришь по манифесту дока — с любым пристыкованным, как ни далеко он стоит.
-  if (!world.docked && ship.state.pos.distanceTo(world.player.state.pos) > DIALOGUE.RANGE) return null
   return ship
 }
 

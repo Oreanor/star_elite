@@ -23,6 +23,7 @@ import {
   generateGalaxy,
   jumpBlock,
   jumpDistance,
+  livingContacts,
   stationSeat,
   stationsOf,
   systemDefFor,
@@ -421,6 +422,106 @@ function OrbitCamera({ control }: { control: { yaw: number; pitch: number; dista
 
 const positionOf = (s: StarSystem) => new Vector3(s.x, s.z, s.y)
 
+/** Тон знакомого на карте — тот же фиолетовый, что и на карте системы: одна метка на обе. */
+const CONTACT_MAP = '#b98bff'
+
+/** Ромб-метка знакомого: билборд в плоскости XY, вершинами по осям. Заливка — два треугольника. */
+const contactMarkerGeometry = (() => {
+  const g = new BufferGeometry()
+  const r = 1.6
+  g.setAttribute(
+    'position',
+    new BufferAttribute(new Float32Array([0, r, 0, r, 0, 0, 0, -r, 0, 0, r, 0, 0, -r, 0, -r, 0, 0]), 3),
+  )
+  return g
+})()
+
+/** Система с живыми знакомыми и их имена — для меток на карте галактики. */
+interface ContactSystem {
+  index: number
+  names: string[]
+  pos: Vector3
+}
+
+/** Сгруппировать живых знакомых по системам: одна метка на систему, имена — под ней. */
+function contactSystemsOf(world: World, systems: readonly StarSystem[]): ContactSystem[] {
+  const byIndex = new Map<number, string[]>()
+  for (const c of livingContacts(world)) {
+    const names = byIndex.get(c.record.systemIndex) ?? []
+    names.push(c.record.name)
+    byIndex.set(c.record.systemIndex, names)
+  }
+  const out: ContactSystem[] = []
+  for (const [index, names] of byIndex) {
+    const system = systems[index]
+    if (system) out.push({ index, names, pos: positionOf(system) })
+  }
+  return out
+}
+
+/**
+ * Метки знакомых на звёздном поле: фиолетовый ромб-билборд у каждой системы, где есть
+ * живой знакомый. Со знакомыми нет случайных встреч — их положение известно всегда, и
+ * карта показывает, в какой системе кто. Раскраску держим отдельной от облака звёзд:
+ * это не небесное тело, а «где мои люди».
+ */
+function ContactStars({ systems }: { systems: ContactSystem[] }) {
+  const material = useMemo(() => new MeshBasicMaterial({ color: CONTACT_MAP, toneMapped: false }), [])
+  useEffect(() => () => material.dispose(), [material])
+  const refs = useRef<(Mesh | null)[]>([])
+  // Билборд: ромбы всегда лицом к камере, как ни поверни карту.
+  useFrame((state) => {
+    for (const m of refs.current) if (m) m.quaternion.copy(state.camera.quaternion)
+  })
+  return (
+    <>
+      {systems.map((s, i) => (
+        <mesh
+          key={s.index}
+          ref={(m) => {
+            refs.current[i] = m
+          }}
+          geometry={contactMarkerGeometry}
+          material={material}
+          position={s.pos}
+          raycast={() => null}
+        />
+      ))}
+    </>
+  )
+}
+
+/**
+ * Подписи имён у меток знакомых. DOM поверх канваса, двигается кадром (не React):
+ * проецируем точку системы на экран и ставим ярлык рядом. За кулисами — те же div'ы,
+ * что заведены в оверлее; здесь только их позиция.
+ */
+function ContactLabels({
+  systems,
+  boxes,
+}: {
+  systems: ContactSystem[]
+  boxes: React.RefObject<Map<number, HTMLDivElement>>
+}) {
+  const { camera, size } = useThree()
+  useFrame(() => {
+    for (const s of systems) {
+      const el = boxes.current.get(s.index)
+      if (!el) continue
+      _screen.copy(s.pos).project(camera)
+      if (_screen.z > 1) {
+        el.style.opacity = '0'
+        continue
+      }
+      const x = (_screen.x * 0.5 + 0.5) * size.width
+      const y = (-_screen.y * 0.5 + 0.5) * size.height
+      el.style.opacity = '1'
+      el.style.transform = `translate(${Math.round(x + 9)}px, ${Math.round(y)}px) translate(0, -50%)`
+    }
+  })
+  return null
+}
+
 function formatRange(ly: number): string {
   return `${ly.toFixed(1)} ${t('unit.ly')} · ${(ly / LY_PER_PARSEC).toFixed(2)} ${t('unit.pc')}`
 }
@@ -474,6 +575,10 @@ export function GalaxyMap({ onClose, embedded = false }: { onClose: () => void; 
   const label = useRef<HTMLDivElement>(null)
   const you = useRef<HTMLDivElement>(null)
   const viewport = useRef<HTMLDivElement>(null)
+  // Метки знакомых: где живые контакты по системам. Div'ы подписей собираем в карту по
+  // индексу системы — их позицию каждый кадр двигает `ContactLabels`, а не React.
+  const contactSystems = contactSystemsOf(world, systems)
+  const contactBoxes = useRef<Map<number, HTMLDivElement>>(new Map())
 
   // Зум колесом/щипком — только карта. Нативный слушатель гасит браузерный зум.
   useWheelZoom(viewport, (deltaY) => {
@@ -547,6 +652,8 @@ export function GalaxyMap({ onClose, embedded = false }: { onClose: () => void; 
           <JumpSphere at={here} charge={world.player.jumpCharge} max={world.player.spec.jumpRange} />
           <YouAreHere at={here} />
           <YouLabel at={here} box={you} />
+          <ContactStars systems={contactSystems} />
+          <ContactLabels systems={contactSystems} boxes={contactBoxes} />
           <Route from={here} to={picked ? positionOf(picked.system) : null} />
           <StarLabel at={picked ? positionOf(picked.system) : null} box={label} />
         </Canvas>
@@ -576,6 +683,22 @@ export function GalaxyMap({ onClose, embedded = false }: { onClose: () => void; 
           <div className="tracking-widest">{picked ? properName(picked.system.name).toUpperCase() : ''}</div>
           <div style={{ color: UI.DIM }}>{picked ? formatRange(picked.distance) : ''}</div>
         </div>
+
+        {/* Подписи знакомых — по одной на систему с живым контактом. Позицию каждой
+            двигает кадр (`ContactLabels`), поэтому тут только текст и сбор ссылок. */}
+        {contactSystems.map((s) => (
+          <div
+            key={s.index}
+            ref={(el) => {
+              if (el) contactBoxes.current.set(s.index, el)
+              else contactBoxes.current.delete(s.index)
+            }}
+            className="pointer-events-none absolute left-0 top-0 text-[11px] tracking-widest opacity-0"
+            style={{ color: CONTACT_MAP, willChange: 'transform' }}
+          >
+            {s.names.map((n) => properName(n)).join(', ').toUpperCase()}
+          </div>
+        ))}
 
         {/* Плашка выбранной системы — прямо у курсора. Правой колонки больше нет:
             карта звёзд занимает всё поле и центрируется сама. */}

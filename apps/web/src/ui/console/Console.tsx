@@ -1,5 +1,19 @@
 import { useReducer } from 'react'
-import { findStation, localSettlement, type BodyEntity, type ShipEntity, type World } from '@elite/sim'
+import {
+  contactWhereabouts,
+  findChassis,
+  findStation,
+  generateSystem,
+  holdContact,
+  livingContacts,
+  localSettlement,
+  roamContact,
+  sendContactTo,
+  type BodyEntity,
+  type Contact,
+  type ShipEntity,
+  type World,
+} from '@elite/sim'
 import { currentLang, t, useLang } from '../i18n'
 import { chassisName, economyName, governmentName, properName, speciesName } from '../i18n/dataNames'
 import { ACCENT, Button, Column, DIM, PilotPortrait, Table } from '../station/chrome'
@@ -23,7 +37,7 @@ import { GalaxyMap } from '../map/GalaxyMap'
  * Здесь только композиция. Правила панели не знают друг о друге; мир мутируют лишь
  * через домен, а `bump` перерисовывает то, что от мира зависит (кредиты после сделки).
  */
-export type ConsoleTab = 'planet' | 'ship' | 'shipyard' | 'shop' | 'cargo' | 'system' | 'galaxy'
+export type ConsoleTab = 'planet' | 'ship' | 'shipyard' | 'shop' | 'cargo' | 'people' | 'system' | 'galaxy'
 
 export function Console({
   world,
@@ -32,6 +46,8 @@ export function Console({
   onTab,
   onClose,
   onTalk,
+  onLocate,
+  onRoute,
 }: {
   world: World
   docked: boolean
@@ -41,6 +57,10 @@ export function Console({
   onClose: () => void
   /** Открыть канал с пристыкованным пилотом (клик по плашке дока). */
   onTalk: (shipId: number) => void
+  /** Навести локатор на борт и (в полёте) закрыть консоль, чтобы стрелка вела к нему. */
+  onLocate: (shipId: number) => void
+  /** Проложить курс к системе: пометить её целью прыжка и открыть карту галактики. */
+  onRoute: (systemIndex: number) => void
 }) {
   useLang()
   const [, bump] = useReducer((n: number) => n + 1, 0)
@@ -61,6 +81,8 @@ export function Console({
     ...(docked ? [{ id: 'shipyard' as const, label: t('station.nav.ship') }] : []),
     ...(docked ? [{ id: 'shop' as const, label: t('station.nav.shop') }] : []),
     { id: 'cargo', label: t('station.nav.cargo') },
+    // ЛЮДИ — знакомые пилоты: где они и как с ними связаться. Есть и у причала, и в полёте.
+    { id: 'people', label: t('station.nav.people') },
     { id: 'system', label: t('station.nav.system') },
     { id: 'galaxy', label: t('station.nav.galaxy') },
   ]
@@ -133,6 +155,9 @@ export function Console({
           {tab === 'shipyard' && docked && <HullShop world={world} onChange={bump} />}
           {tab === 'shop' && docked && <Market world={world} onChange={bump} />}
           {tab === 'cargo' && <Hold world={world} onChange={bump} atStation={docked} />}
+          {tab === 'people' && (
+            <PeopleTab world={world} docked={docked} onTalk={onTalk} onLocate={onLocate} onRoute={onRoute} onChange={bump} />
+          )}
           {tab === 'system' && <SystemMap world={world} embedded onClose={() => onTab('planet')} />}
           {/* onClose у карты галактики срабатывает только при старте прыжка — тогда
               консоль закрывается целиком и мир оживает под кино, а не переходит на вкладку. */}
@@ -147,6 +172,182 @@ interface Fact {
   key: string
   label: string
   value: string
+}
+
+/** Цвет отношения знакомого: тёплый — зелёный, враждебный — красный, ровный — тускло-голубой. */
+const STANCE_COLOR: Record<Contact['record']['relationship'], string> = {
+  friendly: '#6fe08a',
+  neutral: DIM,
+  hostile: '#ff6b6b',
+}
+
+/**
+ * ЛЮДИ — реестр живых знакомых: где каждый и как с ним связаться. Со знакомыми нет
+ * случайных встреч, их положение известно всегда с точностью до системы; кто в ТВОЕЙ
+ * системе — тот на радаре, к нему можно навестись и заговорить. Кто в другой — тому
+ * прокладываешь курс или зовёшь к себе. Список живой: погиб знакомый — уходит отсюда,
+ * а весть о пропаже приходит на HUD.
+ */
+function PeopleTab({
+  world,
+  docked,
+  onTalk,
+  onLocate,
+  onRoute,
+  onChange,
+}: {
+  world: World
+  docked: boolean
+  onTalk: (shipId: number) => void
+  onLocate: (shipId: number) => void
+  onRoute: (systemIndex: number) => void
+  onChange: () => void
+}) {
+  const contacts = livingContacts(world)
+
+  return (
+    <div>
+      <h1 className="text-2xl tracking-[0.2em]">{t('people.title')}</h1>
+      <p className="mt-1 text-xs tracking-widest" style={{ color: DIM }}>
+        {t('people.subtitle')}
+      </p>
+
+      {contacts.length === 0 ? (
+        <p className="mt-8 text-sm" style={{ color: DIM }}>
+          {t('people.empty')}
+        </p>
+      ) : (
+        <div className="mt-6 flex flex-col gap-3">
+          {contacts.map((c) => (
+            <ContactCard
+              key={c.record.id}
+              world={world}
+              contact={c}
+              docked={docked}
+              onTalk={onTalk}
+              onLocate={onLocate}
+              onRoute={onRoute}
+              onChange={onChange}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+/** Одна строка реестра: портрет, имя, отношение, где он — и действия по обстоятельствам. */
+function ContactCard({
+  world,
+  contact,
+  docked,
+  onTalk,
+  onLocate,
+  onRoute,
+  onChange,
+}: {
+  world: World
+  contact: Contact
+  docked: boolean
+  onTalk: (shipId: number) => void
+  onLocate: (shipId: number) => void
+  onRoute: (systemIndex: number) => void
+  onChange: () => void
+}) {
+  const { record, ship } = contact
+  const where = contactWhereabouts(world, contact)
+  const place = where.place ? properName(where.place) : null
+  const system = properName(where.systemName)
+
+  // Где он: присутствует — «рядом · тело · Nкм»; отсутствует — «система · у тела».
+  const locationLine = where.present
+    ? [
+        place ? (where.docked ? t('people.at.dock', { place }) : t('people.at.near', { place })) : t('people.at.here'),
+        ship ? t('people.km', { n: Math.round(ship.state.pos.distanceTo(world.player.state.pos) / 1000) }) : null,
+      ]
+        .filter(Boolean)
+        .join(' · ')
+    : [system, place ? (where.docked ? t('people.at.dock', { place }) : t('people.at.near', { place })) : null]
+        .filter(Boolean)
+        .join(' · ')
+
+  // Куда направляется, если ему задан курс (обещал/послали) и он ещё не дома.
+  const bound = record.boundFor != null ? properName(generateSystem(record.boundFor, world.galaxySeed).name) : null
+
+  return (
+    <div
+      className="flex items-center gap-4 border px-4 py-3"
+      style={{ borderColor: DIM, background: 'rgba(127,214,255,0.03)' }}
+    >
+      {ship ? (
+        <PilotPortrait ship={ship} world={world} size={72} />
+      ) : (
+        <PilotPortrait name={record.name} size={72} />
+      )}
+
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2">
+          <span
+            className="inline-block h-2 w-2 rounded-full"
+            style={{ background: STANCE_COLOR[record.relationship] }}
+            aria-hidden
+          />
+          <span className="truncate text-sm tracking-widest" style={{ color: ACCENT }}>
+            {record.name.toUpperCase()}
+          </span>
+        </div>
+        <div className="mt-1 truncate text-xs" style={{ color: DIM }}>
+          {chassisName(findChassis(record.chassisId)?.name ?? '')} · {locationLine}
+        </div>
+        {bound && (
+          <div className="mt-0.5 truncate text-xs" style={{ color: '#7fd6ff' }}>
+            {t('people.bound', { system: bound })}
+          </div>
+        )}
+      </div>
+
+      <div className="flex shrink-0 flex-wrap items-center justify-end gap-2" style={{ maxWidth: '20rem' }}>
+        {where.present && ship ? (
+          <>
+            <Button small onClick={() => onTalk(ship.id)}>
+              {t('people.talk')}
+            </Button>
+            {!docked && (
+              <Button small onClick={() => onLocate(ship.id)}>
+                {t('people.locate')}
+              </Button>
+            )}
+          </>
+        ) : (
+          <>
+            <Button
+              small
+              onClick={() => {
+                sendContactTo(record, world.systemIndex)
+                onChange()
+              }}
+            >
+              {t('people.summon')}
+            </Button>
+            <Button small onClick={() => onRoute(record.systemIndex)}>
+              {t('people.route')}
+            </Button>
+          </>
+        )}
+        {/* «Оставайся / живи как знаешь» — приколоть на месте или отпустить бродить. */}
+        <Button
+          small
+          onClick={() => {
+            if (record.roaming) holdContact(record)
+            else roamContact(record)
+            onChange()
+          }}
+        >
+          {record.roaming ? t('people.hold') : t('people.roam')}
+        </Button>
+      </div>
+    </div>
+  )
 }
 
 /** Столица системы — самое населённое тело; к ней привязаны и рынок, и причал. */

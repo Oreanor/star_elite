@@ -49,11 +49,21 @@ const BODY = UI.PRIMARY
 const SHIP = UI.SALVAGE
 const STAR = '#ffe6a8'
 const STATION = '#ffffff'
+/** Знакомый на радаре: свой тон, чтобы не спутать с планетой и с игроком. */
+const CONTACT = '#b98bff'
 
 const colourOf = (kind: MarkerKind): string =>
-  kind === 'star' ? STAR : kind === 'station' ? STATION : kind === 'ship' ? SHIP : BODY
+  kind === 'star'
+    ? STAR
+    : kind === 'station'
+      ? STATION
+      : kind === 'ship'
+        ? SHIP
+        : kind === 'contact'
+          ? CONTACT
+          : BODY
 
-type MarkerKind = BodyEntity['kind'] | 'ship'
+type MarkerKind = BodyEntity['kind'] | 'ship' | 'contact'
 
 interface Marker {
   /** У корабля своего id нет: он не тело. Отрицательный — значит, не выбирается. */
@@ -101,9 +111,17 @@ function markers(world: World): Marker[] {
   const origin = star ? star.pos : world.player.state.pos
   const player = world.player.state.pos
 
+  // Знакомые, что сейчас в этой системе, — на радаре по имени: их положение известно,
+  // и карта показывает, где именно. Отрицательный id (−1000−id борта) держит их
+  // невыбираемыми: знакомый летит, «цель навигации» на нём означала бы погоню.
+  const contacts = world.ships
+    .filter((s) => s.alive && s.acquaintanceId != null)
+    .map((s) => ({ id: -1000 - s.id, name: s.name, kind: 'contact' as MarkerKind, pos: s.state.pos }))
+
   const raw = [
     ...world.bodies.map((b) => ({ id: b.id, name: b.name, kind: b.kind as MarkerKind, pos: b.pos })),
     { id: -1, name: t('map.you'), kind: 'ship' as MarkerKind, pos: player },
+    ...contacts,
   ].map((m) => {
     const dx = m.pos.x - origin.x
     const dz = m.pos.z - origin.z
@@ -157,7 +175,7 @@ function formatDistance(metres: number): string {
  * Выбирается всё, что стоит на месте: звезда, планета, луна, причал. Корабль —
  * нет: он летит, и «цель навигации» на нём означала бы преследование, а не курс.
  */
-const selectable = (m: Marker) => m.kind !== 'ship'
+const selectable = (m: Marker) => m.kind !== 'ship' && m.kind !== 'contact'
 
 /** Состав системы одной строкой: сколько чего в ней есть. */
 function census(world: World): string {
@@ -352,6 +370,9 @@ function Hologram({
               ) : m.kind === 'ship' ? (
                 // Игрок — не точка, а нос: треугольник заметен среди кружков планет.
                 <path d="M 0 -5 L 4 5 L 0 2.5 L -4 5 Z" fill={colour} />
+              ) : m.kind === 'contact' ? (
+                // Знакомый — ромб: не тело (кружок) и не игрок (нос), сразу отличишь.
+                <path d="M 0 -5 L 5 0 L 0 5 L -5 0 Z" fill={colour} fillOpacity={0.85} />
               ) : m.kind === 'station' ? (
                 <rect x={-4} y={-4} width={8} height={8} fill={colour} fillOpacity={active ? 0.9 : 0.6} />
               ) : m.kind === 'moon' ? (

@@ -62,7 +62,7 @@ describe('тяжёлый грузовик', () => {
     expect(guard.ai!.targetId).toBe(raider.id)
   })
 
-  it('наёмник ИГРОКА без захвата цели не ищет — только держится рядом', () => {
+  it('наёмник ИГРОКА без захвата сам защищает от врага рядом', () => {
     const world = emptyWorld()
     const at = world.player.state.pos.clone()
 
@@ -74,8 +74,10 @@ describe('тяжёлый грузовик', () => {
     merc.ai.escortOf = world.player.id // патрон — игрок, а не грузовик
     world.ships.push(merc)
 
-    world.lockedTargetId = null // игрок никого не захватил
+    world.lockedTargetId = null // игрок никого не захватил — но враг рядом
     aiController.update(merc, world, 0.2)
-    expect(merc.ai!.targetId).toBeNull()
+    // Компаньон не ждёт приказа: берёт налётчика сам, а не летит красиво рядом.
+    // Захват (Tab) лишь ПЕРЕнаправил бы его на другую цель.
+    expect(merc.ai!.targetId).toBe(raider.id)
   })
 })

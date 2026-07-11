@@ -10,6 +10,7 @@ import {
   itemName,
   localSettlement,
   moodTo,
+  shipWhereabouts,
   type Mood,
   type Persona,
   type Relationship,
@@ -91,6 +92,8 @@ export interface NegotiationContext {
   you: PartySnapshot
   /** Куда направляется игрок: цель в системе или намеченный прыжок. */
   yourHeading: string
+  /** Где сам собеседник — с точностью до системы и приметного места (док станции, у планеты). */
+  theirLocation: string
   distanceM: number
   /** Кто ещё рядом на момент разговора: обстановка для приказов «атакуй вот того». */
   nearby: NearbyShip[]
@@ -312,6 +315,16 @@ export function buildContext(world: World, other: ShipEntity, allowedIntents: To
     .slice(0, 8)
 
   const record = world.acquaintances.find((a) => a.id === other.acquaintanceId)
+
+  // Где он сам: бот должен уметь ответить, где находится, — у планеты, в доке станции.
+  const at = shipWhereabouts(world, other)
+  const place = at.place ? properName(at.place) : null
+  const theirLocation = place
+    ? at.docked
+      ? `в доке станции ${place} (система ${properName(at.systemName)})`
+      : `у ${place} (система ${properName(at.systemName)})`
+    : `в системе ${properName(at.systemName)}`
+
   const navBody = world.bodies.find((b) => b.id === world.navTargetId)
   const heading =
     world.jumpTargetIndex != null
@@ -348,6 +361,7 @@ export function buildContext(world: World, other: ShipEntity, allowedIntents: To
     them: party(other, roleOf(other, world.player.id)),
     you: party(world.player, 'вольный пилот'),
     yourHeading: heading,
+    theirLocation,
     distanceM: Math.round(other.state.pos.distanceTo(world.player.state.pos)),
     nearby,
     localMarket: localMarket(world),

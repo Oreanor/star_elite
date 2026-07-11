@@ -544,6 +544,7 @@ export function createWorld(def: SystemDef = STARTER_SYSTEM): World {
     systemIndex: WORLD.HOME_INDEX,
     epoch: 0,
     acquaintances: [],
+    notices: [],
     credits: WORLD.START_CREDITS,
     score: 0,
   }

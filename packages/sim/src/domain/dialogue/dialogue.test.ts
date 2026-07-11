@@ -38,18 +38,19 @@ function rig(world: World, value: number): void {
 }
 
 describe('разговор', () => {
-  it('говорить можно только с захваченным, живым и близким', () => {
+  it('говорить можно с любым захваченным живым — дистанция не важна (связь по радио)', () => {
     const { world, other } = withShip('hostile')
     expect(interlocutor(world)?.id).toBe(other.id)
 
     world.lockedTargetId = null
     expect(interlocutor(world)).toBeNull()
 
+    // Далеко — не помеха: захватил и говоришь, хоть за полсистемы.
     world.lockedTargetId = other.id
-    other.state.pos.set(0, 0, -(DIALOGUE.RANGE + 10))
-    expect(interlocutor(world)).toBeNull()
+    other.state.pos.set(0, 0, -(DIALOGUE.RANGE + 5000))
+    expect(interlocutor(world)?.id).toBe(other.id)
 
-    other.state.pos.set(0, 0, -200)
+    // А вот с мёртвым — не поговорить.
     other.alive = false
     expect(interlocutor(world)).toBeNull()
   })

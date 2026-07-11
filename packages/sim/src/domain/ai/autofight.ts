@@ -34,6 +34,10 @@ export function engageAutofight(world: World): boolean {
 
   const target = findShip(world, world.lockedTargetId)
   if (!target || !target.alive) return false
+  // Захватить Tab-ом можно кого угодно (чтобы окликнуть или приказать), но АВТОБОЙ
+  // открывает огонь лишь по врагу: случайно натравить бота на союзника/нейтрала нельзя.
+  // Хочешь ударить не-врага — стреляй вручную, по прицелу; это твой осознанный выстрел.
+  if (target.faction !== 'hostile') return false
 
   const ai = createAIState(player.state.pos, world.rng)
   ai.orderedTargetId = target.id

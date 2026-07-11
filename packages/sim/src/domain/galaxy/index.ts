@@ -2,6 +2,7 @@ export { arrivalBounds, arrivalPoint, stationSeat, type Arrival, type Point3 } f
 export { systemDefOf } from './bridge'
 export { isCore, jump, jumpBlock, jumpDistance, reachableSystems, systemDefFor, type JumpBlock } from './jump'
 export { generateGalaxy, generateSystem } from './generate'
+export { driftContacts, contactWhereabouts, shipWhereabouts, type Whereabouts } from './contacts'
 export { galaxyName, moonName, planetName, systemName } from './names'
 export { distanceLy, galaxyShape, placeSystem, type Spot3 } from './shape'
 export {

@@ -6,6 +6,8 @@ import { STARTER_SYSTEM, type SystemDef } from '../world/system'
 import type { World } from '../world/entities'
 import { arrivalPoint, type Arrival } from './arrival'
 import { systemDefOf } from './bridge'
+import { driftContacts } from './contacts'
+import { spawnResidentContacts } from '../world/traffic'
 import { generateSystem } from './generate'
 import { distanceLy, placeSystem } from './shape'
 
@@ -108,6 +110,14 @@ export function jump(world: World, index: number, arrival: Arrival | null = null
   const def = systemDefFor(destIndex, world.galaxySeed)
   enterSystem(world, def, destIndex, arrivalPoint(def, arrival))
   world.player.jumpCharge = Math.max(0, world.player.jumpCharge - spent)
+
+  // Прыжок — отрезок времени: сперва знакомые за кулисами делают ход (перелёт, гибель),
+  // затем тех, чьё место — эта система, выставляем на радар. Порядок важен: сначала
+  // сместить (`boundFor`/странствие), потом заселить — иначе только что прибывший
+  // контакт был бы выставлен и тут же уведён собственным дрейфом. Оба шага — от
+  // `world.rng`, сброшенного `enterSystem` к зерну системы: детерминизм для сети/реплея.
+  driftContacts(world)
+  spawnResidentContacts(world)
   return true
 }
 

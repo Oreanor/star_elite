@@ -27,6 +27,16 @@ export function hostilesOf(world: World): ShipEntity[] {
   return world.ships.filter((s) => isVisible(s) && s.faction === 'hostile')
 }
 
+/**
+ * ВСЕ, кого можно захватить: видимые живые борта любой стороны — враги, нейтралы,
+ * союзники. Захват — это «на кого смотрю», а не «кого бью»: по цели можно и стрелять,
+ * и заговорить, и приказать (если это твой эскорт). Что делать с захваченным, решает
+ * игрок; автобой сам стережёт, чтобы не открыть огонь по не-врагу. Маскировку не берём.
+ */
+export function targetablesOf(world: World): ShipEntity[] {
+  return world.ships.filter((s) => s.alive && isVisible(s))
+}
+
 const _fwd = new Vector3()
 const _right = new Vector3()
 const _up = new Vector3()
@@ -37,7 +47,7 @@ const _toTarget = new Vector3()
  * Игрок ждёт, что Tab возьмёт того, на кого он смотрит.
  */
 export function cycleTarget(world: World, currentId: number | null): number | null {
-  const candidates = hostilesOf(world)
+  const candidates = targetablesOf(world)
   if (candidates.length === 0) return null
 
   shipAxes(world.player.state.quat, _fwd, _right, _up)

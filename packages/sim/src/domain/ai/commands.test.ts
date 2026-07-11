@@ -39,11 +39,12 @@ function think(world: World, ship: ShipEntity): void {
 }
 
 describe('команды автоботу', () => {
-  it('по умолчанию эскорт игрока без захвата драки не ищет', () => {
-    const { world, escort } = withEscortAndPirate()
+  it('по умолчанию эскорт игрока сам защищает от врага рядом', () => {
+    const { world, escort, pirate } = withEscortAndPirate()
     think(world, escort)
-    // Свободный пират рядом есть, но без приказа/захвата эскорт его не трогает.
-    expect(escort.ai!.targetId).toBeNull()
+    // Пират рядом — наёмник берёт его сам, не дожидаясь захвата: компаньон, что
+    // летит красиво, пока тебя разбирают, бесполезен. Захват лишь ПЕРЕнаправит его.
+    expect(escort.ai!.targetId).toBe(pirate.id)
   })
 
   it('«атакуй всех» заставляет эскорта самому взять врага', () => {
@@ -92,9 +93,9 @@ describe('команды автоботу', () => {
     orderAttack(escort, pirate.id)
     orderResume(escort)
     think(world, escort)
-    // Снова эскорт игрока без захвата — драки не ищет.
+    // Снова обычный эскорт: приказа нет (default), но врага рядом сам защищает.
     expect(escort.ai!.command).toBe('default')
-    expect(escort.ai!.targetId).toBeNull()
+    expect(escort.ai!.targetId).toBe(pirate.id)
   })
 
   it('приказ «атакуй этого» сам снимается, когда цель гибнет', () => {

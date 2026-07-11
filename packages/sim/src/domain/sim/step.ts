@@ -1,5 +1,6 @@
 import { Quaternion, Vector3 } from 'three'
 import { WARP } from '../../config/ai'
+import { CONTACTS } from '../../config/contacts'
 import { PHYSICS } from '../../config/physics'
 import { BOMB, GUNNERY, SALVAGE } from '../../config/weapons'
 import { ASTEROID, DEBRIS, SCORE } from '../../config/world'
@@ -38,6 +39,7 @@ import { stepDocking } from '../station/docking'
 import type { ShipEntity, World } from '../world/entities'
 import { stepOrbits } from '../world/orbits'
 import { maybeShiftOrigin } from '../world/origin'
+import { markContactLost } from '../world/acquaintance'
 import { stepTraffic } from '../world/traffic'
 import { stepTitans } from '../world/titans'
 import { stepPlatforms } from '../world/platforms'
@@ -317,11 +319,20 @@ function cleanup(world: World): void {
   world.explosions = world.explosions.filter((e) => now - e.born < DEBRIS.EXPLOSION_LIFE)
   world.shockwaves = world.shockwaves.filter((w) => now - w.born < BOMB.WAVE_LIFE)
   world.warps = world.warps.filter((w) => now - w.born < WARP.FLASH_LIFE)
+  // Вести о пропавших знакомых гаснут сами, как трассеры: HUD показал — и хватит.
+  world.notices = world.notices.filter((n) => now - n.at < CONTACTS.NOTICE_LIFE)
 
   for (const ship of world.ships) {
     if (ship.alive || ship.wreckAt !== null) continue
     // Момент гибели: взрыв и трофеи — ровно один раз.
     ship.wreckAt = now
+
+    // Знакомый погиб у тебя на глазах: пилот — не корабль, но этот пилот больше не
+    // пересядет. Метим запись мёртвой и шлём весть — иначе он бы «воскрес» в трафике.
+    if (ship.acquaintanceId != null) {
+      const record = world.acquaintances.find((a) => a.id === ship.acquaintanceId)
+      if (record) markContactLost(world, record)
+    }
 
     // Беспилотник — расходник: ни взрыва корабельного калибра, ни трофеев.
     // Иначе рой из четырёх аппаратов засыпал бы систему контейнерами с их же

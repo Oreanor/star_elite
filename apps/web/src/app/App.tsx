@@ -121,6 +121,19 @@ function Shell({ onRestart }: { onRestart: () => void }) {
     session.world.lockedTargetId = shipId
     setTalking(true)
   }, [session])
+  // «Навести» из вкладки «Люди»: захватываем борт знакомого — стрелка HUD поведёт к
+  // нему. В полёте закрываем консоль, чтобы мир ожил и можно было лететь; у причала
+  // лететь некуда, метку просто держим.
+  const locateShip = useCallback((shipId: number) => {
+    session.world.lockedTargetId = shipId
+    if (!session.world.docked) closeConsole()
+  }, [session, closeConsole])
+  // «Проложить курс» к знакомому в другой системе: метим её целью прыжка и переводим
+  // на карту галактики — там виден маршрут, а H в полёте прыгнет по этой метке.
+  const routeTo = useCallback((systemIndex: number) => {
+    session.world.jumpTargetIndex = systemIndex
+    setTab('galaxy')
+  }, [session])
   // У причала кнопка шапки отчаливает: отойдя от кольца, корабль оживает захватом.
   const undockAndResume = useCallback(() => {
     undock(session.world)
@@ -214,6 +227,8 @@ function Shell({ onRestart }: { onRestart: () => void }) {
           onTab={setTab}
           onClose={docked ? undockAndResume : closeConsole}
           onTalk={talkTo}
+          onLocate={locateShip}
+          onRoute={routeTo}
         />
       ) : (
         !locked && <Paused resuming={started} onBoot={() => setBooted(true)} />

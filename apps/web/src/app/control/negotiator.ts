@@ -223,6 +223,7 @@ function systemPrompt(ctx: NegotiationContext): string {
     obedience,
     '',
     `ГДЕ ВЫ: система ${w.systemName}. Планет: ${w.planets}, лун: ${w.moons}, станций: ${w.stations}.`,
+    `ГДЕ ТЫ САМ (если спросят): ${ctx.theirLocation}. Отвечай про своё место честно, не выдумывай другую систему.`,
     'ОБИТАЕМЫЕ МИРЫ (у каждого СВОЙ строй, экономика и раса — не путай их):',
     w.worlds.length
       ? w.worlds.map((o) => `• ${o.name} (${o.type}): ${o.economy}, ${o.government}, ${o.species}, ~${o.populationM} млн`).join('\n')

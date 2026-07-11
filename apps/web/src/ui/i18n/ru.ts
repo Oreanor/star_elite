@@ -256,8 +256,28 @@ export const RU = {
   'station.nav.ship': 'ВЕРФЬ',
   'station.nav.cargo': 'ГРУЗ',
   'station.nav.shop': 'МАГАЗИН',
+  'station.nav.people': 'ЛЮДИ',
   'station.nav.system': 'КАРТА СИСТЕМЫ',
   'station.nav.galaxy': 'КАРТА ГАЛАКТИКИ',
+
+  // ─── Люди: реестр знакомых ───────────────────────────────────────────────────
+  'people.title': 'ЗНАКОМЫЕ',
+  'people.subtitle': 'С кем ты говорил и кто ещё жив. Их положение известно всегда.',
+  'people.empty': 'Ты пока ни с кем не знаком. Заговори с кем-нибудь в космосе.',
+  'people.here': 'здесь, рядом',
+  'people.at.near': 'у {place}',
+  'people.at.dock': 'в доке {place}',
+  'people.at.here': 'в этой системе',
+  'people.km': '{n} км',
+  'people.bound': 'летит в {system}',
+  'people.talk': 'СВЯЗАТЬСЯ',
+  'people.locate': 'НАВЕСТИ',
+  'people.summon': 'ПОЗВАТЬ К СЕБЕ',
+  'people.route': 'ПРОЛОЖИТЬ КУРС',
+  'people.hold': 'ПУСТЬ ЖДЁТ',
+  'people.roam': 'ОТПУСТИТЬ',
+  // Весть на HUD, когда знакомый пропал (погиб вне поля зрения или на глазах).
+  'hud.contactLost': '{name} ПРОПАЛ С РАДАРА — ВЕРОЯТНО, ПОГИБ',
 
   // ─── Экономики ──────────────────────────────────────────────────────────────
   'econ.agri': 'Аграрная',

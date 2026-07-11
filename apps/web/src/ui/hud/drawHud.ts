@@ -844,6 +844,14 @@ function drawAlerts({ ctx, world, width, height }: HudFrame): void {
     text(ctx, t('hud.hail', { name: hail.name.toUpperCase() }), width / 2, 46 * S, HUD_COLORS.TARGET, 'center')
   }
 
+  // Пропал знакомый — вероятно, погиб. Весть держится секунды (`CONTACTS.NOTICE_LIFE`,
+  // уборка гасит) и мягко мигает: это утрата, не боевая тревога, но и не рядовой лог.
+  // Показываем самую свежую — если разом пришло несколько, старшие подождут своей уборки.
+  const notice = world.notices[world.notices.length - 1]
+  if (notice && Math.sin(world.time * Math.PI * 2) > -0.5) {
+    text(ctx, t('hud.contactLost', { name: notice.name.toUpperCase() }), width / 2, 64 * S, HUD_COLORS.DANGER, 'center')
+  }
+
   // Выше панели стыковки: она занимает низ по центру и перекрыла бы обе строки.
   if (autofightActive(world)) {
     text(ctx, t('hud.autofight'), width / 2, height - 64 * S, HUD_COLORS.TARGET, 'center')

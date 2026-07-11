@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { makeRng } from '../../core/math'
 import { createWorld, STARTER_SYSTEM, type World } from './index'
-import { applyStance, recurringAcquaintance, rememberPilot } from './acquaintance'
+import { applyStance, residentAcquaintances, rememberPilot } from './acquaintance'
 
 /**
  * Память знакомств. Прохожих космос забывает, с кем говорил — помнит. Проверяем
@@ -42,27 +41,40 @@ describe('память знакомств', () => {
     expect(world.acquaintances).toHaveLength(1)
   })
 
-  it('знакомство переживает гибель борта и годится для повторной встречи', () => {
+  it('знакомство переживает гибель борта: знакомый снова становится жителем системы', () => {
     const world = withStranger()
     const ship = world.ships[0]!
     rememberPilot(world, ship)
 
-    // Пока борт жив и в мире — повторно его не «встретить», он уже тут.
-    expect(recurringAcquaintance(world, makeRng(1))).toBeNull()
+    // Пока борт жив и в мире — он уже тут, повторно выставлять некого.
+    expect(residentAcquaintances(world)).toHaveLength(0)
 
-    // Улетел/погиб — запись осталась, и теперь знакомого можно встретить снова.
+    // Борт исчез (улетел/погиб) — запись осталась, и знакомого нужно выставить снова:
+    // со знакомыми нет случайных встреч, в своей системе они всегда на радаре.
     world.ships = []
-    expect(recurringAcquaintance(world, makeRng(1))?.name).toBe(ship.name)
+    const here = residentAcquaintances(world)
+    expect(here).toHaveLength(1)
+    expect(here[0]!.name).toBe(ship.name)
   })
 
-  it('знакомый из другой системы здесь не встречается', () => {
+  it('знакомый из другой системы жителем ЗДЕСЬ не считается', () => {
     const world = withStranger()
-    const ship = world.ships[0]!
-    rememberPilot(world, ship)
+    rememberPilot(world, world.ships[0]!)
     world.ships = []
 
     world.systemIndex += 1 // прыгнули в соседнюю
-    expect(recurringAcquaintance(world, makeRng(1))).toBeNull()
+    expect(residentAcquaintances(world)).toHaveLength(0)
+  })
+
+  it('погибший знакомый жителем не становится: мёртвый на радаре не всплывает', () => {
+    const world = withStranger()
+    const ship = world.ships[0]!
+    rememberPilot(world, ship)
+    world.ships = []
+    expect(residentAcquaintances(world)).toHaveLength(1)
+
+    world.acquaintances[0]!.alive = false
+    expect(residentAcquaintances(world)).toHaveLength(0)
   })
 
   it('нахамил нейтралу — он встаёт на бой, и это помнится', () => {

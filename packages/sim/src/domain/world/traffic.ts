@@ -7,7 +7,7 @@ import { TRAFFIC } from '../../config/world'
 import { signed, type Rng } from '../../core/math'
 import type { Loadout } from '../loadout'
 import { createAIState } from '../ai/types'
-import { recurringAcquaintance } from './acquaintance'
+import { residentAcquaintances } from './acquaintance'
 import { spawnPlatform } from './platforms'
 import { spawnWarpFlash } from './warp'
 import { addCommodity } from '../cargo/hold'
@@ -92,6 +92,7 @@ export const ENCOUNTERS: readonly EncounterKind[] = [
 const _scratch = new Vector3()
 const _offset = new Vector3()
 const _site = new Vector3()
+const _anchor = new Vector3()
 
 /** Вес встречи с поправкой на удалённость: у станции — торговцы и патруль, в пустоте — пираты. */
 export function biasedWeight(kind: EncounterKind, remoteness: number): number {
@@ -244,30 +245,47 @@ function spawnEscort(world: World, escort: NonNullable<EncounterKind['escort']>,
 }
 
 /**
- * Возвращает ли эта встреча ЗНАКОМОГО. Изредка (RECUR_CHANCE) и только если в этой
- * системе кто-то знакомый вообще есть. Пилот воссоздаётся тем же типом встречи, что
- * и родил его когда-то, но с прежним именем, характером и памятью о тебе.
+ * Выставить на радар всех знакомых, чьё место — эта система. Не «встреча» и не бросок
+ * кости: со знакомыми случайных встреч нет, их положение известно всегда с точностью до
+ * системы. Раз контакт числится ЗДЕСЬ (`residentAcquaintances`), он обязан быть на
+ * радаре с самого прибытия — не всплыть внезапно из пустоты посреди полёта. Зовётся
+ * один раз при входе в систему (после `enterSystem`), не из ритма трафика.
+ *
+ * Борт воссоздаётся тем же типом встречи, что когда-то его родил, но с прежним именем,
+ * характером, фракцией и памятью. Ставим у обитаемого мира (столица/станция) — там его
+ * и «место жительства», и туда же указывает `contactWhereabouts` для отсутствующих.
  */
-function spawnRecurring(world: World): ShipEntity[] | null {
-  if (world.rng() >= TRAFFIC.RECUR_CHANCE) return null
-  const rec = recurringAcquaintance(world, world.rng)
-  if (!rec) return null
+export function spawnResidentContacts(world: World): ShipEntity[] {
+  const residents = residentAcquaintances(world)
+  if (residents.length === 0) return []
 
-  const kind = ENCOUNTERS.find((k) => k.id === rec.kindId) ?? ENCOUNTERS[0]!
-  const centre = new Vector3()
-  const home = new Vector3()
-  spawnSite(world, kind, centre, home)
-  const ship = spawnOne(world, kind, centre, home)
+  const anchor = residentAnchor(world)
+  const born: ShipEntity[] = []
+  for (const rec of residents) {
+    const kind = ENCOUNTERS.find((k) => k.id === rec.kindId) ?? ENCOUNTERS[0]!
+    // Рассадка вокруг якоря, детерминированно от `world.rng` (свежий после enterSystem).
+    randomDirection(world, _scratch)
+    const pos = _site.copy(anchor).addScaledVector(_scratch, TRAFFIC.SPAWN_MIN * (0.6 + world.rng() * 0.8))
+    const ship = spawnOne(world, kind, pos, anchor)
 
-  // Возвращаем именно того пилота: имя, характер, фракция — из записи, не заново.
-  // Знакомого узнаём сразу: открытое имя ставим и в отображаемое, и в истинное.
-  ship.name = rec.name
-  ship.pilotName = rec.name
-  ship.persona = rec.persona
-  ship.faction = rec.faction
-  ship.acquaintanceId = rec.id
-  rec.meetings += 1
-  return [ship]
+    // Тот же пилот, не новый: имя открыто (знакомы), характер и фракция — из записи.
+    ship.name = rec.name
+    ship.pilotName = rec.name
+    ship.persona = rec.persona
+    ship.faction = rec.faction
+    ship.acquaintanceId = rec.id
+    born.push(ship)
+  }
+  return born
+}
+
+/** У какого тела селить знакомых: причал, иначе самый людный мир, иначе — рядом с игроком. */
+function residentAnchor(world: World): Vector3 {
+  const station = world.bodies.find((b) => b.kind === 'station')
+  if (station) return _anchor.copy(station.pos)
+  let best: BodyEntity | null = null
+  for (const b of world.bodies) if (b.population > 0 && (!best || b.population > best.population)) best = b
+  return _anchor.copy(best ? best.pos : world.player.state.pos)
 }
 
 /** Одна встреча: от одиночки до стаи. Возвращает всех, кому нужен пилот. */
@@ -281,9 +299,6 @@ function spawnEncounter(world: World): ShipEntity[] {
 }
 
 function bornEncounter(world: World): ShipEntity[] {
-  const recurring = spawnRecurring(world)
-  if (recurring) return recurring
-
   const kind = weightedPick(world.rng, ENCOUNTERS, remoteness(world))
   const count = kind.min + Math.floor(world.rng() * (kind.max - kind.min + 1))
 
@@ -404,6 +419,9 @@ function despawnDistant(world: World): void {
     if (!s.alive || isDroneShip(s)) return true
     if (s.id === world.lockedTargetId) return true
     if (s.ai?.escortOf != null) return true
+    // ЗНАКОМЫЙ (с ним говорили) не растворяется, как прочий трафик: он отслеживается,
+    // помечен на картах и всегда на связи. Прохожие копятся и гибнут — знакомые живут.
+    if (s.acquaintanceId != null) return true
     // Спящий экипаж принадлежит платформе, а не трафику: его жизненным циклом
     // (пробуждением и уборкой вместе с гнездом) распоряжается stepPlatforms.
     if (s.ai?.dormant) return true

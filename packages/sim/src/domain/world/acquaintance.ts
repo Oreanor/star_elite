@@ -1,4 +1,3 @@
-import type { Rng } from '../../core/math'
 import type { Persona } from './persona'
 import type { ShipEntity, World } from './entities'
 
@@ -29,12 +28,37 @@ export interface Acquaintance {
   chassisId: string
   /** Каким типом встречи он был — чтобы воссоздать ту же сборку при повторной встрече. */
   kindId: string
-  /** В какой системе познакомились: там его и можно встретить снова. */
+  /**
+   * В какой системе контакт СЕЙЧАС. При знакомстве — где познакомились; дальше
+   * меняется: контакт живёт своей скромной жизнью и перелетает между системами
+   * (`driftContacts`). Это истина о его положении, даже когда борт физически не
+   * заспаунен, — по ней вкладка «Люди» и карты знают, где он, а не где ты видел его.
+   */
   systemIndex: number
+  /**
+   * Куда контакт направляется, индекс системы, или `null` — никуда конкретно.
+   * Ставится, когда он ОБЕЩАЛ куда-то лететь или игрок его туда отправил; гаснет по
+   * прибытии. Пока стоит — контакт идёт к цели, а не блуждает.
+   */
+  boundFor: number | null
+  /**
+   * Волен ли бродить сам, когда никуда не направляется. По умолчанию да: у праздного
+   * контакта своя жизнь, и он изредка перелетает в соседнюю систему. «Оставайся там»
+   * гасит это (`holdContact`) — тогда его всегда найдёшь на месте. Отдельно от `boundFor`:
+   * «стой» и «лети в X» — разные приказы, и «стой» обязан ПРИКОЛОТЬ, а не просто «без цели».
+   */
+  roaming: boolean
   /** Сколько раз виделись. >1 — он тебя уже знает. */
   meetings: number
   /** Отношение к игроку по итогу бесед. Хранится тут и переносится на новую встречу. */
   relationship: Relationship
+  /**
+   * Жив ли пилот. Знакомство переживает гибель БОРТА (пилот пересаживается), но не
+   * гибель самого пилота: изредка контакт нарывается вне поля зрения (`driftContacts`)
+   * или его сбивают у тебя на глазах. Мёртвый не отвечает и уходит из списка живых —
+   * запись держим ради истории и чтобы не «воскресить» его повторной встречей.
+   */
+  alive: boolean
 }
 
 /**
@@ -56,8 +80,11 @@ export function rememberPilot(world: World, ship: ShipEntity): void {
     chassisId: ship.loadout.chassis.id,
     kindId: ship.originKind ?? 'trader',
     systemIndex: world.systemIndex,
+    boundFor: null,
+    roaming: true,
     meetings: 1,
     relationship: 'neutral',
+    alive: true,
   }
   world.acquaintances.push(record)
   ship.acquaintanceId = record.id
@@ -88,15 +115,83 @@ export function applyStance(world: World, ship: ShipEntity, stance: Relationship
   }
 }
 
+/** Знакомый и его живой борт, если он сейчас здесь. Для вкладки «Люди» и меток карт. */
+export interface Contact {
+  record: Acquaintance
+  /** Живой борт в текущем мире, если присутствует. `null` — знакомый есть, но не в этой системе. */
+  ship: ShipEntity | null
+  /** Дистанция до игрока в метрах; `Infinity`, если борта тут нет. */
+  distance: number
+}
+
 /**
- * Выбрать знакомого, которого можно встретить СНОВА здесь и сейчас: из этой системы
- * и не присутствующего уже в мире живьём. `null` — некого. Выбор случайный, а редкость
- * повторной встречи задаёт вызывающий (шанс в трафике), не эта функция.
+ * Все живые знакомые: с кем говорили и кто ещё не погиб. Присутствующие в этой системе
+ * идут с живым бортом и дистанцией (по ней и сортируем — ближний сверху), отсутствующие
+ * — с `ship: null` (знакомство помнится, но борт в другой системе). Гибель борта здесь
+ * не видна: мёртвого борта в списке `ships` уже нет, значит и в контактах он не всплывёт.
+ *
+ * Чистая выборка на данных мира — ни рендера, ни глобалов: годится и серверу, и картам.
  */
-export function recurringAcquaintance(world: World, rng: Rng): Acquaintance | null {
-  const here = world.acquaintances.filter(
-    (a) => a.systemIndex === world.systemIndex && !world.ships.some((s) => s.alive && s.acquaintanceId === a.id),
+export function livingContacts(world: World): Contact[] {
+  const out: Contact[] = []
+  for (const record of world.acquaintances) {
+    if (!record.alive) continue // мёртвый в списке живых не значится — только в памяти
+    const ship = world.ships.find((s) => s.alive && s.acquaintanceId === record.id) ?? null
+    const distance = ship ? ship.state.pos.distanceTo(world.player.state.pos) : Infinity
+    out.push({ record, ship, distance })
+  }
+  // Ближние (присутствуют здесь) сверху, отсутствующие — следом в порядке реестра.
+  return out.sort((a, b) => a.distance - b.distance)
+}
+
+/**
+ * Отправить контакт в систему `systemIndex` — он обещал лететь или игрок его послал.
+ * Пока `boundFor` стоит, `driftContacts` ведёт его к цели, а не даёт бродить. Цель =
+ * текущая система гасит намерение сразу: он уже там, лететь некуда.
+ */
+export function sendContactTo(record: Acquaintance, systemIndex: number): void {
+  record.boundFor = systemIndex === record.systemIndex ? null : systemIndex
+}
+
+/**
+ * «Оставайся там»: снимаем и намерение лететь, и право бродить — контакт ПРИКОЛОТ к
+ * своей системе, и там его всегда найдёшь. Отпустить обратно в странствия — `roamContact`.
+ */
+export function holdContact(record: Acquaintance): void {
+  record.boundFor = null
+  record.roaming = false
+}
+
+/** «Живи как знаешь»: контакт снова волен бродить сам, когда никуда не направляется. */
+export function roamContact(record: Acquaintance): void {
+  record.roaming = true
+}
+
+/**
+ * Контакт погиб — у тебя на глазах или где-то вне поля зрения. Помечаем запись
+ * мёртвой (в список живых он больше не попадёт и повторной встречей не воскреснет) и
+ * шлём игроку весть: имя пропало с радара. Идемпотентно — второй раз весть не плодит.
+ */
+export function markContactLost(world: World, record: Acquaintance): void {
+  if (!record.alive) return
+  record.alive = false
+  record.boundFor = null
+  world.notices.push({ kind: 'contact-lost', name: record.name, at: world.time })
+}
+
+/**
+ * Знакомые, которые ДОЛЖНЫ быть здесь на радаре: живые, в этой системе и ещё не
+ * присутствующие бортом. Со знакомыми не бывает случайных встреч — их положение мы
+ * знаем всегда с точностью до системы, а раз они в НАШЕЙ системе, у них есть место на
+ * радаре, и найти их можно. Поэтому не «шанс встретить», а список тех, кого фабрика
+ * обязана выставить при входе в систему (`spawnResidentContacts`). Внезапных появлений
+ * из ниоткуда больше нет: контакт либо тут с самого прибытия, либо в другой системе.
+ */
+export function residentAcquaintances(world: World): Acquaintance[] {
+  return world.acquaintances.filter(
+    (a) =>
+      a.alive &&
+      a.systemIndex === world.systemIndex &&
+      !world.ships.some((s) => s.alive && s.acquaintanceId === a.id),
   )
-  if (here.length === 0) return null
-  return here[Math.floor(rng() * here.length)] ?? null
 }
