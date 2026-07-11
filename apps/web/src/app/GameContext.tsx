@@ -2,6 +2,7 @@ import { createContext, useContext, useMemo, type ReactNode } from 'react'
 import {
   aiController,
   autodockController,
+  applyPlayerSave,
   createWorld,
   enterSystem,
   startAtStation,
@@ -15,6 +16,7 @@ import {
   type World,
 } from '@elite/sim'
 import { createIntent, createPlayerController, type PlayerIntent } from './control/playerController'
+import { loadSave } from './save/saveStore'
 
 export type PilotMode = 'manual' | 'autodock'
 
@@ -86,11 +88,18 @@ function randomStartIndex(): number {
 }
 
 function createSession(): Session {
+  const save = loadSave()
   const world = createWorld()
-  const start = randomStartIndex()
-  enterSystem(world, systemDefFor(start, world.galaxySeed), start)
-  // Новая игра начинается ВПЛОТНУЮ к причалу, а не за тысячу километров, как выход
-  // из гиперпрыжка: первый кадр — станция в паре секунд хода, а не долгий подлёт.
+  // Повторный вход — в СВОЮ сохранённую систему своим сидом; новичок — случайная
+  // стартовая. Систему строим по (сид, индекс) из сейва, чтобы попасть в тот же мир.
+  const index = save ? save.systemIndex : randomStartIndex()
+  const seed = save ? save.galaxySeed : world.galaxySeed
+  enterSystem(world, systemDefFor(index, seed), index)
+  // Пилота накладываем ПОСЛЕ enterSystem: тот пересобирает окружение, но борт игрока
+  // не трогает — значит восстановленные корабль/кошелёк/личность не затрутся.
+  if (save) applyPlayerSave(world, save)
+  // И новичок, и вернувшийся начинают ВПЛОТНУЮ к причалу (точка возврата — станция),
+  // а не за тысячу километров, как выход из гиперпрыжка.
   startAtStation(world)
 
   const intent = createIntent()
