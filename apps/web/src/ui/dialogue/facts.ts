@@ -32,6 +32,8 @@ export interface WorldSnapshot {
   bodyNames: string[]
   /** Оценка места одной фразой: спокойно / анархия / рядом стычка. */
   danger: string
+  /** Обитаемые миры системы, каждый со СВОИМ строем/экономикой/расой (per-planet). */
+  worlds: { name: string; type: string; economy: string; government: string; species: string; populationM: number }[]
 }
 
 export interface PartySnapshot {
@@ -157,6 +159,18 @@ export function buildContext(world: World, other: ShipEntity, allowedIntents: To
       stations: stations.length,
       bodyNames: [...planets, ...stations].slice(0, 6).map((b) => properName(b.name)),
       danger,
+      // Обитаемые миры — каждый со своим поселением: в одной системе аграрная
+      // колония и промышленная столица читаются по-разному, и бот это знает.
+      worlds: world.bodies
+        .filter((b) => b.settlement)
+        .map((b) => ({
+          name: properName(b.name),
+          type: b.surface ?? '—',
+          economy: economyName(b.settlement!.economy),
+          government: governmentName(b.settlement!.government),
+          species: speciesName(b.settlement!.species),
+          populationM: Math.round(b.settlement!.population),
+        })),
     },
     them: party(other, roleOf(other, world.player.id)),
     you: party(world.player, 'вольный пилот'),

@@ -204,6 +204,7 @@ function makeMoonBodies(ids: IdSource, planet: BodyEntity, def: SystemDef['plane
     color: MOON.COLOR,
     surface: 'Скалистая' as const,
     population: 0,
+    settlement: null,
     spin: MOON.SPIN,
     spinAxis: spinAxis(moon.tilt),
     orbit: {
@@ -254,6 +255,7 @@ function makeBodies(ids: IdSource, def: SystemDef): BodyEntity[] {
     color: def.star.color,
     surface: null,
     population: 0,
+    settlement: null,
     spin: 0,
     spinAxis: new Vector3(0, 1, 0),
     // Одиночная стоит в центре; главная звезда двойной обращается вокруг барицентра.
@@ -272,6 +274,7 @@ function makeBodies(ids: IdSource, def: SystemDef): BodyEntity[] {
       color: comp.color,
       surface: null,
       population: 0,
+      settlement: null,
       spin: 0,
       spinAxis: new Vector3(0, 1, 0),
       // Спутник на противоположной стороне барицентра: фаза π.
@@ -289,6 +292,7 @@ function makeBodies(ids: IdSource, def: SystemDef): BodyEntity[] {
       color: p.color,
       surface: p.type,
       population: p.population,
+      settlement: p.settlement ?? null,
       spin: p.spin,
       spinAxis: spinAxis(p.tilt),
       orbit: null,
@@ -306,6 +310,7 @@ function makeBodies(ids: IdSource, def: SystemDef): BodyEntity[] {
       color: 0x9fb3c8,
       surface: null,
       population: 0,
+      settlement: null,
       // Кориолис вращается вокруг продольной оси — так было в оригинале.
       spin: 0.08,
       spinAxis: new Vector3(0, 0, 1),

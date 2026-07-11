@@ -1,6 +1,7 @@
 import type { DysonSpec } from '../../config/dyson'
 import type { PlanetType } from '../../config/galaxy'
 import type { Faction } from './entities'
+import type { Settlement } from '../galaxy/types'
 
 /**
  * Описание системы данными. Новая система — новая запись, а не правка фабрики (OCP).
@@ -57,6 +58,11 @@ export interface SystemDef {
     tilt: number
     /** Миллионы жителей. Ноль — мир необитаем, и ночью на нём темно. */
     population: number
+    /**
+     * Кто и как живёт: строй, экономика, тех, раса. `null`/отсутствует — необитаем.
+     * Своё у КАЖДОЙ планеты: рынок причала и характер мира берутся отсюда.
+     */
+    settlement?: Settlement | null
     /** Спутники. Их период выводится из массы планеты, поэтому здесь его нет. */
     moons: readonly MoonDef[]
   }[]
@@ -131,6 +137,14 @@ export const STARTER_SYSTEM: SystemDef = {
       tilt: 0.41,
       // Столица системы: четыре миллиарда. Ночью её города видно с орбиты.
       population: 4_100,
+      // Промышленная корпоративная столица: высокий тех-уровень, люди-колонисты.
+      settlement: {
+        economy: 'Высокие технологии',
+        government: 'Корпорация',
+        techLevel: 12,
+        population: 4_100,
+        species: 'Люди (колония)',
+      },
       /**
        * Луна там же, где настоящая: 384 тысячи километров, наклон 5°. Оборот
        * не задан — он выведется из массы Оссиании и совпадёт с земным месяцем.

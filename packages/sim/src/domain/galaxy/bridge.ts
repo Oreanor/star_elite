@@ -111,6 +111,9 @@ export function systemDefOf(system: StarSystem, galaxySeed: number): SystemDef {
       // Ноль у необитаемого мира. Ночную сторону красит рендер, но КТО там живёт —
       // знает галактика, и она же одна имеет право это сказать.
       population: p.settlement?.population ?? 0,
+      // Поселение — как есть, per-planet: аграрная колония и промышленная столица
+      // в одной системе имеют каждая своё. Рынок причала возьмёт экономику отсюда.
+      settlement: p.settlement,
       moons: moonsOf(p, radius),
       ...spinOf(i),
     }

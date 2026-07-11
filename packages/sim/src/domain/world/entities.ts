@@ -12,6 +12,7 @@ import type { CruiseState } from '../cruise/drive'
 import type { IdSource } from './ids'
 import type { Persona } from './persona'
 import type { Acquaintance } from './acquaintance'
+import type { Settlement } from '../galaxy/types'
 
 export type Faction = 'player' | 'hostile' | 'neutral' | 'police'
 
@@ -199,6 +200,13 @@ export interface BodyEntity {
    * наличия станции, иначе два слоя однажды разойдутся в том, кто где живёт.
    */
   population: number
+  /**
+   * Кто и как живёт на этом мире: строй, экономика, тех-уровень, раса. `null` —
+   * мир необитаем. Это свойство ПЛАНЕТЫ, а не системы: в одной системе уживаются
+   * аграрная колония и промышленная столица, у каждой своё. Рынок причала берёт
+   * экономику ОТСЮДА, а не одну на всю систему.
+   */
+  settlement: Settlement | null
   /**
    * Собственное вращение, рад/с. Знак задаёт направление: обратное вращение
    * у планет бывает, и выглядит оно правильно только если знак настоящий.
