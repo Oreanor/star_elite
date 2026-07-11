@@ -67,7 +67,11 @@ describe('встречи в космосе', () => {
   it('больше положенного в системе не летает', () => {
     const world = quiet()
     run(world, TRAFFIC.INTERVAL * (TRAFFIC.MAX + 10))
-    expect(met(world).length).toBeLessThanOrEqual(TRAFFIC.MAX)
+    // Потолок считает ВСТРЕЧЕННЫХ, а прикрытие исключено намеренно (`escortOf`):
+    // звено не бросают на полпути ради лимита. Поэтому инвариант — на не-эскортных
+    // бортах, ровно как его стережёт `trafficCount`, а не на всех подряд.
+    const counted = met(world).filter((s) => s.alive && s.ai?.escortOf == null)
+    expect(counted.length).toBeLessThanOrEqual(TRAFFIC.MAX)
   })
 
   /**

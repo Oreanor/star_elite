@@ -56,8 +56,8 @@ interface EncounterKind {
 }
 
 const ENCOUNTERS: readonly EncounterKind[] = [
-  { id: 'trader', faction: 'neutral', name: 'Торговец', loadout: traderLoadout, min: 1, max: 1, weight: 30, approach: false },
-  { id: 'convoy', faction: 'neutral', name: 'Караван', loadout: traderLoadout, min: 2, max: 3, weight: 10, approach: false },
+  { id: 'trader', faction: 'neutral', name: 'Торговец', loadout: traderLoadout, min: 1, max: 1, weight: 36, approach: false },
+  { id: 'convoy', faction: 'neutral', name: 'Караван', loadout: traderLoadout, min: 2, max: 3, weight: 13, approach: false },
   { id: 'pirate', faction: 'hostile', name: 'Пират', loadout: pirateLoadout, min: 1, max: 2, weight: 22, approach: true },
   { id: 'gang', faction: 'hostile', name: 'Стая', loadout: pirateLoadout, min: 3, max: 4, weight: 6, approach: true },
   { id: 'raider', faction: 'hostile', name: 'Налётчик', loadout: pirateLeaderLoadout, min: 1, max: 1, weight: 8, approach: true },
