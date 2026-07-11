@@ -4,6 +4,7 @@ import { createAIState } from '../ai/types'
 import { healthFraction, shieldFraction } from '../combat/damage'
 import { defuseGrievance, provoke } from '../combat/grievance'
 import { jettisonCargo, jettisonWeapons } from '../combat/salvage'
+import type { Relationship } from '../world/acquaintance'
 import type { ShipEntity, World } from '../world/entities'
 import type { Persona } from '../world/persona'
 
@@ -84,6 +85,19 @@ export function moodTo(world: World, other: ShipEntity): Mood {
   return 'neutral'
 }
 
+/**
+ * ОТНОШЕНИЕ борта к игроку одним из трёх слов — то, что показывает шапка диалога.
+ * В отличие от `moodTo` (это ТОН реплики, где есть ещё «насторожён»), тут ровно три
+ * состояния репутации: враг всегда враждебен, иначе — итог знакомства (дружелюбен или
+ * нейтрален). Свежий пират, с кем ещё не виделись, — всё равно ВРАЖДЕБНЫЙ по фракции,
+ * а не «нейтральный» из пустой записи знакомства.
+ */
+export function stanceTo(world: World, other: ShipEntity): Relationship {
+  if (other.faction === 'hostile') return 'hostile'
+  const rec = world.acquaintances.find((a) => a.id === other.acquaintanceId)
+  return rec?.relationship ?? 'neutral'
+}
+
 /** Соц-жест игрока в свободной речи: то, что домен из текста не вычленит сам. */
 export type Social = 'insult' | 'flatter'
 
@@ -117,42 +131,53 @@ export function escortFee(world: World, other: ShipEntity): number | null {
   return Math.round(DIALOGUE.ESCORT_FEE * factor)
 }
 
+/** Реакции «из боя»: угроза, грабёж, мольба. В доке станции им не место (`linesFor`). */
+const COMBAT_TOPICS: Topic[] = ['surrender', 'mercy', 'plunder']
+
 /**
  * Что можно сказать этому кораблю. Список зависит от того, кто он: с пиратом
- * торгуются о жизни, с торговцем — о деньгах и о грузе.
+ * торгуются о жизни, с торговцем — о деньгах и о грузе. Реплики — ПРИКАЗЫ и прямая
+ * речь игрока (повелительно), а не инфинитивы: ты капитан, а не пункт меню.
+ *
+ * В доке станции боевые реакции отпадают: ты под охраной, вокруг закон — грабить,
+ * грозить и молить о пощаде тут не о чем. Остаётся мирный разговор (найм, оклик).
  */
 export function linesFor(world: World, other: ShipEntity): Line[] {
   const player = world.player
 
-  if (other.faction === 'hostile') {
+  const all: Line[] = (() => {
+    if (other.faction === 'hostile') {
+      return [
+        {
+          topic: 'surrender',
+          say: 'ПРЕКРАТИ ОГОНЬ, СБРОСЬ ГРУЗ',
+          // Невредимый пират не бросает добычу. Сначала сбей ему щит.
+          blocked: healthFraction(other) > 0.99 ? 'ОН НЕВРЕДИМ И НЕ СТАНЕТ СЛУШАТЬ' : null,
+        },
+        { topic: 'mercy', say: 'ПОЩАДИ, НЕ СТРЕЛЯЙ', blocked: null },
+      ]
+    }
+
+    const fee = escortFee(world, other)
     return [
       {
-        topic: 'surrender',
-        say: 'ПРЕКРАТИТЬ ОГОНЬ И СБРОСИТЬ ГРУЗ',
-        // Невредимый пират не бросает добычу. Сначала сбей ему щит.
-        blocked: healthFraction(other) > 0.99 ? 'ОН НЕВРЕДИМ И НЕ СТАНЕТ СЛУШАТЬ' : null,
+        topic: 'escort',
+        say: fee != null ? `НАНИМАЙСЯ КО МНЕ · ${fee} КР` : 'НАНИМАЙСЯ КО МНЕ',
+        blocked:
+          fee == null
+            ? 'НЕ ПОЙДЁТ С ТОБОЙ — СНАЧАЛА ПОМИРИСЬ'
+            : world.credits < fee
+              ? 'НЕ ХВАТАЕТ КРЕДИТОВ'
+              : other.ai?.escortOf === player.id
+                ? 'ОН УЖЕ ИДЁТ С ТОБОЙ'
+                : null,
       },
-      { topic: 'mercy', say: 'ПРОСИТЬ ПОЩАДЫ', blocked: null },
+      { topic: 'plunder', say: 'СБРОСЬ ГРУЗ И ОРУЖИЕ', blocked: null },
+      { topic: 'greet', say: 'ОКЛИКНИ ЕГО', blocked: null },
     ]
-  }
+  })()
 
-  const fee = escortFee(world, other)
-  return [
-    {
-      topic: 'escort',
-      say: fee != null ? `НАНЯТЬ В СОПРОВОЖДЕНИЕ · ${fee} КР` : 'НАНЯТЬ В СОПРОВОЖДЕНИЕ',
-      blocked:
-        fee == null
-          ? 'НЕ ПОЙДЁТ С ТОБОЙ — СНАЧАЛА ПОМИРИСЬ'
-          : world.credits < fee
-            ? 'НЕ ХВАТАЕТ КРЕДИТОВ'
-            : other.ai?.escortOf === player.id
-              ? 'ОН УЖЕ ИДЁТ С ТОБОЙ'
-              : null,
-    },
-    { topic: 'plunder', say: 'СБРОСИТЬ ГРУЗ И ОРУЖИЕ', blocked: null },
-    { topic: 'greet', say: 'ПРИВЕТСТВОВАТЬ', blocked: null },
-  ]
+  return world.docked ? all.filter((l) => !COMBAT_TOPICS.includes(l.topic)) : all
 }
 
 /**

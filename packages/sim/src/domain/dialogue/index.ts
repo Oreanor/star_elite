@@ -5,6 +5,7 @@ export {
   linesFor,
   moodTo,
   say,
+  stanceTo,
   type Line,
   type Mood,
   type Reply,

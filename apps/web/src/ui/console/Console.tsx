@@ -15,7 +15,7 @@ import {
   type World,
 } from '@elite/sim'
 import { currentLang, t, useLang } from '../i18n'
-import { chassisName, economyName, governmentName, properName, speciesName } from '../i18n/dataNames'
+import { chassisName, economyName, governmentName, occupationName, properName, speciesName } from '../i18n/dataNames'
 import { ACCENT, Button, Column, DIM, PilotPortrait, Table } from '../station/chrome'
 import { Hold } from '../station/Hold'
 import { Market } from '../station/Market'
@@ -426,6 +426,12 @@ function DockPlaque({ ship, you, onTalk }: { ship: ShipEntity; you: boolean; onT
         <div className="truncate text-sm tracking-widest" style={{ color: ACCENT }}>
           {you ? t('station.you') : ship.pilotName}
         </div>
+        {/* Род занятий — сразу в манифесте: с кем имеешь дело, видно до разговора. */}
+        {!you && (
+          <div className="truncate text-xs tracking-widest" style={{ color: DIM }}>
+            {occupationName(ship.originKind, ship.faction).toUpperCase()}
+          </div>
+        )}
         <div className="truncate text-xs" style={{ color: DIM }}>
           {chassisName(ship.loadout.chassis.name)}
         </div>

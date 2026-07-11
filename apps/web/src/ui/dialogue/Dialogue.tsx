@@ -10,7 +10,9 @@ import {
   linesFor,
   rememberPilot,
   say,
+  stanceTo,
   type AIOrder,
+  type Relationship,
   type Topic,
 } from '@elite/sim'
 import { useSession } from '../../app/GameContext'
@@ -50,11 +52,18 @@ function outcomeFace(topic: Topic, agreed: boolean): Emotion | null {
 /** Кнопки приказов СВОЕМУ эскорту без цели — работают и без связи (по ним же зовём домен). */
 const ORDER_BUTTONS: { order: AIOrder; say: string }[] = [
   { order: 'engageAll', say: 'ОГОНЬ ПО ВСЕМ' },
-  { order: 'hold', say: 'ЖДАТЬ ТУТ' },
+  { order: 'hold', say: 'ЖДИ ТУТ' },
   { order: 'keepBack', say: 'ДЕРЖИСЬ В ХВОСТЕ' },
   { order: 'standDown', say: 'ОТБОЙ, НЕ СТРЕЛЯЙ' },
   { order: 'resume', say: 'ВОЛЬНО' },
 ]
+
+/** Отношение борта к игроку — одним словом в шапке. Три состояния, как `stanceTo`. */
+const STANCE_WORD: Record<Relationship, string> = {
+  friendly: 'ДРУЖЕЛЮБНЫЙ',
+  neutral: 'НЕЙТРАЛЬНЫЙ',
+  hostile: 'ВРАЖДЕБНЫЙ',
+}
 
 /** Подтверждение приказа строкой в ленте (когда его распознала модель из речи). */
 const ORDER_DONE: Record<AIOrder, string> = {
@@ -110,7 +119,7 @@ export function Dialogue({
   }
 
   const lines = linesFor(world, other)
-  const hostile = other.faction === 'hostile'
+  const stance = stanceTo(world, other)
   // Он затаил претензию за твои попадания и вызвал по связи — можно разрядить словом.
   const owed = hasGrievance(other)
   // Это твой нанятый эскорт — ему отдают приказы послушания, а не торгуются.
@@ -219,10 +228,11 @@ export function Dialogue({
             {/* Имя пилота (`pilotName`), а не роль «Торговец»: в разговоре ты обращаешься
                 к человеку. Оно дано при рождении и есть всегда, до всякого знакомства. */}
             <div className="text-lg tracking-[0.3em]">{other.pilotName.toUpperCase()}</div>
-            {/* Род занятий — СРАЗУ, до всякого приглашения: чтобы не звать в напарники
-                пирата вслепую. Внешне читаемое, метагейма нет. */}
+            {/* Род занятий и ОТНОШЕНИЕ — сразу, до всякого приглашения: чтобы не звать
+                в напарники пирата вслепую. Дистанции нет (разговор бывает и в доке);
+                отношение — одно из трёх честных слов, а не размытое «мирный». */}
             <div className="text-xs tracking-widest" style={{ color: UI.DIM }}>
-              {occupationName(other.originKind, other.faction).toUpperCase()} · {hostile ? 'ВРАЖДЕБНЫЙ' : 'МИРНЫЙ'} · {Math.round(other.state.pos.distanceTo(world.player.state.pos))} М
+              {occupationName(other.originKind, other.faction).toUpperCase()} · {STANCE_WORD[stance]}
             </div>
           </div>
         </div>

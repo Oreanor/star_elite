@@ -200,11 +200,34 @@ function holdSummary(ship: ShipEntity): string {
   return items.length > 6 ? `${shown.join(', ')}…` : shown.join(', ')
 }
 
-/** Роль собеседника: чем он занят и как относится к игроку. */
+/**
+ * Род занятий собеседника по ТИПУ ВСТРЕЧИ (`originKind`) — то, кем он себя знает.
+ * Это его собственная правда о себе, отдельная от того, враждебен ли он ПРЯМО СЕЙЧАС.
+ */
+const OCCUPATION_SELF: Record<string, string> = {
+  trader: 'торговец', convoy: 'торговец', pirate: 'пират', gang: 'пират',
+  raider: 'налётчик', police: 'патрульный', freighter: 'дальнобойщик', platform: 'пират',
+}
+function occupationSelf(other: ShipEntity): string {
+  return (other.originKind && OCCUPATION_SELF[other.originKind]) || 'вольный пилот'
+}
+
+/**
+ * Роль собеседника — чем он занят и как относится к игроку. Главное: он ЗНАЕТ, кто он
+ * на самом деле (род занятий — из `originKind`), даже когда прямо сейчас враждебен.
+ * Пират — разбойник по ремеслу; а вот торговец, что озлобился и вышел грабить, про
+ * себя помнит, что он торговец. Пусть блефует «я матёрый пират», если хочет, — но
+ * правду о себе держит, а не получает её подменённой на «пират» самой игрой.
+ */
 function roleOf(other: ShipEntity, playerId: number): string {
-  if (other.faction === 'hostile') return 'пират, вышел на разбой'
-  if (other.ai?.escortOf === playerId) return 'нанят тобой в сопровождение'
-  return 'мирный торговец на рейсе'
+  const occ = occupationSelf(other)
+  if (other.ai?.escortOf === playerId) return `${occ}, сейчас нанят игроком в сопровождение`
+  if (other.faction === 'hostile') {
+    return occ === 'пират'
+      ? 'пират, вышел на разбой'
+      : `по ремеслу ${occ}, но сейчас враждебен и идёшь на разбой (себя-то ты знаешь)`
+  }
+  return `${occ}, мирный рейс`
 }
 
 function cargoList(ship: ShipEntity): { id: string; name: string; units: number }[] {
