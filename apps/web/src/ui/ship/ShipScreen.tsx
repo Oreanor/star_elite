@@ -6,6 +6,7 @@ import {
   buyHull,
   canBuy,
   canUpgrade,
+  deriveShipSpec,
   fitFromHold,
   freeCapacity,
   isEssential,
@@ -265,47 +266,80 @@ function SlotGrid({
 }
 
 /**
- * Верфь корпусов: возьми другой корабль. Отдельная вкладка станции. Плитка на корпус —
- * имя, характеристики (корпус, масса, вёрткость) и цена (пока «даром»); на текущем стоит
- * метка. Взял — домен меняет сборку целиком, `bump` перерисовывает панель: чертёж, статы
- * и сетка модулей на вкладке «КОРАБЛЬ» тут же становятся от нового корабля.
+ * Верфь корпусов: отдельная вкладка станции. Слева — крутящийся чертёж ВЫБРАННОГО
+ * корпуса и его паспорт (тот же `deriveShipSpec`, что и у живого корабля, только для
+ * стоковой сборки предложения); справа — плитки корпусов. Клик по плитке лишь ВЫБИРАЕТ
+ * корпус для показа, а ставит его отдельная кнопка «взять»: сперва разгляди модель,
+ * потом бери. Взял — домен меняет сборку целиком, `bump` перерисовывает всю панель.
  */
 export function HullShop({ world, onChange }: { world: World; onChange: () => void }) {
   const currentId = world.player.loadout.chassis.id
+  // Показываем сперва тот корпус, на котором летим. Клик по плитке — сменить показ.
+  const [selectedId, setSelectedId] = useState(currentId)
+  const selected = SHIPYARD.find((o) => o.chassis.id === selectedId) ?? SHIPYARD[0]!
+  const owned = selected.chassis.id === currentId
+  // Паспорт стоковой сборки предложения — та же чистая функция, что кормит живой корабль.
+  const spec = useMemo(() => deriveShipSpec(selected.loadout()), [selected])
+
   return (
     <section className="border p-5" style={{ borderColor: DIM }}>
       <h2 className="mb-3 text-sm tracking-[0.3em]">{t('ship.hulls')}</h2>
-      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4">
-        {SHIPYARD.map((offer) => {
-          const owned = offer.chassis.id === currentId
-          const c = offer.chassis
-          return (
-            <button
-              key={c.id}
-              type="button"
-              disabled={owned}
-              onClick={() => {
-                if (buyHull(world, offer.loadout(), offer.cost) === null) onChange()
-              }}
-              className={`flex flex-col gap-1 border p-3 text-left transition-colors ${
-                owned ? 'cursor-default' : 'cursor-pointer hover:border-[#7fd6ff] hover:bg-[#7fd6ff]/10'
-              }`}
-              style={{ borderColor: owned ? ACCENT : DIM }}
-            >
-              <span className="text-sm leading-tight" style={{ color: ACCENT }}>
-                {chassisName(c.name)}
-              </span>
-              {/* Голое шасси: корпус и масса — с завода, до модулей. Пилоту важно
-                  сравнить корпуса между собой, а не увидеть точный паспорт со сборкой. */}
-              <span className="text-[0.7rem]" style={{ color: DIM }}>
-                {formatStat('hull', c.baseHull)} · {formatStat('mass', c.baseMass)}
-              </span>
-              <span className="text-[0.7rem]" style={{ color: owned ? ACCENT : DIM }}>
-                {owned ? t('ship.current') : offer.cost === 0 ? t('ship.free') : credits(offer.cost)}
-              </span>
-            </button>
-          )
-        })}
+      <div className="grid gap-5 lg:grid-cols-[minmax(0,18rem)_1fr]">
+        {/* Слева — чертёж выбранного корпуса, под ним паспорт и кнопка «взять». */}
+        <div className="space-y-3">
+          <div
+            className="aspect-[15/8] w-full border"
+            style={{
+              borderColor: DIM,
+              background: 'radial-gradient(ellipse at center, rgba(20,44,74,0.35), rgba(2,6,12,0.6))',
+            }}
+          >
+            <Blueprint chassisId={selected.chassis.id} />
+          </div>
+          <Stats spec={spec} name={chassisName(selected.chassis.name)} />
+          <Button
+            disabled={owned}
+            onClick={() => {
+              if (buyHull(world, selected.loadout(), selected.cost) === null) onChange()
+            }}
+          >
+            {owned
+              ? t('ship.current')
+              : `${t('ship.take')} · ${selected.cost === 0 ? t('ship.free') : credits(selected.cost)}`}
+          </Button>
+        </div>
+
+        {/* Справа — плитки корпусов. Клик выбирает для показа, не покупает. */}
+        <div className="grid grid-cols-2 gap-2.5 self-start sm:grid-cols-3">
+          {SHIPYARD.map((offer) => {
+            const c = offer.chassis
+            const isCurrent = c.id === currentId
+            const isSelected = c.id === selectedId
+            return (
+              <button
+                key={c.id}
+                type="button"
+                onClick={() => setSelectedId(c.id)}
+                className="flex cursor-pointer flex-col gap-1 border p-3 text-left transition-colors hover:border-[#7fd6ff] hover:bg-[#7fd6ff]/10"
+                style={{
+                  borderColor: isSelected ? ACCENT : DIM,
+                  backgroundColor: isSelected ? 'rgba(127,214,255,0.08)' : 'transparent',
+                }}
+              >
+                <span className="text-sm leading-tight" style={{ color: ACCENT }}>
+                  {chassisName(c.name)}
+                </span>
+                {/* Голое шасси: корпус и масса — с завода, до модулей. Для сравнения корпусов. */}
+                <span className="text-[0.7rem]" style={{ color: DIM }}>
+                  {formatStat('hull', c.baseHull)} · {formatStat('mass', c.baseMass)}
+                </span>
+                <span className="text-[0.7rem]" style={{ color: isCurrent ? ACCENT : DIM }}>
+                  {isCurrent ? t('ship.current') : offer.cost === 0 ? t('ship.free') : credits(offer.cost)}
+                </span>
+              </button>
+            )
+          })}
+        </div>
       </div>
     </section>
   )

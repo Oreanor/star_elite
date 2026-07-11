@@ -284,6 +284,7 @@ export const RU = {
   'ship.hulls': 'КОРПУСА',
   'ship.free': 'даром',
   'ship.current': 'вы на нём',
+  'ship.take': 'ВЗЯТЬ КОРПУС',
   'ship.selectSlot': 'Выбери модуль слева — почини, замени или улучши его.',
   'ship.modules.internal': 'ВНУТРЕННИЕ МОДУЛИ',
   'ship.modules.weapons': 'ОРУДИЯ',
