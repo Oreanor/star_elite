@@ -38,6 +38,7 @@ export {
   markContactLost,
 } from './acquaintance'
 export { maybeShiftOrigin } from './origin'
+export { pickFreeSpawn, isFreeSpawn } from './spawn'
 export { cycleTarget, findBody, findShip, hostilesOf, incomingMissile, nearestPod } from './queries'
 export { stepTraffic, spawnResidentContacts } from './traffic'
 export { spawnTitan, stepTitans, titanCount } from './titans'
