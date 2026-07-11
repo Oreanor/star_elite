@@ -14,6 +14,13 @@ export {
 } from './entities'
 export { enterSystem, createWorld, makeShip, refreshSpec } from './factory'
 export { createIdSource, type IdSource } from './ids'
+export {
+  type Persona,
+  type Disposition,
+  DISPOSITIONS,
+  DEFAULT_PERSONA,
+  makePersona,
+} from './persona'
 export { maybeShiftOrigin } from './origin'
 export { cycleTarget, findBody, findShip, hostilesOf, incomingMissile, nearestPod } from './queries'
 export { stepTraffic } from './traffic'

@@ -152,7 +152,7 @@ function spawnOne(world: World, kind: EncounterKind, pos: Vector3, home: Vector3
     _offset.copy(home).sub(pos).normalize(),
   )
 
-  const ship = makeShip(world.ids, kind.faction, kind.name, kind.loadout(), pos.clone(), quat)
+  const ship = makeShip(world.ids, kind.faction, kind.name, kind.loadout(), pos.clone(), quat, world.rng)
   // Дом — не место рождения, а НАЗНАЧЕНИЕ: патрульный круг бота вьётся вокруг дома,
   // значит корабль сперва долетит до цели, а уже там начнёт кружить.
   ship.ai = createAIState(home, world.rng)
@@ -186,7 +186,7 @@ function spawnEscort(world: World, escort: NonNullable<EncounterKind['escort']>,
   for (let i = 0; i < escort.count; i++) {
     randomDirection(world, _offset).multiplyScalar(patron.spec.hull.radius * 2 + world.rng() * TRAFFIC.GROUP_SPREAD)
     const pos = _scratch.copy(patron.state.pos).add(_offset)
-    const ship = makeShip(world.ids, escort.faction, 'Эскорт', escort.loadout(), pos.clone(), patron.state.quat.clone())
+    const ship = makeShip(world.ids, escort.faction, 'Эскорт', escort.loadout(), pos.clone(), patron.state.quat.clone(), world.rng)
     ship.ai = createAIState(patron.state.pos, world.rng)
     ship.ai.escortOf = patron.id
     ship.controls.throttle = 0.7

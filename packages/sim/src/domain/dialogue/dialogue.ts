@@ -100,6 +100,32 @@ function surrender(world: World, other: ShipEntity): void {
   }
 }
 
+/** Эффект пощады: гружёный игрок откупается трюмом, а собеседник отступает. */
+function grantMercy(world: World, other: ShipEntity): void {
+  if (world.player.hold.items.length > 0) jettisonCargo(world, world.player)
+  surrender(world, other)
+}
+
+/** Эффект разбоя: сбросить груз и оружие торговца, снять его с сопровождения. */
+function plunderEffect(world: World, other: ShipEntity): { cargo: number; guns: number } {
+  const cargo = jettisonCargo(world, other)
+  const guns = jettisonWeapons(world, other)
+  if (other.ai) other.ai.escortOf = null
+  return { cargo, guns }
+}
+
+/** Эффект найма: плата вперёд, наёмник встаёт в строй. false — не хватило денег. */
+function hireEscortEffect(world: World, other: ShipEntity): boolean {
+  if (world.credits < DIALOGUE.ESCORT_FEE) return false
+  world.credits -= DIALOGUE.ESCORT_FEE
+  other.ai ??= createAIState(other.state.pos, world.rng)
+  other.ai.escortOf = world.player.id
+  other.ai.skill = DIALOGUE.ESCORT_SKILL
+  other.ai.targetId = null
+  other.ai.orderedTargetId = null
+  return true
+}
+
 function askSurrender(world: World, other: ShipEntity): Reply {
   // Чем сильнее избит, тем охотнее бросает добычу. Целый не сдаётся вовсе.
   const chance = (1 - healthFraction(other)) * DIALOGUE.SURRENDER_GAIN
@@ -127,14 +153,10 @@ function begMercy(world: World, other: ShipEntity): Reply {
 
   if (world.rng() >= chance) return { text: 'ПОЗДНО. ТЫ УЖЕ МЁРТВ.', agreed: false }
 
-  if (laden) {
-    jettisonCargo(world, player)
-    surrender(world, other)
-    return { text: 'ГРУЗ ЗА БОРТ — И ЛЕТИ. МНЕ ХВАТИТ.', agreed: true }
-  }
-
-  surrender(world, other)
-  return { text: 'С ТЕБЯ И ВЗЯТЬ НЕЧЕГО. УБИРАЙСЯ.', agreed: true }
+  grantMercy(world, other)
+  return laden
+    ? { text: 'ГРУЗ ЗА БОРТ — И ЛЕТИ. МНЕ ХВАТИТ.', agreed: true }
+    : { text: 'С ТЕБЯ И ВЗЯТЬ НЕЧЕГО. УБИРАЙСЯ.', agreed: true }
 }
 
 /**
@@ -146,10 +168,7 @@ function plunder(world: World, other: ShipEntity): Reply {
     return { text: 'ПОШЁЛ ПРОЧЬ. Я ВЫЗЫВАЮ ОХРАНУ.', agreed: false }
   }
 
-  const cargo = jettisonCargo(world, other)
-  const guns = jettisonWeapons(world, other)
-  if (other.ai) other.ai.escortOf = null
-
+  const { cargo, guns } = plunderEffect(world, other)
   return {
     text: cargo + guns > 0 ? 'ЗАБИРАЙ ВСЁ. ТОЛЬКО НЕ СТРЕЛЯЙ.' : 'У МЕНЯ НИЧЕГО НЕТ. ПУСТОЙ ИДУ.',
     agreed: true,
@@ -162,15 +181,7 @@ function plunder(world: World, other: ShipEntity): Reply {
  * а не бьёт слабее. Слабость пилота, а не поблажка физики.
  */
 function hireEscort(world: World, other: ShipEntity): Reply {
-  if (world.credits < DIALOGUE.ESCORT_FEE) return { text: 'ПОКАЖИ ДЕНЬГИ.', agreed: false }
-
-  world.credits -= DIALOGUE.ESCORT_FEE
-  other.ai ??= createAIState(other.state.pos, world.rng)
-  other.ai.escortOf = world.player.id
-  other.ai.skill = DIALOGUE.ESCORT_SKILL
-  other.ai.targetId = null
-  other.ai.orderedTargetId = null
-
+  if (!hireEscortEffect(world, other)) return { text: 'ПОКАЖИ ДЕНЬГИ.', agreed: false }
   return { text: 'ДЕНЬГИ ВПЕРЁД — И Я ТВОЙ. ВЕДИ.', agreed: true }
 }
 
@@ -195,5 +206,30 @@ export function say(world: World, other: ShipEntity, topic: Topic): Reply {
     case 'plunder': return plunder(world, other)
     case 'escort': return hireEscort(world, other)
     case 'greet': return greet(other)
+  }
+}
+
+/**
+ * Применить ИСХОД, о котором собеседник уже договорился словами (свободный чат
+ * через модель). Кость здесь НЕ бросается: согласие принял характер собеседника,
+ * а не генератор, — дело домена лишь честно сменить состояние мира, ровно как по
+ * кнопке. Возвращает, удалось ли: жёсткие правила (деньги на эскорт) домен всё
+ * равно стережёт, сколько бы модель ни кивала.
+ *
+ * `greet` и разговоры о погоде мир не трогают — они не доходят сюда: чат зовёт
+ * `applyOutcome` только на пойманное действие, а на болтовню просто показывает текст.
+ */
+export function applyOutcome(world: World, other: ShipEntity, topic: Topic): boolean {
+  // Реплика может быть недоступна тому, кто её «сказал»: торговец не сдаётся,
+  // враг не нанимается. Список доступного считает домен — на него и опираемся.
+  const line = linesFor(world, other).find((l) => l.topic === topic)
+  if (!line || line.blocked !== null) return false
+
+  switch (topic) {
+    case 'surrender': surrender(world, other); return true
+    case 'mercy': grantMercy(world, other); return true
+    case 'plunder': plunderEffect(world, other); return true
+    case 'escort': return hireEscortEffect(world, other)
+    case 'greet': return true
   }
 }

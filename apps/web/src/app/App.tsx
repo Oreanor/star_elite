@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { interlocutor, jumpBlock, undock } from '@elite/sim'
 import { GameProvider, useSession } from './GameContext'
 import { jumping, startDepart } from './control/jumpFx'
+import { negotiate, negotiatorAvailable } from './control/negotiator'
 import { Game } from './Game'
 import { TitleStars } from './TitleStars'
 import { input, releaseLock, requestLock } from '../platform/input/input'
@@ -131,6 +132,10 @@ function Shell({ onRestart }: { onRestart: () => void }) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.repeat || over) return
+      // Набор текста в поле (чат переговоров) не должен дёргать горячие клавиши:
+      // «t» в реплике иначе положил бы трубку. Escape в поле пусть закрывает как всегда.
+      const el = e.target as HTMLElement | null
+      if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') && e.code !== 'Escape') return
       // Пока идёт кино прыжка — клавиши молчат: ни консоли, ни второго прыжка.
       if (jumping()) return
 
@@ -183,7 +188,7 @@ function Shell({ onRestart }: { onRestart: () => void }) {
       {over ? (
         <GameOver score={session.world.score} onRestart={onRestart} />
       ) : talking ? (
-        <Dialogue onClose={closeTalk} />
+        <Dialogue onClose={closeTalk} negotiate={negotiate} chatAvailable={negotiatorAvailable()} />
       ) : docked || tab !== null ? (
         // Одна консоль и в полёте, и у причала: планета, корабль, груз, карты (плюс
         // верфь и магазин у причала). «Открыть карту» — раскрыть эту панель на нужной

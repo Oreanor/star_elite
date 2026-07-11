@@ -19,6 +19,7 @@ import type {
   World,
 } from './entities'
 import { createIdSource, type IdSource } from './ids'
+import { DEFAULT_PERSONA, makePersona } from './persona'
 import { maybeShiftOrigin } from './origin'
 import { stepOrbits } from './orbits'
 import { placeShowcaseTitans } from './titans'
@@ -40,6 +41,8 @@ export function makeShip(
   loadout: Loadout,
   pos: Vector3,
   quat: Quaternion,
+  /** Раздать личность из этого генератора. Без него — ровная персона (тесты, дрон). */
+  rng?: Rng,
 ): ShipEntity {
   const hold = createHold(0)
   const spec = deriveShipSpec(loadout, cargoMass(hold))
@@ -83,6 +86,7 @@ export function makeShip(
     clearance: false,
     droneOf: null,
     dieAt: null,
+    persona: rng ? makePersona(rng) : DEFAULT_PERSONA,
   }
 }
 
@@ -329,6 +333,7 @@ function makePatrols(rng: Rng, ids: IdSource, def: SystemDef): ShipEntity[] {
         leader ? pirateLeaderLoadout() : pirateLoadout(),
         pos,
         quat,
+        rng,
       )
       ship.ai = createAIState(pos, rng)
       ships.push(ship)
@@ -441,6 +446,7 @@ export function createWorld(def: SystemDef = STARTER_SYSTEM): World {
     playerStartLoadout(),
     new Vector3(...def.playerStart),
     new Quaternion(),
+    rng,
   )
   // Стартуем на ходу: висеть в пустоте — плохое первое впечатление.
   player.controls.throttle = WORLD.START_THROTTLE

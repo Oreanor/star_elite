@@ -4,7 +4,7 @@ import { COMMODITIES } from '../cargo'
 import { addCommodity } from '../cargo/hold'
 import { createWorld, STARTER_SYSTEM, type World } from '../world'
 import type { ShipEntity } from '../world/entities'
-import { interlocutor, linesFor, say } from './dialogue'
+import { applyOutcome, interlocutor, linesFor, say } from './dialogue'
 
 /**
  * Разговор — правило, а не окно. Всё проверяется без браузера: если для теста
@@ -178,5 +178,48 @@ describe('разговор', () => {
     expect(other.ai!.skill).toBeLessThan(1)
     expect(other.loadout.weapons.filter(Boolean).length).toBe(guns)
     expect(other.spec.tuning).toEqual(world.ships[0]!.spec.tuning)
+  })
+
+  /**
+   * Свободный чат: согласие принял характер собеседника (через модель), не кость.
+   * `applyOutcome` меняет мир ровно как кнопка, но без броска — и всё равно
+   * стережёт жёсткие правила домена.
+   */
+  describe('исход без броска (чат)', () => {
+    it('избитый пират сдаётся без всякого броска', () => {
+      const { world, other } = withShip('hostile')
+      other.hull = other.spec.hull.hull * 0.5 // не >99%, значит реплика не заблокирована
+      // Бросок гарантированно провалил бы кнопку, но чат кости не кидает.
+      rig(world, 1)
+      expect(applyOutcome(world, other, 'surrender')).toBe(true)
+      expect(other.faction).toBe('neutral')
+    })
+
+    it('невредимого пирата не уговорить и словами: домен стережёт', () => {
+      const { world, other } = withShip('hostile') // полный корпус → surrender заблокирован
+      expect(applyOutcome(world, other, 'surrender')).toBe(false)
+      expect(other.faction).toBe('hostile')
+    })
+
+    it('эскорт словами всё равно требует денег вперёд', () => {
+      const poor = withShip('neutral')
+      poor.world.credits = DIALOGUE.ESCORT_FEE - 1
+      expect(applyOutcome(poor.world, poor.other, 'escort')).toBe(false)
+
+      const rich = withShip('neutral')
+      rich.world.credits = DIALOGUE.ESCORT_FEE + 50
+      expect(applyOutcome(rich.world, rich.other, 'escort')).toBe(true)
+      expect(rich.world.credits).toBe(50)
+      expect(rich.other.ai?.escortOf).toBe(rich.world.player.id)
+    })
+
+    it('разбой словами берёт даже целого торговца: не только с позиции силы', () => {
+      const { world, other } = withShip('neutral') // невредим — кнопка послала бы
+      other.hold.capacity = 10
+      addCommodity(other.hold, COMMODITIES.FOOD, 2)
+      expect(applyOutcome(world, other, 'plunder')).toBe(true)
+      expect(other.hold.items.length).toBe(0)
+      expect(other.loadout.weapons.every((w) => w === null)).toBe(true)
+    })
   })
 })

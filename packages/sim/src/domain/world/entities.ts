@@ -10,6 +10,7 @@ import type { Loadout, MissileModule, ShipSpec } from '../loadout'
 import type { AIState } from '../ai/types'
 import type { CruiseState } from '../cruise/drive'
 import type { IdSource } from './ids'
+import type { Persona } from './persona'
 
 export type Faction = 'player' | 'hostile' | 'neutral' | 'police'
 
@@ -95,6 +96,9 @@ export interface ShipEntity {
   droneOf: number | null
   /** Момент самоликвидации по `world.time`. `null` — живёт, пока не собьют. */
   dieAt: number | null
+
+  /** Личность пилота: нрав и черты для торга. Данные, не логика. */
+  persona: Persona
 }
 
 export interface AsteroidEntity {
