@@ -1,22 +1,25 @@
 import { useFrame } from '@react-three/fiber'
-import { useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import {
   BufferAttribute,
   BufferGeometry,
+  Color,
   IcosahedronGeometry,
+  InstancedBufferAttribute,
   InstancedMesh,
   LineSegments,
   Object3D,
   Vector3,
 } from 'three'
 import { useSession } from '../../app/GameContext'
-import { LASER, LASER_GLOW, LASER_GLOW_FALLBACK } from '../config'
+import { LASER, LASER_GLOW, LASER_GLOW_FALLBACK, WARP_FLASH } from '../config'
 import {
   explosionMaterial,
   missileMaterial,
   podMaterial,
   tracerMaterial,
   tractorMaterial,
+  warpFlashMaterial,
 } from '../materials/materials'
 import { missileGeometry } from '../geometry/ships'
 import { boltGeometry, podGeometry } from '../geometry/props'
@@ -34,6 +37,7 @@ const MAX_MISSILES = 24
 const _dummy = new Object3D()
 const _nose = new Vector3()
 const _muzzle = new Vector3()
+const _warpTint = /* @__PURE__ */ new Color()
 
 const _dir = new Vector3()
 const _mid = new Vector3()
@@ -161,6 +165,73 @@ export function Explosions() {
   })
 
   return <instancedMesh ref={ref} args={[geometry, material, MAX_EXPLOSIONS]} frustumCulled={false} />
+}
+
+/**
+ * Вспышки гиперперехода. Домен заполняет `world.warps` при прыжке НПС и сам их
+ * гасит по `WARP.FLASH_LIFE`; рендер лишь рисует свечение в точке прыжка.
+ *
+ * Один `InstancedMesh` на все вспышки — один вызов отрисовки. Яркость и тон каждой
+ * приходят инстансным цветом: материал общий, но аддитив домножает его на цвет
+ * инстанса, поэтому каждая вспышка гаснет отдельно, без своего шейдера.
+ *
+ * Прибытие и уход различаются и цветом, и жестом: прибывший вспыхивает и
+ * разлетается наружу, уходящий — схлопывается к точке прыжка.
+ */
+export function WarpFlashes() {
+  const session = useSession()
+  const ref = useRef<InstancedMesh>(null)
+
+  const geometry = useMemo(() => new IcosahedronGeometry(1, 0), [])
+  const material = useMemo(warpFlashMaterial, [])
+  // Буфер цветов выделяется один раз, как и меш: в кадре меняются только числа.
+  const colors = useMemo(() => new InstancedBufferAttribute(new Float32Array(WARP_FLASH.MAX * 3), 3), [])
+
+  // instanceColor рождается лишь первым setColorAt; привязываем свой буфер до кадра,
+  // иначе первая вспышка мигнёт белым.
+  useEffect(() => {
+    const mesh = ref.current
+    if (mesh) mesh.instanceColor = colors
+  }, [colors])
+
+  useFrame(() => {
+    const mesh = ref.current
+    if (!mesh) return
+
+    const now = session.world.time
+    let count = 0
+
+    for (const flash of session.world.warps) {
+      if (count >= WARP_FLASH.MAX) break
+      const age = (now - flash.born) / WARP_FLASH.LIFE // 0..1 за время жизни
+      if (age < 0 || age > 1) continue
+
+      _dummy.position.copy(flash.pos)
+      if (flash.arriving) {
+        // Прибытие: короткая вспышка, затем разлёт наружу.
+        _dummy.scale.setScalar(WARP_FLASH.SIZE * (0.35 + age * 1.3))
+        _warpTint.set(WARP_FLASH.ARRIVE_COLOR)
+      } else {
+        // Уход: схлопывание к точке прыжка.
+        _dummy.scale.setScalar(WARP_FLASH.SIZE * (1.35 - age * 1.2))
+        _warpTint.set(WARP_FLASH.DEPART_COLOR)
+      }
+      _dummy.rotation.set(age * 4, age * 3, 0)
+      _dummy.updateMatrix()
+      mesh.setMatrixAt(count, _dummy.matrix)
+
+      // Ранний пик, резкий спад: аддитив несёт яркость в цвете инстанса.
+      const glow = (1 - age) * (1 - age)
+      mesh.setColorAt(count, _warpTint.multiplyScalar(glow))
+      count++
+    }
+
+    mesh.count = count
+    mesh.instanceMatrix.needsUpdate = true
+    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true
+  })
+
+  return <instancedMesh ref={ref} args={[geometry, material, WARP_FLASH.MAX]} frustumCulled={false} />
 }
 
 export function CargoPods() {

@@ -3,6 +3,7 @@ export { activeDrones, expireDrones, isDroneShip, launchDrone } from './drones'
 export { bombReady, fireBomb, regenBomb } from './bomb'
 export { resolveShipVsSphere } from './collision'
 export { applyDamage, healthFraction, regenShield, shieldFraction } from './damage'
+export { defuseGrievance, hasGrievance, pendingHail, provoke, registerPlayerHit, stepGrievances } from './grievance'
 export { energyFraction, fireEcm, regenEnergy } from './ecm'
 export { spawnExplosion, spawnShockwave, spawnTracer } from './effects'
 export { chargeHyperdrive, scooping, starExposure, stepStarHeat } from './starheat'
@@ -16,6 +17,7 @@ export {
   jettisonCargo,
   jettisonWeapons,
   spawnOrePod,
+  spawnCommodityPods,
   scoopBlock,
   scoopReadiness,
   spawnWreckage,

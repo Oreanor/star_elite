@@ -2,17 +2,23 @@ import { Quaternion, Vector3 } from 'three'
 import { freighterLoadout, pirateLeaderLoadout, pirateLoadout, traderLoadout } from '../../config/loadouts'
 import { NPC_DOCK } from '../../config/station'
 import { TITAN } from '../../config/titans'
+import { PLATFORM } from '../../config/platform'
 import { TRAFFIC } from '../../config/world'
 import { signed, type Rng } from '../../core/math'
 import type { Loadout } from '../loadout'
 import { createAIState } from '../ai/types'
 import { recurringAcquaintance } from './acquaintance'
+import { spawnPlatform } from './platforms'
+import { spawnWarpFlash } from './warp'
 import { addCommodity } from '../cargo/hold'
 import { COMMODITIES } from '../cargo/items'
 import { isDroneShip } from '../combat/drones'
 import { makeShip, refreshSpec } from './factory'
 import { spawnTitan, titanCount } from './titans'
-import type { Faction, ShipEntity, World } from './entities'
+import type { BodyEntity, Faction, ShipEntity, World } from './entities'
+
+/** Направление ворот причала: завсегдатаи заходят на стыковку с этой стороны. */
+const _gateDir = new Vector3(NPC_DOCK.GATE[0], NPC_DOCK.GATE[1], NPC_DOCK.GATE[2]).normalize()
 
 /**
  * Встречи в космосе.
@@ -48,7 +54,18 @@ interface EncounterKind {
   readonly loadout: () => Loadout
   readonly min: number
   readonly max: number
+  /** Базовый вес в середине пути. Смещается `farBias` по удалённости от цивилизации. */
   readonly weight: number
+  /**
+   * Как удалённость от обитаемого мира двигает шанс встречи, −1..+1.
+   *
+   * Космос у станции патрулируется и полон торговцев; в пустоте между мирами
+   * закон не достаёт, и там кормится пират. Поэтому вес не постоянный: у самого
+   * причала (`r→0`) он умножается на `1 − farBias`, в глубокой пустоте (`r→1`) —
+   * на `1 + farBias`. Пирату ставим плюс (дальше — чаще), торговцу и патрулю минус
+   * (жмутся к обитаемому). На полпути (`r=0.5`) вес равен базовому — отсюда и число.
+   */
+  readonly farBias: number
   readonly approach: boolean
   /** Тонн товара в трюме. Груз высыпается при гибели — ради него и нападают. */
   readonly cargo?: number
@@ -56,34 +73,60 @@ interface EncounterKind {
   readonly escort?: { readonly count: number; readonly loadout: () => Loadout; readonly faction: Faction }
 }
 
-const ENCOUNTERS: readonly EncounterKind[] = [
-  { id: 'trader', faction: 'neutral', name: 'Торговец', loadout: traderLoadout, min: 1, max: 1, weight: 36, approach: false },
-  { id: 'convoy', faction: 'neutral', name: 'Караван', loadout: traderLoadout, min: 2, max: 3, weight: 13, approach: false },
-  { id: 'pirate', faction: 'hostile', name: 'Пират', loadout: pirateLoadout, min: 1, max: 2, weight: 22, approach: true },
-  { id: 'gang', faction: 'hostile', name: 'Стая', loadout: pirateLoadout, min: 3, max: 4, weight: 6, approach: true },
-  { id: 'raider', faction: 'hostile', name: 'Налётчик', loadout: pirateLeaderLoadout, min: 1, max: 1, weight: 8, approach: true },
-  { id: 'police', faction: 'police', name: 'Патруль', loadout: pirateLeaderLoadout, min: 1, max: 2, weight: 16, approach: false },
+export const ENCOUNTERS: readonly EncounterKind[] = [
+  { id: 'trader', faction: 'neutral', name: 'Торговец', loadout: traderLoadout, min: 1, max: 1, weight: 36, farBias: -0.5, approach: false },
+  { id: 'convoy', faction: 'neutral', name: 'Караван', loadout: traderLoadout, min: 2, max: 3, weight: 13, farBias: -0.5, approach: false },
+  { id: 'pirate', faction: 'hostile', name: 'Пират', loadout: pirateLoadout, min: 1, max: 2, weight: 22, farBias: 0.9, approach: true },
+  { id: 'gang', faction: 'hostile', name: 'Стая', loadout: pirateLoadout, min: 3, max: 4, weight: 6, farBias: 0.9, approach: true },
+  { id: 'raider', faction: 'hostile', name: 'Налётчик', loadout: pirateLeaderLoadout, min: 1, max: 1, weight: 8, farBias: 0.9, approach: true },
+  { id: 'police', faction: 'police', name: 'Патруль', loadout: pirateLeaderLoadout, min: 1, max: 2, weight: 16, farBias: -0.6, approach: false },
   // Тяжёлый грузовик под прикрытием звена. Неповоротлив и набит товаром: сбей —
   // и высыпется весь трюм. Эскорт полицейский: он сам ищет налётчиков рядом с баржей.
   {
     id: 'freighter', faction: 'neutral', name: 'Грузовик', loadout: freighterLoadout,
-    min: 1, max: 1, weight: 7, approach: false, cargo: 140,
+    min: 1, max: 1, weight: 7, farBias: -0.4, approach: false, cargo: 140,
     escort: { count: 3, loadout: pirateLeaderLoadout, faction: 'police' },
   },
 ]
 
 const _scratch = new Vector3()
 const _offset = new Vector3()
+const _site = new Vector3()
 
-function weightedPick(rng: Rng, table: readonly EncounterKind[]): EncounterKind {
+/** Вес встречи с поправкой на удалённость: у станции — торговцы и патруль, в пустоте — пираты. */
+export function biasedWeight(kind: EncounterKind, remoteness: number): number {
+  // r=0 → множитель (1−farBias), r=1 → (1+farBias), линейно между. Пол 0.02, чтобы
+  // редкая встреча совсем не исчезала: пират у станции возможен, просто почти небывал.
+  return Math.max(0.02, kind.weight * (1 + kind.farBias * (2 * remoteness - 1)))
+}
+
+function weightedPick(rng: Rng, table: readonly EncounterKind[], remoteness: number): EncounterKind {
   let total = 0
-  for (const kind of table) total += kind.weight
+  for (const kind of table) total += biasedWeight(kind, remoteness)
   let roll = rng() * total
   for (const kind of table) {
-    roll -= kind.weight
+    roll -= biasedWeight(kind, remoteness)
     if (roll <= 0) return kind
   }
   return table[table.length - 1]!
+}
+
+/**
+ * Насколько глухое место, 0..1. Ноль — у обитаемого мира или причала, единица —
+ * пустота между мирами. Меряется по ближайшему НАСЕЛЁННОМУ телу (станция или мир
+ * с населением): закон и торговля жмутся к жилью, а не к любой каменюке. Если в
+ * системе жить негде вовсе — она вся фронтир, и всюду единица.
+ */
+export function remoteness(world: World): number {
+  let nearest = Infinity
+  for (const body of world.bodies) {
+    const inhabited = body.kind === 'station' || body.population > 0
+    if (!inhabited) continue
+    const altitude = Math.max(0, body.pos.distanceTo(world.player.state.pos) - body.radius)
+    if (altitude < nearest) nearest = altitude
+  }
+  if (!Number.isFinite(nearest)) return 1
+  return nearest / (nearest + TRAFFIC.QUIET_RANGE)
 }
 
 /** Единичный вектор в случайную сторону. Записывает в `out`. */
@@ -217,7 +260,9 @@ function spawnRecurring(world: World): ShipEntity[] | null {
   const ship = spawnOne(world, kind, centre, home)
 
   // Возвращаем именно того пилота: имя, характер, фракция — из записи, не заново.
+  // Знакомого узнаём сразу: открытое имя ставим и в отображаемое, и в истинное.
   ship.name = rec.name
+  ship.pilotName = rec.name
   ship.persona = rec.persona
   ship.faction = rec.faction
   ship.acquaintanceId = rec.id
@@ -227,10 +272,19 @@ function spawnRecurring(world: World): ShipEntity[] | null {
 
 /** Одна встреча: от одиночки до стаи. Возвращает всех, кому нужен пилот. */
 function spawnEncounter(world: World): ShipEntity[] {
+  const born = bornEncounter(world)
+  // Приход в систему видно со стороны: на месте появления — вспышка перехода.
+  // Одна на группу, в её центре: звено выходит из прыжка вместе, а не поштучно.
+  const lead = born[0]
+  if (lead) spawnWarpFlash(world, lead.state.pos, true)
+  return born
+}
+
+function bornEncounter(world: World): ShipEntity[] {
   const recurring = spawnRecurring(world)
   if (recurring) return recurring
 
-  const kind = weightedPick(world.rng, ENCOUNTERS)
+  const kind = weightedPick(world.rng, ENCOUNTERS, remoteness(world))
   const count = kind.min + Math.floor(world.rng() * (kind.max - kind.min + 1))
 
   const centre = new Vector3()
@@ -264,6 +318,77 @@ function spawnEncounter(world: World): ShipEntity[] {
 }
 
 /**
+ * Сколько бортов сейчас В ЦИКЛЕ причала — заходят или стоят. Это и есть «жизнь»
+ * станции: не декорация, а реальные корабли в общей стыковке. Отстоявшийся уходит
+ * (`dock='done'`) и из счёта выпадает — тогда приток добирает норму заново.
+ */
+function stationRegulars(world: World): number {
+  return world.ships.filter(
+    (s) => s.alive && !isDroneShip(s) && s.faction === 'neutral' && (s.ai?.dock === 'inbound' || s.ai?.dock === 'berthed'),
+  ).length
+}
+
+/** Родить одного завсегдатая: торговец заходит на стыковку со стороны ворот. Trader — ENCOUNTERS[0]. */
+function spawnStationRegular(world: World, station: BodyEntity): ShipEntity {
+  // Заход со стороны ворот, с небольшим разбросом, чтобы пара не сыпалась из точки.
+  _scratch.copy(_gateDir).addScaledVector(randomDirection(world, _offset), 0.35).normalize()
+  const pos = _site.copy(station.pos).addScaledVector(_scratch, station.radius + TRAFFIC.STATION_APPROACH)
+  const ship = spawnOne(world, ENCOUNTERS[0]!, pos, _offset.copy(station.pos))
+  if (ship.ai) ship.ai.dock = 'inbound'
+  return ship
+}
+
+/**
+ * Поддержать жизнь у причала, пока игрок рядом со станцией: держим у неё несколько
+ * заходящих на стыковку. Новоприбывший тут же считается `inbound`, поэтому за кадр
+ * добавляем не больше одного — перебора нет, а число само доберёт норму и удержит её
+ * по мере того, как отстоявшиеся уходят. Возвращает родившихся: им нужен пилот.
+ */
+function stepStationLife(world: World): ShipEntity[] {
+  const station = world.bodies.find((b) => b.kind === 'station')
+  if (!station) return []
+  if (station.pos.distanceTo(world.player.state.pos) > TRAFFIC.STATION_LIFE_RANGE) return []
+  if (stationRegulars(world) >= TRAFFIC.STATION_REGULARS) return []
+  if (trafficCount(world) >= TRAFFIC.MAX) return []
+  return [spawnStationRegular(world, station)]
+}
+
+/**
+ * Чужой бой в глуши: пираты уже насели на кого-то, когда игрок подходит. Обе стороны
+ * рождаются рядом на кромке радара и сходятся сами — ИИ считает их врагами по фракции
+ * (`isHostileTo`), драться их никто не заставляет. Игрок волен вмешаться или пройти
+ * мимо; помощь пиратам его не обеляет — они враждебны и к нему.
+ */
+function spawnSkirmish(world: World): ShipEntity[] {
+  randomDirection(world, _scratch)
+  const distance = TRAFFIC.SPAWN_MIN + world.rng() * (TRAFFIC.SPAWN_MAX - TRAFFIC.SPAWN_MIN)
+  const centre = new Vector3().copy(world.player.state.pos).addScaledVector(_scratch, distance)
+
+  // Место схватки — общий дом обеих сторон: они держатся тут и дерутся, а не гонятся
+  // за игроком через полсистемы. Точки рождения разнесены в пределах строя.
+  const nearCentre = (): Vector3 =>
+    _site.copy(centre).addScaledVector(randomDirection(world, _offset), 0.2 + world.rng() * TRAFFIC.GROUP_SPREAD)
+
+  const born: ShipEntity[] = []
+  const pirateKind = ENCOUNTERS.find((k) => k.id === 'pirate')!
+  const raiders = 2 + Math.floor(world.rng() * 2) // 2–3 налётчика
+  for (let i = 0; i < raiders && trafficCount(world) < TRAFFIC.MAX; i++) {
+    born.push(spawnOne(world, pirateKind, nearCentre(), centre))
+  }
+
+  // Жертва: то патруль (даёт настоящий бой), то одинокий торговец (его можно спасти).
+  // Бросок ОДИН и до поиска: `rng()` внутри предиката `find` катился бы на каждом
+  // элементе и не совпал бы ни с чем.
+  const victimId = world.rng() < 0.5 ? 'police' : 'trader'
+  const victimKind = ENCOUNTERS.find((k) => k.id === victimId)!
+  const victims = victimKind.min + Math.floor(world.rng() * (victimKind.max - victimKind.min + 1))
+  for (let i = 0; i < victims && trafficCount(world) < TRAFFIC.MAX; i++) {
+    born.push(spawnOne(world, victimKind, nearCentre(), centre))
+  }
+  return born
+}
+
+/**
  * Убрать тех, кто ушёл за горизонт событий игрока.
  *
  * Захваченную цель не трогаем: пилот на неё смотрит, и корабль, растворившийся
@@ -279,6 +404,9 @@ function despawnDistant(world: World): void {
     if (!s.alive || isDroneShip(s)) return true
     if (s.id === world.lockedTargetId) return true
     if (s.ai?.escortOf != null) return true
+    // Спящий экипаж принадлежит платформе, а не трафику: его жизненным циклом
+    // (пробуждением и уборкой вместе с гнездом) распоряжается stepPlatforms.
+    if (s.ai?.dormant) return true
     // Стыкующегося у причала не бросаем: он привязан к станции, как захваченная цель.
     // Иначе улетевший к причалу игрок вернулся бы к пустому причалу с зависшей очередью.
     if (s.ai?.dock === 'berthed' || s.id === world.dockOccupantId) return true
@@ -324,25 +452,42 @@ function rearm(world: World): void {
 export function stepTraffic(world: World, dt: number): ShipEntity[] {
   despawnDistant(world)
 
+  // Жизнь у причала — вне ритма встреч и вне первой задержки: станция обязана
+  // выглядеть живой сразу, а не через полминуты. Родившихся копим и вернём вместе.
+  const born = stepStationLife(world)
+
   world.trafficTimer -= dt
-  if (world.trafficTimer > 0) return []
+  if (world.trafficTimer > 0) return born
 
   rearm(world)
 
   // Не всякая попытка — встреча. Пустой космос обязан оставаться пустым чаще,
   // чем населённым, иначе корабли перестают что-либо значить. А вдали от миров
   // он пустее: маршруты сходятся у планет, и встречи вместе с ними.
-  if (world.rng() >= TRAFFIC.CHANCE * crowding(world)) return []
+  if (world.rng() >= TRAFFIC.CHANCE * crowding(world)) return born
 
   // Раз в несколько встреч вместо кораблей приходит КИТ — город поколений. Он
-  // живёт своим списком и пилота не требует, поэтому возвращаем пусто. Кит редок
-  // и одинок: за его потолком встреча становится обычной.
+  // живёт своим списком и пилота не требует, поэтому возвращаем накопленное. Кит
+  // редок и одинок: за его потолком встреча становится обычной.
   if (world.rng() < TITAN.ENCOUNTER_SHARE && titanCount(world) < TITAN.MAX) {
     spawnTitan(world)
-    return []
+    return born
   }
 
-  if (trafficCount(world) >= TRAFFIC.MAX) return []
+  // Изредка вместо кораблей приходит спящее ГНЕЗДО — пиратская платформа. Как и
+  // кит, живёт своим списком, но экипажу нужны пилоты, поэтому его и возвращаем.
+  // Гнездо — событие, а не рядовая встреча: спавним его помимо потолка трафика.
+  if (world.rng() < PLATFORM.ENCOUNTER_SHARE && world.platforms.length < PLATFORM.MAX) {
+    return born.concat(spawnPlatform(world))
+  }
 
-  return spawnEncounter(world)
+  if (trafficCount(world) >= TRAFFIC.MAX) return born
+
+  // В глуши рядовую встречу изредка подменяет ЧУЖОЙ БОЙ. Только вдали от жилья:
+  // короткое замыкание по `&&` бережёт поток RNG у станции — там ветка не бросается.
+  if (remoteness(world) >= TRAFFIC.SKIRMISH_MIN_REMOTE && world.rng() < TRAFFIC.SKIRMISH_SHARE) {
+    return born.concat(spawnSkirmish(world))
+  }
+
+  return born.concat(spawnEncounter(world))
 }

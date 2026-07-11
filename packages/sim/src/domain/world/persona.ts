@@ -1,3 +1,4 @@
+import { HUMAN_SPECIES, SPECIES } from '../../config/galaxy'
 import type { Rng } from '../../core/math'
 
 /**
@@ -46,6 +47,12 @@ export interface Persona {
   charisma: number
   /** Воля: гнётся (1) или стоит на своём (5). */
   willpower: number
+  /**
+   * Разумный ВИД пилота (имя из `config/galaxy`: люди или один из гуманоидов). Свойство
+   * пилота, а не корабля: переезжает вместе с персоной при смене борта и в реестр
+   * знакомств. По нему подбирается портрет-аватар и красится реплика в разговоре.
+   */
+  species: string
 }
 
 /** Ровно посередине по всем осям. Для кораблей, что рождены без RNG (тесты, дрон). */
@@ -55,6 +62,7 @@ export const DEFAULT_PERSONA: Persona = {
   temperament: 3,
   charisma: 3,
   willpower: 3,
+  species: HUMAN_SPECIES,
 }
 
 /** Черта 1..5 из RNG. */
@@ -75,5 +83,16 @@ export function makePersona(rng: Rng): Persona {
     temperament: trait(rng),
     charisma: trait(rng),
     willpower: trait(rng),
+    species: makeSpecies(rng),
   }
+}
+
+/**
+ * Вид пилота. Больше половины — люди (как и в колонизации галактики), остальные —
+ * равновероятно один из гуманоидов. Бросается тем же seeded-RNG при рождении борта:
+ * тот же сид — тот же вид у того же пилота.
+ */
+function makeSpecies(rng: Rng): string {
+  if (rng() < 0.55) return HUMAN_SPECIES
+  return SPECIES[Math.floor(rng() * SPECIES.length)]!.name
 }

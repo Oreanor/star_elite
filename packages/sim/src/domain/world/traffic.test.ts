@@ -3,7 +3,7 @@ import { TRAFFIC } from '../../config/world'
 import { isHostileTo } from '../ai/targeting'
 import { createWorld, STARTER_SYSTEM } from './index'
 import type { ShipEntity, World } from './entities'
-import { stepTraffic } from './traffic'
+import { ENCOUNTERS, biasedWeight, remoteness, stepTraffic } from './traffic'
 
 /**
  * Встречи. Космос без них — тир, а не место, где живут; но и встреча по
@@ -40,7 +40,9 @@ function runUntilShip(world: World, cap = 400): ShipEntity {
 
 describe('встречи в космосе', () => {
   it('до первой задержки не приходит никто', () => {
-    const world = quiet()
+    // Без станции: её «завсегдатаи» появляются сразу и вне первой задержки — это
+    // отдельная жизнь причала. Первая ЗАДЕРЖКА стережёт рядовые встречи, их и меряем.
+    const world = deepSpace()
     run(world, TRAFFIC.FIRST_DELAY - 1)
     expect(met(world)).toHaveLength(0)
   })
@@ -69,8 +71,10 @@ describe('встречи в космосе', () => {
     run(world, TRAFFIC.INTERVAL * (TRAFFIC.MAX + 10))
     // Потолок считает ВСТРЕЧЕННЫХ, а прикрытие исключено намеренно (`escortOf`):
     // звено не бросают на полпути ради лимита. Поэтому инвариант — на не-эскортных
-    // бортах, ровно как его стережёт `trafficCount`, а не на всех подряд.
-    const counted = met(world).filter((s) => s.alive && s.ai?.escortOf == null)
+    // бортах, ровно как его стережёт `trafficCount`, а не на всех подряд. Экипаж
+    // платформы-гнезда тоже исключаем: гнездо — событие, оно спавнится ПОМИМО потолка
+    // трафика (как и эскорт), и его дремлющие пираты — не рядовая встреча.
+    const counted = met(world).filter((s) => s.alive && s.ai?.escortOf == null && !s.ai?.dormant)
     expect(counted.length).toBeLessThanOrEqual(TRAFFIC.MAX)
   })
 
@@ -79,7 +83,9 @@ describe('встречи в космосе', () => {
    * встречи шли бы по метроному и перестали что-либо значить.
    */
   it('не всякая попытка кончается встречей', () => {
-    const world = quiet()
+    // Без станции: жизнь причала подсевала бы завсегдатая на каждой очищенной итерации
+    // и «встреча» случалась бы всегда. Пустоту космоса стережёт именно ветка встреч.
+    const world = deepSpace()
     let attempts = 0
     let arrivals = 0
 
@@ -99,10 +105,16 @@ describe('встречи в космосе', () => {
 
   /** Не всегда пираты. За долгий прогон приходят и мирные, и враждебные. */
   it('встречаются и мирные, и враждебные', () => {
-    const world = quiet()
-    const factions = new Set<string>()
+    const world = deepSpace()
+    // Встаём у ДАЛЬНЕЙ необитаемой планеты: тут людно (маршруты у планеты есть), но
+    // закон не достаёт — смещение по удалённости даёт и мирных, и пиратов вперемешку.
+    // У станции пираты теперь почти не родятся, и там этот инвариант проверять нельзя.
+    const planets = world.bodies.filter((b) => b.kind === 'planet')
+    const lonely = planets.reduce((a, b) => (a.pos.length() > b.pos.length() ? a : b))
+    world.player.state.pos.copy(lonely.pos).setX(lonely.pos.x + lonely.radius + 60_000)
 
-    for (let i = 0; i < 200; i++) {
+    const factions = new Set<string>()
+    for (let i = 0; i < 300; i++) {
       world.trafficTimer = 0
       for (const ship of stepTraffic(world, 1 / 60)) factions.add(ship.faction)
       world.ships = []
@@ -180,7 +192,9 @@ describe('встречи в космосе', () => {
    * не вернётся никогда: он просто копился бы в списке.
    */
   it('ушедший далеко исчезает, кем бы он ни был', () => {
-    const world = quiet()
+    // Без станции: иначе жизнь причала тут же родила бы нового завсегдатая на место
+    // ушедшего, и «исчез» не проверить. Уборку по дистанции меряем на рядовой встрече.
+    const world = deepSpace()
     runUntilShip(world)
 
     for (const s of met(world)) s.state.pos.copy(world.player.state.pos).setX(TRAFFIC.DESPAWN_RANGE + 100)
@@ -227,5 +241,82 @@ describe('встречи в космосе', () => {
     run(b, TRAFFIC.INTERVAL * 3)
 
     expect(met(a).map((s) => s.state.pos.toArray())).toEqual(met(b).map((s) => s.state.pos.toArray()))
+  })
+
+  /**
+   * Станция не пустует: пока игрок рядом, у причала держится пара заходящих на
+   * стыковку НЕЙТРАЛОВ — жизнь, а не пираты. И это настоящие корабли в цикле
+   * стыковки, а не декорация: у них есть пилот и фаза захода.
+   */
+  it('у причала постоянно держатся завсегдатаи-нейтралы', () => {
+    const world = quiet() // игрок в 2 км от станции
+    run(world, 5) // ещё до первой встречи (FIRST_DELAY): это отдельная жизнь причала
+
+    const regulars = met(world).filter((s) => s.ai?.dock === 'inbound' || s.ai?.dock === 'berthed')
+    expect(regulars.length).toBe(TRAFFIC.STATION_REGULARS)
+    expect(regulars.every((s) => s.faction === 'neutral')).toBe(true)
+    expect(regulars.every((s) => s.ai !== null)).toBe(true)
+  })
+
+  /** Вдали от станции причал не оживляют: незачем плодить то, чего игрок не видит. */
+  it('вдали от станции завсегдатаев не подсевают', () => {
+    const world = quiet()
+    const station = world.bodies.find((b) => b.kind === 'station')!
+    world.player.state.pos.copy(station.pos).setX(station.pos.x + TRAFFIC.STATION_LIFE_RANGE + 5000)
+
+    run(world, 5)
+    expect(met(world).filter((s) => s.ai?.dock != null)).toHaveLength(0)
+  })
+
+  /**
+   * Чем дальше от жилья, тем больше пиратов. Проверяем СВОЙСТВО смещения, а не долю:
+   * веса будут крутить, но у станции обязан править торговец, а в пустоте — пират.
+   */
+  it('доля пиратов растёт с удалением от обитаемого мира', () => {
+    const pirate = ENCOUNTERS.find((k) => k.id === 'pirate')!
+    const trader = ENCOUNTERS.find((k) => k.id === 'trader')!
+
+    // Пирату дальше — тяжелее вес, торговцу — легче.
+    expect(biasedWeight(pirate, 1)).toBeGreaterThan(biasedWeight(pirate, 0))
+    expect(biasedWeight(trader, 1)).toBeLessThan(biasedWeight(trader, 0))
+    // У самого жилья торговец кратно вероятнее пирата; в пустоте перевес к пирату.
+    expect(biasedWeight(trader, 0)).toBeGreaterThan(biasedWeight(pirate, 0) * 3)
+    expect(biasedWeight(pirate, 1)).toBeGreaterThan(biasedWeight(trader, 1))
+  })
+
+  /** Удалённость 0..1 растёт по мере ухода от обитаемого мира и у причала близка к нулю. */
+  it('удалённость растёт с уходом от жилья', () => {
+    const world = quiet()
+    const station = world.bodies.find((b) => b.kind === 'station')!
+
+    world.player.state.pos.copy(station.pos).setX(station.pos.x + 1000)
+    const near = remoteness(world)
+    world.player.state.pos.copy(station.pos).setX(station.pos.x + 500_000)
+    const far = remoteness(world)
+
+    expect(near).toBeLessThan(0.1)
+    expect(far).toBeGreaterThan(near)
+    expect(far).toBeGreaterThan(0.5)
+  })
+
+  /**
+   * В глуши изредка встречаешь ЧУЖОЙ бой: пираты и их жертва рождаются разом. Только
+   * такая встреча смешивает враждебных с не-враждебными в одной группе — по этому и
+   * узнаём её. Помощь пиратам игрока не обеляет: это отдельная механика фракций.
+   */
+  it('в глуши можно наткнуться на чужой бой — обе стороны разом', () => {
+    const world = deepSpace()
+    const planets = world.bodies.filter((b) => b.kind === 'planet')
+    const lonely = planets.reduce((a, b) => (a.pos.length() > b.pos.length() ? a : b))
+    world.player.state.pos.copy(lonely.pos).setX(lonely.pos.x + lonely.radius + 60_000)
+
+    let sawBattle = false
+    for (let i = 0; i < 800 && !sawBattle; i++) {
+      world.trafficTimer = 0
+      const factions = new Set(stepTraffic(world, 1 / 60).map((s) => s.faction))
+      if (factions.has('hostile') && (factions.has('neutral') || factions.has('police'))) sawBattle = true
+      world.ships = []
+    }
+    expect(sawBattle).toBe(true)
   })
 })

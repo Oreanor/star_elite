@@ -1,9 +1,8 @@
 import { Vector3 } from 'three'
-import { AI } from '../../config/ai'
+import { AI, WARP } from '../../config/ai'
 import { NPC_DOCK } from '../../config/station'
 import { TRAFFIC } from '../../config/world'
 import { clamp, signed } from '../../core/math'
-import { healthFraction, shieldFraction } from '../combat/damage'
 import { shipAxes } from '../flight/axes'
 import { bankToward, steerToward } from '../flight/steering'
 import { findStation } from '../station/docking'
@@ -11,6 +10,8 @@ import type { Controller } from '../sim/controller'
 import type { ShipControls } from '../flight/types'
 import type { ShipEntity, World } from '../world/entities'
 import { breakWaypoint, leadPoint, patrolWaypoint } from './maneuvers'
+import { wantsToFlee } from './morale'
+import { jumpOut } from '../world/warp'
 import { isEngageable } from '../combat/engage'
 import { isHostileTo, selectTarget } from './targeting'
 import type { AIMode, AIState } from './types'
@@ -41,6 +42,7 @@ const _right = new Vector3()
 const _up = new Vector3()
 const _aim = new Vector3()
 const _toTarget = new Vector3()
+const _flee = new Vector3()
 const _dockAim = new Vector3()
 const _depart = new Vector3()
 const _gate = new Vector3(NPC_DOCK.GATE[0], NPC_DOCK.GATE[1], NPC_DOCK.GATE[2])
@@ -57,6 +59,50 @@ export const aiController: Controller = {
     const ai = e.ai
     if (!ai || !e.alive) return
 
+    // Спящий экипаж платформы: сидит на палубе, пока гнездо не поднято. Ни хода,
+    // ни цели, ни огня — его можно вырезать по одному, и он не шевельнётся.
+    if (ai.dormant) {
+      const controls = e.controls
+      controls.throttle = 0
+      controls.pitch = 0
+      controls.yaw = 0
+      controls.roll = 0
+      controls.rudder = 0
+      controls.retro = 0
+      controls.boost = 1
+      controls.flightAssist = true
+      ai.wantsFire = false
+      ai.wantsMissile = false
+      ai.wantsEcm = false
+      return
+    }
+
+    // Приказ «стой тут»: держит место и в бой не лезет, пока игрок отлучился.
+    // В отличие от сна — это его собственная воля по приказу: гасит снос ретро-тягой,
+    // чтобы «стоять» значило стоять, а не дрейфовать по инерции.
+    if (ai.command === 'hold') {
+      const controls = e.controls
+      controls.throttle = 0
+      controls.pitch = 0
+      controls.yaw = 0
+      controls.roll = 0
+      controls.rudder = 0
+      controls.retro = e.state.vel.length() > 2 ? 1 : 0
+      controls.boost = 1
+      controls.flightAssist = true
+      ai.wantsFire = false
+      ai.wantsMissile = false
+      ai.wantsEcm = false
+      return
+    }
+
+    // Приказ «держись в хвосте, береги груз»: уходит от боя, не стреляет, а когда
+    // угрозы рядом нет — держится возле нанимателя, не выходя вперёд.
+    if (ai.command === 'keepBack') {
+      keepDistance(e, world)
+      return
+    }
+
     const c = e.controls
     ai.modeTimer += dt
     ai.wantsFire = false
@@ -70,6 +116,11 @@ export const aiController: Controller = {
     const rethink = ai.thinkTimer <= 0
     // Выучка растягивает время реакции: слабый пилот думает дольше, а не бьёт слабее.
     if (rethink) ai.thinkTimer = AI.THINK_INTERVAL / ai.skill
+
+    // Побег из системы прыжком: напуганный борт с приводом может уйти совсем.
+    // Решение редкое и в такт размышления; пока заряжается — уходит и уязвим.
+    // Перебивает весь остальной бой: ему уже не до цели.
+    if (maybeWarpOut(e, ai, world, rethink, dt)) return
 
     // ПРО решается независимо от цели: ракета летит и в патрулирующего.
     if (rethink) decideEcm(e, ai, world)
@@ -153,6 +204,78 @@ export const aiController: Controller = {
 }
 
 /**
+ * Ближайшая угроза: тот, от кого бежать. Для мирного это игрок, что открыл огонь
+ * (пираты нейтралов не трогают); для боевого — любой, кто ему враг или кому враг он.
+ */
+function nearestDanger(e: ShipEntity, world: World): ShipEntity | null {
+  let best: ShipEntity | null = null
+  let bestSq = Infinity
+  const consider = (o: ShipEntity): void => {
+    if (!o.alive || o === e) return
+    const dangerous = o === world.player || isHostileTo(e.faction, o.faction) || isHostileTo(o.faction, e.faction)
+    if (!dangerous) return
+    const d = o.state.pos.distanceToSquared(e.state.pos)
+    if (d < bestSq) {
+      bestSq = d
+      best = o
+    }
+  }
+  for (const o of world.ships) consider(o)
+  consider(world.player)
+  return best
+}
+
+/** Уходить прочь от ближайшей угрозы на полном ходу. Направление — вон от неё. */
+function fleeFromDanger(e: ShipEntity, world: World): void {
+  const c = e.controls
+  c.flightAssist = true
+  c.rudder = 0
+  c.retro = 0
+  c.boost = AI.ESCAPE_BOOST
+  c.throttle = 1
+
+  const danger = nearestDanger(e, world)
+  if (!danger) return
+  _flee.copy(e.state.pos).add(_toTarget.copy(e.state.pos).sub(danger.state.pos))
+  steerToward(e.state, _flee, 2.2, _steer)
+  c.pitch = _steer.pitch
+  c.yaw = _steer.yaw
+  c.roll = bankToward(e.state, _flee)
+}
+
+/**
+ * Побег из системы прыжком. Возвращает true, если борт занят побегом (заряжает или
+ * уже ушёл) — тогда весь остальной ИИ пропускается.
+ *
+ * Кто бежит: напуганный (уже в `evade`) или недавно обстрелянный мирный, — но
+ * только при наличии привода и РЕДКО (см. `WARP.CHANCE`), иначе от игрока все
+ * подряд разбегались бы прыжком. Пока заряжается — уходит и уязвим: успей добить.
+ */
+function maybeWarpOut(e: ShipEntity, ai: AIState, world: World, rethink: boolean, dt: number): boolean {
+  if (ai.warpTimer >= 0) {
+    ai.warpTimer -= dt
+    fleeFromDanger(e, world)
+    ai.wantsFire = false
+    ai.wantsMissile = false
+    ai.wantsEcm = false
+    if (ai.warpTimer <= 0) jumpOut(world, e)
+    return true
+  }
+
+  // Решение — только в такт размышления, при наличии привода и под угрозой.
+  if (!rethink || e.spec.jumpRange <= 0) return false
+  const underFire = world.time - e.lastHitAt < WARP.THREAT_WINDOW
+  const fleeing = ai.mode === 'evade'
+  if (!underFire && !fleeing) return false
+
+  // Редко: не все, кого пугаешь, уходят прыжком.
+  if (world.rng() >= WARP.CHANCE) return false
+
+  ai.warpTimer = WARP.CHARGE
+  return true
+}
+
+/**
  * Бить ли по ракете противоракетным импульсом.
  *
  * Ждём, пока ракета подойдёт: `fireEcm` жжёт заряд батарей за каждый подрыв,
@@ -219,6 +342,32 @@ function followEscort(e: ShipEntity, world: World): void {
 
 function selectAndRemember(e: ShipEntity, world: World): ShipEntity | null {
   const ai = e.ai!
+
+  // Прямой приказ игрока перекрывает и авто-выбор цели, и следование за нанимателем:
+  // бот подчиняется, а не решает. `hold` сюда не доходит — он обрабатывается выше.
+  if (ai.command === 'standDown') {
+    // Отбой: никого не атакуем. Полёт (следование/патруль) остаётся — не бьём, и только.
+    ai.targetId = null
+    return null
+  }
+  if (ai.command === 'attack') {
+    ai.targetId = ai.orderedTargetId
+    const ordered = resolveTarget(e, world)
+    // Цель уничтожена или пропала — приказ исполнен, бот возвращается к обычному поведению.
+    if (!ordered) {
+      ai.command = 'default'
+      ai.orderedTargetId = null
+    }
+    return ordered
+  }
+  if (ai.command === 'engageAll') {
+    // Свободный огонь: бьёт любого враждебного вокруг, даже будучи эскортом игрока.
+    const enemy = selectTarget(e, world)
+    ai.targetId = enemy?.id ?? null
+    return enemy
+  }
+
+  // default — прежнее поведение: наёмник тянется за целью нанимателя, прочие решают сами.
   followEscort(e, world)
 
   // Приказ отменяет выбор. Иначе в такте размышления пилот перескочил бы
@@ -273,6 +422,46 @@ function flyPatrol(e: ShipEntity, ai: AIState, time: number): void {
   c.boost = 1
   c.throttle = 0.35
   c.flightAssist = true
+}
+
+/** Ближе этого враг — уходим от боя: беречь себя и груз важнее геройства, м. */
+const KEEP_BACK_THREAT = 3_500
+
+/**
+ * Приказ «держись в хвосте». Есть угроза рядом — уходит от неё на форсаже, не
+ * стреляя; нет — держится возле нанимателя патрульным кругом, не выходя вперёд.
+ * Это не трусость пилота, а исполнение приказа беречь груз, пока игрок дерётся.
+ */
+function keepDistance(e: ShipEntity, world: World): void {
+  const ai = e.ai!
+  ai.wantsFire = false
+  ai.wantsMissile = false
+  ai.wantsEcm = false
+  ai.targetId = null
+
+  const c = e.controls
+  c.flightAssist = true
+  c.rudder = 0
+  c.retro = 0
+  c.boost = 1
+
+  const threat = selectTarget(e, world)
+  if (threat && threat.state.pos.distanceTo(e.state.pos) < KEEP_BACK_THREAT) {
+    // Прочь от угрозы: целимся в точку по ту сторону от себя, куда врагу не догнать.
+    _aim.copy(e.state.pos).add(_toTarget.copy(e.state.pos).sub(threat.state.pos))
+    steerToward(e.state, _aim, 2.2, _steer)
+    c.pitch = _steer.pitch
+    c.yaw = _steer.yaw
+    c.roll = bankToward(e.state, _aim)
+    c.throttle = 1
+    c.boost = AI.ESCAPE_BOOST
+    return
+  }
+
+  // Угроз рядом нет — держимся у нанимателя патрульным кругом: рядом, но не в свалке.
+  const patron = ai.escortOf === world.player.id ? world.player : world.ships.find((s) => s.id === ai.escortOf)
+  if (patron?.alive) ai.home.copy(patron.state.pos)
+  flyPatrol(e, ai, world.time)
 }
 
 /** Навести нос и крен на точку. Общий манёвр захода на причал и ожидания очереди. */
@@ -368,13 +557,16 @@ function flyDock(e: ShipEntity, ai: AIState, world: World, dt: number): void {
 
 /** Зовётся только в момент «размышления»: между ними режим держится. */
 function decideMode(e: ShipEntity, ai: AIState, target: ShipEntity, distance: number): void {
-  if (healthFraction(e) < AI.EVADE_HULL_FRAC && shieldFraction(e) < AI.EVADE_SHIELD_FRAC) {
-    // Подбит — рвёт дистанцию, а не гибнет героически.
+  // Боевой дух: страх копится из своей слабости, силы врага и робости нрава, а
+  // слабость врага его гасит. Перевалил порог — рвёт из боя, а не гибнет героически.
+  // Гистерезис держит уже бегущего в бегстве, пока страх не спадёт заметно ниже.
+  if (wantsToFlee(e, target, ai.mode === 'evade')) {
     setMode(ai, 'evade')
   } else if (ai.mode === 'break') {
     if (ai.modeTimer > AI.BREAK_TIME) setMode(ai, 'pursue')
   } else if (ai.mode === 'evade') {
-    if (ai.modeTimer > 5 || shieldFraction(e) > 0.5) setMode(ai, 'pursue')
+    // Страх отпустил (сам оправился или враг ослаб) — возвращается в бой.
+    setMode(ai, 'pursue')
   } else if (distance < AI.BREAK_OFF) {
     // Слишком близко: проскок неизбежен, надо разводить, иначе таран.
     setMode(ai, 'break')

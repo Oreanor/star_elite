@@ -101,6 +101,7 @@ export const RU = {
   'hud.autofight': 'АВТОБОЙ · P — СНЯТЬ',
   'hud.cloak': 'МАСКИРОВКА · X — СНЯТЬ',
   'hud.missileWarn': 'РАКЕТА · {seconds} С · E — ПРО',
+  'hud.hail': '◄ {name} ВЫЗЫВАЕТ · T — ОТВЕТИТЬ',
 
   'hud.holdFull': 'ТРЮМ ПОЛОН',
   'hud.podGrab': 'ЗАХВАТ · {item}',
@@ -248,6 +249,10 @@ export const RU = {
   'station.popUnit': '{n} млн',
   // Навигация со стартового экрана станции.
   'station.nav.planet': 'ПЛАНЕТА',
+  'station.nav.station': 'СТАНЦИЯ',
+  'station.docked.title': 'ПРИСТЫКОВАНЫ',
+  'station.docked.empty': 'Причал пуст — только ты.',
+  'station.you': 'ТЫ',
   'station.nav.ship': 'ВЕРФЬ',
   'station.nav.cargo': 'ГРУЗ',
   'station.nav.shop': 'МАГАЗИН',

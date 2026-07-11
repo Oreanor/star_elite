@@ -172,6 +172,15 @@ export function attachInput(canvas: HTMLCanvasElement): () => void {
       return
     }
 
+    /**
+     * Фокус в текстовом поле (чат разговора, поиск) — клавиатура принадлежит
+     * БРАУЗЕРУ, не игре: иначе `PREVENT_DEFAULT` глушит пробел и стрелки, и в поле
+     * их не набрать. Не трогаем ни held, ни preventDefault — пусть печатается.
+     * В игре текстовых полей нет, а курсор там захвачен, так что это только меню/чат.
+     */
+    const el = e.target as HTMLElement | null
+    if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)) return
+
     if (!held.has(e.code)) pressedThisFrame.add(e.code)
     held.add(e.code)
 

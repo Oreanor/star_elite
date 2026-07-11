@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { HUMAN_SPECIES, SPECIES } from '../../config/galaxy'
 import { makeRng } from '../../core/math'
 import { createWorld } from './factory'
 import { DISPOSITIONS, makePersona } from './persona'
@@ -38,5 +39,15 @@ describe('persona', () => {
 
   it('тот же сид мира — та же личность игрока', () => {
     expect(createWorld().player.persona).toEqual(createWorld().player.persona)
+  })
+
+  it('у пилота есть вид — человек или один из гуманоидов', () => {
+    const known = new Set<string>([HUMAN_SPECIES, ...SPECIES.map((s) => s.name)])
+    const rng = makeRng(7)
+    for (let i = 0; i < 200; i++) expect(known.has(makePersona(rng).species)).toBe(true)
+  })
+
+  it('игрок — человек, а не случайный инопланетянин', () => {
+    expect(createWorld().player.persona.species).toBe(HUMAN_SPECIES)
   })
 })

@@ -50,7 +50,28 @@ function swingTwist(q: Quaternion, axis: Vector3, outSwing: Quaternion, outTwist
   // Проекция векторной части кватерниона на ось и есть его «закрученная» часть.
   _axis.set(q.x, q.y, q.z)
   const projection = _axis.dot(axis)
-  outTwist.set(axis.x * projection, axis.y * projection, axis.z * projection, q.w).normalize()
+  outTwist.set(axis.x * projection, axis.y * projection, axis.z * projection, q.w)
+
+  /**
+   * ВЫРОЖДЕНИЕ. Когда курс уходит на ~180° (в бою — разворот на цель за спиной),
+   * и `q.z`, и `q.w` обращаются в ноль: крен от такого поворота НЕОТДЕЛИМ, а
+   * нормировка почти нулевого вектора даёт шум, скачущий от кадра к кадру. Жёсткая
+   * пружина крена ловит этот скачок и доворачивает кадр по длинной дуге — та самая
+   * «камера сама крутит не по короткому пути». Не выдумываем крен из шума: у
+   * вырождения берём нулевой (камера просто следует за носом, не пытаясь «выпрямить»).
+   */
+  if (outTwist.lengthSq() < 1e-8) {
+    outTwist.identity()
+  } else {
+    outTwist.normalize()
+    /**
+     * Канонизируем полушарие: q и −q — ОДИН поворот, но дают twist противоположного
+     * знака. Без этого цель крена перепрыгивает на «перевёрнутую» версию себя, и
+     * пружина снова идёт длинным путём. Держим `w ≥ 0` — тогда цель непрерывна.
+     */
+    if (outTwist.w < 0) outTwist.set(-outTwist.x, -outTwist.y, -outTwist.z, -outTwist.w)
+  }
+
   // swing = q · twist⁻¹
   outSwing.copy(outTwist).invert().premultiply(q)
 }

@@ -99,13 +99,11 @@ const MODULE_EN: Record<string, string> = {
   cloak_2: 'Cloak Field «Phantom»',
 }
 
-/** Раса собирается из слов («Крупные зелёные ящеры») — переводим по слову. */
+/** Виды — именованные, переводим целиком. Три: земляне, сборные гуманоиды, роботы-синтеты. */
 const SPECIES_EN: Record<string, string> = {
-  'Люди (колония)': 'Humans (colony)',
-  Крупные: 'Large', Мелкие: 'Small', Рослые: 'Tall', Приземистые: 'Squat', Исполинские: 'Giant', Хрупкие: 'Frail',
-  'зелёные': 'green', синие: 'blue', багровые: 'crimson', серые: 'grey', 'белёсые': 'pale', янтарные: 'amber', 'чёрные': 'black',
-  'чешуйчатые': 'scaled', мохнатые: 'furred', панцирные: 'shelled', бескрылые: 'wingless', многоглазые: 'many-eyed', слизистые: 'slimy',
-  'ящеры': 'lizards', птицы: 'birds', насекомые: 'insects', амфибии: 'amphibians', моллюски: 'molluscs', приматы: 'primates', ракообразные: 'crustaceans',
+  'Земляне': 'Earthers',
+  'Гуманоиды': 'Humanoids',
+  'Синтеты': 'Synths',
 }
 
 const en = (): boolean => currentLang() === 'en'

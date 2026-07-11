@@ -1,7 +1,7 @@
 import { Euler, Quaternion, Vector3 } from 'three'
 import { GRAVITY, MOON } from '../../config/bodies'
 import { pirateLeaderLoadout, pirateLoadout, playerStartLoadout } from '../../config/loadouts'
-import { ARRIVAL, GALAXY } from '../../config/galaxy'
+import { ARRIVAL, GALAXY, HUMAN_SPECIES } from '../../config/galaxy'
 import { ASTEROID, TRAFFIC, WORLD } from '../../config/world'
 import { makeRng, range, signed, type Rng } from '../../core/math'
 import { createAIState } from '../ai/types'
@@ -20,6 +20,7 @@ import type {
 } from './entities'
 import { createIdSource, type IdSource } from './ids'
 import { DEFAULT_PERSONA, makePersona } from './persona'
+import { makePilotName } from './names'
 import { maybeShiftOrigin } from './origin'
 import { stepOrbits } from './orbits'
 import { placeShowcaseTitans } from './titans'
@@ -56,11 +57,18 @@ export function makeShip(
     ammo: hasAmmo(mount.weapon) ? mount.weapon.ammo : 0,
   }))
 
+  // Персона и имя пилота — из одного источника случайности: имя даётся ПО ВИДУ
+  // персоны (землянин — земное, синтет — с приставкой и номером, валдри — слоговое).
+  // Без rng (тесты, дрон) — серединная персона и имя-заглушка от типа корабля.
+  const persona = rng ? makePersona(rng) : DEFAULT_PERSONA
+  const pilotName = rng ? makePilotName(rng, persona.species) : name
+
   return {
     id: ids.next(),
     kind: 'ship',
     faction,
     name,
+    pilotName,
     loadout,
     spec,
     state: createShipState(pos, quat),
@@ -86,9 +94,10 @@ export function makeShip(
     clearance: false,
     droneOf: null,
     dieAt: null,
-    persona: rng ? makePersona(rng) : DEFAULT_PERSONA,
+    persona,
     acquaintanceId: null,
     originKind: null,
+    warpedOut: false,
   }
 }
 
@@ -380,6 +389,41 @@ function clearOfBodies(world: World): void {
   }
 }
 
+const _out = /* @__PURE__ */ new Vector3()
+
+/**
+ * Поставить игрока ВПЛОТНУЮ к причалу, носом на него.
+ *
+ * Начало НОВОЙ игры — не прыжок: гиперпереход выводит за тысячу километров (там до
+ * причала минута-две крейсера, и это правильно для перелёта), но первый кадр игры
+ * должен открываться причалом в паре секунд хода, а не долгим вязким подползанием.
+ *
+ * Зовётся ПОСЛЕ `enterSystem`: тот внутри выталкивает корабль на STANDOFF от любого
+ * тела (`clearOfBodies`), и поставь мы игрока рядом со станцией до — его тут же
+ * отшвырнёт на тысячу километров от планеты. Поэтому переставляем в самом конце,
+ * когда расталкивание уже отработало, и заново центрируем плавающее начало координат.
+ */
+export function startAtStation(world: World, gap = 2_500): void {
+  const station = world.bodies.find((b) => b.kind === 'station')
+  if (!station) return
+  const star = world.bodies.find((b) => b.kind === 'star')
+
+  // Наружу от звезды, на дальнюю от неё сторону причала: планета уходит за спину
+  // станции и не встаёт чёрным диском поперёк кадра — тот же резон, что у standoff.
+  _out.copy(station.pos).sub(star ? star.pos : _out.set(0, 0, 0))
+  if (_out.lengthSq() < 1e-6) _out.set(1, 0, 0)
+  _out.normalize()
+
+  const player = world.player
+  player.state.pos.copy(station.pos).addScaledVector(_out, station.radius + gap)
+  player.state.vel.set(0, 0, 0)
+  player.state.angVel.set(0, 0, 0)
+  aimAt(player, station.pos)
+  player.controls.throttle = WORLD.START_THROTTLE
+  // Игрок переехал на тысячу километров — начало координат следует за ним.
+  maybeShiftOrigin(world)
+}
+
 export function enterSystem(
   world: World,
   def: SystemDef,
@@ -404,9 +448,11 @@ export function enterSystem(
   world.pods = []
   world.missiles = []
   world.titans = []
+  world.platforms = []
   world.tracers = []
   world.explosions = []
   world.shockwaves = []
+  world.warps = []
   world.lockedTargetId = null
   world.navTargetId = world.bodies.find((b) => b.kind === 'station')?.id ?? null
   // Прибыли — выбранная для прыжка система достигнута, метку и точку выхода снимаем.
@@ -457,6 +503,9 @@ export function createWorld(def: SystemDef = STARTER_SYSTEM): World {
   )
   // Стартуем на ходу: висеть в пустоте — плохое первое впечатление.
   player.controls.throttle = WORLD.START_THROTTLE
+  // Игрок — человек: протагонист не должен родиться случайным инопланетянином.
+  // Выбор расы игрока — дело будущего создания персонажа, а не броска при спавне.
+  player.persona.species = HUMAN_SPECIES
 
   const ships = makePatrols(rng, ids, def)
 
@@ -471,10 +520,12 @@ export function createWorld(def: SystemDef = STARTER_SYSTEM): World {
     pods: [],
     missiles: [],
     titans: [],
+    platforms: [],
     bodies,
     tracers: [],
     explosions: [],
     shockwaves: [],
+    warps: [],
     docked: false,
     dockArmed: true,
     dockOccupantId: null,

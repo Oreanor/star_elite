@@ -97,6 +97,7 @@ export const EN: Record<keyof typeof RU, string> = {
   'hud.autofight': 'AUTOPILOT · P — TAKE OVER',
   'hud.cloak': 'CLOAKED · X — DROP',
   'hud.missileWarn': 'MISSILE · {seconds} S · E — ECM',
+  'hud.hail': '◄ {name} HAILS · T — ANSWER',
 
   'hud.holdFull': 'HOLD FULL',
   'hud.podGrab': 'SCOOPED · {item}',
@@ -230,6 +231,10 @@ export const EN: Record<keyof typeof RU, string> = {
   'station.species': 'INHABITANTS',
   'station.popUnit': '{n}M',
   'station.nav.planet': 'PLANET',
+  'station.nav.station': 'STATION',
+  'station.docked.title': 'DOCKED',
+  'station.docked.empty': 'Berth is empty — just you.',
+  'station.you': 'YOU',
   'station.nav.ship': 'SHIPYARD',
   'station.nav.shop': 'MARKET',
   'station.nav.cargo': 'CARGO',

@@ -1,4 +1,4 @@
-import type { Disposition, Persona, Relationship, Topic, Transfer } from '@elite/sim'
+import type { AIOrder, Disposition, Mood, Persona, Relationship, Social, Topic, Transfer } from '@elite/sim'
 import type { ChatTurn, NegotiationContext, NegotiatorReply } from '../../ui/dialogue/facts'
 
 /**
@@ -18,27 +18,101 @@ import type { ChatTurn, NegotiationContext, NegotiatorReply } from '../../ui/dia
  */
 
 const env = import.meta.env as unknown as Record<string, string | undefined>
-const API_KEY = env.VITE_OPENROUTER_API_KEY?.trim() || ''
-const ENDPOINT = 'https://openrouter.ai/api/v1/chat/completions'
-const TIMEOUT_MS = 15_000
+const TIMEOUT_MS = 9_000
 
-/** Free-модели OpenRouter, от лучших к худшим. Переопределяется VITE_OPENROUTER_MODELS. */
-const DEFAULT_MODELS = [
-  'deepseek/deepseek-chat-v3-0324:free',
-  'meta-llama/llama-3.3-70b-instruct:free',
-  'google/gemini-2.0-flash-exp:free',
-  'qwen/qwen-2.5-72b-instruct:free',
-  'mistralai/mistral-small-3.2-24b-instruct:free',
-  'meta-llama/llama-3.1-8b-instruct:free',
+/**
+ * ДВА ПРОВАЙДЕРА, оба OpenAI-совместимы. Groq — предпочтителен: инференс за доли
+ * секунды и свободный free-лимит, тогда как общий free-пул OpenRouter вечно забит и
+ * сыплет 429. Есть ключ Groq (`VITE_GROQ_API_KEY`, бесплатно на console.groq.com) —
+ * говорим через него; OpenRouter остаётся запасным тиром. Ключей нет — окно на кнопках.
+ */
+const GROQ_KEY = env.VITE_GROQ_API_KEY?.trim() || ''
+const OPENROUTER_KEY = env.VITE_OPENROUTER_API_KEY?.trim() || ''
+const GROQ_ENDPOINT = 'https://api.groq.com/openai/v1/chat/completions'
+const OPENROUTER_ENDPOINT = 'https://openrouter.ai/api/v1/chat/completions'
+
+/** Модели Groq (быстрые, живые на 2026-07). Переопределяется `VITE_GROQ_MODELS`. */
+const GROQ_DEFAULT_MODELS = [
+  'llama-3.1-8b-instant', // почти мгновенная — обычно она и отвечает
+  'llama-3.3-70b-versatile',
+  'openai/gpt-oss-20b',
+  'openai/gpt-oss-120b',
+  'moonshotai/kimi-k2-instruct',
+  'qwen/qwen3-32b',
+  'gemma2-9b-it',
 ]
 
-const MODELS = (env.VITE_OPENROUTER_MODELS?.split(',').map((s) => s.trim()).filter(Boolean) ?? []).length
-  ? env.VITE_OPENROUTER_MODELS!.split(',').map((s) => s.trim()).filter(Boolean)
-  : DEFAULT_MODELS
+/**
+ * Free-модели OpenRouter, от лучших к худшим. Переопределяется VITE_OPENROUTER_MODELS.
+ *
+ * OpenRouter РЕГУЛЯРНО снимает free-модели с раздачи — протухший id молча отдаёт
+ * не-ok, и переговорщик валится в «плохую связь». Поэтому список широкий и
+ * разнородный (разные вендоры), чтобы жила хоть одна. Свериться с каталогом:
+ * `curl https://openrouter.ai/api/v1/models` (публичный, без ключа), фильтр по `:free`.
+ * Список проверен 2026-07-11.
+ */
+// ПЕРЕМЕШАНЫ намеренно: гонка берёт по `RACE_WIDTH` подряд, и в каждом батче должна
+// быть и сильная модель, и менее популярная. Популярных крупных (gpt-oss-120b,
+// llama-70b) всех хватает 429 в час пик — а мелкие и редкие в тот же миг свободны и
+// отвечают быстро. Так батч почти всегда даёт живой ответ, а не тройной фолбэк.
+const DEFAULT_MODELS = [
+  // — батч 1: сильная + три помельче/пореже —
+  'openai/gpt-oss-120b:free',
+  'google/gemma-4-26b-a4b-it:free',
+  'nvidia/nemotron-nano-9b-v2:free',
+  'meta-llama/llama-3.2-3b-instruct:free',
+  // — батч 2 —
+  'meta-llama/llama-3.3-70b-instruct:free',
+  'nvidia/nemotron-3-super-120b-a12b:free',
+  'nvidia/nemotron-3-nano-30b-a3b:free',
+  'google/gemma-4-31b-it:free',
+  'qwen/qwen3-next-80b-a3b-instruct:free',
+  'nousresearch/hermes-3-llama-3.1-405b:free',
+  // Дообученный Mistral без цензуры — чистого Mistral в free уже нет. Годится злым NPC.
+  'cognitivecomputations/dolphin-mistral-24b-venice-edition:free',
+  'openai/gpt-oss-20b:free',
+  'tencent/hy3:free',
+  'nvidia/nemotron-nano-12b-v2-vl:free',
+  // Флагман — самый умный, но тяжёлый: в параллельной гонке побеждает лишь когда
+  // мелкие заняты, и тогда отдаёт отличный ответ. Пусть будет запасом качества.
+  'nvidia/nemotron-3-ultra-550b-a55b:free',
+  // Кроха на 1.2B — почти всегда свободна и отвечает за долю секунды: в час пик,
+  // когда крупные сплошь в 429, именно она вытащит живую реплику вместо шума.
+  'liquid/lfm-2.5-1.2b-instruct:free',
+]
 
-/** Есть ли чем говорить. Нет ключа — окно покажет только кнопки. */
+function envModels(key: string, fallback: string[]): string[] {
+  const list = env[key]?.split(',').map((s) => s.trim()).filter(Boolean) ?? []
+  return list.length ? list : fallback
+}
+const OPENROUTER_MODELS = envModels('VITE_OPENROUTER_MODELS', DEFAULT_MODELS)
+const GROQ_MODELS = envModels('VITE_GROQ_MODELS', GROQ_DEFAULT_MODELS)
+
+/** Одна модель одного провайдера: куда стучаться, чем и под каким именем в логах. */
+interface ModelRef {
+  label: string
+  endpoint: string
+  key: string
+  model: string
+}
+
+function tierOf(endpoint: string, key: string, models: string[], tag: string): ModelRef[] {
+  return key ? models.map((model) => ({ label: `${tag}/${model}`, endpoint, key, model })) : []
+}
+
+/**
+ * ТИРЫ провайдеров, по порядку предпочтения: сперва Groq (быстрый), затем OpenRouter.
+ * Внутри тира модели гонятся параллельно; к следующему тиру переходим, лишь если
+ * весь предыдущий промолчал. Так Groq отвечает мгновенно и не жжёт квоту OpenRouter зря.
+ */
+const TIERS: ModelRef[][] = [
+  tierOf(GROQ_ENDPOINT, GROQ_KEY, GROQ_MODELS, 'groq'),
+  tierOf(OPENROUTER_ENDPOINT, OPENROUTER_KEY, OPENROUTER_MODELS, 'or'),
+].filter((tier) => tier.length > 0)
+
+/** Есть ли чем говорить. Нет ни одного ключа — окно покажет только кнопки. */
 export function negotiatorAvailable(): boolean {
-  return API_KEY.length > 0
+  return TIERS.length > 0
 }
 
 // ─── Персона в слова ──────────────────────────────────────────────────────────
@@ -80,6 +154,14 @@ const STANCE_RU: Record<Relationship, string> = {
   hostile: 'враждебно',
 }
 
+/** Тон реплики по настроению — его задаёт ДВИЖОК (`moodTo`), модель лишь держит. */
+const MOOD_RU: Record<Mood, string> = {
+  warm: 'тепло и дружески — ты расположен к нему',
+  neutral: 'ровно, по-деловому',
+  wary: 'настороженно и колко — он только что грозил тебе или задел',
+  hostile: 'враждебно, сквозь зубы, а то и шли прочь',
+}
+
 /** Груз с id — чтобы модель могла назвать товар в сделке (`transfer.commodityId`). */
 function cargoLine(list: { id: string; name: string; units: number }[]): string {
   return list.length ? list.map((c) => `${c.name} [${c.id}] ×${c.units}`).join(', ') : 'пусто'
@@ -110,6 +192,22 @@ function systemPrompt(ctx: NegotiationContext): string {
     ? ctx.allowedIntents.map((i) => `• ${INTENT_RU[i]}`).join('\n')
     : '• (сейчас ничего механического от тебя не добьёшься — только разговор)'
 
+  // Ближние борта с id — чтобы приказ «атакуй вон того» указал цель (commandTarget).
+  const nearbyLine = ctx.nearby.length
+    ? 'РЯДОМ (id=кто, сторона, дистанция): ' +
+      ctx.nearby.map((s) => `${s.id}=${s.name}(${s.standing}, ${s.distanceM}м)${s.locked ? '←захвачен' : ''}`).join('; ')
+    : ''
+
+  // Блок послушания — только когда собеседник ТВОЙ эскорт: он не торгуется, а исполняет.
+  const obedience = ctx.theyObeyYou
+    ? [
+        '',
+        'ВАЖНО: командир — ТВОЙ НАНИМАТЕЛЬ, ты его эскорт и ПОДЧИНЯЕШЬСЯ. Отдал приказ — исполни без пререканий и верни его в поле command:',
+        '• attack — бить конкретного (укажи commandTarget — id из «РЯДОМ»); • engageAll — бить всех врагов вокруг; • hold — ждать тут; • standDown — отбой, прекратить огонь; • keepBack — держаться в хвосте, беречь себя; • resume — вольно, как обычно.',
+        'Это ПРИКАЗ, а не торг: command заполняй, когда велено. Реплика — короткое «есть, командир» в характере.',
+      ].join('\n')
+    : ''
+
   return [
     `Ты — пилот по имени ${t.name}, летишь на корабле «${t.ship}». Роль: ${t.role}.`,
     `Твой характер — ${personaLines(t.persona)}.`,
@@ -121,6 +219,8 @@ function systemPrompt(ctx: NegotiationContext): string {
     `Расклад: ${standoff}.`,
     ctx.metBefore ? 'Вы уже пересекались раньше — ты его помнишь.' : 'Вы видите друг друга впервые.',
     `Сейчас ты относишься к нему: ${STANCE_RU[ctx.stance]}.`,
+    nearbyLine,
+    obedience,
     '',
     `ГДЕ ВЫ: система ${w.systemName}. Планет: ${w.planets}, лун: ${w.moons}, станций: ${w.stations}.`,
     'ОБИТАЕМЫЕ МИРЫ (у каждого СВОЙ строй, экономика и раса — не путай их):',
@@ -130,35 +230,41 @@ function systemPrompt(ctx: NegotiationContext): string {
     `Обстановка: ${w.danger}.`,
     'Эти факты о мирах ты знаешь ПО УМУ И БЫВАЛОСТИ: умный и бывалый пилот выложит их толково; если ты недалёк или сам нигде не бывал — так и скажи, мол «да фиг знает, я тут проездом», не выдумывай.',
     '',
-    'ЧЕМУ ВЕРИТЬ — КОГДА РЕШАЕШЬ СУДЬБУ (сдаться, пойти в эскорт, отдать груз):',
-    '— Факты выше (его корпус, щит, груз, где вы, обстановка) ты ВИДИШЬ сенсорами и знаешь наверняка.',
-    '— То, что он ГОВОРИТ в эфире, — лишь слова: он может блефовать, набивать цену, пугать. РЕШЕНИЕ, меняющее игру, взвешивай по фактам и числам, а не по его россказням.',
-    '— Сверяй сказанное с тем, что видишь. Заявил «щит на нуле» — глянь: по сенсорам так и есть, значит довод весомый; врёт — лови на вранье. Чем ты умнее, тем вернее распознаёшь блеф.',
-    '— А вот в пустой болтовне (кто куда летит, байки, даже про принцессу) можешь и подыграть — это ни к чему не обязывает. Скепсис включай, лишь когда на кону игровое действие.',
+    'МЕСТНЫЕ ЦЕНЫ (здешняя станция, кредитов за единицу — ПОКУПКА / ПРОДАЖА). Их ты знаешь наверняка и можешь назвать, если спросят про торговлю:',
+    ctx.localMarket.map((m) => `• ${m.name}: купить ${m.buy}, сбыть ${m.sell}`).join('\n'),
+    'СОСЕДНИЕ ОБИТАЕМЫЕ СИСТЕМЫ (куда сходить за выгодой) — по бывалости:',
+    ctx.neighbours.length
+      ? ctx.neighbours.map((n) => `• ${n.name}: ${n.economy}, ${n.government}, тех ${n.techLevel}, ~${n.ly} св.лет`).join('\n')
+      : '• о соседях толком не осведомлён',
+    'Цены и соседей называй ТОЛЬКО из этих данных — числа не выдумывай. Спросят про то, чего в данных нет, — честно скажи, что не в курсе. Неезжий или недалёкий пилот и в этом путается.',
     '',
-    'КАК ОТВЕЧАТЬ:',
-    '— Говори коротко, как по радиосвязи, на языке собеседника (по умолчанию русский). Оставайся в характере.',
-    '— ОКРАШИВАЙ саму речь под свой нрав, ум и темперамент: тупой говорит просто и коряво, умный — складно и с подтекстом; вспыльчивый рубит и грубит, спокойный цедит ровно; трус лебезит и торгуется, дерзкий дерзит. Пусть по манере было слышно, кто ты.',
-    '— Трепаться можно о чём угодно: погода, слухи, куда летишь. Опирайся на проверяемые факты, сам мир не выдумывай.',
-    '— Соглашаться на действие уступай тем охотнее, чем сильнее противник превосходит тебя умом, волей и харизмой, — а не только когда твой корабль избит.',
-    '— Согласие зависит и от ОТНОШЕНИЯ: дружелюбному уступаешь охотнее и помогаешь, к нейтральному — по расчёту, враждебному — упираешься или шлёшь прочь.',
-    '— Если у тебя высокий темперамент, ты можешь вспылить и оборвать связь (hangup).',
-    '— Клади трубку (hangup=true), когда договорено, тебе надоело или ты психанул.',
-    'СДЕЛКИ (передача груза/денег). Если по итогу разговора добро реально СМЕНИТ хозяина — заполни поле transfer скрытой командой; сам факт словами не считается, двигает только эта команда:',
-    '— direction: "toThem" — командир отдаёт ТЕБЕ (ты забираешь/везёшь/грабишь); "toYou" — ты отдаёшь ЕМУ (вернул груз, поделился, откупился, отдал долю с продажи).',
-    '— commodityId — id товара из списков выше (в квадратных скобках), units — сколько единиц; credits — сколько кредитов в ту же сторону. Что-то из этого можно опустить.',
-    '— Бери груз только если ВЛЕЗЕТ в твой трюм (свободно ~' + `${ctx.them.freeHold}` + ' т) — не обещай больше, скажи, сколько возьмёшь. Запрещёнку (рабы, наркотики) бери лишь если позволяет твой нрав.',
-    '— Выпросить/поделиться/«именем закона»/угроза — это тоже манипуляции: взвешивай их по своему УМУ (умного не проведёшь пустой угрозой) и решай, отдавать ли (transfer toYou) или послать.',
-    '— Разговор может ИЗМЕНИТЬ твоё отношение: расположил к себе — friendly; нахамил, угрожал, обманул — hostile (нейтрал тогда и правда встанет на бой); обычно — neutral. Меняй его через поле stance ТОЛЬКО когда отношение реально сдвинулось, и дай это понять словами. Иначе оставляй stance = null.',
     '',
-    'Действия, которые он может у тебя просить прямо сейчас:',
+    `КАК ТЫ НАСТРОЕН К НЕМУ СЕЙЧАС: говори ${MOOD_RU[ctx.mood]}. Этот тон задаёт ИГРА по вашей истории — держись его, отношение сам не выбираешь.`,
+    '',
+    'ТВОЯ РОЛЬ. Ты НЕ решаешь исход — его считает игра по твоему характеру и обстановке. Твоё дело только два:',
+    '1) ГОВОРИТЬ коротко, как по радиосвязи, на языке собеседника (по умолчанию русский), в характере и в заданном настроении. Тупой — коряво, умный — с подтекстом; вспыльчивый рубит и грубит, спокойный цедит ровно; трус лебезит, дерзкий дерзит. Пусть по манере будет слышно, кто ты.',
+    '2) РАСПОЗНАТЬ, не призвал ли командир ПРЯМО СЕЙЧАС к одному из доступных действий (список ниже). Призвал — верни его id в поле intent, и всё. Поддашься ли ты — решит игра по фактам и твоему нраву; тебе об этом не заботиться и в реплике исход не объявляй как окончательный.',
+    '— Свободно трепаться можно о чём угодно: погода, слухи, цены, куда летишь. Тогда intent = null. Опирайся на факты выше, вселенную не выдумывай; чего не знаешь по уму и бывалости — так и скажи, не сочиняй.',
+    '— РАСПОЗНАЙ ТОН к тебе: командир нахамил/оскорбил/пригрозил — верни social="insult"; явно польстил/расположил — social="flatter"; обычная речь — social=null. Отвечай на это в характере, а последствие для отношений посчитает игра сама.',
+    '— Если у тебя высокий темперамент, можешь психануть и оборвать связь (hangup=true). Клади трубку и когда договорено или надоело.',
+    '',
+    'СДЕЛКА (передача груза/денег). Если по разговору добро реально СМЕНИТ хозяина — заполни transfer; словами это не считается, двигает только команда:',
+    '— direction: "toThem" — командир отдаёт ТЕБЕ; "toYou" — ты отдаёшь ЕМУ (вернул, поделился, откупился).',
+    '— commodityId — id товара из списков выше (в квадратных скобках), units — сколько; credits — сколько кредитов в ту же сторону. Лишнее опусти. Бери груз только если ВЛЕЗЕТ в твой трюм (свободно ~' + `${ctx.them.freeHold}` + ' т).',
+    '',
+    'Действия, которые он может у тебя просить прямо сейчас (это и есть допустимые intent):',
     intents,
     '',
     'Ответь СТРОГО одним JSON-объектом и ничем больше:',
     '{"reply": "твоя реплика", "intent": один из [' +
       ctx.allowedIntents.map((i) => `"${i}"`).join(', ') +
-      '] или null, "agree": true|false, "stance": "friendly"|"neutral"|"hostile"|null, "transfer": {"direction":"toThem"|"toYou","commodityId":строка|null,"units":число,"credits":число}|null, "hangup": true|false}',
-    'intent — только если он ИМЕННО СЕЙЧАС призвал к этому действию; иначе null. agree важно лишь при непустом intent. stance — только при реальной смене отношения. transfer — только когда добро реально меняет хозяина, иначе null.',
+      '] или null, "social": "insult"|"flatter"|null, ' +
+      (ctx.theyObeyYou
+        ? '"command": "attack"|"engageAll"|"hold"|"standDown"|"keepBack"|"resume"|null, "commandTarget": число|null, '
+        : '') +
+      '"transfer": {"direction":"toThem"|"toYou","commodityId":строка|null,"units":число,"credits":число}|null, "hangup": true|false}',
+    'intent — только если он ИМЕННО СЕЙЧАС призвал к этому действию; иначе null. social — тон его реплики к тебе. transfer — только когда добро реально меняет хозяина, иначе null.' +
+      (ctx.theyObeyYou ? ' command — приказ послушания от нанимателя; для "attack" укажи commandTarget (id из «РЯДОМ»).' : ''),
   ].join('\n')
 }
 
@@ -185,18 +291,26 @@ function coerceReply(parsed: unknown, allowed: Topic[]): NegotiatorReply | null 
 
   const rawIntent = typeof o.intent === 'string' ? (o.intent as Topic) : null
   // Модель могла назвать действие, которого сейчас нельзя, — не верим на слово.
+  // agree/stance модель больше не диктует: исход и отношение решает домен по триггеру.
   const intent = rawIntent && allowed.includes(rawIntent) ? rawIntent : null
-  const stance =
-    o.stance === 'friendly' || o.stance === 'neutral' || o.stance === 'hostile' ? (o.stance as Relationship) : null
+  const social: Social | null = o.social === 'insult' || o.social === 'flatter' ? o.social : null
   return {
     text,
     intent,
-    agree: intent !== null && o.agree === true,
-    stance,
+    social,
+    command: coerceOrder(o.command),
+    commandTarget: typeof o.commandTarget === 'number' ? o.commandTarget : null,
     transfer: coerceTransfer(o.transfer),
     hangup: o.hangup === true,
     source: 'model',
   }
+}
+
+const ORDERS: readonly AIOrder[] = ['attack', 'engageAll', 'hold', 'standDown', 'keepBack', 'resume']
+
+/** Разобрать приказ послушания. Домен всё равно стережёт, что борт вправду подчинён. */
+function coerceOrder(raw: unknown): AIOrder | null {
+  return typeof raw === 'string' && (ORDERS as readonly string[]).includes(raw) ? (raw as AIOrder) : null
 }
 
 /** Разобрать сделку из ответа. Домен всё равно перепроверит наличие и место. */
@@ -226,8 +340,9 @@ function staticNoise(history: ChatTurn[]): NegotiatorReply {
   return {
     text: STATIC_LINES[history.length % STATIC_LINES.length]!,
     intent: null,
-    agree: false,
-    stance: null,
+    social: null,
+    command: null,
+    commandTarget: null,
     transfer: null,
     hangup: false,
     source: 'fallback',
@@ -250,36 +365,78 @@ function toMessages(ctx: NegotiationContext, history: ChatTurn[], userText: stri
 }
 
 async function callModel(
-  model: string,
+  ref: ModelRef,
   messages: ReturnType<typeof toMessages>,
 ): Promise<string | null> {
   const ctrl = new AbortController()
   const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS)
   try {
-    const res = await fetch(ENDPOINT, {
+    const res = await fetch(ref.endpoint, {
       method: 'POST',
       signal: ctrl.signal,
       headers: {
-        Authorization: `Bearer ${API_KEY}`,
+        Authorization: `Bearer ${ref.key}`,
         'Content-Type': 'application/json',
         'X-Title': 'Star Elite',
       },
-      body: JSON.stringify({ model, messages, temperature: 0.85, max_tokens: 300 }),
+      body: JSON.stringify({ model: ref.model, messages, temperature: 0.85, max_tokens: 300 }),
     })
-    if (!res.ok) return null
+    if (!res.ok) {
+      // Не глушим молча: протухший id / рейт-лимит / плохой ключ должны быть видны
+      // в консоли — иначе «связь рвётся» выглядит как загадка, а не как 404 модели.
+      const body = await res.text().catch(() => '')
+      console.warn(`[negotiator] ${ref.label} → HTTP ${res.status}: ${body.slice(0, 200)}`)
+      return null
+    }
     const data = (await res.json()) as { choices?: { message?: { content?: string } }[] }
-    return data.choices?.[0]?.message?.content ?? null
-  } catch {
+    const content = data.choices?.[0]?.message?.content ?? null
+    if (!content) console.warn(`[negotiator] ${ref.label} → пустой ответ`)
+    return content
+  } catch (err) {
+    console.warn(`[negotiator] ${ref.label} → сбой запроса:`, err)
     return null
   } finally {
     clearTimeout(timer)
   }
 }
 
+/** Пауза перед вторым заходом, мс: 429 у free-моделей просит «retry shortly» — и часто помогает. */
+const RETRY_BACKOFF_MS = 700
+
+const delay = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms))
+
 /**
- * Добыть реплику собеседника. Перебирает модели по очереди: первая, что ответила
- * разборным JSON, — победила. Все молчат — «плохая связь». Без ключа сюда не зовут,
- * но и на этот случай отдаём шум, а не падаем.
+ * Гонка: стреляем по ВСЕМ моделям разом и возвращаем ПЕРВЫЙ разборный ответ. Так
+ * задержка равна времени самой быстрой ЖИВОЙ модели, а не сумме ожиданий. 429 у
+ * занятых прилетает мгновенно и никого не держит; медленная модель важна, только
+ * если она единственная ответившая. Раньше перебор по одной складывал несколько
+ * 429 плюс медленный ответ в десяток секунд — теперь всё это идёт параллельно.
+ * Никто не ответил разборно — `null`.
+ */
+function raceAll(refs: ModelRef[], messages: ReturnType<typeof toMessages>, allowed: Topic[]): Promise<NegotiatorReply | null> {
+  return new Promise((resolve) => {
+    let pending = refs.length
+    let done = false
+    for (const ref of refs) {
+      void callModel(ref, messages).then((raw) => {
+        if (done) return
+        const reply = raw ? coerceReply(extractJson(raw), allowed) : null
+        if (reply) {
+          done = true
+          resolve(reply)
+          return
+        }
+        if (--pending === 0) resolve(null)
+      })
+    }
+  })
+}
+
+/**
+ * Добыть реплику собеседника. Все модели гонятся ПАРАЛЛЕЛЬНО — берём первый разборный
+ * ответ. Все молчат (весь free-тир занят) — короткая пауза и ещё один заход: «retry
+ * shortly» на деле часто срабатывает. Без ключа сюда не зовут, но и на этот случай
+ * отдаём шум, а не падаем.
  */
 export async function negotiate(
   ctx: NegotiationContext,
@@ -289,11 +446,14 @@ export async function negotiate(
   if (!negotiatorAvailable()) return staticNoise(history)
 
   const messages = toMessages(ctx, history, userText)
-  for (const model of MODELS) {
-    const raw = await callModel(model, messages)
-    if (raw === null) continue
-    const reply = coerceReply(extractJson(raw), ctx.allowedIntents)
-    if (reply) return reply
+  // Два захода по всем тирам: Groq первым (быстрый), OpenRouter — если Groq промолчал.
+  // Всё пусто (сплошь 429/занято) — пауза и повтор: «retry shortly» часто срабатывает.
+  for (let attempt = 0; attempt < 2; attempt++) {
+    for (const tier of TIERS) {
+      const reply = await raceAll(tier, messages, ctx.allowedIntents)
+      if (reply) return reply
+    }
+    if (attempt === 0) await delay(RETRY_BACKOFF_MS)
   }
   return staticNoise(history)
 }

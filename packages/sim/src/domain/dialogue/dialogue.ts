@@ -1,8 +1,11 @@
 import { DIALOGUE } from '../../config/dialogue'
+import { clamp } from '../../core/math'
 import { createAIState } from '../ai/types'
 import { healthFraction, shieldFraction } from '../combat/damage'
+import { defuseGrievance, provoke } from '../combat/grievance'
 import { jettisonCargo, jettisonWeapons } from '../combat/salvage'
 import type { ShipEntity, World } from '../world/entities'
+import type { Persona } from '../world/persona'
 
 /**
  * Разговор с захваченным кораблём.
@@ -41,12 +44,77 @@ export function interlocutor(world: World): ShipEntity | null {
 
   const ship = world.ships.find((s) => s.id === id)
   if (!ship?.alive) return null
-  if (ship.state.pos.distanceTo(world.player.state.pos) > DIALOGUE.RANGE) return null
+  // Дистанция важна в ПОЛЁТЕ: докричаться можно лишь до ближнего. У причала же ты
+  // говоришь по манифесту дока — с любым пристыкованным, как ни далеко он стоит.
+  if (!world.docked && ship.state.pos.distanceTo(world.player.state.pos) > DIALOGUE.RANGE) return null
   return ship
 }
 
 /** Полное здоровье: щит и корпус вместе. Именно его и видит собеседник. */
 const vigour = (e: ShipEntity) => (shieldFraction(e) + healthFraction(e)) / 2
+
+/**
+ * Стойкость собеседника −1..+1: насколько он НЕ склонен сломаться. Волевой и
+ * храбрый держится (плюс), трус и слабовольный подаётся (минус). Двигает шансы
+ * сдачи и сопротивления грабежу — честно характером, а не заниженным здоровьем.
+ */
+function nerve(p: Persona): number {
+  const will = (p.willpower - 3) / 2 // 1..5 → −1..+1
+  const grit = p.disposition === 'brave' ? 0.5 : p.disposition === 'cowardly' ? -0.5 : 0
+  return clamp(will + grit, -1, 1)
+}
+
+/** Настроение собеседника к игроку — единственный источник тона реплик. */
+export type Mood = 'warm' | 'neutral' | 'wary' | 'hostile'
+
+/**
+ * Как борт настроен к игроку ПРЯМО СЕЙЧАС. Складывается из фракции (враг всегда
+ * враждебен), открытой претензии (задел или пригрозил — насторожён) и памяти
+ * знакомства (итог прошлых бесед). Это единый источник тона: его читают и канонные
+ * реплики домена, и подсказка для LLM — чтобы разнообразие слов не расходилось с
+ * отношением. Движок отношений живёт здесь, а не в настроении языковой модели.
+ */
+export function moodTo(world: World, other: ShipEntity): Mood {
+  if (other.faction === 'hostile') return 'hostile'
+  if ((other.ai?.grievance ?? 0) > 0) return 'wary'
+  const rec = world.acquaintances.find((a) => a.id === other.acquaintanceId)
+  if (rec?.relationship === 'friendly') return 'warm'
+  if (rec?.relationship === 'hostile') return 'hostile'
+  return 'neutral'
+}
+
+/** Соц-жест игрока в свободной речи: то, что домен из текста не вычленит сам. */
+export type Social = 'insult' | 'flatter'
+
+/**
+ * Соц-реакция. Тон реплики (нахамил / польстил) РАСПОЗНАЁТ модель и шлёт триггером —
+ * а СЛЕДСТВИЕ считает движок, детерминированно, в данных:
+ *
+ * - `insult` копит претензию как угроза (`provoke`): нейтрала может перелить во враги,
+ *   и тогда `applyStance` сам рвёт эскорт и договорённости. Оскорбление имеет цену.
+ * - `flatter` гасит претензию (`defuseGrievance`) — лесть успокаивает насторожённого.
+ *   Но дружбы даром не даёт: расположить к себе можно ДЕЛОМ (эскорт, пощада), не словом,
+ *   иначе целого пирата уболтали бы в друзья в обход честной сдачи.
+ */
+export function applySocial(world: World, other: ShipEntity, social: Social): void {
+  if (social === 'insult') provoke(world, other, DIALOGUE.INSULT_WEIGHT)
+  else defuseGrievance(other)
+}
+
+/**
+ * Плата за сопровождение — это ТОРГ, а не прайс: базу двигают нрав и отношение.
+ * Жадный дерёт больше, расположенный уступает. Насторожённый или враждебный не
+ * наймётся НИ ЗА ЧТО (`null`) — сперва помирись. Так наём зависит от цены И согласия,
+ * а порча отношения (нахамил, пригрозил) честно срывает возможность договориться.
+ */
+export function escortFee(world: World, other: ShipEntity): number | null {
+  const m = moodTo(world, other)
+  if (m === 'hostile' || m === 'wary') return null
+  let factor = 1
+  if (other.persona.disposition === 'greedy') factor *= DIALOGUE.ESCORT_FEE_GREEDY
+  if (m === 'warm') factor *= DIALOGUE.ESCORT_FEE_FRIENDLY
+  return Math.round(DIALOGUE.ESCORT_FEE * factor)
+}
 
 /**
  * Что можно сказать этому кораблю. Список зависит от того, кто он: с пиратом
@@ -67,16 +135,19 @@ export function linesFor(world: World, other: ShipEntity): Line[] {
     ]
   }
 
+  const fee = escortFee(world, other)
   return [
     {
       topic: 'escort',
-      say: `НАНЯТЬ В СОПРОВОЖДЕНИЕ · ${DIALOGUE.ESCORT_FEE} КР`,
+      say: fee != null ? `НАНЯТЬ В СОПРОВОЖДЕНИЕ · ${fee} КР` : 'НАНЯТЬ В СОПРОВОЖДЕНИЕ',
       blocked:
-        world.credits < DIALOGUE.ESCORT_FEE
-          ? 'НЕ ХВАТАЕТ КРЕДИТОВ'
-          : other.ai?.escortOf === player.id
-            ? 'ОН УЖЕ ИДЁТ С ТОБОЙ'
-            : null,
+        fee == null
+          ? 'НЕ ПОЙДЁТ С ТОБОЙ — СНАЧАЛА ПОМИРИСЬ'
+          : world.credits < fee
+            ? 'НЕ ХВАТАЕТ КРЕДИТОВ'
+            : other.ai?.escortOf === player.id
+              ? 'ОН УЖЕ ИДЁТ С ТОБОЙ'
+              : null,
     },
     { topic: 'plunder', say: 'СБРОСИТЬ ГРУЗ И ОРУЖИЕ', blocked: null },
     { topic: 'greet', say: 'ПРИВЕТСТВОВАТЬ', blocked: null },
@@ -114,10 +185,14 @@ function plunderEffect(world: World, other: ShipEntity): { cargo: number; guns: 
   return { cargo, guns }
 }
 
-/** Эффект найма: плата вперёд, наёмник встаёт в строй. false — не хватило денег. */
+/**
+ * Эффект найма: плата вперёд по ТОРГОВАННОЙ цене (нрав + отношение), наёмник встаёт
+ * в строй. false — не сговорились: не доверяет (насторожён/враг) или не хватило денег.
+ */
 function hireEscortEffect(world: World, other: ShipEntity): boolean {
-  if (world.credits < DIALOGUE.ESCORT_FEE) return false
-  world.credits -= DIALOGUE.ESCORT_FEE
+  const fee = escortFee(world, other)
+  if (fee == null || world.credits < fee) return false
+  world.credits -= fee
   other.ai ??= createAIState(other.state.pos, world.rng)
   other.ai.escortOf = world.player.id
   other.ai.skill = DIALOGUE.ESCORT_SKILL
@@ -127,8 +202,9 @@ function hireEscortEffect(world: World, other: ShipEntity): boolean {
 }
 
 function askSurrender(world: World, other: ShipEntity): Reply {
-  // Чем сильнее избит, тем охотнее бросает добычу. Целый не сдаётся вовсе.
-  const chance = (1 - healthFraction(other)) * DIALOGUE.SURRENDER_GAIN
+  // Чем сильнее избит, тем охотнее бросает добычу; но волевой и храбрый упирается
+  // дольше, трус ломается раньше — стойкость двигает шанс честно, характером.
+  const chance = (1 - healthFraction(other)) * DIALOGUE.SURRENDER_GAIN - nerve(other.persona) * DIALOGUE.NERVE_SWING
   if (world.rng() >= chance) return { text: 'СНАЧАЛА ПОПРОБУЙ МЕНЯ ВЗЯТЬ.', agreed: false }
 
   surrender(world, other)
@@ -164,8 +240,19 @@ function begMercy(world: World, other: ShipEntity): Reply {
  * Целого и невредимого не запугать — станция рядом, а ты пока никто.
  */
 function plunder(world: World, other: ShipEntity): Reply {
-  if (vigour(other) > DIALOGUE.PIRACY_FEAR_THRESHOLD) {
-    return { text: 'ПОШЁЛ ПРОЧЬ. Я ВЫЗЫВАЮ ОХРАНУ.', agreed: false }
+  // Целого не запугать; но стойкий сопротивляется даже избитым, трус пасует раньше.
+  const fear = DIALOGUE.PIRACY_FEAR_THRESHOLD - nerve(other.persona) * DIALOGUE.NERVE_SWING
+  if (vigour(other) > fear) {
+    // Требование сбросить груз — это УГРОЗА, а не слова. Целый торговец не только
+    // откажет, но и затаит: повторишь — вызовет охрану и встанет на бой. Решает это
+    // движок отношений (`provoke` копит претензию до порога), а не тон реплики.
+    provoke(world, other, DIALOGUE.THREAT_WEIGHT)
+    return {
+      text: other.faction === 'hostile'
+        ? 'ХВАТИТ С МЕНЯ! ОХРАНА, ГРАБЁЖ!' // провокация перелила через край — теперь враг
+        : 'ПОШЁЛ ПРОЧЬ. Я ВЫЗЫВАЮ ОХРАНУ.',
+      agreed: false,
+    }
   }
 
   const { cargo, guns } = plunderEffect(world, other)
@@ -185,10 +272,21 @@ function hireEscort(world: World, other: ShipEntity): Reply {
   return { text: 'ДЕНЬГИ ВПЕРЁД — И Я ТВОЙ. ВЕДИ.', agreed: true }
 }
 
-const greet = (other: ShipEntity): Reply => ({
-  text: other.ai?.escortOf !== null && other.ai ? 'ИДУ ЗА ТОБОЙ, КОМАНДИР.' : 'ЧИСТОГО НЕБА, ПИЛОТ.',
-  agreed: true,
-})
+/**
+ * Приветствие. Тон — по НАСТРОЕНИЮ: свой эскорт рапортует, дружелюбный радуется,
+ * насторожённый (ты ему только что грозил) огрызается, враг шлёт прочь. Раньше greet
+ * отдавал «чистого неба» безусловно — и выходило, что послал грабителя, а через
+ * реплику желаешь ему доброго пути. Теперь реакция следует за отношением, не сама по себе.
+ */
+function greet(world: World, other: ShipEntity): Reply {
+  if (other.ai && other.ai.escortOf === world.player.id) return { text: 'ИДУ ЗА ТОБОЙ, КОМАНДИР.', agreed: true }
+  switch (moodTo(world, other)) {
+    case 'hostile': return { text: 'НАМ НЕ О ЧЕМ ГОВОРИТЬ. УБИРАЙСЯ.', agreed: false }
+    case 'wary': return { text: 'ЧЕГО НАДО? И ДЕРЖИ ПУШКИ ПОДАЛЬШЕ.', agreed: false }
+    case 'warm': return { text: 'РАД ТЕБЯ ВИДЕТЬ, КОМАНДИР!', agreed: true }
+    case 'neutral': return { text: 'ЧИСТОГО НЕБА, ПИЛОТ.', agreed: true }
+  }
+}
 
 /**
  * Сказать реплику. Ровно один бросок кости, ровно одно изменение мира.
@@ -205,7 +303,7 @@ export function say(world: World, other: ShipEntity, topic: Topic): Reply {
     case 'mercy': return begMercy(world, other)
     case 'plunder': return plunder(world, other)
     case 'escort': return hireEscort(world, other)
-    case 'greet': return greet(other)
+    case 'greet': return greet(world, other)
   }
 }
 

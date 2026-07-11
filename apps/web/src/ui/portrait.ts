@@ -1,0 +1,146 @@
+import type { CSSProperties } from 'react'
+import type { ShipEntity, World } from '@elite/sim'
+
+/**
+ * Портреты пилотов. Лица НЕ нарезаны на файлы: на каждую расу и эмоцию — один лист
+ * 6×6 (36 разных персонажей), а нужная клетка вырезается ПО КООРДИНАТАМ под маску:
+ * в вебе через `background-position`, в HUD-канвасе через `drawImage` c sub-rect.
+ *
+ * Пилот = (вид, индекс 0..35): вид берётся из его персоны (переезжает с ним при
+ * смене борта), индекс — стабильный хеш личности. Эмоция выбирает, с какого листа
+ * брать клетку, и выводится из состояния борта — без RNG, детерминированно.
+ *
+ * Пока листов нет — крой ничего не показывает (404), и наружу проступает
+ * плейсхолдер-инициал. Появятся файлы в `public/portraits/` — лица встанут сами.
+ */
+
+export type Emotion = 'neutral' | 'joy' | 'pain' | 'anger' | 'fear' | 'sadness'
+
+/**
+ * Номер листа по эмоции: файл называется `<раса>-<номер>.png`. Порядок задан
+ * художником: 1 нейтраль, 2 радость, 3 страх, 4 злость, 5 боль, 6 грусть.
+ */
+const EMOTION_FILE: Record<Emotion, string> = {
+  neutral: '1',
+  joy: '2',
+  fear: '3',
+  anger: '4',
+  pain: '5',
+  sadness: '6',
+}
+
+/** Имя вида (рус, из sim) → id папки ассетов. Неизвестный вид — земляне. Пока три расы. */
+const SPECIES_ASSET: Record<string, string> = {
+  'Земляне': 'human',
+  'Гуманоиды': 'humanoids',
+  'Синтеты': 'robots',
+}
+
+/** Сторона сетки: лист 6×6 = 36 лиц на расу. */
+export const PORTRAIT_GRID = 6
+
+export function speciesAsset(species: string): string {
+  return SPECIES_ASSET[species] ?? 'humans'
+}
+
+/**
+ * URL листа эмоции для вида. Раскладка как в `docs/pilots/`: папка на расу, файл на
+ * эмоцию по номеру — `public/portraits/<раса>/<номер>.png`, напр. `human/3.png` (страх).
+ */
+export function portraitSheet(species: string, emotion: Emotion): string {
+  return `/portraits/${speciesAsset(species)}/${EMOTION_FILE[emotion]}.png`
+}
+
+/** Хеш строки в 32 бита: разные имена — разные лица, но детерминированно. */
+function hashString(s: string): number {
+  let h = 0x811c9dc5
+  for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 0x01000193)
+  return h >>> 0
+}
+
+/**
+ * Стабильный индекс лица пилота 0..35. Сид — ИМЯ пилота (`pilotName`, дано при
+ * рождении): оно не меняется от знакомства и восстанавливается у повторной встречи,
+ * поэтому лицо НЕ прыгает по ходу разговора и узнаётся при новой встрече. Раньше сид
+ * брался из `acquaintanceId ?? id`, а он присваивается на первой реплике — оттого лицо
+ * и «превращалось» в другого человека, стоило заговорить.
+ */
+export function portraitIndex(ship: ShipEntity): number {
+  const h = hashString(ship.pilotName || String(ship.id))
+  return h % (PORTRAIT_GRID * PORTRAIT_GRID)
+}
+
+/** Клетка лица в сетке: столбец/строка из индекса. */
+export function portraitCell(index: number): { col: number; row: number } {
+  return { col: index % PORTRAIT_GRID, row: Math.floor(index / PORTRAIT_GRID) }
+}
+
+/**
+ * Транзиентная эмоция по ИСХОДУ разговора: грусть при сдаче/грабеже, радость от
+ * сделки. Живёт в UI, не в домене — домен эмоций не знает. Ключ — id борта, гаснет
+ * по модельному времени. Ставится из окна разговора, читается портретами везде.
+ */
+const outcomeEmotion = new Map<number, { emotion: Emotion; at: number }>()
+/** Сколько держится эмоция исхода, с модельного времени. */
+const OUTCOME_TTL = 6
+
+export function markOutcomeEmotion(shipId: number, emotion: Emotion, time: number): void {
+  // Подчищаем протухшее, чтобы Map не рос вечно: борты гибнут, id не переиспользуются,
+  // а эмоция исхода живёт лишь `OUTCOME_TTL`. Сметаем только когда накопилось — дёшево.
+  if (outcomeEmotion.size > 24) {
+    for (const [id, m] of outcomeEmotion) if (time - m.at >= OUTCOME_TTL) outcomeEmotion.delete(id)
+  }
+  outcomeEmotion.set(shipId, { emotion, at: time })
+}
+
+/**
+ * Эмоция из состояния борта — детерминированно, без RNG. Порядок = приоритет:
+ * боль (только что попали) → исход разговора (сдался — грусть, сделка — радость) →
+ * страх (ломается/уходит прыжком) → злость (враг или обида) → радость (расположен
+ * к тебе) → нейтраль.
+ */
+export function pilotEmotion(ship: ShipEntity, world: World): Emotion {
+  if (world.time - ship.lastHitAt < 1) return 'pain'
+  const mark = outcomeEmotion.get(ship.id)
+  if (mark && world.time - mark.at >= 0 && world.time - mark.at < OUTCOME_TTL) return mark.emotion
+  if (ship.ai?.mode === 'evade' || (ship.ai?.warpTimer ?? -1) >= 0) return 'fear'
+  if (ship.faction === 'hostile' || (ship.ai?.grievance ?? 0) > 0) return 'anger'
+  const rec = world.acquaintances.find((a) => a.id === ship.acquaintanceId)
+  if (rec?.relationship === 'friendly') return 'joy'
+  return 'neutral'
+}
+
+/**
+ * CSS-крой клетки для веба: лист как фон, увеличенный в 6× (клетка занимает бокс),
+ * и сдвинутый на нужный столбец/строку. `background-position` в процентах для сетки
+ * N делит диапазон на N−1 шагов — оттого `(col / (GRID−1)) * 100`.
+ */
+export function portraitStyle(species: string, index: number, emotion: Emotion): CSSProperties {
+  const { col, row } = portraitCell(index)
+  const span = PORTRAIT_GRID - 1
+  return {
+    backgroundImage: `url(${portraitSheet(species, emotion)})`,
+    backgroundSize: `${PORTRAIT_GRID * 100}% ${PORTRAIT_GRID * 100}%`,
+    backgroundPosition: `${(col / span) * 100}% ${(row / span) * 100}%`,
+    backgroundRepeat: 'no-repeat',
+    imageRendering: 'pixelated',
+  }
+}
+
+/** Кэш листов для HUD-канваса: один `Image` на URL, грузится лениво. */
+const sheetCache = new Map<string, HTMLImageElement>()
+
+export function loadSheet(url: string): HTMLImageElement {
+  let img = sheetCache.get(url)
+  if (!img) {
+    img = new Image()
+    img.src = url
+    sheetCache.set(url, img)
+  }
+  return img
+}
+
+/** Лист догружен и годен к отрисовке (не 404 и не пустой). */
+export function sheetReady(img: HTMLImageElement): boolean {
+  return img.complete && img.naturalWidth > 0
+}

@@ -1,4 +1,5 @@
 import { Quaternion, Vector3 } from 'three'
+import { WARP } from '../../config/ai'
 import { PHYSICS } from '../../config/physics'
 import { BOMB, GUNNERY, SALVAGE } from '../../config/weapons'
 import { ASTEROID, DEBRIS, SCORE } from '../../config/world'
@@ -39,6 +40,8 @@ import { stepOrbits } from '../world/orbits'
 import { maybeShiftOrigin } from '../world/origin'
 import { stepTraffic } from '../world/traffic'
 import { stepTitans } from '../world/titans'
+import { stepPlatforms } from '../world/platforms'
+import { stepGrievances } from '../combat/grievance'
 import { NULL_CONTROLLER, type ControllerMap } from './controller'
 
 /**
@@ -96,6 +99,9 @@ export function stepWorld(world: World, frameDt: number, controllers: Controller
   const frame = Math.min(frameDt, PHYSICS.MAX_FRAME_DT)
   stepTraffic(world, frame)
   stepTitans(world, frame)
+  stepPlatforms(world, frame)
+  // Претензии за случайные попадания гаснут по секундам, а не по шагам физики.
+  stepGrievances(world)
   maybeShiftOrigin(world)
 }
 
@@ -144,9 +150,17 @@ function stepWeapons(world: World, controllers: ControllerMap, dt: number): void
     // импульс никого не убивает — он лишь снимает то, что летит в тебя.
     if (controller.wantsEcm?.(ship, world)) fireEcm(world, ship)
 
-    // Под маскировкой не стреляют: излучатели обесточены, вся мощность в поле.
-    // Иначе невидимка бьёт без ответа, и поле перестаёт быть побегом.
-    if (ship.cloaked) continue
+    // Под маскировкой стволы обычно холодны: вся мощность в поле, и невидимка не
+    // бьёт живое без ответа. Единственное исключение — СПЯЩЕЕ гнездо: спящий пират
+    // и сама платформа не отвечают, и `castLaser` от замаскированного стрелка
+    // засчитывает попадание только по ним. Так гнездо вырезается скрытно, а поле
+    // остаётся побегом, а не безнаказанностью: живого бодрствующего под ним не задеть.
+    if (ship.cloaked) {
+      if (!isPhased(ship) && controller.wantsFire(ship, world)) {
+        fireLasers(world, ship, ship.faction !== 'player')
+      }
+      continue
+    }
 
     if (controller.wantsBomb?.(ship, world)) fireBomb(world, ship)
     if (controller.wantsDrone?.(ship, world)) launchDrone(world, ship)
@@ -302,6 +316,7 @@ function cleanup(world: World): void {
   world.tracers = world.tracers.filter((t) => now - t.born < GUNNERY.TRACER_LIFE)
   world.explosions = world.explosions.filter((e) => now - e.born < DEBRIS.EXPLOSION_LIFE)
   world.shockwaves = world.shockwaves.filter((w) => now - w.born < BOMB.WAVE_LIFE)
+  world.warps = world.warps.filter((w) => now - w.born < WARP.FLASH_LIFE)
 
   for (const ship of world.ships) {
     if (ship.alive || ship.wreckAt !== null) continue
@@ -322,8 +337,11 @@ function cleanup(world: World): void {
     }
   }
 
-  // Обломок держим, пока взрыв не отыграет.
-  world.ships = world.ships.filter((s) => s.alive || (s.wreckAt !== null && now - s.wreckAt < DEBRIS.WRECK_LIFE))
+  // Обломок держим, пока взрыв не отыграет. Ушедшего прыжком снимаем молча: он не
+  // погиб (alive всё ещё true, взрыва не было) — его просто больше нет в системе.
+  world.ships = world.ships.filter(
+    (s) => !s.warpedOut && (s.alive || (s.wreckAt !== null && now - s.wreckAt < DEBRIS.WRECK_LIFE)),
+  )
 
   // Убитый камень уже раскололся в `damageAsteroid` — здесь только выметаем мёртвых.
   // Второе место, гасящее астероид по прочности, однажды забыло бы про осколки.

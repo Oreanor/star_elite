@@ -215,6 +215,32 @@ export function spawnOrePod(world: World, pos: Vector3, vel: Vector3, units: num
 }
 
 /**
+ * Рассыпать товар ПОЛЕМ контейнеров. Тот же `spawnPod`, что у трофеев и руды:
+ * один способ рождать контейнеры на всех. Металл с расстрелянной платформы
+ * приходит сюда — это груда обломков, а не единый куб. Единицы делятся поровну,
+ * остаток достаётся последнему контейнеру: сумма ровно `totalUnits`, ни на грамм
+ * больше — вещество из ничего не рождается.
+ */
+export function spawnCommodityPods(
+  world: World,
+  pos: Vector3,
+  vel: Vector3,
+  commodity: Commodity,
+  totalUnits: number,
+  pods: number,
+): void {
+  if (totalUnits <= 0) return
+  const n = Math.max(1, Math.min(pods, totalUnits))
+  const per = Math.floor(totalUnits / n)
+  let left = totalUnits
+  for (let i = 0; i < n; i++) {
+    const units = i === n - 1 ? left : per
+    left -= units
+    if (units > 0) spawnPod(world, pos, vel, { kind: 'commodity', commodity, units })
+  }
+}
+
+/**
  * Выбросить весь груз за борт. Тем же кодом, что высыпает трюм из обломка:
  * приказ «сбрось груз» не должен рождать второй способ терять контейнеры.
  *

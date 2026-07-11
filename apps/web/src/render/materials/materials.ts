@@ -271,6 +271,24 @@ export function explosionMaterial(): MeshBasicMaterial {
   return explosion
 }
 
+let warpFlash: MeshBasicMaterial | null = null
+
+/**
+ * Вспышка гиперперехода. Свет, а не тело: аддитивно и без записи глубины, как взрыв.
+ * Цвет — белый: тон и яркость каждой вспышки приходят инстансным цветом (`instanceColor`),
+ * материал их только домножает. Один материал на все прыжки — один вызов отрисовки.
+ */
+export function warpFlashMaterial(): MeshBasicMaterial {
+  warpFlash ??= new MeshBasicMaterial({
+    color: 0xffffff,
+    transparent: true,
+    blending: AdditiveBlending,
+    depthWrite: false,
+    fog: false,
+  })
+  return warpFlash
+}
+
 const tracers = new Map<string, MeshBasicMaterial>()
 
 /**

@@ -154,18 +154,11 @@ function makeCompanion(rng: Rng, primary: Star): Star | null {
   return { class: cls.id, className: cls.name, color: cls.color, radius, scoopable: cls.scoopable }
 }
 
-/** Описание расы собирается из частей: «Крупные зелёные чешуйчатые ящеры». */
+/** Кем населён мир: чаще люди, иначе — один из инопланетных гуманоидов. */
 function makeSpecies(rng: Rng): string {
   // Больше половины галактики колонизировано людьми — иначе экзотика перестаёт быть экзотикой.
   if (rng() < 0.55) return HUMAN_SPECIES
-  const parts = [
-    pick(rng, SPECIES.SIZE, 'Крупные'),
-    pick(rng, SPECIES.COLOR, 'зелёные'),
-    // Признак не всегда: «Мелкие синие птицы» звучит лучше нагромождения.
-    rng() < 0.7 ? pick(rng, SPECIES.TRAIT, 'чешуйчатые') : '',
-    pick(rng, SPECIES.KIND, 'ящеры'),
-  ]
-  return parts.filter(Boolean).join(' ')
+  return pick(rng, SPECIES, SPECIES[0]!).name
 }
 
 /** Экономика следует за тех-уровнем: аграрии внизу, высокие технологии наверху. */

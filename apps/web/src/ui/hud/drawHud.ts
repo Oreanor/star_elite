@@ -18,6 +18,7 @@ import {
   missileAmmo,
   nearestPod,
   peakHeat,
+  pendingHail,
   scooping,
   isVisible,
   scoopReadiness,
@@ -34,6 +35,15 @@ import { t } from '../i18n'
 import { properName, shipTypeName } from '../i18n/dataNames'
 import { drawFlare } from './drawFlare'
 import { angularSize, formatDistance, formatSpeed, projectPoint } from './project'
+import {
+  PORTRAIT_GRID,
+  loadSheet,
+  pilotEmotion,
+  portraitCell,
+  portraitIndex,
+  portraitSheet,
+  sheetReady,
+} from '../portrait'
 
 /**
  * Вся отрисовка HUD. Императивная, в кадре, без React.
@@ -85,6 +95,7 @@ export function drawHud(frame: HudFrame): void {
   drawGunsight(frame)
   drawFlightPathMarker(frame)
   drawRadar(frame)
+  drawTargetPortrait(frame)
   drawReadouts(frame)
   drawCruise(frame)
   drawDocking(frame)
@@ -477,6 +488,41 @@ function drawBodyMarkers({ ctx, camera, world, width, height }: HudFrame): void 
 }
 
 /**
+ * Портрет захваченной цели — «того, кто с тобой» — над локатором справа. Лицо
+ * вырезается из листа расы ПО КООРДИНАТАМ (клетка index в сетке 6×6), эмоция — из
+ * состояния борта. Пока листа нет, рамка с инициалом держит место; догрузится —
+ * лицо встанет само. Невидимку (в маскировке) не показываем, как и локатор.
+ */
+function drawTargetPortrait({ ctx, world, width, height }: HudFrame): void {
+  if (world.lockedTargetId == null) return
+  const ship = world.ships.find((s) => s.id === world.lockedTargetId)
+  if (!ship || !ship.alive || !isVisible(ship)) return
+
+  const size = 66 * S
+  const x = width - 12 * S - size
+  // Над локатором: его верхняя кромка — height − 2·radius(36) − отступ(12).
+  const radarTop = height - 72 * S - 12 * S
+  const y = radarTop - 8 * S - size - 7 * S // ещё выше на строку имени
+
+  ctx.strokeStyle = HUD_COLORS.DIM
+  ctx.lineWidth = 1
+  ctx.strokeRect(Math.round(x) + 0.5, Math.round(y) + 0.5, Math.round(size), Math.round(size))
+
+  const sheet = loadSheet(portraitSheet(ship.persona.species, pilotEmotion(ship, world)))
+  if (sheetReady(sheet)) {
+    const cell = sheet.naturalWidth / PORTRAIT_GRID
+    const { col, row } = portraitCell(portraitIndex(ship))
+    ctx.imageSmoothingEnabled = false
+    ctx.drawImage(sheet, col * cell, row * cell, cell, cell, Math.round(x), Math.round(y), Math.round(size), Math.round(size))
+  } else {
+    text(ctx, (ship.name.trim().charAt(0) || '?').toUpperCase(), x + size / 2, y + size / 2 - 5 * S, HUD_COLORS.DIM, 'center')
+  }
+
+  // Имя под портретом — кто это.
+  text(ctx, ship.name.toUpperCase(), x + size / 2, y + size + 2 * S, HUD_COLORS.PRIMARY, 'center')
+}
+
+/**
  * Радар: вид сверху, нос — вверх. Показывает и корабли, и тела, поэтому шкала
  * логарифмическая: иначе планета в 400 км сплющит всё остальное к центру.
  */
@@ -493,8 +539,19 @@ function drawRadar({ ctx, world, width, height }: HudFrame): void {
   const player = world.player
   shipAxes(player.state.quat, _fwd, _right, _up)
 
-  /** Отметка. `ring` — обвести кольцом: так показан захват и цель навигации. */
-  const plot = (worldPos: Vector3, color: string, size: number, ring = false) => {
+  /**
+   * Отметка. `ring` — обвести кольцом (захват, цель навигации). `shape` — форма
+   * метки: небесные тела круглые, станции — ромбом, а всё подвижное (корабли,
+   * обломки, платформы) — квадратом. Форма отвечает на вопрос «это место или это
+   * цель?» ещё до цвета: по круглому и ромбу не стреляют, к ним летят.
+   */
+  const plot = (
+    worldPos: Vector3,
+    color: string,
+    size: number,
+    ring = false,
+    shape: 'square' | 'round' | 'diamond' = 'square',
+  ) => {
     _point.copy(worldPos).sub(player.state.pos)
     const distance = _point.length()
     if (distance < 1) return
@@ -521,16 +578,38 @@ function drawRadar({ ctx, world, width, height }: HudFrame): void {
     const lift = Math.max(-10 * S, Math.min(10 * S, (_point.dot(_up) / distance) * 20 * S))
     if (Math.abs(lift) > S) line(ctx, px, py, px, py - lift, HUD_COLORS.DIM)
 
-    ctx.fillStyle = color
-    ctx.fillRect(Math.round(px - size / 2), Math.round(py - lift - size / 2), size, size)
-    if (ring) circle(ctx, px, py - lift, size, color)
+    const my = py - lift
+    if (shape === 'round') {
+      dot(ctx, px, my, Math.max(1, size / 2), color)
+    } else if (shape === 'diamond') {
+      // Ромб — квадрат на угол. Держим компактным: станция не должна раздуваться
+      // крупнее планеты рядом.
+      const r = size / 2
+      ctx.fillStyle = color
+      ctx.beginPath()
+      ctx.moveTo(Math.round(px), Math.round(my - r))
+      ctx.lineTo(Math.round(px + r), Math.round(my))
+      ctx.lineTo(Math.round(px), Math.round(my + r))
+      ctx.lineTo(Math.round(px - r), Math.round(my))
+      ctx.fill()
+    } else {
+      ctx.fillStyle = color
+      ctx.fillRect(Math.round(px - size / 2), Math.round(my - size / 2), size, size)
+    }
+    if (ring) circle(ctx, px, my, size, color)
   }
 
   // Цель навигации обведена кольцом: на логарифмической шкале, где все тела жмутся
   // к ободу, отметки стоят вплотную, и одного размера мало.
+  // Небесные тела — это МЕСТА, а не цели, и форма говорит об этом раньше цвета:
+  // звезда и планета круглые, станция — ромбом (рукотворное среди природного),
+  // а всё подвижное останется квадратом. Цель навигации крупнее и в кольце.
   for (const body of world.bodies) {
     const nav = body.id === world.navTargetId
-    plot(body.pos, bodyColor(body), Math.round((nav ? 5 : 3) * S), nav)
+    const shape = body.kind === 'station' ? 'diamond' : 'round'
+    // Звезда — крупнее прочих: она центр системы и ориентир, а не рядовая метка.
+    const base = body.kind === 'star' ? 5 : 3
+    plot(body.pos, bodyColor(body), Math.round((nav ? base + 1 : base) * S), nav, shape)
   }
 
   // Камни — только ближние: пояс в двести шестьдесят отметок залил бы обод серым,
@@ -548,12 +627,20 @@ function drawRadar({ ctx, world, width, height }: HudFrame): void {
   // с рядовым нейтралом-торговцем: это не корабль, это город.
   for (const titan of world.titans) plot(titan.pos, HUD_COLORS.NEUTRAL, Math.round(5 * S), true)
 
+  // Пиратские платформы-гнёзда — крупной красной отметкой в кольце: это враждебная
+  // СТРУКТУРА, а не рядовой истребитель. Кольцо отличает её от точки-корабля, а
+  // красный отвечает на тот же вопрос боя — стрелять.
+  for (const platform of world.platforms) {
+    if (!platform.alive) continue
+    plot(platform.pos, HUD_COLORS.DANGER, Math.round(5 * S), true)
+  }
+
   // Локатор невидимку не берёт — то же правило, что у захвата и у головки ракеты.
   // Знакомого выделяем кольцом, как захваченного: среди точек он должен читаться особо.
   for (const ship of world.ships) {
     if (!isVisible(ship)) continue
     const marked = ship.id === world.lockedTargetId || ship.acquaintanceId != null
-    plot(ship.state.pos, radarColor(ship, world), Math.round(4 * S), marked)
+    plot(ship.state.pos, radarColor(ship, world), Math.round(3 * S), marked)
   }
 }
 
@@ -749,6 +836,14 @@ function drawBombBurst({ ctx, world, width, height }: HudFrame): void {
  * что «через шесть секунд» и «через одну» требуют разной степени паники.
  */
 function drawAlerts({ ctx, world, width, height }: HudFrame): void {
+  // Обиженный вызывает по связи (ты его задел): входящий вызов сверху по центру,
+  // мягко мигает — «ответь по T, разряди, пока не перелило во враги». Не тревога,
+  // а социальный сигнал: цвет цели, не опасности. Пока говоришь — окно поверх скроет.
+  const hail = pendingHail(world)
+  if (hail && Math.sin(world.time * Math.PI * 2) > -0.5) {
+    text(ctx, t('hud.hail', { name: hail.name.toUpperCase() }), width / 2, 46 * S, HUD_COLORS.TARGET, 'center')
+  }
+
   // Выше панели стыковки: она занимает низ по центру и перекрыла бы обе строки.
   if (autofightActive(world)) {
     text(ctx, t('hud.autofight'), width / 2, height - 64 * S, HUD_COLORS.TARGET, 'center')

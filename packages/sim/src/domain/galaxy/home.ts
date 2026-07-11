@@ -1,4 +1,4 @@
-import { SCALE, STAR_CLASSES } from '../../config/galaxy'
+import { HUMAN_SPECIES, SCALE, STAR_CLASSES } from '../../config/galaxy'
 import { STARTER_SYSTEM } from '../world/system'
 import type { Planet, StarSystem } from './types'
 
@@ -45,7 +45,7 @@ const planetsOf = (): Planet[] =>
             government: 'Демократия' as const,
             techLevel: 12,
             population: 8.6,
-            species: 'Люди',
+            species: HUMAN_SPECIES,
           }
         : null,
       station:

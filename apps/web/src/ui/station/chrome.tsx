@@ -1,5 +1,7 @@
 import { Fragment, useState } from 'react'
+import type { ShipEntity, World } from '@elite/sim'
 import { UI } from '../theme'
+import { pilotEmotion, portraitIndex, portraitStyle, type Emotion } from '../portrait'
 
 /**
  * Хром станции: кнопка, вкладки, панель.
@@ -78,6 +80,51 @@ export function Tabs<T extends string>({
         )
       })}
     </nav>
+  )
+}
+
+/**
+ * Портрет пилота. Внизу — плейсхолдер (рамка с инициалом), поверх — крой лица из
+ * листа расы по эмоции. Пока листа нет (404), крой прозрачен и проступает инициал;
+ * появятся файлы в `public/portraits/` — лица встанут сами, вёрстка не поедет.
+ *
+ * Лицо и эмоцию берём из борта: вид — из персоны, индекс — из личности, эмоцию —
+ * из состояния (можно переопределить пропом `emotion`, напр. по исходу разговора).
+ * Без борта — только плейсхолдер по имени (например, у ещё безымянного встречного).
+ */
+export function PilotPortrait({
+  ship,
+  world,
+  emotion,
+  name,
+  size = 46,
+}: {
+  ship?: ShipEntity
+  world?: World
+  emotion?: Emotion
+  name?: string
+  size?: number
+}) {
+  const label = (ship?.name ?? name ?? '?').trim()
+  const initial = label.charAt(0).toUpperCase() || '?'
+  const emo: Emotion | null = ship ? emotion ?? (world ? pilotEmotion(ship, world) : 'neutral') : null
+  const crop = ship && emo ? portraitStyle(ship.persona.species, portraitIndex(ship), emo) : null
+  return (
+    <div
+      className="relative flex shrink-0 select-none items-center justify-center border"
+      style={{
+        width: size,
+        height: size,
+        borderColor: DIM,
+        color: DIM,
+        background: 'rgba(127,214,255,0.05)',
+        fontSize: size * 0.42,
+      }}
+      aria-hidden
+    >
+      {initial}
+      {crop && <div className="absolute inset-0" style={crop} />}
+    </div>
   )
 }
 

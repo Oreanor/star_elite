@@ -5,6 +5,7 @@ import { isLaser, isMissile } from '../loadout'
 import type { MissileEntity, ShipEntity, World } from '../world/entities'
 import { applyDamage } from './damage'
 import { spawnExplosion, spawnTracer } from './effects'
+import { registerPlayerHit } from './grievance'
 import { damageAsteroid } from './mining'
 import { castLaser } from './raycast'
 
@@ -15,6 +16,8 @@ const _muzzle = new Vector3()
 const _convergence = new Vector3()
 const _dir = new Vector3()
 const _hitPos = new Vector3()
+/** Неподвижная сфера платформы: скорость обломков от неё — ноль. Не мутируется. */
+const _still = new Vector3()
 
 /** Мировая позиция ствола `mountIndex`. Нужна и симуляции, и рендеру вспышки. */
 export function muzzleWorldPos(e: ShipEntity, mountIndex: number, out: Vector3): Vector3 {
@@ -64,6 +67,9 @@ export function fireLasers(world: World, e: ShipEntity, hostile: boolean): boole
     if (hit.ship) {
       applyDamage(hit.ship, laser.damage, world.time)
       spawnExplosion(world, _hitPos, hit.ship.state.vel, 0.6)
+      // Попал игрок по не-врагу — это повод к обиде, а не к мгновенной войне:
+      // копим претензию, а во враги переводит уже сам `registerPlayerHit` на пороге.
+      if (e.faction === 'player') registerPlayerHit(world, hit.ship)
     } else if (hit.asteroid) {
       spawnExplosion(world, _hitPos, hit.asteroid.vel, 0.4)
       // Камень не исчезает — он раскалывается. Правило дробления живёт в одном
@@ -73,6 +79,11 @@ export function fireLasers(world: World, e: ShipEntity, hostile: boolean): boole
       // Ракета не «повреждается»: у неё нет прочности, только боевая часть.
       hit.missile.alive = false
       spawnExplosion(world, hit.missile.pos, hit.missile.vel, 1.2)
+    } else if (hit.platform) {
+      // Ядро платформы принимает урон корпусом: щита у гнезда нет. Гибель,
+      // взрыв и металл — забота `stepPlatforms`, когда прочность уйдёт в ноль.
+      hit.platform.hull = Math.max(0, hit.platform.hull - laser.damage)
+      spawnExplosion(world, _hitPos, _still, 0.6)
     }
   })
 

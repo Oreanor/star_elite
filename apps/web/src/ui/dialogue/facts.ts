@@ -1,10 +1,22 @@
 import {
+  capitalOf,
+  commandableByPlayer,
+  commodityBuyPrice,
+  commoditySellPrice,
+  commodityStock,
+  distanceLy,
   freeCapacity,
+  generateGalaxy,
   itemName,
   localSettlement,
+  moodTo,
+  type Mood,
   type Persona,
   type Relationship,
+  type AIOrder,
   type ShipEntity,
+  type Social,
+  type StarSystem,
   type Topic,
   type Transfer,
   type World,
@@ -55,6 +67,22 @@ export interface PartySnapshot {
   role: string
 }
 
+/**
+ * Ближний борт в поле зрения на момент разговора. Нужен, чтобы собеседник понимал
+ * обстановку и разбирал приказы вроде «атакуй вот этого» или «прикрой того»: у каждого
+ * есть имя, сторона и дистанция, а `locked` метит того, кого игрок захватил прямо сейчас
+ * — это и есть «вот этот». Эфемерная выжимка мира, не память: пересобирается на разговор.
+ */
+export interface NearbyShip {
+  id: number
+  name: string
+  /** Сторона их словом: враг / мирный / свой. */
+  standing: string
+  distanceM: number
+  /** Захвачен игроком прямо сейчас — «вот этот». */
+  locked: boolean
+}
+
 export interface NegotiationContext {
   world: WorldSnapshot
   /** Собеседник. */
@@ -64,8 +92,25 @@ export interface NegotiationContext {
   /** Куда направляется игрок: цель в системе или намеченный прыжок. */
   yourHeading: string
   distanceM: number
+  /** Кто ещё рядом на момент разговора: обстановка для приказов «атакуй вот того». */
+  nearby: NearbyShip[]
+  /** Местные цены на заметные товары — РЕАЛЬНЫЕ из домена, чтобы пилот не выдумывал числа. */
+  localMarket: MarketQuote[]
+  /** Ближайшие обитаемые системы: куда сходить за выгодой. Экономика/тех — настоящие. */
+  neighbours: NeighbourWorld[]
+  /**
+   * Подчиняется ли собеседник игроку (это его нанятый эскорт/автобот). Тогда он не
+   * торгуется, а ИСПОЛНЯЕТ приказы послушания — и распознавать надо их, а не уговоры.
+   */
+  theyObeyYou: boolean
   /** Текущее отношение собеседника к игроку — итог прошлых бесед, если были. */
   stance: Relationship
+  /**
+   * Настроение собеседника ПРЯМО СЕЙЧАС (его считает домен, `moodTo`): в этом тоне
+   * модель и обязана говорить. Отношением рулит движок, а не настроение модели —
+   * потому тон приходит готовым, а не выбирается ею.
+   */
+  mood: Mood
   /** Что механически можно у него попросить прямо сейчас (незаблокированное). */
   allowedIntents: Topic[]
   /**
@@ -75,22 +120,45 @@ export interface NegotiationContext {
   metBefore: boolean
 }
 
+/** Местная цена товара: пилот знает цифры и может их назвать, не выдумывая. */
+export interface MarketQuote {
+  name: string
+  buy: number
+  sell: number
+}
+
+/** Соседняя обитаемая система: экономика/строй/тех и путь в световых годах. */
+export interface NeighbourWorld {
+  name: string
+  economy: string
+  government: string
+  techLevel: number
+  ly: number
+}
+
 /** Одна реплика ленты. */
 export interface ChatTurn {
   who: 'you' | 'them' | 'system'
   text: string
 }
 
-/** Ответ переговорщика: слова + пойманное действие. */
+/**
+ * Ответ переговорщика. Модель тут — РАСПОЗНАВАТЕЛЬ и ГОЛОС, а не судья: она даёт
+ * слова и ловит, какое действие озвучил игрок (`intent` — триггер). РЕШАЕТ исход
+ * домен (`say` по триггеру): согласие и смену отношения модель не диктует — иначе
+ * выходит «послал → чистого неба». Пустой триггер — просто болтовня (погода, цены).
+ */
 export interface NegotiatorReply {
   text: string
-  /** Действие, к которому призвал игрок и на которое собеседник дал ответ. */
+  /** Триггер: какое из доступных действий озвучил игрок. null — просто разговор. */
   intent: Topic | null
-  /** Согласился ли на это действие. Значимо лишь при непустом intent. */
-  agree: boolean
-  /** Сменилось ли отношение по итогу реплики. null — без изменений. */
-  stance: Relationship | null
-  /** Скрытая команда на передачу товара/денег, если сделка состоялась. null — нет. */
+  /** Соц-тон реплики игрока (нахамил/польстил). Следствие считает домен. null — нейтрально. */
+  social: Social | null
+  /** Приказ послушания СВОЕМУ эскорту, если игрок его отдал. null — не приказ. */
+  command: AIOrder | null
+  /** Кого атаковать по приказу `command:"attack"` — id ближнего борта. null — не задан. */
+  commandTarget: number | null
+  /** Скрытая команда на передачу товара/денег, если по разговору добро сменит хозяина. */
   transfer: Transfer | null
   /** Собеседник кладёт трубку: договорено, надоело или психанул. */
   hangup: boolean
@@ -137,6 +205,75 @@ function party(ship: ShipEntity, role: string): PartySnapshot {
   }
 }
 
+/** Дальше этого борт в разговоре не поминают, м: обстановка — это ближний круг, не вся система. */
+const NEARBY_RANGE = 6000
+
+/** Сколько заметных товаров и сколько соседних систем даём пилоту на память. */
+const MARKET_ITEMS = 6
+const NEIGHBOUR_COUNT = 4
+
+/**
+ * Галактику генерим лениво и КЭШИРУЕМ по зерну. 2500 систем строятся за миллисекунды,
+ * но дёргать это на каждую реплику незачем — разговор редкое событие, кэш живёт сессию.
+ */
+let galaxyCache: { seed: number; systems: StarSystem[] } | null = null
+function galaxyFor(seed: number): StarSystem[] {
+  if (!galaxyCache || galaxyCache.seed !== seed) galaxyCache = { seed, systems: generateGalaxy(seed) }
+  return galaxyCache.systems
+}
+
+/**
+ * Местные цены на заметные легальные товары — РЕАЛЬНЫЕ из домена (`commodityBuyPrice`/
+ * `commoditySellPrice`). Пилот эти цифры знает и может назвать; модель их лишь озвучивает,
+ * а не сочиняет. Контрабанду в прайс не суём: о ней разговор особый.
+ */
+function localMarket(world: World): MarketQuote[] {
+  return commodityStock()
+    .filter((c) => !c.contraband)
+    .slice(0, MARKET_ITEMS)
+    .map((c) => ({ name: c.name, buy: commodityBuyPrice(world, c), sell: commoditySellPrice(world, c) }))
+}
+
+/**
+ * Ближайшие ОБИТАЕМЫЕ системы — КЭШ по (зерно, текущая система): список не меняется,
+ * пока ты в этой системе, а `capitalOf` на 2500 систем считать на каждую реплику ни к
+ * чему. Прыгнул в другую систему — пересчитается. Живёт сессию, как и кэш галактики.
+ */
+let neighbourCache: { seed: number; index: number; list: NeighbourWorld[] } | null = null
+function neighbours(world: World): NeighbourWorld[] {
+  if (neighbourCache && neighbourCache.seed === world.galaxySeed && neighbourCache.index === world.systemIndex) {
+    return neighbourCache.list
+  }
+  const list = computeNeighbours(world)
+  neighbourCache = { seed: world.galaxySeed, index: world.systemIndex, list }
+  return list
+}
+
+/**
+ * Экономика, строй, тех-уровень и путь в св. годах — всё настоящее, из генерации
+ * галактики. По ним бывалый пилот подскажет, куда сходить за выгодой («электроника
+ * тут дорога — в промышленной system X дешевле»). Числа честные.
+ */
+function computeNeighbours(world: World): NeighbourWorld[] {
+  const systems = galaxyFor(world.galaxySeed)
+  const here = systems[world.systemIndex]
+  if (!here) return []
+  return systems
+    .filter((s) => s.index !== world.systemIndex)
+    .map((s) => ({ s, cap: capitalOf(s) }))
+    .filter((x): x is { s: StarSystem; cap: NonNullable<ReturnType<typeof capitalOf>> } => x.cap !== null)
+    .map((x) => ({ ...x, ly: distanceLy(here, x.s) }))
+    .sort((a, b) => a.ly - b.ly)
+    .slice(0, NEIGHBOUR_COUNT)
+    .map((x) => ({
+      name: properName(x.s.name),
+      economy: economyName(x.cap.settlement.economy),
+      government: governmentName(x.cap.settlement.government),
+      techLevel: x.cap.settlement.techLevel,
+      ly: Math.round(x.ly),
+    }))
+}
+
 /**
  * Собрать контекст переговоров из мира. `allowedIntents` считает домен
  * (`linesFor` минус заблокированное) и передаёт вызывающий: правило одно.
@@ -155,6 +292,24 @@ export function buildContext(world: World, other: ShipEntity, allowedIntents: To
       : anarchy
         ? 'анархия, закон тут не работает'
         : 'патрулируется, относительно спокойно'
+
+  // Ближние борта: что реально маячит вокруг на момент разговора. Невидимок
+  // (в маскировке) не показываем — их не знает ни локатор, ни собеседник. Себя и
+  // самого собеседника исключаем, сортируем по близости и берём горсть — длинный
+  // список пилоту ни к чему, а «вот этот» и «вон тот» разбираются и по трём меткам.
+  const player = world.player
+  const nearby: NearbyShip[] = world.ships
+    .filter((s) => s.alive && !s.cloaked && s.id !== other.id && s.id !== player.id)
+    .map((s) => ({
+      id: s.id,
+      name: s.name,
+      standing: s.faction === 'hostile' ? 'враг' : s.faction === player.faction ? 'свой' : 'мирный',
+      distanceM: Math.round(s.state.pos.distanceTo(player.state.pos)),
+      locked: s.id === world.lockedTargetId,
+    }))
+    .filter((s) => s.distanceM < NEARBY_RANGE)
+    .sort((a, b) => a.distanceM - b.distanceM)
+    .slice(0, 8)
 
   const record = world.acquaintances.find((a) => a.id === other.acquaintanceId)
   const navBody = world.bodies.find((b) => b.id === world.navTargetId)
@@ -194,7 +349,12 @@ export function buildContext(world: World, other: ShipEntity, allowedIntents: To
     you: party(world.player, 'вольный пилот'),
     yourHeading: heading,
     distanceM: Math.round(other.state.pos.distanceTo(world.player.state.pos)),
+    nearby,
+    localMarket: localMarket(world),
+    neighbours: neighbours(world),
+    theyObeyYou: commandableByPlayer(other, world.player.id),
     stance: record?.relationship ?? 'neutral',
+    mood: moodTo(world, other),
     allowedIntents,
     // Узнаёт, только если виделись РАНЬШЕ: у записи больше одной встречи. В первый
     // разговор запись родится по ходу дела, но встреча всё ещё первая — не «узнаёт».

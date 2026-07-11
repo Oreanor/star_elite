@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { interlocutor, jumpBlock, undock } from '@elite/sim'
+import { interlocutor, jumpBlock, pendingHail, undock } from '@elite/sim'
 import { GameProvider, useSession } from './GameContext'
 import { jumping, startDepart } from './control/jumpFx'
 import { negotiate, negotiatorAvailable } from './control/negotiator'
@@ -111,8 +111,16 @@ function Shell({ onRestart }: { onRestart: () => void }) {
   }, [])
   const closeTalk = useCallback(() => {
     setTalking(false)
-    void requestLock()
-  }, [])
+    // У причала возвращаемся в консоль (курсор уже отпущен, мир стоит); в полёте —
+    // забираем захват обратно, и мир оживает. Иначе закрытие дока «взлетело» бы.
+    if (!session.world.docked) void requestLock()
+  }, [session])
+  // Клик по пристыкованному пилоту в доке: наводимся на него и открываем канал.
+  // Курсор у причала уже свободен, мир стоит — только показать окно разговора.
+  const talkTo = useCallback((shipId: number) => {
+    session.world.lockedTargetId = shipId
+    setTalking(true)
+  }, [session])
   // У причала кнопка шапки отчаливает: отойдя от кольца, корабль оживает захватом.
   const undockAndResume = useCallback(() => {
     undock(session.world)
@@ -147,9 +155,15 @@ function Shell({ onRestart }: { onRestart: () => void }) {
       }
 
       if (e.code === 'KeyT') {
-        if (docked || tab !== null) return
-        if (talking) return
-        if (!interlocutor(session.world)) return
+        if (docked || tab !== null || talking) return
+        // Обычно говорим с ЗАХВАЧЕННОЙ целью. Но если по связи вызывает обиженный
+        // (ты его задел), T отвечает ему — наводимся на него и открываем канал, чтобы
+        // разрядить претензию, пока она не перелилась во враги.
+        if (!interlocutor(session.world)) {
+          const hail = pendingHail(session.world)
+          if (!hail) return
+          session.world.lockedTargetId = hail.id
+        }
         setTalking(true)
         releaseLock()
         return
@@ -199,6 +213,7 @@ function Shell({ onRestart }: { onRestart: () => void }) {
           tab={tab ?? 'planet'}
           onTab={setTab}
           onClose={docked ? undockAndResume : closeConsole}
+          onTalk={talkTo}
         />
       ) : (
         !locked && <Paused resuming={started} onBoot={() => setBooted(true)} />
@@ -458,7 +473,10 @@ function Paused({ resuming, onBoot }: { resuming: boolean; onBoot: () => void })
                     active={t(KEY_GROUPS[keyGroup]!.title)}
                     onSelect={(label) => setKeyGroup(KEY_GROUPS.findIndex((g) => t(g.title) === label))}
                   />
-                  <dl className="w-full max-w-md space-y-1 text-left text-sm">
+                  {/* Высота ФИКСИРОВАНА под самый длинный блок (9 строк): у групп
+                      разное число клавиш, и без этого при переключении вкладок список
+                      менял высоту, а центрирование дёргало вкладки и кнопку вверх-вниз. */}
+                  <dl className="h-[14rem] w-full max-w-md content-start space-y-1 text-left text-sm">
                     {KEY_GROUPS[keyGroup]!.rows.map(([keyLabel, keyWhat]) => (
                       <div key={keyLabel} className="flex gap-3">
                         <dt className="w-24 shrink-0 text-right text-[#7fd6ff]">{t(keyLabel)}</dt>

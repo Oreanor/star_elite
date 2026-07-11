@@ -37,15 +37,6 @@ export interface Acquaintance {
   relationship: Relationship
 }
 
-// Имена пилотов: пара коротких списков. Не культура и не лор — просто чтобы у
-// знакомого была подпись на локаторе, а не «Торговец 1».
-const FIRST = ['Дэн', 'Йенс', 'Мира', 'Кай', 'Ров', 'Талл', 'Нэя', 'Орм', 'Сол', 'Векка', 'Гром', 'Лия', 'Зандер', 'Ксан', 'Ума', 'Бор']
-const LAST = ['Ковач', 'Рэн', 'Ольт', 'Стрейн', 'Вэйл', 'Дорн', 'Кесс', 'Марлоу', 'Крайн', 'Валло', 'Ромм', 'Сайкс', 'Град', 'Онн', 'Пёрл', 'Феск']
-
-function makePilotName(rng: Rng): string {
-  return `${FIRST[Math.floor(rng() * FIRST.length)]!} ${LAST[Math.floor(rng() * LAST.length)]!}`
-}
-
 /**
  * Запомнить пилота: игрок с ним заговорил. Идемпотентно на встречу — второй раз за
  * тот же разговор запись не плодит. В этот миг у пилота появляется имя, и оно тут же
@@ -54,7 +45,9 @@ function makePilotName(rng: Rng): string {
 export function rememberPilot(world: World, ship: ShipEntity): void {
   if (ship.acquaintanceId != null) return
 
-  const name = makePilotName(world.rng)
+  // Имя не сочиняем заново — оно уже есть у пилота с рождения (`pilotName`, по виду).
+  // Знакомство лишь ОТКРЫВАЕТ его игроку: до сих пор на радаре был безликий «Торговец».
+  const name = ship.pilotName
   const record: Acquaintance = {
     id: world.ids.next(),
     name,

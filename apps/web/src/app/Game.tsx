@@ -7,11 +7,12 @@ import { PIXEL_SCALE, RENDER } from '../render/config'
 import { AsteroidField } from '../render/scene/Asteroids'
 import { Bodies } from '../render/scene/Bodies'
 import { Titans } from '../render/scene/Titans'
+import { Platforms } from '../render/scene/Platforms'
 import { Cockpit } from '../render/scene/Cockpit'
 import { DockingCorridor } from '../render/scene/DockingCorridor'
 import { Dyson } from '../render/scene/Dyson'
 import { Dust } from '../render/scene/Dust'
-import { CargoPods, Explosions, Missiles, TractorBeam, Tracers } from '../render/scene/Effects'
+import { CargoPods, Explosions, Missiles, TractorBeam, Tracers, WarpFlashes } from '../render/scene/Effects'
 import { Exhaust } from '../render/scene/Exhaust'
 import { Lighting } from '../render/scene/Lighting'
 import { Drones, EnemyShips, FreighterShips, PlayerShip } from '../render/scene/Ships'
@@ -45,6 +46,7 @@ function Scene() {
       <Dyson />
       <AsteroidField />
       <Titans />
+      <Platforms />
       <DockingCorridor />
 
       <PlayerShip />
@@ -62,6 +64,7 @@ function Scene() {
 
       <Tracers />
       <Explosions />
+      <WarpFlashes />
       <JumpRing />
       <Cockpit />
 

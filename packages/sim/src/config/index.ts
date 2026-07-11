@@ -2,6 +2,7 @@ export { PHYSICS } from './physics'
 export { BODY_KINDS, GRAVITY, MOON, type BodyKind } from './bodies'
 export { ASTEROID, DEBRIS, SCORE, WORLD } from './world'
 export { TITAN } from './titans'
+export { PLATFORM } from './platform'
 export {
   ARRIVAL,
   CORE_INDEX,
@@ -12,7 +13,7 @@ export {
   type GalaxyShapeId,
   type PlanetType,
 } from './galaxy'
-export { AI } from './ai'
+export { AI, GRIEVANCE, MORALE, WARP } from './ai'
 export { CRUISE } from './cruise'
 export { DYSON, type DysonSpec } from './dyson'
 export { HYPERDRIVE, STAR_HEAT } from './heat'

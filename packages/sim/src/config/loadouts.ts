@@ -71,11 +71,17 @@ export function traderLoadout(): Loadout {
   )
 }
 
-/** Главарь: исправные стволы и одна ракета на пилоне. С него есть что снять. */
+/**
+ * Главарь: исправные стволы и одна ракета на пилоне. С него есть что снять.
+ *
+ * Компактный гиперпривод — не для дальних рейсов, а для ПОБЕГА: проигрывая бой,
+ * главарь может уйти из системы прыжком (см. `WARP`), а рядовой пират — нет.
+ * Оттого уход прыжком и остаётся редким: на нём способен уйти не каждый встречный.
+ */
 export function pirateLeaderLoadout(): Loadout {
   return createLoadout(
     SIDEWINDER,
-    [ENGINE_CIVILIAN, RCS_STANDARD, SHIELD_LIGHT],
+    [ENGINE_CIVILIAN, RCS_STANDARD, SHIELD_LIGHT, HYPERDRIVE_COMPACT],
     [PULSE_LASER, PULSE_LASER, MISSILE_PYLON],
   )
 }

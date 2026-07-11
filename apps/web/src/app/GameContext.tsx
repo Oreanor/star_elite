@@ -4,6 +4,7 @@ import {
   autodockController,
   createWorld,
   enterSystem,
+  startAtStation,
   jump,
   systemDefFor,
   CORE_INDEX,
@@ -88,6 +89,9 @@ function createSession(): Session {
   const world = createWorld()
   const start = randomStartIndex()
   enterSystem(world, systemDefFor(start, world.galaxySeed), start)
+  // Новая игра начинается ВПЛОТНУЮ к причалу, а не за тысячу километров, как выход
+  // из гиперпрыжка: первый кадр — станция в паре секунд хода, а не долгий подлёт.
+  startAtStation(world)
 
   const intent = createIntent()
   const pilot = createPlayerController(intent)
