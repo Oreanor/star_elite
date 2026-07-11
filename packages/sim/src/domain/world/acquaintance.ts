@@ -16,6 +16,9 @@ import type { ShipEntity, World } from './entities'
  * его можно спокойно удалять при чистке трафика, память о нём не заводилась.
  */
 
+/** Как пилот относится к игроку. Итог разговоров, помнится между встречами. */
+export type Relationship = 'friendly' | 'neutral' | 'hostile'
+
 export interface Acquaintance {
   /** Стабильный id ЗНАКОМСТВА, не корабля: корабль эфемерен, знакомство — нет. */
   id: number
@@ -30,6 +33,8 @@ export interface Acquaintance {
   systemIndex: number
   /** Сколько раз виделись. >1 — он тебя уже знает. */
   meetings: number
+  /** Отношение к игроку по итогу бесед. Хранится тут и переносится на новую встречу. */
+  relationship: Relationship
 }
 
 // Имена пилотов: пара коротких списков. Не культура и не лор — просто чтобы у
@@ -59,11 +64,35 @@ export function rememberPilot(world: World, ship: ShipEntity): void {
     kindId: ship.originKind ?? 'trader',
     systemIndex: world.systemIndex,
     meetings: 1,
+    relationship: 'neutral',
   }
   world.acquaintances.push(record)
   ship.acquaintanceId = record.id
   // Теперь он не «Торговец», а человек с именем — и в эфире, и на метке локатора.
   ship.name = name
+}
+
+/**
+ * Разговор изменил отношение. Пишем его в запись знакомства — оно переживёт встречу.
+ *
+ * Но МЕХАНИКУ трогаем только в одну сторону: обозлить нейтрала (нейтрал→враждебный)
+ * можно кого угодно — это во вред самому игроку, эксплойта нет. А вот РАЗОРУЖИТЬ
+ * враждебного дружелюбием — нельзя: иначе целого пирата уболтали бы в друзья
+ * бесплатно, в обход сдачи с её условиями (сначала сбей щит). Замирение — дело
+ * `applyOutcome('surrender'/'mercy')`, а не доброго слова.
+ */
+export function applyStance(world: World, ship: ShipEntity, stance: Relationship): void {
+  const record = world.acquaintances.find((a) => a.id === ship.acquaintanceId)
+  if (record) record.relationship = stance
+
+  if (stance === 'hostile' && ship.faction === 'neutral') {
+    ship.faction = 'hostile'
+    if (ship.ai) {
+      ship.ai.escortOf = null
+      ship.ai.targetId = null
+      ship.ai.orderedTargetId = null
+    }
+  }
 }
 
 /**

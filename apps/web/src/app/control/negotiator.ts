@@ -1,4 +1,4 @@
-import type { Disposition, Persona, Topic } from '@elite/sim'
+import type { Disposition, Persona, Relationship, Topic } from '@elite/sim'
 import type { ChatTurn, NegotiationContext, NegotiatorReply } from '../../ui/dialogue/facts'
 
 /**
@@ -74,6 +74,12 @@ function personaLines(p: Persona): string {
   ].join(', ')
 }
 
+const STANCE_RU: Record<Relationship, string> = {
+  friendly: 'дружелюбно',
+  neutral: 'нейтрально',
+  hostile: 'враждебно',
+}
+
 const INTENT_RU: Record<Topic, string> = {
   surrender: 'surrender — сдаться: прекратить бой, сбросить груз, перестать быть врагом',
   mercy: 'mercy — пощадить игрока и отпустить его (ты пират, добыча — его груз)',
@@ -107,7 +113,8 @@ function systemPrompt(ctx: NegotiationContext): string {
     `Перед тобой командир на «${y.ship}» в ${ctx.distanceM} м. Твои сенсоры видят: корпус ${y.hullPct}%, щит ${y.shieldPct}%, в трюме: ${y.cargo}. Он ${ctx.yourHeading}.`,
     `Его характер — ${personaLines(y.persona)}.`,
     `Расклад: ${standoff}.`,
-    ctx.metBefore ? 'Вы уже пересекались раньше.' : 'Вы видите друг друга впервые.',
+    ctx.metBefore ? 'Вы уже пересекались раньше — ты его помнишь.' : 'Вы видите друг друга впервые.',
+    `Сейчас ты относишься к нему: ${STANCE_RU[ctx.stance]}.`,
     '',
     `ГДЕ ВЫ: система ${w.systemName}, строй — ${w.government}, экономика — ${w.economy}, тех-уровень ${w.techLevel}, население — ${w.species}.`,
     `В системе планет: ${w.planets}, лун: ${w.moons}, станций: ${w.stations}. Известные тела: ${w.bodyNames.join(', ') || '—'}.`,
@@ -126,6 +133,7 @@ function systemPrompt(ctx: NegotiationContext): string {
     '— Соглашаться на действие уступай тем охотнее, чем сильнее противник превосходит тебя умом, волей и харизмой, — а не только когда твой корабль избит.',
     '— Если у тебя высокий темперамент, ты можешь вспылить и оборвать связь (hangup).',
     '— Клади трубку (hangup=true), когда договорено, тебе надоело или ты психанул.',
+    '— Разговор может ИЗМЕНИТЬ твоё отношение: расположил к себе — friendly; нахамил, угрожал, обманул — hostile (нейтрал тогда и правда встанет на бой); обычно — neutral. Меняй его через поле stance ТОЛЬКО когда отношение реально сдвинулось, и дай это понять словами. Иначе оставляй stance = null.',
     '',
     'Действия, которые он может у тебя просить прямо сейчас:',
     intents,
@@ -133,8 +141,8 @@ function systemPrompt(ctx: NegotiationContext): string {
     'Ответь СТРОГО одним JSON-объектом и ничем больше:',
     '{"reply": "твоя реплика", "intent": один из [' +
       ctx.allowedIntents.map((i) => `"${i}"`).join(', ') +
-      '] или null, "agree": true|false, "hangup": true|false}',
-    'intent — только если он ИМЕННО СЕЙЧАС призвал к этому действию; иначе null. agree важно лишь при непустом intent.',
+      '] или null, "agree": true|false, "stance": "friendly"|"neutral"|"hostile"|null, "hangup": true|false}',
+    'intent — только если он ИМЕННО СЕЙЧАС призвал к этому действию; иначе null. agree важно лишь при непустом intent. stance — только при реальной смене отношения.',
   ].join('\n')
 }
 
@@ -162,10 +170,13 @@ function coerceReply(parsed: unknown, allowed: Topic[]): NegotiatorReply | null 
   const rawIntent = typeof o.intent === 'string' ? (o.intent as Topic) : null
   // Модель могла назвать действие, которого сейчас нельзя, — не верим на слово.
   const intent = rawIntent && allowed.includes(rawIntent) ? rawIntent : null
+  const stance =
+    o.stance === 'friendly' || o.stance === 'neutral' || o.stance === 'hostile' ? (o.stance as Relationship) : null
   return {
     text,
     intent,
     agree: intent !== null && o.agree === true,
+    stance,
     hangup: o.hangup === true,
     source: 'model',
   }
@@ -185,6 +196,7 @@ function staticNoise(history: ChatTurn[]): NegotiatorReply {
     text: STATIC_LINES[history.length % STATIC_LINES.length]!,
     intent: null,
     agree: false,
+    stance: null,
     hangup: false,
     source: 'fallback',
   }

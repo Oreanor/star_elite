@@ -1,18 +1,18 @@
 import { describe, expect, it } from 'vitest'
 import { makeRng } from '../../core/math'
 import { createWorld, STARTER_SYSTEM, type World } from './index'
-import { recurringAcquaintance, rememberPilot } from './acquaintance'
+import { applyStance, recurringAcquaintance, rememberPilot } from './acquaintance'
 
 /**
  * Память знакомств. Прохожих космос забывает, с кем говорил — помнит. Проверяем
  * без браузера: реестр — данные и правило, а не окно.
  */
 
-function withStranger(): World {
+function withStranger(faction: 'neutral' | 'hostile' = 'neutral'): World {
   return createWorld({
     ...STARTER_SYSTEM,
     belt: null,
-    patrols: [{ count: 1, at: [0, 0, -200], spread: 0, faction: 'neutral', name: 'Торговец' }],
+    patrols: [{ count: 1, at: [0, 0, -200], spread: 0, faction, name: 'Кто-то' }],
   })
 }
 
@@ -63,6 +63,27 @@ describe('память знакомств', () => {
 
     world.systemIndex += 1 // прыгнули в соседнюю
     expect(recurringAcquaintance(world, makeRng(1))).toBeNull()
+  })
+
+  it('нахамил нейтралу — он встаёт на бой, и это помнится', () => {
+    const world = withStranger('neutral')
+    const ship = world.ships[0]!
+    rememberPilot(world, ship)
+
+    applyStance(world, ship, 'hostile')
+    expect(ship.faction).toBe('hostile')
+    expect(world.acquaintances[0]!.relationship).toBe('hostile')
+  })
+
+  it('дружелюбие НЕ разоружает врага: замирение — дело сдачи, не слов', () => {
+    const world = withStranger('hostile')
+    const ship = world.ships[0]!
+    rememberPilot(world, ship)
+
+    applyStance(world, ship, 'friendly')
+    // Отношение записалось, но пират остался врагом: уболтать целого в друзья нельзя.
+    expect(world.acquaintances[0]!.relationship).toBe('friendly')
+    expect(ship.faction).toBe('hostile')
   })
 
   it('знакомство переживает прыжок: реестр не чистится сменой системы', () => {

@@ -1,5 +1,5 @@
 import { useEffect, useReducer, useRef, useState } from 'react'
-import { applyOutcome, interlocutor, linesFor, rememberPilot, say, type Topic } from '@elite/sim'
+import { applyOutcome, applyStance, interlocutor, linesFor, rememberPilot, say, type Relationship, type Topic } from '@elite/sim'
 import { useSession } from '../../app/GameContext'
 import { Button } from '../station/chrome'
 import { UI } from '../theme'
@@ -18,6 +18,12 @@ import { buildContext, type ChatTurn, type NegotiatorReply } from './facts'
  * Мир под окном СТОИТ (пауза = отпущенный курсор), поэтому собеседник за время
  * разговора не улетит и не погибнет: некому оборвать связь исподтишка.
  */
+const STANCE_RU: Record<Relationship, string> = {
+  friendly: 'теперь он расположен к тебе',
+  neutral: 'снова нейтрален',
+  hostile: 'теперь он враждебен',
+}
+
 export function Dialogue({
   onClose,
   negotiate,
@@ -84,6 +90,11 @@ export function Dialogue({
     rememberPilot(world, other)
     // Собеседник согласился на действие — домен меняет мир ровно как по кнопке.
     if (reply.intent && reply.agree) applyOutcome(world, other, reply.intent)
+    // Отношение сдвинулось — пишем в знакомство и сообщаем строкой в ленте.
+    if (reply.stance) {
+      applyStance(world, other, reply.stance)
+      push({ who: 'system', text: `Отношение: ${STANCE_RU[reply.stance]}.` })
+    }
     bump()
     setBusy(false)
     // Психанул или договорил — кладём трубку ПОСЛЕ его последней реплики.
@@ -113,6 +124,10 @@ export function Dialogue({
                     <span>
                       <span style={{ color: UI.DIM }}>ТЫ:&nbsp;</span>
                       {t.text}
+                    </span>
+                  ) : t.who === 'system' ? (
+                    <span className="text-xs tracking-widest" style={{ color: UI.WARN }}>
+                      · {t.text} ·
                     </span>
                   ) : (
                     <span style={{ color: UI.PRIMARY }}>— {t.text}</span>

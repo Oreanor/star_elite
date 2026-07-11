@@ -2,6 +2,7 @@ import {
   itemName,
   localSettlement,
   type Persona,
+  type Relationship,
   type ShipEntity,
   type Topic,
   type World,
@@ -55,6 +56,8 @@ export interface NegotiationContext {
   /** Куда направляется игрок: цель в системе или намеченный прыжок. */
   yourHeading: string
   distanceM: number
+  /** Текущее отношение собеседника к игроку — итог прошлых бесед, если были. */
+  stance: Relationship
   /** Что механически можно у него попросить прямо сейчас (незаблокированное). */
   allowedIntents: Topic[]
   /**
@@ -77,6 +80,8 @@ export interface NegotiatorReply {
   intent: Topic | null
   /** Согласился ли на это действие. Значимо лишь при непустом intent. */
   agree: boolean
+  /** Сменилось ли отношение по итогу реплики. null — без изменений. */
+  stance: Relationship | null
   /** Собеседник кладёт трубку: договорено, надоело или психанул. */
   hangup: boolean
   /** Откуда реплика: живая модель или локальный запас на случай обрыва связи. */
@@ -131,6 +136,7 @@ export function buildContext(world: World, other: ShipEntity, allowedIntents: To
         ? 'анархия, закон тут не работает'
         : 'патрулируется, относительно спокойно'
 
+  const record = world.acquaintances.find((a) => a.id === other.acquaintanceId)
   const navBody = world.bodies.find((b) => b.id === world.navTargetId)
   const heading =
     world.jumpTargetIndex != null
@@ -156,9 +162,10 @@ export function buildContext(world: World, other: ShipEntity, allowedIntents: To
     you: party(world.player, 'вольный пилот'),
     yourHeading: heading,
     distanceM: Math.round(other.state.pos.distanceTo(world.player.state.pos)),
+    stance: record?.relationship ?? 'neutral',
     allowedIntents,
     // Узнаёт, только если виделись РАНЬШЕ: у записи больше одной встречи. В первый
     // разговор запись родится по ходу дела, но встреча всё ещё первая — не «узнаёт».
-    metBefore: (world.acquaintances.find((a) => a.id === other.acquaintanceId)?.meetings ?? 0) > 1,
+    metBefore: (record?.meetings ?? 0) > 1,
   }
 }

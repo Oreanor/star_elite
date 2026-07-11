@@ -21,7 +21,7 @@ export {
   DEFAULT_PERSONA,
   makePersona,
 } from './persona'
-export { type Acquaintance, rememberPilot, recurringAcquaintance } from './acquaintance'
+export { type Acquaintance, type Relationship, rememberPilot, recurringAcquaintance, applyStance } from './acquaintance'
 export { maybeShiftOrigin } from './origin'
 export { cycleTarget, findBody, findShip, hostilesOf, incomingMissile, nearestPod } from './queries'
 export { stepTraffic } from './traffic'
