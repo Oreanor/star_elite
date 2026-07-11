@@ -4,7 +4,7 @@ import { InstancedMesh, Mesh, Object3D } from 'three'
 import { isDroneShip, isVisible } from '@elite/sim'
 import { useSession } from '../../app/GameContext'
 import { shipHidden } from '../../app/control/jumpFx'
-import { auroraGeometry, droneGeometry, freighterGeometry, sidewinderGeometry } from '../geometry/ships'
+import { auroraGeometry, chassisGeometry, droneGeometry, freighterGeometry, sidewinderGeometry } from '../geometry/ships'
 import { cloakMaterial, hullMaterial } from '../materials/materials'
 
 /** Все враги — один InstancedMesh: 1 draw call вместо N. */
@@ -29,6 +29,14 @@ export function PlayerShip() {
     const mesh = ref.current
     if (!mesh) return
     const player = session.world.player
+
+    // Купил другой корпус — меняем геометрию. PlayerShip не перерисовывается от React
+    // (пропсов нет), поэтому подмену ловим в кадре по id шасси, а не на маунте.
+    const id = player.loadout.chassis.id
+    if (mesh.userData.chassis !== id) {
+      mesh.geometry = chassisGeometry(id)
+      mesh.userData.chassis = id
+    }
 
     mesh.position.copy(player.state.pos)
     mesh.quaternion.copy(player.state.quat)

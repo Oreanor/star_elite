@@ -1,6 +1,6 @@
 import type { Chassis } from '../domain/loadout'
 import { createLoadout, type Loadout } from '../domain/loadout'
-import { AURORA_MK3, DRONE, LARGE_FREIGHTER, SIDEWINDER } from './chassis'
+import { APOLLO, ARTEMIS, ATHENA, AURORA_MK3, DRONE, LARGE_FREIGHTER, SIDEWINDER } from './chassis'
 import {
   ARMOUR_PLATE,
   BURST_LASER,
@@ -113,6 +113,33 @@ export function calliopeLoadout(): Loadout {
   return createLoadout(DRONE, [ENGINE_CIVILIAN, RCS_CIVILIAN, HYPERDRIVE_COMPACT], [PULSE_LASER])
 }
 
+/** «Аполлон» — дельта-перехватчик: два ствола и два ракетных пилона. */
+export function apolloLoadout(): Loadout {
+  return createLoadout(
+    APOLLO,
+    [ENGINE_STANDARD, RCS_STANDARD, SHIELD_STANDARD, ARMOUR_PLATE, CARGO_SMALL, HYPERDRIVE_BASIC],
+    [PULSE_LASER, PULSE_LASER, MISSILE_PYLON, MISSILE_PYLON],
+  )
+}
+
+/** «Артемида» — ударный: крепкий щит и броня, два ствола и два пилона. */
+export function artemisLoadout(): Loadout {
+  return createLoadout(
+    ARTEMIS,
+    [ENGINE_STANDARD, RCS_STANDARD, SHIELD_STANDARD, ARMOUR_PLATE, CARGO_SMALL, HYPERDRIVE_BASIC],
+    [PULSE_LASER, PULSE_LASER, MISSILE_PYLON, MISSILE_PYLON],
+  )
+}
+
+/** «Афина» — стелс: маскировочное поле на борту, два ствола и пилон. */
+export function athenaLoadout(): Loadout {
+  return createLoadout(
+    ATHENA,
+    [ENGINE_STANDARD, RCS_STANDARD, SHIELD_LIGHT, ARMOUR_PLATE, CARGO_SMALL, HYPERDRIVE_BASIC, CLOAK_FIELD],
+    [PULSE_LASER, PULSE_LASER, MISSILE_PYLON],
+  )
+}
+
 /**
  * Каталог верфи: какие корпуса можно взять на станции и с какой сборкой. Цена пока
  * ноль — «дают погонять». Новый корабль — новая строка, а не ветка в коде (OCP):
@@ -126,6 +153,9 @@ export interface HullOffer {
 
 export const SHIPYARD: readonly HullOffer[] = [
   { chassis: AURORA_MK3, loadout: playerStartLoadout, cost: 0 },
+  { chassis: APOLLO, loadout: apolloLoadout, cost: 0 },
+  { chassis: ARTEMIS, loadout: artemisLoadout, cost: 0 },
+  { chassis: ATHENA, loadout: athenaLoadout, cost: 0 },
   { chassis: SIDEWINDER, loadout: aresLoadout, cost: 0 },
   { chassis: LARGE_FREIGHTER, loadout: freighterLoadout, cost: 0 },
   { chassis: DRONE, loadout: calliopeLoadout, cost: 0 },

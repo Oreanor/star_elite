@@ -228,6 +228,9 @@ const CHASSIS_EN: Record<string, string> = {
   'Арес': 'Ares',
   'Деметра': 'Demeter',
   'Каллиопа': 'Calliope',
+  'Аполлон': 'Apollo',
+  'Артемида': 'Artemis',
+  'Афина': 'Athena',
 }
 
 export function chassisName(name: string): string {

@@ -28,7 +28,7 @@ import {
   type ShipSpec,
   type World,
 } from '@elite/sim'
-import { auroraGeometry, droneGeometry, freighterGeometry, sidewinderGeometry } from '../../render/geometry/ships'
+import { chassisGeometry } from '../../render/geometry/ships'
 import { hullMaterial } from '../../render/materials/materials'
 import { t, useLang, type Key } from '../i18n'
 import { UI } from '../theme'
@@ -650,22 +650,7 @@ function Stats({ spec, name }: { spec: ShipSpec; name: string }) {
   )
 }
 
-// ─── Чертёж (без изменений: своя причина меняться) ─────────────────────────────
-
-/** Шасси → фабрика геометрии. Данные вместо ветвления: новый корпус — новая ветка
- *  здесь и новая фабрика, а не правка симуляции (её этот экран вообще не трогает). */
-function chassisGeometry(id: string): BufferGeometry {
-  switch (id) {
-    case 'sidewinder':
-      return sidewinderGeometry()
-    case 'freighter':
-      return freighterGeometry()
-    case 'drone':
-      return droneGeometry()
-    default:
-      return auroraGeometry() // aurora_mk3 — корпус игрока
-  }
-}
+// ─── Чертёж ────────────────────────────────────────────────────────────────
 
 /** Состояние вращения чертежа. Живёт в ref, а не в state: его крутит кадр, не React. */
 interface DragState {

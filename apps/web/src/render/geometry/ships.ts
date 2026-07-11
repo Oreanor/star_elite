@@ -453,3 +453,179 @@ export const FREIGHTER_NOZZLES: readonly Nozzle[] = [
   { offset: [0, 0, 33.2], radius: 2.3 },
   { offset: [6.5, 0, 33.2], radius: 2.0 },
 ]
+
+// ─── Три футуристичных истребителя для верфи ─────────────────────────────────
+//
+// Собраны из ОДНОГО проверенного каркаса (нос-фаска → фюзеляж → крыло-плита → срез
+// кормы): обход вершин у него заведомо верный. Морфологию задаёт не новая сборка, а
+// координаты — дельта, двухкилевой ударный и «летающее крыло». Кили, вторые сопла и
+// канопи навешиваются поверх. Крыло уводим НАЗАД или вбок, но не вперёд: у переднего
+// стреловидного обход плиты перевернулся бы, и верх крыла ушёл бы в тень.
+
+interface JetVerts {
+  noseT: Vec3; noseB: Vec3; noseS: Vec3
+  top: Vec3; bot: Vec3
+  shoulder: Vec3; hip: Vec3
+  aftTop: Vec3; aftBot: Vec3; topBack: Vec3; botBack: Vec3
+  wtRootF: Vec3; wtTip: Vec3; wtRootB: Vec3
+  wbRootF: Vec3; wbTip: Vec3; wbRootB: Vec3
+}
+
+function jetHalf(v: JetVerts): Triangle[] {
+  return [
+    // Нос с фаской.
+    tri(v.noseT, v.noseS, v.top, HULL),
+    tri(v.noseB, v.bot, v.noseS, HULL_DARK),
+    tri(v.noseT, v.noseB, v.noseS, HULL_ACCENT),
+    tri(v.noseS, v.top, v.shoulder, HULL),
+    tri(v.noseS, v.hip, v.bot, HULL_DARK),
+    tri(v.noseS, v.shoulder, v.hip, HULL_ACCENT),
+    // Фюзеляж: крыша, днище, борт вскользь.
+    ...quad(v.top, v.shoulder, v.aftTop, v.topBack, HULL),
+    ...quad(v.bot, v.botBack, v.aftBot, v.hip, HULL_DARK),
+    ...quad(v.shoulder, v.hip, v.aftBot, v.aftTop, HULL_SHADE),
+    // Крыло-плита с толщиной.
+    tri(v.wtRootF, v.wtTip, v.wtRootB, HULL),
+    tri(v.wbRootF, v.wbRootB, v.wbTip, HULL_DARK),
+    ...quad(v.wtRootF, v.wbRootF, v.wbTip, v.wtTip, HULL_ACCENT),
+    ...quad(v.wtTip, v.wbTip, v.wbRootB, v.wtRootB, HULL_TRIM),
+    // Срез кормы — торец.
+    ...quad(v.aftTop, v.aftBot, v.botBack, v.topBack, HULL_TRIM),
+  ]
+}
+
+/** Наклонный «фонарь» кабины: сужается и опускается к носу. */
+function canopy(halfW: number, backZ: number, frontZ: number, backY: number, frontY: number): Triangle[] {
+  return quad(
+    [-halfW, backY, backZ], [halfW, backY, backZ],
+    [halfW * 0.7, frontY, frontZ], [-halfW * 0.7, frontY, frontZ],
+    COCKPIT_GLASS,
+  )
+}
+
+// «Аполлон» — дельта-перехватчик: длинный нос, широкое треугольное крыло, высокий
+// киль, одно сопло. Читается как остриё.
+const apolloHalf: Triangle[] = [
+  ...jetHalf({
+    noseT: [0, 0.35, -12], noseB: [0, -0.35, -12], noseS: [0.5, 0, -11.2],
+    top: [0, 1.0, -1.5], bot: [0, -0.95, -1.5],
+    shoulder: [1.7, 0.35, -2], hip: [1.7, -0.55, -2],
+    aftTop: [1.3, 0.75, 7], aftBot: [1.3, -0.7, 7], topBack: [0, 0.9, 7], botBack: [0, -0.85, 7],
+    wtRootF: [1.6, 0.05, -1.5], wtTip: [11.5, 0.0, 7.0], wtRootB: [1.3, 0.1, 7],
+    wbRootF: [1.6, -0.2, -1.5], wbTip: [11.5, -0.12, 7.0], wbRootB: [1.3, -0.15, 7],
+  }),
+  // Расшивка по крылу.
+  ...panel([3, 0.06, 1.5], [8, 0.02, 5], [8, 0.01, 5.6], [3, 0.05, 2.1], HULL_LINE, [0, 0.05, 0]),
+]
+
+const apolloCentre: Triangle[] = [
+  ...canopy(0.85, -3, -6.8, 1.05, 0.7),
+  // Высокий одиночный киль по оси.
+  tri([0, 1.0, 3.5], [0, 3.3, 6.9], [0, 0.92, 7], HULL_ACCENT),
+  ...bell(0, 0, 7.05, 0.78, 0.98, 1.0, 8, ENGINE, ENGINE_CORE),
+]
+
+let apolloCache: BufferGeometry | null = null
+export function apolloGeometry(): BufferGeometry {
+  apolloCache ??= buildGeometry([...symmetric(apolloHalf), ...apolloCentre])
+  return apolloCache
+}
+export const APOLLO_NOZZLES: readonly Nozzle[] = [{ offset: [0, 0.05, 7.6], radius: 0.95 }]
+
+// «Артемида» — ударный истребитель с ДВУМЯ разнесёнными килями и двумя соплами.
+// Крепче «Аполлона», силуэт с развалом хвоста ни с чем не спутать.
+const artemisHalf: Triangle[] = [
+  ...jetHalf({
+    noseT: [0, 0.4, -10.5], noseB: [0, -0.4, -10.5], noseS: [0.6, 0, -9.8],
+    top: [0, 1.1, -2], bot: [0, -1.0, -2],
+    shoulder: [1.8, 0.45, -2.5], hip: [1.8, -0.6, -2.5],
+    aftTop: [2.2, 0.85, 6.5], aftBot: [2.2, -0.8, 6.5], topBack: [0, 1.0, 6.5], botBack: [0, -0.9, 6.5],
+    wtRootF: [1.8, 0.1, -1], wtTip: [9.5, 0.05, 3.5], wtRootB: [2.0, 0.12, 6.5],
+    wbRootF: [1.8, -0.25, -1], wbTip: [9.5, -0.12, 3.5], wbRootB: [2.0, -0.2, 6.5],
+  }),
+  // Разнесённый киль, наклонён наружу (законцовка дальше корня по X).
+  tri([1.5, 0.9, 4.2], [2.6, 2.7, 6.9], [1.7, 0.9, 6.6], HULL_ACCENT),
+  tri([1.5, 0.9, 4.2], [1.7, 0.9, 6.6], [2.6, 2.7, 6.9], HULL_TRIM),
+]
+
+const artemisCentre: Triangle[] = [
+  ...canopy(0.9, -3.5, -7, 1.15, 0.8),
+  // Спинной гребень между килями.
+  tri([0, 1.0, 2], [0, 1.7, 5.5], [0, 0.98, 6.5], HULL_ACCENT),
+  ...bell(-1.3, 0, 6.55, 0.62, 0.8, 0.95, 8, ENGINE, ENGINE_CORE),
+  ...bell(1.3, 0, 6.55, 0.62, 0.8, 0.95, 8, ENGINE, ENGINE_CORE),
+]
+
+let artemisCache: BufferGeometry | null = null
+export function artemisGeometry(): BufferGeometry {
+  artemisCache ??= buildGeometry([...symmetric(artemisHalf), ...artemisCentre])
+  return artemisCache
+}
+export const ARTEMIS_NOZZLES: readonly Nozzle[] = [
+  { offset: [-1.3, 0, 7.5], radius: 0.8 },
+  { offset: [1.3, 0, 7.5], radius: 0.8 },
+]
+
+// «Афина» — «летающее крыло»: широкий ромбовидный планформ, слитый корпус, низкий
+// профиль без высокого киля, два утопленных сопла. Стелс-облик.
+const athenaHalf: Triangle[] = [
+  ...jetHalf({
+    noseT: [0, 0.3, -9], noseB: [0, -0.35, -9], noseS: [0.85, 0, -8],
+    top: [0, 0.7, -1], bot: [0, -0.7, -1],
+    shoulder: [2.3, 0.25, -1.5], hip: [2.3, -0.4, -1.5],
+    aftTop: [1.6, 0.55, 5], aftBot: [1.6, -0.5, 5], topBack: [0, 0.65, 5], botBack: [0, -0.6, 5],
+    wtRootF: [2.1, 0.05, -3], wtTip: [11.0, 0.0, 1.5], wtRootB: [1.8, 0.08, 5],
+    wbRootF: [2.1, -0.15, -3], wbTip: [11.0, -0.1, 1.5], wbRootB: [1.8, -0.12, 5],
+  }),
+  // Широкая расшивка по крылу — «панели» стелс-обшивки.
+  ...panel([3, 0.05, -2], [9, 0.01, 1], [9, 0.0, 1.8], [3, 0.04, -1.2], HULL_LINE, [0, 0.05, 0]),
+]
+
+const athenaCentre: Triangle[] = [
+  ...canopy(1.05, -3.5, -6.8, 0.72, 0.42),
+  // Низкий гребень вместо киля: стелс-профиль не задирает силуэт.
+  tri([0, 0.62, 0.5], [0, 1.25, 3.5], [0, 0.6, 5], HULL_ACCENT),
+  ...bell(-1.6, 0, 5.05, 0.55, 0.72, 0.9, 8, ENGINE, ENGINE_CORE),
+  ...bell(1.6, 0, 5.05, 0.55, 0.72, 0.9, 8, ENGINE, ENGINE_CORE),
+]
+
+let athenaCache: BufferGeometry | null = null
+export function athenaGeometry(): BufferGeometry {
+  athenaCache ??= buildGeometry([...symmetric(athenaHalf), ...athenaCentre])
+  return athenaCache
+}
+export const ATHENA_NOZZLES: readonly Nozzle[] = [
+  { offset: [-1.6, 0, 5.55], radius: 0.72 },
+  { offset: [1.6, 0, 5.55], radius: 0.72 },
+]
+
+// ─── Шасси → геометрия и сопла ───────────────────────────────────────────────
+//
+// Данные вместо ветвлений (OCP): новый корпус — новая строка здесь, а не правка
+// PlayerShip, чертежа и струй по отдельности. Один источник правды на весь рендер.
+
+/** Геометрия корпуса по id шасси. */
+export function chassisGeometry(id: string): BufferGeometry {
+  switch (id) {
+    case 'sidewinder': return sidewinderGeometry()
+    case 'freighter': return freighterGeometry()
+    case 'drone': return droneGeometry()
+    case 'apollo': return apolloGeometry()
+    case 'artemis': return artemisGeometry()
+    case 'athena': return athenaGeometry()
+    default: return auroraGeometry() // aurora_mk3 — корпус игрока с завода
+  }
+}
+
+/** Срезы сопел корпуса по id шасси. */
+export function chassisNozzles(id: string): readonly Nozzle[] {
+  switch (id) {
+    case 'freighter': return FREIGHTER_NOZZLES
+    case 'drone': return DRONE_NOZZLES
+    case 'apollo': return APOLLO_NOZZLES
+    case 'artemis': return ARTEMIS_NOZZLES
+    case 'athena': return ATHENA_NOZZLES
+    case 'sidewinder': return SIDEWINDER_NOZZLES
+    default: return AURORA_NOZZLES
+  }
+}

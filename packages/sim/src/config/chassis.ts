@@ -119,7 +119,99 @@ export const LARGE_FREIGHTER: Chassis = {
   cost: 210000,
 }
 
-export const CHASSIS_CATALOGUE: readonly Chassis[] = [AURORA_MK3, SIDEWINDER, LARGE_FREIGHTER]
+// ─── Верфные истребители: греко-римские имена, разные морфологии ──────────────
+// Геометрию каждого рендер знает по `id`; здесь — только числа и слоты. У всех есть
+// слот гиперпривода: купленный корабль обязан уметь улететь из системы.
+
+/** «Аполлон» — дельта-перехватчик: лёгкий, быстрый, вёрткий, но тонкокожий. */
+export const APOLLO: Chassis = {
+  id: 'apollo',
+  name: 'Аполлон',
+  baseMass: 7,
+  baseHull: 70,
+  radius: 11,
+  inertiaFactor: 0.8,
+  assistLateralDamp: 1.2,
+  assistSpeedDamp: 0.35,
+  hardpoints: [
+    { offset: [-1.7, -0.1, -2], kind: 'gun', maxClass: 2 },
+    { offset: [1.7, -0.1, -2], kind: 'gun', maxClass: 2 },
+    { offset: [-5.5, -0.2, 3], kind: 'pylon', maxClass: 1 },
+    { offset: [5.5, -0.2, 3], kind: 'pylon', maxClass: 1 },
+  ],
+  slots: [
+    { kind: 'engine', maxClass: 3 },
+    { kind: 'thrusters', maxClass: 3 },
+    { kind: 'shield', maxClass: 2 },
+    { kind: 'armour', maxClass: 1 },
+    { kind: 'cargo', maxClass: 1 },
+    { kind: 'hyperdrive', maxClass: 2 },
+  ],
+  cost: 0,
+}
+
+/** «Артемида» — ударный истребитель: крепче и тяжелее, два разнесённых киля. */
+export const ARTEMIS: Chassis = {
+  id: 'artemis',
+  name: 'Артемида',
+  baseMass: 9,
+  baseHull: 105,
+  radius: 10,
+  inertiaFactor: 1.0,
+  assistLateralDamp: 1.1,
+  assistSpeedDamp: 0.35,
+  hardpoints: [
+    { offset: [-1.8, -0.1, -2.5], kind: 'gun', maxClass: 2 },
+    { offset: [1.8, -0.1, -2.5], kind: 'gun', maxClass: 2 },
+    { offset: [-4.5, -0.2, 2], kind: 'pylon', maxClass: 1 },
+    { offset: [4.5, -0.2, 2], kind: 'pylon', maxClass: 1 },
+  ],
+  slots: [
+    { kind: 'engine', maxClass: 3 },
+    { kind: 'thrusters', maxClass: 2 },
+    { kind: 'shield', maxClass: 3 },
+    { kind: 'armour', maxClass: 2 },
+    { kind: 'cargo', maxClass: 2 },
+    { kind: 'hyperdrive', maxClass: 2 },
+  ],
+  cost: 0,
+}
+
+/** «Афина» — «летающее крыло»: вёрткий стелс с маскировкой на борту. */
+export const ATHENA: Chassis = {
+  id: 'athena',
+  name: 'Афина',
+  baseMass: 8,
+  baseHull: 80,
+  radius: 10,
+  inertiaFactor: 0.9,
+  assistLateralDamp: 1.25,
+  assistSpeedDamp: 0.35,
+  hardpoints: [
+    { offset: [-2, -0.1, -2], kind: 'gun', maxClass: 2 },
+    { offset: [2, -0.1, -2], kind: 'gun', maxClass: 2 },
+    { offset: [-4.5, -0.2, 0], kind: 'pylon', maxClass: 1 },
+  ],
+  slots: [
+    { kind: 'engine', maxClass: 3 },
+    { kind: 'thrusters', maxClass: 3 },
+    { kind: 'shield', maxClass: 2 },
+    { kind: 'armour', maxClass: 1 },
+    { kind: 'cargo', maxClass: 1 },
+    { kind: 'hyperdrive', maxClass: 2 },
+    { kind: 'cloak', maxClass: 3 },
+  ],
+  cost: 0,
+}
+
+export const CHASSIS_CATALOGUE: readonly Chassis[] = [
+  AURORA_MK3,
+  SIDEWINDER,
+  LARGE_FREIGHTER,
+  APOLLO,
+  ARTEMIS,
+  ATHENA,
+]
 
 export function findChassis(id: string): Chassis | null {
   return CHASSIS_CATALOGUE.find((c) => c.id === id) ?? null
