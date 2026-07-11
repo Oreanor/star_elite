@@ -17,6 +17,7 @@ import { useSession } from '../../app/GameContext'
 import { Button, PilotPortrait } from '../station/chrome'
 import { markOutcomeEmotion, type Emotion } from '../portrait'
 import { UI } from '../theme'
+import { occupationName } from '../i18n/dataNames'
 import { buildContext, type ChatTurn, type NegotiatorReply } from './facts'
 
 /**
@@ -218,8 +219,10 @@ export function Dialogue({
             {/* Имя пилота (`pilotName`), а не роль «Торговец»: в разговоре ты обращаешься
                 к человеку. Оно дано при рождении и есть всегда, до всякого знакомства. */}
             <div className="text-lg tracking-[0.3em]">{other.pilotName.toUpperCase()}</div>
+            {/* Род занятий — СРАЗУ, до всякого приглашения: чтобы не звать в напарники
+                пирата вслепую. Внешне читаемое, метагейма нет. */}
             <div className="text-xs tracking-widest" style={{ color: UI.DIM }}>
-              {hostile ? 'ВРАЖДЕБНЫЙ' : 'МИРНЫЙ'} · {Math.round(other.state.pos.distanceTo(world.player.state.pos))} М
+              {occupationName(other.originKind, other.faction).toUpperCase()} · {hostile ? 'ВРАЖДЕБНЫЙ' : 'МИРНЫЙ'} · {Math.round(other.state.pos.distanceTo(world.player.state.pos))} М
             </div>
           </div>
         </div>

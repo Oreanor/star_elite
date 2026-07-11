@@ -220,6 +220,33 @@ export function shipTypeName(name: string): string {
   return SHIP_TYPE_EN[name] ?? properName(name)
 }
 
+/**
+ * Род занятий по ТИПУ ВСТРЕЧИ (`originKind`), а не по имени борта: имя после знакомства
+ * становится личным, а занятие остаётся. Внешне читаемое — показываем в диалоге сразу,
+ * чтобы не позвать в напарники пирата вслепую. Неизвестный тип — откат по фракции.
+ */
+const OCCUPATION_RU: Record<string, string> = {
+  trader: 'Торговец', convoy: 'Торговец', pirate: 'Пират', gang: 'Пират',
+  raider: 'Налётчик', police: 'Патрульный', freighter: 'Дальнобойщик', platform: 'Пират',
+}
+const OCCUPATION_EN: Record<string, string> = {
+  trader: 'Trader', convoy: 'Trader', pirate: 'Pirate', gang: 'Pirate',
+  raider: 'Raider', police: 'Patrol officer', freighter: 'Hauler', platform: 'Pirate',
+}
+const OCCUPATION_FACTION_RU: Record<string, string> = {
+  hostile: 'Пират', police: 'Патрульный', neutral: 'Гражданский', player: 'Пилот',
+}
+const OCCUPATION_FACTION_EN: Record<string, string> = {
+  hostile: 'Pirate', police: 'Patrol officer', neutral: 'Civilian', player: 'Pilot',
+}
+
+export function occupationName(originKind: string | null, faction: string): string {
+  const byKind = en() ? OCCUPATION_EN : OCCUPATION_RU
+  if (originKind && byKind[originKind]) return byKind[originKind]!
+  const byFaction = en() ? OCCUPATION_FACTION_EN : OCCUPATION_FACTION_RU
+  return byFaction[faction] ?? (en() ? 'Pilot' : 'Пилот')
+}
+
 /** Имена корпусов — собственные (бренд): в RU как есть, в EN по таблице. */
 const CHASSIS_EN: Record<string, string> = {
   'Аврора Мк III': 'Aurora Mk III',
