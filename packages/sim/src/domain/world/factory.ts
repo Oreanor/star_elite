@@ -1,7 +1,7 @@
 import { Euler, Quaternion, Vector3 } from 'three'
 import { GRAVITY, MOON } from '../../config/bodies'
 import { pirateLeaderLoadout, pirateLoadout, playerStartLoadout } from '../../config/loadouts'
-import { GALAXY } from '../../config/galaxy'
+import { ARRIVAL, GALAXY } from '../../config/galaxy'
 import { ASTEROID, TRAFFIC, WORLD } from '../../config/world'
 import { makeRng, range, signed, type Rng } from '../../core/math'
 import { createAIState } from '../ai/types'
@@ -347,6 +347,27 @@ function makePatrols(rng: Rng, ids: IdSource, def: SystemDef): ShipEntity[] {
  * `epoch` растёт при каждой смене. Рендер держит меши тел и пояса с момента
  * монтирования, и узнать, что мир под ним подменили, ему больше неоткуда.
  */
+const _clearDir = /* @__PURE__ */ new Vector3()
+
+/**
+ * Отодвинуть корабль наружу от тела, в которое он «влип» на выходе из прыжка. Наружу —
+ * от ЗВЕЗДЫ (как штатный standoff): не занырнуть к светилу за планету. Станцию пропускаем:
+ * об неё не гибнут, у неё свой порог швартовки. Проверяем каждое тело — за один проход
+ * (перекрытие сразу двух тел в пустоте практически невозможно).
+ */
+function clearOfBodies(world: World): void {
+  const p = world.player
+  const star = world.bodies.find((b) => b.kind === 'star')
+  for (const body of world.bodies) {
+    if (body.kind === 'station') continue
+    const safe = body.radius + p.spec.hull.radius + ARRIVAL.STANDOFF
+    if (body.pos.distanceToSquared(p.state.pos) >= safe * safe) continue
+    _clearDir.copy(body.pos).sub(star ? star.pos : p.state.pos)
+    if (_clearDir.lengthSq() < 1e-6) _clearDir.set(1, 0, 0)
+    p.state.pos.copy(body.pos).addScaledVector(_clearDir.normalize(), safe)
+  }
+}
+
 export function enterSystem(
   world: World,
   def: SystemDef,
@@ -393,6 +414,12 @@ export function enterSystem(
   player.state.pos.set(...start)
   player.state.vel.set(0, 0, 0)
   player.state.angVel.set(0, 0, 0)
+  // Не дать вынырнуть ВНУТРИ тела. Точку выхода считают по орбитам системы в
+  // ноль времени (`def`), но `stepOrbits` уже подвинул тела к `world.time`, а он
+  // между прыжками не сбрасывается — за долгую игру планета успевает отойти на
+  // пол-орбиты и встать ровно там, куда целил выход. Касание тверди мгновенно
+  // смертельно (`stepBodyCollisions`), отсюда «иногда после гипера корабль потерян».
+  clearOfBodies(world)
   aimAt(player, world.bodies.find((b) => b.id === world.navTargetId)?.pos ?? null)
   player.controls.throttle = WORLD.START_THROTTLE
   world.originOffset.set(0, 0, 0)

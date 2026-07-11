@@ -110,6 +110,28 @@ describe('прыжок', () => {
   })
 
   /**
+   * Выход из прыжка НЕ внутри тела. Точку выхода считают по орбитам в ноль времени,
+   * но `world.time` между прыжками не сбрасывается, и `stepOrbits` уводит планету к
+   * её нынешнему месту — за долгую игру она встаёт ровно на точку выхода. Касание
+   * тверди мгновенно смертельно, оттого «иногда после гипера корабль сразу потерян».
+   */
+  it('корабль не выныривает внутри тела, как бы далеко ни ушли орбиты', () => {
+    const world = createWorld()
+    const target = neighbourWithin(world, world.player.spec.jumpRange)
+    // Уводим орбиты далеко: имитируем долгую игру до прыжка.
+    world.time = 5e7
+
+    expect(jump(world, target)).toBe(true)
+
+    const p = world.player
+    for (const body of world.bodies) {
+      if (body.kind === 'station') continue // об станцию задевают, а не гибнут
+      const reach = body.radius + p.spec.hull.radius
+      expect(body.pos.distanceTo(p.state.pos)).toBeGreaterThan(reach)
+    }
+  })
+
+  /**
    * Прыгает ПИЛОТ, а не вселенная. Корабль, кредиты, трюм и очки переживают
    * смену системы; чужой бой — трассы, ракеты, обломки — остаётся позади.
    */

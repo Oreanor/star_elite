@@ -32,7 +32,7 @@ import { t, useLang, type Key } from '../i18n'
 import { UI } from '../theme'
 import { ACCENT, Button, Column, DIM, Panel, Table } from '../station/chrome'
 import { StatId, credits, formatStat, statLabel } from '../station/format'
-import { displayName, headlineCompare, headlineNumber, weaponSlot } from '../station/Equipment'
+import { displayName, headlineCompare, headlineNumber, moduleBenefit, weaponSlot } from '../station/Equipment'
 import { chassisName, properName } from '../i18n/dataNames'
 
 /**
@@ -125,11 +125,12 @@ export function ShipScreen({
           <Stats spec={player.spec} name={chassisName(player.loadout.chassis.name)} />
         </div>
 
-        <SlotGrid slots={slots} onOpen={setOpenKey} />
+        <SlotGrid slots={slots} onOpen={setOpenKey} docked={docked} />
       </div>
 
-      {/* Клик по плитке — стеклянная модалка поверх: варианты (верфь + твой трюм) и действия. */}
-      {openSlot && (
+      {/* Модалка — ТОЛЬКО у причала: там она мастерская (варианты + действия). В полёте
+          карточки самодостаточны (харка и вес прямо на них), и клик ничего не открывает. */}
+      {docked && openSlot && (
         <SlotModal world={world} docked={docked} slot={openSlot} onChange={bump} onClose={() => setOpenKey(null)} />
       )}
     </>
@@ -208,11 +209,20 @@ function buildSlots(world: World): SlotView[] {
 }
 
 /**
- * Оснастка ПЛИТКОЙ, а не таблицей: каждая ячейка — вид слота и что в нём стоит
- * («нет» — свободен). Плитка кликабельна: по ней встаёт стеклянная модалка с
- * вариантами и действиями. Столбца «класс» тут нет — класс жил лишь в имени модуля.
+ * Оснастка ПЛИТКОЙ, а не таблицей: каждая ячейка — вид слота, что в нём стоит
+ * («нет» — свободен), его характеристика и вес прямо на карточке. У причала плитка
+ * кликабельна — по ней встаёт мастерская-модалка; в полёте карточки только читают,
+ * клик ничего не открывает (незачем модалка ради тех же цифр).
  */
-function SlotGrid({ slots, onOpen }: { slots: readonly SlotView[]; onOpen: (key: string) => void }) {
+function SlotGrid({
+  slots,
+  onOpen,
+  docked,
+}: {
+  slots: readonly SlotView[]
+  onOpen: (key: string) => void
+  docked: boolean
+}) {
   // Своя секция, а не общий Panel: у того `mt-6` роняет модули на строку ниже модельки.
   // Здесь верх плитки встаёт вровень с контейнером чертежа — как и просили.
   return (
@@ -223,8 +233,10 @@ function SlotGrid({ slots, onOpen }: { slots: readonly SlotView[]; onOpen: (key:
           <button
             key={s.key}
             type="button"
-            onClick={() => onOpen(s.key)}
-            className="flex cursor-pointer flex-col gap-1 border p-3 text-left transition-colors hover:border-[#7fd6ff] hover:bg-[#7fd6ff]/10"
+            onClick={docked ? () => onOpen(s.key) : undefined}
+            className={`flex flex-col gap-1 border p-3 text-left transition-colors ${
+              docked ? 'cursor-pointer hover:border-[#7fd6ff] hover:bg-[#7fd6ff]/10' : 'cursor-default'
+            }`}
             style={{ borderColor: DIM }}
           >
             {/* Вид слота — что за оборудование сюда ставится, а не имя конкретной модели. */}
@@ -234,10 +246,13 @@ function SlotGrid({ slots, onOpen }: { slots: readonly SlotView[]; onOpen: (key:
             <span className="text-sm leading-tight" style={{ color: s.module ? ACCENT : DIM }}>
               {s.module ? displayName(s.module) : t('ship.slotEmpty')}
             </span>
-            {/* Ракеты схлопнуты в одну плитку — показываем суммарный боезапас. */}
-            {s.ammoTotal !== undefined && (
+            {/* Харка и вес — прямо на карточке. У ракет заголовочная цифра — суммарный
+                боезапас пилонов, а не боезапас одного; вес показываем модуля. */}
+            {s.module && (
               <span className="text-[0.7rem]" style={{ color: DIM }}>
-                {formatStat('ammo', s.ammoTotal)}
+                {s.ammoTotal !== undefined ? formatStat('ammo', s.ammoTotal) : moduleBenefit(s.module)}
+                {' · '}
+                {formatStat('mass', s.module.mass)}
               </span>
             )}
           </button>

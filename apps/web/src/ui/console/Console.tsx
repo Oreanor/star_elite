@@ -78,7 +78,7 @@ export function Console({
           <h1 className="text-xl tracking-[0.3em]">
             {docked && station
               ? `${properName(station.name)}${planet ? ` (${properName(planet.name)})` : ''}`
-              : properName(world.systemName).toUpperCase()}
+              : `${t('station.system')}: ${properName(world.systemName).toUpperCase()}`}
           </h1>
           {/* Кошелёк — единожды и на виду: слева от выхода, а не в каждой вкладке. */}
           <div className="flex items-center gap-4">
