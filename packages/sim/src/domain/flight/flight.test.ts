@@ -1,6 +1,6 @@
 import { Euler, Quaternion, Vector3 } from 'three'
 import { describe, expect, it } from 'vitest'
-import { COBRA_MK3 } from '../../config/chassis'
+import { AURORA_MK3 } from '../../config/chassis'
 import { ENGINE_STANDARD, PULSE_LASER, RCS_STANDARD, SHIELD_HEAVY, SHIELD_STANDARD } from '../../config/modules'
 import { playerStartLoadout } from '../../config/loadouts'
 import { createLoadout, deriveShipSpec } from '../loadout'
@@ -254,10 +254,10 @@ describe('снаряжение определяет характеристики
   it('тяжёлый щит уменьшает угловое ускорение', () => {
     // Компромисс прокачки должен СЧИТАТЬСЯ из массы, а не назначаться.
     const light = deriveShipSpec(
-      createLoadout(COBRA_MK3, [ENGINE_STANDARD, RCS_STANDARD, SHIELD_STANDARD], [PULSE_LASER, PULSE_LASER]),
+      createLoadout(AURORA_MK3, [ENGINE_STANDARD, RCS_STANDARD, SHIELD_STANDARD], [PULSE_LASER, PULSE_LASER]),
     )
     const heavy = deriveShipSpec(
-      createLoadout(COBRA_MK3, [ENGINE_STANDARD, RCS_STANDARD, SHIELD_HEAVY], [PULSE_LASER, PULSE_LASER]),
+      createLoadout(AURORA_MK3, [ENGINE_STANDARD, RCS_STANDARD, SHIELD_HEAVY], [PULSE_LASER, PULSE_LASER]),
     )
     expect(heavy.mass).toBeGreaterThan(light.mass)
     expect(heavy.tuning.PITCH_ACCEL).toBeLessThan(light.tuning.PITCH_ACCEL)
@@ -271,7 +271,7 @@ describe('снаряжение определяет характеристики
   })
 
   it('корабль без двигателя не летит', () => {
-    const dead = deriveShipSpec(createLoadout(COBRA_MK3, [RCS_STANDARD], []))
+    const dead = deriveShipSpec(createLoadout(AURORA_MK3, [RCS_STANDARD], []))
     expect(dead.tuning.THRUST).toBe(0)
     expect(dead.tuning.MAX_SPEED).toBe(0)
   })

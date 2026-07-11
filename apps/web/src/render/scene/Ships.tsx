@@ -4,7 +4,7 @@ import { InstancedMesh, Mesh, Object3D } from 'three'
 import { isDroneShip, isVisible } from '@elite/sim'
 import { useSession } from '../../app/GameContext'
 import { shipHidden } from '../../app/control/jumpFx'
-import { cobraGeometry, droneGeometry, freighterGeometry, sidewinderGeometry } from '../geometry/ships'
+import { auroraGeometry, droneGeometry, freighterGeometry, sidewinderGeometry } from '../geometry/ships'
 import { cloakMaterial, hullMaterial } from '../materials/materials'
 
 /** Все враги — один InstancedMesh: 1 draw call вместо N. */
@@ -41,7 +41,7 @@ export function PlayerShip() {
     mesh.material = player.cloaked ? cloakMaterial() : hullMaterial()
   })
 
-  return <mesh ref={ref} geometry={cobraGeometry()} material={hullMaterial()} frustumCulled={false} />
+  return <mesh ref={ref} geometry={auroraGeometry()} material={hullMaterial()} frustumCulled={false} />
 }
 
 /**

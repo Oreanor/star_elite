@@ -214,11 +214,23 @@ const SHIP_TYPE_EN: Record<string, string> = {
   'Налётчик': 'Raider',
   'Патруль': 'Patrol',
   'Грузовик': 'Freighter',
+  'Аврора': 'Aurora',
 }
 
 export function shipTypeName(name: string): string {
   if (!en()) return name
   return SHIP_TYPE_EN[name] ?? properName(name)
+}
+
+/** Имена корпусов — собственные (бренд): в RU как есть, в EN по таблице. */
+const CHASSIS_EN: Record<string, string> = {
+  'Аврора Мк III': 'Aurora Mk III',
+  'Грузовик «Тип-9»': 'Type-9 Hauler',
+  'БПЛА «Оса»': 'Wasp Drone',
+}
+
+export function chassisName(name: string): string {
+  return en() ? CHASSIS_EN[name] ?? name : name
 }
 
 const SECURITY_EN: Record<string, string> = {

@@ -26,14 +26,14 @@ import {
   type ShipSpec,
   type World,
 } from '@elite/sim'
-import { cobraGeometry, droneGeometry, freighterGeometry, sidewinderGeometry } from '../../render/geometry/ships'
+import { auroraGeometry, droneGeometry, freighterGeometry, sidewinderGeometry } from '../../render/geometry/ships'
 import { hullMaterial } from '../../render/materials/materials'
 import { t, useLang, type Key } from '../i18n'
 import { UI } from '../theme'
 import { ACCENT, Button, Column, DIM, Panel, Table } from '../station/chrome'
 import { StatId, credits, formatStat, statLabel } from '../station/format'
 import { displayName, headlineCompare, headlineNumber, weaponSlot } from '../station/Equipment'
-import { properName } from '../i18n/dataNames'
+import { chassisName, properName } from '../i18n/dataNames'
 
 /**
  * Экран корабля (клавиша I) и он же — ВЕРФЬ у причала. ОДИН компонент, а не два:
@@ -122,7 +122,7 @@ export function ShipScreen({
             <Blueprint chassisId={player.loadout.chassis.id} />
           </div>
           {/* Имя корабля — заголовком панели характеристик, а не отдельной строкой над моделью. */}
-          <Stats spec={player.spec} name={player.loadout.chassis.name} />
+          <Stats spec={player.spec} name={chassisName(player.loadout.chassis.name)} />
         </div>
 
         <SlotGrid slots={slots} onOpen={setOpenKey} />
@@ -603,7 +603,7 @@ function chassisGeometry(id: string): BufferGeometry {
     case 'drone':
       return droneGeometry()
     default:
-      return cobraGeometry() // cobra_mk3 — корпус игрока
+      return auroraGeometry() // aurora_mk3 — корпус игрока
   }
 }
 

@@ -6,7 +6,7 @@ import { useSession } from '../../app/GameContext'
 import { shipHidden } from '../../app/control/jumpFx'
 import { EXHAUST } from '../config'
 import { flameGeometry } from '../geometry/flame'
-import { COBRA_NOZZLES, DRONE_NOZZLES, FREIGHTER_NOZZLES, MISSILE_NOZZLE, SIDEWINDER_NOZZLES, type Nozzle } from '../geometry/ships'
+import { AURORA_NOZZLES, DRONE_NOZZLES, FREIGHTER_NOZZLES, MISSILE_NOZZLE, SIDEWINDER_NOZZLES, type Nozzle } from '../geometry/ships'
 
 /**
  * Струи из сопел — как у турбо-зажигалки: узкий белый керн внутри голубого факела.
@@ -30,7 +30,7 @@ const MISSILE_FLAME: readonly Nozzle[] = [MISSILE_NOZZLE]
 
 function nozzlesFor(ship: ShipEntity): readonly Nozzle[] {
   switch (ship.loadout.chassis.id) {
-    case 'cobra_mk3': return COBRA_NOZZLES
+    case 'aurora_mk3': return AURORA_NOZZLES
     case 'drone': return DRONE_NOZZLES
     case 'freighter': return FREIGHTER_NOZZLES
     default: return SIDEWINDER_NOZZLES

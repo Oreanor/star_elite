@@ -1,5 +1,5 @@
 import { createLoadout, type Loadout } from '../domain/loadout'
-import { COBRA_MK3, LARGE_FREIGHTER, SIDEWINDER } from './chassis'
+import { AURORA_MK3, LARGE_FREIGHTER, SIDEWINDER } from './chassis'
 import {
   ARMOUR_PLATE,
   BURST_LASER,
@@ -33,7 +33,7 @@ import {
  */
 export function playerStartLoadout(): Loadout {
   return createLoadout(
-    COBRA_MK3,
+    AURORA_MK3,
     // Базовый гиперпривод стоит с завода: без него не улететь из системы вообще,
     // а «заработай сорок пять тысяч, чтобы впервые куда-то полететь» — не начало игры.
     // Дальний рейс всё равно надо покупать: девять световых лет — это соседи.

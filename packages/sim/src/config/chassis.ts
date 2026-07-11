@@ -5,9 +5,9 @@ import type { Chassis } from '../domain/loadout'
  * Симуляцию трогать не нужно.
  */
 
-export const COBRA_MK3: Chassis = {
-  id: 'cobra_mk3',
-  name: 'Aurora Mk III',
+export const AURORA_MK3: Chassis = {
+  id: 'aurora_mk3',
+  name: 'Аврора Мк III',
   baseMass: 8, // т, пустой
   baseHull: 90,
   /** м. Аврора — корабль метров 25 в длину; сфера ~половина размаха.
@@ -54,7 +54,7 @@ export const SIDEWINDER: Chassis = {
   baseHull: 40,
   /** м. Мелкий истребитель: труднее попасть, но и брони нет. */
   radius: 9,
-  // Компактный: поворачивается легче «Кобры» при той же массе.
+  // Компактный: поворачивается легче «Авроры» при той же массе.
   inertiaFactor: 0.85,
   assistLateralDamp: 1.1,
   assistSpeedDamp: 0.35,
@@ -91,7 +91,7 @@ export const LARGE_FREIGHTER: Chassis = {
   name: 'Грузовик «Тип-9»',
   baseMass: 90, // т, пустой — на порядок тяжелее истребителя
   baseHull: 320,
-  /** м. Втрое длиннее «Кобры»: тушу видно издалека, и попасть по ней нетрудно. */
+  /** м. Втрое длиннее «Авроры»: тушу видно издалека, и попасть по ней нетрудно. */
   radius: 34,
   inertiaFactor: 5.0,
   assistLateralDamp: 0.7, // 1/с — тяжёлую баржу лётный компьютер гасит вяло
@@ -116,7 +116,7 @@ export const LARGE_FREIGHTER: Chassis = {
   cost: 210000,
 }
 
-export const CHASSIS_CATALOGUE: readonly Chassis[] = [COBRA_MK3, SIDEWINDER, LARGE_FREIGHTER]
+export const CHASSIS_CATALOGUE: readonly Chassis[] = [AURORA_MK3, SIDEWINDER, LARGE_FREIGHTER]
 
 export function findChassis(id: string): Chassis | null {
   return CHASSIS_CATALOGUE.find((c) => c.id === id) ?? null

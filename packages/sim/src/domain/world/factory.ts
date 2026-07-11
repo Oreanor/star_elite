@@ -410,7 +410,7 @@ export function createWorld(def: SystemDef = STARTER_SYSTEM): World {
   const player = makeShip(
     ids,
     'player',
-    'Aurora',
+    'Аврора',
     playerStartLoadout(),
     new Vector3(...def.playerStart),
     new Quaternion(),

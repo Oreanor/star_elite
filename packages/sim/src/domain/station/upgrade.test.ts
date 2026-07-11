@@ -13,7 +13,7 @@ import { canUpgrade, upgradeLevel, upgradeModule } from './shop'
 /** Установленный щит игрока как ShieldModule — стартовый SHIELD_STANDARD. */
 function playerShield(world: ReturnType<typeof createWorld>): ShieldModule {
   const shield = world.player.loadout.internals.find(isShield)
-  if (!shield) throw new Error('у стартовой Кобры обязан быть щит')
+  if (!shield) throw new Error('у стартовой Авроры обязан быть щит')
   return shield
 }
 

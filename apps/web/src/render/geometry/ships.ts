@@ -11,7 +11,7 @@ import { antenna, beam, bell, panel } from './parts'
  * зеркалить нельзя — две совпадающие грани дадут мерцание в буфере глубины.
  * Поэтому они собираются отдельно и добавляются к готовой симметричной половине.
  *
- * Размеры согласованы с физикой: сфера столкновений «Кобры» — 12 м,
+ * Размеры согласованы с физикой: сфера столкновений «Авроры» — 12 м,
  * значит корпус около 26 м в длину и 24 в размахе. Это не косметика —
  * угловой размер цели решает, возможно ли по ней попасть.
  *
@@ -33,7 +33,7 @@ const {
   ENGINE_CORE,
 } = PALETTE
 
-// ─── Cobra Mk III: игрок ─────────────────────────────────────────────────────
+// ─── Aurora Mk III: игрок ─────────────────────────────────────────────────────
 
 // Нос гранёный, а не остриё: фаска ловит свет и не даёт корпусу схлопнуться в клин.
 const NOSE_T: Vec3 = [0, 0.5, -14]
@@ -71,7 +71,7 @@ const CAN_B: Vec3 = [0, 2.0, 0.7]
 const CAN_SF: Vec3 = [1.15, 1.3, -5.2]
 const CAN_SB: Vec3 = [1.35, 1.6, 1.0]
 
-const cobraHalf: Triangle[] = [
+const auroraHalf: Triangle[] = [
   // ─ Нос: фаска сверху, снизу и по скуле.
   tri(NOSE_T, NOSE_S, TOP_F, HULL),
   tri(TOP_F, NOSE_S, CHINE, HULL),
@@ -132,7 +132,7 @@ const cobraHalf: Triangle[] = [
 ]
 
 /** Детали на оси симметрии. Зеркалить их нельзя: совпадающие грани мерцают. */
-const cobraCentre: Triangle[] = [
+const auroraCentre: Triangle[] = [
   // Киль. Единственная деталь на оси, и единственная, что видно строго сверху —
   // ей и достаётся акцент: сверху корабль иначе читается как белое пятно.
   tri([0, 1.95, 6.0], [0, 3.3, 9.2], [0, 1.9, 9.4], HULL_ACCENT),
@@ -140,12 +140,12 @@ const cobraCentre: Triangle[] = [
   ...bell(0, 0.2, 9.35, 0.55, 0.7, 1.0, 8, ENGINE, ENGINE_CORE),
 ]
 
-let cobraCache: BufferGeometry | null = null
+let auroraCache: BufferGeometry | null = null
 
 /** Геометрия создаётся один раз на модуль, а не на каждый компонент. */
-export function cobraGeometry(): BufferGeometry {
-  cobraCache ??= buildGeometry([...symmetric(cobraHalf), ...cobraCentre])
-  return cobraCache
+export function auroraGeometry(): BufferGeometry {
+  auroraCache ??= buildGeometry([...symmetric(auroraHalf), ...auroraCentre])
+  return auroraCache
 }
 
 /**
@@ -157,7 +157,7 @@ export interface Nozzle {
   radius: number
 }
 
-export const COBRA_NOZZLES: readonly Nozzle[] = [
+export const AURORA_NOZZLES: readonly Nozzle[] = [
   { offset: [0, 0.2, 10.35], radius: 0.7 },
   { offset: [-1.45, 0.15, 10.55], radius: 1.15 },
   { offset: [1.45, 0.15, 10.55], radius: 1.15 },
@@ -198,7 +198,7 @@ const sidewinderHalf: Triangle[] = [
   // ─ Фюзеляж.
   ...quad(S_TOP, S_SHOULDER, S_AFT_TOP, S_TOP_BACK, ENEMY_HULL),
   ...quad(S_BOT, S_BOT_BACK, S_AFT_BOT, S_HIP, ENEMY_DARK),
-  // Борт светлее днища — та же логика, что у «Кобры»: он освещён вскользь.
+  // Борт светлее днища — та же логика, что у «Авроры»: он освещён вскользь.
   ...quad(S_SHOULDER, S_HIP, S_AFT_BOT, S_AFT_TOP, ENEMY_SHADE),
 
   // ─ Расшивка и лючок.
@@ -228,7 +228,7 @@ const sidewinderHalf: Triangle[] = [
 ]
 
 const sidewinderCentre: Triangle[] = [
-  // Киль пирата — тоже акцент: сверху его силуэт иначе не отличить от «Кобры».
+  // Киль пирата — тоже акцент: сверху его силуэт иначе не отличить от «Авроры».
   tri([0, 1.3, 3.6], [0, 2.5, 6.3], [0, 1.28, 6.5], ENEMY_ACCENT),
 ]
 
@@ -352,7 +352,7 @@ export const DRONE_NOZZLES: readonly Nozzle[] = [{ offset: [0, 0, 2.05], radius:
 // двигателей с батареей сопел и навесных контейнеров по бортам. Читается издалека
 // как «большой и медленный», вблизи держит взгляд расшивкой и обвесом.
 //
-// Сфера столкновений — 34 м, значит корпус около 60 м в длину: втрое длиннее «Кобры».
+// Сфера столкновений — 34 м, значит корпус около 60 м в длину: втрое длиннее «Авроры».
 
 /** Полупрофиль сечения (правый борт, сверху вниз): фаска-коробка ширины w. */
 function freighterRing(w: number, yT: number, yB: number, c: number, z: number): Vec3[] {
