@@ -289,7 +289,11 @@ function drawTargets({ ctx, camera, world, width, height }: HudFrame): void {
     if (p.behind || !isOnScreen(p.x, p.y, width, height, 20 * S)) continue
 
     const locked = ship.id === world.lockedTargetId
-    const color = radarColor(ship, world)
+    // Захваченную цель красим фосфором (голубым): среди красных рамок врагов она —
+    // единственная не-красная, и глаз сразу находит, ЗА КЕМ гоняться. На локаторе
+    // захват метит кольцом (форма), а здесь — цветом: рамок на экране немного,
+    // и другой цвет читается быстрее, чем искать обводку среди одинаковых треугольников.
+    const color = locked ? HUD_COLORS.PRIMARY : radarColor(ship, world)
 
     // Минимум крупный: корабль в 12 м на километре занимает меньше пикселя,
     // и без рамки его физически не найти глазом.
@@ -331,8 +335,11 @@ function drawOffscreenArrows(frame: HudFrame): void {
    */
   for (const ship of world.ships) {
     if (!ship.alive || !isVisible(ship)) continue
-    if (ship.faction !== 'hostile' && ship.id !== world.lockedTargetId) continue
-    offscreenArrow(frame, ship.state.pos, radarColor(ship, world))
+    const locked = ship.id === world.lockedTargetId
+    if (ship.faction !== 'hostile' && !locked) continue
+    // Стрелка захваченной цели — голубая, как и её рамка: среди красных треугольников
+    // врагов сразу видно, в какую сторону вращать нос к ВЫБРАННОМУ, а не к любому.
+    offscreenArrow(frame, ship.state.pos, locked ? HUD_COLORS.PRIMARY : radarColor(ship, world))
   }
 
   // Цвет тела, а не отдельный «цвет навигации»: жёлтая стрелка ведёт к звезде,
