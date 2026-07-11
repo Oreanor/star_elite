@@ -21,9 +21,18 @@ export {
   type Persona,
   type PilotProfile,
   type Disposition,
+  type Secrecy,
+  type Humor,
+  type BuyableTrait,
   DISPOSITIONS,
+  SECRECIES,
+  HUMORS,
+  BUYABLE_TRAITS,
   DEFAULT_PERSONA,
   makePersona,
+  personaPointsSpent,
+  isLegalPersona,
+  isLegalProfile,
 } from './persona'
 export {
   type Acquaintance,
