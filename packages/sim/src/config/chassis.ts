@@ -49,7 +49,7 @@ export const AURORA_MK3: Chassis = {
 
 export const SIDEWINDER: Chassis = {
   id: 'sidewinder',
-  name: 'Sidewinder',
+  name: 'Арес',
   baseMass: 6,
   baseHull: 40,
   /** м. Мелкий истребитель: труднее попасть, но и брони нет. */
@@ -70,6 +70,9 @@ export const SIDEWINDER: Chassis = {
     { kind: 'shield', maxClass: 2 },
     { kind: 'armour', maxClass: 1 },
     { kind: 'cargo', maxClass: 1 },
+    // Пиратам он пуст (их сборки без привода), но игрок на купленном «Аресе»
+    // должен уметь улететь из системы — поэтому слот под гиперпривод есть.
+    { kind: 'hyperdrive', maxClass: 2 },
   ],
   cost: 32000,
 }
@@ -88,7 +91,7 @@ export const SIDEWINDER: Chassis = {
  */
 export const LARGE_FREIGHTER: Chassis = {
   id: 'freighter',
-  name: 'Грузовик «Тип-9»',
+  name: 'Деметра',
   baseMass: 90, // т, пустой — на порядок тяжелее истребителя
   baseHull: 320,
   /** м. Втрое длиннее «Авроры»: тушу видно издалека, и попасть по ней нетрудно. */
@@ -135,10 +138,10 @@ export function findChassis(id: string): Chassis | null {
  */
 export const DRONE: Chassis = {
   id: 'drone',
-  name: 'БПЛА «Оса»',
+  name: 'Каллиопа',
   baseMass: 0.9,
   baseHull: 22,
-  /** м. Втрое мельче «Сайдвиндера»: попасть в него — отдельная задача. */
+  /** м. Втрое мельче «Ареса»: попасть в него — отдельная задача. */
   radius: 3,
   inertiaFactor: 0.4,
   assistLateralDamp: 1.4,
@@ -147,6 +150,9 @@ export const DRONE: Chassis = {
   slots: [
     { kind: 'engine', maxClass: 1 },
     { kind: 'thrusters', maxClass: 1 },
+    // Боевому дрону пуст (его сборка без привода), но купленная «Каллиопа» — крошечный
+    // скорострельный скаут, и улететь на нём из системы должно быть можно.
+    { kind: 'hyperdrive', maxClass: 1 },
   ],
   cost: 0,
 }

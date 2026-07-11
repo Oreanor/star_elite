@@ -3,6 +3,7 @@ import { useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import { Group, Vector3, type BufferGeometry } from 'three'
 import {
   buy,
+  buyHull,
   canBuy,
   canUpgrade,
   fitFromHold,
@@ -11,6 +12,7 @@ import {
   moduleResaleValue,
   moduleStat,
   priceOf,
+  SHIPYARD,
   rearm,
   rearmCost,
   repair,
@@ -127,6 +129,9 @@ export function ShipScreen({
 
         <SlotGrid slots={slots} onOpen={setOpenKey} docked={docked} />
       </div>
+
+      {/* Верфь корпусов — только у причала: в полёте корабль не сменить. */}
+      {docked && <HullShop world={world} onChange={bump} />}
 
       {/* Модалка — ТОЛЬКО у причала: там она мастерская (варианты + действия). В полёте
           карточки самодостаточны (харка и вес прямо на них), и клик ничего не открывает. */}
@@ -257,6 +262,46 @@ function SlotGrid({
             )}
           </button>
         ))}
+      </div>
+    </section>
+  )
+}
+
+/**
+ * Верфь корпусов: возьми другой корабль. Плитка на корпус — имя и цена (пока «даром»);
+ * на текущем стоит метка. Взял — домен меняет сборку целиком, `bump` перерисовывает
+ * экран: чертёж, статы и сетка модулей тут же становятся от нового корабля.
+ */
+function HullShop({ world, onChange }: { world: World; onChange: () => void }) {
+  const currentId = world.player.loadout.chassis.id
+  return (
+    <section className="mt-5 border p-5" style={{ borderColor: DIM }}>
+      <h2 className="mb-3 text-sm tracking-[0.3em]">{t('ship.hulls')}</h2>
+      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+        {SHIPYARD.map((offer) => {
+          const owned = offer.chassis.id === currentId
+          return (
+            <button
+              key={offer.chassis.id}
+              type="button"
+              disabled={owned}
+              onClick={() => {
+                if (buyHull(world, offer.loadout(), offer.cost) === null) onChange()
+              }}
+              className={`flex flex-col gap-1 border p-3 text-left transition-colors ${
+                owned ? 'cursor-default' : 'cursor-pointer hover:border-[#7fd6ff] hover:bg-[#7fd6ff]/10'
+              }`}
+              style={{ borderColor: owned ? ACCENT : DIM }}
+            >
+              <span className="text-sm leading-tight" style={{ color: ACCENT }}>
+                {chassisName(offer.chassis.name)}
+              </span>
+              <span className="text-[0.7rem]" style={{ color: DIM }}>
+                {owned ? t('ship.current') : offer.cost === 0 ? t('ship.free') : credits(offer.cost)}
+              </span>
+            </button>
+          )
+        })}
       </div>
     </section>
   )

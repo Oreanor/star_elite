@@ -225,8 +225,9 @@ export function shipTypeName(name: string): string {
 /** Имена корпусов — собственные (бренд): в RU как есть, в EN по таблице. */
 const CHASSIS_EN: Record<string, string> = {
   'Аврора Мк III': 'Aurora Mk III',
-  'Грузовик «Тип-9»': 'Type-9 Hauler',
-  'БПЛА «Оса»': 'Wasp Drone',
+  'Арес': 'Ares',
+  'Деметра': 'Demeter',
+  'Каллиопа': 'Calliope',
 }
 
 export function chassisName(name: string): string {

@@ -1,5 +1,6 @@
+import type { Chassis } from '../domain/loadout'
 import { createLoadout, type Loadout } from '../domain/loadout'
-import { AURORA_MK3, LARGE_FREIGHTER, SIDEWINDER } from './chassis'
+import { AURORA_MK3, DRONE, LARGE_FREIGHTER, SIDEWINDER } from './chassis'
 import {
   ARMOUR_PLATE,
   BURST_LASER,
@@ -10,6 +11,7 @@ import {
   ENGINE_CIVILIAN,
   ENGINE_STANDARD,
   HYPERDRIVE_BASIC,
+  HYPERDRIVE_COMPACT,
   MISSILE_PYLON,
   PULSE_LASER,
   PULSE_LASER_WORN,
@@ -90,3 +92,41 @@ export function freighterLoadout(): Loadout {
     [PULSE_LASER_WORN, PULSE_LASER_WORN],
   )
 }
+
+/**
+ * СТОКОВЫЕ СБОРКИ ВЕРФИ. Готовые к вылету корпуса, что продаются на станции: с
+ * приводом (иначе из системы не улететь), исправным железом и парой стволов. Игрок,
+ * купив, тут же летит — а не собирает корабль из пустых слотов.
+ */
+
+/** «Арес» — лёгкий истребитель: вёрткий, с бронеплитой, ствол и ракетный пилон. */
+export function aresLoadout(): Loadout {
+  return createLoadout(
+    SIDEWINDER,
+    [ENGINE_STANDARD, RCS_STANDARD, SHIELD_LIGHT, ARMOUR_PLATE, CARGO_SMALL, HYPERDRIVE_COMPACT],
+    [PULSE_LASER, PULSE_LASER, MISSILE_PYLON],
+  )
+}
+
+/** «Каллиопа» — крошечный скаут: почти без брони, но один ствол и компактный привод. */
+export function calliopeLoadout(): Loadout {
+  return createLoadout(DRONE, [ENGINE_CIVILIAN, RCS_CIVILIAN, HYPERDRIVE_COMPACT], [PULSE_LASER])
+}
+
+/**
+ * Каталог верфи: какие корпуса можно взять на станции и с какой сборкой. Цена пока
+ * ноль — «дают погонять». Новый корабль — новая строка, а не ветка в коде (OCP):
+ * рендер знает геометрию по `chassis.id`, домен — как поставить сборку.
+ */
+export interface HullOffer {
+  readonly chassis: Chassis
+  readonly loadout: () => Loadout
+  readonly cost: number
+}
+
+export const SHIPYARD: readonly HullOffer[] = [
+  { chassis: AURORA_MK3, loadout: playerStartLoadout, cost: 0 },
+  { chassis: SIDEWINDER, loadout: aresLoadout, cost: 0 },
+  { chassis: LARGE_FREIGHTER, loadout: freighterLoadout, cost: 0 },
+  { chassis: DRONE, loadout: calliopeLoadout, cost: 0 },
+]
