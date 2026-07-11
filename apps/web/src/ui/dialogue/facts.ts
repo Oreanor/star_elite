@@ -1,10 +1,12 @@
 import {
+  freeCapacity,
   itemName,
   localSettlement,
   type Persona,
   type Relationship,
   type ShipEntity,
   type Topic,
+  type Transfer,
   type World,
 } from '@elite/sim'
 import { chassisName, economyName, governmentName, properName, speciesName } from '../i18n/dataNames'
@@ -45,6 +47,10 @@ export interface PartySnapshot {
   shieldPct: number
   /** Трюм словами: «Руда ×20, Металлы ×10» или «пусто». */
   cargo: string
+  /** Трюм машиночитаемо: чтобы модель могла указать товар в сделке по id. */
+  cargoList: { id: string; name: string; units: number }[]
+  /** Свободный трюм, т: сколько ещё влезет. Бот не обещает больше, чем поместится. */
+  freeHold: number
   /** Роль/намерение: пират, торговец, нанятый эскорт. */
   role: string
 }
@@ -84,6 +90,8 @@ export interface NegotiatorReply {
   agree: boolean
   /** Сменилось ли отношение по итогу реплики. null — без изменений. */
   stance: Relationship | null
+  /** Скрытая команда на передачу товара/денег, если сделка состоялась. null — нет. */
+  transfer: Transfer | null
   /** Собеседник кладёт трубку: договорено, надоело или психанул. */
   hangup: boolean
   /** Откуда реплика: живая модель или локальный запас на случай обрыва связи. */
@@ -107,6 +115,14 @@ function roleOf(other: ShipEntity, playerId: number): string {
   return 'мирный торговец на рейсе'
 }
 
+function cargoList(ship: ShipEntity): { id: string; name: string; units: number }[] {
+  const out: { id: string; name: string; units: number }[] = []
+  for (const it of ship.hold.items) {
+    if (it.kind === 'commodity') out.push({ id: it.commodity.id, name: it.commodity.name, units: it.units })
+  }
+  return out
+}
+
 function party(ship: ShipEntity, role: string): PartySnapshot {
   return {
     name: ship.name,
@@ -115,6 +131,8 @@ function party(ship: ShipEntity, role: string): PartySnapshot {
     hullPct: pct(ship.hull, ship.spec.hull.hull),
     shieldPct: pct(ship.shield, ship.spec.hull.shield),
     cargo: holdSummary(ship),
+    cargoList: cargoList(ship),
+    freeHold: Math.floor(freeCapacity(ship.hold)),
     role,
   }
 }

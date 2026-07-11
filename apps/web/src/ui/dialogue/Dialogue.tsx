@@ -1,5 +1,5 @@
 import { useEffect, useReducer, useRef, useState } from 'react'
-import { applyOutcome, applyStance, interlocutor, linesFor, rememberPilot, say, type Relationship, type Topic } from '@elite/sim'
+import { applyOutcome, applyStance, applyTransfer, interlocutor, linesFor, rememberPilot, say, type Relationship, type Topic } from '@elite/sim'
 import { useSession } from '../../app/GameContext'
 import { Button } from '../station/chrome'
 import { UI } from '../theme'
@@ -22,6 +22,18 @@ const STANCE_RU: Record<Relationship, string> = {
   friendly: 'теперь он расположен к тебе',
   neutral: 'снова нейтрален',
   hostile: 'теперь он враждебен',
+}
+
+/** Итог сделки строкой для ленты. null — ничего не перешло (обещал, да нечем). */
+function transferLine(r: ReturnType<typeof applyTransfer>): string | null {
+  const parts: string[] = []
+  if (r.units > 0 && r.commodityName) {
+    parts.push(r.direction === 'toThem' ? `Передано: ${r.commodityName} ×${r.units}` : `Получено: ${r.commodityName} ×${r.units}`)
+  }
+  if (r.credits > 0) {
+    parts.push(r.direction === 'toThem' ? `Списано: ${r.credits} кр` : `Зачислено: ${r.credits} кр`)
+  }
+  return parts.length ? parts.join(' · ') : null
 }
 
 export function Dialogue({
@@ -90,6 +102,12 @@ export function Dialogue({
     rememberPilot(world, other)
     // Собеседник согласился на действие — домен меняет мир ровно как по кнопке.
     if (reply.intent && reply.agree) applyOutcome(world, other, reply.intent)
+    // Сделка: передача товара/денег. Домен двигает ровно что есть и влезает.
+    if (reply.transfer) {
+      const r = applyTransfer(world, other, reply.transfer)
+      const line = transferLine(r)
+      if (line) push({ who: 'system', text: line })
+    }
     // Отношение сдвинулось — пишем в знакомство и сообщаем строкой в ленте.
     if (reply.stance) {
       applyStance(world, other, reply.stance)

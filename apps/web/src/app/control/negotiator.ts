@@ -1,4 +1,4 @@
-import type { Disposition, Persona, Relationship, Topic } from '@elite/sim'
+import type { Disposition, Persona, Relationship, Topic, Transfer } from '@elite/sim'
 import type { ChatTurn, NegotiationContext, NegotiatorReply } from '../../ui/dialogue/facts'
 
 /**
@@ -80,6 +80,11 @@ const STANCE_RU: Record<Relationship, string> = {
   hostile: 'враждебно',
 }
 
+/** Груз с id — чтобы модель могла назвать товар в сделке (`transfer.commodityId`). */
+function cargoLine(list: { id: string; name: string; units: number }[]): string {
+  return list.length ? list.map((c) => `${c.name} [${c.id}] ×${c.units}`).join(', ') : 'пусто'
+}
+
 const INTENT_RU: Record<Topic, string> = {
   surrender: 'surrender — сдаться: прекратить бой, сбросить груз, перестать быть врагом',
   mercy: 'mercy — пощадить игрока и отпустить его (ты пират, добыча — его груз)',
@@ -111,6 +116,7 @@ function systemPrompt(ctx: NegotiationContext): string {
     `Твоё состояние: корпус ${t.hullPct}%, щит ${t.shieldPct}%. В трюме: ${t.cargo}.`,
     '',
     `Перед тобой командир на «${y.ship}» в ${ctx.distanceM} м. Твои сенсоры видят: корпус ${y.hullPct}%, щит ${y.shieldPct}%, в трюме: ${y.cargo}. Он ${ctx.yourHeading}.`,
+    `У ТЕБЯ в трюме: ${cargoLine(t.cargoList)}. Свободно ~${t.freeHold} т. У него свободно ~${y.freeHold} т.`,
     `Его характер — ${personaLines(y.persona)}.`,
     `Расклад: ${standoff}.`,
     ctx.metBefore ? 'Вы уже пересекались раньше — ты его помнишь.' : 'Вы видите друг друга впервые.',
@@ -138,6 +144,11 @@ function systemPrompt(ctx: NegotiationContext): string {
     '— Согласие зависит и от ОТНОШЕНИЯ: дружелюбному уступаешь охотнее и помогаешь, к нейтральному — по расчёту, враждебному — упираешься или шлёшь прочь.',
     '— Если у тебя высокий темперамент, ты можешь вспылить и оборвать связь (hangup).',
     '— Клади трубку (hangup=true), когда договорено, тебе надоело или ты психанул.',
+    'СДЕЛКИ (передача груза/денег). Если по итогу разговора добро реально СМЕНИТ хозяина — заполни поле transfer скрытой командой; сам факт словами не считается, двигает только эта команда:',
+    '— direction: "toThem" — командир отдаёт ТЕБЕ (ты забираешь/везёшь/грабишь); "toYou" — ты отдаёшь ЕМУ (вернул груз, поделился, откупился, отдал долю с продажи).',
+    '— commodityId — id товара из списков выше (в квадратных скобках), units — сколько единиц; credits — сколько кредитов в ту же сторону. Что-то из этого можно опустить.',
+    '— Бери груз только если ВЛЕЗЕТ в твой трюм (свободно ~' + `${ctx.them.freeHold}` + ' т) — не обещай больше, скажи, сколько возьмёшь. Запрещёнку (рабы, наркотики) бери лишь если позволяет твой нрав.',
+    '— Выпросить/поделиться/«именем закона»/угроза — это тоже манипуляции: взвешивай их по своему УМУ (умного не проведёшь пустой угрозой) и решай, отдавать ли (transfer toYou) или послать.',
     '— Разговор может ИЗМЕНИТЬ твоё отношение: расположил к себе — friendly; нахамил, угрожал, обманул — hostile (нейтрал тогда и правда встанет на бой); обычно — neutral. Меняй его через поле stance ТОЛЬКО когда отношение реально сдвинулось, и дай это понять словами. Иначе оставляй stance = null.',
     '',
     'Действия, которые он может у тебя просить прямо сейчас:',
@@ -146,8 +157,8 @@ function systemPrompt(ctx: NegotiationContext): string {
     'Ответь СТРОГО одним JSON-объектом и ничем больше:',
     '{"reply": "твоя реплика", "intent": один из [' +
       ctx.allowedIntents.map((i) => `"${i}"`).join(', ') +
-      '] или null, "agree": true|false, "stance": "friendly"|"neutral"|"hostile"|null, "hangup": true|false}',
-    'intent — только если он ИМЕННО СЕЙЧАС призвал к этому действию; иначе null. agree важно лишь при непустом intent. stance — только при реальной смене отношения.',
+      '] или null, "agree": true|false, "stance": "friendly"|"neutral"|"hostile"|null, "transfer": {"direction":"toThem"|"toYou","commodityId":строка|null,"units":число,"credits":число}|null, "hangup": true|false}',
+    'intent — только если он ИМЕННО СЕЙЧАС призвал к этому действию; иначе null. agree важно лишь при непустом intent. stance — только при реальной смене отношения. transfer — только когда добро реально меняет хозяина, иначе null.',
   ].join('\n')
 }
 
@@ -182,9 +193,24 @@ function coerceReply(parsed: unknown, allowed: Topic[]): NegotiatorReply | null 
     intent,
     agree: intent !== null && o.agree === true,
     stance,
+    transfer: coerceTransfer(o.transfer),
     hangup: o.hangup === true,
     source: 'model',
   }
+}
+
+/** Разобрать сделку из ответа. Домен всё равно перепроверит наличие и место. */
+function coerceTransfer(raw: unknown): Transfer | null {
+  if (typeof raw !== 'object' || raw === null) return null
+  const o = raw as Record<string, unknown>
+  const direction = o.direction === 'toThem' || o.direction === 'toYou' ? o.direction : null
+  if (!direction) return null
+  const units = typeof o.units === 'number' && o.units > 0 ? Math.floor(o.units) : 0
+  const credits = typeof o.credits === 'number' && o.credits > 0 ? Math.floor(o.credits) : 0
+  const commodityId = typeof o.commodityId === 'string' ? o.commodityId : null
+  // Пустая сделка — не сделка: ни товара, ни денег.
+  if (!(commodityId && units > 0) && credits <= 0) return null
+  return { direction, commodityId, units, credits }
 }
 
 // ─── Обрыв связи ─────────────────────────────────────────────────────────────────
@@ -202,6 +228,7 @@ function staticNoise(history: ChatTurn[]): NegotiatorReply {
     intent: null,
     agree: false,
     stance: null,
+    transfer: null,
     hangup: false,
     source: 'fallback',
   }
