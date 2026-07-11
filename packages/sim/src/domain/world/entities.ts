@@ -11,6 +11,7 @@ import type { AIState } from '../ai/types'
 import type { CruiseState } from '../cruise/drive'
 import type { IdSource } from './ids'
 import type { Persona } from './persona'
+import type { Acquaintance } from './acquaintance'
 
 export type Faction = 'player' | 'hostile' | 'neutral' | 'police'
 
@@ -99,6 +100,11 @@ export interface ShipEntity {
 
   /** Личность пилота: нрав и черты для торга. Данные, не логика. */
   persona: Persona
+
+  /** id записи в реестре знакомств, если игрок уже говорил с этим пилотом. null — незнакомец. */
+  acquaintanceId: number | null
+  /** Каким типом встречи рождён — чтобы воссоздать сборку при повторной встрече. null — не из трафика. */
+  originKind: string | null
 }
 
 export interface AsteroidEntity {
@@ -356,5 +362,11 @@ export interface World {
   epoch: number
   credits: number
   score: number
+
+  /**
+   * Реестр знакомых пилотов: с кем игрок говорил. Переживает и гибель бортов
+   * (пилот — не корабль), и прыжки между системами, как кредиты и очки.
+   */
+  acquaintances: Acquaintance[]
 }
 

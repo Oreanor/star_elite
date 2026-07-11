@@ -6,6 +6,7 @@ import { TRAFFIC } from '../../config/world'
 import { signed, type Rng } from '../../core/math'
 import type { Loadout } from '../loadout'
 import { createAIState } from '../ai/types'
+import { recurringAcquaintance } from './acquaintance'
 import { addCommodity } from '../cargo/hold'
 import { COMMODITIES } from '../cargo/items'
 import { isDroneShip } from '../combat/drones'
@@ -153,6 +154,9 @@ function spawnOne(world: World, kind: EncounterKind, pos: Vector3, home: Vector3
   )
 
   const ship = makeShip(world.ids, kind.faction, kind.name, kind.loadout(), pos.clone(), quat, world.rng)
+  // Помним, каким типом рождён: по нему воссоздадим борт, если игрок с ним заговорит
+  // и однажды встретит снова.
+  ship.originKind = kind.id
   // Дом — не место рождения, а НАЗНАЧЕНИЕ: патрульный круг бота вьётся вокруг дома,
   // значит корабль сперва долетит до цели, а уже там начнёт кружить.
   ship.ai = createAIState(home, world.rng)
@@ -196,8 +200,36 @@ function spawnEscort(world: World, escort: NonNullable<EncounterKind['escort']>,
   return born
 }
 
+/**
+ * Возвращает ли эта встреча ЗНАКОМОГО. Изредка (RECUR_CHANCE) и только если в этой
+ * системе кто-то знакомый вообще есть. Пилот воссоздаётся тем же типом встречи, что
+ * и родил его когда-то, но с прежним именем, характером и памятью о тебе.
+ */
+function spawnRecurring(world: World): ShipEntity[] | null {
+  if (world.rng() >= TRAFFIC.RECUR_CHANCE) return null
+  const rec = recurringAcquaintance(world, world.rng)
+  if (!rec) return null
+
+  const kind = ENCOUNTERS.find((k) => k.id === rec.kindId) ?? ENCOUNTERS[0]!
+  const centre = new Vector3()
+  const home = new Vector3()
+  spawnSite(world, kind, centre, home)
+  const ship = spawnOne(world, kind, centre, home)
+
+  // Возвращаем именно того пилота: имя, характер, фракция — из записи, не заново.
+  ship.name = rec.name
+  ship.persona = rec.persona
+  ship.faction = rec.faction
+  ship.acquaintanceId = rec.id
+  rec.meetings += 1
+  return [ship]
+}
+
 /** Одна встреча: от одиночки до стаи. Возвращает всех, кому нужен пилот. */
 function spawnEncounter(world: World): ShipEntity[] {
+  const recurring = spawnRecurring(world)
+  if (recurring) return recurring
+
   const kind = weightedPick(world.rng, ENCOUNTERS)
   const count = kind.min + Math.floor(world.rng() * (kind.max - kind.min + 1))
 

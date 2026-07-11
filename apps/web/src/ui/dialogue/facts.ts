@@ -157,6 +157,8 @@ export function buildContext(world: World, other: ShipEntity, allowedIntents: To
     yourHeading: heading,
     distanceM: Math.round(other.state.pos.distanceTo(world.player.state.pos)),
     allowedIntents,
-    metBefore: false,
+    // Узнаёт, только если виделись РАНЬШЕ: у записи больше одной встречи. В первый
+    // разговор запись родится по ходу дела, но встреча всё ещё первая — не «узнаёт».
+    metBefore: (world.acquaintances.find((a) => a.id === other.acquaintanceId)?.meetings ?? 0) > 1,
   }
 }

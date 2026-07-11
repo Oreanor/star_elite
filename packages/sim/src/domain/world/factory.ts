@@ -87,6 +87,8 @@ export function makeShip(
     droneOf: null,
     dieAt: null,
     persona: rng ? makePersona(rng) : DEFAULT_PERSONA,
+    acquaintanceId: null,
+    originKind: null,
   }
 }
 
@@ -485,6 +487,7 @@ export function createWorld(def: SystemDef = STARTER_SYSTEM): World {
     galaxySeed: GALAXY.SEED,
     systemIndex: WORLD.HOME_INDEX,
     epoch: 0,
+    acquaintances: [],
     credits: WORLD.START_CREDITS,
     score: 0,
   }

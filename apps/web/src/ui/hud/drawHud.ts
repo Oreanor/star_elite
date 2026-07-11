@@ -289,9 +289,15 @@ function drawTargets({ ctx, camera, world, width, height }: HudFrame): void {
     // понять, кто рядом, а кто в километре.
     text(ctx, formatDistance(p.distance), p.x, p.y + size / 2 + 3 * S, color, 'center')
 
-    if (locked) {
-      text(ctx, shipTypeName(ship.name), p.x, p.y + size / 2 + 13 * S, color, 'center')
+    // Знакомого подписываем ВСЕГДА и по имени — со значком ◈, чтобы среди безликих
+    // отметок он читался как «этого ты знаешь». Незнакомца называем лишь захваченного.
+    const known = ship.acquaintanceId != null
+    if (locked || known) {
+      const label = known ? `◈ ${ship.name}` : shipTypeName(ship.name)
+      text(ctx, label, p.x, p.y + size / 2 + 13 * S, known ? HUD_COLORS.PRIMARY : color, 'center')
+    }
 
+    if (locked) {
       const shield = ship.spec.hull.shield > 0 ? ship.shield / ship.spec.hull.shield : 0
       const hull = ship.hull / ship.spec.hull.hull
       bar(ctx, p.x - 20 * S, p.y - size / 2 - 10 * S, 40 * S, 3 * S, shield, HUD_COLORS.PRIMARY)
@@ -543,9 +549,11 @@ function drawRadar({ ctx, world, width, height }: HudFrame): void {
   for (const titan of world.titans) plot(titan.pos, HUD_COLORS.NEUTRAL, Math.round(5 * S), true)
 
   // Локатор невидимку не берёт — то же правило, что у захвата и у головки ракеты.
+  // Знакомого выделяем кольцом, как захваченного: среди точек он должен читаться особо.
   for (const ship of world.ships) {
     if (!isVisible(ship)) continue
-    plot(ship.state.pos, radarColor(ship, world), Math.round(4 * S), ship.id === world.lockedTargetId)
+    const marked = ship.id === world.lockedTargetId || ship.acquaintanceId != null
+    plot(ship.state.pos, radarColor(ship, world), Math.round(4 * S), marked)
   }
 }
 

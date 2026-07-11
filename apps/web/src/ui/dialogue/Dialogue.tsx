@@ -1,5 +1,5 @@
 import { useEffect, useReducer, useRef, useState } from 'react'
-import { applyOutcome, interlocutor, linesFor, say, type Topic } from '@elite/sim'
+import { applyOutcome, interlocutor, linesFor, rememberPilot, say, type Topic } from '@elite/sim'
 import { useSession } from '../../app/GameContext'
 import { Button } from '../station/chrome'
 import { UI } from '../theme'
@@ -61,6 +61,8 @@ export function Dialogue({
     const reply = say(world, other, topic)
     push({ who: 'you', text: line.say })
     push({ who: 'them', text: reply.text })
+    // Заговорил — значит теперь знаком: у пилота появляется имя, и мир его запоминает.
+    rememberPilot(world, other)
     bump()
   }
 
@@ -78,10 +80,11 @@ export function Dialogue({
     const reply = await negotiate(ctx, history, text)
 
     push({ who: 'them', text: reply.text })
+    // Разговор состоялся — запоминаем пилота (имя, характер) на будущие встречи.
+    rememberPilot(world, other)
     // Собеседник согласился на действие — домен меняет мир ровно как по кнопке.
-    if (reply.intent && reply.agree) {
-      if (applyOutcome(world, other, reply.intent)) bump()
-    }
+    if (reply.intent && reply.agree) applyOutcome(world, other, reply.intent)
+    bump()
     setBusy(false)
     // Психанул или договорил — кладём трубку ПОСЛЕ его последней реплики.
     if (reply.hangup) setEnded('Собеседник отключился.')
