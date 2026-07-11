@@ -12,7 +12,7 @@
   "dependencies": {
     "@elite/sim": "*",
     "@react-three/fiber": "^9.1.2",
-    "@supabase/supabase-js": "^2.110.2",
+    "firebase": "^12.16.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "three": "^0.180.0"

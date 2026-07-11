@@ -1,5 +1,5 @@
 import type { PlayerSave } from '@elite/sim'
-import { online } from '../net/supabase'
+import { online } from '../net/firebase'
 import { writeServerSave } from '../net/account'
 
 /**
