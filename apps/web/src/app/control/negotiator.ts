@@ -128,16 +128,6 @@ const DISPOSITION_RU: Record<Disposition, string> = {
 
 const level = (n: number): string => (n <= 2 ? 'низкий' : n >= 4 ? 'высокий' : 'средний')
 
-/** Расклад по одной черте глазами собеседника: противник (игрок) против него. */
-function edge(mine: number, foe: number, more: string, less: string): string {
-  const d = foe - mine
-  if (d >= 2) return `противник заметно ${more}`
-  if (d >= 1) return `противник немного ${more}`
-  if (d <= -2) return `противник заметно ${less}`
-  if (d <= -1) return `противник немного ${less}`
-  return 'вы вровень'
-}
-
 function personaLines(p: Persona): string {
   return [
     `нрав: ${DISPOSITION_RU[p.disposition]}`,
@@ -182,12 +172,6 @@ function systemPrompt(ctx: NegotiationContext): string {
   const t = ctx.them
   const y = ctx.you
 
-  const standoff = [
-    edge(t.persona.intellect, y.persona.intellect, 'умнее тебя', 'глупее тебя'),
-    edge(t.persona.willpower, y.persona.willpower, 'волевее тебя', 'слабее духом'),
-    edge(t.persona.charisma, y.persona.charisma, 'убедительнее тебя', 'менее убедителен'),
-  ].join('; ')
-
   const intents = ctx.allowedIntents.length
     ? ctx.allowedIntents.map((i) => `• ${INTENT_RU[i]}`).join('\n')
     : '• (сейчас ничего механического от тебя не добьёшься — только разговор)'
@@ -213,10 +197,13 @@ function systemPrompt(ctx: NegotiationContext): string {
     `Твой характер — ${personaLines(t.persona)}.`,
     `Твоё состояние: корпус ${t.hullPct}%, щит ${t.shieldPct}%. В трюме: ${t.cargo}.`,
     '',
-    `Перед тобой командир на «${y.ship}» в ${ctx.distanceM} м. Твои сенсоры видят: корпус ${y.hullPct}%, щит ${y.shieldPct}%, в трюме: ${y.cargo}. Он ${ctx.yourHeading}.`,
-    `У ТЕБЯ в трюме: ${cargoLine(t.cargoList)}. Свободно ~${t.freeHold} т. У него свободно ~${y.freeHold} т.`,
-    `Его характер — ${personaLines(y.persona)}.`,
-    `Расклад: ${standoff}.`,
+    `Перед тобой ${y.role} по имени ${y.name}, вид — ${y.species}, на «${y.ship}», в ${ctx.distanceM} м.`,
+    `У ТЕБЯ в трюме: ${cargoLine(t.cargoList)}. Свободно ~${t.freeHold} т.`,
+    // ГРАНИЦА ЗНАНИЯ: о нём известно только видимое. Характер, богатство, груз и планы
+    // тебе НЕ даны — не выдумывай их и не делай вид, что знаешь. Что он за человек —
+    // суди сам, по своему нраву и по тому, что он скажет и сделает: доверчивый поверит
+    // словам, недоверчивый усомнится. Соврёт — поймать можешь лишь своим умом, не «анкетой».
+    'Ты НЕ знаешь его характер, кошелёк, груз и намерения — только имя, род занятий, вид и борт. Не приписывай ему черт, которых не видел. Каков он — суди по своему нраву и по его словам и делам: во что веришь, в то и веришь.',
     ctx.metBefore ? 'Вы уже пересекались раньше — ты его помнишь.' : 'Вы видите друг друга впервые.',
     `Сейчас ты относишься к нему: ${STANCE_RU[ctx.stance]}.`,
     nearbyLine,

@@ -69,6 +69,24 @@ export interface PartySnapshot {
 }
 
 /**
+ * Игрок глазами собеседника: ровно то, что видно снаружи. Симметрично тому, что сам
+ * игрок видит о встречном — имя, род занятий, вид, борт. Скрытое (характер, кошелёк,
+ * груз, курс) сюда НЕ входит: узнаётся только со слов игрока.
+ */
+export interface SeenParty {
+  name: string
+  /** Род занятий — серый по умолчанию, ни к чему не обязывает и ничего не выдаёт. */
+  role: string
+  /** Разумный вид (землянин/гуманоид/синтет) — виден. */
+  species: string
+  /** Модель корпуса — видна снаружи. */
+  ship: string
+}
+
+/** Род занятий игрока по умолчанию: намеренно СЕРЫЙ — вольный делец, а не пират/торговец. */
+const PLAYER_ROLE = 'вольный делец'
+
+/**
  * Ближний борт в поле зрения на момент разговора. Нужен, чтобы собеседник понимал
  * обстановку и разбирал приказы вроде «атакуй вот этого» или «прикрой того»: у каждого
  * есть имя, сторона и дистанция, а `locked` метит того, кого игрок захватил прямо сейчас
@@ -86,12 +104,15 @@ export interface NearbyShip {
 
 export interface NegotiationContext {
   world: WorldSnapshot
-  /** Собеседник. */
+  /** Собеседник (он сам — знает о себе всё). */
   them: PartySnapshot
-  /** Игрок — глазами собеседника. */
-  you: PartySnapshot
-  /** Куда направляется игрок: цель в системе или намеченный прыжок. */
-  yourHeading: string
+  /**
+   * Игрок ГЛАЗАМИ собеседника — только наблюдаемое: имя, род занятий, вид, борт.
+   * Ни характера, ни статов, ни груза, ни денег, ни планов: скрытое собеседник
+   * узнаёт, ТОЛЬКО если игрок сам расскажет (это придёт лентой реплик). Иначе NPC
+   * ловил бы несоответствие «поведение против статов» — а он их знать не должен.
+   */
+  you: SeenParty
   /** Где сам собеседник — с точностью до системы и приметного места (док станции, у планеты). */
   theirLocation: string
   distanceM: number
@@ -325,14 +346,6 @@ export function buildContext(world: World, other: ShipEntity, allowedIntents: To
       : `у ${place} (система ${properName(at.systemName)})`
     : `в системе ${properName(at.systemName)}`
 
-  const navBody = world.bodies.find((b) => b.id === world.navTargetId)
-  const heading =
-    world.jumpTargetIndex != null
-      ? 'намечен гиперпрыжок в другую систему'
-      : navBody
-        ? `идёт к ${properName(navBody.name)}`
-        : 'без определённой цели'
-
   return {
     world: {
       systemName: properName(world.systemName),
@@ -359,8 +372,14 @@ export function buildContext(world: World, other: ShipEntity, allowedIntents: To
         })),
     },
     them: party(other, roleOf(other, world.player.id)),
-    you: party(world.player, 'вольный пилот'),
-    yourHeading: heading,
+    // Игрок — только наблюдаемое (имя/род занятий/вид/борт). Характер, груз, деньги
+    // и планы собеседнику не отдаём: узнает, лишь если игрок сам скажет.
+    you: {
+      name: player.name,
+      role: PLAYER_ROLE,
+      species: speciesName(player.persona.species),
+      ship: chassisName(player.loadout.chassis.name),
+    },
     theirLocation,
     distanceM: Math.round(other.state.pos.distanceTo(world.player.state.pos)),
     nearby,
