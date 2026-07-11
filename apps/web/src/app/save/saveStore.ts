@@ -1,15 +1,31 @@
 import type { PlayerSave } from '@elite/sim'
+import { online } from '../net/supabase'
+import { writeServerSave } from '../net/account'
 
 /**
- * Кэш сейва игрока в localStorage. ФАЗА 0: локально; Фаза 3 переедет на сервер
- * (Supabase — источник правды), а localStorage останется быстрым кэшем для старта.
+ * Хранилище сейва игрока. ОНЛАЙН (настроен Supabase) — источник правды сервер, сюда
+ * автосейв идёт через `writeServerSave`. ОФЛАЙН (ключей нет) — кэш в localStorage,
+ * чтобы игра и master-ветка работали без сети. Ветвится в `persistSave` по `online`.
  *
  * Здесь только чтение/запись строки — вся правда о том, ЧТО сохранять, живёт в
  * доменном `serializePlayer`/`applyPlayerSave`. Отказ хранилища (приватный режим,
- * переполнение) не роняет игру: сейв не критичен для текущей сессии.
+ * переполнение, обрыв сети) не роняет игру: сейв не критичен для текущей секунды.
  */
 
 const KEY = 'elite.save'
+
+/**
+ * Записать сейв туда, где источник правды: онлайн — на сервер (по стыковке, fire-and-
+ * forget: автосейв не должен вешать кадр), офлайн — в localStorage. Один вызов на месте
+ * стыковки не знает про режим — знает он.
+ */
+export function persistSave(save: PlayerSave): void {
+  if (online) {
+    void writeServerSave(save).catch((e) => console.warn('Серверный сейв не удался:', e))
+  } else {
+    writeSave(save)
+  }
+}
 
 /** Прочитать сейв. Пусто/битое/чужой версии — как будто сейва нет, а не падение. */
 export function loadSave(): PlayerSave | null {

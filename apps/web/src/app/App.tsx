@@ -1,12 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { applyPilotProfile, interlocutor, jumpBlock, pendingHail, serializePlayer, undock, type PilotProfile } from '@elite/sim'
+import { applyPilotProfile, interlocutor, jumpBlock, pendingHail, serializePlayer, undock, type PilotProfile, type PlayerSave } from '@elite/sim'
 import { GameProvider, useSession } from './GameContext'
 import { jumping, startDepart } from './control/jumpFx'
 import { negotiate, negotiatorAvailable } from './control/negotiator'
 import { Game } from './Game'
-import { writeSave } from './save/saveStore'
+import { loadServerSave, onAuthChange } from './net/account'
+import { online } from './net/supabase'
+import { persistSave } from './save/saveStore'
 import { TitleStars } from './TitleStars'
 import { input, releaseLock, requestLock } from '../platform/input/input'
+import { AuthScreen } from '../ui/auth/AuthScreen'
 import { Console, type ConsoleTab } from '../ui/console/Console'
 import { CharacterCreation } from '../ui/create/CharacterCreation'
 import { Dialogue } from '../ui/dialogue/Dialogue'
@@ -21,10 +24,71 @@ export function App() {
   // Перезапуск — новая сессия целиком. `key` пересоздаёт мир, контроллеры и сцену:
   // ни одно поле не переживёт смерть, а значит, и не привезёт с собой баг.
   const [run, setRun] = useState(0)
+  const restart = () => setRun((n) => n + 1)
 
+  // Офлайн (Supabase не настроен) — сразу в игру, сейв из localStorage. Онлайн — через
+  // гейт входа: сперва аккаунт, потом серверный сейв, и лишь затем мир.
+  if (!online) {
+    return (
+      <GameProvider key={run}>
+        <Shell onRestart={restart} />
+      </GameProvider>
+    )
+  }
+  return <OnlineBoot key={run} onRestart={restart} />
+}
+
+/** Простой экран-заставка с одной строкой: ждём сессию или грузим сейв. */
+function BootSplash({ label }: { label: string }) {
   return (
-    <GameProvider key={run}>
-      <Shell onRestart={() => setRun((n) => n + 1)} />
+    <div
+      className="absolute inset-0 flex items-center justify-center bg-black bg-cover bg-center font-mono text-[#7fd6ff]"
+      style={{ backgroundImage: 'url(/bg.png)' }}
+    >
+      <div className="absolute inset-0 bg-black/60" />
+      <div className="relative text-sm tracking-[0.3em]">{label}</div>
+    </div>
+  )
+}
+
+/**
+ * Онлайн-путь: аккаунт → серверный сейв → мир. Сессию слушаем через `onAuthChange`
+ * (первым событием прилетает восстановленная из куки), сейв тянем, как узнали
+ * пользователя. Пока не готовы — заставка; нет входа — форма. Один источник правды о
+ * входе: форму убирает не она сама, а смена сессии, которую видит эта подписка.
+ */
+function OnlineBoot({ onRestart }: { onRestart: () => void }) {
+  useLang() // заставка/форма — на выбранном языке
+  // undefined — ещё не знаем (ждём первую весть о сессии); null — не залогинен; string — id.
+  const [userId, setUserId] = useState<string | null | undefined>(undefined)
+  // 'loading' — тянем сейв; иначе результат (PlayerSave или null = новичок).
+  const [save, setSave] = useState<PlayerSave | null | 'loading'>('loading')
+
+  useEffect(() => onAuthChange(setUserId), [])
+
+  useEffect(() => {
+    if (!userId) {
+      setSave('loading')
+      return
+    }
+    let alive = true
+    setSave('loading')
+    loadServerSave()
+      .then((s) => alive && setSave(s))
+      .catch(() => alive && setSave(null)) // сеть подвела — считаем новичком, чем падать
+    return () => {
+      alive = false
+    }
+  }, [userId])
+
+  if (userId === undefined) return <BootSplash label={t('auth.loading')} />
+  if (userId === null) return <AuthScreen />
+  if (save === 'loading') return <BootSplash label={t('auth.loading')} />
+
+  // Ключ по пользователю: сменился аккаунт — мир пересобирается с его сейвом с нуля.
+  return (
+    <GameProvider key={userId} initialSave={save}>
+      <Shell onRestart={onRestart} />
     </GameProvider>
   )
 }
@@ -154,7 +218,7 @@ function Shell({ onRestart }: { onRestart: () => void }) {
   const createPilot = useCallback(
     (profile: PilotProfile) => {
       applyPilotProfile(session.world.player, profile)
-      writeSave(serializePlayer(session.world))
+      persistSave(serializePlayer(session.world))
       session.isNewGame = false
       setCreated(true)
     },

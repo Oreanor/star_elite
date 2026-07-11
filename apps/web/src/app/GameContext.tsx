@@ -13,6 +13,7 @@ import {
   WORLD,
   type Arrival,
   type Controller,
+  type PlayerSave,
   type World,
 } from '@elite/sim'
 import { createIntent, createPlayerController, type PlayerIntent } from './control/playerController'
@@ -89,8 +90,10 @@ function randomStartIndex(): number {
   return fallback === CORE_INDEX ? WORLD.HOME_INDEX : fallback
 }
 
-function createSession(): Session {
-  const save = loadSave()
+function createSession(initialSave?: PlayerSave | null): Session {
+  // `undefined` — офлайн-путь: сейв берём из localStorage. Иначе (в т.ч. `null`) — тот,
+  // что дали снаружи: онлайн уже загрузил серверный сейв (null = новичок без прогресса).
+  const save = initialSave !== undefined ? initialSave : loadSave()
   const world = createWorld()
   // Повторный вход — в СВОЮ сохранённую систему своим сидом; новичок — случайная
   // стартовая. Систему строим по (сид, индекс) из сейва, чтобы попасть в тот же мир.
@@ -176,9 +179,17 @@ export function jumpTo(session: Session, index: number, arrival: Arrival | null 
   return true
 }
 
-export function GameProvider({ children }: { children: ReactNode }) {
-  // useMemo, а не useState: сессия не должна перерождаться при перерисовке.
-  const session = useMemo(createSession, [])
+export function GameProvider({
+  children,
+  initialSave,
+}: {
+  children: ReactNode
+  /** Уже загруженный сейв (онлайн) или `undefined` — тогда возьмём из localStorage (офлайн). */
+  initialSave?: PlayerSave | null
+}) {
+  // useMemo, а не useState: сессия не должна перерождаться при перерисовке. initialSave
+  // фиксируется на монтировании — новая сессия (вход, перезапуск) приходит через key.
+  const session = useMemo(() => createSession(initialSave), [])
   return <GameContext.Provider value={session}>{children}</GameContext.Provider>
 }
 

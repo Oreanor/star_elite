@@ -1,7 +1,7 @@
 import { useFrame, useThree } from '@react-three/fiber'
 import { autodockController, canEngageAutodock, cycleTarget, serializePlayer, stepWorld } from '@elite/sim'
 import { syncControllers, useSession, type Session } from '../../app/GameContext'
-import { writeSave } from '../../app/save/saveStore'
+import { persistSave } from '../../app/save/saveStore'
 import { clearPresses, consumePress, input, releaseLock } from '../../platform/input/input'
 
 /**
@@ -57,8 +57,8 @@ export function Simulation() {
         if (session.mode === 'autodock') setPilot(session, 'manual')
         releaseLock()
         // Автосейв — ТОЛЬКО на станции, и это единственная его точка (ТЗ): пристыковался
-        // → прогресс записан. В космосе не сохраняемся. Фаза 0 — в localStorage-кэш.
-        writeSave(serializePlayer(world))
+        // → прогресс записан. В космосе не сохраняемся. Онлайн — на сервер, офлайн — в кэш.
+        persistSave(serializePlayer(world))
       }
       session.onDockChange?.(world.docked)
     }
