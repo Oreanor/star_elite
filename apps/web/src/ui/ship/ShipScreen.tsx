@@ -130,9 +130,6 @@ export function ShipScreen({
         <SlotGrid slots={slots} onOpen={setOpenKey} docked={docked} />
       </div>
 
-      {/* Верфь корпусов — только у причала: в полёте корабль не сменить. */}
-      {docked && <HullShop world={world} onChange={bump} />}
-
       {/* Модалка — ТОЛЬКО у причала: там она мастерская (варианты + действия). В полёте
           карточки самодостаточны (харка и вес прямо на них), и клик ничего не открывает. */}
       {docked && openSlot && (
@@ -268,21 +265,23 @@ function SlotGrid({
 }
 
 /**
- * Верфь корпусов: возьми другой корабль. Плитка на корпус — имя и цена (пока «даром»);
- * на текущем стоит метка. Взял — домен меняет сборку целиком, `bump` перерисовывает
- * экран: чертёж, статы и сетка модулей тут же становятся от нового корабля.
+ * Верфь корпусов: возьми другой корабль. Отдельная вкладка станции. Плитка на корпус —
+ * имя, характеристики (корпус, масса, вёрткость) и цена (пока «даром»); на текущем стоит
+ * метка. Взял — домен меняет сборку целиком, `bump` перерисовывает панель: чертёж, статы
+ * и сетка модулей на вкладке «КОРАБЛЬ» тут же становятся от нового корабля.
  */
-function HullShop({ world, onChange }: { world: World; onChange: () => void }) {
+export function HullShop({ world, onChange }: { world: World; onChange: () => void }) {
   const currentId = world.player.loadout.chassis.id
   return (
-    <section className="mt-5 border p-5" style={{ borderColor: DIM }}>
+    <section className="border p-5" style={{ borderColor: DIM }}>
       <h2 className="mb-3 text-sm tracking-[0.3em]">{t('ship.hulls')}</h2>
-      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4">
         {SHIPYARD.map((offer) => {
           const owned = offer.chassis.id === currentId
+          const c = offer.chassis
           return (
             <button
-              key={offer.chassis.id}
+              key={c.id}
               type="button"
               disabled={owned}
               onClick={() => {
@@ -294,9 +293,14 @@ function HullShop({ world, onChange }: { world: World; onChange: () => void }) {
               style={{ borderColor: owned ? ACCENT : DIM }}
             >
               <span className="text-sm leading-tight" style={{ color: ACCENT }}>
-                {chassisName(offer.chassis.name)}
+                {chassisName(c.name)}
               </span>
+              {/* Голое шасси: корпус и масса — с завода, до модулей. Пилоту важно
+                  сравнить корпуса между собой, а не увидеть точный паспорт со сборкой. */}
               <span className="text-[0.7rem]" style={{ color: DIM }}>
+                {formatStat('hull', c.baseHull)} · {formatStat('mass', c.baseMass)}
+              </span>
+              <span className="text-[0.7rem]" style={{ color: owned ? ACCENT : DIM }}>
                 {owned ? t('ship.current') : offer.cost === 0 ? t('ship.free') : credits(offer.cost)}
               </span>
             </button>

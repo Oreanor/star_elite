@@ -5,7 +5,7 @@ import { economyName, governmentName, properName, speciesName } from '../i18n/da
 import { ACCENT, Button, Column, DIM, Table } from '../station/chrome'
 import { Hold } from '../station/Hold'
 import { Market } from '../station/Market'
-import { ShipScreen } from '../ship/ShipScreen'
+import { HullShop, ShipScreen } from '../ship/ShipScreen'
 import { SystemMap } from '../map/SystemMap'
 import { GalaxyMap } from '../map/GalaxyMap'
 
@@ -23,7 +23,7 @@ import { GalaxyMap } from '../map/GalaxyMap'
  * Здесь только композиция. Правила панели не знают друг о друге; мир мутируют лишь
  * через домен, а `bump` перерисовывает то, что от мира зависит (кредиты после сделки).
  */
-export type ConsoleTab = 'planet' | 'ship' | 'shop' | 'cargo' | 'system' | 'galaxy'
+export type ConsoleTab = 'planet' | 'ship' | 'shipyard' | 'shop' | 'cargo' | 'system' | 'galaxy'
 
 export function Console({
   world,
@@ -51,6 +51,9 @@ export function Console({
   const tabs: { id: ConsoleTab; label: string }[] = [
     { id: 'planet', label: t('station.nav.planet') },
     { id: 'ship', label: t('ship.title') },
+    // Верфь — отдельная вкладка у причала: «где купить корпус» не должно теряться
+    // под сеткой модулей. Рядом с «КОРАБЛЁМ» (твой борт) и «МАГАЗИНОМ» (железо).
+    ...(docked ? [{ id: 'shipyard' as const, label: t('station.nav.ship') }] : []),
     ...(docked ? [{ id: 'shop' as const, label: t('station.nav.shop') }] : []),
     { id: 'cargo', label: t('station.nav.cargo') },
     { id: 'system', label: t('station.nav.system') },
@@ -117,6 +120,7 @@ export function Console({
         <div className="mt-5 flex min-h-0 flex-1 flex-col overflow-y-auto pr-1">
           {tab === 'planet' && <LocationReadout world={world} planet={planet} />}
           {tab === 'ship' && <ShipScreen world={world} docked={docked} embedded onClose={() => onTab('planet')} />}
+          {tab === 'shipyard' && docked && <HullShop world={world} onChange={bump} />}
           {tab === 'shop' && docked && <Market world={world} onChange={bump} />}
           {tab === 'cargo' && <Hold world={world} onChange={bump} atStation={docked} />}
           {tab === 'system' && <SystemMap world={world} embedded onClose={() => onTab('planet')} />}
