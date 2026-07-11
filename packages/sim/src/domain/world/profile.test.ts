@@ -15,10 +15,9 @@ const KAIRA: PilotProfile = {
     willpower: 3,
     agility: 3,
     accuracy: 4,
-    secrecy: 'secretive',
-    humor: 'cheerful',
     species: SYNTH_SPECIES,
     portrait: 17,
+    profession: 'explorer',
   },
 }
 
@@ -27,7 +26,7 @@ describe('создание персонажа', () => {
     expect(PLAYABLE_SPECIES).toEqual([HUMAN_SPECIES, 'Гуманоиды', SYNTH_SPECIES])
   })
 
-  it('профиль открывает имя и ставит выбранную личность и лицо', () => {
+  it('профиль открывает имя и ставит выбранную личность, лицо и профессию', () => {
     const w = createWorld(STARTER_SYSTEM, KAIRA)
     // Имя игрока открыто сразу — это ТЫ, не незнакомец с радара.
     expect(w.player.name).toBe('Кайра')
@@ -35,6 +34,7 @@ describe('создание персонажа', () => {
     expect(w.player.persona.species).toBe(SYNTH_SPECIES)
     expect(w.player.persona.disposition).toBe('brave')
     expect(w.player.persona.portrait).toBe(17)
+    expect(w.player.persona.profession).toBe('explorer')
   })
 
   it('без профиля — землянин по умолчанию, лицо не выбрано', () => {
@@ -51,12 +51,13 @@ describe('создание персонажа', () => {
     expect(chosen.player.spec.hull.hull).toBe(plain.player.spec.hull.hull)
   })
 
-  it('имя, вид и выбранное лицо переживают сейв', () => {
+  it('имя, вид, лицо и профессия переживают сейв', () => {
     const src = createWorld(STARTER_SYSTEM, KAIRA)
     const dst = createWorld(STARTER_SYSTEM)
     applyPlayerSave(dst, serializePlayer(src))
     expect(dst.player.name).toBe('Кайра')
     expect(dst.player.persona.species).toBe(SYNTH_SPECIES)
     expect(dst.player.persona.portrait).toBe(17)
+    expect(dst.player.persona.profession).toBe('explorer')
   })
 })

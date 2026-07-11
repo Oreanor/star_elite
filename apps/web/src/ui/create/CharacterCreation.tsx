@@ -2,11 +2,13 @@ import { useState } from 'react'
 import {
   DEFAULT_PERSONA,
   PLAYABLE_SPECIES,
+  PROFESSIONS,
   isLegalProfile,
   type PilotProfile,
+  type Profession,
 } from '@elite/sim'
 import { PORTRAIT_GRID, portraitStyle } from '../portrait'
-import { speciesName } from '../i18n/dataNames'
+import { professionName, speciesName } from '../i18n/dataNames'
 import { t, useLang } from '../i18n'
 
 /**
@@ -30,12 +32,15 @@ export function CharacterCreation({ onSubmit }: { onSubmit: (profile: PilotProfi
   const [name, setName] = useState('')
   const [species, setSpecies] = useState<string>(PLAYABLE_SPECIES[0]!)
   const [face, setFace] = useState(0)
+  // Профессия — как ты представляешься миру. Путешественник по умолчанию: самый мирный,
+  // «просто странствую». Пока это лейбл: задаёт род занятий и тон, что видят собеседники.
+  const [profession, setProfession] = useState<Profession>('traveler')
 
   // Остальная персона — нейтральный дефолт: игрок её не крутит (нечему проявиться),
-  // но у борта она должна быть законной. Переопределяем лишь вид и выбранное лицо.
+  // но у борта она должна быть законной. Переопределяем вид, лицо и профессию.
   const profile: PilotProfile = {
     name: name.trim(),
-    persona: { ...DEFAULT_PERSONA, species, portrait: face },
+    persona: { ...DEFAULT_PERSONA, species, portrait: face, profession },
   }
   const ready = isLegalProfile(profile)
 
@@ -85,6 +90,14 @@ export function CharacterCreation({ onSubmit }: { onSubmit: (profile: PilotProfi
             {PLAYABLE_SPECIES.map((s) => (
               <Chip key={s} active={species === s} onClick={() => setSpecies(s)}>
                 {speciesName(s)}
+              </Chip>
+            ))}
+          </Field>
+
+          <Field label={t('create.profession')}>
+            {PROFESSIONS.map((p) => (
+              <Chip key={p} active={profession === p} onClick={() => setProfession(p)}>
+                {professionName(p)}
               </Chip>
             ))}
           </Field>

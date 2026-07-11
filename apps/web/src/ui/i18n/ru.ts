@@ -28,6 +28,7 @@ export const RU = {
   'create.name': 'ИМЯ',
   'create.name.placeholder': 'Как тебя звать…',
   'create.species': 'ВИД',
+  'create.profession': 'РОД ЗАНЯТИЙ',
   'create.portrait': 'ЛИЦО',
   'create.launch': 'В ПОЛЁТ',
 

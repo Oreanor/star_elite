@@ -26,6 +26,7 @@ export const EN: Record<keyof typeof RU, string> = {
   'create.name': 'NAME',
   'create.name.placeholder': 'Your name…',
   'create.species': 'SPECIES',
+  'create.profession': 'OCCUPATION',
   'create.portrait': 'FACE',
   'create.launch': 'LAUNCH',
 

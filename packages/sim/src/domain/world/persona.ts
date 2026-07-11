@@ -34,15 +34,16 @@ export const DISPOSITIONS: readonly Disposition[] = [
 ]
 
 /**
- * Скрытность: держит при себе или говорит открыто. КАТЕГОРИЯ, не число: собеседнику
- * «скрытный» читается вернее шкалы. Внешне читаема — проявляется в поведении.
+ * Профессия ИГРОКА — публичный род занятий, которым он представляется миру. Пока это
+ * ЧИСТЫЙ ЛЕЙБЛ: ни целей, ни счётчиков, ни физики. Она принимается ЗА ПРАВДУ (ты тот,
+ * кем назвался — не «якобы»): собеседник видит её открыто и по ней задаёт тон и общий
+ * стиль общения, а его отношение красится связкой «его ремесло → твой род занятий»
+ * (пират смотрит на мирных свысока, военного остерегается, и т.п.). Это мягкая поправка
+ * к реплике, не приговор — исход решает домен. Есть только у игрока (выбор при создании);
+ * у NPC род занятий берётся из `originKind`. Задел под будущую карьеру (звания, цели).
  */
-export type Secrecy = 'secretive' | 'open'
-export const SECRECIES: readonly Secrecy[] = ['secretive', 'open']
-
-/** Настрой: серьёзный или весёлый. Тоже категория-тон, красит реплику, не считается. */
-export type Humor = 'serious' | 'cheerful'
-export const HUMORS: readonly Humor[] = ['serious', 'cheerful']
+export type Profession = 'traveler' | 'explorer' | 'businessman' | 'military' | 'pirate'
+export const PROFESSIONS: readonly Profession[] = ['traveler', 'explorer', 'businessman', 'military', 'pirate']
 
 /**
  * Черты в шкале 1..5 (середина 3). Не 0..1: собеседнику-модели «воля 4 из 5»
@@ -63,10 +64,6 @@ export interface Persona {
   agility: number
   /** Точность: кучность стрельбы (разброс наведения), НЕ урон. */
   accuracy: number
-  /** Скрытность как тон — категория, не число. */
-  secrecy: Secrecy
-  /** Настрой как тон — категория, не число. */
-  humor: Humor
   /**
    * Разумный ВИД пилота (имя из `config/galaxy`: люди или один из гуманоидов). Свойство
    * пилота, а не корабля: переезжает вместе с персоной при смене борта и в реестр
@@ -80,6 +77,11 @@ export interface Persona {
    * и попадает в реестр знакомств: твоё лицо помнят.
    */
   portrait?: number
+  /**
+   * Профессия-самоназвание ИГРОКА (см. `Profession`). Есть только у игрока: у NPC род
+   * занятий берётся из `originKind`. Пока чистый лейбл — как ты представляешься собеседнику.
+   */
+  profession?: Profession
 }
 
 /**
@@ -102,8 +104,6 @@ export const DEFAULT_PERSONA: Persona = {
   willpower: 3,
   agility: 3,
   accuracy: 3,
-  secrecy: 'open',
-  humor: 'serious',
   species: HUMAN_SPECIES,
 }
 
@@ -130,8 +130,6 @@ export function makePersona(rng: Rng): Persona {
     species: makeSpecies(rng),
     agility: trait(rng),
     accuracy: trait(rng),
-    secrecy: SECRECIES[Math.floor(rng() * SECRECIES.length)]!,
-    humor: HUMORS[Math.floor(rng() * HUMORS.length)]!,
   }
 }
 
@@ -171,14 +169,19 @@ export function isLegalPersona(p: Persona): boolean {
     if (!Number.isInteger(p[t]) || p[t] < CHARACTER.MIN || p[t] > CHARACTER.MAX) return false
   }
   if (!DISPOSITIONS.includes(p.disposition)) return false
-  if (!SECRECIES.includes(p.secrecy)) return false
-  if (!HUMORS.includes(p.humor)) return false
+  // Профессия необязательна (у NPC её нет), но если задана — только из списка.
+  if (p.profession !== undefined && !PROFESSIONS.includes(p.profession)) return false
   return personaPointsSpent(p) <= CHARACTER.POOL
 }
 
-/** Легален ли весь профиль новичка: имя не пустое, вид доступен, персона в правилах. */
+/**
+ * Легален ли весь профиль новичка: имя не пустое, вид доступен, профессия выбрана из
+ * списка (игрок обязан назваться кем-то), персона в правилах. Один валидатор на экран
+ * И на сервер — присланный профиль не накрутить.
+ */
 export function isLegalProfile(profile: PilotProfile): boolean {
   if (profile.name.trim().length === 0) return false
   if (!PLAYABLE_SPECIES.includes(profile.persona.species)) return false
+  if (!profile.persona.profession || !PROFESSIONS.includes(profile.persona.profession)) return false
   return isLegalPersona(profile.persona)
 }

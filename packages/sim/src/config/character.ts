@@ -6,8 +6,8 @@
  * «править HP через консоль» — тот же принцип авторитетности из ТЗ.
  *
  * Числа тут — заготовка под баланс, их и крутить. Раздаются ЧИСЛОВЫЕ оси персоны
- * (`intellect/charisma/willpower/agility/accuracy`). Тона (`disposition/secrecy/
- * humor`) и `temperament` очков не стоят — это окраска, а не сила.
+ * (`intellect/charisma/willpower/agility/accuracy`). Тон (`disposition`) и
+ * `temperament` очков не стоят — это окраска, а не сила.
  */
 export const CHARACTER = {
   /** Стартовое значение каждой черты до раздачи очков. */

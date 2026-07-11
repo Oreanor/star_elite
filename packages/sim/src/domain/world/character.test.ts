@@ -6,8 +6,8 @@ import {
   isLegalPersona,
   isLegalProfile,
   personaPointsSpent,
+  type Disposition,
   type PilotProfile,
-  type Secrecy,
 } from './persona'
 
 /**
@@ -51,14 +51,20 @@ describe('валидатор создания персонажа', () => {
   })
 
   it('битый тон (не из enum) — незаконно', () => {
-    const badTone = { ...DEFAULT_PERSONA, secrecy: 'nope' as unknown as Secrecy }
+    const badTone = { ...DEFAULT_PERSONA, disposition: 'nope' as unknown as Disposition }
     expect(isLegalPersona(badTone)).toBe(false)
   })
 
-  it('профиль: имя обязательно и вид должен быть доступным', () => {
-    const ok: PilotProfile = { name: 'Рэй', persona: { ...DEFAULT_PERSONA, species: HUMAN_SPECIES } }
+  it('профиль: имя, доступный вид и выбранная профессия обязательны', () => {
+    const ok: PilotProfile = {
+      name: 'Рэй',
+      persona: { ...DEFAULT_PERSONA, species: HUMAN_SPECIES, profession: 'traveler' },
+    }
     expect(isLegalProfile(ok)).toBe(true)
     expect(isLegalProfile({ ...ok, name: '   ' })).toBe(false)
     expect(isLegalProfile({ ...ok, persona: { ...ok.persona, species: 'Марсиане' } })).toBe(false)
+    // Игрок ОБЯЗАН назваться кем-то: профиль без профессии или с битой — незаконен.
+    expect(isLegalProfile({ ...ok, persona: { ...ok.persona, profession: undefined } })).toBe(false)
+    expect(isLegalProfile({ ...ok, persona: { ...ok.persona, profession: 'wizard' as never } })).toBe(false)
   })
 })
