@@ -7,10 +7,10 @@ import type { Chassis } from '../domain/loadout'
 
 export const COBRA_MK3: Chassis = {
   id: 'cobra_mk3',
-  name: 'Cobra Mk III',
+  name: 'Aurora Mk III',
   baseMass: 8, // т, пустой
   baseHull: 90,
-  /** м. Кобра — корабль метров 25 в длину; сфера ~половина размаха.
+  /** м. Аврора — корабль метров 25 в длину; сфера ~половина размаха.
    *  Это не косметика: угловой размер цели решает, возможно ли попасть вообще. */
   radius: 12,
   inertiaFactor: 1.0,

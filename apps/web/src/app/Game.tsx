@@ -74,7 +74,16 @@ function Scene() {
   )
 }
 
-export function Game() {
+/**
+ * Канвас монтируется СРАЗУ, а тяжёлая сцена — только по `ready` (нажат СТАРТ).
+ *
+ * Захват курсора требует, чтобы канвас уже существовал В МОМЕНТ жеста: иначе первое
+ * нажатие «СТАРТ» ловить нечего, запрос проваливается, и заставка уходит лишь со
+ * второго. Поэтому пустой канвас (и `attachInput` на нём) живут с загрузки страницы,
+ * а полумиллионное небо и геометрия планет строятся уже под нажатием — там это
+ * читается как загрузка, а не как поломка.
+ */
+export function Game({ ready }: { ready: boolean }) {
   const hostRef = useRef<HTMLDivElement>(null)
   const session = useSession()
 
@@ -113,9 +122,14 @@ export function Game() {
         camera={{ fov: RENDER.FOV_CHASE, near: RENDER.NEAR, far: RENDER.FAR }}
         style={{ imageRendering: PIXEL_SCALE > 1 ? 'pixelated' : 'auto' }}
       >
-        {/* Постановщик — ВНЕ ключа: подмена мира не должна его размонтировать. */}
-        <JumpDirector />
-        <Scene key={epoch} />
+        {/* Пока не нажат СТАРТ — канвас пуст (только контекст ради захвата курсора).
+            Постановщик прыжка — ВНЕ ключа: подмена мира не должна его размонтировать. */}
+        {ready && (
+          <>
+            <JumpDirector />
+            <Scene key={epoch} />
+          </>
+        )}
       </Canvas>
 
       {/* HUD поверх 3D. pointer-events отключены: клик должен уходить в канвас. */}

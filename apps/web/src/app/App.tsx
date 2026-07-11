@@ -177,7 +177,9 @@ function Shell({ onRestart }: { onRestart: () => void }) {
 
   return (
     <div className="relative h-screen w-screen overflow-hidden bg-black">
-      {booted && <Game />}
+      {/* Канвас — всегда: захвату курсора нужен готовый канвас уже на первом жесте.
+          Тяжёлую сцену он строит только по `booted` (после нажатия СТАРТ). */}
+      <Game ready={booted} />
       {over ? (
         <GameOver score={session.world.score} onRestart={onRestart} />
       ) : talking ? (
