@@ -738,6 +738,15 @@ function drawReadouts({ ctx, world, height }: HudFrame): void {
 
   const ammo = missileAmmo(player)
   if (ammo > 0) text(ctx, t('hud.missiles', { ammo }), x + barWidth, y, HUD_COLORS.WARN)
+
+  // Миелофон: пока борт вырос, показываем множитель масштаба — иначе рост в пустом
+  // космосе не на чем увидеть. Растёт с E — значит артефакт работает.
+  const scale = player.state.scale
+  if (scale > 1.001) {
+    y += step
+    const shown = scale < 100 ? scale.toFixed(1) : Math.round(scale).toString()
+    text(ctx, `МАСШТАБ x${shown}`, x, y, HUD_COLORS.TARGET)
+  }
 }
 
 /** Крейсер: множитель и причина, по которой он не включается. */
