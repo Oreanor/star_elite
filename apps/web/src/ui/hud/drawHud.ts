@@ -337,9 +337,11 @@ function drawOffscreenArrows(frame: HudFrame): void {
     if (!ship.alive || !isVisible(ship)) continue
     const locked = ship.id === world.lockedTargetId
     if (ship.faction !== 'hostile' && !locked) continue
-    // Стрелка захваченной цели — голубая, как и её рамка (живой игрок — розовым, как и
-    // его рамка): среди красных треугольников сразу видно, куда вращать нос к ВЫБРАННОМУ.
-    offscreenArrow(frame, ship.state.pos, locked && !ship.kinematic ? HUD_COLORS.PRIMARY : radarColor(ship, world))
+    // Стрелка захваченной цели — ВСЕГДА голубая, без исключений для живого игрока. На
+    // экране рамка и HP-полосы уже говорят «выбран», а у стрелки за кадром сигнал один —
+    // цвет. Оставь её розовой/красной (как радар), и захваченный человек или враждебный
+    // пилот сольётся с чужими стрелками: непонятно, куда вращать нос к ВЫБРАННОМУ.
+    offscreenArrow(frame, ship.state.pos, locked ? HUD_COLORS.PRIMARY : radarColor(ship, world))
   }
 
   // Цвет тела, а не отдельный «цвет навигации»: жёлтая стрелка ведёт к звезде,

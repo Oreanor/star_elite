@@ -1,7 +1,37 @@
-import { Fragment, useState } from 'react'
+import { Fragment, useEffect, useState } from 'react'
 import type { ShipEntity, World } from '@elite/sim'
 import { UI } from '../theme'
-import { pilotEmotion, portraitIndex, portraitStyle, type Emotion } from '../portrait'
+import { loadSheet, pilotEmotion, portraitIndex, portraitSheet, portraitStyle, type Emotion } from '../portrait'
+import { StaticNoise } from '../StaticNoise'
+
+/**
+ * Грузится ли ещё лист портрета. Пока Image в полёте — показываем помехи-прелоадер;
+ * как только загрузился ИЛИ отвалился (404), помехи гаснут: на 404 крой прозрачен и
+ * наружу проступает плейсхолдер-инициал, поэтому вечных помех на отсутствующем листе нет.
+ */
+function useSheetLoading(url: string | null): boolean {
+  const [loading, setLoading] = useState(() => (url ? !loadSheet(url).complete : false))
+  useEffect(() => {
+    if (!url) {
+      setLoading(false)
+      return
+    }
+    const img = loadSheet(url)
+    if (img.complete) {
+      setLoading(false)
+      return
+    }
+    setLoading(true)
+    const settle = () => setLoading(false)
+    img.addEventListener('load', settle)
+    img.addEventListener('error', settle)
+    return () => {
+      img.removeEventListener('load', settle)
+      img.removeEventListener('error', settle)
+    }
+  }, [url])
+  return loading
+}
 
 /**
  * Хром станции: кнопка, вкладки, панель.
@@ -127,6 +157,12 @@ export function PilotPortrait({
     : species !== undefined && face !== undefined
       ? portraitStyle(species, face, 'neutral')
       : null
+  const sheetUrl = ship && emo
+    ? portraitSheet(ship.persona.species, emo)
+    : species !== undefined
+      ? portraitSheet(species, 'neutral')
+      : null
+  const loading = useSheetLoading(sheetUrl)
   const interactive = onClick !== undefined
   return (
     <div
@@ -167,6 +203,7 @@ export function PilotPortrait({
     >
       {initial}
       {crop && <div className="absolute inset-0" style={crop} />}
+      {loading && <StaticNoise />}
     </div>
   )
 }
