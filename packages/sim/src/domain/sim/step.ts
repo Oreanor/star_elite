@@ -291,10 +291,14 @@ function stepShipCollisions(world: World): void {
 
   for (let i = 0; i < ships.length; i++) {
     const a = ships[i]!
-    if (!a.alive || a.kinematic || isPhased(a)) continue
+    if (!a.alive || isPhased(a)) continue
     for (let j = i + 1; j < ships.length; j++) {
       const b = ships[j]!
-      if (!b.alive || b.kinematic || isPhased(b)) continue
+      if (!b.alive || isPhased(b)) continue
+      // Оба кинематические (два чужих игрока по сети) — двигать физикой некого, пропускаем.
+      // А пару, где ОДИН кинематический, решаем: он служит стеной, другого выталкивает
+      // (иначе гигант проваливался бы сквозь чужой борт — тот был пропущен целиком).
+      if (a.kinematic && b.kinematic) continue
       // Сталкиваются только пары, где есть гигант.
       if (Math.max(a.state.scale, b.state.scale) <= MIELOPHONE.COLLIDE_MIN_SCALE) continue
       resolveShipVsShip(a, b, world.time)
