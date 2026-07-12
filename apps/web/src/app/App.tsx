@@ -678,10 +678,12 @@ function TitleDust() {
   const bits = useMemo(() => {
     const VANISH_X = 50 // vw
     const VANISH_Y = 24 // vh — за и над кораблём
-    return Array.from({ length: 16 }, () => {
-      const startX = 6 + Math.random() * 88 // vw, вдоль низа
-      const startY = 92 + Math.random() * 12 // vh, у нижнего края и ниже
-      const dur = 5 + Math.random() * 5 // с
+    return Array.from({ length: 26 }, () => {
+      // Старт по всему нижнему полю И бокам, не только вдоль низа: тогда пыль сносит
+      // и по краям кадра, а не единой струёй по центру. Все ниже точки схода — летят вверх.
+      const startX = -6 + Math.random() * 112 // vw, включая самые края
+      const startY = 40 + Math.random() * 70 // vh, от середины боков до ниже низа
+      const dur = 1.7 + Math.random() * 1.7 // с — быстрый снос, «летим»
       return {
         startX,
         startY,
@@ -689,7 +691,7 @@ function TitleDust() {
         dy: VANISH_Y - startY,
         dur,
         delay: -Math.random() * dur, // отрицательная задержка — часть уже в полёте с первого кадра
-        size: 1.3 + Math.random() * 2.4, // px
+        size: 2 + Math.random() * 2.4, // px — минимум 2, иначе 1px не видно
         peak: 0.35 + Math.random() * 0.5,
       }
     })
