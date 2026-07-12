@@ -39,6 +39,15 @@ export function circle(ctx: CanvasRenderingContext2D, x: number, y: number, r: n
   ctx.stroke()
 }
 
+/** Эллипс контуром: локатор шире, чем высок, и рисуется им, а не окружностью. */
+export function ellipse(ctx: CanvasRenderingContext2D, x: number, y: number, rx: number, ry: number, color: string) {
+  ctx.strokeStyle = color
+  ctx.lineWidth = 1
+  ctx.beginPath()
+  ctx.ellipse(Math.round(x), Math.round(y), rx, ry, 0, 0, Math.PI * 2)
+  ctx.stroke()
+}
+
 /** Залитая точка — лампа индикатора. Контур на четырёх пикселях неразличим. */
 export function dot(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, color: string) {
   ctx.fillStyle = color

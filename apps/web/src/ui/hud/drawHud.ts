@@ -1,4 +1,4 @@
-import { Vector3, type Camera } from 'three'
+import { Vector3, type Camera, type PerspectiveCamera } from 'three'
 import {
   AUTODOCK,
   CRUISE,
@@ -30,7 +30,7 @@ import {
 } from '@elite/sim'
 import { bombFlash, bombRing } from '../../render/bombFeel'
 import { HUD_SCALE } from '../../render/config'
-import { HUD_COLORS, bar, circle, corners, dot, line, rect, text } from './draw'
+import { HUD_COLORS, bar, circle, corners, dot, ellipse, line, rect, text } from './draw'
 import { t } from '../i18n'
 import { chassisName, occupationName, properName, shipTypeName } from '../i18n/dataNames'
 import { drawFlare } from './drawFlare'
@@ -545,15 +545,28 @@ function drawTargetPortrait({ ctx, world, width, height }: HudFrame): void {
  * Радар: вид сверху, нос — вверх. Показывает и корабли, и тела, поэтому шкала
  * логарифмическая: иначе планета в 400 км сплющит всё остальное к центру.
  */
-function drawRadar({ ctx, world, width, height }: HudFrame): void {
-  const radius = 36 * S
-  const cx = width - radius - 12 * S
-  const cy = height - radius - 12 * S
+function drawRadar({ ctx, camera, world, width, height }: HudFrame): void {
+  const radiusY = 36 * S
+  const radiusX = radiusY * 1.5 // локатор на 50% шире — эллипс, а не круг
+  const cx = width - radiusX - 12 * S
+  const cy = height - radiusY - 12 * S
 
-  circle(ctx, cx, cy, radius, HUD_COLORS.DIM)
-  circle(ctx, cx, cy, radius / 2, HUD_COLORS.DIM)
+  ellipse(ctx, cx, cy, radiusX, radiusY, HUD_COLORS.DIM)
+  ellipse(ctx, cx, cy, radiusX / 2, radiusY / 2, HUD_COLORS.DIM)
   line(ctx, cx, cy - 3 * S, cx, cy + 3 * S, HUD_COLORS.DIM)
   line(ctx, cx - 3 * S, cy, cx + 3 * S, cy, HUD_COLORS.DIM)
+
+  // Лучи границ угла зрения от центра ВВЕРХ (нос — вверху): что между ними, то в кадре
+  // перед тобой; что снаружи — за краем экрана. Горизонтальный FOV выводим из вертикального
+  // FOV камеры и соотношения сторон, лучи тянем до обода эллипса.
+  const fov = (camera as PerspectiveCamera).fov
+  const halfFov = Math.atan(Math.tan((fov * Math.PI) / 360) * (width / height))
+  for (const s of [-1, 1]) {
+    const dx = Math.sin(halfFov) * s
+    const dy = -Math.cos(halfFov)
+    const reach = 1 / Math.hypot(dx / radiusX, dy / radiusY) // до пересечения с эллипсом
+    line(ctx, cx, cy, cx + dx * reach, cy + dy * reach, HUD_COLORS.DIM)
+  }
 
   const player = world.player
   shipAxes(player.state.quat, _fwd, _right, _up)
@@ -589,9 +602,9 @@ function drawRadar({ ctx, world, width, height }: HudFrame): void {
      * честнее, чем не показать вовсе: «оно там, дальше уже неважно насколько».
      */
     const k = Math.min(1, Math.log10(1 + distance / 50) / Math.log10(1 + RADAR_RANGE / 50))
-    const scaled = k * radius
-    const px = cx + (x / flat) * scaled
-    const py = cy - (z / flat) * scaled
+    // Эллипс: по горизонтали шкала шире (radiusX), по вертикали как была (radiusY).
+    const px = cx + (x / flat) * k * radiusX
+    const py = cy - (z / flat) * k * radiusY
 
     // Высота над плоскостью корабля — вертикальный штрих, как в Elite.
     const lift = Math.max(-10 * S, Math.min(10 * S, (_point.dot(_up) / distance) * 20 * S))
