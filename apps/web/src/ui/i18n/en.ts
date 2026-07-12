@@ -280,6 +280,7 @@ export const EN: Record<keyof typeof RU, string> = {
   'locator.title': 'LOCATOR',
   'locator.nose': 'NOSE',
   'locator.hint': 'Hover a blip to see who it is.',
+  'locator.controls': 'Drag to rotate and tilt. Wheel to zoom.',
   'locator.count': 'on locator: {n}',
   'locator.kind.star': 'star',
   'locator.kind.planet': 'planet',

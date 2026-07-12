@@ -300,6 +300,7 @@ export const RU = {
   'locator.title': 'ЛОКАТОР',
   'locator.nose': 'НОС',
   'locator.hint': 'Наведи на отметку — увидишь, кто это.',
+  'locator.controls': 'Перетаскивай — поворот и наклон. Колесо — приближение.',
   'locator.count': 'на локаторе: {n}',
   'locator.kind.star': 'звезда',
   'locator.kind.planet': 'планета',

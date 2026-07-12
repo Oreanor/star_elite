@@ -1,36 +1,44 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { Vector3 } from 'three'
 import { isVisible, shipAxes, type BodyEntity, type ShipEntity, type World } from '@elite/sim'
 import { UI } from '../theme'
 import { t, useLang } from '../i18n'
 import { chassisName, occupationName, properName } from '../i18n/dataNames'
+import { useWheelZoom } from './useWheelZoom'
 
 /**
  * Локатор — большой круглый радар консоли: вид сверху, нос корабля ВВЕРХ.
  *
- * Тот же прибор, что в углу кабины (`drawRadar`), но во весь экран и с наведением:
- * на дот можно навести курсор и прочитать, кто это. Проекция и логарифмическая
- * шкала — один в один кабинная, чтобы «слева на радаре» и «слева на локаторе»
- * означали одно место. Консоль на паузе (курсор отпущен), мир не движется —
- * снимок статичен, кадровый цикл не нужен, как и карте системы.
+ * Тот же прибор, что в углу кабины (`drawRadar`), но во весь экран и живой: его можно
+ * КРУТИТЬ и НАКЛОНЯТЬ драгом (на себя — от себя), приближать колесом и наводиться на
+ * отметку, чтобы прочитать, кто это. В кабине этого нет намеренно: там мыши нет, радар
+ * плоский. Здесь панель на паузе (курсор отпущен), мир статичен — перерисовка на драг
+ * дёшева, кадровый цикл не нужен.
+ *
+ * Наклон превращает круг в ЭЛЛИПС: все координаты пересчитываются проекцией
+ * `project` — поворот в плоскости (yaw), затем наклон (tilt) сжимает ось «вперёд»
+ * и поднимает высоту над плоскостью. Диск, сетка, конус обзора и метки — всё через неё.
  */
 
-/** Радиус диска, единицы SVG. */
+/** Радиус диска в единицах SVG (до зума). */
 const R = 300
 /** Поле под подписи по краям. */
-const PAD = 34
+const PAD = 46
 const VIEW = 2 * (R + PAD)
 /** Дальше этого локатор не разбирает дистанцию, м: отметка прижата к ободу (как в кабине). */
 const RANGE = 20_000
-/** Максимальный штрих высоты над плоскостью корабля, единицы SVG. */
-const LIFT = 26
+/** Максимальная высота отметки над плоскостью при наклоне, единицы SVG. */
+const LIFT = 46
+/** Вертикальный FOV погони (град) — из него и соотношения сторон строим конус обзора. */
+const FOV_V = 70
+const ASPECT = 16 / 9
+const HALF_FOV = Math.atan(Math.tan((FOV_V * Math.PI) / 360) * ASPECT)
 
 const _fwd = new Vector3()
 const _right = new Vector3()
 const _up = new Vector3()
 const _rel = new Vector3()
 
-/** Цвет корабля — тот же ответ «стрелять или нет», что в кабине. */
 function shipColor(ship: ShipEntity, world: World): string {
   if (ship.faction === 'hostile') return UI.DANGER
   if (ship.kinematic) return UI.PLAYER
@@ -47,22 +55,28 @@ type Shape = 'square' | 'round' | 'diamond'
 
 interface Blip {
   key: string
-  /** Место на диске, единицы SVG (уже с учётом штриха высоты). */
-  px: number
-  py: number
-  /** Длина штриха высоты вверх, единицы SVG (может быть отрицательной). */
-  lift: number
+  /** Место в плоскости диска: right (вбок) и forward (вперёд), единицы SVG. */
+  rt: number
+  fwd: number
+  /** Высота над плоскостью, единицы SVG. */
+  h: number
   color: string
   shape: Shape
   size: number
-  /** Обвести кольцом: цель боя, знакомый — их выделяем и здесь. */
   ring: boolean
   title: string
   subtitle: string
 }
 
-/** Проекция мировой точки на диск локатора. Null — если точка в самом центре (нечего рисовать). */
-function project(world: World, pos: Vector3): { px: number; py: number; lift: number } | null {
+/** Проекция точки диска на экран: сперва поворот в плоскости, затем наклон и зум. */
+function project(rt: number, fwd: number, h: number, yaw: number, tilt: number, zoom: number): { x: number; y: number; depth: number } {
+  const rc = (rt * Math.cos(yaw) - fwd * Math.sin(yaw)) * zoom
+  const fc = (rt * Math.sin(yaw) + fwd * Math.cos(yaw)) * zoom
+  return { x: rc, y: -(fc * Math.cos(tilt) + h * zoom * Math.sin(tilt)), depth: fc }
+}
+
+/** Проекция мировой точки на плоскость диска (right/forward/height), null — в самом центре. */
+function toDisc(world: World, pos: Vector3): { rt: number; fwd: number; h: number } | null {
   _rel.copy(pos).sub(world.player.state.pos)
   const dist = _rel.length()
   if (dist < 1) return null
@@ -70,32 +84,28 @@ function project(world: World, pos: Vector3): { px: number; py: number; lift: nu
   const z = _rel.dot(_fwd)
   const flat = Math.hypot(x, z)
   if (flat < 1e-3) return null
-  // Логарифм сжимает пять порядков дистанций в радиус диска; дальше предела — прижато к ободу.
   const k = Math.min(1, Math.log10(1 + dist / 50) / Math.log10(1 + RANGE / 50))
-  const px = (x / flat) * k * R
-  const py = -(z / flat) * k * R
-  const lift = Math.max(-1, Math.min(1, _rel.dot(_up) / dist)) * LIFT
-  return { px, py, lift }
+  return {
+    rt: (x / flat) * k * R,
+    fwd: (z / flat) * k * R,
+    h: Math.max(-1, Math.min(1, _rel.dot(_up) / dist)) * LIFT,
+  }
 }
 
-/** Все, кого локатор видит: тела-места и корабли-кто. */
 function blips(world: World): Blip[] {
   shipAxes(world.player.state.quat, _fwd, _right, _up)
   const out: Blip[] = []
 
   for (const body of world.bodies) {
-    const p = project(world, body.pos)
-    if (!p) continue
-    const nav = body.id === world.navTargetId
+    const d = toDisc(world, body.pos)
+    if (!d) continue
     out.push({
       key: `body-${body.id}`,
-      px: p.px,
-      py: p.py,
-      lift: p.lift,
+      ...d,
       color: bodyColor(body),
       shape: body.kind === 'station' ? 'diamond' : 'round',
       size: body.kind === 'star' ? 11 : 7,
-      ring: nav,
+      ring: body.id === world.navTargetId,
       title: properName(body.name),
       subtitle: t(`locator.kind.${body.kind}` as 'locator.kind.planet'),
     })
@@ -103,18 +113,15 @@ function blips(world: World): Blip[] {
 
   for (const ship of world.ships) {
     if (!isVisible(ship)) continue
-    const p = project(world, ship.state.pos)
-    if (!p) continue
-    const marked = ship.id === world.lockedTargetId || ship.acquaintanceId != null
+    const d = toDisc(world, ship.state.pos)
+    if (!d) continue
     out.push({
       key: `ship-${ship.id}`,
-      px: p.px,
-      py: p.py,
-      lift: p.lift,
+      ...d,
       color: shipColor(ship, world),
       shape: 'square',
       size: 7,
-      ring: marked,
+      ring: ship.id === world.lockedTargetId || ship.acquaintanceId != null,
       title: ship.pilotName,
       subtitle: `${occupationName(ship.originKind, ship.faction)} · ${chassisName(ship.loadout.chassis.name)}`,
     })
@@ -123,65 +130,121 @@ function blips(world: World): Blip[] {
   return out
 }
 
+/** Расстояние, отвечающее доле радиуса k (обратная логарифмической шкале радара). */
+function distAt(k: number): number {
+  return 50 * ((1 + RANGE / 50) ** k - 1)
+}
+function fmtDist(m: number): string {
+  return m >= 1000 ? `${(m / 1000).toFixed(0)} ${t('unit.km')}` : `${Math.round(m / 10) * 10} ${t('unit.m')}`
+}
+
 export function Locator({ world }: { world: World }) {
   useLang()
   const [hover, setHover] = useState<string | null>(null)
+  // Поворот, наклон и зум диска. Наклон по умолчанию — лёгкий (радар-«тарелка»), но
+  // 0 даёт честный вид сверху; крайние значения зажаты, чтобы диск не выворачивался.
+  const [yaw, setYaw] = useState(0)
+  const [tilt, setTilt] = useState(0.5)
+  const [zoom, setZoom] = useState(1)
+  const box = useRef<HTMLDivElement>(null)
+  const drag = useRef<{ x: number; y: number } | null>(null)
+  useWheelZoom(box, (dy) => setZoom((z) => Math.min(3, Math.max(0.6, z * (dy > 0 ? 0.9 : 1.1)))))
+
+  const proj = (rt: number, fwd: number, h: number) => project(rt, fwd, h, yaw, tilt, zoom)
+  const cos = Math.cos(tilt)
+
   const marks = blips(world)
-  const active = marks.find((m) => m.key === hover) ?? null
+    .map((b) => ({ b, base: proj(b.rt, b.fwd, 0), tip: proj(b.rt, b.fwd, b.h) }))
+    // Дальние (больше «вперёд» после поворота) рисуем первыми — ближние лягут поверх.
+    .sort((a, b) => b.base.depth - a.base.depth)
+  const active = marks.find((m) => m.b.key === hover)?.b ?? null
+
+  // Обод, сетка и конус — через ту же проекцию. Кольца сетки: эллипсы rx=r·zoom, ry=r·cos·zoom.
+  const gridRings = [0.25, 0.5, 0.75, 1]
+  const spokes = [0, 1, 2, 3, 4, 5].map((i) => (i * Math.PI) / 3) // радиальные лучи через 60°
+  const fovA = proj(Math.sin(HALF_FOV) * R, Math.cos(HALF_FOV) * R, 0)
+  const fovB = proj(Math.sin(-HALF_FOV) * R, Math.cos(-HALF_FOV) * R, 0)
 
   return (
-    <div className="flex w-full items-start justify-center gap-6 py-2 font-mono">
-      <div className="relative aspect-square w-full min-w-0 max-w-[34rem] shrink">
+    <div className="flex w-full items-start justify-center gap-6 py-1 font-mono">
+      <div
+        ref={box}
+        onPointerDown={(e) => {
+          drag.current = { x: e.clientX, y: e.clientY }
+          e.currentTarget.setPointerCapture(e.pointerId)
+        }}
+        onPointerMove={(e) => {
+          const s = drag.current
+          if (!s) return
+          setYaw((y) => y - (e.clientX - s.x) * 0.008)
+          setTilt((tl) => Math.max(0, Math.min(1.35, tl + (e.clientY - s.y) * 0.006)))
+          drag.current = { x: e.clientX, y: e.clientY }
+        }}
+        onPointerUp={() => (drag.current = null)}
+        onPointerCancel={() => (drag.current = null)}
+        // Круг обязан влезать в высоту панели, иначе появляется скролл: сторона квадрата
+        // ограничена и шириной колонки, и оставшейся высотой экрана.
+        className="relative aspect-square w-full max-w-[min(34rem,calc(100vh-15rem))] shrink cursor-grab touch-none select-none active:cursor-grabbing"
+      >
         <svg className="absolute inset-0 h-full w-full" viewBox={`${-VIEW / 2} ${-VIEW / 2} ${VIEW} ${VIEW}`}>
-          <defs>
-            <radialGradient id="locator-disc">
-              <stop offset="0%" stopColor="rgba(124,196,255,0.14)" />
-              <stop offset="70%" stopColor="rgba(124,196,255,0.03)" />
-              <stop offset="100%" stopColor="rgba(124,196,255,0)" />
-            </radialGradient>
-          </defs>
+          {/* Конус обзора — сектор от центра между лучами FOV, залит еле-еле. */}
+          <path d={`M 0 0 L ${fovA.x} ${fovA.y} L ${fovB.x} ${fovB.y} Z`} fill="rgba(124,196,255,0.06)" />
+          <line x1={0} y1={0} x2={fovA.x} y2={fovA.y} stroke="rgba(124,196,255,0.28)" />
+          <line x1={0} y1={0} x2={fovB.x} y2={fovB.y} stroke="rgba(124,196,255,0.28)" />
 
-          <circle r={R} fill="url(#locator-disc)" stroke="rgba(124,196,255,0.22)" />
-          <circle r={R / 2} fill="none" stroke="rgba(124,196,255,0.12)" />
-          <line x1={0} y1={-6} x2={0} y2={6} stroke="rgba(124,196,255,0.2)" />
-          <line x1={-6} y1={0} x2={6} y2={0} stroke="rgba(124,196,255,0.2)" />
-          {/* Нос — вверх: подпись у верхней кромки, чтобы читалось, куда смотрит корабль. */}
-          <text x={0} y={-R - 12} fontSize={13} fill={UI.DIM} textAnchor="middle" style={{ pointerEvents: 'none' }}>
+          {/* Координатная сетка — вдвое приглушённая: кольца-эллипсы и радиальные лучи. */}
+          {gridRings.map((k) => (
+            <ellipse key={k} rx={R * k * zoom} ry={R * k * cos * zoom} fill="none" stroke="rgba(124,196,255,0.09)" />
+          ))}
+          {spokes.map((a, i) => {
+            const p = proj(Math.sin(a) * R, Math.cos(a) * R, 0)
+            return <line key={i} x1={0} y1={0} x2={p.x} y2={p.y} stroke="rgba(124,196,255,0.07)" />
+          })}
+          {/* Обод — чуть ярче сетки. */}
+          <ellipse rx={R * zoom} ry={R * cos * zoom} fill="none" stroke="rgba(124,196,255,0.24)" />
+
+          {/* Подписи расстояний у верхней кромки колец (экранно, не вращаются). */}
+          {[0.5, 1].map((k) => (
+            <text
+              key={k}
+              x={4}
+              y={-R * k * cos * zoom - 3}
+              fontSize={11}
+              fill={UI.DIM}
+              style={{ pointerEvents: 'none' }}
+            >
+              {fmtDist(distAt(k))}
+            </text>
+          ))}
+          {/* Нос — вверх: где смотрит корабль. Метка ездит с наклоном вместе с ободом. */}
+          <text x={0} y={-R * cos * zoom - 16} fontSize={13} fill={UI.DIM} textAnchor="middle" style={{ pointerEvents: 'none' }}>
             {t('locator.nose')}
           </text>
 
-          {/* Игрок в центре — нос вверх, как метка корабля на карте системы. */}
+          {/* Игрок в центре — нос вверх. */}
           <path d="M 0 -7 L 5 6 L 0 3 L -5 6 Z" fill={UI.SALVAGE} />
 
-          {marks.map((m) => {
-            const on = m.key === hover
-            const my = m.py - m.lift
+          {marks.map(({ b, base, tip }) => {
+            const on = b.key === hover
             return (
               <g
-                key={m.key}
-                onMouseEnter={() => setHover(m.key)}
-                onMouseLeave={() => setHover((h) => (h === m.key ? null : h))}
+                key={b.key}
+                onMouseEnter={() => setHover(b.key)}
+                onMouseLeave={() => setHover((h) => (h === b.key ? null : h))}
                 style={{ cursor: 'pointer' }}
               >
-                {/* Крупная прозрачная мишень: попасть курсором в дот из семи единиц тяжело. */}
-                <circle cx={m.px} cy={my} r={16} fill="transparent" />
-                {/* Штрих высоты над плоскостью корабля — как в кабине. */}
-                {Math.abs(m.lift) > 1 && (
-                  <line x1={m.px} y1={m.py} x2={m.px} y2={my} stroke={m.color} strokeOpacity={0.35} />
+                <circle cx={tip.x} cy={tip.y} r={16} fill="transparent" />
+                {/* Штрих высоты: от плоскости (base) к отметке (tip) — виден при наклоне. */}
+                {Math.hypot(tip.x - base.x, tip.y - base.y) > 1 && (
+                  <line x1={base.x} y1={base.y} x2={tip.x} y2={tip.y} stroke={b.color} strokeOpacity={0.35} />
                 )}
-                <Mark shape={m.shape} cx={m.px} cy={my} size={m.size} color={m.color} />
-                {(m.ring || on) && (
-                  <circle cx={m.px} cy={my} r={m.size + 4} fill="none" stroke={m.color} strokeOpacity={on ? 0.9 : 0.5} />
+                <Mark shape={b.shape} cx={tip.x} cy={tip.y} size={b.size} color={b.color} />
+                {(b.ring || on) && (
+                  <circle cx={tip.x} cy={tip.y} r={b.size + 4} fill="none" stroke={b.color} strokeOpacity={on ? 0.9 : 0.5} />
                 )}
                 {on && (
-                  <text
-                    x={m.px + m.size + 8}
-                    y={my + 4}
-                    fontSize={13}
-                    fill={m.color}
-                    style={{ pointerEvents: 'none', userSelect: 'none' }}
-                  >
-                    {m.title}
+                  <text x={tip.x + b.size + 8} y={tip.y + 4} fontSize={13} fill={b.color} style={{ pointerEvents: 'none', userSelect: 'none' }}>
+                    {b.title}
                   </text>
                 )}
               </g>
@@ -190,12 +253,9 @@ export function Locator({ world }: { world: World }) {
         </svg>
       </div>
 
-      {/* Кто под курсором. Пусто — подсказка «наведи», плюс счётчик контактов на диске. */}
       <div className="flex w-64 shrink-0 flex-col" style={{ color: UI.PRIMARY }}>
         <h1 className="text-xl tracking-[0.3em]">{t('locator.title')}</h1>
-        <p className="mb-6 mt-1 text-[11px] tracking-widest opacity-50">
-          {t('locator.count', { n: marks.length })}
-        </p>
+        <p className="mb-6 mt-1 text-[11px] tracking-widest opacity-50">{t('locator.count', { n: marks.length })}</p>
         {active ? (
           <div className="rounded border p-4" style={{ borderColor: 'rgba(124,196,255,0.24)' }}>
             <div className="text-base tracking-widest" style={{ color: active.color }}>
@@ -206,6 +266,7 @@ export function Locator({ world }: { world: World }) {
         ) : (
           <p className="text-sm opacity-60">{t('locator.hint')}</p>
         )}
+        <p className="mt-4 text-[11px] leading-relaxed opacity-40">{t('locator.controls')}</p>
       </div>
     </div>
   )
