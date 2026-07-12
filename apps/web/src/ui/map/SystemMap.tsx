@@ -223,16 +223,57 @@ export function SystemMap({
   const holoRef = useRef<HTMLDivElement>(null)
   useWheelZoom(holoRef, (dy) => setZoom((z) => Math.min(12, Math.max(0.6, z * (dy > 0 ? 0.9 : 1.1)))))
 
+  // Панорамирование: карту можно ТАСКАТЬ, а не только зумить. `pan` — сдвиг центра кадра
+  // в единицах SVG, поверх авто-наводки на фокус. Драг за пустое место двигает вид; клик
+  // по метке по-прежнему выбирает цель (если это не был драг — см. `dragged`).
+  const [pan, setPan] = useState({ x: 0, y: 0 })
+  const drag = useRef<{ x: number; y: number } | null>(null)
+  const dragged = useRef(false)
+
+  const onPointerDown = (e: React.PointerEvent) => {
+    drag.current = { x: e.clientX, y: e.clientY }
+    dragged.current = false
+    e.currentTarget.setPointerCapture(e.pointerId)
+  }
+  const onPointerMove = (e: React.PointerEvent) => {
+    const start = drag.current
+    const el = holoRef.current
+    if (!start || !el) return
+    const dxp = e.clientX - start.x
+    const dyp = e.clientY - start.y
+    if (!dragged.current && Math.hypot(dxp, dyp) > 3) dragged.current = true
+    // Экранные пиксели → единицы SVG: поле зрения (VIEW/zoom) на ширину контейнера.
+    const perPx = VIEW / zoom / el.clientWidth
+    // Тащим содержимое ЗА курсором: вид смещается против движения (viewBox−).
+    setPan((p) => ({ x: p.x - dxp * perPx, y: p.y - dyp * perPx }))
+    drag.current = { x: e.clientX, y: e.clientY }
+  }
+  const onPointerUp = () => {
+    drag.current = null
+  }
+
   const points = markers(world)
   const select = (id: number) => {
+    // Драг завершился на метке — это перетаскивание, а не выбор: клик гасим.
+    if (dragged.current) {
+      dragged.current = false
+      return
+    }
     world.navTargetId = world.navTargetId === id ? null : id
     bump((n) => n + 1)
   }
 
   const content = (
     <>
-      <div ref={holoRef} className="relative aspect-square w-full min-w-0 max-w-[34rem] shrink cursor-crosshair select-none">
-        <Hologram points={points} heading={headingOf(world)} navTargetId={world.navTargetId} zoom={zoom} onSelect={select} />
+      <div
+        ref={holoRef}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+        onPointerCancel={onPointerUp}
+        className="relative aspect-square w-full min-w-0 max-w-[34rem] shrink cursor-grab touch-none select-none active:cursor-grabbing"
+      >
+        <Hologram points={points} heading={headingOf(world)} navTargetId={world.navTargetId} zoom={zoom} pan={pan} onSelect={select} />
       </div>
 
       <div className="flex w-72 shrink-0 flex-col" style={{ color: BODY }}>
@@ -306,6 +347,7 @@ function Hologram({
   heading,
   navTargetId,
   zoom,
+  pan,
   onSelect,
 }: {
   points: Marker[]
@@ -313,6 +355,8 @@ function Hologram({
   navTargetId: number | null
   /** Масштаб: делит поле зрения. Больше — ближе. Тела не растут, растёт разлёт орбит. */
   zoom: number
+  /** Сдвиг кадра от перетаскивания, единицы SVG. Накладывается поверх авто-наводки. */
+  pan: { x: number; y: number }
   onSelect: (id: number) => void
 }) {
   // Кольца-орбиты: у каждого тела своя окружность вокруг звезды. Дубли (причал у
@@ -325,8 +369,9 @@ function Hologram({
   const focus = points.find((m) => m.id === navTargetId && selectable(m)) ?? ships ?? { x: 0, y: 0 }
   const box = VIEW / zoom
   const k = 1 - 1 / zoom
-  const cx = focus.x * k
-  const cy = focus.y * k
+  // Центр кадра = авто-наводка на фокус ПЛЮС ручной сдвиг перетаскиванием.
+  const cx = focus.x * k + pan.x
+  const cy = focus.y * k + pan.y
 
   return (
     <svg className="absolute inset-0 h-full w-full" viewBox={`${cx - box / 2} ${cy - box / 2} ${box} ${box}`}>
