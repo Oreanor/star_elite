@@ -798,7 +798,7 @@ function TitleWarp({ vanishY }: { vanishY: number }) {
   )
 }
 
-function TitleShip({ launching }: { launching: boolean }) {
+function TitleShip({ launching, vanishY }: { launching: boolean; vanishY: number }) {
   const ref = useRef<HTMLDivElement>(null)
   const shineRef = useRef<HTMLDivElement>(null)
 
@@ -836,7 +836,10 @@ function TitleShip({ launching }: { launching: boolean }) {
       {/* Хлопок на срыве: волна ЗА кораблём. В проекции она позади ДЛИННОГО корпуса, поэтому
           центр чуть ВЫШЕ середины корабля. Диск — лёгкий эллипс 4:3, рост равномерный. Кольцо
           светится СИЛЬНЕЕ по бокам: два ярких «капа» на левом и правом краях поверх обода —
-          там, где ринг смотрит на нас ребром. Сидит ПОЗАДИ (раньше в DOM), screen красит чёрный. */}
+          там, где ринг смотрит на нас ребром. Сидит ПОЗАДИ (раньше в DOM), screen красит чёрный.
+          После хлопка волну, как и всё поле, уносит перспективой к точке схода: `--clap-rise` —
+          путь вверх до звезды (≈середина корабля 55vh → vanishY), кольцо туда рвётся, тая и
+          уменьшаясь (см. keyframe title-ship-clap). */}
       {launching && (
         <div
           aria-hidden
@@ -855,8 +858,9 @@ function TitleShip({ launching }: { launching: boolean }) {
             ].join(','),
             transform: 'translate(-50%, -50%) scale(0.2)',
             opacity: 0,
-            animation: 'title-ship-clap 0.6s ease-out 0.8s both',
-          }}
+            '--clap-rise': `${vanishY - 55}vh`, // путь вверх к точке схода (≈ от 55vh к vanishY)
+            animation: 'title-ship-clap 0.7s ease-out 0.8s both',
+          } as React.CSSProperties}
         />
       )}
       <div ref={ref} style={{ transition: 'transform 0.25s ease-out' }}>
@@ -1040,7 +1044,7 @@ function Paused({ resuming, onBoot, onNewGame }: { resuming: boolean; onBoot: ()
       {!resuming && <TitleDust launching={waiting} vanishY={vanishY} />}
       {/* Варп-штрихи — только в момент срыва (по СТАРТУ): пыль слилась в линии. */}
       {!resuming && waiting && <TitleWarp vanishY={vanishY} />}
-      {!resuming && <TitleShip launching={waiting} />}
+      {!resuming && <TitleShip launching={waiting} vanishY={vanishY} />}
 
       {/* Логотип — СВОЙ контейнер, вне общего потока: сдвинуть его нечем, что бы
           ни выросло ниже. Растр, поэтому у него собственная ширина. Заголовок
