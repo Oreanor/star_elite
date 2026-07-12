@@ -208,7 +208,7 @@ export function SystemMap({
   // крутят, сама SVG тянется по контейнеру, поэтому карта всегда влезает в экран.
   const [zoom, setZoom] = useState(1)
   const holoRef = useRef<HTMLDivElement>(null)
-  useWheelZoom(holoRef, (dy) => setZoom((z) => Math.min(5, Math.max(0.6, z * (dy > 0 ? 0.9 : 1.1)))))
+  useWheelZoom(holoRef, (dy) => setZoom((z) => Math.min(12, Math.max(0.6, z * (dy > 0 ? 0.9 : 1.1)))))
 
   const points = markers(world)
   const select = (id: number) => {
@@ -306,13 +306,17 @@ function Hologram({
   // планеты) сливаются в одну — это честно, они и правда на одной орбите.
   const ships = points.find((m) => m.kind === 'ship')
 
-  // Поле зрения делим на масштаб вокруг центра-звезды. SVG тянется на весь контейнер
-  // (`h-full w-full`), поэтому карта влезает в любой экран, а зум лишь меняет охват.
-  const half = VIEW / 2 / zoom
+  // Центр кадра тянется к тому, что рассматриваешь: выбранная цель, иначе игрок. На
+  // zoom=1 стоит на звезде (k=0) — вся система в кадре; с приближением (k→1) наезжает на
+  // фокус, поэтому цель не убегает за край. SVG тянется на весь контейнер (`h-full w-full`).
+  const focus = points.find((m) => m.id === navTargetId && selectable(m)) ?? ships ?? { x: 0, y: 0 }
   const box = VIEW / zoom
+  const k = 1 - 1 / zoom
+  const cx = focus.x * k
+  const cy = focus.y * k
 
   return (
-    <svg className="absolute inset-0 h-full w-full" viewBox={`${-half} ${-half} ${box} ${box}`}>
+    <svg className="absolute inset-0 h-full w-full" viewBox={`${cx - box / 2} ${cy - box / 2} ${box} ${box}`}>
       <defs>
         <radialGradient id="map-disc">
           <stop offset="0%" stopColor="rgba(124,196,255,0.14)" />
@@ -332,11 +336,12 @@ function Hologram({
 
       {/* Игла курса от корабля: единственное, что связывает карту с тем, куда повёрнут нос. */}
       {ships && (
+        // Игла курса — тоже постоянной длины на экране (÷zoom), в лад с меткой корабля.
         <line
           x1={ships.x}
-          y1={ships.y - ships.lift}
-          x2={ships.x + heading.x * 34}
-          y2={ships.y - ships.lift + heading.y * 34}
+          y1={ships.y - ships.lift / zoom}
+          x2={ships.x + (heading.x * 34) / zoom}
+          y2={ships.y - ships.lift / zoom + (heading.y * 34) / zoom}
           stroke={SHIP}
           strokeOpacity={0.4}
           strokeDasharray="6 5"
@@ -355,6 +360,10 @@ function Hologram({
             onClick={clickable ? () => onSelect(m.id) : undefined}
             style={{ cursor: clickable ? 'pointer' : 'default' }}
           >
+            {/* Метки — постоянного размера на экране (контр-масштаб 1/zoom): их МЕСТА на
+                диске раздвигаются зумом, а сами значки не растут, поэтому слипшиеся у
+                планеты луна и причал наконец расходятся. Иначе зум — просто скейл, без пользы. */}
+            <g transform={`scale(${1 / zoom})`}>
             {/* Штрих от плоскости эклиптики к телу: единственный носитель высоты. */}
             {Math.abs(m.lift) > 1 && <line x1={0} y1={0} x2={0} y2={-m.lift} stroke={colour} strokeOpacity={0.35} />}
 
@@ -394,6 +403,7 @@ function Hologram({
               >
                 {properName(m.name)}
               </text>
+            </g>
             </g>
           </g>
         )
