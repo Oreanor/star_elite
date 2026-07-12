@@ -537,6 +537,7 @@ export function createWorld(def: SystemDef = STARTER_SYSTEM, profile?: PilotProf
     bodies,
     tracers: [],
     remoteHits: [],
+    shieldFlashes: [],
     explosions: [],
     shockwaves: [],
     warps: [],

@@ -1,5 +1,6 @@
 import {
   AdditiveBlending,
+  CanvasTexture,
   Color,
   DoubleSide,
   LineBasicMaterial,
@@ -287,6 +288,48 @@ export function warpFlashMaterial(): MeshBasicMaterial {
     fog: false,
   })
   return warpFlash
+}
+
+let shieldFlash: MeshBasicMaterial | null = null
+
+/**
+ * Мягкий радиальный градиент «пятна поля»: белый центр, гаснущий к краю в прозрачность.
+ * Строится в canvas один раз. Аддитивная отрисовка домножает на него цвет вспышки,
+ * поэтому вместо резкого кружка получается размытый ореол — «участок купола проявился».
+ */
+function shieldGradientTexture(): CanvasTexture {
+  const size = 128
+  const canvas = document.createElement('canvas')
+  canvas.width = size
+  canvas.height = size
+  const ctx = canvas.getContext('2d')!
+  const g = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2)
+  // Ядро не в полную силу — вспышка и так аддитивная; резкий белый центр «выжигал» бы точку.
+  g.addColorStop(0, 'rgba(255,255,255,0.85)')
+  g.addColorStop(0.35, 'rgba(255,255,255,0.35)')
+  g.addColorStop(0.7, 'rgba(255,255,255,0.08)')
+  g.addColorStop(1, 'rgba(255,255,255,0)')
+  ctx.fillStyle = g
+  ctx.fillRect(0, 0, size, size)
+  return new CanvasTexture(canvas)
+}
+
+/**
+ * Вспышка защитного поля станции. Как варп-вспышка — свет, а не тело: аддитивно, без
+ * записи глубины. Базовый цвет белый и домножается инстансным (голубой фосфор × яркость ×
+ * спад), поэтому все вспышки идут одним вызовом отрисовки и гаснут по отдельности. Карта —
+ * радиальный градиент: пятно мягкое и прозрачное к краю, а не плоский кружок.
+ */
+export function shieldFlashMaterial(): MeshBasicMaterial {
+  shieldFlash ??= new MeshBasicMaterial({
+    color: 0xffffff,
+    map: shieldGradientTexture(),
+    transparent: true,
+    blending: AdditiveBlending,
+    depthWrite: false,
+    fog: false,
+  })
+  return shieldFlash
 }
 
 const tracers = new Map<string, MeshBasicMaterial>()

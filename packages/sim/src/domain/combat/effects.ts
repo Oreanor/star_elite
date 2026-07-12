@@ -13,6 +13,14 @@ export function spawnExplosion(world: World, pos: Vector3, vel: Vector3, scale: 
 }
 
 /**
+ * Вспышка защитного поля станции в точке удара: снаряд погас, станция неуязвима.
+ * `intensity` (0..1) задаёт яркость: прямое попадание — 1, отскок корабля — по силе удара.
+ */
+export function spawnShieldFlash(world: World, pos: Vector3, center: Vector3, intensity: number): void {
+  world.shieldFlashes.push({ pos: pos.clone(), center: center.clone(), intensity, born: world.time })
+}
+
+/**
  * Вспышка энергетической бомбы. Ни позиции, ни скорости: это экранный эффект,
  * а не тело. Рисуется поверх корабля и живёт пару секунд.
  */

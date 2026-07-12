@@ -1,7 +1,8 @@
 import { Vector3 } from 'three'
 import { GUNNERY } from '../../config/weapons'
+import { SHIELD } from '../../config/station'
 import { raySphere } from '../../core/math'
-import type { AsteroidEntity, MissileEntity, PlatformEntity, ShipEntity, World } from '../world/entities'
+import type { AsteroidEntity, BodyEntity, MissileEntity, PlatformEntity, ShipEntity, World } from '../world/entities'
 
 /** Что первым встретил луч. Все поля null — луч ушёл в пустоту. */
 export interface LaserHit {
@@ -11,6 +12,8 @@ export interface LaserHit {
   asteroid: AsteroidEntity | null
   missile: MissileEntity | null
   platform: PlatformEntity | null
+  /** Станция, о ЩИТ которой погас луч. Урона не наносит — станция неуязвима. */
+  station: BodyEntity | null
 }
 
 /**
@@ -40,7 +43,7 @@ export function castLaser(
   shooter: ShotSource,
   range: number,
 ): LaserHit {
-  const hit: LaserHit = { distance: range, ship: null, asteroid: null, missile: null, platform: null }
+  const hit: LaserHit = { distance: range, ship: null, asteroid: null, missile: null, platform: null, station: null }
   const closer = (t: number): boolean => t >= 0 && t < hit.distance
   const set = (t: number, next: Partial<LaserHit>): void => {
     hit.distance = t
@@ -48,6 +51,7 @@ export function castLaser(
     hit.asteroid = next.asteroid ?? null
     hit.missile = next.missile ?? null
     hit.platform = next.platform ?? null
+    hit.station = next.station ?? null
   }
 
   /**
@@ -77,6 +81,17 @@ export function castLaser(
     if (p.pos.distanceToSquared(origin) > (range + p.radius) ** 2) continue
     const t = raySphere(origin, dir, p.pos, p.radius)
     if (closer(t)) set(t, { platform: p })
+  }
+
+  // Щит станции: снаряд гаснет о поле у поверхности. Это не «цель», а стенка, и станция
+  // неуязвима — урона нет. Тест независим от маскировки: поле ловит любой физический болт,
+  // из-под клоака в том числе (маскировка прячет от прицела, а не проходит сквозь металл).
+  for (const b of world.bodies) {
+    if (b.kind !== 'station') continue
+    const shieldR = b.radius * SHIELD.RADIUS_FACTOR
+    if (b.pos.distanceToSquared(origin) > (range + shieldR) ** 2) continue
+    const t = raySphere(origin, dir, b.pos, shieldR)
+    if (closer(t)) set(t, { station: b })
   }
 
   // Астероиды и ракеты замаскированному не цель: под полем режем и их.

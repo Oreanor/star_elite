@@ -1,6 +1,6 @@
 import { Vector3 } from 'three'
 import { describe, expect, it } from 'vitest'
-import { DOCKING } from '../../config/station'
+import { DOCKING, SHIELD } from '../../config/station'
 import { ARMOUR_COMPOSITE, SHIELD_HEAVY } from '../../config/modules'
 import { addCommodity, cargoMass } from '../cargo/hold'
 import { COMMODITIES } from '../cargo/items'
@@ -43,28 +43,41 @@ describe('стыковка', () => {
   })
 
   /**
-   * Регрессия. `dock()` звал ОДИН автопилот, поэтому подлетевший вручную игрок
-   * утыкался в станцию, где не происходило ничего: тела не сталкиваются, стыковка
-   * не срабатывала. Это читалось как зависшая игра. Стыковка — правило мира,
-   * и шаг мира обязан её замечать сам, без клавиши.
+   * Врезаться в станцию нельзя, и «подлетел вручную — пристыковался» больше НЕ работает:
+   * шаг мира не стыкует по касанию. У поверхности стоит защитное поле, оно отпружинивает
+   * корабль без допуска. Стыковка теперь — только автопилотом по L (см. тест ниже).
    */
-  it('подлетевший вручную стыкуется сам, без автопилота', () => {
+  it('шаг мира не стыкует по касанию — врезаться в станцию нельзя', () => {
     const world = quiet()
     atDock(world)
     expect(world.docked).toBe(false)
 
     stepWorld(world, 1 / 60, new Map())
-    expect(world.docked).toBe(true)
+    expect(world.docked).toBe(false)
   })
 
-  /** И обратное: подошёл слишком быстро — это таран, а не стыковка. */
-  it('шаг мира не стыкует того, кто идёт слишком быстро', () => {
+  /** Разогнавшийся не таранит станцию, а отпружинивает от поля, ТЕРЯЯ скорость. */
+  it('поле отбрасывает разогнавшийся корабль назад и гасит ход', () => {
     const world = quiet()
-    atDock(world)
-    world.player.state.vel.set(0, 0, DOCKING.MAX_SPEED + 1)
+    const station = findStation(world)!
+    const shieldR = station.radius * SHIELD.RADIUS_FACTOR
 
-    stepWorld(world, 1 / 60, new Map())
+    // Летим прямо в станцию на скорости — влетаем в поле снаружи, вплотную к нему.
+    world.player.state.pos.copy(station.pos).add(new Vector3(0, 0, shieldR + 8))
+    const speed = DOCKING.MAX_SPEED + 120
+    world.player.state.vel.set(0, 0, -speed)
+    world.player.clearance = false
+
+    // Несколько кадров: долетел до поля и отпружинил (vel.z сменил знак).
+    for (let i = 0; i < 30 && world.player.state.vel.z <= 0; i++) stepWorld(world, 1 / 60, new Map())
+
     expect(world.docked).toBe(false)
+    // Отпружинил: скорость вдоль оси станции сменила знак (летит уже прочь).
+    expect(world.player.state.vel.z).toBeGreaterThan(0)
+    // И потерял ход — отскок медленнее налёта (восстановление < 1).
+    expect(world.player.state.vel.length()).toBeLessThan(speed)
+    // Вспышка поля родилась.
+    expect(world.shieldFlashes.length).toBeGreaterThan(0)
   })
 
   /** Регрессия: мир в доке обязан стоять, иначе пираты добьют тебя через витрину. */
@@ -116,23 +129,25 @@ describe('стыковка', () => {
     }
   })
 
-  /** Но выйдя за зону, корабль снова стыкуется: взвод не должен быть билетом в один конец. */
-  it('покинувший зону стыкуется снова', () => {
+  /** Но выйдя за зону, взвод возвращается: стыковка снова возможна, а не билет в один конец. */
+  it('покинувший зону снова может стыковаться (взвод возвращается)', () => {
     const world = quiet()
     atDock(world)
     dock(world)
     undock(world)
+    // Отчалил — взвод сброшен: у кольца сразу обратно не пристыкуешься.
+    expect(world.dockArmed).toBe(false)
 
-    // Улетел на пару километров и погасил ход.
+    // Улетел на пару километров и погасил ход — взвод возвращается сам.
     const station = findStation(world)!
     world.player.state.pos.copy(station.pos).add(new Vector3(0, 0, station.radius + 2_000))
     world.player.state.vel.set(0, 0, 0)
     stepWorld(world, 1 / 60, new Map())
     expect(world.dockArmed).toBe(true)
 
+    // И стыковка снова проходит командой (тот же путь, что зовёт автопилот по L).
     atDock(world)
-    stepWorld(world, 1 / 60, new Map())
-    expect(world.docked).toBe(true)
+    expect(dock(world)).toBe(true)
   })
 
   /**

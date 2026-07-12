@@ -1,7 +1,7 @@
 import { Vector3 } from 'three'
 import type { BoltEntity, World } from '../world/entities'
 import { applyDamage } from './damage'
-import { spawnExplosion, spawnTracer } from './effects'
+import { spawnExplosion, spawnShieldFlash, spawnTracer } from './effects'
 import { registerPlayerHit } from './grievance'
 import { damageAsteroid } from './mining'
 import { castLaser } from './raycast'
@@ -57,6 +57,11 @@ function resolveHit(world: World, bolt: BoltEntity, hitPos: Vector3, hit: Return
     // металл — забота `stepPlatforms`, когда прочность уйдёт в ноль.
     hit.platform.hull = Math.max(0, hit.platform.hull - bolt.damage)
     spawnExplosion(world, hitPos, _still, 0.6)
+  } else if (hit.station) {
+    // Станция неуязвима: болт гаснет о защитное поле голубой вспышкой. Ни урона, ни
+    // обиды — стрелять по станции бессмысленно, и это должно читаться сразу. Прямое
+    // попадание — полная яркость.
+    spawnShieldFlash(world, hitPos, hit.station.pos, 1)
   }
 }
 

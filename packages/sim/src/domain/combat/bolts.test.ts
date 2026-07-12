@@ -14,6 +14,10 @@ function withOneEnemy(): { world: World; enemy: ShipEntity } {
     belt: null,
     patrols: [{ count: 1, at: [0, 0, -500], spread: 0, faction: 'hostile', name: 'Пират' }],
   })
+  // Станция стартовой системы стоит близко к игроку и её защитное поле гасило бы болты
+  // на линии огня. Тесты здесь про болт против корабля/камня — уводим станцию за горизонт.
+  const station = world.bodies.find((b) => b.kind === 'station')
+  if (station) station.pos.set(0, 1e7, 0)
   return { world, enemy: world.ships[0]! }
 }
 

@@ -9,14 +9,16 @@ import {
   InstancedMesh,
   LineSegments,
   Object3D,
+  PlaneGeometry,
   Vector3,
 } from 'three'
 import { useSession } from '../../app/GameContext'
-import { LASER, LASER_GLOW, LASER_GLOW_FALLBACK, WARP_FLASH } from '../config'
+import { LASER, LASER_GLOW, LASER_GLOW_FALLBACK, SHIELD_FLASH, WARP_FLASH } from '../config'
 import {
   explosionMaterial,
   missileMaterial,
   podMaterial,
+  shieldFlashMaterial,
   tracerMaterial,
   tractorMaterial,
   warpFlashMaterial,
@@ -41,6 +43,7 @@ const _dummy = new Object3D()
 const _nose = new Vector3()
 const _muzzle = new Vector3()
 const _warpTint = /* @__PURE__ */ new Color()
+const _shieldTint = /* @__PURE__ */ new Color()
 
 const _dir = new Vector3()
 const _mid = new Vector3()
@@ -235,6 +238,71 @@ export function WarpFlashes() {
   })
 
   return <instancedMesh ref={ref} args={[geometry, material, WARP_FLASH.MAX]} frustumCulled={false} />
+}
+
+/**
+ * Вспышки защитного поля станции. Домен заполняет `world.shieldFlashes` там, где о поле
+ * погас снаряд, и сам гасит их по `SHIELD.FLASH_LIFE`; рендер зажигает голубой кружок в
+ * точке удара. Как варп-вспышки: один `InstancedMesh`, спад яркости — в цвете инстанса.
+ */
+export function StationShields() {
+  const session = useSession()
+  const ref = useRef<InstancedMesh>(null)
+
+  // Плоскость с радиальным градиентом, а не диск: вспышка — кусок невидимого купола,
+  // проявившийся у удара, мягкий и прозрачный к краю. Плоскость в XY нормалью +Z; ниже
+  // мы разворачиваем +Z вдоль радиуса станции, и пятно ложится КАСАТЕЛЬНО к сфере поля.
+  const geometry = useMemo(() => new PlaneGeometry(1, 1), [])
+  const material = useMemo(shieldFlashMaterial, [])
+  const colors = useMemo(() => new InstancedBufferAttribute(new Float32Array(SHIELD_FLASH.MAX * 3), 3), [])
+
+  useEffect(() => {
+    const mesh = ref.current
+    if (mesh) mesh.instanceColor = colors
+  }, [colors])
+
+  useFrame(() => {
+    const mesh = ref.current
+    if (!mesh) return
+
+    const now = session.world.time
+    let count = 0
+
+    for (const flash of session.world.shieldFlashes) {
+      if (count >= SHIELD_FLASH.MAX) break
+      const age = (now - flash.born) / SHIELD_FLASH.LIFE // 0..1 за время жизни
+      if (age < 0 || age > 1) continue
+
+      _dummy.position.copy(flash.pos)
+      // Нормаль пятна — вдоль радиуса от центра станции к точке удара: плоскость
+      // перпендикулярна радиусу, пятно лежит на сфере купола, а не смотрит в камеру.
+      _dir.copy(flash.pos).sub(flash.center)
+      const r = _dir.length()
+      if (r > 1e-6) {
+        _dir.divideScalar(r)
+        _dummy.quaternion.setFromUnitVectors(_zAxis, _dir)
+      } else {
+        _dummy.quaternion.identity()
+      }
+      // Вспыхнул и растёкся: пятно распухает от половины радиуса и гаснет. Слабый удар —
+      // пятно и мельче, и тусклее (intensity), но поле всё равно видно, что оно тут.
+      _dummy.scale.setScalar(SHIELD_FLASH.SIZE * (0.6 + flash.intensity * 0.7) * (0.5 + age * 1.1))
+      _dummy.updateMatrix()
+      mesh.setMatrixAt(count, _dummy.matrix)
+
+      // Ранний пик, резкий спад; и общая яркость по силе удара (intensity).
+      const glow = (1 - age) * (1 - age) * flash.intensity
+      _shieldTint.set(SHIELD_FLASH.COLOR)
+      mesh.setColorAt(count, _shieldTint.multiplyScalar(glow))
+      count++
+    }
+
+    mesh.count = count
+    mesh.instanceMatrix.needsUpdate = true
+    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true
+  })
+
+  return <instancedMesh ref={ref} args={[geometry, material, SHIELD_FLASH.MAX]} frustumCulled={false} />
 }
 
 export function CargoPods() {

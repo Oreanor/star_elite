@@ -1,9 +1,10 @@
 import { Quaternion, Vector3 } from 'three'
 import { GUNNERY } from '../../config/weapons'
+import { SHIELD } from '../../config/station'
 import type { MissileEntity, ShipEntity, World } from '../world/entities'
 import { isEngageable } from './engage'
 import { applyDamage } from './damage'
-import { spawnExplosion } from './effects'
+import { spawnExplosion, spawnShieldFlash } from './effects'
 
 /**
  * Самонаведение — ПРОПОРЦИОНАЛЬНОЕ. Ракета доворачивает вектор скорости со
@@ -48,6 +49,24 @@ function detonate(world: World, m: MissileEntity, victim: ShipEntity | null): vo
   m.alive = false
   spawnExplosion(world, m.pos, m.vel, 2.2)
   if (victim) applyDamage(victim, m.module.damage, world.time)
+}
+
+/**
+ * Погасла ли ракета о защитное поле станции. Станцию не подбить: ракета взрывается о
+ * поле (обычным взрывом), а само поле вспыхивает голубым. Проверка точечная — за шаг
+ * ракета проходит единицы метров, много меньше радиуса поля, промаха между шагами нет.
+ */
+function hitStationShield(world: World, m: MissileEntity): boolean {
+  for (const b of world.bodies) {
+    if (b.kind !== 'station') continue
+    const shieldR = b.radius * SHIELD.RADIUS_FACTOR
+    if (m.pos.distanceToSquared(b.pos) <= shieldR * shieldR) {
+      detonate(world, m, null)
+      spawnShieldFlash(world, m.pos, b.pos, 1)
+      return true
+    }
+  }
+  return false
 }
 
 /**
@@ -125,6 +144,7 @@ export function stepMissiles(world: World, dt: number): void {
     }
 
     m.pos.addScaledVector(m.vel, dt)
+    hitStationShield(world, m)
   }
 
   world.missiles = world.missiles.filter((m) => m.alive)

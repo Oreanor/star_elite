@@ -32,6 +32,11 @@ export const autodockController: Controller = {
     c.retro = 0
     c.flightAssist = true
 
+    // Автопилот — это заявка на стыковку: даём кораблю допуск. Он открывает коридор
+    // колец и пропускает сквозь защитное поле станции (иначе автопилот отпружинил бы
+    // от собственного захода). Тот же флаг, каким NPC заходят на причал под защитой.
+    ship.clearance = true
+
     const station = findStation(world)
     if (!station) {
       c.throttle = 0

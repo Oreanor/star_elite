@@ -4,7 +4,7 @@ import { CONTACTS } from '../../config/contacts'
 import { PHYSICS } from '../../config/physics'
 import { BOMB, GUNNERY, SALVAGE } from '../../config/weapons'
 import { ASTEROID, DEBRIS, SCORE } from '../../config/world'
-import { DOCKING } from '../../config/station'
+import { SHIELD } from '../../config/station'
 import {
   applyDamage,
   clearTractorMarks,
@@ -15,6 +15,7 @@ import {
   fireEcm,
   fireLasers,
   fireMissile,
+  bounceOffShield,
   isDroneShip,
   launchDrone,
   regenBomb,
@@ -25,6 +26,7 @@ import {
   shatter,
   chargeHyperdrive,
   spawnExplosion,
+  spawnShieldFlash,
   spawnWreckage,
   stepCloak,
   stepStarHeat,
@@ -252,14 +254,8 @@ function stepCollisions(world: World): void {
   }
 }
 
-/** Крупные тела неподвижны в масштабах удара: их скорость для физики — ноль. */
-const _still = /* @__PURE__ */ new Vector3()
-
-/**
- * Масса станции, тонны. Точное число не важно: оно нужно лишь чтобы доля
- * импульса, достающаяся кораблю, была практически единицей. Станция не отлетает.
- */
-const STATION_MASS = 1e9
+/** Точка контакта корабля с полем станции — для вспышки. Горячий путь, без аллокаций. */
+const _shieldContact = /* @__PURE__ */ new Vector3()
 
 /**
  * Столкновение с крупным телом.
@@ -269,10 +265,11 @@ const STATION_MASS = 1e9
  * метров в секунду, значит моделировать вход в атмосферу, посадку и прочность
  * корпуса. Ничего этого нет, и притворяться незачем: удар о твердь смертелен.
  *
- * Станция — другое дело. Об неё можно ЗАДЕТЬ, и это должно стоить корпуса, а не
- * жизни. Порог ровно тот же, по которому станция принимает швартовку: идёшь
- * медленнее — ты стыкуешься, быстрее — таранишь. Второго правила заводить нельзя,
- * иначе однажды окажется, что стыковаться можно только тараня.
+ * Станция — другое дело: врезаться в неё НЕЛЬЗЯ. У поверхности стоит защитное поле,
+ * и корабль без допуска отпружинивает от него назад, теряя ход (голубая вспышка, без
+ * урона). Пройти внутрь к причалу можно только с допуском (`clearance`) — его даёт
+ * автостыковка по L, ведущая корабль коридором колец. Тарану дорога закрыта: слишком
+ * быстрый гасит скорость о поле, а стыковка перестала быть следствием «подлетел тихо».
  */
 function stepBodyCollisions(world: World): void {
   for (const ship of allShips(world)) {
@@ -284,14 +281,28 @@ function stepBodyCollisions(world: World): void {
     if (isPhased(ship)) continue
 
     for (const body of world.bodies) {
-      const reach = body.radius + ship.spec.hull.radius
-      if (body.pos.distanceToSquared(ship.state.pos) > reach * reach) continue
-
       if (body.kind === 'station') {
-        if (ship.state.vel.length() <= DOCKING.MAX_SPEED) continue
-        resolveShipVsSphere(ship, body.pos, _still, body.radius, STATION_MASS, world.time)
+        // Допуск — билет сквозь поле: корабль идёт коридором на стыковку, поле молчит.
+        if (ship.clearance) continue
+        const shieldR = body.radius * SHIELD.RADIUS_FACTOR
+        const reach = shieldR + ship.spec.hull.radius
+        if (body.pos.distanceToSquared(ship.state.pos) > reach * reach) continue
+        // Вспышка при любом касании поля (`impact >= 0`), но ЯРКОСТЬ — по силе удара:
+        // упор тягой еле светится (поле «на месте», но не слепит), таран — в полную силу.
+        // `-1` значит контакта не было — тогда молчим.
+        const impact = bounceOffShield(ship, body.pos, shieldR, _shieldContact)
+        if (impact >= 0) {
+          const intensity = Math.max(
+            SHIELD.FLASH_MIN_INTENSITY,
+            Math.min(1, impact / SHIELD.FLASH_REF_SPEED),
+          )
+          spawnShieldFlash(world, _shieldContact, body.pos, intensity)
+        }
         continue
       }
+
+      const reach = body.radius + ship.spec.hull.radius
+      if (body.pos.distanceToSquared(ship.state.pos) > reach * reach) continue
 
       // Щит от планеты не спасает: он держит лучи и обломки, а не кору.
       ship.shield = 0
@@ -334,6 +345,7 @@ function cleanup(world: World): void {
   world.explosions = world.explosions.filter((e) => now - e.born < DEBRIS.EXPLOSION_LIFE)
   world.shockwaves = world.shockwaves.filter((w) => now - w.born < BOMB.WAVE_LIFE)
   world.warps = world.warps.filter((w) => now - w.born < WARP.FLASH_LIFE)
+  world.shieldFlashes = world.shieldFlashes.filter((f) => now - f.born < SHIELD.FLASH_LIFE)
   // Вести о пропавших знакомых гаснут сами, как трассеры: HUD показал — и хватит.
   world.notices = world.notices.filter((n) => now - n.at < CONTACTS.NOTICE_LIFE)
 
