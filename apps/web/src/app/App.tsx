@@ -592,14 +592,14 @@ function TitleShip() {
           alt=""
           aria-hidden
           className="absolute bottom-[82%] left-[39.8%] w-[13%] origin-bottom mix-blend-screen"
-          style={{ animation: 'title-flame-left 3s ease-in-out infinite, flame-flicker 0.42s linear infinite' }}
+          style={{ animation: 'title-flame-left 1.5s ease-in-out infinite, flame-flicker 0.42s linear infinite' }}
         />
         <img
           src="/flame_right.png"
           alt=""
           aria-hidden
           className="absolute bottom-[82%] left-[60.2%] w-[13%] origin-bottom mix-blend-screen"
-          style={{ animation: 'title-flame-right 3s ease-in-out infinite, flame-flicker 0.35s linear infinite' }}
+          style={{ animation: 'title-flame-right 1.5s ease-in-out infinite, flame-flicker 0.35s linear infinite' }}
         />
         <img
           src="/flame_center.png"
