@@ -798,7 +798,7 @@ function TitleWarp({ vanishY }: { vanishY: number }) {
   )
 }
 
-function TitleShip({ launching, vanishY }: { launching: boolean; vanishY: number }) {
+function TitleShip({ launching }: { launching: boolean }) {
   const ref = useRef<HTMLDivElement>(null)
   const shineRef = useRef<HTMLDivElement>(null)
 
@@ -833,13 +833,11 @@ function TitleShip({ launching, vanishY }: { launching: boolean; vanishY: number
 
   return (
     <div className="pointer-events-none absolute inset-x-0 top-[calc(55%+50px)] mx-auto w-full max-w-[43.2rem] -translate-y-1/2 px-8">
-      {/* Хлопок на срыве: волна ЗА кораблём. В проекции она позади ДЛИННОГО корпуса, поэтому
-          центр чуть ВЫШЕ середины корабля. Диск — лёгкий эллипс 4:3, рост равномерный. Кольцо
-          светится СИЛЬНЕЕ по бокам: два ярких «капа» на левом и правом краях поверх обода —
-          там, где ринг смотрит на нас ребром. Сидит ПОЗАДИ (раньше в DOM), screen красит чёрный.
-          После хлопка волну, как и всё поле, уносит перспективой к точке схода: `--clap-rise` —
-          путь вверх до звезды (≈середина корабля 55vh → vanishY), кольцо туда рвётся, тая и
-          уменьшаясь (см. keyframe title-ship-clap). */}
+      {/* Хлопок-«пуф» на срыве: большой взрыв ЗА кораблём. В проекции он позади ДЛИННОГО
+          корпуса, поэтому центр чуть ВЫШЕ середины корабля. Диск — лёгкий эллипс 4:3, рост
+          равномерный. Кольцо светится СИЛЬНЕЕ по бокам: два ярких «капа» на краях поверх обода —
+          там ринг к нам ребром. РЕЗКО раздувается из точки аж за края экрана и там же
+          растворяется, никуда не улетая (см. keyframe title-ship-clap). screen красит чёрный. */}
       {launching && (
         <div
           aria-hidden
@@ -858,11 +856,10 @@ function TitleShip({ launching, vanishY }: { launching: boolean; vanishY: number
               // белое для видимости. farthest-side сажает градиент ровно на кромку эллипса.
               'radial-gradient(ellipse farthest-side at 50% 50%, transparent 87%, rgba(232,246,255,1) 94%, transparent 100%)',
             ].join(','),
-            transform: 'translate(-50%, -50%) scale(0.2)',
+            transform: 'translate(-50%, -50%) scale(0.12)',
             opacity: 0,
-            '--clap-rise': `${vanishY - 55}vh`, // путь вверх к точке схода (≈ от 55vh к vanishY)
-            animation: 'title-ship-clap 0.7s ease-out 0.8s both',
-          } as React.CSSProperties}
+            animation: 'title-ship-clap 0.55s ease-out 0.8s both', // резкий «пуф», потом растворяется
+          }}
         />
       )}
       <div ref={ref} style={{ transition: 'transform 0.25s ease-out' }}>
@@ -1046,7 +1043,7 @@ function Paused({ resuming, onBoot, onNewGame }: { resuming: boolean; onBoot: ()
       {!resuming && <TitleDust launching={waiting} vanishY={vanishY} />}
       {/* Варп-штрихи — только в момент срыва (по СТАРТУ): пыль слилась в линии. */}
       {!resuming && waiting && <TitleWarp vanishY={vanishY} />}
-      {!resuming && <TitleShip launching={waiting} vanishY={vanishY} />}
+      {!resuming && <TitleShip launching={waiting} />}
 
       {/* Логотип — СВОЙ контейнер, вне общего потока: сдвинуть его нечем, что бы
           ни выросло ниже. Растр, поэтому у него собственная ширина. Заголовок
