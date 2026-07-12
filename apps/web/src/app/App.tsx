@@ -944,7 +944,7 @@ function Paused({ resuming, onBoot, onNewGame }: { resuming: boolean; onBoot: ()
   const [waitLong, setWaitLong] = useState(false)
   useEffect(() => {
     if (!waiting) return void setWaitLong(false)
-    const id = window.setTimeout(() => setWaitLong(true), 2000)
+    const id = window.setTimeout(() => setWaitLong(true), 2500)
     return () => window.clearTimeout(id)
   }, [waiting])
   // «Новая игра» стирает прогресс — жмётся в два клика: первый взводит подтверждение.
