@@ -706,12 +706,24 @@ function TitleLogo({
   return (
     <div className="pointer-events-none absolute inset-x-0 top-[6vh] mx-auto w-full max-w-[54rem] px-8">
       <div className="relative">
-        <img
-          ref={imgRef}
-          src="/logo.png"
-          alt="STAR ELITE"
-          onLoad={onReady}
-          className={`block w-full ${launching ? 'title-logo-flash' : ''}`}
+        <img ref={imgRef} src="/logo.png" alt="STAR ELITE" onLoad={onReady} className="block w-full" />
+        {/* Вспышка старта — БЕЛАЯ НАКЛАДКА по форме букв с анимацией OPACITY (не filter):
+            opacity идёт на композиторе и НЕ замирает под блокирующей сборкой сцены — иначе
+            вспышка застывала на полусвете. Гаснет в ноль (`forwards`). */}
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0"
+          style={{
+            WebkitMaskImage: 'url(/logo.png)',
+            maskImage: 'url(/logo.png)',
+            WebkitMaskSize: '100% 100%',
+            maskSize: '100% 100%',
+            WebkitMaskRepeat: 'no-repeat',
+            maskRepeat: 'no-repeat',
+            background: 'rgba(255,255,255,0.95)',
+            opacity: 0,
+            animation: launching ? 'logo-flash-op 1s ease-out forwards' : 'none',
+          }}
         />
         <div ref={glintRef} className="title-logo-glint" aria-hidden />
       </div>
@@ -925,7 +937,7 @@ function TitleShip({ trembling, launched }: { trembling: boolean; launched: bool
             animation: launched
               ? 'title-ship-launch 0.25s cubic-bezier(0.85, 0, 1, 1) forwards'
               : trembling
-                ? 'title-ship-tremble 1.3s linear infinite'
+                ? 'title-ship-tremble 4s linear forwards'
                 : 'title-ship-float 7s ease-in-out infinite',
           }}
         >

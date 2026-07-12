@@ -148,31 +148,47 @@ canvas {
   0%   { transform: translateY(0) scale(1); opacity: 1; }
   100% { transform: translateY(90vh) scale(1.5); opacity: 0; }
 }
-/* Дрожь корабля, пока грузится сцена: ЧАСТАЯ и МЕЛКАЯ, амплитуда нарастает внутри цикла
-   (0.4 → 2.6 px вбок, к концу совсем чуть по вертикали), к концу мягко спадает для плавной
-   петли. ~8 Гц. Идёт на композиторе — не замирает под блокирующей сборкой сцены. */
+/* Дрожь корабля, пока грузится сцена: частая и мелкая, амплитуда МОНОТОННО нарастает от нуля
+   к пику за ~4с и там держится (`forwards`) — НЕ сбрасывается (это раздражало). Горизонталь
+   0 → 2.6 px, вертикаль совсем чуть и позже. Идёт на композиторе — не мрёт под сборкой сцены. */
 @keyframes title-ship-tremble {
   0%   { transform: translate(0, 0); }
-  5%   { transform: translate(0.6px, -0.1px); }
-  10%  { transform: translate(-0.7px, 0.15px); }
-  15%  { transform: translate(0.9px, -0.2px); }
-  20%  { transform: translate(-1.0px, 0.2px); }
-  25%  { transform: translate(1.2px, -0.25px); }
-  30%  { transform: translate(-1.3px, 0.3px); }
-  35%  { transform: translate(1.5px, -0.3px); }
-  40%  { transform: translate(-1.6px, 0.35px); }
-  45%  { transform: translate(1.8px, -0.4px); }
-  50%  { transform: translate(-1.9px, 0.4px); }
-  55%  { transform: translate(2.0px, -0.4px); }
-  60%  { transform: translate(-2.2px, 0.45px); }
-  65%  { transform: translate(2.3px, -0.45px); }
-  70%  { transform: translate(-2.4px, 0.5px); }
-  75%  { transform: translate(2.5px, -0.5px); }
-  80%  { transform: translate(-2.6px, 0.5px); }
-  85%  { transform: translate(2.5px, -0.45px); }
-  90%  { transform: translate(-2.2px, 0.4px); }
-  95%  { transform: translate(1.4px, -0.25px); }
-  100% { transform: translate(0, 0); }
+  3%   { transform: translate(-0.09px, 0); }
+  7%   { transform: translate(0.17px, 0); }
+  10%  { transform: translate(-0.26px, 0); }
+  13%  { transform: translate(0.35px, 0); }
+  17%  { transform: translate(-0.43px, 0); }
+  20%  { transform: translate(0.52px, -0.05px); }
+  23%  { transform: translate(-0.61px, 0.05px); }
+  27%  { transform: translate(0.69px, -0.08px); }
+  30%  { transform: translate(-0.78px, 0.08px); }
+  33%  { transform: translate(0.87px, -0.1px); }
+  37%  { transform: translate(-0.95px, 0.1px); }
+  40%  { transform: translate(1.04px, -0.13px); }
+  43%  { transform: translate(-1.13px, 0.13px); }
+  47%  { transform: translate(1.21px, -0.16px); }
+  50%  { transform: translate(-1.3px, 0.16px); }
+  53%  { transform: translate(1.39px, -0.2px); }
+  57%  { transform: translate(-1.47px, 0.2px); }
+  60%  { transform: translate(1.56px, -0.24px); }
+  63%  { transform: translate(-1.65px, 0.24px); }
+  67%  { transform: translate(1.73px, -0.28px); }
+  70%  { transform: translate(-1.82px, 0.28px); }
+  73%  { transform: translate(1.91px, -0.32px); }
+  77%  { transform: translate(-1.99px, 0.32px); }
+  80%  { transform: translate(2.08px, -0.36px); }
+  83%  { transform: translate(-2.17px, 0.36px); }
+  87%  { transform: translate(2.25px, -0.4px); }
+  90%  { transform: translate(-2.34px, 0.4px); }
+  93%  { transform: translate(2.43px, -0.44px); }
+  97%  { transform: translate(-2.51px, 0.44px); }
+  100% { transform: translate(2.6px, -0.48px); }
+}
+/* Вспышка логотипа на старте — по OPACITY (композитор), не по filter: не застывает
+   на полусвете под блокирующей сборкой. Белая накладка по форме букв гаснет в ноль. */
+@keyframes logo-flash-op {
+  0%   { opacity: 0.95; }
+  100% { opacity: 0; }
 }
 /* Мелкая дрожь кнопки-индикатора «секундочку», когда загрузка затягивается. Слабее
    корабельной: это подпись, а не корабль — трясётся нервно, но не убегает. */
