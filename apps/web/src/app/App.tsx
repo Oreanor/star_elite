@@ -786,14 +786,11 @@ function TitleShip({ launching }: { launching: boolean }) {
         />
           <div className="relative w-full">
             <img src="/ship.png" alt="" aria-hidden className="block w-full" />
-            {/* Блик на корпусе: ОДИН большой глобальный, крупнее корабля, замаскирован его
-                силуэтом (mask по той же png). Режим soft-light, а НЕ screen: screen осветлял
-                чёрный фон корабля (screen с чёрным = сам блик), и чернота переставала быть
-                чёрной. soft-light над чёрным даёт чёрное — блик виден только на светлых частях
-                корпуса, тени целы. Центр двигает параллакс (см. onMove) — свет перетекает. */}
+            {/* Вертикальная растушёвка корпуса: верх чуть темнее, низ чуть светлее — пара
+                процентов объёма. Режим overlay: над чёрным даёт чёрное (тени целы), а средние
+                тона гнёт — тёмный верх гасит, светлый низ поднимает. Статична, маска по силуэту. */}
             <div
-              ref={shineRef}
-              className="pointer-events-none absolute inset-0 mix-blend-soft-light"
+              className="pointer-events-none absolute inset-0 mix-blend-overlay"
               style={{
                 WebkitMaskImage: 'url(/ship.png)',
                 maskImage: 'url(/ship.png)',
@@ -802,7 +799,24 @@ function TitleShip({ launching }: { launching: boolean }) {
                 WebkitMaskRepeat: 'no-repeat',
                 maskRepeat: 'no-repeat',
                 background:
-                  'radial-gradient(180% 130% at calc(50% + var(--sx, 0%)) calc(38% + var(--sy, 0%)), rgba(230,242,255,0.75), rgba(230,242,255,0) 70%)',
+                  'linear-gradient(to bottom, rgba(0,0,0,0.28), rgba(0,0,0,0) 42%, rgba(255,255,255,0) 58%, rgba(255,255,255,0.30))',
+              }}
+            />
+            {/* Блик: РЕЗКИЙ подвижный. Небольшой сплющенный, screen — но мелкий, поэтому чёрный
+                фон не заливает (это делал прежний блик во всю ширину), а читается искрой света.
+                Центр двигает параллакс (см. onMove) — блик ездит по корпусу при сдвиге. */}
+            <div
+              ref={shineRef}
+              className="pointer-events-none absolute inset-0 mix-blend-screen"
+              style={{
+                WebkitMaskImage: 'url(/ship.png)',
+                maskImage: 'url(/ship.png)',
+                WebkitMaskSize: '100% 100%',
+                maskSize: '100% 100%',
+                WebkitMaskRepeat: 'no-repeat',
+                maskRepeat: 'no-repeat',
+                background:
+                  'radial-gradient(70% 26% at calc(50% + var(--sx, 0%)) calc(36% + var(--sy, 0%)), rgba(226,240,255,0.72), rgba(210,232,255,0.22) 34%, rgba(200,224,255,0) 56%)',
               }}
             />
           </div>
