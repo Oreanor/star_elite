@@ -6,10 +6,12 @@ import { negotiate, negotiatorAvailable } from './control/negotiator'
 import { Game } from './Game'
 import { loadServerSave, onAuthChange } from './net/account'
 import { online } from './net/firebase'
+import { clearPresence, publishPresence } from './net/presence'
 import { persistSave } from './save/saveStore'
 import { TitleStars } from './TitleStars'
 import { input, releaseLock, requestLock } from '../platform/input/input'
 import { AuthScreen } from '../ui/auth/AuthScreen'
+import { properName } from '../ui/i18n/dataNames'
 import { Console, type ConsoleTab } from '../ui/console/Console'
 import { CharacterCreation } from '../ui/create/CharacterCreation'
 import { Dialogue } from '../ui/dialogue/Dialogue'
@@ -91,6 +93,40 @@ function OnlineBoot({ onRestart }: { onRestart: () => void }) {
       <Shell onRestart={onRestart} />
     </GameProvider>
   )
+}
+
+/**
+ * Транслирует присутствие игрока (имя, система, место, позиция) раз в пару секунд, пока
+ * идёт игра. Ничего не рисует. Позиция — абсолютная (`state.pos + originOffset`), чтобы
+ * у всех сходилась. onDisconnect на стороне RTDB уберёт метку, если вкладку закрыли резко;
+ * размонтирование (выход в меню) снимает её сразу через `clearPresence`.
+ */
+function PresencePublisher() {
+  const session = useSession()
+  useEffect(() => {
+    const push = () => {
+      const w = session.world
+      const station = w.docked ? w.bodies.find((b) => b.kind === 'station') : undefined
+      const pos = w.player.state.pos
+      const off = w.originOffset
+      void publishPresence({
+        name: w.player.pilotName,
+        systemIndex: w.systemIndex,
+        systemName: properName(w.systemName),
+        place: station ? properName(station.name) : null,
+        x: pos.x + off.x,
+        y: pos.y + off.y,
+        z: pos.z + off.z,
+      })
+    }
+    push()
+    const id = window.setInterval(push, 2000)
+    return () => {
+      window.clearInterval(id)
+      void clearPresence()
+    }
+  }, [session])
+  return null
 }
 
 function Shell({ onRestart }: { onRestart: () => void }) {
@@ -297,6 +333,8 @@ function Shell({ onRestart }: { onRestart: () => void }) {
       {/* Канвас — всегда: захвату курсора нужен готовый канвас уже на первом жесте.
           Тяжёлую сцену он строит только по `booted` (после нажатия СТАРТ). */}
       <Game ready={booted} />
+      {/* Онлайн: раз в пару секунд шлём своё присутствие. Ничего не рисует. */}
+      {online && <PresencePublisher />}
       {over ? (
         <GameOver score={session.world.score} onRestart={onRestart} />
       ) : talking ? (

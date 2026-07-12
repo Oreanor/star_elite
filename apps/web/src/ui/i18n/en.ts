@@ -279,6 +279,9 @@ export const EN: Record<keyof typeof RU, string> = {
   'people.route': 'PLOT COURSE',
   'people.hold': 'HAVE THEM WAIT',
   'people.roam': 'LET GO',
+  'people.online': 'ONLINE',
+  'people.online.sys': 'in {sys}',
+  'people.online.dock': 'docked at {place} · {sys}',
   'hud.contactLost': '{name} LOST FROM RADAR — PRESUMED DEAD',
 
   'econ.agri': 'Agricultural',

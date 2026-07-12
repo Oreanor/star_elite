@@ -60,16 +60,25 @@ export function ShipScreen({
   onClose,
   docked = false,
   embedded = false,
+  onChange,
 }: {
   world: World
   onClose: () => void
   docked?: boolean
   /** Встроен в стеклянную панель станции: без своего оверлея, фона и заголовка. */
   embedded?: boolean
+  /** Родитель (консоль) хочет знать о тратах — обновить кошелёк в своей шапке. */
+  onChange?: () => void
 }) {
   useLang()
   // Счётчик перерисовок: установка/улучшение мутируют мир, статы обязаны догнать.
   const [, bump] = useReducer((n: number) => n + 1, 0)
+  // Траты в модалке слота меняют и наш экран, и КОШЕЛЁК в шапке станции — а он живёт в
+  // родителе (Console). Бампаем оба: иначе кредиты списаны, но табло баланса остаётся старым.
+  const refresh = () => {
+    bump()
+    onChange?.()
+  }
   const player = world.player
 
   // Открытый слот: по клику на плитку над всем встаёт стеклянная модалка с вариантами
@@ -134,7 +143,7 @@ export function ShipScreen({
       {/* Модалка — ТОЛЬКО у причала: там она мастерская (варианты + действия). В полёте
           карточки самодостаточны (харка и вес прямо на них), и клик ничего не открывает. */}
       {docked && openSlot && (
-        <SlotModal world={world} docked={docked} slot={openSlot} onChange={bump} onClose={() => setOpenKey(null)} />
+        <SlotModal world={world} docked={docked} slot={openSlot} onChange={refresh} onClose={() => setOpenKey(null)} />
       )}
     </>
   )

@@ -1,5 +1,6 @@
 import { initializeApp, type FirebaseApp, type FirebaseOptions } from 'firebase/app'
 import { getAuth, type Auth } from 'firebase/auth'
+import { getDatabase, type Database } from 'firebase/database'
 import { getFirestore, type Firestore } from 'firebase/firestore'
 
 /**
@@ -16,6 +17,7 @@ const config: FirebaseOptions = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
   authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
   projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  databaseURL: import.meta.env.VITE_FIREBASE_DATABASE_URL,
   appId: import.meta.env.VITE_FIREBASE_APP_ID,
 }
 
@@ -25,6 +27,13 @@ const configured = Boolean(config.apiKey && config.authDomain && config.projectI
 const app: FirebaseApp | null = configured ? initializeApp(config) : null
 export const auth: Auth | null = app ? getAuth(app) : null
 export const db: Firestore | null = app ? getFirestore(app) : null
+
+/**
+ * Realtime Database — для присутствия (кто в какой системе): низкая задержка и
+ * onDisconnect (сам стирает отвалившегося). Отдельный ключ `databaseURL`: нет его —
+ * presence просто выключен, а вход и сейвы (Auth+Firestore) работают как есть.
+ */
+export const rtdb: Database | null = app && config.databaseURL ? getDatabase(app) : null
 
 /** Настроена ли сеть. Где ветвится «онлайн против офлайн» — спрашиваем это, а не env. */
 export const online: boolean = app !== null

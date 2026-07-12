@@ -299,6 +299,9 @@ export const RU = {
   'people.route': 'ПРОЛОЖИТЬ КУРС',
   'people.hold': 'ПУСТЬ ЖДЁТ',
   'people.roam': 'ОТПУСТИТЬ',
+  'people.online': 'В СЕТИ',
+  'people.online.sys': 'в системе {sys}',
+  'people.online.dock': 'в доке {place} · {sys}',
   // Весть на HUD, когда знакомый пропал (погиб вне поля зрения или на глазах).
   'hud.contactLost': '{name} ПРОПАЛ С РАДАРА — ВЕРОЯТНО, ПОГИБ',
 

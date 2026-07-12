@@ -14,6 +14,7 @@ import {
   type ShipEntity,
   type World,
 } from '@elite/sim'
+import { useOnlinePlayers } from '../../app/net/presence'
 import { currentLang, t, useLang } from '../i18n'
 import { chassisName, economyName, governmentName, occupationName, professionName, properName, speciesName } from '../i18n/dataNames'
 import { ACCENT, Button, Column, DIM, PilotPortrait, Table } from '../station/chrome'
@@ -151,7 +152,7 @@ export function Console({
             ) : (
               <LocationReadout world={world} planet={planet} />
             ))}
-          {tab === 'ship' && <ShipScreen world={world} docked={docked} embedded onClose={() => onTab('planet')} />}
+          {tab === 'ship' && <ShipScreen world={world} docked={docked} embedded onChange={bump} onClose={() => onTab('planet')} />}
           {tab === 'shipyard' && docked && <HullShop world={world} onChange={bump} />}
           {tab === 'shop' && docked && <Market world={world} onChange={bump} />}
           {tab === 'cargo' && <Hold world={world} onChange={bump} atStation={docked} />}
@@ -212,6 +213,9 @@ function PeopleTab({
         {t('people.subtitle')}
       </p>
 
+      {/* Живые игроки онлайн — отдельным блоком над знакомыми-НПС. Пусто в офлайне. */}
+      <OnlineList world={world} onRoute={onRoute} />
+
       {contacts.length === 0 ? (
         <p className="mt-8 text-sm" style={{ color: DIM }}>
           {t('people.empty')}
@@ -232,6 +236,53 @@ function PeopleTab({
           ))}
         </div>
       )}
+    </div>
+  )
+}
+
+/**
+ * Живые игроки в сети (presence): кто онлайн, в какой системе и где стоит. В своей
+ * системе — рядом (метки на радаре/карте придут следующим слоем); в чужой — можно
+ * проложить курс. Пусто в офлайне: список приходит из RTDB, а его там нет.
+ */
+function OnlineList({ world, onRoute }: { world: World; onRoute: (systemIndex: number) => void }) {
+  const players = useOnlinePlayers()
+  if (players.length === 0) return null
+
+  return (
+    <div className="mt-6">
+      <h2 className="text-sm tracking-[0.3em]" style={{ color: ACCENT }}>
+        {t('people.online')}
+      </h2>
+      <div className="mt-3 flex flex-col gap-2">
+        {players.map((p) => {
+          const here = p.systemIndex === world.systemIndex
+          const where = p.place
+            ? t('people.online.dock', { place: p.place, sys: p.systemName })
+            : t('people.online.sys', { sys: p.systemName })
+          return (
+            <div
+              key={p.uid}
+              className="flex items-center justify-between gap-3 border px-3 py-2"
+              style={{ borderColor: DIM }}
+            >
+              <div className="min-w-0">
+                <div className="truncate text-sm tracking-widest" style={{ color: ACCENT }}>
+                  {p.name}
+                </div>
+                <div className="truncate text-xs" style={{ color: DIM }}>
+                  {where}
+                </div>
+              </div>
+              {!here && (
+                <Button small onClick={() => onRoute(p.systemIndex)}>
+                  {t('people.route')}
+                </Button>
+              )}
+            </div>
+          )
+        })}
+      </div>
     </div>
   )
 }
@@ -423,8 +474,10 @@ function DockPlaque({ ship, you, onTalk }: { ship: ShipEntity; you: boolean; onT
       {/* У причала пилот спокоен — портрет нейтральный. */}
       <PilotPortrait ship={ship} emotion="neutral" size={96} />
       <div className="min-w-0 text-left">
+        {/* Своё имя, а не «ТЫ»: в манифесте это ты по имени, как и все прочие. Свою
+            плашку и так видно — она без кнопки разговора. */}
         <div className="truncate text-sm tracking-widest" style={{ color: ACCENT }}>
-          {you ? t('station.you') : ship.pilotName}
+          {ship.pilotName}
         </div>
         {/* Род занятий — сразу в манифесте: с кем имеешь дело, видно до разговора. У себя
             это ВЫБРАННАЯ профессия, у прочих — тип борта (`originKind`). */}
