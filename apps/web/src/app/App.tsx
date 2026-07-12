@@ -833,19 +833,25 @@ function TitleShip({ launching }: { launching: boolean }) {
 
   return (
     <div className="pointer-events-none absolute inset-x-0 top-[calc(55%+50px)] mx-auto w-full max-w-[43.2rem] -translate-y-1/2 px-8">
-      {/* Хлопок на срыве: волна ЗА кораблём (центр на корпусе). Проекция диска — лёгкий эллипс
-          4:3 (шире, чем выше); рост РАВНОМЕРНЫЙ, оттого соотношение держится. Сидит ПОЗАДИ (раньше
-          в DOM → корабль перекрывает центр), не движется — раздувается ШИРЕ корабля и гаснет. */}
+      {/* Хлопок на срыве: волна ЗА кораблём. В проекции она позади ДЛИННОГО корпуса, поэтому
+          центр чуть ВЫШЕ середины корабля. Диск — лёгкий эллипс 4:3, рост равномерный. Кольцо
+          светится СИЛЬНЕЕ по бокам: два ярких «капа» на левом и правом краях поверх обода —
+          там, где ринг смотрит на нас ребром. Сидит ПОЗАДИ (раньше в DOM), screen красит чёрный. */}
       {launching && (
         <div
           aria-hidden
-          className="pointer-events-none absolute left-1/2 top-1/2 mix-blend-screen"
+          className="pointer-events-none absolute left-1/2 top-[44%] mix-blend-screen"
           style={{
             width: '16vw',
             height: '12vw', // 4:3 — лёгкий эллипс
             borderRadius: '50%',
-            background:
-              'radial-gradient(ellipse at 50% 50%, rgba(214,240,255,0) 46%, rgba(159,224,255,0.45) 60%, rgba(230,246,255,1) 72%, rgba(214,240,255,0) 88%)',
+            background: [
+              // Боковые «капы» — яркие сгустки на краях, ринг у нас ребром именно там.
+              'radial-gradient(circle at 5% 50%, rgba(236,248,255,1), rgba(150,215,255,0) 26%)',
+              'radial-gradient(circle at 95% 50%, rgba(236,248,255,1), rgba(150,215,255,0) 26%)',
+              // Сам обод — насыщенный голубой, тоньше и ярче прежнего.
+              'radial-gradient(ellipse at 50% 50%, rgba(140,210,255,0) 50%, rgba(120,200,255,0.65) 63%, rgba(224,244,255,0.95) 73%, rgba(180,225,255,0) 86%)',
+            ].join(','),
             transform: 'translate(-50%, -50%) scale(0.2)',
             opacity: 0,
             animation: 'title-ship-clap 0.6s ease-out 0.8s both',
