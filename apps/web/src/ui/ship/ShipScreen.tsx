@@ -5,7 +5,6 @@ import {
   buy,
   canBuy,
   canUpgrade,
-  cargoMass,
   deriveShipSpec,
   fitFromHold,
   fitOntoChassis,
@@ -104,11 +103,16 @@ export function ShipScreen({
   // стрелками, и проверка грузоподъёмности для кнопки покупки.
   const fit = useMemo(() => fitOntoChassis(player.loadout, offer.chassis), [player.loadout, offer])
   const previewSpec = useMemo(() => deriveShipSpec(fit.loadout), [fit])
-  const overflowMass = fit.overflow.reduce((m, x) => m + x.mass, 0)
-  const roomOk = cargoMass(player.hold) + overflowMass <= previewSpec.cargoCapacity
-  const cycle = (d: number) => setBrowseIdx((i) => (i + d + SHIPYARD.length) % SHIPYARD.length)
+  // Не хватило трюма на перенос обвеса — показываем МОДАЛКУ (а не строку под кнопкой).
+  const [noRoom, setNoRoom] = useState(false)
+  const cycle = (d: number) => {
+    setBrowseIdx((i) => (i + d + SHIPYARD.length) % SHIPYARD.length)
+    setNoRoom(false)
+  }
   const doSwap = () => {
-    if (swapHull(world, offer.chassis, offer.cost) === null) refresh()
+    const err = swapHull(world, offer.chassis, offer.cost)
+    if (err === null) refresh()
+    else if (err === 'no-room') setNoRoom(true)
   }
 
   // Escape закрывает экран — как на карте галактики. Клавишу I гасит App.
@@ -178,24 +182,17 @@ export function ShipScreen({
                 {t('ship.owned')}
               </div>
             ) : (
-              <div className="space-y-1.5">
-                <button
-                  type="button"
-                  disabled={!roomOk || world.credits < offer.cost}
-                  onClick={doSwap}
-                  className={`w-full border px-4 py-2.5 text-sm tracking-[0.2em] transition-colors ${
-                    !roomOk || world.credits < offer.cost ? 'cursor-not-allowed opacity-40' : 'cursor-pointer hover:bg-[#7fd6ff] hover:text-black'
-                  }`}
-                  style={{ borderColor: ACCENT, color: ACCENT }}
-                >
-                  {t('ship.buyHull', { price: credits(offer.cost) })}
-                </button>
-                {!roomOk && (
-                  <p className="text-xs leading-tight" style={{ color: UI.WARN }}>
-                    {t('ship.hullNoRoom')}
-                  </p>
-                )}
-              </div>
+              <button
+                type="button"
+                disabled={world.credits < offer.cost}
+                onClick={doSwap}
+                className={`w-full border px-4 py-2.5 text-sm tracking-[0.2em] transition-colors ${
+                  world.credits < offer.cost ? 'cursor-not-allowed opacity-40' : 'cursor-pointer hover:bg-[#7fd6ff] hover:text-black'
+                }`}
+                style={{ borderColor: ACCENT, color: ACCENT }}
+              >
+                {t('ship.buyHull', { price: credits(offer.cost) })}
+              </button>
             )
           )}
 
@@ -215,6 +212,34 @@ export function ShipScreen({
           карточки самодостаточны (харка и вес прямо на них), и клик ничего не открывает. */}
       {docked && openSlot && (
         <SlotModal world={world} docked={docked} slot={openSlot} onChange={refresh} onClose={() => setOpenKey(null)} />
+      )}
+
+      {/* Не хватило грузоподъёмности на перенос обвеса — модалка (то же стекло, что у покупки). */}
+      {noRoom && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-6 font-mono" onClick={() => setNoRoom(false)}>
+          <div
+            className="w-full max-w-sm rounded-2xl border p-6 text-center backdrop-blur-md"
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              borderColor: 'rgba(124,196,255,0.3)',
+              background: 'linear-gradient(150deg, rgba(40,95,150,0.28), rgba(8,22,42,0.55))',
+              boxShadow: '0 0 60px rgba(60,150,255,0.18), inset 0 0 80px rgba(80,180,255,0.06)',
+              color: ACCENT,
+            }}
+          >
+            <p className="text-sm leading-relaxed" style={{ color: UI.WARN }}>
+              {t('ship.hullNoRoom')}
+            </p>
+            <button
+              type="button"
+              onClick={() => setNoRoom(false)}
+              className="mt-5 border px-6 py-2 text-sm tracking-[0.2em] transition-colors hover:bg-[#7fd6ff] hover:text-black"
+              style={{ borderColor: ACCENT }}
+            >
+              {t('ship.ok')}
+            </button>
+          </div>
+        </div>
       )}
     </>
   )

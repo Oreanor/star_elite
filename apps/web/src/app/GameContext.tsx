@@ -120,9 +120,13 @@ function createSession(initialSave?: PlayerSave | null): Session {
   // Пилота накладываем ПОСЛЕ enterSystem: тот пересобирает окружение, но борт игрока
   // не трогает — значит восстановленные корабль/кошелёк/личность не затрутся.
   if (save) applyPlayerSave(world, save)
-  // DEV: новичку кладём миелофон в трюм — поставить в слот и потестить рост масштаба.
+  // DEV: держим миелофон под рукой — и у новичка, и у вернувшегося (по сейву он мог
+  // потеряться). Кладём в трюм, только если его нет НИ в трюме, ни в слоте: без дублей.
   // Временно, для отладки фичи; в релизе артефакт добывается, а не выдаётся на старте.
-  if (save === null) {
+  const hasMielo =
+    world.player.hold.items.some((it) => it.kind === 'module' && it.module.kind === 'mielophone') ||
+    world.player.loadout.internals.some((m) => m.kind === 'mielophone')
+  if (!hasMielo) {
     const mielophone = findModule('mielophone_1')
     if (mielophone) addItem(world.player.hold, { kind: 'module', module: mielophone })
   }
