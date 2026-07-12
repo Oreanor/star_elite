@@ -1055,21 +1055,6 @@ function Paused({
   // «Вжух»: срыв корабля. Взводится, только когда сцена ПОСТРОЕНА — до этого корабль лишь
   // дрожит (по нарастающей), а «секундочку» висит. Так тремор и есть индикатор загрузки.
   const [launched, setLaunched] = useState(false)
-  // Затянувшаяся загрузка эскалирует нетерпение: 0 — спокойно «секундочку»; 1 (через 3с) —
-  // корабль и кнопка начинают дрожать; 2 (через 7с) — подпись срывается на «ИИИИИИИ…».
-  const [stall, setStall] = useState(0)
-  useEffect(() => {
-    if (!waiting) return void setStall(0)
-    // «Вжух» подписи НЕ сбрасывает: держим тот уровень, до которого доэскалировали, иначе
-    // на срыве лейбл прыгал обратно на «секундочку». Просто больше не наращиваем.
-    if (launched) return
-    const a = window.setTimeout(() => setStall(1), 2000)
-    const b = window.setTimeout(() => setStall(2), 5000)
-    return () => {
-      window.clearTimeout(a)
-      window.clearTimeout(b)
-    }
-  }, [waiting, launched])
   // «Новая игра» стирает прогресс — жмётся в два клика: первый взводит подтверждение.
   const [confirmNew, setConfirmNew] = useState(false)
   const [screen, setScreen] = useState<PauseScreen>('main')
@@ -1221,10 +1206,16 @@ function Paused({
             className="transition-transform duration-700 ease-out"
             style={{ transform: !resuming ? 'translateY(calc(18vh - 3rem))' : 'none' }}
           >
-            {/* Затянулось — подпись нервничает: меняется на 3с и на 6с, и дрожит с 3с. */}
-            <div style={stall >= 1 ? { animation: 'title-btn-shake 0.5s linear infinite' } : undefined}>
+            {/* Эскалация подписи и дрожь кнопки — ЧЕРЕЗ CSS (композитор), а не React-таймеры:
+                считается от МОМЕНТА нажатия в реальном времени, даже пока сборка держит поток.
+                Три лейбла наложены и переключаются opacity на 2с и 5с; кнопка дрожит с 2с. */}
+            <div style={{ animation: 'title-btn-shake 0.5s linear 2s infinite' }}>
               <MenuButton disabled onClick={() => {}}>
-                {t(stall >= 2 ? 'menu.waitLong' : stall >= 1 ? 'menu.wait2' : 'menu.wait')}
+                <span className="relative block">
+                  <span className="block" style={{ animation: 'esc-a 5s linear forwards' }}>{t('menu.wait')}</span>
+                  <span className="absolute inset-0" style={{ animation: 'esc-b 5s linear forwards' }}>{t('menu.wait2')}</span>
+                  <span className="absolute inset-0" style={{ animation: 'esc-c 5s linear forwards' }}>{t('menu.waitLong')}</span>
+                </span>
               </MenuButton>
             </div>
           </div>
