@@ -37,3 +37,21 @@ export function stepScale(e: ShipEntity, dt: number): void {
   }
   e.state.scale = clamp(e.state.scale, MIELOPHONE.MIN_SCALE, MIELOPHONE.MAX_SCALE)
 }
+
+/**
+ * Насколько борт ЕЩЁ присутствует в единичном мире: 1 до PHASE_START, к PHASE_END → 0.
+ * Кривая ease-in (`1 − t^FADE_EXP`): почти до конца плотный, потом гаснет рывком — так
+ * полупрозрачных «призраков» в кадре мало. Рендер берёт это как opacity, домен — как «ещё
+ * взаимодействует ли». Чистая функция от одного числа: и клиент, и сервер считают одинаково.
+ */
+export function phasePresence(scale: number): number {
+  if (scale <= MIELOPHONE.PHASE_START) return 1
+  if (scale >= MIELOPHONE.PHASE_END) return 0
+  const t = (scale - MIELOPHONE.PHASE_START) / (MIELOPHONE.PHASE_END - MIELOPHONE.PHASE_START)
+  return 1 - t ** MIELOPHONE.FADE_EXP
+}
+
+/** Ушёл в «большой мир»: за PHASE_END борт не взаимодействует с мелочью единичного мира. */
+export function phasedOut(scale: number): boolean {
+  return scale >= MIELOPHONE.PHASE_END
+}
