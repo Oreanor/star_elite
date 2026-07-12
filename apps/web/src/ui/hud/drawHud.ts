@@ -723,7 +723,8 @@ function drawReadouts({ ctx, world, height }: HudFrame): void {
     [t('hud.temp'), temp, temp > STAR_HEAT.LEAK_THRESHOLD ? HUD_COLORS.DANGER : temp > 0.5 ? HUD_COLORS.WARN : HUD_COLORS.DIM],
     // Заряд гиперпривода: тратится прыжком, черпается у звезды (светится целью).
     [t('hud.jump'), jump, jumpColor],
-    [t('hud.throttle'), player.controls.throttle, HUD_COLORS.PRIMARY],
+    // Задний ход рисуем той же шкалой, но жёлтым и по модулю: реверс — не «ноль тяги».
+    [t('hud.throttle'), Math.abs(player.controls.throttle), player.controls.throttle < 0 ? HUD_COLORS.WARN : HUD_COLORS.PRIMARY],
   ]
 
   for (const [label, value, color] of rows) {

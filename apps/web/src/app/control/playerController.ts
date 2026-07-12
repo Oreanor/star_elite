@@ -34,6 +34,17 @@ import { chargeThrottle, jumpFx } from './jumpFx'
 const THROTTLE_RATE = 0.9
 
 /**
+ * Задний ход — доля от крейсерской, доступная за нулём рукояти газа.
+ *
+ * Главное сопло смотрит назад и толкает только вперёд; пятиться нечем, кроме
+ * маневровых — тех же, что тормозят на Ctrl и дают снос вбок. Поэтому назад
+ * корабль ползёт медленно: 15% полного хода, не больше. Рукоять газа при этом
+ * общая, S просто уводит её за ноль — сначала гасит ход до нуля, потом включает
+ * реверс. Отдельного «когда в покое» не нужно: через ноль иначе не пройти.
+ */
+const REVERSE_FRAC = 0.15
+
+/**
  * Мёртвая зона ручки, доля отклонения. При SENSITIVITY = 420 это ~8 пикселей мыши:
  * больше дрожи руки и меньше осознанного движения.
  */
@@ -272,7 +283,7 @@ export function createPlayerController(intent: PlayerIntent): Controller {
       if (!manoeuvring(intent)) {
         if (confirmedHold('KeyW')) intent.throttle += THROTTLE_RATE * dt
         if (confirmedHold('KeyS')) intent.throttle -= THROTTLE_RATE * dt
-        intent.throttle = clamp(intent.throttle, 0, 1)
+        intent.throttle = clamp(intent.throttle, -REVERSE_FRAC, 1)
       }
 
       /**
