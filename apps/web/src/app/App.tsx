@@ -822,7 +822,7 @@ function TitleShip({ launching }: { launching: boolean }) {
                 WebkitMaskRepeat: 'no-repeat',
                 maskRepeat: 'no-repeat',
                 background:
-                  'radial-gradient(176% 88% at calc(50% + var(--sx, 0%)) calc(30% + var(--sy, 0%)), rgba(226,240,255,0.6), rgba(210,232,255,0.17) 34%, rgba(200,224,255,0) 56%)',
+                  'radial-gradient(176% 88% at calc(50% + var(--sx, 0%)) calc(30% + var(--sy, 0%)), rgba(226,240,255,0.85), rgba(210,232,255,0.28) 34%, rgba(200,224,255,0) 56%)',
               }}
             />
           </div>
