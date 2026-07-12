@@ -281,6 +281,13 @@ export const EN: Record<keyof typeof RU, string> = {
   'people.online': 'ONLINE',
   'people.online.sys': 'in {sys}',
   'people.online.dock': 'docked at {place} · {sys}',
+  'people.chat': 'MESSAGE',
+  'chat.online': 'ONLINE',
+  'chat.you': 'YOU',
+  'chat.empty': 'Channel is open. Type.',
+  'chat.placeholder': 'Type a message…',
+  'chat.send': 'SEND',
+  'chat.close': 'CLOSE CHANNEL',
   'hud.contactLost': '{name} LOST FROM RADAR — PRESUMED DEAD',
 
   'econ.agri': 'Agricultural',

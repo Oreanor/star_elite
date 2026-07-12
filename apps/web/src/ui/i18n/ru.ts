@@ -301,6 +301,13 @@ export const RU = {
   'people.online': 'В СЕТИ',
   'people.online.sys': 'в системе {sys}',
   'people.online.dock': 'в доке {place} · {sys}',
+  'people.chat': 'НАПИСАТЬ',
+  'chat.online': 'ОНЛАЙН',
+  'chat.you': 'ТЫ',
+  'chat.empty': 'Канал открыт. Пиши.',
+  'chat.placeholder': 'Написать…',
+  'chat.send': 'ОТПРАВИТЬ',
+  'chat.close': 'ЗАКРЫТЬ КАНАЛ',
   // Весть на HUD, когда знакомый пропал (погиб вне поля зрения или на глазах).
   'hud.contactLost': '{name} ПРОПАЛ С РАДАРА — ВЕРОЯТНО, ПОГИБ',
 

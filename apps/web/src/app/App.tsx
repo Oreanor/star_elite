@@ -15,6 +15,8 @@ import { properName } from '../ui/i18n/dataNames'
 import { Console, type ConsoleTab } from '../ui/console/Console'
 import { CharacterCreation } from '../ui/create/CharacterCreation'
 import { Dialogue } from '../ui/dialogue/Dialogue'
+import { PlayerChat } from '../ui/chat/PlayerChat'
+import type { OnlinePlayer } from './net/presence'
 import { setLang, t, useLang, type Key, type Lang } from '../ui/i18n'
 import { Tabs } from '../ui/station/chrome'
 
@@ -150,6 +152,8 @@ function Shell({ onRestart }: { onRestart: () => void }) {
   const [tab, setTab] = useState<ConsoleTab | null>(null)
   /** Открыт ли канал связи. Отдельный оверлей: ни вкладок, ни причала у него нет. */
   const [talking, setTalking] = useState(false)
+  /** Живой игрок, с кем открыт чат (поверх консоли, из вкладки ЛЮДИ). null — закрыт. */
+  const [chatWith, setChatWith] = useState<OnlinePlayer | null>(null)
 
   /**
    * Сцена строится по нажатию СТАРТ, а не при загрузке страницы.
@@ -227,6 +231,10 @@ function Shell({ onRestart }: { onRestart: () => void }) {
     // забираем захват обратно, и мир оживает. Иначе закрытие дока «взлетело» бы.
     if (!session.world.docked) void requestLock()
   }, [session])
+  // Чат с живым игроком открывается поверх консоли (из вкладки ЛЮДИ) и закрывается
+  // обратно в неё — мир под ним не паузим: чужой корабль по сети всё равно не стоит.
+  const openChat = useCallback((player: OnlinePlayer) => setChatWith(player), [])
+  const closeChat = useCallback(() => setChatWith(null), [])
   // Клик по пристыкованному пилоту в доке: наводимся на него и открываем канал.
   // Курсор у причала уже свободен, мир стоит — только показать окно разговора.
   const talkTo = useCallback((shipId: number) => {
@@ -286,7 +294,8 @@ function Shell({ onRestart }: { onRestart: () => void }) {
 
       // Браузер уже снял захват под оверлеем, так что закрыть его без Escape нечем.
       if (e.code === 'Escape') {
-        if (talking) closeTalk()
+        if (chatWith) closeChat()
+        else if (talking) closeTalk()
         else if (!docked && tab !== null) closeConsole()
         return
       }
@@ -329,7 +338,7 @@ function Shell({ onRestart }: { onRestart: () => void }) {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [session, over, docked, tab, talking, openConsole, closeConsole, closeTalk])
+  }, [session, over, docked, tab, talking, chatWith, openConsole, closeConsole, closeTalk, closeChat])
 
   return (
     <div className="relative h-screen w-screen overflow-hidden bg-black">
@@ -355,6 +364,7 @@ function Shell({ onRestart }: { onRestart: () => void }) {
           onTalk={talkTo}
           onLocate={locateShip}
           onRoute={routeTo}
+          onChat={openChat}
         />
       ) : !created ? (
         // Новичок сначала лепит пилота — экран стоит вместо титульного меню, до старта.
@@ -362,6 +372,9 @@ function Shell({ onRestart }: { onRestart: () => void }) {
       ) : (
         !locked && <Paused resuming={started} onBoot={() => setBooted(true)} />
       )}
+      {/* Чат с живым игроком — поверх консоли, из которой открыт. Не в общем `?:`, чтобы
+          лечь СВЕРХУ, а не вместо неё: закрыл чат — вернулся в тот же список ЛЮДИ. */}
+      {chatWith && <PlayerChat player={chatWith} onClose={closeChat} />}
     </div>
   )
 }

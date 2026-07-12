@@ -9,6 +9,17 @@
         ".write": "auth != null && auth.uid === $uid",
         ".validate": "newData.hasChildren(['name', 'systemIndex'])"
       }
+    },
+    "chats": {
+      "$cid": {
+        ".read": "auth != null && $cid.contains(auth.uid)",
+        ".write": "auth != null && $cid.contains(auth.uid)",
+        "messages": {
+          "$mid": {
+            ".validate": "newData.hasChildren(['from', 'text']) && newData.child('from').val() === auth.uid"
+          }
+        }
+      }
     }
   }
 }

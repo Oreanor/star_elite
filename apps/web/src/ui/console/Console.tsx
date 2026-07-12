@@ -14,7 +14,7 @@ import {
   type ShipEntity,
   type World,
 } from '@elite/sim'
-import { useOnlinePlayers } from '../../app/net/presence'
+import { useOnlinePlayers, type OnlinePlayer } from '../../app/net/presence'
 import { currentLang, t, useLang } from '../i18n'
 import { chassisName, economyName, governmentName, occupationName, professionName, properName, speciesName } from '../i18n/dataNames'
 import { ACCENT, Button, Column, DIM, PilotPortrait, Table } from '../station/chrome'
@@ -49,6 +49,7 @@ export function Console({
   onTalk,
   onLocate,
   onRoute,
+  onChat,
 }: {
   world: World
   docked: boolean
@@ -62,6 +63,8 @@ export function Console({
   onLocate: (shipId: number) => void
   /** Проложить курс к системе: пометить её целью прыжка и открыть карту галактики. */
   onRoute: (systemIndex: number) => void
+  /** Открыть чат с живым игроком (кнопка на плашке в блоке В СЕТИ). */
+  onChat: (player: OnlinePlayer) => void
 }) {
   useLang()
   const [, bump] = useReducer((n: number) => n + 1, 0)
@@ -157,7 +160,7 @@ export function Console({
           {tab === 'shop' && docked && <Market world={world} onChange={bump} />}
           {tab === 'cargo' && <Hold world={world} onChange={bump} atStation={docked} />}
           {tab === 'people' && (
-            <PeopleTab world={world} docked={docked} onTalk={onTalk} onLocate={onLocate} onRoute={onRoute} onChange={bump} />
+            <PeopleTab world={world} docked={docked} onTalk={onTalk} onLocate={onLocate} onRoute={onRoute} onChat={onChat} onChange={bump} />
           )}
           {tab === 'system' && <SystemMap world={world} embedded onClose={() => onTab('planet')} />}
           {/* onClose у карты галактики срабатывает только при старте прыжка — тогда
@@ -195,6 +198,7 @@ function PeopleTab({
   onTalk,
   onLocate,
   onRoute,
+  onChat,
   onChange,
 }: {
   world: World
@@ -202,6 +206,7 @@ function PeopleTab({
   onTalk: (shipId: number) => void
   onLocate: (shipId: number) => void
   onRoute: (systemIndex: number) => void
+  onChat: (player: OnlinePlayer) => void
   onChange: () => void
 }) {
   const contacts = livingContacts(world)
@@ -229,7 +234,7 @@ function PeopleTab({
       )}
 
       {/* Живые игроки онлайн — отдельным блоком. Пусто в офлайне. */}
-      <OnlineList world={world} onRoute={onRoute} />
+      <OnlineList world={world} onRoute={onRoute} onChat={onChat} />
 
       {/* ЗНАКОМЫЕ — с кем говорил и кто ещё жив, где бы ни были. */}
       {contacts.length > 0 && (
@@ -266,7 +271,15 @@ function PeopleTab({
  * системе — рядом (метки на радаре/карте придут следующим слоем); в чужой — можно
  * проложить курс. Пусто в офлайне: список приходит из RTDB, а его там нет.
  */
-function OnlineList({ world, onRoute }: { world: World; onRoute: (systemIndex: number) => void }) {
+function OnlineList({
+  world,
+  onRoute,
+  onChat,
+}: {
+  world: World
+  onRoute: (systemIndex: number) => void
+  onChat: (player: OnlinePlayer) => void
+}) {
   const players = useOnlinePlayers()
   if (players.length === 0) return null
 
@@ -300,11 +313,16 @@ function OnlineList({ world, onRoute }: { world: World; onRoute: (systemIndex: n
                 <div className="truncate text-xs" style={{ color: DIM }}>
                   {where}
                 </div>
-                {!here && (
-                  <Button small onClick={() => onRoute(p.systemIndex)}>
-                    {t('people.route')}
+                <div className="mt-1 flex flex-wrap gap-2">
+                  <Button small onClick={() => onChat(p)}>
+                    {t('people.chat')}
                   </Button>
-                )}
+                  {!here && (
+                    <Button small onClick={() => onRoute(p.systemIndex)}>
+                      {t('people.route')}
+                    </Button>
+                  )}
+                </div>
               </div>
             </div>
           )
