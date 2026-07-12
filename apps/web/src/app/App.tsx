@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { applyPilotProfile, interlocutor, jumpBlock, pendingHail, serializePlayer, stationInterlocutor, undock, type PilotProfile, type PlayerSave, type World } from '@elite/sim'
 import { GameProvider, useSession } from './GameContext'
 import { jumping, startDepart } from './control/jumpFx'
@@ -618,8 +618,15 @@ function restartAnimation(el: HTMLElement | null, animation: string): void {
  * РАЗГОРАЮТСЯ и гаснут (1 раз). По СТАРТУ (`launching`) логотип разом вспыхивает бело-раскалённым.
  * Свечение/вспышка — filter самого раста; блик — маскированная по форме логотипа накладка.
  */
-function TitleLogo({ launching }: { launching: boolean }) {
-  const imgRef = useRef<HTMLImageElement>(null)
+function TitleLogo({
+  launching,
+  imgRef,
+  onReady,
+}: {
+  launching: boolean
+  imgRef: React.RefObject<HTMLImageElement | null>
+  onReady: () => void
+}) {
   const glintRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -650,6 +657,7 @@ function TitleLogo({ launching }: { launching: boolean }) {
           ref={imgRef}
           src="/logo.png"
           alt="STAR ELITE"
+          onLoad={onReady}
           className={`block w-full ${launching ? 'title-logo-flash' : ''}`}
         />
         <div ref={glintRef} className="title-logo-glint" aria-hidden />
@@ -674,10 +682,10 @@ function TitleLogo({ launching }: { launching: boolean }) {
  * корабля (тот на ~55%). Стартовые точки и тайминги фиксируем на монтировании (`useMemo`),
  * дальше всё крутит CSS-анимация — ноль ре-рендеров и ноль работы в кадре.
  */
-function TitleDust({ launching }: { launching: boolean }) {
+function TitleDust({ launching, vanishY }: { launching: boolean; vanishY: number }) {
   const bits = useMemo(() => {
     const VANISH_X = 50 // vw
-    const VANISH_Y = 24 // vh — за и над кораблём
+    const VANISH_Y = vanishY // vh — центр звезды логотипа
     return Array.from({ length: 26 }, () => {
       // Старт по всему нижнему полю И бокам, не только вдоль низа: тогда пыль сносит
       // и по краям кадра, а не единой струёй по центру. Все ниже точки схода — летят вверх.
@@ -695,7 +703,7 @@ function TitleDust({ launching }: { launching: boolean }) {
         peak: 0.35 + Math.random() * 0.5,
       }
     })
-  }, [])
+  }, [vanishY])
   return (
     <div
       className="pointer-events-none absolute inset-0 overflow-hidden"
@@ -732,9 +740,9 @@ function TitleDust({ launching }: { launching: boolean }) {
  * штрихи разбегались бы каждый в свою сторону. Много разом, очень резко (ease-in), затем
  * гаснут с дальнего конца — небо пустеет к переходу в игру. Параметры фиксируем на монтаже.
  */
-function TitleWarp() {
+function TitleWarp({ vanishY }: { vanishY: number }) {
   const streaks = useMemo(() => {
-    const VANISH_Y = 24 // vh — точка схода по вертикали; по X это центр (50vw)
+    const VANISH_Y = vanishY // vh — центр звезды логотипа; по X это центр (50vw)
     return Array.from({ length: 110 }, () => {
       // Горизонталь — в vh ОТ ЦЕНТРА (не vw!), чтобы вся геометрия была в одних единицах.
       // Иначе dx(vw) и длина(vh) при изотропном rotate не сходятся в точку: по вертикали
@@ -759,7 +767,7 @@ function TitleWarp() {
         peak: 0.7 + Math.random() * 0.3,
       }
     })
-  }, [])
+  }, [vanishY])
   return (
     <div className="pointer-events-none absolute inset-0 overflow-hidden">
       {streaks.map((s, i) => (
@@ -916,6 +924,26 @@ function Paused({ resuming, onBoot, onNewGame }: { resuming: boolean; onBoot: ()
   useEffect(() => () => void (timer.current !== null && window.clearTimeout(timer.current)), [])
 
   /**
+   * Точка схода пыли и варп-штрихов — центр ЗВЕЗДЫ логотипа. По X это центр экрана (лого
+   * центрировано), по Y — зависит от отрендеренного размера лого, поэтому картинку МЕРЯЕМ
+   * в рантайме. Звезда сидит почти в центре PNG — на ~10 из его 492 пикселей выше середины.
+   */
+  const logoRef = useRef<HTMLImageElement>(null)
+  const [vanishY, setVanishY] = useState(14) // vh — разумное значение до первого замера
+  const measureVanish = useCallback(() => {
+    const img = logoRef.current
+    if (!img || img.clientHeight < 1) return
+    const rect = img.getBoundingClientRect()
+    const starY = rect.top + rect.height * (0.5 - 10 / 492)
+    setVanishY((starY / window.innerHeight) * 100)
+  }, [])
+  useLayoutEffect(() => {
+    measureVanish()
+    window.addEventListener('resize', measureVanish)
+    return () => window.removeEventListener('resize', measureVanish)
+  }, [measureVanish])
+
+  /**
    * Браузер отказывает в захвате примерно секунду после выхода из него — защита
    * от игр, крадущих Escape. Одного нажатия поэтому не хватало: кнопка молча
    * съедала клик, и приходилось жать ещё раз. Теперь запрос ПОВТОРЯЕТСЯ сам,
@@ -983,16 +1011,16 @@ function Paused({ resuming, onBoot, onNewGame }: { resuming: boolean; onBoot: ()
           правь bottom/left/w, если сопла окажутся не на месте.
           Корабль — только на ПЕРВОЙ заставке (не на паузе: там пустое небо). По СТАРТУ
           (`waiting`) он срывается и улетает, а затем уходит с экраном паузы. */}
-      {!resuming && <TitleDust launching={waiting} />}
+      {!resuming && <TitleDust launching={waiting} vanishY={vanishY} />}
       {/* Варп-штрихи — только в момент срыва (по СТАРТУ): пыль слилась в линии. */}
-      {!resuming && waiting && <TitleWarp />}
+      {!resuming && waiting && <TitleWarp vanishY={vanishY} />}
       {!resuming && <TitleShip launching={waiting} />}
 
       {/* Логотип — СВОЙ контейнер, вне общего потока: сдвинуть его нечем, что бы
           ни выросло ниже. Растр, поэтому у него собственная ширина. Заголовок
           остаётся для тех, кто читает страницу не глазами. */}
       <h1 className="sr-only">STAR ELITE</h1>
-      <TitleLogo launching={waiting} />
+      <TitleLogo launching={waiting} imgRef={logoRef} onReady={measureVanish} />
 
       {/* Главное меню — просто кнопки на фоне корабля, без плашки: обводка тут ни к чему.
           Клавиши и настройки не живут на этом экране, а всплывают поверх отдельной панелью. */}
