@@ -578,24 +578,28 @@ type PauseScreen = 'main' | 'keys' | 'settings'
  * перекрывает): базы прячутся за кормой, плюмажи торчат сверху. Режим screen гасит чёрный
  * фон струи в свечение над тёмным небом. Центральная — быстрый нервный «пых» (≈0.8 c) и
  * чуть ниже боковых; боковые крупнее, период ≈2 c, синхронно и с лёгким сносом к центру.
+ *
+ * Весь узел (корабль + струи) медленно покачивается — иллюзия полёта. Слои разделены,
+ * чтобы transform-ы не спорили: внешний div держит позицию (`-translate-y-1/2`), внутренний
+ * `relative` качается своей анимацией, а струи внутри него дышат каждая своей.
  */
 function TitleShip() {
   return (
     <div className="pointer-events-none absolute inset-x-0 top-[calc(55%+50px)] mx-auto w-full max-w-[43.2rem] -translate-y-1/2 px-8">
-      <div className="relative">
+      <div className="relative" style={{ animation: 'title-ship-float 7s ease-in-out infinite' }}>
         <img
           src="/flame_left.png"
           alt=""
           aria-hidden
           className="absolute bottom-[82%] left-[39.8%] w-[13%] origin-bottom mix-blend-screen"
-          style={{ animation: 'title-flame-left 2s ease-in-out infinite' }}
+          style={{ animation: 'title-flame-left 3s ease-in-out infinite' }}
         />
         <img
           src="/flame_right.png"
           alt=""
           aria-hidden
           className="absolute bottom-[82%] left-[60.2%] w-[13%] origin-bottom mix-blend-screen"
-          style={{ animation: 'title-flame-right 2s ease-in-out infinite' }}
+          style={{ animation: 'title-flame-right 3s ease-in-out infinite' }}
         />
         <img
           src="/flame_center.png"
