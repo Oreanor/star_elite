@@ -1082,10 +1082,10 @@ function Paused({ resuming, onBoot, onNewGame }: { resuming: boolean; onBoot: ()
               pointerEvents: waiting && !resuming ? 'none' : 'auto',
             }}
           >
-            {/* «Новая игра» стирает прогресс, поэтому в ДВА клика: первый показывает
-                предупреждение, второй исполняет. Прочие кнопки сбрасывают подтверждение. */}
-            <MenuButton onClick={() => (confirmNew ? onNewGame() : setConfirmNew(true))}>
-              {confirmNew ? t('menu.newGameConfirm') : t('menu.newGame')}
+            {/* «Новая игра» стирает прогресс. Есть сейв — спрашиваем МОДАЛКОЙ (Да/Нет);
+                нет сейва (нечего терять) — начинаем сразу, без лишнего вопроса. */}
+            <MenuButton onClick={() => (session.isNewGame ? onNewGame() : setConfirmNew(true))}>
+              {t('menu.newGame')}
             </MenuButton>
             <MenuButton onClick={() => { setConfirmNew(false); setScreen('keys') }}>
               {t('menu.keys')}
@@ -1096,6 +1096,26 @@ function Paused({ resuming, onBoot, onNewGame }: { resuming: boolean; onBoot: ()
           </div>
         </div>
       </div>
+
+      {/* Новая игра при живом сейве — модалка с прямым «уничтожит, начать?». Клик мимо = отмена. */}
+      {confirmNew && (
+        <div
+          className="absolute inset-0 z-30 flex items-center justify-center bg-black/60 px-8"
+          onClick={() => setConfirmNew(false)}
+        >
+          <div onClick={(e) => e.stopPropagation()}>
+            <MenuPanel>
+              <p className="max-w-sm text-center text-sm leading-relaxed tracking-widest text-[#7fd6ff]">
+                {t('menu.newGameWarn')}
+              </p>
+              <div className="flex gap-4">
+                <MenuButton onClick={onNewGame}>{t('menu.yes')}</MenuButton>
+                <MenuButton onClick={() => setConfirmNew(false)}>{t('menu.no')}</MenuButton>
+              </div>
+            </MenuPanel>
+          </div>
+        </div>
+      )}
 
       {/* Панель клавиш/настроек — оверлей ПОВЕРХ меню: всплыла, прочитал, закрыл и вернулся.
           Клик мимо неё (по затемнению) или «назад» возвращает к кнопкам старта. */}
