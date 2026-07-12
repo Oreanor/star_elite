@@ -242,7 +242,7 @@ function PeopleTab({
       )}
 
       {/* Живые игроки онлайн — отдельным блоком. Пусто в офлайне. */}
-      <OnlineList world={world} onRoute={onRoute} onChat={onChat} />
+      <OnlineList onChat={onChat} />
 
       {/* ЗНАКОМЫЕ — с кем говорил и кто ещё жив, где бы ни были. */}
       {contacts.length > 0 && (
@@ -275,19 +275,10 @@ function PeopleTab({
 }
 
 /**
- * Живые игроки в сети (presence): кто онлайн, в какой системе и где стоит. В своей
- * системе — рядом (метки на радаре/карте придут следующим слоем); в чужой — можно
- * проложить курс. Пусто в офлайне: список приходит из RTDB, а его там нет.
+ * Живые игроки в сети (presence): кто онлайн, в какой системе и где стоит. Связаться
+ * можно с любым — окно то же, что с ботами. Пусто в офлайне: список приходит из RTDB.
  */
-function OnlineList({
-  world,
-  onRoute,
-  onChat,
-}: {
-  world: World
-  onRoute: (systemIndex: number) => void
-  onChat: (player: OnlinePlayer) => void
-}) {
+function OnlineList({ onChat }: { onChat: (player: OnlinePlayer) => void }) {
   const players = useOnlinePlayers()
   if (players.length === 0) return null
 
@@ -298,12 +289,11 @@ function OnlineList({
       </h2>
       <div className="mt-3 flex flex-wrap gap-3">
         {players.map((p) => {
-          const here = p.systemIndex === world.systemIndex
           const where = p.place
             ? t('people.online.dock', { place: p.place, sys: p.systemName })
             : t('people.online.sys', { sys: p.systemName })
           // Та же плашка, что у пилотов у причала: портрет из вида+лица (пришли в presence),
-          // имя, род занятий; ниже — где он и, если в другой системе, курс к нему.
+          // имя, род занятий; ниже — где он.
           return (
             <div
               key={p.uid}
@@ -322,16 +312,11 @@ function OnlineList({
                   {/* Отошёл (пауза) — так и пишем: в игре его нет, локатор его не найдёт. */}
                   {p.paused ? t('people.online.paused') : where}
                 </div>
-                <div className="mt-1 flex flex-wrap gap-2">
+                <div className="mt-1">
                   {/* Тот же глагол, что у знакомых-ботов (СВЯЗАТЬСЯ): люди и боты равноправны. */}
                   <Button small onClick={() => onChat(p)}>
                     {t('people.talk')}
                   </Button>
-                  {!here && (
-                    <Button small onClick={() => onRoute(p.systemIndex)}>
-                      {t('people.route')}
-                    </Button>
-                  )}
                 </div>
               </div>
             </div>
