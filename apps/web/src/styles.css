@@ -158,15 +158,19 @@ canvas {
   100% { transform: translate(var(--dx), var(--dy)) scale(0.12); opacity: 0; }
 }
 
-/* СРЫВ С МЕСТА (СТАРТ): та же пыль снизу-вверх РАЗГОНЯЕТСЯ и сливается в линии — вход
-   в крейсер. Крупинки летят к той же точке схода (--dx/--dy), но быстро, вытягиваясь в
-   штрих ВДОЛЬ своего движения (--rot ориентирует линию, --stretch тянет). translate идёт
-   ДО rotate — значит смещение в экранных осях, а поворот лишь разворачивает штрих по ходу.
-   ease-in снаружи даёт «очень резко»: почти стоят, затем рывок. */
+/* СРЫВ С МЕСТА (СТАРТ): та же пыль снизу-вверх РАЗГОНЯЕТСЯ, и каждая крупинка «печатает»
+   за собой след — голова тянет хвост ВДОЛЬ своего движения (--rot по ходу, --stretch тянет).
+   Якорь у ГОЛОВЫ (transform-origin низ), поэтому хвост растёт назад, за голову. Смещение
+   translate ДО rotate — в экранных осях; поворот лишь кладёт хвост по ходу.
+
+   Фазы: голова прочерчивает след до полной длины (к 50%), затем уходит к точке схода, а
+   след ТАЕТ С ДАЛЬНЕГО (самого раннего) конца — scaleY подбирается к голове, opacity гаснет.
+   Оттого у точки схода штрихов уже почти не видно, и «веника» из сходящихся линий не выходит. */
 @keyframes title-dust-warp {
-  0%   { transform: translate(0, 0) rotate(var(--rot)) scaleY(0.5); opacity: 0; }
-  15%  { opacity: var(--peak, 0.85); }
-  100% { transform: translate(var(--dx), var(--dy)) rotate(var(--rot)) scaleY(var(--stretch)); opacity: 0; }
+  0%   { transform: translate(0, 0) rotate(var(--rot)) scaleY(0.15); opacity: 0; }
+  12%  { opacity: var(--peak, 0.85); }
+  50%  { transform: translate(calc(var(--dx) * 0.55), calc(var(--dy) * 0.55)) rotate(var(--rot)) scaleY(var(--stretch)); opacity: var(--peak, 0.85); }
+  100% { transform: translate(var(--dx), var(--dy)) rotate(var(--rot)) scaleY(calc(var(--stretch) * 0.25)); opacity: 0; }
 }
 /* Обычная дрейфующая пыль гаснет ровно в момент срыва — её сменяют штрихи выше. */
 @keyframes title-dust-out {

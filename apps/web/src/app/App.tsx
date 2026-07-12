@@ -736,12 +736,14 @@ function TitleWarp() {
   const streaks = useMemo(() => {
     const VANISH_X = 50 // vw — та же точка схода, что у пыли
     const VANISH_Y = 24 // vh
-    return Array.from({ length: 70 }, () => {
+    return Array.from({ length: 66 }, () => {
       const startX = -6 + Math.random() * 112 // vw — по всему полю и краям
-      const startY = 40 + Math.random() * 70 // vh — снизу и с боков
-      const dx = VANISH_X - startX + (Math.random() * 8 - 4)
+      const startY = 40 + Math.random() * 72 // vh — снизу и с боков
+      // Горизонтальный сход ГАСИМ (×0.4): иначе крайние крупинки метут вбок и все сходятся
+      // в «веник» у точки схода. Пусть летят почти радиально вверх с лёгким наклоном внутрь.
+      const dx = (VANISH_X - startX) * 0.4 + (Math.random() * 3 - 1.5)
       const dy = VANISH_Y - startY
-      // Линию разворачиваем ВДОЛЬ движения: её длина по +Y, значит поворот = угол вектора −90°.
+      // Хвост тянется ВДОЛЬ движения (по damped dx): поворот = угол вектора −90°.
       const rot = (Math.atan2(dy, dx) * 180) / Math.PI - 90
       return {
         startX,
@@ -749,11 +751,11 @@ function TitleWarp() {
         dx,
         dy,
         rot,
-        stretch: 6 + Math.random() * 11, // во сколько раз вытягивается в линию
-        dur: 0.3 + Math.random() * 0.3, // с — коротко и резко
+        stretch: 5 + Math.random() * 9, // во сколько раз вытягивается хвост
+        dur: 0.32 + Math.random() * 0.3, // с — коротко и резко
         delay: 0.8 + Math.random() * 0.14, // синхронно со срывом корабля, с лёгким разбросом
-        len: 6 + Math.random() * 8, // px — базовая длина штриха
-        peak: 0.7 + Math.random() * 0.3,
+        len: 5 + Math.random() * 7, // px — базовая длина хвоста в покое
+        peak: 0.65 + Math.random() * 0.3,
       }
     })
   }, [])
@@ -762,15 +764,18 @@ function TitleWarp() {
       {streaks.map((s, i) => (
         <span
           key={i}
-          className="absolute rounded-full bg-white"
+          className="absolute"
           style={
             {
               left: `${s.startX}vw`,
               top: `${s.startY}vh`,
-              width: 1.7,
+              width: 1.6,
               height: s.len,
-              marginLeft: -0.85,
-              marginTop: -s.len / 2,
+              marginLeft: -0.8,
+              marginTop: -s.len, // голова (низ) — в точке старта; хвост растёт вверх, за голову
+              transformOrigin: '50% 100%', // якорь у ГОЛОВЫ: хвост тянется назад по ходу
+              // Голова яркая, хвост тает — точка «прочерчивает» за собой след, а не штрих.
+              background: 'linear-gradient(to top, rgba(255,255,255,0.95), rgba(255,255,255,0))',
               opacity: 0,
               '--dx': `${s.dx}vw`,
               '--dy': `${s.dy}vh`,
