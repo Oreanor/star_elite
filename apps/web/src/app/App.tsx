@@ -1064,7 +1064,7 @@ function Paused({
     // на срыве лейбл прыгал обратно на «секундочку». Просто больше не наращиваем.
     if (launched) return
     const a = window.setTimeout(() => setStall(1), 2000)
-    const b = window.setTimeout(() => setStall(2), 4000)
+    const b = window.setTimeout(() => setStall(2), 5000)
     return () => {
       window.clearTimeout(a)
       window.clearTimeout(b)
