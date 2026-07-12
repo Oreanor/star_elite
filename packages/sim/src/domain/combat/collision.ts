@@ -46,13 +46,15 @@ export function resolveShipVsSphere(
   ship.state.vel.addScaledVector(_normal, -closingSpeed * (1 + IMPACT.RESTITUTION) * massRatio)
 
   // «Сырая» сила удара — по ней вызывающий решает, колоть ли камень; она от масштаба
-  // не зависит. А вот УРОН кораблю делим на масштаб: большому таран не так смертелен.
+  // не зависит (гигант всё так же дробит астероид, что задел).
   const rawImpact = Math.min(
     IMPACT.RAM_DAMAGE_MAX,
     Math.abs(closingSpeed) * IMPACT.RAM_DAMAGE_PER_SPEED,
   )
-  const damage = rawImpact / ship.state.scale
-  if (damage > 1) applyDamage(ship, damage, time)
+  // Вырос (миелофон) — НЕУЯЗВИМ к столкновениям, но ОСТАЁТСЯ ТВЁРДЫМ: раздвижка и импульс
+  // выше уже применены (не проваливается), а урон гиганту не наносим. За каждой мошкой,
+  // что в тебя тычется, гиганту не уследить — глупо за это гибнуть.
+  if (ship.state.scale <= 1 && rawImpact > 1) applyDamage(ship, rawImpact, time)
   return rawImpact
 }
 
@@ -94,10 +96,12 @@ export function resolveShipVsShip(a: ShipEntity, b: ShipEntity, time: number): v
   b.state.vel.addScaledVector(_cnormal, -j * (mA / total))
 
   // Урон по отношению размеров: врезаться в НАМНОГО большее — смертельно, а большому
-  // от малого — почти ничего. При равных масштабах (два гиганта рядом) — поровну.
+  // от малого — ничего. Выросший (миелофон) неуязвим к столкновениям, но твёрд: импульс
+  // и раздвижка выше применены, урон ему не наносим. Так гигант давит мелочь, сам цел;
+  // два гиганта рядом — толкаются, но не бьются. Проверка по масштабу КАЖДОГО борта.
   const base = Math.abs(closing) * IMPACT.RAM_DAMAGE_PER_SPEED
-  applyDamage(a, base * (b.state.scale / a.state.scale), time)
-  applyDamage(b, base * (a.state.scale / b.state.scale), time)
+  if (a.state.scale <= 1) applyDamage(a, base * (b.state.scale / a.state.scale), time)
+  if (b.state.scale <= 1) applyDamage(b, base * (a.state.scale / b.state.scale), time)
 }
 
 const _sdelta = new Vector3()
@@ -122,7 +126,7 @@ export function bounceOffShield(
 ): number {
   _sdelta.copy(ship.state.pos).sub(center)
   const distance = _sdelta.length()
-  const minDistance = ship.spec.hull.radius + shieldRadius
+  const minDistance = effectiveRadius(ship) + shieldRadius
   if (distance >= minDistance || distance < 1e-6) return -1
 
   _snormal.copy(_sdelta).divideScalar(distance)

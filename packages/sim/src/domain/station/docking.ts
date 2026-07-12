@@ -23,10 +23,14 @@ export function stationRange(ship: ShipEntity, station: BodyEntity): number {
 /**
  * Можно ли стыковаться прямо сейчас. Скорость важна не меньше дистанции:
  * влететь в причал на двухстах метрах в секунду — это не стыковка, а таран.
+ *
+ * В масштабе (миелофон) стыковка невозможна: гигант не влезет в причал. Диспетчер по
+ * связи так и отвечает — сожмись до обычного размера. `scale <= 1` — обычный корабль.
  */
 export function canDockAt(ship: ShipEntity, station: BodyEntity): boolean {
   return (
     ship.alive &&
+    ship.state.scale <= 1 &&
     stationRange(ship, station) < DOCKING.RANGE &&
     ship.state.vel.length() < DOCKING.MAX_SPEED
   )

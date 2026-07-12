@@ -304,6 +304,8 @@ function stepShipCollisions(world: World): void {
 
 /** Точка контакта корабля с полем станции — для вспышки. Горячий путь, без аллокаций. */
 const _shieldContact = /* @__PURE__ */ new Vector3()
+/** Планета для отскока гиганта считается неподвижной: её орбитальный ход мал против тарана. */
+const _bodyStill = /* @__PURE__ */ new Vector3()
 
 /**
  * Столкновение с крупным телом.
@@ -351,6 +353,16 @@ function stepBodyCollisions(world: World): void {
 
       const reach = body.radius + effectiveRadius(ship)
       if (body.pos.distanceToSquared(ship.state.pos) > reach * reach) continue
+
+      // Гигант (миелофон) о планету НЕ гибнет — он УПИРАЕТСЯ в атмосферу, как в поле
+      // станции: твёрдый отскок без урона. Масса тела берётся по объёму (radius³), поэтому
+      // планета не шелохнётся, а гиганта отпружинивает наружу. Урон при scale>1 не наносится
+      // (см. resolveShipVsSphere). Отсюда правило: сожмёшься обратно, застряв в теле, —
+      // снова станешь смертным и погибнешь. Расти и уходить в размер надо в пустоте.
+      if (ship.state.scale > 1) {
+        resolveShipVsSphere(ship, body.pos, _bodyStill, body.radius, body.radius ** 3, world.time)
+        continue
+      }
 
       // Щит от планеты не спасает: он держит лучи и обломки, а не кору.
       ship.shield = 0

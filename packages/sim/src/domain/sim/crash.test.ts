@@ -112,4 +112,56 @@ describe('удар о крупное тело', () => {
 
     expect(world.player.alive).toBe(true)
   })
+
+  /**
+   * Миелофон: выросший борт о планету НЕ гибнет — упирается в атмосферу твёрдым отскоком.
+   * Иначе увеличиться рядом с планетой было бы невозможно: распухший радиус мгновенно
+   * задевает кору и убивает. Гигант неуязвим к столкновениям, пока в масштабе.
+   */
+  it('гигант (миелофон) упирается в планету, а не гибнет', () => {
+    const world = quiet()
+    const player = world.player
+    player.state.scale = 40
+    ram(world, bodyOf(world, 'planet'), 40)
+
+    oneStep(world)
+
+    expect(player.alive).toBe(true)
+  })
+
+  /**
+   * Твёрдость гиганта: он не проваливается в тело. После шага центр — не глубже, чем
+   * сумма радиусов (эффективный радиус корабля + радиус планеты): раздвижка выталкивает.
+   */
+  it('гигант не проваливается внутрь планеты — остаётся твёрдым', () => {
+    const world = quiet()
+    const player = world.player
+    player.state.scale = 40
+    const planet = bodyOf(world, 'planet')
+    // Ставим глубоко внутри досягаемости, носом внутрь.
+    player.state.pos.copy(planet.pos)
+    player.state.pos.x += planet.radius
+    player.state.vel.set(-40, 0, 0)
+    player.controls.throttle = 0
+
+    oneStep(world)
+
+    const reach = planet.radius + player.spec.hull.radius * player.state.scale
+    expect(player.state.pos.distanceTo(planet.pos)).toBeGreaterThanOrEqual(reach - 1)
+  })
+
+  /**
+   * Правило «сожмись в пустоте»: вернувшись к обычному размеру ВНУТРИ тела, снова
+   * становишься смертным и гибнешь. Расти и уходить из масштаба надо вдали от планет.
+   */
+  it('сжавшийся обратно внутри планеты — гибнет как обычный корабль', () => {
+    const world = quiet()
+    const player = world.player
+    player.state.scale = 1
+    ram(world, bodyOf(world, 'planet'), 40)
+
+    oneStep(world)
+
+    expect(player.alive).toBe(false)
+  })
 })
