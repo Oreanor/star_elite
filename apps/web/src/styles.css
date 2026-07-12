@@ -62,16 +62,16 @@ canvas {
    чтобы читалось как случайное трепыхание, а не мерное дыхание. Короткий период (в разметке
    ≈0.8 c) добавляет дёрганости. Меняется и длина (scaleY), и чуть высота, и яркость. */
 @keyframes title-flame-center {
-  0%   { transform: translateX(-50%) translateY(0)    scaleY(1);    opacity: 0.9; }
-  11%  { transform: translateX(-50%) translateY(-1%)  scaleY(1.22); opacity: 1;   }
-  23%  { transform: translateX(-50%) translateY(-3%)  scaleY(1.05); opacity: 0.86;}
-  34%  { transform: translateX(-50%) translateY(-1%)  scaleY(1.32); opacity: 1;   }
-  46%  { transform: translateX(-50%) translateY(-4%)  scaleY(1.12); opacity: 0.92;}
-  58%  { transform: translateX(-50%) translateY(-2%)  scaleY(1.38); opacity: 1;   }
-  69%  { transform: translateX(-50%) translateY(-3%)  scaleY(1.08); opacity: 0.88;}
-  80%  { transform: translateX(-50%) translateY(-1%)  scaleY(1.26); opacity: 1;   }
-  91%  { transform: translateX(-50%) translateY(-2%)  scaleY(1.1);  opacity: 0.94;}
-  100% { transform: translateX(-50%) translateY(0)    scaleY(1);    opacity: 0.9; }
+  0%   { transform: translateX(-50%) translateY(0)    scaleY(1);    opacity: 0.8;  }
+  11%  { transform: translateX(-50%) translateY(-1%)  scaleY(1.22); opacity: 0.9;  }
+  23%  { transform: translateX(-50%) translateY(-3%)  scaleY(1.05); opacity: 0.77; }
+  34%  { transform: translateX(-50%) translateY(-1%)  scaleY(1.32); opacity: 0.9;  }
+  46%  { transform: translateX(-50%) translateY(-4%)  scaleY(1.12); opacity: 0.82; }
+  58%  { transform: translateX(-50%) translateY(-2%)  scaleY(1.38); opacity: 0.9;  }
+  69%  { transform: translateX(-50%) translateY(-3%)  scaleY(1.08); opacity: 0.78; }
+  80%  { transform: translateX(-50%) translateY(-1%)  scaleY(1.26); opacity: 0.9;  }
+  91%  { transform: translateX(-50%) translateY(-2%)  scaleY(1.1);  opacity: 0.85; }
+  100% { transform: translateX(-50%) translateY(0)    scaleY(1);    opacity: 0.8;  }
 }
 @keyframes title-flame-left {
   0%, 100% { transform: translateX(-50%) translateY(0) scaleY(1); }
@@ -84,11 +84,11 @@ canvas {
 
 /*
  * Медленное покачивание корабля на титуле — иллюзия полёта. Только вверх-вниз, БЕЗ вращения.
- * В нижней точке — лёгкая вытяжка по вертикали (scaleY до 1.03): корпус будто чуть наклоняет
+ * В нижней точке — лёгкая вытяжка по вертикали (scaleY до 1.05): корпус будто чуть наклоняет
  * нос к зрителю. Долгий период и ease-in-out — чтобы качало плавно, а не дёргало. Струи
  * дышат внутри своей жизнью, это их не трогает.
  */
 @keyframes title-ship-float {
   0%, 100% { transform: translateY(-7px) scaleY(1); }
-  50%      { transform: translateY(7px) scaleY(1.03); }
+  50%      { transform: translateY(7px) scaleY(1.05); }
 }
