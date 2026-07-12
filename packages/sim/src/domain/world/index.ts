@@ -48,7 +48,7 @@ export {
 export { maybeShiftOrigin } from './origin'
 export { pickFreeSpawn, isFreeSpawn } from './spawn'
 export { cycleTarget, findBody, findShip, hostilesOf, incomingMissile, nearestPod } from './queries'
-export { stepTraffic, spawnResidentContacts } from './traffic'
+export { stepTraffic, spawnResidentContacts, stepDockedBerth } from './traffic'
 export { spawnTitan, stepTitans, titanCount } from './titans'
 export { spawnPlatform, stepPlatforms } from './platforms'
 export { jumpOut, spawnWarpFlash } from './warp'

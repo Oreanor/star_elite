@@ -369,6 +369,51 @@ function stepStationLife(world: World): ShipEntity[] {
 }
 
 /**
+ * Жизнь причала, пока игрок ПРИСТЫКОВАН и мир стоит. Обычный шаг в доке заморожен
+ * (`stepWorld` выходит сразу), поэтому смену лиц у причала ведём отдельно и по СЕКУНДАМ
+ * реального времени (`dt`): у стоящих тикает стоянка, отстоявшийся отходит (`dock='done'` —
+ * когда отчалишь, улетит сам), а на освободившееся место иногда швартуется новый
+ * завсегдатай — сразу в `berthed`, ведь его подхода из дока всё равно не видно.
+ *
+ * Детерминированно от `world.rng`. Возвращает true, если состав причала изменился —
+ * приложению это сигнал перерисовать плашки. Контроллер новичку слой приложения раздаст
+ * сам, когда мир оживёт (`syncControllers`): стоящему у причала он пока не нужен.
+ */
+export function stepDockedBerth(world: World, dt: number): boolean {
+  const station = world.bodies.find((b) => b.kind === 'station')
+  if (!station) return false
+  let changed = false
+
+  // Стоянка тикает и в доке — вручную по dt, ведь world.time стоит. Отстоявшийся отходит.
+  for (const s of world.ships) {
+    if (!s.alive || !s.ai || s.ai.dock !== 'berthed' || s.faction !== 'neutral' || isDroneShip(s)) continue
+    s.ai.dockTimer -= dt
+    if (s.ai.dockTimer <= 0) {
+      s.ai.dock = 'done'
+      s.clearance = false
+      if (world.dockOccupantId === s.id) world.dockOccupantId = null
+      changed = true
+    }
+  }
+
+  // Новый гость — не чаще раза в DOCKED_BERTH_PERIOD секунд и только если причал не полон.
+  const berthed = world.ships.filter(
+    (s) => s.alive && s.ai?.dock === 'berthed' && s.faction === 'neutral' && !isDroneShip(s),
+  ).length
+  if (berthed < TRAFFIC.STATION_REGULARS && trafficCount(world) < TRAFFIC.MAX && world.rng() < dt / TRAFFIC.DOCKED_BERTH_PERIOD) {
+    const ship = spawnStationRegular(world, station)
+    if (ship.ai) {
+      // Сразу у причала: подхода не видно, стоянку даём с разбросом, чтобы уходили вразнобой.
+      ship.ai.dock = 'berthed'
+      ship.ai.dockTimer = NPC_DOCK.DWELL * (0.6 + world.rng() * 0.9)
+    }
+    ship.clearance = true
+    changed = true
+  }
+  return changed
+}
+
+/**
  * Чужой бой в глуши: пираты уже насели на кого-то, когда игрок подходит. Обе стороны
  * рождаются рядом на кромке радара и сходятся сами — ИИ считает их врагами по фракции
  * (`isHostileTo`), драться их никто не заставляет. Игрок волен вмешаться или пройти

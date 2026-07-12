@@ -1,4 +1,4 @@
-import { useReducer } from 'react'
+import { useEffect, useReducer } from 'react'
 import {
   contactWhereabouts,
   findChassis,
@@ -9,6 +9,7 @@ import {
   localSettlement,
   roamContact,
   sendContactTo,
+  stepDockedBerth,
   type BodyEntity,
   type Contact,
   type ShipEntity,
@@ -68,6 +69,17 @@ export function Console({
 }) {
   useLang()
   const [, bump] = useReducer((n: number) => n + 1, 0)
+
+  // Причал не застывает, пока сидишь в доке: мир на паузе, поэтому смену лиц у причала
+  // ведём отдельным тиком по реальному времени. Изменился состав — перерисовываем плашки.
+  useEffect(() => {
+    if (!docked) return
+    const dt = 2 // с реального времени между попытками
+    const id = window.setInterval(() => {
+      if (stepDockedBerth(world, dt)) bump()
+    }, dt * 1000)
+    return () => window.clearInterval(id)
+  }, [docked, world])
 
   const station = findStation(world)
   const planet = capitalWorld(world)
