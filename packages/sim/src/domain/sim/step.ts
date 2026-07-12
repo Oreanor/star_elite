@@ -29,6 +29,7 @@ import {
   stepCloak,
   stepStarHeat,
   stepMissiles,
+  stepBolts,
   toggleCloak,
   tractorPods,
   tryScoop,
@@ -89,6 +90,9 @@ export function stepWorld(world: World, frameDt: number, controllers: Controller
     stepWeapons(world, controllers, dt)
     stepAsteroids(world, dt)
     stepMissiles(world, dt)
+    // Болты летят и заметают отрезок ПОСЛЕ движения кораблей и ракет этого шага:
+    // попадание считается по свежим позициям целей, а не по вчерашним.
+    stepBolts(world, dt)
     stepCollisions(world)
     stepBodyCollisions(world)
     stepScooping(world, controllers, dt)
@@ -114,6 +118,8 @@ export function stepWorld(world: World, frameDt: number, controllers: Controller
 function stepControllers(world: World, controllers: ControllerMap, dt: number): void {
   for (const ship of allShips(world)) {
     if (!ship.alive) continue
+    // Кинематический борт рулится извне — свой контроллер и крейсер ему не задаём.
+    if (ship.kinematic) continue
     const controller = controllerFor(controllers, ship)
     controller.update(ship, world, dt)
     updateCruise(ship, world, controller.wantsCruise?.(ship, world) ?? false, dt)
@@ -123,6 +129,8 @@ function stepControllers(world: World, controllers: ControllerMap, dt: number): 
 function stepPhysics(world: World, dt: number): void {
   for (const ship of allShips(world)) {
     if (!ship.alive) continue
+    // Кинематический борт не интегрируем: его позу ставит внешний источник.
+    if (ship.kinematic) continue
     stepShip(ship.state, ship.controls, ship.spec.tuning, dt)
     // Нагрев звездой ДО регенерации щита: если корона течёт, `applyDamage`
     // пометит попадание, и щит в этом же шаге восстанавливаться не станет.
@@ -135,6 +143,9 @@ function stepPhysics(world: World, dt: number): void {
 
 function stepWeapons(world: World, controllers: ControllerMap, dt: number): void {
   for (const ship of allShips(world)) {
+    // Кинематический борт не стреляет и не «остывает» локально: его залпы и
+    // состояние приходят извне. Оружие по нему всё равно работает — он цель, не стрелок.
+    if (ship.kinematic) continue
     coolGuns(ship, dt)
     regenEnergy(ship, dt)
     // После щита: `regenShield` уже отработал в этом шаге, в `stepPhysics`.
@@ -208,6 +219,8 @@ function stepAsteroids(world: World, dt: number): void {
 function stepCollisions(world: World): void {
   for (const ship of allShips(world)) {
     if (!ship.alive) continue
+    // Кинематический борт не толкаем: его положение авторитетно из внешнего источника.
+    if (ship.kinematic) continue
     // Вне фазы: на 20 км/с шаг физики — 165 м, больше любого астероида.
     // Столкновение всё равно не сработало бы — корабль пролетел бы насквозь.
     if (isPhased(ship)) continue
@@ -264,6 +277,8 @@ const STATION_MASS = 1e9
 function stepBodyCollisions(world: World): void {
   for (const ship of allShips(world)) {
     if (!ship.alive) continue
+    // Кинематический борт не толкаем и не убиваем о тела: его положение внешнее.
+    if (ship.kinematic) continue
     // Вне фазы: на крейсерском ходу шаг физики длиннее радиуса планеты, и
     // столкновение всё равно не сработало бы. От тел крейсер уводит масс-лок.
     if (isPhased(ship)) continue

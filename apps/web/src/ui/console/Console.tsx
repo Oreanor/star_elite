@@ -105,8 +105,15 @@ export function Console({
 
   return (
     <div
-      className="absolute inset-0 flex items-center justify-center backdrop-blur-md"
-      style={{ background: 'radial-gradient(ellipse at center, rgba(12,34,60,0.66), rgba(0,3,8,0.93))' }}
+      className={`absolute inset-0 flex items-center justify-center ${docked ? '' : 'backdrop-blur-md'}`}
+      // У причала фон НЕПРОЗРАЧНЫЙ: ты внутри станции, космос и собственный корабль
+      // просвечивать сквозь экран не должны. В полёте же вкладка (карта, трюм) — оверлей
+      // поверх боя, и там полупрозрачность с блюром уместна: мир под ней продолжает жить.
+      style={{
+        background: docked
+          ? 'radial-gradient(ellipse at center, #0c223c, #000308)'
+          : 'radial-gradient(ellipse at center, rgba(12,34,60,0.66), rgba(0,3,8,0.93))',
+      }}
     >
       <div
         className="flex h-[calc(100vh-3rem)] w-[calc(100vw-3rem)] max-w-6xl flex-col rounded-2xl border p-7 font-mono"
@@ -312,7 +319,15 @@ function OnlineList({ onChat }: { onChat: (player: OnlinePlayer) => void }) {
               className="flex items-center gap-3 border px-3 py-2"
               style={{ borderColor: DIM, minWidth: '15rem' }}
             >
-              <PilotPortrait species={p.species} face={p.face} muted={p.paused} size={96} />
+              {/* Клик по портрету = «СВЯЗАТЬСЯ»: то же действие, что кнопка ниже. */}
+              <PilotPortrait
+                species={p.species}
+                face={p.face}
+                muted={p.paused}
+                size={96}
+                onClick={() => onChat(p)}
+                title={t('people.talk')}
+              />
               <div className="min-w-0 text-left">
                 <div className="truncate text-sm tracking-widest" style={{ color: ACCENT }}>
                   {p.name}
@@ -383,7 +398,15 @@ function ContactCard({
       style={{ borderColor: DIM, background: 'rgba(127,214,255,0.03)' }}
     >
       {ship ? (
-        <PilotPortrait ship={ship} world={world} size={72} />
+        // Клик по портрету = «СВЯЗАТЬСЯ», но только когда собеседник рядом (иначе связи нет —
+        // отсутствующего сперва зовут или прокладывают курс кнопками справа).
+        <PilotPortrait
+          ship={ship}
+          world={world}
+          size={72}
+          onClick={where.present ? () => onTalk(ship.id) : undefined}
+          title={t('people.talk')}
+        />
       ) : (
         <PilotPortrait name={record.name} size={72} />
       )}

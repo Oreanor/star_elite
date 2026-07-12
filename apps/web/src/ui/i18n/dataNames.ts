@@ -99,10 +99,11 @@ const MODULE_EN: Record<string, string> = {
   cloak_2: 'Cloak Field «Phantom»',
 }
 
-/** Виды — именованные, переводим целиком. Три: земляне, сборные гуманоиды, роботы-синтеты. */
+/** Виды — именованные, переводим целиком. Четыре: земляне, гуманоиды, фелиды, синтеты. */
 const SPECIES_EN: Record<string, string> = {
   'Земляне': 'Earthers',
   'Гуманоиды': 'Humanoids',
+  'Фелиды': 'Felids',
   'Синтеты': 'Synths',
 }
 

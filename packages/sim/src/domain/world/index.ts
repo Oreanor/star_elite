@@ -9,6 +9,7 @@ export {
   type MissileEntity,
   type Notice,
   type PlatformEntity,
+  type RemoteHit,
   type ShipEntity,
   type TitanEntity,
   type Tracer,
@@ -46,8 +47,9 @@ export {
   markContactLost,
 } from './acquaintance'
 export { maybeShiftOrigin } from './origin'
+export { spawnRemotePlayer, despawnRemotePlayer, type RemotePlayerInit } from './remote'
 export { pickFreeSpawn, isFreeSpawn } from './spawn'
-export { cycleTarget, findBody, findShip, hostilesOf, incomingMissile, nearestPod } from './queries'
+export { cycleTarget, cycleLock, findBody, findShip, hostilesOf, incomingMissile, nearestPod, targetableStationsOf } from './queries'
 export { stepTraffic, spawnResidentContacts, stepDockedBerth } from './traffic'
 export { spawnTitan, stepTitans, titanCount } from './titans'
 export { spawnPlatform, stepPlatforms } from './platforms'

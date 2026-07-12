@@ -4,7 +4,7 @@ import {
   signInWithEmailAndPassword,
   signOut as fbSignOut,
 } from 'firebase/auth'
-import { doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore'
+import { deleteDoc, doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore'
 import type { PlayerSave } from '@elite/sim'
 import { auth, db } from './firebase'
 
@@ -100,4 +100,14 @@ export async function writeServerSave(save: PlayerSave): Promise<void> {
   const uid = currentUserId()
   if (!uid) throw new Error('Нет сессии — серверный сейв невозможен')
   await setDoc(doc(requireDb(), 'saves', uid), { save: JSON.stringify(save), updatedAt: serverTimestamp() })
+}
+
+/**
+ * Стереть серверный сейв — «новая игра»: следующая загрузка увидит новичка и покажет
+ * создание персонажа. Нет сессии — молча выходим (нечего стирать).
+ */
+export async function clearServerSave(): Promise<void> {
+  const uid = currentUserId()
+  if (!uid) return
+  await deleteDoc(doc(requireDb(), 'saves', uid))
 }

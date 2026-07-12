@@ -9,7 +9,8 @@ export { spawnExplosion, spawnShockwave, spawnTracer } from './effects'
 export { chargeHyperdrive, scooping, starExposure, stepStarHeat } from './starheat'
 export { damageAsteroid, oreFits, oreUnits, scoopAsteroid, shatter, splittable } from './mining'
 export { stepMissiles } from './missiles'
-export { castLaser, type LaserHit } from './raycast'
+export { stepBolts } from './bolts'
+export { castLaser, type LaserHit, type ShotSource } from './raycast'
 export {
   canScoopAt,
   clearTractorMarks,
@@ -32,4 +33,5 @@ export {
   missileAmmo,
   muzzleWorldPos,
   peakHeat,
+  spawnBolt,
 } from './weapons'

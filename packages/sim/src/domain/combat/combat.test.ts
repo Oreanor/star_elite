@@ -6,6 +6,7 @@ import { raySphere } from '../../core/math'
 import { isLaser, isMissile } from '../loadout'
 import { createWorld, STARTER_SYSTEM } from '../world'
 import type { MissileEntity, ShipEntity, World } from '../world/entities'
+import { stepBolts } from './bolts'
 import { applyDamage, regenShield } from './damage'
 import { fireEcm, regenEnergy } from './ecm'
 import { stepMissiles } from './missiles'
@@ -13,6 +14,15 @@ import { fireLasers, fireMissile, missileAmmo } from './weapons'
 
 function quiet(): World {
   return createWorld({ ...STARTER_SYSTEM, patrols: [], belt: null })
+}
+
+/**
+ * Гонит выпущенные болты, пока они не разрешатся — попадут или уйдут за дальность.
+ * Лазер теперь снаряд: между выстрелом и попаданием проходят шаги, и тест обязан
+ * их прожать, иначе проверяет мир, в котором болт ещё висит у ствола.
+ */
+function settleBolts(world: World, steps = 120): void {
+  for (let i = 0; i < steps && world.bolts.length > 0; i++) stepBolts(world, 1 / 120)
 }
 
 /** Ставит врага ровно перед носом игрока на дистанции d. */
@@ -57,14 +67,18 @@ describe('лазер', () => {
     const before = enemy.shield
 
     fireLasers(world, world.player, false)
+    // Болт ещё летит: в кадре выстрела урона нет — это и есть его снарядная природа.
+    expect(enemy.shield).toBe(before)
+    settleBolts(world)
     expect(enemy.shield).toBeLessThan(before)
-    expect(world.tracers.length).toBe(2) // два ствола
+    expect(world.tracers.length).toBeGreaterThan(0) // болт оставляет след, пока летит
   })
 
   /**
-   * Регрессия. Лазер мгновенный: он попадает в тот же шаг, в котором выпущен.
-   * Целиться в точку упреждения — значит систематически промахиваться.
-   * Раньше ИИ так и делал и не попал ни разу за полторы минуты боя.
+   * Целиться в точку упреждения по НЕПОДВИЖНОЙ цели — значит мазать: болт летит
+   * туда, куда наведён ствол, а мишень стоит в стороне. Прежде это доказывало
+   * мгновенность луча; теперь — что снаряд летит ПРЯМО и упреждение оправдано лишь
+   * против движущейся цели (её ведёт ИИ, см. `ai/autofight`), а по стоячей — промах.
    */
   it('целясь с упреждением по неподвижной цели, промахивается', () => {
     const { world, enemy } = withOneEnemy()
@@ -76,6 +90,7 @@ describe('лазер', () => {
 
     const before = enemy.shield
     fireLasers(world, world.player, false)
+    settleBolts(world)
     expect(enemy.shield).toBe(before) // ни одного попадания
   })
 
@@ -93,6 +108,7 @@ describe('лазер', () => {
 
     const before = enemy.shield
     fireLasers(world, world.player, false)
+    settleBolts(world)
     expect(before - enemy.shield).toBeCloseTo(expected, 0)
   })
 
@@ -220,12 +236,14 @@ describe('ракеты на пилонах', () => {
     const mine = world.missiles[0]!
     mine.pos.set(0, 0, -300)
 
-    // Свой залп проходит мимо неё.
+    // Свой залп проходит мимо неё: болт не бьёт по ракете своего же владельца.
     fireLasers(world, world.player, false)
+    settleBolts(world)
     expect(mine.alive).toBe(true)
 
-    // Чужой — сбивает.
+    // Чужой — сбивает, когда болт долетит.
     fireLasers(world, enemy, true)
+    settleBolts(world)
     expect(mine.alive).toBe(false)
   })
 })

@@ -2,6 +2,13 @@ export { autodockController, canEngageAutodock } from './autopilot'
 export { buyHull, type HullError } from './shipyard'
 export { canDockAt, dock, findStation, startDocked, stationRange, stepDocking, undock } from './docking'
 export {
+  stationInterlocutor,
+  dispatcherPersona,
+  dispatcherBriefing,
+  type BriefingBody,
+  type DispatcherBriefing,
+} from './dispatcher'
+export {
   buy,
   buyCommodity,
   canBuy,

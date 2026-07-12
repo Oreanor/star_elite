@@ -1,5 +1,5 @@
 import { useFrame, useThree } from '@react-three/fiber'
-import { autodockController, canEngageAutodock, cycleTarget, serializePlayer, stepWorld } from '@elite/sim'
+import { autodockController, canEngageAutodock, cycleLock, serializePlayer, stepWorld } from '@elite/sim'
 import { syncControllers, useSession, type Session } from '../../app/GameContext'
 import { persistSave } from '../../app/save/saveStore'
 import { clearPresses, consumePress, input, releaseLock } from '../../platform/input/input'
@@ -86,7 +86,9 @@ export function Simulation() {
     if (consumePress('KeyB')) intent.bomb = true
     if (consumePress('KeyX')) intent.cloak = true
     if (consumePress('KeyQ')) intent.drone = true
-    if (consumePress('Tab')) world.lockedTargetId = cycleTarget(world, world.lockedTargetId)
+    // Tab перебирает борта И станции как один круг, но кладёт выбор в своё поле
+    // (`lockedTargetId` / `lockedStationId`): станцию не бьют, с ней связываются (T).
+    if (consumePress('Tab')) cycleLock(world)
 
     if (consumePress('KeyL')) {
       if (session.mode === 'autodock') setPilot(session, 'manual')

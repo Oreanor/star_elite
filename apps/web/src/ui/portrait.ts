@@ -29,18 +29,19 @@ const EMOTION_FILE: Record<Emotion, string> = {
   sadness: '6',
 }
 
-/** Имя вида (рус, из sim) → id папки ассетов. Неизвестный вид — земляне. Пока три расы. */
+/** Имя вида (рус, из sim) → id папки ассетов. Неизвестный вид — земляне. Четыре расы. */
 const SPECIES_ASSET: Record<string, string> = {
   'Земляне': 'human',
   'Гуманоиды': 'humanoids',
   'Синтеты': 'robots',
+  'Фелиды': 'felines',
 }
 
 /** Сторона сетки: лист 6×6 = 36 лиц на расу. */
 export const PORTRAIT_GRID = 6
 
 export function speciesAsset(species: string): string {
-  return SPECIES_ASSET[species] ?? 'humans'
+  return SPECIES_ASSET[species] ?? 'human'
 }
 
 /**

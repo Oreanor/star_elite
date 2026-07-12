@@ -10,6 +10,8 @@ export const EN: Record<keyof typeof RU, string> = {
   'menu.start': 'LAUNCH',
   'menu.resume': 'RESUME',
   'menu.wait': 'ONE MOMENT…',
+  'menu.newGame': 'NEW GAME',
+  'menu.newGameConfirm': 'ERASE PROGRESS?',
   'menu.keys': 'CONTROLS',
   'menu.settings': 'SETTINGS',
   'menu.back': 'BACK',

@@ -1,19 +1,20 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { applyPilotProfile, interlocutor, jumpBlock, pendingHail, serializePlayer, undock, type PilotProfile, type PlayerSave, type World } from '@elite/sim'
+import { applyPilotProfile, interlocutor, jumpBlock, pendingHail, serializePlayer, stationInterlocutor, undock, type PilotProfile, type PlayerSave, type World } from '@elite/sim'
 import { GameProvider, useSession } from './GameContext'
 import { jumping, startDepart } from './control/jumpFx'
 import { negotiate, negotiatorAvailable } from './control/negotiator'
 import { Game } from './Game'
-import { loadServerSave, onAuthChange } from './net/account'
+import { clearServerSave, loadServerSave, onAuthChange } from './net/account'
 import { online } from './net/firebase'
 import { clearPresence, publishPresence, selfPresence } from './net/presence'
-import { persistSave } from './save/saveStore'
+import { clearSave, persistSave } from './save/saveStore'
 import { TitleStars } from './TitleStars'
 import { input, releaseLock, requestLock } from '../platform/input/input'
 import { AuthScreen } from '../ui/auth/AuthScreen'
 import { Console, type ConsoleTab } from '../ui/console/Console'
 import { CharacterCreation } from '../ui/create/CharacterCreation'
 import { Dialogue } from '../ui/dialogue/Dialogue'
+import { Dispatcher } from '../ui/dialogue/Dispatcher'
 import { PlayerChat, IncomingCall } from '../ui/chat/PlayerChat'
 import { subscribeInbox } from './net/chat'
 import type { OnlinePlayer } from './net/presence'
@@ -155,6 +156,8 @@ function Shell({ onRestart }: { onRestart: () => void }) {
   const [tab, setTab] = useState<ConsoleTab | null>(null)
   /** Открыт ли канал связи. Отдельный оверлей: ни вкладок, ни причала у него нет. */
   const [talking, setTalking] = useState(false)
+  /** Открыта ли связь с ДИСПЕТЧЕРОМ станции. Свой оверлей, как разговор с бортом. */
+  const [dispatching, setDispatching] = useState(false)
   /** Живой игрок, с кем СЕЙЧАС открыт чат. Ровно один за раз — как разговор по T. */
   const [chatWith, setChatWith] = useState<OnlinePlayer | null>(null)
   /** Второй вызов, пришедший пока ты занят: висит баннером, пока не освободишься. */
@@ -165,10 +168,10 @@ function Shell({ onRestart }: { onRestart: () => void }) {
   const chatUidRef = useRef<string | null>(null)
   const waitingRef = useRef<OnlinePlayer | null>(null)
   useEffect(() => {
-    busyRef.current = talking || chatWith !== null
+    busyRef.current = talking || chatWith !== null || dispatching
     chatUidRef.current = chatWith?.uid ?? null
     waitingRef.current = waiting
-  }, [talking, chatWith, waiting])
+  }, [talking, chatWith, waiting, dispatching])
 
   /**
    * Сцена строится по нажатию СТАРТ, а не при загрузке страницы.
@@ -252,6 +255,13 @@ function Shell({ onRestart }: { onRestart: () => void }) {
     }
     if (!session.world.docked) void requestLock()
   }, [session])
+
+  // Закрыть связь с диспетчером: разговор со станцией всегда в полёте (в доке T молчит),
+  // поэтому просто возвращаем захват. Отдельно от `closeTalk` — это другой оверлей.
+  const closeDispatch = useCallback(() => {
+    setDispatching(false)
+    void requestLock()
+  }, [])
   // Открыть разговор с живым игроком — ровно как с ботом по T: окно на весь экран, курсор
   // отпущен (значит мир на паузе). Занят (говоришь с ботом или уже в чате) — новый вызов не
   // перебивает текущий, а встаёт баннером «входящий»: закончишь один — перейдёшь к другому.
@@ -333,6 +343,15 @@ function Shell({ onRestart }: { onRestart: () => void }) {
     [session],
   )
 
+  // «Новая игра»: стираем сейв — и локальный кэш, и серверную правду (иначе загрузка
+  // снова подтянула бы старого пилота) — и пересобираем сессию с нуля. `onRestart`
+  // бампает key всей сессии: чистый мир → новичок → экран создания персонажа.
+  const newGame = useCallback(async () => {
+    clearSave()
+    if (online) await clearServerSave().catch((e) => console.warn('Сброс серверного сейва не удался:', e))
+    onRestart()
+  }, [onRestart])
+
   /**
    * Оверлеи переключаются ЗДЕСЬ, а не в кадре симуляции: тумблер, живущий внутри
    * того, что он останавливает, закрыть себя не сможет. Раскрыт всегда РОВНО ОДИН
@@ -356,16 +375,24 @@ function Shell({ onRestart }: { onRestart: () => void }) {
       // Браузер уже снял захват под оверлеем, так что закрыть его без Escape нечем.
       if (e.code === 'Escape') {
         if (chatWith) closeChat()
+        else if (dispatching) closeDispatch()
         else if (talking) closeTalk()
         else if (!docked && tab !== null) closeConsole()
         return
       }
 
       if (e.code === 'KeyT') {
-        if (docked || tab !== null || talking || chatWith) return
-        // Обычно говорим с ЗАХВАЧЕННОЙ целью. Но если по связи вызывает обиженный
-        // (ты его задел), T отвечает ему — наводимся на него и открываем канал, чтобы
-        // разрядить претензию, пока она не перелилась во враги.
+        if (docked || tab !== null || talking || chatWith || dispatching) return
+        // Захвачена СТАНЦИЯ — T вызывает её диспетчера (свой оверлей). Проверяем первой:
+        // при захвате станции `lockedTargetId` пуст, так что с бортами это не конфликтует.
+        if (stationInterlocutor(session.world)) {
+          setDispatching(true)
+          releaseLock()
+          return
+        }
+        // Иначе говорим с ЗАХВАЧЕННЫМ бортом. Но если по связи вызывает обиженный (ты его
+        // задел), T отвечает ему — наводимся на него и открываем канал, чтобы разрядить
+        // претензию, пока она не перелилась во враги.
         if (!interlocutor(session.world)) {
           const hail = pendingHail(session.world)
           if (!hail) return
@@ -380,7 +407,7 @@ function Shell({ onRestart }: { onRestart: () => void }) {
       // в полёте (у причала карта лишь метит цель), поэтому у станции клавиша молчит.
       // Точку выхода домен возьмёт из мира (`jumpArrivalPlanet`): причал или звезда.
       if (e.code === 'KeyH') {
-        if (docked || talking) return
+        if (docked || talking || dispatching) return
         const target = session.world.jumpTargetIndex
         if (target == null || jumpBlock(session.world, target) !== null) return
         const planet = session.world.jumpArrivalPlanet
@@ -391,7 +418,7 @@ function Shell({ onRestart }: { onRestart: () => void }) {
 
       const wanted: ConsoleTab | null =
         e.code === 'KeyM' ? 'system' : e.code === 'KeyG' ? 'galaxy' : e.code === 'KeyI' ? 'ship' : null
-      if (!wanted || talking || docked) return
+      if (!wanted || talking || dispatching || docked) return
 
       if (tab === wanted) closeConsole()
       else if (tab === null) openConsole(wanted)
@@ -399,7 +426,7 @@ function Shell({ onRestart }: { onRestart: () => void }) {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [session, over, docked, tab, talking, chatWith, openConsole, closeConsole, closeTalk, closeChat])
+  }, [session, over, docked, tab, talking, dispatching, chatWith, openConsole, closeConsole, closeTalk, closeChat, closeDispatch])
 
   return (
     <div className="relative h-screen w-screen overflow-hidden bg-black">
@@ -412,6 +439,8 @@ function Shell({ onRestart }: { onRestart: () => void }) {
         <GameOver score={session.world.score} onRestart={onRestart} />
       ) : talking ? (
         <Dialogue onClose={closeTalk} negotiate={negotiate} chatAvailable={negotiatorAvailable()} />
+      ) : dispatching ? (
+        <Dispatcher world={session.world} onClose={closeDispatch} />
       ) : docked || tab !== null ? (
         // Одна консоль и в полёте, и у причала: планета, корабль, груз, карты (плюс
         // верфь и магазин у причала). «Открыть карту» — раскрыть эту панель на нужной
@@ -431,7 +460,7 @@ function Shell({ onRestart }: { onRestart: () => void }) {
         // Новичок сначала лепит пилота — экран стоит вместо титульного меню, до старта.
         <CharacterCreation onSubmit={createPilot} />
       ) : (
-        !locked && <Paused resuming={started} onBoot={() => setBooted(true)} />
+        !locked && <Paused resuming={started} onBoot={() => setBooted(true)} onNewGame={newGame} />
       )}
       {/* Чат с живым игроком — поверх всего (консоли или разговора). Один за раз; закрыл —
           вернулся туда, откуда открыл, либо сразу поднялся ждущий входящий. */}
@@ -569,9 +598,65 @@ function MenuButton({
  */
 const LOCK_RETRY_MS = 200
 const LOCK_GIVE_UP_MS = 8000
+/** Полная длительность запуска по СТАРТУ, мс: дрожь 0.8с + улёт 0.25с (см. `title-ship-*`). */
+const TITLE_LAUNCH_MS = 1050
 
 /** Какой экран паузы раскрыт: главный, таблица клавиш или настройки. */
 type PauseScreen = 'main' | 'keys' | 'settings'
+
+/** Перезапуск CSS-анимации на том же элементе: сброс + форс reflow + назначение снова. */
+function restartAnimation(el: HTMLElement | null, animation: string): void {
+  if (!el) return
+  el.style.animation = 'none'
+  void el.offsetWidth
+  el.style.animation = animation
+}
+
+/**
+ * Логотип с живым светом. В покое раз в 5–7с (интервал случайный, чтобы не тикало метрономом)
+ * играет ОДНО из двух: иногда по буквам пробегает БЛИК (1–3 прохода), иногда буквы плавно
+ * РАЗГОРАЮТСЯ и гаснут (1 раз). По СТАРТУ (`launching`) логотип разом вспыхивает бело-раскалённым.
+ * Свечение/вспышка — filter самого раста; блик — маскированная по форме логотипа накладка.
+ */
+function TitleLogo({ launching }: { launching: boolean }) {
+  const imgRef = useRef<HTMLImageElement>(null)
+  const glintRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    // На старте управление растром отдаём классу вспышки — снимаем возможный inline-пульс.
+    if (launching) {
+      if (imgRef.current) imgRef.current.style.animation = ''
+      return
+    }
+    let id: number
+    const tick = () => {
+      if (Math.random() < 0.6) {
+        // Блик: один проход полосы по буквам.
+        restartAnimation(glintRef.current, 'logo-glint 0.7s ease-in-out')
+      } else {
+        // Свечение: разгорелись-погасли один раз.
+        restartAnimation(imgRef.current, 'logo-pulse 1s ease-in-out')
+      }
+      id = window.setTimeout(tick, 5000 + Math.random() * 2000) // 5–7с
+    }
+    id = window.setTimeout(tick, 5000 + Math.random() * 2000)
+    return () => window.clearTimeout(id)
+  }, [launching])
+
+  return (
+    <div className="pointer-events-none absolute inset-x-0 top-[6vh] mx-auto w-full max-w-[54rem] px-8">
+      <div className="relative">
+        <img
+          ref={imgRef}
+          src="/logo.png"
+          alt="STAR ELITE"
+          className={`block w-full ${launching ? 'title-logo-flash' : ''}`}
+        />
+        <div ref={glintRef} className="title-logo-glint" aria-hidden />
+      </div>
+    </div>
+  )
+}
 
 /**
  * Корабль с дюзами на титуле. Три струи — ЗА корпусом (в DOM раньше корабля → он их
@@ -583,10 +668,41 @@ type PauseScreen = 'main' | 'keys' | 'settings'
  * чтобы transform-ы не спорили: внешний div держит позицию (`-translate-y-1/2`), внутренний
  * `relative` качается своей анимацией, а струи внутри него дышат каждая своей.
  */
-function TitleShip() {
+function TitleShip({ launching }: { launching: boolean }) {
+  const ref = useRef<HTMLDivElement>(null)
+
+  // Инверсный параллакс: корабль чуть смещается ПРОТИВ курсора — до ±10 px по каждой оси,
+  // плюс небольшой skewX растра по горизонтали, будто кренится в сторону хода. Пишем прямо
+  // в style по pointermove, без ре-рендера. Отдельная обёртка под параллакс, чтобы не спорить
+  // с качкой (`title-ship-float`) и улётом на внутреннем div — трансформы вкладываются.
+  useEffect(() => {
+    const AMPLITUDE = 10 // px в каждую сторону
+    const SKEW = 4 // градусов на самом краю экрана — «небольшой» крен
+    const onMove = (e: PointerEvent) => {
+      const el = ref.current
+      if (!el) return
+      const nx = e.clientX / window.innerWidth - 0.5 // −0.5..0.5
+      const ny = e.clientY / window.innerHeight - 0.5
+      el.style.transform = `translate(${-nx * AMPLITUDE * 2}px, ${-ny * AMPLITUDE * 2}px) skewX(${-nx * SKEW * 2}deg)`
+    }
+    window.addEventListener('pointermove', onMove)
+    return () => window.removeEventListener('pointermove', onMove)
+  }, [])
+
   return (
     <div className="pointer-events-none absolute inset-x-0 top-[calc(55%+50px)] mx-auto w-full max-w-[43.2rem] -translate-y-1/2 px-8">
-      <div className="relative" style={{ animation: 'title-ship-float 7s ease-in-out infinite' }}>
+      <div ref={ref} style={{ transition: 'transform 0.25s ease-out' }}>
+        <div
+          className="relative"
+          style={{
+            // Запуск перекрывает качку двумя тактами: сперва дрожь 0.5с (нарастающий
+            // тремор), затем — с задержкой 0.5с — резкий срыв и улёт вниз с ускорением.
+            // `forwards` держит финальный кадр улёта.
+            animation: launching
+              ? 'title-ship-shake 0.8s linear, title-ship-launch 0.25s cubic-bezier(0.85, 0, 1, 1) 0.8s forwards'
+              : 'title-ship-float 7s ease-in-out infinite',
+          }}
+        >
         <img
           src="/flame_left.png"
           alt=""
@@ -608,16 +724,19 @@ function TitleShip() {
           className="absolute bottom-[80%] left-1/2 w-[9%] origin-bottom mix-blend-screen"
           style={{ animation: 'title-flame-center 0.8s ease-in-out infinite, flame-flicker 0.3s linear infinite' }}
         />
-        <img src="/ship.png" alt="" aria-hidden className="relative w-full" />
+          <img src="/ship.png" alt="" aria-hidden className="relative w-full" />
+        </div>
       </div>
     </div>
   )
 }
 
-function Paused({ resuming, onBoot }: { resuming: boolean; onBoot: () => void }) {
+function Paused({ resuming, onBoot, onNewGame }: { resuming: boolean; onBoot: () => void; onNewGame: () => void }) {
   useLang() // подписка: смена языка перерисует меню
   const session = useSession()
   const [waiting, setWaiting] = useState(false)
+  // «Новая игра» стирает прогресс — жмётся в два клика: первый взводит подтверждение.
+  const [confirmNew, setConfirmNew] = useState(false)
   const [screen, setScreen] = useState<PauseScreen>('main')
   const [keyGroup, setKeyGroup] = useState(0)
   const timer = useRef<number | null>(null)
@@ -659,12 +778,15 @@ function Paused({ resuming, onBoot }: { resuming: boolean; onBoot: () => void })
   const take = () => {
     if (waiting) return
     setWaiting(true)
+    // На ПЕРВОМ старте корабль срывается и улетает — игра начинается не раньше, чем он
+    // уйдёт, плюс секунда пустого неба. На «продолжить» (пауза) корабля нет и ждать нечего.
+    const delay = resuming ? 0 : TITLE_LAUNCH_MS + 1000
     window.setTimeout(() => {
-      // Первое нажатие строит сцену. Пока её нет, захват не даётся, и цикл
-      // повторов дожидается канваса — специально для этого он и заведён.
+      // Строит сцену. Пока её нет, захват не даётся, и цикл повторов дожидается
+      // канваса — специально для этого он и заведён.
       onBoot()
       poll(performance.now() + LOCK_GIVE_UP_MS)
-    }, 0)
+    }, delay)
   }
 
   return (
@@ -687,32 +809,56 @@ function Paused({ resuming, onBoot }: { resuming: boolean; onBoot: () => void })
           Пламя — ТРИ струи ПОД корпусом (в DOM раньше корабля → он их перекрывает): базы
           прячутся за кормой, плюмажи торчат сверху. Режим screen делает чёрный фон струи
           прозрачным и превращает её в свечение над тёмным небом. Позиции в % от корабля —
-          правь bottom/left/w, если сопла окажутся не на месте. */}
-      <TitleShip />
+          правь bottom/left/w, если сопла окажутся не на месте.
+          Корабль — только на ПЕРВОЙ заставке (не на паузе: там пустое небо). По СТАРТУ
+          (`waiting`) он срывается и улетает, а затем уходит с экраном паузы. */}
+      {!resuming && <TitleShip launching={waiting} />}
 
       {/* Логотип — СВОЙ контейнер, вне общего потока: сдвинуть его нечем, что бы
           ни выросло ниже. Растр, поэтому у него собственная ширина. Заголовок
           остаётся для тех, кто читает страницу не глазами. */}
       <h1 className="sr-only">STAR ELITE</h1>
-      <img
-        src="/logo.png"
-        alt="STAR ELITE"
-        className="absolute inset-x-0 top-[6vh] mx-auto w-full max-w-[54rem] px-8"
-      />
+      <TitleLogo launching={waiting} />
 
       {/* Главное меню — просто кнопки на фоне корабля, без плашки: обводка тут ни к чему.
           Клавиши и настройки не живут на этом экране, а всплывают поверх отдельной панелью. */}
       <div className="absolute inset-0 flex flex-col items-center justify-start pt-[calc(32vh+40px)]">
         <div className="flex flex-col items-center gap-4">
-          <MenuButton onClick={take} disabled={waiting}>
-            {waiting ? t('menu.wait') : resuming ? t('menu.resume') : t('menu.start')}
-          </MenuButton>
-          <MenuButton onClick={() => setScreen('keys')} disabled={waiting}>
-            {t('menu.keys')}
-          </MenuButton>
-          <MenuButton onClick={() => setScreen('settings')} disabled={waiting}>
-            {t('menu.settings')}
-          </MenuButton>
+          {/* На первом старте кнопка (уже «СЕКУНДУ…») плавно уезжает к середине экрана —
+              пока прочие растворяются, остаётся один центрованный индикатор загрузки. На
+              паузе не двигаем. Сдвиг = от места кнопки (≈32vh) к центру (50vh) за вычетом
+              её половины; transform не трогает вёрстку соседей. */}
+          <div
+            className="transition-transform duration-700 ease-out"
+            style={{ transform: waiting && !resuming ? 'translateY(calc(18vh - 3rem))' : 'none' }}
+          >
+            <MenuButton onClick={take} disabled={waiting}>
+              {waiting ? t('menu.wait') : resuming ? t('menu.resume') : t('menu.start')}
+            </MenuButton>
+          </div>
+          {/* Прочие кнопки РАСТВОРЯЮТСЯ только на первом СТАРТЕ (где улёт корабля): на экране
+              остаются лишь «СЕКУНДУ…» и улетающий корабль. На ПАУЗЕ (`resuming`) корабля нет и
+              «Продолжить» мгновенно — там кнопки не гасим, все нужные остаются на месте.
+              Не размонтируем, а гасим прозрачность (и снимаем клики) — уход плавный. */}
+          <div
+            className="flex flex-col items-center gap-4 transition-opacity duration-500"
+            style={{
+              opacity: waiting && !resuming ? 0 : 1,
+              pointerEvents: waiting && !resuming ? 'none' : 'auto',
+            }}
+          >
+            {/* «Новая игра» стирает прогресс, поэтому в ДВА клика: первый показывает
+                предупреждение, второй исполняет. Прочие кнопки сбрасывают подтверждение. */}
+            <MenuButton onClick={() => (confirmNew ? onNewGame() : setConfirmNew(true))}>
+              {confirmNew ? t('menu.newGameConfirm') : t('menu.newGame')}
+            </MenuButton>
+            <MenuButton onClick={() => { setConfirmNew(false); setScreen('keys') }}>
+              {t('menu.keys')}
+            </MenuButton>
+            <MenuButton onClick={() => { setConfirmNew(false); setScreen('settings') }}>
+              {t('menu.settings')}
+            </MenuButton>
+          </div>
         </div>
       </div>
 

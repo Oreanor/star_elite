@@ -1,13 +1,19 @@
 {
-  "//": "Star Elite — правила Realtime Database (присутствие). Применить: Firebase Console →",
-  "//1": "Realtime Database → вкладка Rules → вставить и Publish. Читать список онлайн может",
-  "//2": "любой вошедший; писать/стирать МОЖНО только свой узел presence/{uid} (auth.uid).",
   "rules": {
     "presence": {
       ".read": "auth != null",
       "$uid": {
         ".write": "auth != null && auth.uid === $uid",
         ".validate": "newData.hasChildren(['name', 'systemIndex'])"
+      }
+    },
+    "poses": {
+      ".read": "auth != null",
+      "$sys": {
+        "$uid": {
+          ".write": "auth != null && auth.uid === $uid",
+          ".validate": "newData.hasChildren(['x', 'y', 'z'])"
+        }
       }
     },
     "chats": {
@@ -27,6 +33,15 @@
         "$from": {
           ".write": "auth != null && ($from === auth.uid || auth.uid === $uid)",
           ".validate": "auth.uid === $uid || newData.hasChildren(['name'])"
+        }
+      }
+    },
+    "hits": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        "$hid": {
+          ".write": "auth != null && ((!data.exists() && newData.child('from').val() === auth.uid) || auth.uid === $uid)",
+          ".validate": "newData.hasChildren(['dmg', 'from']) && newData.child('dmg').isNumber() && newData.child('from').val() === auth.uid"
         }
       }
     }

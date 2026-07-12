@@ -29,7 +29,10 @@ import { boltGeometry, podGeometry } from '../geometry/props'
  * Все буферы выделяются один раз; в кадре меняются только данные и `count`.
  */
 
-const MAX_TRACERS = 64
+// Лазер теперь снаряд: каждый болт сыплет по короткому следу ЗА ШАГ, а не один луч
+// на выстрел. Живёт след доли секунды (GUNNERY.TRACER_LIFE), но болтов в бою десятки —
+// потолок выше прежнего, чтобы в свалке следы не начали пропадать. Инстансы дешёвые.
+const MAX_TRACERS = 192
 const MAX_EXPLOSIONS = 48
 const MAX_PODS = 48
 const MAX_MISSILES = 24

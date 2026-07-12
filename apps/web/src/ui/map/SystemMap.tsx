@@ -51,6 +51,8 @@ const STAR = '#ffe6a8'
 const STATION = '#ffffff'
 /** Знакомый на радаре: свой тон, чтобы не спутать с планетой и с игроком. */
 const CONTACT = '#b98bff'
+/** Живой игрок: розовый — та же семантика, что на локаторе и карте галактики. */
+const PLAYER = UI.PLAYER
 
 const colourOf = (kind: MarkerKind): string =>
   kind === 'star'
@@ -61,9 +63,11 @@ const colourOf = (kind: MarkerKind): string =>
         ? SHIP
         : kind === 'contact'
           ? CONTACT
-          : BODY
+          : kind === 'player'
+            ? PLAYER
+            : BODY
 
-type MarkerKind = BodyEntity['kind'] | 'ship' | 'contact'
+type MarkerKind = BodyEntity['kind'] | 'ship' | 'contact' | 'player'
 
 interface Marker {
   /** У корабля своего id нет: он не тело. Отрицательный — значит, не выбирается. */
@@ -115,13 +119,22 @@ function markers(world: World): Marker[] {
   // и карта показывает, где именно. Отрицательный id (−1000−id борта) держит их
   // невыбираемыми: знакомый летит, «цель навигации» на нём означала бы погоню.
   const contacts = world.ships
-    .filter((s) => s.alive && s.acquaintanceId != null)
+    // Кинематических (живых игроков) сюда не берём — они идут отдельным слоем `players`
+    // розовым, даже если ты с ними уже знаком: «живой человек здесь» важнее метки знакомства.
+    .filter((s) => s.alive && s.acquaintanceId != null && !s.kinematic)
     .map((s) => ({ id: -1000 - s.id, name: s.name, kind: 'contact' as MarkerKind, pos: s.state.pos }))
+
+  // Живые игроки в этой системе (кинематические борта). Отрицательный id (−2000−id)
+  // держит их невыбираемыми: игрок летит, «цель навигации» на нём означала бы погоню.
+  const players = world.ships
+    .filter((s) => s.alive && s.kinematic)
+    .map((s) => ({ id: -2000 - s.id, name: s.name, kind: 'player' as MarkerKind, pos: s.state.pos }))
 
   const raw = [
     ...world.bodies.map((b) => ({ id: b.id, name: b.name, kind: b.kind as MarkerKind, pos: b.pos })),
     { id: -1, name: t('map.you'), kind: 'ship' as MarkerKind, pos: player },
     ...contacts,
+    ...players,
   ].map((m) => {
     const dx = m.pos.x - origin.x
     const dz = m.pos.z - origin.z

@@ -11,6 +11,8 @@ export const RU = {
   'menu.start': 'СТАРТ',
   'menu.resume': 'В ИГРУ',
   'menu.wait': 'СЕКУНДУ…',
+  'menu.newGame': 'НОВАЯ ИГРА',
+  'menu.newGameConfirm': 'СТЕРЕТЬ ПРОГРЕСС?',
   'menu.keys': 'КЛАВИШИ',
   'menu.settings': 'НАСТРОЙКИ',
   'menu.back': 'НАЗАД',

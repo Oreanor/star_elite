@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { HUMAN_SPECIES, PLAYABLE_SPECIES, SYNTH_SPECIES } from '../../config/galaxy'
+import { FELINE_SPECIES, HUMAN_SPECIES, PLAYABLE_SPECIES, SYNTH_SPECIES } from '../../config/galaxy'
 import { applyPlayerSave, serializePlayer } from '../save'
 import { createWorld, STARTER_SYSTEM } from '.'
 import type { PilotProfile } from './persona'
@@ -22,8 +22,8 @@ const KAIRA: PilotProfile = {
 }
 
 describe('создание персонажа', () => {
-  it('ровно три вида на выбор, земляне первыми', () => {
-    expect(PLAYABLE_SPECIES).toEqual([HUMAN_SPECIES, 'Гуманоиды', SYNTH_SPECIES])
+  it('ровно четыре вида на выбор, земляне первыми', () => {
+    expect(PLAYABLE_SPECIES).toEqual([HUMAN_SPECIES, 'Гуманоиды', FELINE_SPECIES, SYNTH_SPECIES])
   })
 
   it('профиль открывает имя и ставит выбранную личность, лицо и профессию', () => {
