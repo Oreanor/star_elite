@@ -72,8 +72,11 @@ export function Dust() {
      * В покое куб не схлопывается в точку: у него есть `BOX`, размер стоячей пыли.
      * Штрих держим в трети куба — тогда за гранью всегда есть куда лететь.
      */
-    const box = Math.max(DUST.BOX, speed * DUST.BOX_SECONDS)
-    const streak = Math.min(speed * DUST.STREAK_SCALE * dt, box * DUST.STREAK_FRACTION)
+    // Миелофон: у гигантского борта камера отъезжает на ×scale, поэтому и куб пыли, и штрих
+    // растим на тот же множитель — иначе поле пыли схлопывается в точку у корабля и не видно.
+    const grow = player.state.scale
+    const box = Math.max(DUST.BOX, speed * DUST.BOX_SECONDS) * grow
+    const streak = Math.min(speed * DUST.STREAK_SCALE * dt * grow, box * DUST.STREAK_FRACTION)
 
     // Хвост строится из ВЕКТОРА скорости, поэтому делим на его длину.
     const scale = speed > 1e-3 ? streak / speed : 0

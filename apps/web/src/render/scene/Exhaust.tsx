@@ -108,8 +108,12 @@ function Flames({ cone }: { cone: Cone }) {
     const step = session.running ? dt : 0
     let count = 0
 
-    /** Общий вывод факелов: и корабль, и ракета — это позиция, поворот и сопла. */
-    const emit = (pos: Vector3, quat: Quaternion, nozzles: readonly Nozzle[], length: number) => {
+    /**
+     * Общий вывод факелов: и корабль, и ракета — это позиция, поворот и сопла.
+     * `grow` — масштаб борта (миелофон): и смещение сопел, и размер конуса растут вместе
+     * с корпусом, иначе у гигантского корабля факел остаётся точкой у центра и не виден.
+     */
+    const emit = (pos: Vector3, quat: Quaternion, nozzles: readonly Nozzle[], length: number, grow = 1) => {
       shipAxes(quat, _fwd, _right, _up)
 
       for (const nozzle of nozzles) {
@@ -118,17 +122,17 @@ function Flames({ cone }: { cone: Cone }) {
 
         _dummy.position
           .copy(pos)
-          .addScaledVector(_right, x)
-          .addScaledVector(_up, y)
+          .addScaledVector(_right, x * grow)
+          .addScaledVector(_up, y * grow)
           // Смещение в связанных осях, где +Z назад, а нос смотрит в −Z.
-          .addScaledVector(_fwd, -z)
+          .addScaledVector(_fwd, -z * grow)
 
         _dummy.quaternion.copy(quat)
         // Конус построен вдоль +Z, то есть уже назад по корпусу. Растим его длиной.
         _dummy.scale.set(
-          nozzle.radius * cone.widthScale,
-          nozzle.radius * cone.widthScale,
-          nozzle.radius * length * cone.lengthScale,
+          nozzle.radius * cone.widthScale * grow,
+          nozzle.radius * cone.widthScale * grow,
+          nozzle.radius * length * cone.lengthScale * grow,
         )
         _dummy.updateMatrix()
         mesh.setMatrixAt(count, _dummy.matrix)
@@ -151,7 +155,7 @@ function Flames({ cone }: { cone: Cone }) {
       const length =
         (EXHAUST.IDLE_LENGTH + throttle * EXHAUST.THROTTLE_LENGTH + surge * EXHAUST.SURGE_LENGTH) * flicker
 
-      emit(ship.state.pos, ship.state.quat, nozzlesFor(ship), length)
+      emit(ship.state.pos, ship.state.quat, nozzlesFor(ship), length, ship.state.scale)
     }
 
     // Корабль игрока канул в кольцо — гасим и его факел вместе с корпусом.
