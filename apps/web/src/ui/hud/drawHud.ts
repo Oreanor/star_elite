@@ -510,13 +510,13 @@ function drawTargetPortrait({ ctx, world, width, height }: HudFrame): void {
   const ship = world.ships.find((s) => s.id === world.lockedTargetId)
   if (!ship || !ship.alive || !isVisible(ship)) return
 
-  // Того же размера, что портреты у причала (96). Раньше был мельче — цель в бою
-  // читалась хуже, чем сосед в доке.
-  const size = 96 * S
+  // HUD рисуется в уменьшенном внутреннем разрешении и растягивается, поэтому размер
+  // тут «крупнее», чем то же число в DOM. 48 — компактный портрет цели над локатором.
+  const size = 48 * S
   const x = width - 12 * S - size
   // Над локатором: его верхняя кромка — height − 2·radius(36) − отступ(12).
   const radarTop = height - 72 * S - 12 * S
-  const y = radarTop - 8 * S - size - 26 * S // выше на ТРИ строки подписи (имя/род/корабль)
+  const y = radarTop - 8 * S - size - 22 * S // выше на ТРИ строки мелкой подписи (имя/род/корабль)
 
   ctx.strokeStyle = HUD_COLORS.DIM
   ctx.lineWidth = 1
@@ -533,12 +533,16 @@ function drawTargetPortrait({ ctx, world, width, height }: HudFrame): void {
   }
 
   // Под портретом — ИМЯ, РОД занятий и КОРАБЛЬ, а не одна роль «Торговец»: с кем имеешь
-  // дело, видно так же полно, как на плашке у причала.
+  // дело, видно так же полно, как на плашке у причала. Шрифт МЕЛЬЧЕ основного (три строки
+  // должны влезть под компактный портрет); после — возвращаем базовый, иначе поедет весь HUD.
   const midX = x + size / 2
   const nameY = y + size + 2 * S
+  const baseFont = ctx.font
+  ctx.font = `${Math.round(6 * S)}px "Consolas", "DejaVu Sans Mono", monospace`
   text(ctx, ship.pilotName.toUpperCase(), midX, nameY, HUD_COLORS.PRIMARY, 'center')
-  text(ctx, occupationName(ship.originKind, ship.faction).toUpperCase(), midX, nameY + 8 * S, HUD_COLORS.DIM, 'center')
-  text(ctx, chassisName(ship.loadout.chassis.name).toUpperCase(), midX, nameY + 16 * S, HUD_COLORS.DIM, 'center')
+  text(ctx, occupationName(ship.originKind, ship.faction).toUpperCase(), midX, nameY + 7 * S, HUD_COLORS.DIM, 'center')
+  text(ctx, chassisName(ship.loadout.chassis.name).toUpperCase(), midX, nameY + 14 * S, HUD_COLORS.DIM, 'center')
+  ctx.font = baseFont
 }
 
 /**
