@@ -20,6 +20,15 @@
           }
         }
       }
+    },
+    "inbox": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        "$from": {
+          ".write": "auth != null && ($from === auth.uid || auth.uid === $uid)",
+          ".validate": "auth.uid === $uid || newData.hasChildren(['name'])"
+        }
+      }
     }
   }
 }

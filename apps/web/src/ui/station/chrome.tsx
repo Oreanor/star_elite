@@ -99,6 +99,7 @@ export function PilotPortrait({
   name,
   species,
   face,
+  muted,
   size = 46,
 }: {
   ship?: ShipEntity
@@ -108,6 +109,8 @@ export function PilotPortrait({
   /** Вид и лицо напрямую (без борта) — для удалённых игроков из presence. */
   species?: string
   face?: number
+  /** «Отошёл»: гасим аватар в серый — игрока в мире сейчас нет. */
+  muted?: boolean
   size?: number
 }) {
   const label = (ship?.name ?? name ?? '?').trim()
@@ -128,6 +131,9 @@ export function PilotPortrait({
         color: DIM,
         background: 'rgba(127,214,255,0.05)',
         fontSize: size * 0.42,
+        // Отошёл — серый и приглушённый: в игре его сейчас нет.
+        filter: muted ? 'grayscale(1) brightness(0.65)' : undefined,
+        opacity: muted ? 0.6 : undefined,
       }}
       aria-hidden
     >

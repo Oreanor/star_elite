@@ -302,7 +302,7 @@ function OnlineList({
               className="flex items-center gap-3 border px-3 py-2"
               style={{ borderColor: DIM, minWidth: '15rem' }}
             >
-              <PilotPortrait species={p.species} face={p.face} size={96} />
+              <PilotPortrait species={p.species} face={p.face} muted={p.paused} size={96} />
               <div className="min-w-0 text-left">
                 <div className="truncate text-sm tracking-widest" style={{ color: ACCENT }}>
                   {p.name}
@@ -311,11 +311,13 @@ function OnlineList({
                   {professionName(p.profession).toUpperCase()}
                 </div>
                 <div className="truncate text-xs" style={{ color: DIM }}>
-                  {where}
+                  {/* Отошёл (пауза) — так и пишем: в игре его нет, локатор его не найдёт. */}
+                  {p.paused ? t('people.online.paused') : where}
                 </div>
                 <div className="mt-1 flex flex-wrap gap-2">
+                  {/* Тот же глагол, что у знакомых-ботов (СВЯЗАТЬСЯ): люди и боты равноправны. */}
                   <Button small onClick={() => onChat(p)}>
-                    {t('people.chat')}
+                    {t('people.talk')}
                   </Button>
                   {!here && (
                     <Button small onClick={() => onRoute(p.systemIndex)}>

@@ -3,9 +3,10 @@ import { Button, PilotPortrait } from '../station/chrome'
 import { UI } from '../theme'
 import { t, useLang } from '../i18n'
 import { professionName } from '../i18n/dataNames'
+import { useSession } from '../../app/GameContext'
 import { currentUserId } from '../../app/net/account'
 import { sendChat, useChat } from '../../app/net/chat'
-import type { OnlinePlayer } from '../../app/net/presence'
+import { selfPresence, type OnlinePlayer } from '../../app/net/presence'
 
 /**
  * Окно чата с живым игроком — то же, что разговор с ботом, но БЕЗ модели и БЕЗ механик:
@@ -17,6 +18,7 @@ import type { OnlinePlayer } from '../../app/net/presence'
  */
 export function PlayerChat({ player, onClose }: { player: OnlinePlayer; onClose: () => void }) {
   useLang()
+  const session = useSession()
   const me = currentUserId()
   const messages = useChat(player.uid)
   const [input, setInput] = useState('')
@@ -30,7 +32,9 @@ export function PlayerChat({ player, onClose }: { player: OnlinePlayer; onClose:
     const text = input.trim()
     if (!text) return
     setInput('')
-    void sendChat(player.uid, text)
+    // Со своей карточкой: у собеседника всплывёт окно (входящий), и он увидит, кто пишет.
+    // Пишешь из разговора — значит отошёл (paused): в карточке так и помечаем.
+    void sendChat(player.uid, text, selfPresence(session.world, true))
   }
 
   const where = player.place
@@ -95,6 +99,33 @@ export function PlayerChat({ player, onClose }: { player: OnlinePlayer; onClose:
           <button type="button" className="cursor-pointer hover:underline" onClick={onClose}>
             {t('chat.close')}
           </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/**
+ * Баннер «второй входящий»: живой игрок зовёт, пока ты занят другим разговором. Не
+ * перебивает — висит сверху, пока не положишь трубку текущего. По одному за раз, чтобы
+ * было понятно, какой разговор закрывает T.
+ */
+export function IncomingCall({ caller }: { caller: OnlinePlayer }) {
+  useLang()
+  return (
+    <div className="pointer-events-none absolute inset-x-0 top-6 flex justify-center font-mono">
+      <div
+        className="flex items-center gap-3 border px-4 py-2"
+        style={{ borderColor: UI.WARN, background: 'rgba(4,12,22,0.92)' }}
+      >
+        <PilotPortrait species={caller.species} face={caller.face} size={44} />
+        <div className="min-w-0">
+          <div className="text-xs tracking-[0.3em]" style={{ color: UI.WARN }}>
+            {t('chat.incoming')} · {caller.name.toUpperCase()}
+          </div>
+          <div className="text-[0.65rem] tracking-widest" style={{ color: UI.DIM }}>
+            {t('chat.incoming.hint')}
+          </div>
         </div>
       </div>
     </div>

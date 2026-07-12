@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react'
 import { onDisconnect, onValue, ref, remove, serverTimestamp, set } from 'firebase/database'
+import type { World } from '@elite/sim'
 import { currentUserId } from './account'
 import { rtdb } from './firebase'
+import { properName } from '../../ui/i18n/dataNames'
 
 /**
  * Присутствие: кто сейчас онлайн, в какой системе, ГДЕ в ней и пристыкован ли. Живёт в
@@ -23,6 +25,12 @@ export interface OnlinePlayer {
   systemName: string
   /** Пристыкован ли и где (имя станции). null — в полёте. */
   place: string | null
+  /**
+   * «Отошёл»: мир у него на паузе (открыл меню/разговор) — значит в игре его нет, аватар
+   * гаснет, а корабль (когда появится сетевой рендер бортов) из чужого мира исчезает.
+   * НЕ ставится при врагах рядом: иначе паузой можно было бы исчезать из боя — это чит.
+   */
+  paused: boolean
   /** Вид пилота — для того же портрета, что у ботов у причала. */
   species: string
   /** Выбранное лицо (индекс в листе портретов). */
@@ -37,6 +45,30 @@ export interface OnlinePlayer {
 
 /** То, что клиент публикует о себе. uid берётся из сессии, время ставит сервер. */
 export type PresenceUpdate = Omit<OnlinePlayer, 'uid'>
+
+/**
+ * Собрать своё присутствие из мира: имя, система, место у причала, вид/лицо/профессия
+ * (для портрета у других) и АБСОЛЮТНАЯ позиция. Один источник и для публикации метки,
+ * и для карточки в чате — чтобы собеседник видел тебя так же, как в списке В СЕТИ.
+ */
+export function selfPresence(world: World, paused: boolean): PresenceUpdate {
+  const station = world.docked ? world.bodies.find((b) => b.kind === 'station') : undefined
+  const pos = world.player.state.pos
+  const off = world.originOffset
+  return {
+    name: world.player.pilotName,
+    systemIndex: world.systemIndex,
+    systemName: properName(world.systemName),
+    place: station ? properName(station.name) : null,
+    paused,
+    species: world.player.persona.species,
+    face: world.player.persona.portrait ?? 0,
+    profession: world.player.persona.profession ?? 'traveler',
+    x: pos.x + off.x,
+    y: pos.y + off.y,
+    z: pos.z + off.z,
+  }
+}
 
 /** Транслировать своё присутствие. onDisconnect уберёт узел, когда клиент отвалится. */
 export async function publishPresence(update: PresenceUpdate): Promise<void> {
@@ -71,6 +103,7 @@ export function subscribeOnline(cb: (players: OnlinePlayer[]) => void): () => vo
         systemIndex: p.systemIndex,
         systemName: p.systemName ?? '—',
         place: p.place ?? null,
+        paused: p.paused ?? false,
         species: p.species ?? 'human',
         face: p.face ?? 0,
         profession: p.profession ?? 'traveler',

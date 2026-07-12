@@ -1,21 +1,21 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { applyPilotProfile, interlocutor, jumpBlock, pendingHail, serializePlayer, undock, type PilotProfile, type PlayerSave } from '@elite/sim'
+import { applyPilotProfile, interlocutor, jumpBlock, pendingHail, serializePlayer, undock, type PilotProfile, type PlayerSave, type World } from '@elite/sim'
 import { GameProvider, useSession } from './GameContext'
 import { jumping, startDepart } from './control/jumpFx'
 import { negotiate, negotiatorAvailable } from './control/negotiator'
 import { Game } from './Game'
 import { loadServerSave, onAuthChange } from './net/account'
 import { online } from './net/firebase'
-import { clearPresence, publishPresence } from './net/presence'
+import { clearPresence, publishPresence, selfPresence } from './net/presence'
 import { persistSave } from './save/saveStore'
 import { TitleStars } from './TitleStars'
 import { input, releaseLock, requestLock } from '../platform/input/input'
 import { AuthScreen } from '../ui/auth/AuthScreen'
-import { properName } from '../ui/i18n/dataNames'
 import { Console, type ConsoleTab } from '../ui/console/Console'
 import { CharacterCreation } from '../ui/create/CharacterCreation'
 import { Dialogue } from '../ui/dialogue/Dialogue'
-import { PlayerChat } from '../ui/chat/PlayerChat'
+import { PlayerChat, IncomingCall } from '../ui/chat/PlayerChat'
+import { subscribeInbox } from './net/chat'
 import type { OnlinePlayer } from './net/presence'
 import { setLang, t, useLang, type Key, type Lang } from '../ui/i18n'
 import { Tabs } from '../ui/station/chrome'
@@ -108,21 +108,10 @@ function PresencePublisher() {
   useEffect(() => {
     const push = () => {
       const w = session.world
-      const station = w.docked ? w.bodies.find((b) => b.kind === 'station') : undefined
-      const pos = w.player.state.pos
-      const off = w.originOffset
-      void publishPresence({
-        name: w.player.pilotName,
-        systemIndex: w.systemIndex,
-        systemName: properName(w.systemName),
-        place: station ? properName(station.name) : null,
-        species: w.player.persona.species,
-        face: w.player.persona.portrait ?? 0,
-        profession: w.player.persona.profession ?? 'traveler',
-        x: pos.x + off.x,
-        y: pos.y + off.y,
-        z: pos.z + off.z,
-      })
+      // «Отошёл» = мир не идёт (курсор отпущен: меню/разговор). Но при враге рядом — нет:
+      // паузой нельзя исчезать из боя (чит). Тогда остаёшься в игре, метка не гаснет.
+      const paused = !input.pointerLocked && !threatened(w)
+      void publishPresence(selfPresence(w, paused))
     }
     push()
     const id = window.setInterval(push, 2000)
@@ -132,6 +121,20 @@ function PresencePublisher() {
     }
   }, [session])
   return null
+}
+
+/**
+ * Есть ли рядом враг, при котором «отойти» (пауза-исчезновение) запрещено. Радиус щедрый:
+ * любой живой враждебный — или затаивший обиду — борт в этих пределах держит тебя в игре.
+ * Пока рендера чужих бортов нет, флаг лишь гасит аватар; правило заведено на будущее, чтобы
+ * поведение было верным, когда борта появятся. Тогда этой проверке место в домене.
+ */
+const AWAY_BLOCK_RANGE = 20_000 // м
+function threatened(w: World): boolean {
+  const p = w.player.state.pos
+  return w.ships.some(
+    (s) => s.alive && (s.faction === 'hostile' || (s.ai?.grievance ?? 0) > 0) && s.state.pos.distanceTo(p) < AWAY_BLOCK_RANGE,
+  )
 }
 
 function Shell({ onRestart }: { onRestart: () => void }) {
@@ -152,8 +155,20 @@ function Shell({ onRestart }: { onRestart: () => void }) {
   const [tab, setTab] = useState<ConsoleTab | null>(null)
   /** Открыт ли канал связи. Отдельный оверлей: ни вкладок, ни причала у него нет. */
   const [talking, setTalking] = useState(false)
-  /** Живой игрок, с кем открыт чат (поверх консоли, из вкладки ЛЮДИ). null — закрыт. */
+  /** Живой игрок, с кем СЕЙЧАС открыт чат. Ровно один за раз — как разговор по T. */
   const [chatWith, setChatWith] = useState<OnlinePlayer | null>(null)
+  /** Второй вызов, пришедший пока ты занят: висит баннером, пока не освободишься. */
+  const [waiting, setWaiting] = useState<OnlinePlayer | null>(null)
+  // Читаем актуальные «занят?» и «с кем чат» из стабильного колбэка инбокса без пересборки
+  // подписки: иначе onChildAdded переигрывал бы при каждом изменении состояния.
+  const busyRef = useRef(false)
+  const chatUidRef = useRef<string | null>(null)
+  const waitingRef = useRef<OnlinePlayer | null>(null)
+  useEffect(() => {
+    busyRef.current = talking || chatWith !== null
+    chatUidRef.current = chatWith?.uid ?? null
+    waitingRef.current = waiting
+  }, [talking, chatWith, waiting])
 
   /**
    * Сцена строится по нажатию СТАРТ, а не при загрузке страницы.
@@ -227,14 +242,51 @@ function Shell({ onRestart }: { onRestart: () => void }) {
   }, [])
   const closeTalk = useCallback(() => {
     setTalking(false)
-    // У причала возвращаемся в консоль (курсор уже отпущен, мир стоит); в полёте —
-    // забираем захват обратно, и мир оживает. Иначе закрытие дока «взлетело» бы.
+    // Пока говорил с ботом, позвал живой игрок — сразу поднимаем его окно (курсор так и
+    // отпущен). Иначе у причала возвращаемся в консоль, в полёте — забираем захват.
+    const next = waitingRef.current
+    if (next) {
+      setWaiting(null)
+      setChatWith(next)
+      return
+    }
     if (!session.world.docked) void requestLock()
   }, [session])
-  // Чат с живым игроком открывается поверх консоли (из вкладки ЛЮДИ) и закрывается
-  // обратно в неё — мир под ним не паузим: чужой корабль по сети всё равно не стоит.
-  const openChat = useCallback((player: OnlinePlayer) => setChatWith(player), [])
-  const closeChat = useCallback(() => setChatWith(null), [])
+  // Открыть разговор с живым игроком — ровно как с ботом по T: окно на весь экран, курсор
+  // отпущен (значит мир на паузе). Занят (говоришь с ботом или уже в чате) — новый вызов не
+  // перебивает текущий, а встаёт баннером «входящий»: закончишь один — перейдёшь к другому.
+  // Стабильна (без deps): актуальное состояние читаем через ref-ы, чтобы подписку инбокса
+  // не пересобирать. Тот же путь и для клика «СВЯЗАТЬСЯ», и для входящего пинга.
+  const hail = useCallback((player: OnlinePlayer) => {
+    if (chatUidRef.current === player.uid) return
+    if (busyRef.current) {
+      setWaiting(player)
+      return
+    }
+    setChatWith(player)
+    releaseLock()
+  }, [])
+  // Положить трубку: есть входящий — сразу поднимаем его (окно не гаснет, курсор так и
+  // отпущен); нет — закрываем и в полёте возвращаем захват, мир оживает.
+  const closeChat = useCallback(() => {
+    const next = waitingRef.current
+    if (next) {
+      setWaiting(null)
+      setChatWith(next)
+      return
+    }
+    setChatWith(null)
+    if (!session.world.docked) void requestLock()
+  }, [session])
+
+  // Входящие вызовы: живой игрок написал — окно всплывает само, как разговор по T (или
+  // встаёт баннером, если занят). `hail` стабильна и читает состояние через ref-ы, поэтому
+  // подписку не пересобираем. Офлайн — subscribeInbox сразу отдаёт пустую отписку.
+  useEffect(() => {
+    if (!online) return
+    return subscribeInbox(hail)
+  }, [hail])
+
   // Клик по пристыкованному пилоту в доке: наводимся на него и открываем канал.
   // Курсор у причала уже свободен, мир стоит — только показать окно разговора.
   const talkTo = useCallback((shipId: number) => {
@@ -301,7 +353,7 @@ function Shell({ onRestart }: { onRestart: () => void }) {
       }
 
       if (e.code === 'KeyT') {
-        if (docked || tab !== null || talking) return
+        if (docked || tab !== null || talking || chatWith) return
         // Обычно говорим с ЗАХВАЧЕННОЙ целью. Но если по связи вызывает обиженный
         // (ты его задел), T отвечает ему — наводимся на него и открываем канал, чтобы
         // разрядить претензию, пока она не перелилась во враги.
@@ -364,7 +416,7 @@ function Shell({ onRestart }: { onRestart: () => void }) {
           onTalk={talkTo}
           onLocate={locateShip}
           onRoute={routeTo}
-          onChat={openChat}
+          onChat={hail}
         />
       ) : !created ? (
         // Новичок сначала лепит пилота — экран стоит вместо титульного меню, до старта.
@@ -372,9 +424,11 @@ function Shell({ onRestart }: { onRestart: () => void }) {
       ) : (
         !locked && <Paused resuming={started} onBoot={() => setBooted(true)} />
       )}
-      {/* Чат с живым игроком — поверх консоли, из которой открыт. Не в общем `?:`, чтобы
-          лечь СВЕРХУ, а не вместо неё: закрыл чат — вернулся в тот же список ЛЮДИ. */}
+      {/* Чат с живым игроком — поверх всего (консоли или разговора). Один за раз; закрыл —
+          вернулся туда, откуда открыл, либо сразу поднялся ждущий входящий. */}
       {chatWith && <PlayerChat player={chatWith} onClose={closeChat} />}
+      {/* Второй вызов пока занят — баннер поверх текущего окна. Заверши текущий, чтобы перейти. */}
+      {waiting && <IncomingCall caller={waiting} />}
     </div>
   )
 }
