@@ -4,6 +4,7 @@ import { BufferAttribute, BufferGeometry, LineSegments, Vector3 } from 'three'
 import { makeRng } from '@elite/sim'
 import { useSession } from '../../app/GameContext'
 import { DUST } from '../config'
+import { dustExtents, wrapUnit } from './dustMath'
 import { dustMaterial } from '../materials/materials'
 
 /**
@@ -33,9 +34,6 @@ import { dustMaterial } from '../materials/materials'
 
 const _true = new Vector3()
 const _delta = new Vector3()
-
-/** В долю от −0.5 до 0.5. Обёртка модульная, а не пошаговая: скачок начала координат. */
-const wrapUnit = (u: number) => u - Math.round(u)
 
 export function Dust() {
   const session = useSession()
@@ -72,14 +70,10 @@ export function Dust() {
      * В покое куб не схлопывается в точку: у него есть `BOX`, размер стоячей пыли.
      * Штрих держим в трети куба — тогда за гранью всегда есть куда лететь.
      */
-    // Миелофон: у гигантского борта камера отъезжает на ×scale, поэтому и куб пыли, и штрих
-    // растим на тот же множитель — иначе поле пыли схлопывается в точку у корабля и не видно.
-    const grow = player.state.scale
-    const box = Math.max(DUST.BOX, speed * DUST.BOX_SECONDS) * grow
-    const streak = Math.min(speed * DUST.STREAK_SCALE * dt * grow, box * DUST.STREAK_FRACTION)
-
-    // Хвост строится из ВЕКТОРА скорости, поэтому делим на его длину.
-    const scale = speed > 1e-3 ? streak / speed : 0
+    // Размеры куба, штриха и темп проноса — чистой функцией (её же гоняет тест на
+    // предельных скоростях). `box`/`streak` растут с масштабом борта (миелофон), а `rate`
+    // (базовый куб) — нет: иначе на большом кубе иголки стоят, а не несутся.
+    const { box, tail, rate } = dustExtents(speed, dt, player.state.scale)
 
     // Сколько прошёл корабль в НАСТОЯЩИХ координатах, в долях куба.
     _true.copy(origin).add(world.originOffset)
@@ -87,7 +81,7 @@ export function Dust() {
       previous.at.copy(_true)
       previous.known = true
     }
-    _delta.copy(_true).sub(previous.at).divideScalar(box)
+    _delta.copy(_true).sub(previous.at).divideScalar(rate)
     previous.at.copy(_true)
 
     const attribute = mesh.geometry.getAttribute('position') as BufferAttribute
@@ -113,9 +107,9 @@ export function Dust() {
       array[o + 1] = y
       array[o + 2] = z
       // Хвост тянется ПРОТИВ вектора скорости — как след на длинной выдержке.
-      array[o + 3] = x - velocity.x * scale
-      array[o + 4] = y - velocity.y * scale
-      array[o + 5] = z - velocity.z * scale
+      array[o + 3] = x - velocity.x * tail
+      array[o + 4] = y - velocity.y * tail
+      array[o + 5] = z - velocity.z * tail
     }
 
     attribute.needsUpdate = true

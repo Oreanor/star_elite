@@ -734,15 +734,19 @@ function drawReadouts({ ctx, world, height }: HudFrame): void {
   }
 
   y += 3 * S
-  text(ctx, formatSpeed(player.state.vel.length()), x, y, HUD_COLORS.PRIMARY)
+  const scale = player.state.scale
+  const scaled = scale > 1.001
+  // Скорость — ОБЫЧНАЯ (реальные м/с). Если борт в масштабе (миелофон), рядом жёлтая
+  // ЗВЁЗДОЧКА: число честное, но на глаз мир проходишь в `scale` раз быстрее.
+  const speedStr = formatSpeed(player.state.vel.length())
+  text(ctx, speedStr, x, y, HUD_COLORS.PRIMARY)
+  if (scaled) text(ctx, '*', x + ctx.measureText(speedStr).width, y, HUD_COLORS.WARN)
 
   const ammo = missileAmmo(player)
   if (ammo > 0) text(ctx, t('hud.missiles', { ammo }), x + barWidth, y, HUD_COLORS.WARN)
 
-  // Миелофон: пока борт вырос, показываем множитель масштаба — иначе рост в пустом
-  // космосе не на чем увидеть. Растёт с E — значит артефакт работает.
-  const scale = player.state.scale
-  if (scale > 1.001) {
+  // Множитель масштаба: иначе рост в пустом космосе не на чем увидеть. Растёт с E.
+  if (scaled) {
     y += step
     const shown = scale < 100 ? scale.toFixed(1) : Math.round(scale).toString()
     text(ctx, `МАСШТАБ x${shown}`, x, y, HUD_COLORS.TARGET)
