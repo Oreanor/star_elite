@@ -148,41 +148,51 @@ canvas {
   0%   { transform: translateY(0) scale(1); opacity: 1; }
   100% { transform: translateY(90vh) scale(1.5); opacity: 0; }
 }
-/* Дрожь корабля, пока грузится сцена: частая и мелкая, амплитуда МОНОТОННО нарастает от нуля
-   к пику за ~4с и там держится (`forwards`) — НЕ сбрасывается (это раздражало). Горизонталь
-   0 → 2.6 px, вертикаль совсем чуть и позже. Идёт на композиторе — не мрёт под сборкой сцены. */
+/* Дрожь корабля, пока грузится сцена: ОЧЕНЬ ЧАСТАЯ (~7 Гц) и заметная СРАЗУ, а амплитуда
+   по ГОРИЗОНТАЛИ нарастает (1 → 4.2 px) плюс совсем чуть по вертикали позже. Один проход
+   (`forwards`) — БЕЗ сброса. Идёт на композиторе — не мрёт под блокирующей сборкой сцены. */
 @keyframes title-ship-tremble {
   0%   { transform: translate(0, 0); }
-  3%   { transform: translate(-0.09px, 0); }
-  7%   { transform: translate(0.17px, 0); }
-  10%  { transform: translate(-0.26px, 0); }
-  13%  { transform: translate(0.35px, 0); }
-  17%  { transform: translate(-0.43px, 0); }
-  20%  { transform: translate(0.52px, -0.05px); }
-  23%  { transform: translate(-0.61px, 0.05px); }
-  27%  { transform: translate(0.69px, -0.08px); }
-  30%  { transform: translate(-0.78px, 0.08px); }
-  33%  { transform: translate(0.87px, -0.1px); }
-  37%  { transform: translate(-0.95px, 0.1px); }
-  40%  { transform: translate(1.04px, -0.13px); }
-  43%  { transform: translate(-1.13px, 0.13px); }
-  47%  { transform: translate(1.21px, -0.16px); }
-  50%  { transform: translate(-1.3px, 0.16px); }
-  53%  { transform: translate(1.39px, -0.2px); }
-  57%  { transform: translate(-1.47px, 0.2px); }
-  60%  { transform: translate(1.56px, -0.24px); }
-  63%  { transform: translate(-1.65px, 0.24px); }
-  67%  { transform: translate(1.73px, -0.28px); }
-  70%  { transform: translate(-1.82px, 0.28px); }
-  73%  { transform: translate(1.91px, -0.32px); }
-  77%  { transform: translate(-1.99px, 0.32px); }
-  80%  { transform: translate(2.08px, -0.36px); }
-  83%  { transform: translate(-2.17px, 0.36px); }
-  87%  { transform: translate(2.25px, -0.4px); }
-  90%  { transform: translate(-2.34px, 0.4px); }
-  93%  { transform: translate(2.43px, -0.44px); }
-  97%  { transform: translate(-2.51px, 0.44px); }
-  100% { transform: translate(2.6px, -0.48px); }
+  2.5% { transform: translate(-1.08px, 0); }
+  5%   { transform: translate(1.16px, 0); }
+  7.5% { transform: translate(-1.24px, 0); }
+  10%  { transform: translate(1.32px, 0); }
+  12.5%{ transform: translate(-1.4px, 0); }
+  15%  { transform: translate(1.48px, 0); }
+  17.5%{ transform: translate(-1.56px, 0); }
+  20%  { transform: translate(1.64px, -0.15px); }
+  22.5%{ transform: translate(-1.72px, 0.16px); }
+  25%  { transform: translate(1.8px, -0.17px); }
+  27.5%{ transform: translate(-1.88px, 0.18px); }
+  30%  { transform: translate(1.96px, -0.19px); }
+  32.5%{ transform: translate(-2.04px, 0.2px); }
+  35%  { transform: translate(2.12px, -0.21px); }
+  37.5%{ transform: translate(-2.2px, 0.22px); }
+  40%  { transform: translate(2.28px, -0.23px); }
+  42.5%{ transform: translate(-2.36px, 0.24px); }
+  45%  { transform: translate(2.44px, -0.25px); }
+  47.5%{ transform: translate(-2.52px, 0.26px); }
+  50%  { transform: translate(2.6px, -0.27px); }
+  52.5%{ transform: translate(-2.68px, 0.28px); }
+  55%  { transform: translate(2.76px, -0.29px); }
+  57.5%{ transform: translate(-2.84px, 0.3px); }
+  60%  { transform: translate(2.92px, -0.31px); }
+  62.5%{ transform: translate(-3.0px, 0.32px); }
+  65%  { transform: translate(3.08px, -0.33px); }
+  67.5%{ transform: translate(-3.16px, 0.34px); }
+  70%  { transform: translate(3.24px, -0.35px); }
+  72.5%{ transform: translate(-3.32px, 0.36px); }
+  75%  { transform: translate(3.4px, -0.37px); }
+  77.5%{ transform: translate(-3.48px, 0.38px); }
+  80%  { transform: translate(3.56px, -0.39px); }
+  82.5%{ transform: translate(-3.64px, 0.4px); }
+  85%  { transform: translate(3.72px, -0.41px); }
+  87.5%{ transform: translate(-3.8px, 0.42px); }
+  90%  { transform: translate(3.88px, -0.43px); }
+  92.5%{ transform: translate(-3.96px, 0.44px); }
+  95%  { transform: translate(4.04px, -0.45px); }
+  97.5%{ transform: translate(-4.12px, 0.46px); }
+  100% { transform: translate(4.2px, -0.47px); }
 }
 /* Вспышка логотипа на старте — по OPACITY (композитор), не по filter: не застывает
    на полусвете под блокирующей сборкой. Белая накладка по форме букв гаснет в ноль. */

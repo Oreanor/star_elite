@@ -213,9 +213,10 @@ function Shell({ onRestart }: { onRestart: () => void }) {
    * этот переход — гаснет, как только показан док.
    */
   const [launching, setLaunching] = useState(false)
-  // Тот же флаг в ref — читать из колбэка стыковки (`onDockChange`), не пересобирая его.
-  const launchingRef = useRef(false)
-  useEffect(() => void (launchingRef.current = launching), [launching])
+  // Пока идёт ФЛОРИШ взлёта (титул, до «вжуха» и перехода) — стартовую стыковку из сима
+  // ИГНОРИРУЕМ, иначе станция всплыла бы панелью и накрыла улетающий корабль. Управляет
+  // флагом сам Paused: взводит на старте флориша, снимает на переходе.
+  const flourishRef = useRef(false)
 
   /**
    * Персонаж уже создан. Новичку (сейва не было) сперва показываем экран создания —
@@ -251,10 +252,9 @@ function Shell({ onRestart }: { onRestart: () => void }) {
   useEffect(() => {
     session.onOver = () => setOver(true)
     session.onDockChange = (d) => {
-      // Во время флориша взлёта новичка стартовую стыковку из сима ИГНОРИРУЕМ: док покажем
-      // сами, ПОСЛЕ «вжуха» (onDock в Paused). Иначе первый же кадр сима вырезал бы флориш —
-      // корабль дрожал, а станция всплывала мгновенно, минуя срыв.
-      if (d && launchingRef.current) return
+      // Во время флориша взлёта (новая игра И «продолжить») стыковку из сима ИГНОРИРУЕМ:
+      // док покажем сами, ПОСЛЕ «вжуха». Иначе станция накрывает панелью улетающий корабль.
+      if (d && flourishRef.current) return
       setDocked(d)
       // Пристыковались — консоль открыта на планете; отчалили — закрыта.
       setTab(d ? 'planet' : null)
@@ -501,6 +501,7 @@ function Shell({ onRestart }: { onRestart: () => void }) {
             resuming={started}
             auto={launching}
             ready={sceneReady}
+            flourishRef={flourishRef}
             onBoot={() => setBooted(true)}
             onDock={() => {
               setDocked(true)
@@ -868,10 +869,30 @@ function TitleWarp({ vanishY }: { vanishY: number }) {
 function TitleShip({ trembling, launched }: { trembling: boolean; launched: boolean }) {
   const ref = useRef<HTMLDivElement>(null)
   const shineRef = useRef<HTMLDivElement>(null)
+  const shakeRef = useRef<HTMLDivElement>(null)
 
-  // Дрожь — КЕЙФРЕЙМ (не JS): CSS-анимация transform идёт на КОМПОЗИТОРЕ и потому не замирает,
-  // пока сборка сцены блокирует главный поток. JS-петля на rAF там бы застыла (это и была
-  // причина «не дрожит»). Кейфрейм частый и мелкий, амплитуда нарастает внутри цикла.
+  // Дрожь ПРОГРАММНАЯ через Web Animations API: кадры генерим формулой (не хардкод), но
+  // `element.animate` для transform крутится на КОМПОЗИТОРЕ — не мрёт под блокирующей сборкой
+  // сцены (обычный rAF там бы застыл). Частота высокая СРАЗУ (~8 Гц), горизонтальная амплитуда
+  // НАРАСТАЕТ (1.2 → 6 px), вертикаль совсем чуть. Один проход, держит финал (`forwards`).
+  useEffect(() => {
+    const el = shakeRef.current
+    if (!trembling || launched || !el) return
+    const N = 260
+    const CYCLES = 46 // всего колебаний за проход → частота = CYCLES / duration
+    const DURATION = 5000
+    const frames: Keyframe[] = []
+    for (let i = 0; i <= N; i++) {
+      const t = i / N
+      const amp = 1.2 + t * 4.8 // горизонталь растёт
+      const ph = t * CYCLES * 2 * Math.PI
+      const x = Math.sin(ph) * amp
+      const y = Math.sin(ph * 0.8 + 1.1) * amp * 0.12
+      frames.push({ transform: `translate(${x.toFixed(2)}px, ${y.toFixed(2)}px)` })
+    }
+    const anim = el.animate(frames, { duration: DURATION, fill: 'forwards' })
+    return () => anim.cancel()
+  }, [trembling, launched])
 
   // Инверсный параллакс: корабль чуть смещается ПРОТИВ курсора — до ±20 px вбок и ±10 px
   // по вертикали (вбок вдвое, чтобы это читалось смещением, а не только креном),
@@ -929,15 +950,15 @@ function TitleShip({ trembling, launched }: { trembling: boolean; launched: bool
       )}
       <div ref={ref} style={{ transition: 'transform 0.25s ease-out' }}>
         <div
+          ref={shakeRef}
           className="relative"
           style={{
-            // Три такта. Грузимся (`trembling`) — частая мелкая ДРОЖЬ кейфреймом (композитор,
-            // не мрёт под сборкой). Готово (`launched`) — резкий СРЫВ и улёт вниз (`forwards`
-            // держит финал). Иначе — спокойная качка.
+            // Грузимся (`trembling`) — дрожь ведёт Web Animations API (выше), CSS-animation
+            // выключен. Готово (`launched`) — резкий СРЫВ и улёт вниз. Иначе — спокойная качка.
             animation: launched
               ? 'title-ship-launch 0.25s cubic-bezier(0.85, 0, 1, 1) forwards'
               : trembling
-                ? 'title-ship-tremble 4s linear forwards'
+                ? 'none'
                 : 'title-ship-float 7s ease-in-out infinite',
           }}
         >
@@ -1010,6 +1031,7 @@ function Paused({
   resuming,
   auto,
   ready,
+  flourishRef,
   onBoot,
   onDock,
   onNewGame,
@@ -1019,6 +1041,8 @@ function Paused({
   auto?: boolean
   /** Сцена ПОСТРОЕНА (первый кадр отрисован). До этого корабль лишь дрожит; по нему — «вжух». */
   ready: boolean
+  /** Флаг «идёт флориш» — Paused взводит его, чтобы Shell не дал станции накрыть корабль. */
+  flourishRef: React.MutableRefObject<boolean>
   onBoot: () => void
   /** Финал авто-старта: посадить новичка на станцию (вместо запроса захвата курсора). */
   onDock?: () => void
@@ -1118,10 +1142,9 @@ function Paused({
       }, 0)
       return
     }
-    // Титул: запускаем СБОРКУ сцены (`onBoot`), а корабль пусть дрожит, пока она идёт.
-    // «Вжух» и переход даст эффект по сигналу готовности (`ready`), не по таймеру —
-    // раньше корабль срывался мгновенно, потому что `onBoot` лишь помечает сборку, а не ждёт её.
-    // Небольшая задержка — чтобы «секундочку» и тремор успели отрисоваться до блокирующей сборки.
+    // Титул: пока строится сцена, корабль дрожит; станции не даём накрыть его панелью
+    // (flourishRef). «Вжух» и переход — по сигналу готовности (`ready`), не по таймеру.
+    flourishRef.current = true
     window.setTimeout(onBoot, TREMBLE_LEAD_MS)
   }
 
@@ -1133,7 +1156,10 @@ function Paused({
     setLaunched(true)
     // eslint-disable-next-line react-hooks/exhaustive-deps
     window.setTimeout(() => {
-      if (auto && onDock) onDock()
+      flourishRef.current = false // флориш кончился — станция снова вправе всплывать
+      // Куда переходим — по фактическому состоянию мира: пристыкован (новичок ИЛИ сейв у
+      // причала) → станция; в полёте → дожимаем захват. Так «продолжить» тоже улетает.
+      if (session.world.docked) onDock?.()
       else poll(performance.now() + LOCK_GIVE_UP_MS)
     }, LAUNCH_HOLD_MS)
     // eslint-disable-next-line react-hooks/exhaustive-deps
