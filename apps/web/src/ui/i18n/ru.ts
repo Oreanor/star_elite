@@ -273,8 +273,6 @@ export const RU = {
   // Навигация со стартового экрана станции.
   'station.nav.planet': 'ПЛАНЕТА',
   'station.nav.station': 'СТАНЦИЯ',
-  'station.docked.title': 'ПРИСТЫКОВАНЫ',
-  'station.docked.empty': 'Причал пуст — только ты.',
   'station.you': 'ТЫ',
   'station.nav.ship': 'ВЕРФЬ',
   'station.nav.cargo': 'ГРУЗ',
@@ -284,7 +282,9 @@ export const RU = {
   'station.nav.galaxy': 'КАРТА ГАЛАКТИКИ',
 
   // ─── Люди: реестр знакомых ───────────────────────────────────────────────────
-  'people.title': 'ЗНАКОМЫЕ',
+  'people.title': 'ЛЮДИ',
+  'people.docked': 'ПРИСТЫКОВАНЫ',
+  'people.acquaintances': 'ЗНАКОМЫЕ',
   'people.subtitle': 'С кем ты говорил и кто ещё жив. Их положение известно всегда.',
   'people.empty': 'Ты пока ни с кем не знаком. Заговори с кем-нибудь в космосе.',
   'people.here': 'здесь, рядом',

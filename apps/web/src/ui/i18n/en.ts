@@ -253,8 +253,6 @@ export const EN: Record<keyof typeof RU, string> = {
   'station.popUnit': '{n}M',
   'station.nav.planet': 'PLANET',
   'station.nav.station': 'STATION',
-  'station.docked.title': 'DOCKED',
-  'station.docked.empty': 'Berth is empty — just you.',
   'station.you': 'YOU',
   'station.nav.ship': 'SHIPYARD',
   'station.nav.shop': 'MARKET',
@@ -264,7 +262,9 @@ export const EN: Record<keyof typeof RU, string> = {
   'station.nav.galaxy': 'GALAXY MAP',
 
   // People: contacts registry.
-  'people.title': 'CONTACTS',
+  'people.title': 'PEOPLE',
+  'people.docked': 'DOCKED HERE',
+  'people.acquaintances': 'ACQUAINTANCES',
   'people.subtitle': "Those you've talked to and who are still alive. Their whereabouts are always known.",
   'people.empty': "You haven't met anyone yet. Hail someone out in space.",
   'people.here': 'here, nearby',

@@ -148,7 +148,7 @@ export function Console({
         <div className="mt-5 flex min-h-0 flex-1 flex-col overflow-y-auto pr-1">
           {tab === 'planet' &&
             (docked ? (
-              <StationReadout world={world} station={station} planet={planet} onTalk={onTalk} />
+              <StationReadout world={world} station={station} planet={planet} />
             ) : (
               <LocationReadout world={world} planet={planet} />
             ))}
@@ -205,36 +205,62 @@ function PeopleTab({
   onChange: () => void
 }) {
   const contacts = livingContacts(world)
+  // Кто стоит у ЭТОГО причала прямо сейчас — из манифеста мира, но без себя (первый
+  // в `dockedPilots` — игрок). Только у причала: в полёте рядом никто не пристыкован.
+  const dockedHere = docked ? dockedPilots(world).slice(1).filter((s) => s.alive) : []
 
   return (
     <div>
       <h1 className="text-2xl tracking-[0.2em]">{t('people.title')}</h1>
-      <p className="mt-1 text-xs tracking-widest" style={{ color: DIM }}>
-        {t('people.subtitle')}
-      </p>
 
-      {/* Живые игроки онлайн — отдельным блоком над знакомыми-НПС. Пусто в офлайне. */}
+      {/* ПРИСТЫКОВАНЫ — кто физически здесь, у причала: к ним можно подойти и заговорить.
+          Могут быть и вовсе незнакомцы. Себя не показываем — свою плашку видеть незачем. */}
+      {dockedHere.length > 0 && (
+        <div className="mt-6">
+          <h2 className="text-sm tracking-[0.3em]" style={{ color: ACCENT }}>
+            {t('people.docked')}
+          </h2>
+          <div className="mt-3 flex flex-wrap gap-3">
+            {dockedHere.map((p) => (
+              <DockPlaque key={p.id} ship={p} you={false} onTalk={onTalk} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Живые игроки онлайн — отдельным блоком. Пусто в офлайне. */}
       <OnlineList world={world} onRoute={onRoute} />
 
-      {contacts.length === 0 ? (
+      {/* ЗНАКОМЫЕ — с кем говорил и кто ещё жив, где бы ни были. */}
+      {contacts.length > 0 && (
+        <div className="mt-6">
+          <h2 className="text-sm tracking-[0.3em]" style={{ color: ACCENT }}>
+            {t('people.acquaintances')}
+          </h2>
+          <p className="mt-1 text-xs tracking-widest" style={{ color: DIM }}>
+            {t('people.subtitle')}
+          </p>
+          <div className="mt-3 flex flex-col gap-3">
+            {contacts.map((c) => (
+              <ContactCard
+                key={c.record.id}
+                world={world}
+                contact={c}
+                docked={docked}
+                onTalk={onTalk}
+                onLocate={onLocate}
+                onRoute={onRoute}
+                onChange={onChange}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {contacts.length === 0 && dockedHere.length === 0 && (
         <p className="mt-8 text-sm" style={{ color: DIM }}>
           {t('people.empty')}
         </p>
-      ) : (
-        <div className="mt-6 flex flex-col gap-3">
-          {contacts.map((c) => (
-            <ContactCard
-              key={c.record.id}
-              world={world}
-              contact={c}
-              docked={docked}
-              onTalk={onTalk}
-              onLocate={onLocate}
-              onRoute={onRoute}
-              onChange={onChange}
-            />
-          ))}
-        </div>
       )}
     </div>
   )
@@ -519,12 +545,10 @@ function StationReadout({
   world,
   station,
   planet,
-  onTalk,
 }: {
   world: World
   station: BodyEntity | null
   planet: BodyEntity | null
-  onTalk: (shipId: number) => void
 }) {
   const s = localSettlement(world)
   const population = Math.round(s.population * 10) / 10
@@ -540,27 +564,13 @@ function StationReadout({
     { key: 'species', label: t('station.species'), value: speciesName(s.species) },
   ]
 
-  const pilots = dockedPilots(world)
-
   return (
     <div>
       <h1 className="text-2xl tracking-[0.2em]">{properName(station ? station.name : world.systemName)}</h1>
       <div className="mt-6 max-w-md text-sm">
         <Table columns={FACT_COLUMNS} rows={rows} rowKey={(r) => r.key} />
       </div>
-
-      <h2 className="mb-3 mt-8 text-sm tracking-[0.3em]">{t('station.docked.title')}</h2>
-      {pilots.length === 0 ? (
-        <p className="text-sm" style={{ color: DIM }}>
-          {t('station.docked.empty')}
-        </p>
-      ) : (
-        <div className="flex flex-wrap gap-3">
-          {pilots.map((p, i) => (
-            <DockPlaque key={p.id} ship={p} you={i === 0} onTalk={onTalk} />
-          ))}
-        </div>
-      )}
+      {/* Кто пристыкован — теперь во вкладке ЛЮДИ (раздел ПРИСТЫКОВАНЫ), рядом со знакомыми. */}
     </div>
   )
 }
