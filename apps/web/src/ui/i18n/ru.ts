@@ -286,7 +286,6 @@ export const RU = {
   'people.docked': 'ПРИСТЫКОВАНЫ',
   'people.acquaintances': 'ЗНАКОМЫЕ',
   'people.subtitle': 'С кем ты говорил и кто ещё жив. Их положение известно всегда.',
-  'people.empty': 'Ты пока ни с кем не знаком. Заговори с кем-нибудь в космосе.',
   'people.here': 'здесь, рядом',
   'people.at.near': 'у {place}',
   'people.at.dock': 'в доке {place}',

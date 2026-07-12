@@ -257,11 +257,6 @@ function PeopleTab({
         </div>
       )}
 
-      {contacts.length === 0 && dockedHere.length === 0 && (
-        <p className="mt-8 text-sm" style={{ color: DIM }}>
-          {t('people.empty')}
-        </p>
-      )}
     </div>
   )
 }
@@ -280,31 +275,37 @@ function OnlineList({ world, onRoute }: { world: World; onRoute: (systemIndex: n
       <h2 className="text-sm tracking-[0.3em]" style={{ color: ACCENT }}>
         {t('people.online')}
       </h2>
-      <div className="mt-3 flex flex-col gap-2">
+      <div className="mt-3 flex flex-wrap gap-3">
         {players.map((p) => {
           const here = p.systemIndex === world.systemIndex
           const where = p.place
             ? t('people.online.dock', { place: p.place, sys: p.systemName })
             : t('people.online.sys', { sys: p.systemName })
+          // Та же плашка, что у пилотов у причала: портрет из вида+лица (пришли в presence),
+          // имя, род занятий; ниже — где он и, если в другой системе, курс к нему.
           return (
             <div
               key={p.uid}
-              className="flex items-center justify-between gap-3 border px-3 py-2"
-              style={{ borderColor: DIM }}
+              className="flex items-center gap-3 border px-3 py-2"
+              style={{ borderColor: DIM, minWidth: '15rem' }}
             >
-              <div className="min-w-0">
+              <PilotPortrait species={p.species} face={p.face} size={96} />
+              <div className="min-w-0 text-left">
                 <div className="truncate text-sm tracking-widest" style={{ color: ACCENT }}>
                   {p.name}
+                </div>
+                <div className="truncate text-xs tracking-widest" style={{ color: DIM }}>
+                  {professionName(p.profession).toUpperCase()}
                 </div>
                 <div className="truncate text-xs" style={{ color: DIM }}>
                   {where}
                 </div>
+                {!here && (
+                  <Button small onClick={() => onRoute(p.systemIndex)}>
+                    {t('people.route')}
+                  </Button>
+                )}
               </div>
-              {!here && (
-                <Button small onClick={() => onRoute(p.systemIndex)}>
-                  {t('people.route')}
-                </Button>
-              )}
             </div>
           )
         })}

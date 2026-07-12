@@ -97,18 +97,27 @@ export function PilotPortrait({
   world,
   emotion,
   name,
+  species,
+  face,
   size = 46,
 }: {
   ship?: ShipEntity
   world?: World
   emotion?: Emotion
   name?: string
+  /** Вид и лицо напрямую (без борта) — для удалённых игроков из presence. */
+  species?: string
+  face?: number
   size?: number
 }) {
   const label = (ship?.name ?? name ?? '?').trim()
   const initial = label.charAt(0).toUpperCase() || '?'
   const emo: Emotion | null = ship ? emotion ?? (world ? pilotEmotion(ship, world) : 'neutral') : null
-  const crop = ship && emo ? portraitStyle(ship.persona.species, portraitIndex(ship), emo) : null
+  const crop = ship && emo
+    ? portraitStyle(ship.persona.species, portraitIndex(ship), emo)
+    : species !== undefined && face !== undefined
+      ? portraitStyle(species, face, 'neutral')
+      : null
   return (
     <div
       className="relative flex shrink-0 select-none items-center justify-center border"

@@ -23,6 +23,12 @@ export interface OnlinePlayer {
   systemName: string
   /** Пристыкован ли и где (имя станции). null — в полёте. */
   place: string | null
+  /** Вид пилота — для того же портрета, что у ботов у причала. */
+  species: string
+  /** Выбранное лицо (индекс в листе портретов). */
+  face: number
+  /** Профессия — строкой рода занятий под именем. */
+  profession: string
   /** Абсолютная позиция в системе (state.pos + originOffset) — для меток внутри системы. */
   x: number
   y: number
@@ -65,6 +71,9 @@ export function subscribeOnline(cb: (players: OnlinePlayer[]) => void): () => vo
         systemIndex: p.systemIndex,
         systemName: p.systemName ?? '—',
         place: p.place ?? null,
+        species: p.species ?? 'human',
+        face: p.face ?? 0,
+        profession: p.profession ?? 'traveler',
         x: p.x ?? 0,
         y: p.y ?? 0,
         z: p.z ?? 0,

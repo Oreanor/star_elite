@@ -266,7 +266,6 @@ export const EN: Record<keyof typeof RU, string> = {
   'people.docked': 'DOCKED HERE',
   'people.acquaintances': 'ACQUAINTANCES',
   'people.subtitle': "Those you've talked to and who are still alive. Their whereabouts are always known.",
-  'people.empty': "You haven't met anyone yet. Hail someone out in space.",
   'people.here': 'here, nearby',
   'people.at.near': 'near {place}',
   'people.at.dock': 'docked at {place}',
