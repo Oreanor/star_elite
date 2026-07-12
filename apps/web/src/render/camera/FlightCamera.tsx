@@ -6,7 +6,7 @@ import { manoeuvreHoldsCamera } from '../../app/control/playerController'
 import { useSession } from '../../app/GameContext'
 import { jumpFx, jumpShake } from '../../app/control/jumpFx'
 import { bombShake } from '../bombFeel'
-import { CAMERA, RENDER } from '../config'
+import { CAMERA, GIANT_RENDER_CAP, RENDER } from '../config'
 
 /**
  * Камера преследования и вид из кабины.
@@ -203,7 +203,10 @@ export function FlightCamera() {
     }
     // Миелофон: камера отъезжает НА ТОТ ЖЕ множитель, что и размер борта. Оттого свой
     // корабль на экране всегда одного размера, а мир вокруг «уменьшается» — не «я расту».
-    _offset.multiplyScalar(state.scale)
+    // Множитель зажат потолком РЕНДЕРА (см. GIANT_RENDER_CAP): выше него километровый
+    // корпус мерцает в лог-буфере, а на экране он и так во весь кадр. Тот же зажим у меша
+    // корабля — тогда он остаётся постоянного размера, просто мир перестаёт уменьшаться.
+    _offset.multiplyScalar(Math.min(state.scale, GIANT_RENDER_CAP))
     _target.copy(state.pos).add(_offset)
 
     if (cockpit) {

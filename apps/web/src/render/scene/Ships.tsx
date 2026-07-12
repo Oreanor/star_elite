@@ -4,6 +4,7 @@ import { InstancedMesh, Mesh, Object3D } from 'three'
 import { isDroneShip, isVisible } from '@elite/sim'
 import { useSession } from '../../app/GameContext'
 import { shipHidden } from '../../app/control/jumpFx'
+import { GIANT_RENDER_CAP } from '../config'
 import { auroraGeometry, chassisGeometry, droneGeometry, freighterGeometry, sidewinderGeometry } from '../geometry/ships'
 import { cloakMaterial, hullMaterial } from '../materials/materials'
 
@@ -41,8 +42,10 @@ export function PlayerShip() {
     mesh.position.copy(player.state.pos)
     mesh.quaternion.copy(player.state.quat)
     // Миелофон: корабль в мире и правда большой (коллизии это знают). На экране он
-    // постоянен — камера отъезжает на тот же множитель (см. FlightCamera).
-    mesh.scale.setScalar(player.state.scale)
+    // постоянен — камера отъезжает на тот же множитель (см. FlightCamera). Множитель зажат
+    // потолком рендера (GIANT_RENDER_CAP), синхронно с камерой: выше него корпус мерцает
+    // в лог-буфере глубины. По игре ты растёшь дальше — просто на экране размер замирает.
+    mesh.scale.setScalar(Math.min(player.state.scale, GIANT_RENDER_CAP))
     // Из кабины камера внутри корпуса — меш только мешал бы. И корабль исчезает,
     // канув в кольцо прыжка: с этого мига его в старой системе уже нет.
     mesh.visible = player.alive && session.view === 'chase' && !shipHidden()
