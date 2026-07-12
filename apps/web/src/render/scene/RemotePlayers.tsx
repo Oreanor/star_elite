@@ -149,6 +149,8 @@ export function RemotePlayers() {
         ship.state.pos.set(_pos.x - world.originOffset.x, _pos.y - world.originOffset.y, _pos.z - world.originOffset.z)
         ship.state.quat.copy(_quat)
       }
+      // Масштаб миелофона: вырос по сети — и на чужом экране ты гигант.
+      ship.state.scale = interp.scaleOf(uid)
     }
 
     // 6) Отрисовка: один InstancedMesh на всех чужих (у всех дефолтная «Аврора»).
@@ -160,6 +162,7 @@ export function RemotePlayers() {
       if (!ship || !isVisible(ship) || count >= MAX_REMOTE) continue
       _dummy.position.copy(ship.state.pos)
       _dummy.quaternion.copy(ship.state.quat)
+      _dummy.scale.setScalar(ship.state.scale)
       _dummy.updateMatrix()
       mesh.setMatrixAt(count, _dummy.matrix)
       count++

@@ -35,6 +35,8 @@ export interface PoseSnapshot {
   vx: number
   vy: number
   vz: number
+  /** Масштаб борта (миелофон): чужой видит тебя гигантом, если ты вырос. По умолчанию 1. */
+  s: number
 }
 
 /** То, что клиент публикует о себе; uid добавляется на приёме из ключа узла. */
@@ -55,6 +57,7 @@ export function selfPose(world: World): PoseUpdate {
     vx: vel.x,
     vy: vel.y,
     vz: vel.z,
+    s: world.player.state.scale,
   }
 }
 
@@ -118,6 +121,7 @@ export function subscribePoses(systemIndex: number, cb: (snaps: PoseSnapshot[]) 
         vx: p.vx ?? 0,
         vy: p.vy ?? 0,
         vz: p.vz ?? 0,
+        s: p.s ?? 1,
       })
     }
     cb(list)

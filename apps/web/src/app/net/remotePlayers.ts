@@ -26,6 +26,8 @@ interface Sample {
   vx: number
   vy: number
   vz: number
+  /** Масштаб борта (миелофон). */
+  s: number
 }
 
 /** Насколько показываем в прошлом, мс. ~1.5 пакета при 12 Гц — почти всегда есть пара. */
@@ -52,12 +54,14 @@ export class PoseInterp {
         this.buffers.set(s.uid, buf)
       }
       // onValue повторяет неизменные узлы: дубликат не копим, только освежаем время.
+      // Масштаб в сверку ВХОДИТ: растущий на месте гигант не двигает pos/quat, и без
+      // этого его рост не долетал бы до чужого экрана (пакет отбраковывался как дубль).
       const last = buf[buf.length - 1]
-      if (last && last.x === s.x && last.y === s.y && last.z === s.z && last.qw === s.qw) {
+      if (last && last.x === s.x && last.y === s.y && last.z === s.z && last.qw === s.qw && last.s === s.s) {
         last.t = now
         continue
       }
-      buf.push({ t: now, x: s.x, y: s.y, z: s.z, qx: s.qx, qy: s.qy, qz: s.qz, qw: s.qw, vx: s.vx, vy: s.vy, vz: s.vz })
+      buf.push({ t: now, x: s.x, y: s.y, z: s.z, qx: s.qx, qy: s.qy, qz: s.qz, qw: s.qw, vx: s.vx, vy: s.vy, vz: s.vz, s: s.s })
       if (buf.length > BUFFER) buf.shift()
     }
   }
@@ -119,6 +123,16 @@ export class PoseInterp {
     outPos.set(s.x + s.vx * dt, s.y + s.vy * dt, s.z + s.vz * dt)
     outQuat.set(s.qx, s.qy, s.qz, s.qw)
     return true
+  }
+
+  /**
+   * Последний известный масштаб борта `uid` (миелофон). 1, если данных нет. Масштаб
+   * меняется плавно, поэтому берём свежайший пакет без интерполяции — задержки не видно.
+   */
+  scaleOf(uid: string): number {
+    const buf = this.buffers.get(uid)
+    const last = buf?.[buf.length - 1]
+    return last?.s ?? 1
   }
 
   /** Забыть игрока (вышел из системы/из игры). */
