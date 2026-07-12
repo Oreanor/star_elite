@@ -110,10 +110,12 @@ describe('энергетическая бомба', () => {
   /** Подорвать можно любой запас: мощность — ровно та доля, что успела набраться. */
   it('половинный заряд не убивает целого, но добивает раненого', () => {
     const tough = withCrowd()
+    const fullShield = tough.pirate.spec.hull.shield
     tough.world.player.bombCharge = 0.5
     fireBomb(tough.world, tough.world.player)
     expect(tough.pirate.alive).toBe(true)
-    expect(tough.pirate.shield).toBe(0) // щит снесён, корпус надкушен
+    // Половина полного пула — тяжёлый, но не смертельный удар: щит надкушен, целого не убить.
+    expect(tough.pirate.shield).toBeLessThan(fullShield)
 
     const wounded = withCrowd()
     wounded.pirate.shield = 0
@@ -129,6 +131,9 @@ describe('энергетическая бомба', () => {
    */
   it('доля считается от полного запаса, а не от текущего', () => {
     const { world, pirate } = withCrowd()
+    // Корпусу нужен запас БОЛЬШЕ половины полного пула, иначе удар его перекрывает
+    // и цель гибнет — измерять вычитание не на чем. Даём корпусу «щит+корпус» брони.
+    pirate.spec = { ...pirate.spec, hull: { ...pirate.spec.hull, hull: pirate.spec.hull.shield + pirate.spec.hull.hull } }
     const full = pirate.spec.hull.shield + pirate.spec.hull.hull
     pirate.shield = 0
     pirate.hull = pirate.spec.hull.hull

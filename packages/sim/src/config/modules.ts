@@ -306,7 +306,7 @@ export const SHIELD_LIGHT: ShieldModule = {
   mass: 0.6,
   cost: 0,
   salvageChance: 0.5,
-  capacity: 40,
+  capacity: 80,
   regen: 2.0,
   regenDelay: 5,
 }
@@ -319,7 +319,7 @@ export const SHIELD_STANDARD: ShieldModule = {
   mass: 1.2,
   cost: 21000,
   salvageChance: 0.3,
-  capacity: 100,
+  capacity: 120,
   regen: 4.5,
   regenDelay: 4,
 }
@@ -348,7 +348,7 @@ export const SHIELD_LIGHT_D: ShieldModule = {
   mass: 0.85,
   cost: 8000,
   salvageChance: 0.5,
-  capacity: 60,
+  capacity: 90,
   regen: 2.6,
   regenDelay: 4.8,
 }
@@ -708,8 +708,10 @@ export const PLASMA_GUN_HEAVY: LaserModule = {
  * пилонов, поэтому «выпускать по одной» получается само собой, а пустая подвеска
  * сразу видна на крыле.
  *
- * Урон 130 против 80 живучести «Сайдвиндера»: попала — значит сбила. Цена —
- * конечность боезапаса и то, что цель от неё уворачивается.
+ * Урон 60 — примерно половина живучести «Сайдвиндера» (щит 80 + корпус 40 = 120).
+ * Ракета больше не сбивает с одного попадания: она сносит половину, а добивают
+ * стволы. Так у боя есть длительность, у щита — видимая фаза, а у боезапаса из
+ * шести ракет — вес: две ракеты на цель, не одна.
  */
 export const MISSILE_PYLON: MissileModule = {
   id: 'missile_p',
@@ -721,7 +723,7 @@ export const MISSILE_PYLON: MissileModule = {
   salvageChance: 0.35,
   /** Две на пилон. У «Авроры» четыре пилона — значит восемь ракет на вылет. */
   ammo: 2,
-  damage: 130,
+  damage: 60,
   /**
    * Замер (`scratch/missiles.ts`): с пропорциональным наведением 550 м/с дают
    * 4 попадания из 4 по вертящейся цели с любой дистанции, а 420 — только 3 из 4.

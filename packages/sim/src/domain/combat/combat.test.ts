@@ -215,10 +215,13 @@ describe('ракеты на пилонах', () => {
     expect(missileAmmo(world.player)).toBe(launchers.length * (MISSILE_PYLON.ammo - 1))
   })
 
-  it('подвесная ракета сбивает «Сайдвиндера» одним попаданием', () => {
+  it('подвесная ракета сносит около половины «Сайдвиндера», но не добивает с одного', () => {
     const { enemy } = withOneEnemy()
-    // Свойство, а не число: ракета обязана пробивать щит и корпус разом.
-    expect(MISSILE_PYLON.damage).toBeGreaterThanOrEqual(enemy.hull + enemy.shield)
+    const ehp = enemy.hull + enemy.shield
+    // Свойство, а не число: ракета — тяжёлый удар (сносит заметную долю), но НЕ
+    // ваншот. У боя должна оставаться длительность, добивают стволы.
+    expect(MISSILE_PYLON.damage).toBeLessThan(ehp) // не сбивает разом
+    expect(MISSILE_PYLON.damage).toBeGreaterThan(ehp * 0.3) // но выносит существенную часть
   })
 
   /**
@@ -484,12 +487,15 @@ describe('наведение ракеты', () => {
     world.player.state.quat.copy(new Quaternion())
     enemy.state.pos.set(0, 0, -1200)
     enemy.state.vel.set(180, 0, 0) // строго поперёк: худший случай для погони
+    const ehpBefore = enemy.hull + enemy.shield
 
     expect(fireMissile(world, world.player, enemy.id)).toBe(true)
     chase(world, enemy, 180)
 
-    // Свойство, а не число: ракета обязана ДОЙТИ до цели, а не пройти рядом.
-    expect(enemy.alive).toBe(false)
+    // Свойство, а не число: ракета обязана ДОЙТИ до цели, а не пройти рядом. Одна
+    // ракета уже не убивает (сносит половину), поэтому проверяем факт попадания —
+    // цель получила урон, — а не смерть.
+    expect(enemy.hull + enemy.shield).toBeLessThan(ehpBefore)
     expect(world.missiles).toHaveLength(0)
   })
 
