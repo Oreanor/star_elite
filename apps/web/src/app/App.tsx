@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { applyPilotProfile, interlocutor, jumpBlock, pendingHail, serializePlayer, stationInterlocutor, undock, type PilotProfile, type PlayerSave, type World } from '@elite/sim'
 import { GameProvider, useSession } from './GameContext'
 import { jumping, startDepart } from './control/jumpFx'
@@ -668,22 +668,82 @@ function TitleLogo({ launching }: { launching: boolean }) {
  * чтобы transform-ы не спорили: внешний div держит позицию (`-translate-y-1/2`), внутренний
  * `relative` качается своей анимацией, а струи внутри него дышат каждая своей.
  */
+/**
+ * Звёздная пыль титула: редкие крупинки летят снизу вверх к точке схода ЗА и НАД кораблём,
+ * ужимаясь и гаснут — иллюзия, что корабль несётся вперёд. Точка схода ≈ (50vw, 24vh), выше
+ * корабля (тот на ~55%). Стартовые точки и тайминги фиксируем на монтировании (`useMemo`),
+ * дальше всё крутит CSS-анимация — ноль ре-рендеров и ноль работы в кадре.
+ */
+function TitleDust() {
+  const bits = useMemo(() => {
+    const VANISH_X = 50 // vw
+    const VANISH_Y = 24 // vh — за и над кораблём
+    return Array.from({ length: 16 }, () => {
+      const startX = 6 + Math.random() * 88 // vw, вдоль низа
+      const startY = 92 + Math.random() * 12 // vh, у нижнего края и ниже
+      const dur = 5 + Math.random() * 5 // с
+      return {
+        startX,
+        startY,
+        dx: VANISH_X - startX + (Math.random() * 8 - 4), // немного разброса у точки схода
+        dy: VANISH_Y - startY,
+        dur,
+        delay: -Math.random() * dur, // отрицательная задержка — часть уже в полёте с первого кадра
+        size: 1.3 + Math.random() * 2.4, // px
+        peak: 0.35 + Math.random() * 0.5,
+      }
+    })
+  }, [])
+  return (
+    <div className="pointer-events-none absolute inset-0 overflow-hidden">
+      {bits.map((b, i) => (
+        <span
+          key={i}
+          className="absolute rounded-full bg-white"
+          style={
+            {
+              left: `${b.startX}vw`,
+              top: `${b.startY}vh`,
+              width: b.size,
+              height: b.size,
+              '--dx': `${b.dx}vw`,
+              '--dy': `${b.dy}vh`,
+              '--peak': b.peak,
+              animation: `title-dust ${b.dur}s linear ${b.delay}s infinite`,
+            } as React.CSSProperties
+          }
+        />
+      ))}
+    </div>
+  )
+}
+
 function TitleShip({ launching }: { launching: boolean }) {
   const ref = useRef<HTMLDivElement>(null)
+  const shineRef = useRef<HTMLDivElement>(null)
 
   // Инверсный параллакс: корабль чуть смещается ПРОТИВ курсора — до ±10 px по каждой оси,
   // плюс небольшой skewX растра по горизонтали, будто кренится в сторону хода. Пишем прямо
   // в style по pointermove, без ре-рендера. Отдельная обёртка под параллакс, чтобы не спорить
   // с качкой (`title-ship-float`) и улётом на внутреннем div — трансформы вкладываются.
+  //
+  // Заодно возим блики по корпусу: их центры — CSS-переменные, сдвигаемые тем же курсором.
+  // Разные слои едут с РАЗНОЙ силой (глубина), оттого при сползании корабля свет «перетекает»
+  // по нему — иллюзия наклона и смены освещения. Блики замаскированы силуэтом (см. разметку).
   useEffect(() => {
     const AMPLITUDE = 10 // px в каждую сторону
     const SKEW = 4 // градусов на самом краю экрана — «небольшой» крен
     const onMove = (e: PointerEvent) => {
-      const el = ref.current
-      if (!el) return
       const nx = e.clientX / window.innerWidth - 0.5 // −0.5..0.5
       const ny = e.clientY / window.innerHeight - 0.5
-      el.style.transform = `translate(${-nx * AMPLITUDE * 2}px, ${-ny * AMPLITUDE * 2}px) skewX(${-nx * SKEW * 2}deg)`
+      const el = ref.current
+      if (el) el.style.transform = `translate(${-nx * AMPLITUDE * 2}px, ${-ny * AMPLITUDE * 2}px) skewX(${-nx * SKEW * 2}deg)`
+      const sh = shineRef.current
+      if (sh) {
+        // Центр большого блика ходит по корпусу против курсора — свет «перетекает» при сдвиге.
+        sh.style.setProperty('--sx', `${nx * 30}%`)
+        sh.style.setProperty('--sy', `${ny * 18}%`)
+      }
     }
     window.addEventListener('pointermove', onMove)
     return () => window.removeEventListener('pointermove', onMove)
@@ -724,7 +784,27 @@ function TitleShip({ launching }: { launching: boolean }) {
           className="absolute bottom-[80%] left-1/2 w-[9%] origin-bottom mix-blend-screen"
           style={{ animation: 'title-flame-center 0.8s ease-in-out infinite, flame-flicker 0.3s linear infinite' }}
         />
-          <img src="/ship.png" alt="" aria-hidden className="relative w-full" />
+          <div className="relative w-full">
+            <img src="/ship.png" alt="" aria-hidden className="block w-full" />
+            {/* Блик на корпусе: ОДИН большой глобальный, крупнее корабля, замаскирован его
+                силуэтом (mask по той же png) и светит через screen — читается как освещение,
+                а не пятно. Центр — CSS-переменные, которые двигает параллакс (см. onMove),
+                оттого при сдвиге свет «перетекает» по корпусу: иллюзия наклона и смены света. */}
+            <div
+              ref={shineRef}
+              className="pointer-events-none absolute inset-0 mix-blend-screen"
+              style={{
+                WebkitMaskImage: 'url(/ship.png)',
+                maskImage: 'url(/ship.png)',
+                WebkitMaskSize: '100% 100%',
+                maskSize: '100% 100%',
+                WebkitMaskRepeat: 'no-repeat',
+                maskRepeat: 'no-repeat',
+                background:
+                  'radial-gradient(180% 130% at calc(50% + var(--sx, 0%)) calc(38% + var(--sy, 0%)), rgba(200,230,255,0.40), rgba(200,230,255,0.10) 45%, rgba(190,224,255,0) 75%)',
+              }}
+            />
+          </div>
         </div>
       </div>
     </div>
@@ -812,6 +892,7 @@ function Paused({ resuming, onBoot, onNewGame }: { resuming: boolean; onBoot: ()
           правь bottom/left/w, если сопла окажутся не на месте.
           Корабль — только на ПЕРВОЙ заставке (не на паузе: там пустое небо). По СТАРТУ
           (`waiting`) он срывается и улетает, а затем уходит с экраном паузы. */}
+      {!resuming && <TitleDust />}
       {!resuming && <TitleShip launching={waiting} />}
 
       {/* Логотип — СВОЙ контейнер, вне общего потока: сдвинуть его нечем, что бы
