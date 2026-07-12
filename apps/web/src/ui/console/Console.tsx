@@ -24,6 +24,7 @@ import { Market } from '../station/Market'
 import { HullShop, ShipScreen } from '../ship/ShipScreen'
 import { SystemMap } from '../map/SystemMap'
 import { GalaxyMap } from '../map/GalaxyMap'
+import { Locator } from '../map/Locator'
 
 /**
  * Консоль — ОДНА стеклянная панель с вкладками, общая для причала и полёта.
@@ -39,7 +40,16 @@ import { GalaxyMap } from '../map/GalaxyMap'
  * Здесь только композиция. Правила панели не знают друг о друге; мир мутируют лишь
  * через домен, а `bump` перерисовывает то, что от мира зависит (кредиты после сделки).
  */
-export type ConsoleTab = 'planet' | 'ship' | 'shipyard' | 'shop' | 'cargo' | 'people' | 'system' | 'galaxy'
+export type ConsoleTab = 'planet' | 'ship' | 'shipyard' | 'shop' | 'cargo' | 'people' | 'locator' | 'system' | 'galaxy'
+
+/**
+ * Вкладка КАРТА — одна кнопка в шапке, а внутри три вида: локатор, система, галактика.
+ * Внешние адресаты (клавиши M/G, «проложить курс») по-прежнему метят конкретный вид
+ * из этого набора — он и открывается активным. Первый — вид по умолчанию для кнопки.
+ */
+const MAP_VIEWS = ['locator', 'system', 'galaxy'] as const
+type MapView = (typeof MAP_VIEWS)[number]
+const isMapView = (tab: ConsoleTab): tab is MapView => (MAP_VIEWS as readonly string[]).includes(tab)
 
 export function Console({
   world,
@@ -87,7 +97,7 @@ export function Console({
   // Верфь и магазин — только у причала: в полёте оснастку не сменить и не поторговать.
   // Вкладка корабля зовётся «КОРАБЛЬ» и там, и там — это один и тот же экран; у причала
   // он лишь обрастает действиями (починить, купить, улучшить), а имя ему незачем менять.
-  const tabs: { id: ConsoleTab; label: string }[] = [
+  const tabs: { id: ConsoleTab; label: string; active?: boolean }[] = [
     // У причала первая вкладка — СТАНЦИЯ (шапка места + кто пристыкован); в полёте
     // станции под тобой нет, и та же вкладка показывает паспорт мира — ПЛАНЕТА.
     { id: 'planet', label: docked ? t('station.nav.station') : t('station.nav.planet') },
@@ -99,8 +109,9 @@ export function Console({
     { id: 'cargo', label: t('station.nav.cargo') },
     // ЛЮДИ — знакомые пилоты: где они и как с ними связаться. Есть и у причала, и в полёте.
     { id: 'people', label: t('station.nav.people') },
-    { id: 'system', label: t('station.nav.system') },
-    { id: 'galaxy', label: t('station.nav.galaxy') },
+    // КАРТА — одна кнопка на три вида (локатор/система/галактика). Подсвечена, пока
+    // открыт любой из них; клик ведёт на локатор, если сейчас не в карте.
+    { id: 'locator', label: t('station.nav.map'), active: isMapView(tab) },
   ]
 
   return (
@@ -146,12 +157,13 @@ export function Console({
 
         <nav className="mt-4 flex flex-wrap gap-2">
           {tabs.map((item) => {
-            const on = item.id === tab
+            const on = item.active ?? item.id === tab
             return (
               <button
                 key={item.id}
                 type="button"
-                onClick={() => onTab(item.id)}
+                // КАРТА, уже открытая, не сбрасывает выбранный вид: клик по ней остаётся на нём.
+                onClick={() => onTab(item.active ? tab : item.id)}
                 aria-current={on ? 'page' : undefined}
                 className="cursor-pointer border px-5 py-2 text-xs tracking-[0.25em] transition-colors hover:bg-[#7fd6ff] hover:text-black"
                 style={{
@@ -181,10 +193,37 @@ export function Console({
           {tab === 'people' && (
             <PeopleTab world={world} docked={docked} onTalk={onTalk} onLocate={onLocate} onRoute={onRoute} onChat={onChat} onChange={bump} />
           )}
-          {tab === 'system' && <SystemMap world={world} embedded onClose={() => onTab('planet')} />}
-          {/* onClose у карты галактики срабатывает только при старте прыжка — тогда
-              консоль закрывается целиком и мир оживает под кино, а не переходит на вкладку. */}
-          {tab === 'galaxy' && <GalaxyMap embedded onClose={onClose} />}
+          {/* КАРТА — три вида под одной вкладкой: ряд переключателей и выбранный вид. */}
+          {isMapView(tab) && (
+            <div className="flex min-h-0 flex-1 flex-col">
+              <div className="mb-4 flex gap-2">
+                {MAP_VIEWS.map((view) => {
+                  const on = view === tab
+                  return (
+                    <button
+                      key={view}
+                      type="button"
+                      onClick={() => onTab(view)}
+                      aria-current={on ? 'page' : undefined}
+                      className="cursor-pointer border px-4 py-1.5 text-xs tracking-[0.25em] transition-colors hover:bg-[#7fd6ff] hover:text-black"
+                      style={{
+                        borderColor: on ? ACCENT : DIM,
+                        backgroundColor: on ? ACCENT : 'transparent',
+                        color: on ? '#000' : DIM,
+                      }}
+                    >
+                      {t(`map.view.${view}` as 'map.view.locator')}
+                    </button>
+                  )
+                })}
+              </div>
+              {tab === 'locator' && <Locator world={world} />}
+              {tab === 'system' && <SystemMap world={world} embedded onClose={() => onTab('planet')} />}
+              {/* onClose у карты галактики срабатывает только при старте прыжка — тогда
+                  консоль закрывается целиком и мир оживает под кино, а не переходит на вкладку. */}
+              {tab === 'galaxy' && <GalaxyMap embedded onClose={onClose} />}
+            </div>
+          )}
         </div>
       </div>
     </div>

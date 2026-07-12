@@ -112,7 +112,6 @@ function BuyModal({
   const [qty, setQty] = useState(1)
   // Границы могли сузиться после покупки — держим ползунок в них, не заводя вторую истину.
   const value = Math.min(Math.max(1, qty), Math.max(1, max))
-  const usedAfter = Math.round(cargoMass(hold) + value * commodity.unitMass)
   const disabled = max < 1
 
   return (
@@ -139,7 +138,11 @@ function BuyModal({
           </span>
         </div>
 
-        <div className="flex items-center gap-3 text-sm">
+        {/* Мин и макс — прямо по краям ползунка: слева минимум (1), справа сколько влезет. */}
+        <div className="flex items-center gap-3 text-sm tabular-nums">
+          <span className="w-10 text-right" style={{ color: DIM }}>
+            1
+          </span>
           <input
             type="range"
             min={1}
@@ -149,22 +152,20 @@ function BuyModal({
             onChange={(e) => setQty(Number(e.target.value))}
             className="h-1 flex-1 cursor-pointer accent-[#7fd6ff]"
           />
-          <span className="w-12 text-right tabular-nums">{value}</span>
-          <button
-            type="button"
-            disabled={disabled}
-            onClick={() => setQty(max)}
-            className="cursor-pointer text-xs tracking-widest hover:underline disabled:opacity-40"
-            style={{ color: DIM }}
-          >
-            {t('station.max')} {max}
-          </button>
+          <span className="w-10" style={{ color: DIM }}>
+            {max}
+          </span>
         </div>
 
-        <p className="mt-3 text-xs" style={{ color: DIM }}>
-          {t('station.total')} <span style={{ color: ACCENT }}>{credits(value * price)}</span> ·{' '}
-          {t('ship.cargo.used', { used: usedAfter, cap: hold.capacity })}
-        </p>
+        {/* Общая цена — крупно и по центру: главное число сделки. Под ней мелко «сколько × почём». */}
+        <div className="mt-4 text-center">
+          <div className="text-2xl tabular-nums" style={{ color: ACCENT }}>
+            {credits(value * price)}
+          </div>
+          <div className="mt-1 text-xs tabular-nums" style={{ color: DIM }}>
+            {value} × {credits(price)}
+          </div>
+        </div>
 
         <div className="mt-5 flex justify-end gap-2">
           <Button

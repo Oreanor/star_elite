@@ -268,8 +268,23 @@ export const EN: Record<keyof typeof RU, string> = {
   'station.nav.shop': 'MARKET',
   'station.nav.cargo': 'CARGO',
   'station.nav.people': 'PEOPLE',
+  'station.nav.map': 'MAP',
   'station.nav.system': 'SYSTEM MAP',
   'station.nav.galaxy': 'GALAXY MAP',
+  // Three buttons inside the MAP tab.
+  'map.view.locator': 'LOCATOR',
+  'map.view.system': 'SYSTEM',
+  'map.view.galaxy': 'GALAXY',
+
+  // ─── Locator: big round console radar ────────────────────────────────────────
+  'locator.title': 'LOCATOR',
+  'locator.nose': 'NOSE',
+  'locator.hint': 'Hover a blip to see who it is.',
+  'locator.count': 'on locator: {n}',
+  'locator.kind.star': 'star',
+  'locator.kind.planet': 'planet',
+  'locator.kind.moon': 'moon',
+  'locator.kind.station': 'station',
 
   // People: contacts registry.
   'people.title': 'PEOPLE',

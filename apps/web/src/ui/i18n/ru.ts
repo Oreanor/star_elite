@@ -288,8 +288,23 @@ export const RU = {
   'station.nav.cargo': 'ГРУЗ',
   'station.nav.shop': 'МАГАЗИН',
   'station.nav.people': 'ЛЮДИ',
+  'station.nav.map': 'КАРТА',
   'station.nav.system': 'КАРТА СИСТЕМЫ',
   'station.nav.galaxy': 'КАРТА ГАЛАКТИКИ',
+  // Три кнопки внутри вкладки КАРТА.
+  'map.view.locator': 'ЛОКАТОР',
+  'map.view.system': 'СИСТЕМА',
+  'map.view.galaxy': 'ГАЛАКТИКА',
+
+  // ─── Локатор: большой круглый радар консоли ──────────────────────────────────
+  'locator.title': 'ЛОКАТОР',
+  'locator.nose': 'НОС',
+  'locator.hint': 'Наведи на отметку — увидишь, кто это.',
+  'locator.count': 'на локаторе: {n}',
+  'locator.kind.star': 'звезда',
+  'locator.kind.planet': 'планета',
+  'locator.kind.moon': 'луна',
+  'locator.kind.station': 'станция',
 
   // ─── Люди: реестр знакомых ───────────────────────────────────────────────────
   'people.title': 'ЛЮДИ',
