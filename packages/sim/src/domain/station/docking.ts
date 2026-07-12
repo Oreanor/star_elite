@@ -1,6 +1,7 @@
 import { Vector3 } from 'three'
 import { DOCKING } from '../../config/station'
 import type { BodyEntity, ShipEntity, World } from '../world/entities'
+import { startAtStation } from '../world/factory'
 
 /**
  * Стыковка. Домен знает только состояние «пристыкован» и условия входа-выхода;
@@ -44,6 +45,16 @@ export function dock(world: World): boolean {
   // берёт за это деньгами (когда появится счёт). Второй путь к тому же полному баку.
   world.player.jumpCharge = world.player.spec.jumpRange
   return true
+}
+
+/**
+ * Начать ПРИСТЫКОВАННЫМ. Ставим вплотную к причалу (RELEASE_GAP < RANGE, скорость ноль)
+ * и стыкуем общим путём `dock()` — игрок открывает глаза уже в доке станции, а не в
+ * километре в открытом космосе. Для старта новой сессии: и точка возврата, и безопасно.
+ */
+export function startDocked(world: World): void {
+  startAtStation(world, DOCKING.RELEASE_GAP)
+  dock(world)
 }
 
 /**

@@ -5,7 +5,7 @@ import {
   applyPlayerSave,
   createWorld,
   enterSystem,
-  startAtStation,
+  startDocked,
   jump,
   systemDefFor,
   CORE_INDEX,
@@ -17,6 +17,7 @@ import {
   type World,
 } from '@elite/sim'
 import { createIntent, createPlayerController, type PlayerIntent } from './control/playerController'
+import { online } from './net/firebase'
 import { loadSave } from './save/saveStore'
 
 export type PilotMode = 'manual' | 'autodock'
@@ -90,22 +91,36 @@ function randomStartIndex(): number {
   return fallback === CORE_INDEX ? WORLD.HOME_INDEX : fallback
 }
 
+/**
+ * ОБЩАЯ стартовая система для новичков в СЕТИ: все начинают у одной станции, чтобы
+ * встречаться, а не искать друг друга по всей галактике. Детерминированно (без
+ * Math.random): первая от начала обитаемая система со станцией, кроме ядра и дома.
+ * Один сид — одна точка сбора для всех.
+ */
+function sharedStartIndex(): number {
+  for (let index = 0; index < GALAXY.COUNT; index++) {
+    if (index === CORE_INDEX || index === WORLD.HOME_INDEX) continue
+    if (systemDefFor(index, GALAXY.SEED).station) return index
+  }
+  return WORLD.HOME_INDEX
+}
+
 function createSession(initialSave?: PlayerSave | null): Session {
   // `undefined` — офлайн-путь: сейв берём из localStorage. Иначе (в т.ч. `null`) — тот,
   // что дали снаружи: онлайн уже загрузил серверный сейв (null = новичок без прогресса).
   const save = initialSave !== undefined ? initialSave : loadSave()
   const world = createWorld()
-  // Повторный вход — в СВОЮ сохранённую систему своим сидом; новичок — случайная
-  // стартовая. Систему строим по (сид, индекс) из сейва, чтобы попасть в тот же мир.
-  const index = save ? save.systemIndex : randomStartIndex()
+  // Повторный вход — в СВОЮ сохранённую систему своим сидом. Новичок: в сети — ОБЩАЯ
+  // точка сбора (чтоб встречаться), офлайн — случайная. Систему строим по (сид, индекс).
+  const index = save ? save.systemIndex : online ? sharedStartIndex() : randomStartIndex()
   const seed = save ? save.galaxySeed : world.galaxySeed
   enterSystem(world, systemDefFor(index, seed), index)
   // Пилота накладываем ПОСЛЕ enterSystem: тот пересобирает окружение, но борт игрока
   // не трогает — значит восстановленные корабль/кошелёк/личность не затрутся.
   if (save) applyPlayerSave(world, save)
-  // И новичок, и вернувшийся начинают ВПЛОТНУЮ к причалу (точка возврата — станция),
-  // а не за тысячу километров, как выход из гиперпрыжка.
-  startAtStation(world)
+  // Начинаем ПРИСТЫКОВАННЫМИ у причала — и новичок, и вернувшийся: станция и точка
+  // возврата, и безопасный старт. Не в открытом космосе за тысячу километров.
+  startDocked(world)
 
   const intent = createIntent()
   const pilot = createPlayerController(intent)
