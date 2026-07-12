@@ -178,6 +178,7 @@ export const EN: Record<keyof typeof RU, string> = {
   'kind.hyperdrive': 'hyperdrive',
   'kind.cloak': 'cloak',
   'kind.drone': 'drone',
+  'kind.mielophone': 'mielophone',
 
   'station.tab.service': 'REPAIR',
   'station.tab.upgrade': 'OUTFIT',

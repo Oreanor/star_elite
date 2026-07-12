@@ -25,6 +25,12 @@ export type Task =
   | { kind: 'goto'; point: Vector3; arriveRadius: number }
   /** Вернуться к нанимателю (кого сопровождает) и встать рядом. */
   | { kind: 'return-to-escort'; arriveRadius: number }
+  /**
+   * Держать позицию у `anchor` (в радиусе `radius`) и ЖДАТЬ. Задача НЕ завершается сама —
+   * бот висит, пока её не снимут (`clearTasks`) или не сменят приказ. Это примитив «подожди
+   * там»: конечный член цепочки вроде «лети → купи → жди». Держим через тот же полёт-с-тормозом.
+   */
+  | { kind: 'hold'; anchor: Vector3; radius: number }
 
 export type TaskKind = Task['kind']
 
@@ -94,6 +100,11 @@ function runTask(e: ShipEntity, world: World, task: Task): TaskStep {
       const arrived = e.state.pos.distanceTo(patron.state.pos) <= task.arriveRadius
       if (arrived) return { done: true, intent: null }
       return { done: false, intent: { target: patron.state.pos, scoop: false, arriveRadius: task.arriveRadius } }
+    }
+    case 'hold': {
+      // Никогда не done: держит позицию, пока задачу не снимут. Полёт-с-тормозом сам гасит
+      // ход у точки, и бот висит в радиусе, а не нарезает круги.
+      return { done: false, intent: { target: task.anchor, scoop: false, arriveRadius: task.radius } }
     }
   }
 }

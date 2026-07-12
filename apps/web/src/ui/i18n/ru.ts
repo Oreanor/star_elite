@@ -188,6 +188,7 @@ export const RU = {
   'kind.hyperdrive': 'гиперпривод',
   'kind.cloak': 'маскировка',
   'kind.drone': 'БПЛА',
+  'kind.mielophone': 'миелофон',
 
   // ─── Станция: общее ─────────────────────────────────────────────────────────
   'station.tab.service': 'РЕМОНТ',

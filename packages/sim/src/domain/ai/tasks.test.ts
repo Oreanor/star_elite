@@ -95,6 +95,23 @@ describe('очередь задач компаньона', () => {
     expect(bot.ai!.tasks.length).toBe(1) // сбор снят, остался возврат
   })
 
+  it('hold ведёт к точке и НЕ завершается сам (это «жди», а не «долети»)', () => {
+    const { world, bot } = withCompanion()
+    bot.state.pos.set(0, 0, 0)
+    const anchor = new Vector3(0, 0, -300)
+    enqueueTask(bot, { kind: 'hold', anchor, radius: 150 })
+
+    const intent = stepTasks(bot, world)
+    expect(intent).not.toBeNull()
+    expect(intent!.scoop).toBe(false)
+    expect(intent!.target.distanceTo(anchor)).toBeLessThan(1e-6)
+
+    // Даже стоя ВПЛОТНУЮ у точки — задача остаётся: бот ждёт, пока её не снимут.
+    bot.state.pos.copy(anchor)
+    expect(stepTasks(bot, world)).not.toBeNull()
+    expect(hasTask(bot)).toBe(true)
+  })
+
   /**
    * Интеграция: компаньон честно набивает трюм по поручению — тем же правилом подбора,
    * что игрок (`stepScooping`). Не «числа сходятся», а само поведение: дали задачу — трюм

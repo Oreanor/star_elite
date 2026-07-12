@@ -57,7 +57,10 @@ export function subscribeLang(listen: () => void): () => void {
  * THE CORE» уже нет. Склеивать перевод из кусков — значит переводить грамматику.
  */
 export function t(key: Key, params?: Record<string, string | number>): string {
-  const line = DICTS[lang][key]
+  // Устойчивость к рантайм-ключам (`('kind.'+x) as Key` обходит проверку типов): пропущенный
+  // в текущем языке ключ НЕ должен ронять UI (`undefined.toUpperCase()`). Падаем на русский
+  // (базовый словарь), затем на сам ключ — видно, что перевода нет, но кадр цел.
+  const line = DICTS[lang][key] ?? DICTS.ru[key] ?? String(key)
   if (!params) return line
   return line.replace(/\{(\w+)\}/g, (whole, name: string) => {
     const value = params[name]
