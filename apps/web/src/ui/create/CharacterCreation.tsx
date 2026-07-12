@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   DEFAULT_PERSONA,
   PLAYABLE_SPECIES,
@@ -7,7 +7,7 @@ import {
   type PilotProfile,
   type Profession,
 } from '@elite/sim'
-import { PORTRAIT_GRID, portraitStyle } from '../portrait'
+import { PORTRAIT_GRID, portraitStyle, type Emotion } from '../portrait'
 import { professionName, speciesName } from '../i18n/dataNames'
 import { t, useLang } from '../i18n'
 
@@ -35,6 +35,15 @@ export function CharacterCreation({ onSubmit }: { onSubmit: (profile: PilotProfi
   // Профессия — как ты представляешься миру. Путешественник по умолчанию: самый мирный,
   // «просто странствую». Пока это лейбл: задаёт род занятий и тон, что видят собеседники.
   const [profession, setProfession] = useState<Profession>('traveler')
+
+  // Живой штрих: новое лицо на полсекунды радуется или грустит (рандом), потом в нейтраль.
+  // Реагирует и на смену вида, и на перебор лица — как будто знакомишься с новым человеком.
+  const [reaction, setReaction] = useState<Emotion>('neutral')
+  useEffect(() => {
+    setReaction(Math.random() < 0.5 ? 'joy' : 'sadness')
+    const timer = setTimeout(() => setReaction('neutral'), 500)
+    return () => clearTimeout(timer)
+  }, [species, face])
 
   // Остальная персона — нейтральный дефолт: игрок её не крутит (нечему проявиться),
   // но у борта она должна быть законной. Переопределяем вид, лицо и профессию.
@@ -64,7 +73,7 @@ export function CharacterCreation({ onSubmit }: { onSubmit: (profile: PilotProfi
           <div className="flex flex-col items-center gap-3">
             <div
               className="h-36 w-36 border"
-              style={{ ...portraitStyle(species, face, 'neutral'), borderColor: '#3f7391' }}
+              style={{ ...portraitStyle(species, face, reaction), borderColor: '#3f7391' }}
             />
             <div className="flex items-center gap-4">
               <Nudge onClick={() => cycleFace(-1)}>◀</Nudge>
