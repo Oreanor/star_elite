@@ -105,21 +105,27 @@ export function RemotePlayers() {
       }
     }
 
-    // 2) Кто должен быть в мире: онлайн-игроки в МОЕЙ системе. Паузнутый НЕ пропадает —
-    //    он висит в космосе на последней позе (её мы всё равно публикуем каждый кадр рендера)
-    //    и остаётся уязвим: урон по нему шлётся его клиенту и применяется мимо петли паузы.
-    //    Раньше `!p.paused` гасил его борт у соседей, будто он вышел, — теперь виден как есть.
+    // 2) Кто должен быть в мире: онлайн-игроки в МОЕЙ системе, чья ПОЗА свежа. Свежесть —
+    //    решающая: перезагрузился/завис/вышел — поток поз встал, и борт растворяется САМ,
+    //    не дожидаясь presence (его onDisconnect в RTDB тормозит до минуты, оттого призрак
+    //    висел гигантом). Паузнутый шлёт позу каждый кадр рендера — он остаётся свежим и виден.
+    const fresh = interp.freshUids(now)
     const want = new Map<string, (typeof peersRef.current)[number]>()
     for (const p of peersRef.current) {
-      if (p.systemIndex === sys) want.set(p.uid, p)
+      if (p.systemIndex === sys && fresh.has(p.uid)) want.set(p.uid, p)
     }
 
-    // 3) Деспавн ушедших (сменили систему, вышли, «отошли»).
+    // 3) Деспавн ушедших (сменили систему, вышли, зависли, встали в док).
     for (const [uid, id] of registry) {
       if (!want.has(uid)) {
         despawnRemotePlayer(world, id)
         registry.delete(uid)
         interp.drop(uid)
+        // Был в мире и растворился. Если presence ещё числит его В ПОЛЁТЕ (place == null) —
+        // это не штатный уход и не стыковка, а обрыв (перезагрузка/зависание): шлём весть
+        // «похоже, вышел». Пристыковавшийся (place != null) гаснет тихо — он у причала.
+        const peer = peersRef.current.find((q) => q.uid === uid)
+        if (peer && peer.place == null) world.notices.push({ kind: 'player-left', name: peer.name, at: world.time })
       }
     }
 

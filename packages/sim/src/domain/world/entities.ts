@@ -409,7 +409,8 @@ export interface Shockwave {
  * гаснет сама, как трассер: канал «мир → игрок», а не хранимое состояние.
  */
 export interface Notice {
-  kind: 'contact-lost'
+  /** `player-left` — чужой ИГРОК пропал (вышел/перезагрузился): его борт растворился. */
+  kind: 'contact-lost' | 'player-left'
   /** Имя, которое игрок знал. Данные, не перевод: подставляется в шаблон HUD. */
   name: string
   /** Момент по `world.time`, от него считается угасание. */

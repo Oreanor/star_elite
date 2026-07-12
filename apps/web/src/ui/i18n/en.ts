@@ -296,6 +296,7 @@ export const EN: Record<keyof typeof RU, string> = {
   'chat.incoming': 'INCOMING CALL',
   'chat.incoming.hint': 'end your current call to answer',
   'hud.contactLost': '{name} LOST FROM RADAR — PRESUMED DEAD',
+  'hud.playerLeft': '{name} SEEMS TO HAVE LEFT',
 
   'econ.agri': 'Agricultural',
   'econ.extract': 'Extraction',

@@ -902,7 +902,10 @@ function drawAlerts({ ctx, world, width, height }: HudFrame): void {
   // Показываем самую свежую — если разом пришло несколько, старшие подождут своей уборки.
   const notice = world.notices[world.notices.length - 1]
   if (notice && Math.sin(world.time * Math.PI * 2) > -0.5) {
-    text(ctx, t('hud.contactLost', { name: notice.name.toUpperCase() }), width / 2, 64 * S, HUD_COLORS.DANGER, 'center')
+    // Ушедший игрок — весть мягче (жёлтым): он не погиб под твоим прицелом, а вышел.
+    const left = notice.kind === 'player-left'
+    const msg = t(left ? 'hud.playerLeft' : 'hud.contactLost', { name: notice.name.toUpperCase() })
+    text(ctx, msg, width / 2, 64 * S, left ? HUD_COLORS.WARN : HUD_COLORS.DANGER, 'center')
   }
 
   // Выше панели стыковки: она занимает низ по центру и перекрыла бы обе строки.
