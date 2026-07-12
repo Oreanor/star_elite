@@ -3,6 +3,7 @@ import {
   CanvasTexture,
   Color,
   DoubleSide,
+  FrontSide,
   LineBasicMaterial,
   MeshBasicMaterial,
   MeshLambertMaterial,
@@ -30,16 +31,21 @@ import { MATERIAL, PALETTE } from '../config'
 let hull: MeshStandardMaterial | null = null
 
 /**
- * Корпуса кораблей. `DoubleSide` намеренно: корпуса собраны вручную из
- * треугольников, и следить за обходом вершин у каждой грани — источник
- * невидимых дыр. На двух сотнях треугольников цена нулевая, а грань,
- * повёрнутая наизнанку, всё равно освещается верно.
+ * Корпуса кораблей. `FrontSide` (отсечение задних граней) — не только скорость: на
+ * ГИГАНТСКОМ масштабе (миелофон ×тысячи) прежний `DoubleSide` давал мерцание всего корпуса.
+ * У тонких мест передняя и задняя грани почти совпадают по глубине; на обычном размере их
+ * разводит точность, а на километровом корпусе вдали лог-буфер уже нет — грани спорят за
+ * глубину, весь корпус мигает. Отсекли заднюю — спорить некому.
+ *
+ * Расплата: если какая-то грань собрана «наизнанку» (обход вершин), она станет дырой.
+ * Строители `quad`/`tri` кладут вершины единообразно, так что геометрия должна быть чистой;
+ * если где-то мелькнёт дыра — там и поправить обход, а не возвращать DoubleSide.
  */
 export function hullMaterial(): MeshStandardMaterial {
   hull ??= new MeshStandardMaterial({
     vertexColors: true,
     flatShading: true,
-    side: DoubleSide,
+    side: FrontSide,
     metalness: MATERIAL.HULL_METALNESS,
     roughness: MATERIAL.HULL_ROUGHNESS,
   })
