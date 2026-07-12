@@ -135,6 +135,26 @@ export function enqueueTask(e: ShipEntity, task: Task): boolean {
   return true
 }
 
+const _approach = new Vector3()
+
+/**
+ * Поручение «подойди к телу и встань рядом»: бот летит к точке в `margin` метрах от
+ * ПОВЕРХНОСТИ тела со СВОЕЙ стороны — не в центр (там он воткнулся бы в планету), а на
+ * подлётную дугу. Годится для «встреть меня у той станции/планеты»: цель берут из
+ * `navTargetId`. Реализовано через готовый `goto`, поэтому и полёт, и прибытие уже
+ * покрыты его тестами; здесь проверяем лишь правильную точку выхода. `false` — не автобот.
+ */
+export function assignApproach(e: ShipEntity, bodyPos: Vector3, bodyRadius: number, margin = 800): boolean {
+  if (!e.ai) return false
+  _approach.copy(e.state.pos).sub(bodyPos)
+  const len = _approach.length() || 1
+  // Точка на сфере (radius + margin) со стороны бота: ближайший к нему безопасный подлёт.
+  const point = bodyPos.clone().addScaledVector(_approach, (bodyRadius + margin) / len)
+  // Допуск прибытия — небольшой (не `margin`!), иначе бот «уже на месте», ещё вися вдали.
+  enqueueTask(e, { kind: 'goto', point, arriveRadius: 300 })
+  return true
+}
+
 /** Снять все задачи: бот бросает поручение и возвращается к обычному поведению. */
 export function clearTasks(e: ShipEntity): void {
   if (e.ai) e.ai.tasks.length = 0

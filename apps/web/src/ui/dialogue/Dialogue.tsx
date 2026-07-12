@@ -3,6 +3,7 @@ import {
   applyOrder,
   applySocial,
   applyTransfer,
+  assignApproach,
   assignCollectRun,
   clearTasks,
   commandableByPlayer,
@@ -155,6 +156,15 @@ export function Dialogue({
     clearTasks(other)
     push({ who: 'you', text: 'БРОСЬ ПОРУЧЕНИЕ.' })
     push({ who: 'them', text: 'ОТСТАВИЛ.' })
+    bump()
+  }
+  // Цель навигации игрока (тело на карте/радаре) — куда послать эскорт «встань у неё».
+  const navBody = world.navTargetId != null ? world.bodies.find((b) => b.id === world.navTargetId) ?? null : null
+  const goToTarget = () => {
+    if (ended || !navBody) return
+    assignApproach(other, navBody.pos, navBody.radius)
+    push({ who: 'you', text: `ЛЕТИ К ЦЕЛИ: ${navBody.name.toUpperCase()}.` })
+    push({ who: 'them', text: 'ИДУ ТУДА.' })
     bump()
   }
 
@@ -356,6 +366,11 @@ export function Dialogue({
                   <Button small onClick={collect}>
                     СОБЕРИ ГРУЗ
                   </Button>
+                  {navBody && (
+                    <Button small onClick={goToTarget}>
+                      ЛЕТИ К ЦЕЛИ
+                    </Button>
+                  )}
                   {hasTask(other) && (
                     <Button small onClick={dropTask}>
                       БРОСЬ ПОРУЧЕНИЕ

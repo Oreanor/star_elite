@@ -7,7 +7,7 @@ import { stepWorld } from '../sim'
 import { createWorld, STARTER_SYSTEM } from '../world'
 import type { ShipEntity, World } from '../world/entities'
 import { aiController } from './pilot'
-import { assignCollectRun, enqueueTask, hasTask, stepTasks } from './tasks'
+import { assignApproach, assignCollectRun, enqueueTask, hasTask, stepTasks } from './tasks'
 
 /** Мир с одним ботом-компаньоном (эскорт игрока), готовым брать поручения. */
 function withCompanion(): { world: World; bot: ShipEntity } {
@@ -110,6 +110,27 @@ describe('очередь задач компаньона', () => {
     bot.state.pos.copy(anchor)
     expect(stepTasks(bot, world)).not.toBeNull()
     expect(hasTask(bot)).toBe(true)
+  })
+
+  it('подход к телу ведёт к точке ВНЕ его поверхности, не в центр', () => {
+    const { world, bot } = withCompanion()
+    bot.state.pos.set(0, 0, 2000) // бот со стороны +Z от тела
+    const bodyPos = new Vector3(0, 0, 0)
+    const bodyRadius = 600
+    const margin = 800
+
+    assignApproach(bot, bodyPos, bodyRadius, margin)
+    const intent = stepTasks(bot, world)!
+    expect(intent).not.toBeNull()
+    // Целевая точка — снаружи тела: не ближе радиуса к центру (не втыкаемся в поверхность).
+    expect(intent.target.distanceTo(bodyPos)).toBeGreaterThan(bodyRadius)
+    // И со стороны бота (по +Z), а не с противоположной.
+    expect(intent.target.z).toBeGreaterThan(0)
+
+    // Долетел до точки — задача снялась (это «долети», а не «жди»).
+    bot.state.pos.copy(intent.target)
+    expect(stepTasks(bot, world)).toBeNull()
+    expect(hasTask(bot)).toBe(false)
   })
 
   /**

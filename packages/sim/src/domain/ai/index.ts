@@ -15,6 +15,7 @@ export { cowardice, fearLevel, wantsToFlee } from './morale'
 export { aiController } from './pilot'
 export { isHostileTo, selectTarget } from './targeting'
 export {
+  assignApproach,
   assignCollectRun,
   clearTasks,
   enqueueTask,
