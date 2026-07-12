@@ -787,12 +787,13 @@ function TitleShip({ launching }: { launching: boolean }) {
           <div className="relative w-full">
             <img src="/ship.png" alt="" aria-hidden className="block w-full" />
             {/* Блик на корпусе: ОДИН большой глобальный, крупнее корабля, замаскирован его
-                силуэтом (mask по той же png) и светит через screen — читается как освещение,
-                а не пятно. Центр — CSS-переменные, которые двигает параллакс (см. onMove),
-                оттого при сдвиге свет «перетекает» по корпусу: иллюзия наклона и смены света. */}
+                силуэтом (mask по той же png). Режим soft-light, а НЕ screen: screen осветлял
+                чёрный фон корабля (screen с чёрным = сам блик), и чернота переставала быть
+                чёрной. soft-light над чёрным даёт чёрное — блик виден только на светлых частях
+                корпуса, тени целы. Центр двигает параллакс (см. onMove) — свет перетекает. */}
             <div
               ref={shineRef}
-              className="pointer-events-none absolute inset-0 mix-blend-screen"
+              className="pointer-events-none absolute inset-0 mix-blend-soft-light"
               style={{
                 WebkitMaskImage: 'url(/ship.png)',
                 maskImage: 'url(/ship.png)',
@@ -801,7 +802,7 @@ function TitleShip({ launching }: { launching: boolean }) {
                 WebkitMaskRepeat: 'no-repeat',
                 maskRepeat: 'no-repeat',
                 background:
-                  'radial-gradient(180% 130% at calc(50% + var(--sx, 0%)) calc(38% + var(--sy, 0%)), rgba(200,230,255,0.40), rgba(200,230,255,0.10) 45%, rgba(190,224,255,0) 75%)',
+                  'radial-gradient(180% 130% at calc(50% + var(--sx, 0%)) calc(38% + var(--sy, 0%)), rgba(230,242,255,0.75), rgba(230,242,255,0) 70%)',
               }}
             />
           </div>
