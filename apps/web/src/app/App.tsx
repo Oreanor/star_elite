@@ -734,22 +734,23 @@ function TitleDust({ launching }: { launching: boolean }) {
  */
 function TitleWarp() {
   const streaks = useMemo(() => {
-    const VANISH_X = 50 // vw — та же точка схода, что у пыли
-    const VANISH_Y = 24 // vh
+    const VANISH_Y = 24 // vh — точка схода по вертикали; по X это центр (50vw)
     return Array.from({ length: 110 }, () => {
-      const startX = -6 + Math.random() * 112 // vw — по всему полю и краям
-      const startY = 40 + Math.random() * 72 // vh — снизу и с боков
-      // Траектория — РОВНО как у пыли: все сходятся к одной точке (50,24). Никакого гашения,
-      // иначе штрихи летят каждый в свою сторону, куда-то выше — что и было не так.
-      const dx = VANISH_X - startX + (Math.random() * 8 - 4)
+      // Горизонталь — в vh ОТ ЦЕНТРА (не vw!), чтобы вся геометрия была в одних единицах.
+      // Иначе dx(vw) и длина(vh) при изотропном rotate не сходятся в точку: по вертикали
+      // штрихи сойдутся, по горизонтали промахнутся — и пересекутся. Здесь схода — идеальный.
+      const offX = -90 + Math.random() * 180 // vh от центра — по всей ширине поля и краям
+      const startY = -6 + Math.random() * 120 // vh — по ВСЕЙ высоте: сыплются и с боков, и сверху
+      // Вектор к точке схода (центр по X, VANISH_Y по Y), ОБА в vh. Никакого джиттера:
+      // все линии целятся точно в одну точку, поэтому не пересекаются.
+      const dx = -offX
       const dy = VANISH_Y - startY
       // Линия рисуется НА ВСЮ дистанцию полёта (start→сход): её длина = длине вектора, в vh.
-      // Так выстраивается почти полный штрих, а не короткий убегающий хвост.
       const dist = Math.hypot(dx, dy)
       // Ось линии (её локальный «верх») кладём вдоль вектора (dx,dy): rot = atan2(dx, −dy).
       const rot = (Math.atan2(dx, -dy) * 180) / Math.PI
       return {
-        startX,
+        offX,
         startY,
         dist,
         rot,
@@ -767,7 +768,8 @@ function TitleWarp() {
           className="absolute"
           style={
             {
-              left: `${s.startX}vw`,
+              // Центр по X (50vw) плюс смещение в vh — та же изотропная система, что и длина.
+              left: `calc(50vw ${s.offX >= 0 ? '+' : '-'} ${Math.abs(s.offX)}vh)`,
               top: `${s.startY}vh`,
               width: 1.6,
               height: `${s.dist}vh`, // длина = вся дистанция полёта
