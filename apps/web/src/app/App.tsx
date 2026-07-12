@@ -841,7 +841,7 @@ function TitleShip({ launching }: { launching: boolean }) {
       {launching && (
         <div
           aria-hidden
-          className="pointer-events-none absolute left-1/2 top-[44%] mix-blend-screen"
+          className="pointer-events-none absolute left-1/2 top-[40%] mix-blend-screen"
           style={{
             width: '16vw',
             height: '12vw', // 4:3 — лёгкий эллипс
