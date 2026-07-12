@@ -1,4 +1,4 @@
-import { useFrame } from '@react-three/fiber'
+import { useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef } from 'react'
 import { InstancedMesh, Object3D, Quaternion, Vector3 } from 'three'
 import { applyDamage, despawnRemotePlayer, isVisible, spawnRemotePlayer } from '@elite/sim'
@@ -24,13 +24,25 @@ const MAX_REMOTE = 16
 /** Свою позу шлём ~15 раз в секунду: чаще — лишний трафик, реже — рвано у соседей. */
 const PUBLISH_HZ = 15
 
+/**
+ * Гигант-прокси против «голографического» мерцания. Километровый корпус вдали лог-буфер
+ * глубины не тянет — грани спорят, весь корпус мигает. Поэтому выросший борт рисуем БЛИЖЕ
+ * к камере и во столько же МЕНЬШЕ: угловой размер на экране тот же, а числа глубины малые —
+ * точности хватает. Это идея «считать на малых числах, потом домножить масштабом». На
+ * геймплей/позу/столкновения не влияет — только на матрицу отрисовки этого инстанса.
+ */
+const PROXY_MIN_SCALE = 4 // ниже — обычный борт, прокси не нужен
+const PROXY_DIST = 4000 // на какую дистанцию (м) подносим гиганта: тут глубине хорошо
+
 const _dummy = new Object3D()
 const _pos = new Vector3()
 const _quat = new Quaternion()
 const _spawnQuat = /* @__PURE__ */ new Quaternion()
+const _dv = /* @__PURE__ */ new Vector3()
 
 export function RemotePlayers() {
   const session = useSession()
+  const camera = useThree((s) => s.camera)
   const peers = useOnlinePlayers()
   const ref = useRef<InstancedMesh>(null)
 
@@ -166,9 +178,19 @@ export function RemotePlayers() {
     for (const id of registry.values()) {
       const ship = world.ships.find((s) => s.id === id)
       if (!ship || !isVisible(ship) || count >= MAX_REMOTE) continue
-      _dummy.position.copy(ship.state.pos)
       _dummy.quaternion.copy(ship.state.quat)
-      _dummy.scale.setScalar(ship.state.scale)
+      const scale = ship.state.scale
+      if (scale > PROXY_MIN_SCALE) {
+        // Гигант: подносим ближе и во столько же уменьшаем — на экране то же, глубине легче.
+        _dv.copy(ship.state.pos).sub(camera.position)
+        const dist = _dv.length()
+        const k = dist > PROXY_DIST ? dist / PROXY_DIST : 1
+        _dummy.position.copy(camera.position).addScaledVector(_dv, 1 / k)
+        _dummy.scale.setScalar(scale / k)
+      } else {
+        _dummy.position.copy(ship.state.pos)
+        _dummy.scale.setScalar(scale)
+      }
       _dummy.updateMatrix()
       mesh.setMatrixAt(count, _dummy.matrix)
       count++
