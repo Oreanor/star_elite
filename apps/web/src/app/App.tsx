@@ -188,9 +188,18 @@ function Shell({ onRestart }: { onRestart: () => void }) {
    * ещё нет), и кнопка сама повторяет запрос, пока сцена не встанет.
    */
   const [booted, setBooted] = useState(false)
-  // Сцена реально ПОСТРОЕНА (первый кадр отрисован) — по этому сигналу титул даёт «вжух».
-  // `booted` лишь запускает сборку; готовность приходит кадром позже, из `Game`.
+  // Сцена реально ПОСТРОЕНА — по этому сигналу титул даёт «вжух». `booted` лишь запускает
+  // сборку (тяжёлый рендер сцены), а этот эффект срабатывает уже ПОСЛЕ её коммита: два кадра
+  // rAF гарантируют, что сцена собрана и отрисована, а не «помечена к сборке». Надёжнее, чем
+  // useFrame внутри Canvas (тот мог не тикать до захвата курсора) — оттого «вжуха» и не было.
   const [sceneReady, setSceneReady] = useState(false)
+  useEffect(() => {
+    if (!booted) return
+    let raf = requestAnimationFrame(() => {
+      raf = requestAnimationFrame(() => setSceneReady(true))
+    })
+    return () => cancelAnimationFrame(raf)
+  }, [booted])
 
   /**
    * Новичок только что слепил пилота и запускается: Paused проигрывает флориш взлёта
@@ -446,7 +455,7 @@ function Shell({ onRestart }: { onRestart: () => void }) {
     <div className="relative h-screen w-screen overflow-hidden bg-black">
       {/* Канвас — всегда: захвату курсора нужен готовый канвас уже на первом жесте.
           Тяжёлую сцену он строит только по `booted` (после нажатия СТАРТ). */}
-      <Game ready={booted} onReady={() => setSceneReady(true)} />
+      <Game ready={booted} />
       {/* Онлайн: раз в пару секунд шлём своё присутствие. Ничего не рисует. */}
       {online && <PresencePublisher />}
       {over ? (
@@ -899,7 +908,7 @@ function TitleShip({ trembling, launched }: { trembling: boolean; launched: bool
             animation: launched
               ? 'title-ship-launch 0.25s cubic-bezier(0.85, 0, 1, 1) forwards'
               : trembling
-                ? 'title-ship-shake 1.1s linear infinite'
+                ? 'title-ship-tremble 4.5s linear forwards'
                 : 'title-ship-float 7s ease-in-out infinite',
           }}
         >
@@ -1136,7 +1145,7 @@ function Paused({
       {!resuming && <TitleDust launched={launched} vanishY={vanishY} />}
       {/* Варп-штрихи — только в момент СРЫВА (`launched`): пыль слилась в линии. */}
       {!resuming && launched && <TitleWarp vanishY={vanishY} />}
-      {!resuming && <TitleShip trembling={stall >= 1} launched={launched} />}
+      {!resuming && <TitleShip trembling={waiting} launched={launched} />}
 
       {/* Логотип — СВОЙ контейнер, вне общего потока: сдвинуть его нечем, что бы
           ни выросло ниже. Растр, поэтому у него собственная ширина. Заголовок
