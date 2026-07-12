@@ -37,10 +37,12 @@ export function CharacterCreation({ onSubmit }: { onSubmit: (profile: PilotProfi
   const [profession, setProfession] = useState<Profession>('traveler')
 
   // Живой штрих: новое лицо на полсекунды радуется или грустит (рандом), потом в нейтраль.
-  // Реагирует и на смену вида, и на перебор лица — как будто знакомишься с новым человеком.
+  // Изредка — боль (пятый лист), для неожиданности. Реагирует и на смену вида, и на перебор
+  // лица — как будто знакомишься с новым человеком.
   const [reaction, setReaction] = useState<Emotion>('neutral')
   useEffect(() => {
-    setReaction(Math.random() < 0.5 ? 'joy' : 'sadness')
+    const r = Math.random()
+    setReaction(r < 0.15 ? 'pain' : r < 0.575 ? 'joy' : 'sadness')
     const timer = setTimeout(() => setReaction('neutral'), 500)
     return () => clearTimeout(timer)
   }, [species, face])
