@@ -62,16 +62,30 @@ canvas {
    чтобы читалось как случайное трепыхание, а не мерное дыхание. Короткий период (в разметке
    ≈0.8 c) добавляет дёрганости. Меняется и длина (scaleY), и чуть высота, и яркость. */
 @keyframes title-flame-center {
-  0%   { transform: translateX(-50%) translateY(0)    scaleY(1);    opacity: 0.8;  }
-  11%  { transform: translateX(-50%) translateY(-1%)  scaleY(1.22); opacity: 0.9;  }
-  23%  { transform: translateX(-50%) translateY(-3%)  scaleY(1.05); opacity: 0.77; }
-  34%  { transform: translateX(-50%) translateY(-1%)  scaleY(1.32); opacity: 0.9;  }
-  46%  { transform: translateX(-50%) translateY(-4%)  scaleY(1.12); opacity: 0.82; }
-  58%  { transform: translateX(-50%) translateY(-2%)  scaleY(1.38); opacity: 0.9;  }
-  69%  { transform: translateX(-50%) translateY(-3%)  scaleY(1.08); opacity: 0.78; }
-  80%  { transform: translateX(-50%) translateY(-1%)  scaleY(1.26); opacity: 0.9;  }
-  91%  { transform: translateX(-50%) translateY(-2%)  scaleY(1.1);  opacity: 0.85; }
-  100% { transform: translateX(-50%) translateY(0)    scaleY(1);    opacity: 0.8;  }
+  0%   { transform: translateX(-50%) translateY(0)    scaleY(1);    }
+  11%  { transform: translateX(-50%) translateY(-1%)  scaleY(1.22); }
+  23%  { transform: translateX(-50%) translateY(-3%)  scaleY(1.05); }
+  34%  { transform: translateX(-50%) translateY(-1%)  scaleY(1.32); }
+  46%  { transform: translateX(-50%) translateY(-4%)  scaleY(1.12); }
+  58%  { transform: translateX(-50%) translateY(-2%)  scaleY(1.38); }
+  69%  { transform: translateX(-50%) translateY(-3%)  scaleY(1.08); }
+  80%  { transform: translateX(-50%) translateY(-1%)  scaleY(1.26); }
+  91%  { transform: translateX(-50%) translateY(-2%)  scaleY(1.1);  }
+  100% { transform: translateX(-50%) translateY(0)    scaleY(1);    }
+}
+
+/* Лёгкое мерцание струй ОТДЕЛЬНОЙ анимацией (на opacity — не спорит с transform выше).
+   Почти всё время держатся у 0.9, но нет-нет резко и коротко проседают к ~0.5 и назад,
+   без плавного твина — читается как трепет огня, но не рябит. У каждой струи своя
+   длительность (задаётся в разметке), чтобы не мигали в такт. */
+@keyframes flame-flicker {
+  0%, 6%    { opacity: 0.9;  }
+  8%        { opacity: 0.52; }
+  11%, 40%  { opacity: 0.9;  }
+  43%       { opacity: 0.6;  }
+  46%, 72%  { opacity: 0.9;  }
+  74%       { opacity: 0.5;  }
+  77%, 100% { opacity: 0.9;  }
 }
 @keyframes title-flame-left {
   0%, 100% { transform: translateX(-50%) translateY(0) scaleY(1); }
