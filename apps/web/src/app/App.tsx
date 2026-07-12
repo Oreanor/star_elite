@@ -806,12 +806,14 @@ function TitleShip({ launching }: { launching: boolean }) {
                   'linear-gradient(to bottom, rgba(0,0,0,0.28), rgba(0,0,0,0) 42%, rgba(255,255,255,0) 58%, rgba(255,255,255,0.30))',
               }}
             />
-            {/* Блик: РЕЗКИЙ подвижный. Небольшой сплющенный, screen — но мелкий, поэтому чёрный
-                фон не заливает (это делал прежний блик во всю ширину), а читается искрой света.
+            {/* Блик: крупный подвижный, режим OVERLAY. screen красил бы весь чёрный в серый
+                (над нулём его итог равен цвету блика), поэтому большой блик убивал черноту.
+                overlay же над чёрным даёт чёрное (в тенях — умножение), а светлеет лишь там,
+                где под ним уже металл: свет перетекает по корпусу, чёрный цел.
                 Центр двигает параллакс (см. onMove) — блик ездит по корпусу при сдвиге. */}
             <div
               ref={shineRef}
-              className="pointer-events-none absolute inset-0 mix-blend-screen"
+              className="pointer-events-none absolute inset-0 mix-blend-overlay"
               style={{
                 WebkitMaskImage: 'url(/ship.png)',
                 maskImage: 'url(/ship.png)',
