@@ -219,17 +219,25 @@ function PeopleTab({
       <h1 className="text-2xl tracking-[0.2em]">{t('people.title')}</h1>
 
       {/* ПРИСТЫКОВАНЫ — кто физически здесь, у причала: к ним можно подойти и заговорить.
-          Могут быть и вовсе незнакомцы. Себя не показываем — свою плашку видеть незачем. */}
-      {dockedHere.length > 0 && (
+          Могут быть и вовсе незнакомцы. Себя не показываем — свою плашку видеть незачем.
+          У причала показываем всегда (даже пустой): пусто в начале — борта заходят со
+          временем, а пока стоишь в доке мир на паузе, так что причал наполнится по возврате. */}
+      {docked && (
         <div className="mt-6">
           <h2 className="text-sm tracking-[0.3em]" style={{ color: ACCENT }}>
             {t('people.docked')}
           </h2>
-          <div className="mt-3 flex flex-wrap gap-3">
-            {dockedHere.map((p) => (
-              <DockPlaque key={p.id} ship={p} you={false} onTalk={onTalk} />
-            ))}
-          </div>
+          {dockedHere.length > 0 ? (
+            <div className="mt-3 flex flex-wrap gap-3">
+              {dockedHere.map((p) => (
+                <DockPlaque key={p.id} ship={p} you={false} onTalk={onTalk} />
+              ))}
+            </div>
+          ) : (
+            <p className="mt-2 text-sm" style={{ color: DIM }}>
+              {t('people.docked.empty')}
+            </p>
+          )}
         </div>
       )}
 

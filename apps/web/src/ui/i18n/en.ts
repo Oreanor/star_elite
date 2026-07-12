@@ -264,6 +264,7 @@ export const EN: Record<keyof typeof RU, string> = {
   // People: contacts registry.
   'people.title': 'PEOPLE',
   'people.docked': 'DOCKED HERE',
+  'people.docked.empty': "Berth is empty — just you. Ships arrive over time.",
   'people.acquaintances': 'ACQUAINTANCES',
   'people.subtitle': "Those you've talked to and who are still alive. Their whereabouts are always known.",
   'people.here': 'here, nearby',
