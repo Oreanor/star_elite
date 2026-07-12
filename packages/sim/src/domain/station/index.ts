@@ -1,5 +1,5 @@
 export { autodockController, canEngageAutodock } from './autopilot'
-export { buyHull, type HullError } from './shipyard'
+export { swapHull, fitOntoChassis, type HullError, type HullFit } from './shipyard'
 export { canDockAt, dock, findStation, startDocked, stationRange, stepDocking, undock } from './docking'
 export {
   stationInterlocutor,

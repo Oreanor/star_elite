@@ -21,7 +21,7 @@ import { chassisName, economyName, governmentName, occupationName, professionNam
 import { ACCENT, Button, Column, DIM, PilotPortrait, Table } from '../station/chrome'
 import { Hold } from '../station/Hold'
 import { Market } from '../station/Market'
-import { HullShop, ShipScreen } from '../ship/ShipScreen'
+import { ShipScreen } from '../ship/ShipScreen'
 import { SystemMap } from '../map/SystemMap'
 import { GalaxyMap } from '../map/GalaxyMap'
 import { Locator } from '../map/Locator'
@@ -40,7 +40,7 @@ import { Locator } from '../map/Locator'
  * Здесь только композиция. Правила панели не знают друг о друге; мир мутируют лишь
  * через домен, а `bump` перерисовывает то, что от мира зависит (кредиты после сделки).
  */
-export type ConsoleTab = 'planet' | 'ship' | 'shipyard' | 'shop' | 'cargo' | 'people' | 'locator' | 'system' | 'galaxy'
+export type ConsoleTab = 'planet' | 'ship' | 'shop' | 'cargo' | 'people' | 'locator' | 'system' | 'galaxy'
 
 /**
  * Вкладка КАРТА — одна кнопка в шапке, а внутри три вида: локатор, система, галактика.
@@ -101,10 +101,9 @@ export function Console({
     // У причала первая вкладка — СТАНЦИЯ (шапка места + кто пристыкован); в полёте
     // станции под тобой нет, и та же вкладка показывает паспорт мира — ПЛАНЕТА.
     { id: 'planet', label: docked ? t('station.nav.station') : t('station.nav.planet') },
+    // КОРАБЛЬ — и твой борт, и витрина корпусов: у причала под моделью стрелки листают
+    // каталог и кнопка покупки. Отдельной «ВЕРФИ» больше нет.
     { id: 'ship', label: t('ship.title') },
-    // Верфь — отдельная вкладка у причала: «где купить корпус» не должно теряться
-    // под сеткой модулей. Рядом с «КОРАБЛЁМ» (твой борт) и «МАГАЗИНОМ» (железо).
-    ...(docked ? [{ id: 'shipyard' as const, label: t('station.nav.ship') }] : []),
     ...(docked ? [{ id: 'shop' as const, label: t('station.nav.shop') }] : []),
     { id: 'cargo', label: t('station.nav.cargo') },
     // ЛЮДИ — знакомые пилоты: где они и как с ними связаться. Есть и у причала, и в полёте.
@@ -187,7 +186,6 @@ export function Console({
               <LocationReadout world={world} planet={planet} />
             ))}
           {tab === 'ship' && <ShipScreen world={world} docked={docked} embedded onChange={bump} onClose={() => onTab('planet')} />}
-          {tab === 'shipyard' && docked && <HullShop world={world} onChange={bump} />}
           {tab === 'shop' && docked && <Market world={world} onChange={bump} />}
           {tab === 'cargo' && <Hold world={world} onChange={bump} atStation={docked} />}
           {tab === 'people' && (
@@ -598,12 +596,6 @@ function DockPlaque({ ship, you, onTalk }: { ship: ShipEntity; you: boolean; onT
         <div className="truncate text-xs tracking-widest" style={{ color: DIM }}>
           {(you ? professionName(ship.persona.profession) : occupationName(ship.originKind, ship.faction)).toUpperCase()}
         </div>
-        {/* Род занятий — сразу в манифесте: с кем имеешь дело, видно до разговора. */}
-        {!you && (
-          <div className="truncate text-xs tracking-widest" style={{ color: DIM }}>
-            {occupationName(ship.originKind, ship.faction).toUpperCase()}
-          </div>
-        )}
         <div className="truncate text-xs" style={{ color: DIM }}>
           {chassisName(ship.loadout.chassis.name)}
         </div>

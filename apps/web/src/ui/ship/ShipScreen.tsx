@@ -3,11 +3,12 @@ import { useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import { Group, Vector3, type BufferGeometry } from 'three'
 import {
   buy,
-  buyHull,
   canBuy,
   canUpgrade,
+  cargoMass,
   deriveShipSpec,
   fitFromHold,
+  fitOntoChassis,
   freeCapacity,
   isEssential,
   moduleResaleValue,
@@ -20,6 +21,7 @@ import {
   repairCost,
   sellModule,
   stationStock,
+  swapHull,
   unfitModule,
   upgradeCashCost,
   upgradeModule,
@@ -87,6 +89,27 @@ export function ShipScreen({
   const slots = buildSlots(world)
   const openSlot = slots.find((s) => s.key === openKey) ?? null
 
+  // ── Витрина корпусов прямо здесь: отдельной «ВЕРФИ» больше нет. Стрелками листаем
+  // каталог, под моделью — имя и кнопка «купить». В ПОЛЁТЕ стрелок нет: корпус там
+  // не сменить, экран лишь показывает твой корабль.
+  const currentId = player.loadout.chassis.id
+  const [browseIdx, setBrowseIdx] = useState(() => Math.max(0, SHIPYARD.findIndex((o) => o.chassis.id === currentId)))
+  const offer = SHIPYARD[browseIdx] ?? SHIPYARD[0]!
+  // У причала показываем ВЫБРАННЫЙ стрелками корпус; в полёте — всегда свой.
+  const shownId = docked ? offer.chassis.id : currentId
+  const owned = shownId === currentId
+
+  // Примерка обвеса на выбранный корпус: спека и осадок «в трюм». По ней и статы со
+  // стрелками, и проверка грузоподъёмности для кнопки покупки.
+  const fit = useMemo(() => fitOntoChassis(player.loadout, offer.chassis), [player.loadout, offer])
+  const previewSpec = useMemo(() => deriveShipSpec(fit.loadout), [fit])
+  const overflowMass = fit.overflow.reduce((m, x) => m + x.mass, 0)
+  const roomOk = cargoMass(player.hold) + overflowMass <= previewSpec.cargoCapacity
+  const cycle = (d: number) => setBrowseIdx((i) => (i + d + SHIPYARD.length) % SHIPYARD.length)
+  const doSwap = () => {
+    if (swapHull(world, offer.chassis, offer.cost) === null) refresh()
+  }
+
   // Escape закрывает экран — как на карте галактики. Клавишу I гасит App.
   // Встроенным в станцию клавишами заведует сама станция — второго слушателя не вешаем.
   useEffect(() => {
@@ -131,10 +154,57 @@ export function ShipScreen({
               background: 'radial-gradient(ellipse at center, rgba(20,44,74,0.35), rgba(2,6,12,0.6))',
             }}
           >
-            <Blueprint chassisId={player.loadout.chassis.id} />
+            <Blueprint chassisId={shownId} />
           </div>
-          {/* Имя корабля — заголовком панели характеристик, а не отдельной строкой над моделью. */}
-          <Stats spec={player.spec} name={chassisName(player.loadout.chassis.name)} />
+
+          {/* Имя корпуса в обрамлении стрелок — ими и листаем каталог. В полёте стрелок
+              нет (корпус не сменить), просто имя своего корабля по центру. */}
+          {docked ? (
+            <div className="flex items-center gap-2">
+              <ArrowButton dir="left" onClick={() => cycle(-1)} />
+              <span className="flex-1 text-center text-sm tracking-[0.2em]">{chassisName(offer.chassis.name)}</span>
+              <ArrowButton dir="right" onClick={() => cycle(1)} />
+            </div>
+          ) : (
+            <div className="text-center text-sm tracking-[0.2em]">{chassisName(player.loadout.chassis.name)}</div>
+          )}
+
+          {/* Цена внутри кнопки покупки, либо «уже у вас». Не хватает трюма на перенос
+              обвеса — кнопка гаснет и подсказывает продать лишнее. */}
+          {docked && (
+            owned ? (
+              <div className="w-full border py-2.5 text-center text-sm tracking-[0.2em]" style={{ borderColor: DIM, color: DIM }}>
+                {t('ship.owned')}
+              </div>
+            ) : (
+              <div className="space-y-1.5">
+                <button
+                  type="button"
+                  disabled={!roomOk || world.credits < offer.cost}
+                  onClick={doSwap}
+                  className={`w-full border px-4 py-2.5 text-sm tracking-[0.2em] transition-colors ${
+                    !roomOk || world.credits < offer.cost ? 'cursor-not-allowed opacity-40' : 'cursor-pointer hover:bg-[#7fd6ff] hover:text-black'
+                  }`}
+                  style={{ borderColor: ACCENT, color: ACCENT }}
+                >
+                  {t('ship.buyHull', { price: credits(offer.cost) })}
+                </button>
+                {!roomOk && (
+                  <p className="text-xs leading-tight" style={{ color: UI.WARN }}>
+                    {t('ship.hullNoRoom')}
+                  </p>
+                )}
+              </div>
+            )
+          )}
+
+          {/* Характеристики. У чужого корпуса — со стрелками сравнения с текущим: белая
+              вверх — параметр лучше, синяя вниз — хуже. */}
+          <Stats
+            spec={owned ? player.spec : previewSpec}
+            name={chassisName((owned ? player.loadout.chassis : offer.chassis).name)}
+            baseline={docked && !owned ? player.spec : null}
+          />
         </div>
 
         <SlotGrid slots={slots} onOpen={setOpenKey} docked={docked} />
@@ -269,100 +339,6 @@ function SlotGrid({
             )}
           </button>
         ))}
-      </div>
-    </section>
-  )
-}
-
-/**
- * Верфь корпусов: отдельная вкладка станции. Слева — крутящийся чертёж ВЫБРАННОГО
- * корпуса и его паспорт (тот же `deriveShipSpec`, что и у живого корабля, только для
- * стоковой сборки предложения); справа — плитки корпусов. Клик по плитке лишь ВЫБИРАЕТ
- * корпус для показа, а ставит его отдельная кнопка «взять»: сперва разгляди модель,
- * потом бери. Взял — домен меняет сборку целиком, `bump` перерисовывает всю панель.
- */
-export function HullShop({ world, onChange }: { world: World; onChange: () => void }) {
-  const currentId = world.player.loadout.chassis.id
-  // Показываем сперва тот корпус, на котором летим. Клик по плитке — сменить показ.
-  const [selectedId, setSelectedId] = useState(currentId)
-  const selected = SHIPYARD.find((o) => o.chassis.id === selectedId) ?? SHIPYARD[0]!
-  const owned = selected.chassis.id === currentId
-  // Паспорт стоковой сборки предложения — та же чистая функция, что кормит живой корабль.
-  const spec = useMemo(() => deriveShipSpec(selected.loadout()), [selected])
-
-  const take = () => {
-    if (buyHull(world, selected.loadout(), selected.cost) === null) onChange()
-  }
-
-  return (
-    <section className="border p-5" style={{ borderColor: DIM }}>
-      <div className="mb-3 flex items-baseline justify-between gap-3">
-        <h2 className="text-sm tracking-[0.3em]">{t('ship.hulls')}</h2>
-        <span className="text-[0.7rem]" style={{ color: DIM }}>
-          {t('ship.hulls.hint')}
-        </span>
-      </div>
-      <div className="grid gap-5 lg:grid-cols-[minmax(0,18rem)_1fr]">
-        {/* Слева — чертёж выбранного корпуса, СРАЗУ под ним кнопка «взять» (чтобы её не
-            прятал за собой паспорт), а уже потом статы. */}
-        <div className="space-y-3">
-          <div
-            className="aspect-[15/8] w-full border"
-            style={{
-              borderColor: DIM,
-              background: 'radial-gradient(ellipse at center, rgba(20,44,74,0.35), rgba(2,6,12,0.6))',
-            }}
-          >
-            <Blueprint chassisId={selected.chassis.id} />
-          </div>
-          {/* Кнопка на всю ширину и с именем корпуса: видно, что именно берёшь. */}
-          <button
-            type="button"
-            disabled={owned}
-            onClick={take}
-            className={`w-full border px-4 py-2.5 text-sm tracking-[0.2em] transition-colors ${
-              owned ? 'cursor-not-allowed opacity-40' : 'cursor-pointer hover:bg-[#7fd6ff] hover:text-black'
-            }`}
-            style={{ borderColor: owned ? DIM : ACCENT, color: owned ? DIM : ACCENT }}
-          >
-            {owned
-              ? t('ship.current')
-              : `${t('ship.take')}: ${chassisName(selected.chassis.name)} · ${credits(selected.cost)}`}
-          </button>
-          <Stats spec={spec} name={chassisName(selected.chassis.name)} />
-        </div>
-
-        {/* Справа — плитки корпусов. Клик выбирает для показа, не покупает. */}
-        <div className="grid grid-cols-2 gap-2.5 self-start sm:grid-cols-3">
-          {SHIPYARD.map((offer) => {
-            const c = offer.chassis
-            const isCurrent = c.id === currentId
-            const isSelected = c.id === selectedId
-            return (
-              <button
-                key={c.id}
-                type="button"
-                onClick={() => setSelectedId(c.id)}
-                className="flex cursor-pointer flex-col gap-1 border p-3 text-left transition-colors hover:border-[#7fd6ff] hover:bg-[#7fd6ff]/10"
-                style={{
-                  borderColor: isSelected ? ACCENT : DIM,
-                  backgroundColor: isSelected ? 'rgba(127,214,255,0.08)' : 'transparent',
-                }}
-              >
-                <span className="text-sm leading-tight" style={{ color: ACCENT }}>
-                  {chassisName(c.name)}
-                </span>
-                {/* Голое шасси: корпус и масса — с завода, до модулей. Для сравнения корпусов. */}
-                <span className="text-[0.7rem]" style={{ color: DIM }}>
-                  {formatStat('hull', c.baseHull)} · {formatStat('mass', c.baseMass)}
-                </span>
-                <span className="text-[0.7rem]" style={{ color: isCurrent ? ACCENT : DIM }}>
-                  {isCurrent ? t('ship.current') : credits(offer.cost)}
-                </span>
-              </button>
-            )
-          })}
-        </div>
       </div>
     </section>
   )
@@ -684,9 +660,12 @@ interface StatRow {
   value: number
 }
 
-function Stats({ spec, name }: { spec: ShipSpec; name: string }) {
+/** У какой характеристики «больше — лучше». По умолчанию да; масса — исключение: лёгкий вёртче. */
+const HIGHER_BETTER: Partial<Record<StatId, boolean>> = { mass: false }
+
+function statRows(spec: ShipSpec): StatRow[] {
   const tuning = spec.tuning
-  const rows: StatRow[] = [
+  return [
     { id: 'hull', value: spec.hull.hull },
     { id: 'shield', value: spec.hull.shield },
     { id: 'mass', value: spec.mass },
@@ -698,16 +677,55 @@ function Stats({ spec, name }: { spec: ShipSpec; name: string }) {
     { id: 'cargo', value: spec.cargoCapacity },
     { id: 'energy', value: spec.power.capacity },
   ]
+}
+
+/** Стрелка сравнения с текущим кораблём: белая вверх — лучше, синяя вниз — хуже. */
+function CompareArrow({ id, value, base }: { id: StatId; value: number; base: number }) {
+  if (Math.abs(value - base) < 1e-6) return null
+  const better = (HIGHER_BETTER[id] ?? true) ? value > base : value < base
+  return <span style={{ color: better ? '#eaf4ff' : '#5b9bd6' }}>{better ? '▲' : '▼'}</span>
+}
+
+function Stats({ spec, name, baseline }: { spec: ShipSpec; name: string; baseline?: ShipSpec | null }) {
+  const rows = statRows(spec)
+  const base = baseline ? statRows(baseline) : null
 
   const columns: Column<StatRow>[] = [
     { key: 'name', header: '', cell: (r) => <span style={{ color: DIM }}>{statLabel(r.id)}</span> },
-    { key: 'value', header: '', align: 'right', cell: (r) => formatStat(r.id, r.value) },
+    {
+      key: 'value',
+      header: '',
+      align: 'right',
+      cell: (r) => {
+        const b = base?.find((x) => x.id === r.id)
+        return (
+          <span className="inline-flex items-center justify-end gap-1.5">
+            {formatStat(r.id, r.value)}
+            {b && <CompareArrow id={r.id} value={r.value} base={b.value} />}
+          </span>
+        )
+      },
+    },
   ]
 
   return (
     <Panel title={name}>
       <Table columns={columns} rows={rows} rowKey={(r) => r.id} />
     </Panel>
+  )
+}
+
+/** Стрелка-кнопка листания каталога корпусов под моделью. */
+function ArrowButton({ dir, onClick }: { dir: 'left' | 'right'; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="cursor-pointer border px-3 py-1 text-sm transition-colors hover:bg-[#7fd6ff] hover:text-black"
+      style={{ borderColor: DIM, color: ACCENT }}
+    >
+      {dir === 'left' ? '◄' : '►'}
+    </button>
   )
 }
 
