@@ -15,6 +15,7 @@ import { wantsToFlee } from './morale'
 import { jumpOut } from '../world/warp'
 import { isEngageable } from '../combat/engage'
 import { isHostileTo, selectTarget } from './targeting'
+import { stepTasks } from './tasks'
 import type { AIMode, AIState } from './types'
 
 /**
@@ -104,6 +105,11 @@ export const aiController: Controller = {
       keepDistance(e, world)
       return
     }
+
+    // Поручение из очереди задач (сбор груза, встреча, возврат): бот уходит его исполнять.
+    // Приоритет над боем, как keepBack: послан за делом — занят делом, а не висит в свалке.
+    // Пустая очередь (или задача выполнилась в этом такте) — падаем в обычное поведение ниже.
+    if (ai.tasks.length > 0 && flyTasks(e, world)) return
 
     const c = e.controls
     ai.modeTimer += dt
@@ -424,6 +430,42 @@ function flyPatrol(e: ShipEntity, ai: AIState, time: number): void {
   c.boost = 1
   c.throttle = 0.35
   c.flightAssist = true
+}
+
+/**
+ * Исполнение очереди поручений. `stepTasks` даёт точку, к которой лететь (и снимает
+ * выполненные задачи сам); ведём туда нос и тормозим у цели, чтобы не проскочить сбор
+ * или встречу. Сбор груза (черпание подов) делает шаг мира — здесь только полёт.
+ *
+ * Возвращает `false`, если очередь опустела в этом такте: пилот тут же падает в обычное
+ * поведение, без пустого кадра «замер на месте».
+ */
+function flyTasks(e: ShipEntity, world: World): boolean {
+  const intent = stepTasks(e, world)
+  if (!intent) return false
+
+  _aim.copy(intent.target)
+  const distance = e.state.pos.distanceTo(_aim)
+  steerToward(e.state, _aim, 2.2, _steer)
+
+  const c = e.controls
+  c.pitch = _steer.pitch
+  c.yaw = _steer.yaw
+  c.rudder = 0
+  c.roll = bankToward(e.state, _aim)
+  c.flightAssist = true
+  c.boost = 1
+  // Тормозим на подлёте: за зоной торможения — полный ход, внутри — пропорционально дистанции.
+  const brake = intent.arriveRadius * 6
+  c.throttle = distance > brake ? 1 : Math.max(0.1, distance / brake)
+  // У самой цели гасим снос ретро-тягой, иначе проскочим и будем нарезать круги.
+  c.retro = distance < intent.arriveRadius * 1.5 && e.state.vel.length() > 8 ? 1 : 0
+
+  const ai = e.ai!
+  ai.wantsFire = false
+  ai.wantsMissile = false
+  ai.wantsEcm = false
+  return true
 }
 
 /** Ближе этого враг — уходим от боя: беречь себя и груз важнее геройства, м. */

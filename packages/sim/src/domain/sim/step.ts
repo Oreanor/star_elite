@@ -318,18 +318,32 @@ function stepBodyCollisions(world: World): void {
  * Луч спрашивается у Controller, как стрельба: симуляция не знает про клавишу C.
  */
 function stepScooping(world: World, controllers: ControllerMap, dt: number): void {
+  if (world.pods.length === 0) return
   const player = world.player
-  if (!player.alive || world.pods.length === 0) return
 
   clearTractorMarks(world)
-  if (controllerFor(controllers, player).wantsTractor?.(player, world)) {
+
+  if (player.alive && controllerFor(controllers, player).wantsTractor?.(player, world)) {
     tractorPods(world, player, dt)
   }
+  if (player.alive) scoopNearby(world, player)
 
+  // Компаньон на поручении СБОРА черпает тем же правилом, что игрок: тяговый луч
+  // притягивает, `tryScoop` забирает при касании. Так «собери грузы» и вправду набивает
+  // его трюм, а не остаётся словами. Прочие боты груз не трогают — у них нет такой задачи.
+  for (const ship of world.ships) {
+    if (!ship.alive || ship.ai?.tasks[0]?.kind !== 'collect-cargo') continue
+    tractorPods(world, ship, dt)
+    scoopNearby(world, ship)
+  }
+}
+
+/** Забрать все контейнеры в радиусе подбора корабля. Общее правило для игрока и бота. */
+function scoopNearby(world: World, ship: ShipEntity): void {
   for (const pod of world.pods) {
     if (!pod.alive) continue
-    if (pod.pos.distanceToSquared(player.state.pos) > (SALVAGE.SCOOP_RADIUS + player.spec.hull.radius) ** 2) continue
-    tryScoop(player, pod)
+    if (pod.pos.distanceToSquared(ship.state.pos) > (SALVAGE.SCOOP_RADIUS + ship.spec.hull.radius) ** 2) continue
+    tryScoop(ship, pod)
   }
 }
 

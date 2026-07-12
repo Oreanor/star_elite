@@ -1,5 +1,6 @@
 import { Vector3 } from 'three'
 import type { Rng } from '../../core/math'
+import type { Task } from './tasks'
 
 export type AIMode = 'patrol' | 'pursue' | 'attack' | 'break' | 'evade'
 
@@ -86,6 +87,14 @@ export interface AIState {
   command: AICommand
 
   /**
+   * Очередь ПОРУЧЕНИЙ, взятых в разговоре (см. `tasks.ts`). Пустая — бот действует по
+   * приказу/эскорту как обычно; непустая — уходит исполнять её (сбор груза, встреча, позже
+   * перелёт/покупка/разговор), голова очереди — текущая задача. Приоритет над боем: послал
+   * за делом — он делом и занят, а не висит в свалке.
+   */
+  tasks: Task[]
+
+  /**
    * Обратный отсчёт зарядки прыжка-побега, с. Отрицательный — не заряжает. Пока
    * тикает, бот уходит от угрозы и уязвим; дошёл до нуля — уходит из системы.
    */
@@ -142,6 +151,7 @@ export function createAIState(home: Vector3, rng: Rng): AIState {
     dockTimer: 0,
     dormant: false,
     command: 'default',
+    tasks: [],
     warpTimer: -1,
     grievance: 0,
     grievanceAt: -1e9,
