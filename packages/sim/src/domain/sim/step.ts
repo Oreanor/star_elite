@@ -60,8 +60,17 @@ import { NULL_CONTROLLER, type ControllerMap } from './controller'
 const _tmpAxis = new Vector3()
 const _tmpQuat = new Quaternion()
 
+// Переиспользуемый буфер: `allShips` зовётся 5 раз за шаг физики, и спред
+// `[player, ...ships]` каждый раз плодил массив на выброс. Вызовы ПОСЛЕДОВАТЕЛЬНЫ и
+// не вложены (внутри цикла по allShips никто снова allShips не зовёт), поэтому один
+// общий буфер безопасен: следующий вызов перезаписывает предыдущий, уже отработавший.
+const _allShips: ShipEntity[] = []
+
 function allShips(world: World): ShipEntity[] {
-  return world.player.alive ? [world.player, ...world.ships] : world.ships
+  _allShips.length = 0
+  if (world.player.alive) _allShips.push(world.player)
+  for (const s of world.ships) _allShips.push(s)
+  return _allShips
 }
 
 function controllerFor(controllers: ControllerMap, ship: ShipEntity) {

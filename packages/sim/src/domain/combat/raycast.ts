@@ -66,12 +66,17 @@ export function castLaser(
   for (const target of world.ships) {
     if (!target.alive || target.id === shooter.id) continue
     if (cloaked && !target.ai?.dormant) continue
+    // Дешёвая отбраковка до точного теста, как у астероидов/ракет: болт заметает
+    // отрезок в 1/120 с (~200 м), большинство кораблей дальше — их не проверяем лучом.
+    if (target.state.pos.distanceToSquared(origin) > (range + target.spec.hull.radius) ** 2) continue
     const t = raySphere(origin, dir, target.state.pos, target.spec.hull.radius)
     if (closer(t)) set(t, { ship: target })
   }
   if (!cloaked && shooter.id !== world.player.id && world.player.alive) {
-    const t = raySphere(origin, dir, world.player.state.pos, world.player.spec.hull.radius)
-    if (closer(t)) set(t, { ship: world.player })
+    if (world.player.state.pos.distanceToSquared(origin) <= (range + world.player.spec.hull.radius) ** 2) {
+      const t = raySphere(origin, dir, world.player.state.pos, world.player.spec.hull.radius)
+      if (closer(t)) set(t, { ship: world.player })
+    }
   }
 
   // Платформа-гнездо: её ядро — цель для луча, и под полем тоже (гнездо от этого
