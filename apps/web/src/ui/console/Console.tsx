@@ -620,11 +620,10 @@ function StationReadout({
   ]
 
   return (
-    <div>
-      <h1 className="text-2xl tracking-[0.2em]">{properName(station ? station.name : world.systemName)}</h1>
-      <div className="mt-6 max-w-md text-sm">
-        <Table columns={FACT_COLUMNS} rows={rows} rowKey={(r) => r.key} />
-      </div>
+    // Крупный заголовок с именем станции убран: причал уже подписан в шапке модалки, а имя
+    // повторяется первой строкой таблицы — большой дубль над ней был лишним.
+    <div className="max-w-md text-sm">
+      <Table columns={FACT_COLUMNS} rows={rows} rowKey={(r) => r.key} />
       {/* Кто пристыкован — теперь во вкладке ЛЮДИ (раздел ПРИСТЫКОВАНЫ), рядом со знакомыми. */}
     </div>
   )

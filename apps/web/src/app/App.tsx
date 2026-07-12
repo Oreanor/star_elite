@@ -190,6 +190,13 @@ function Shell({ onRestart }: { onRestart: () => void }) {
   const [booted, setBooted] = useState(false)
 
   /**
+   * Новичок только что слепил пилота и запускается: Paused проигрывает флориш взлёта
+   * (корабль улетает), затем строит сцену и сажает игрока на станцию. Флаг живёт лишь
+   * этот переход — гаснет, как только показан док.
+   */
+  const [launching, setLaunching] = useState(false)
+
+  /**
    * Персонаж уже создан. Новичку (сейва не было) сперва показываем экран создания —
    * до всякого старта сцены; вернувшемуся игроку создавать нечего. Экран — не пауза:
    * он живёт вместо титульного меню, пока личность не выбрана.
@@ -339,11 +346,10 @@ function Shell({ onRestart }: { onRestart: () => void }) {
       persistSave(serializePlayer(session.world))
       session.isNewGame = false
       setCreated(true)
-      // После создания — СРАЗУ на станцию, без промежуточного меню: новичок стартует
-      // ПРИСТЫКОВАННЫМ (startDocked), поэтому строим сцену и показываем док. Захват курсора
-      // здесь не нужен — он берётся при отчаливании.
-      setBooted(true)
-      setDocked(true)
+      // Дальше — тот же старт, что по «Продолжить»: корабль срывается и улетает (флориш
+      // титульного экрана), а как сцена построится — новичок садится на станцию. `launching`
+      // включает у Paused авто-старт; захват курсора не берём — новичок ПРИСТЫКОВАН.
+      setLaunching(true)
     },
     [session],
   )
@@ -465,7 +471,18 @@ function Shell({ onRestart }: { onRestart: () => void }) {
         // Новичок сначала лепит пилота — экран стоит вместо титульного меню, до старта.
         <CharacterCreation onSubmit={createPilot} />
       ) : (
-        !locked && <Paused resuming={started} onBoot={() => setBooted(true)} onNewGame={newGame} />
+        !locked && (
+          <Paused
+            resuming={started}
+            auto={launching}
+            onBoot={() => setBooted(true)}
+            onDock={() => {
+              setDocked(true)
+              setLaunching(false)
+            }}
+            onNewGame={newGame}
+          />
+        )
       )}
       {/* Чат с живым игроком — поверх всего (консоли или разговора). Один за раз; закрыл —
           вернулся туда, откуда открыл, либо сразу поднялся ждущий входящий. */}
@@ -940,10 +957,25 @@ function TitleShip({ launching }: { launching: boolean }) {
   )
 }
 
-function Paused({ resuming, onBoot, onNewGame }: { resuming: boolean; onBoot: () => void; onNewGame: () => void }) {
+function Paused({
+  resuming,
+  auto,
+  onBoot,
+  onDock,
+  onNewGame,
+}: {
+  resuming: boolean
+  /** Новичок: сразу играем флориш взлёта и садимся на станцию, без меню и без захвата. */
+  auto?: boolean
+  onBoot: () => void
+  /** Финал авто-старта: посадить новичка на станцию (вместо запроса захвата курсора). */
+  onDock?: () => void
+  onNewGame: () => void
+}) {
   useLang() // подписка: смена языка перерисует меню
   const session = useSession()
-  const [waiting, setWaiting] = useState(false)
+  // Авто-старт новичка начинается сразу «занятым»: индикатор вместо меню, без кадра-мигания.
+  const [waiting, setWaiting] = useState(!!auto)
   // «ЩА-ЩА… УЖЕ…» вместо «СЕКУНДУ…» на время РЕАЛЬНОЙ загрузки — взводим прямо перед `onBoot`
   // (после улёта корабля, когда строится сцена). Не `setTimeout`: тот стартует гонку с
   // блокирующим главный поток `onBoot` и таймер не успевал выстрелить до размонтирования.
@@ -1009,8 +1041,7 @@ function Paused({ resuming, onBoot, onNewGame }: { resuming: boolean; onBoot: ()
    * секунду с лишним, и запущенная прямо здесь не дала бы React отрисовать
    * «СЕКУНДУ…»: надпись появилась бы ровно тогда, когда ждать уже нечего.
    */
-  const take = () => {
-    if (waiting) return
+  const launch = () => {
     setWaiting(true)
     // На ПЕРВОМ старте корабль срывается и улетает — игра начинается не раньше, чем он
     // уйдёт, плюс секунда пустого неба. На «продолжить» (пауза) корабля нет и ждать нечего.
@@ -1022,9 +1053,21 @@ function Paused({ resuming, onBoot, onNewGame }: { resuming: boolean; onBoot: ()
       // Строит сцену. Пока её нет, захват не даётся, и цикл повторов дожидается
       // канваса — специально для этого он и заведён.
       onBoot()
-      poll(performance.now() + LOCK_GIVE_UP_MS)
+      // Новичок (авто-старт) садится на станцию — курсор ему не захватываем (у причала он
+      // свободен). Возвращающийся жмёт «Продолжить» и уходит в полёт: дожимаем захват.
+      if (auto && onDock) onDock()
+      else poll(performance.now() + LOCK_GIVE_UP_MS)
     }, delay)
   }
+
+  const take = () => {
+    if (waiting) return
+    launch()
+  }
+
+  // Авто-старт новичка: флориш и посадка на станцию проигрываются сами, без нажатия.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => void (auto && launch()), [])
 
   return (
     <div
