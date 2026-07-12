@@ -40,6 +40,9 @@ export function PlayerShip() {
 
     mesh.position.copy(player.state.pos)
     mesh.quaternion.copy(player.state.quat)
+    // Миелофон: корабль в мире и правда большой (коллизии это знают). На экране он
+    // постоянен — камера отъезжает на тот же множитель (см. FlightCamera).
+    mesh.scale.setScalar(player.state.scale)
     // Из кабины камера внутри корпуса — меш только мешал бы. И корабль исчезает,
     // канув в кольцо прыжка: с этого мига его в старой системе уже нет.
     mesh.visible = player.alive && session.view === 'chase' && !shipHidden()
@@ -73,6 +76,7 @@ export function Drones() {
 
       _dummy.position.copy(ship.state.pos)
       _dummy.quaternion.copy(ship.state.quat)
+      _dummy.scale.setScalar(ship.state.scale) // миелофон: истинный размер борта
       _dummy.updateMatrix()
       mesh.setMatrixAt(count, _dummy.matrix)
       count++
@@ -105,6 +109,7 @@ export function EnemyShips() {
 
       _dummy.position.copy(ship.state.pos)
       _dummy.quaternion.copy(ship.state.quat)
+      _dummy.scale.setScalar(ship.state.scale) // миелофон: истинный размер борта
       _dummy.updateMatrix()
       mesh.setMatrixAt(count, _dummy.matrix)
       count++
@@ -147,6 +152,7 @@ export function FreighterShips() {
 
       _dummy.position.copy(ship.state.pos)
       _dummy.quaternion.copy(ship.state.quat)
+      _dummy.scale.setScalar(ship.state.scale) // миелофон: истинный размер борта
       _dummy.updateMatrix()
       mesh.setMatrixAt(count, _dummy.matrix)
       count++

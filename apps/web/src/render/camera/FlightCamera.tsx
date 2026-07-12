@@ -194,6 +194,9 @@ export function FlightCamera() {
     } else {
       _offset.applyQuaternion(state.quat)
     }
+    // Миелофон: камера отъезжает НА ТОТ ЖЕ множитель, что и размер борта. Оттого свой
+    // корабль на экране всегда одного размера, а мир вокруг «уменьшается» — не «я расту».
+    _offset.multiplyScalar(state.scale)
     _target.copy(state.pos).add(_offset)
 
     if (cockpit) {

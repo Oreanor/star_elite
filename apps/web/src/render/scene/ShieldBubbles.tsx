@@ -52,7 +52,7 @@ export function ShieldBubbles() {
       // под любым ракурсом. Плоскость единичная (радиус 0.5), поэтому масштаб — ДИАМЕТР:
       // берём радиус корпуса ×2 ×коэффициент, чтобы кольцо охватывало корабль.
       _dummy.quaternion.copy(camera.quaternion)
-      _dummy.scale.setScalar(ship.spec.hull.radius * SHIELD_BUBBLE.RADIUS_FACTOR * 2)
+      _dummy.scale.setScalar(ship.spec.hull.radius * ship.state.scale * SHIELD_BUBBLE.RADIUS_FACTOR * 2)
       _dummy.updateMatrix()
       mesh.setMatrixAt(count, _dummy.matrix)
 
