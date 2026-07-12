@@ -158,14 +158,15 @@ canvas {
   100% { transform: translate(var(--dx), var(--dy)) scale(0.12); opacity: 0; }
 }
 
-/* СРЫВ С МЕСТА (СТАРТ): пыль ускоряется и сливается в линии — как вход в крейсер. Крупинки
-   разом вспыхивают штрихами и разлетаются РАДИАЛЬНО от точки схода, вытягиваясь на ходу.
-   Направление у каждой своё (--rot), дальность (--reach) и вытяжка (--stretch) — свои.
+/* СРЫВ С МЕСТА (СТАРТ): та же пыль снизу-вверх РАЗГОНЯЕТСЯ и сливается в линии — вход
+   в крейсер. Крупинки летят к той же точке схода (--dx/--dy), но быстро, вытягиваясь в
+   штрих ВДОЛЬ своего движения (--rot ориентирует линию, --stretch тянет). translate идёт
+   ДО rotate — значит смещение в экранных осях, а поворот лишь разворачивает штрих по ходу.
    ease-in снаружи даёт «очень резко»: почти стоят, затем рывок. */
-@keyframes title-warp {
-  0%   { transform: rotate(var(--rot)) translateY(0) scaleY(0.3); opacity: 0; }
-  18%  { opacity: 0.95; }
-  100% { transform: rotate(var(--rot)) translateY(calc(var(--reach) * -1)) scaleY(var(--stretch)); opacity: 0; }
+@keyframes title-dust-warp {
+  0%   { transform: translate(0, 0) rotate(var(--rot)) scaleY(0.5); opacity: 0; }
+  15%  { opacity: var(--peak, 0.85); }
+  100% { transform: translate(var(--dx), var(--dy)) rotate(var(--rot)) scaleY(var(--stretch)); opacity: 0; }
 }
 /* Обычная дрейфующая пыль гаснет ровно в момент срыва — её сменяют штрихи выше. */
 @keyframes title-dust-out {

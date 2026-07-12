@@ -726,23 +726,34 @@ function TitleDust({ launching }: { launching: boolean }) {
 }
 
 /**
- * Варп-штрихи «срыва с места»: в момент старта корабля (0.8с) пыль сливается в линии и
- * рвётся РАДИАЛЬНО от точки схода — как вход в крейсер. Много штрихов разом, очень резко
- * (ease-in: почти стоят, затем рывок), затем гаснут — и небо пустеет к переходу в игру.
- * Каждый штрих — тонкая линия, развёрнутая наружу (--rot), летит на --reach, вытягиваясь
- * в --stretch раз. Стартовые параметры фиксируем на монтировании — дальше всё крутит CSS.
+ * Разгон пыли на «срыве с места»: в момент старта корабля (0.8с) та же пыль, что летела
+ * снизу вверх, РАЗГОНЯЕТСЯ и сливается в линии — вход в крейсер. Штрихи стартуют по всему
+ * нижнему полю и бокам (как обычная пыль), летят к той же точке схода (≈50vw,24vh), но
+ * быстро и вытянувшись в линию вдоль своего движения. Много разом, очень резко (ease-in),
+ * затем гаснут — небо пустеет к переходу в игру. Параметры фиксируем на монтировании.
  */
 function TitleWarp() {
   const streaks = useMemo(() => {
-    return Array.from({ length: 90 }, () => {
-      const len = 7 + Math.random() * 9 // px — базовая длина штриха до вытяжки
+    const VANISH_X = 50 // vw — та же точка схода, что у пыли
+    const VANISH_Y = 24 // vh
+    return Array.from({ length: 70 }, () => {
+      const startX = -6 + Math.random() * 112 // vw — по всему полю и краям
+      const startY = 40 + Math.random() * 70 // vh — снизу и с боков
+      const dx = VANISH_X - startX + (Math.random() * 8 - 4)
+      const dy = VANISH_Y - startY
+      // Линию разворачиваем ВДОЛЬ движения: её длина по +Y, значит поворот = угол вектора −90°.
+      const rot = (Math.atan2(dy, dx) * 180) / Math.PI - 90
       return {
-        rot: Math.random() * 360, // радиальное направление от точки схода
-        reach: 42 + Math.random() * 52, // vh — как далеко улетает
-        stretch: 9 + Math.random() * 15, // во сколько раз вытягивается в линию
-        dur: 0.32 + Math.random() * 0.33, // с — коротко и резко
-        delay: 0.8 + Math.random() * 0.12, // синхронно со срывом корабля, с лёгким разбросом
-        len,
+        startX,
+        startY,
+        dx,
+        dy,
+        rot,
+        stretch: 6 + Math.random() * 11, // во сколько раз вытягивается в линию
+        dur: 0.3 + Math.random() * 0.3, // с — коротко и резко
+        delay: 0.8 + Math.random() * 0.14, // синхронно со срывом корабля, с лёгким разбросом
+        len: 6 + Math.random() * 8, // px — базовая длина штриха
+        peak: 0.7 + Math.random() * 0.3,
       }
     })
   }, [])
@@ -751,18 +762,22 @@ function TitleWarp() {
       {streaks.map((s, i) => (
         <span
           key={i}
-          className="absolute left-1/2 top-[24vh] rounded-full bg-white"
+          className="absolute rounded-full bg-white"
           style={
             {
-              width: 1.6,
+              left: `${s.startX}vw`,
+              top: `${s.startY}vh`,
+              width: 1.7,
               height: s.len,
-              marginLeft: -0.8,
-              marginTop: -s.len / 2, // центр штриха — в точке схода (50vw, 24vh)
+              marginLeft: -0.85,
+              marginTop: -s.len / 2,
               opacity: 0,
+              '--dx': `${s.dx}vw`,
+              '--dy': `${s.dy}vh`,
               '--rot': `${s.rot}deg`,
-              '--reach': `${s.reach}vh`,
               '--stretch': s.stretch,
-              animation: `title-warp ${s.dur}s ease-in ${s.delay}s both`,
+              '--peak': s.peak,
+              animation: `title-dust-warp ${s.dur}s ease-in ${s.delay}s both`,
             } as React.CSSProperties
           }
         />
