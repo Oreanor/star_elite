@@ -21,6 +21,7 @@ import {
   galaxyName,
   galaxyShape,
   generateGalaxy,
+  isInhabited,
   jumpBlock,
   jumpDistance,
   livingContacts,
@@ -135,12 +136,18 @@ function Stars({
   systems,
   hovered,
   selected,
+  highlight,
+  visible,
   onHover,
   onSelect,
 }: {
   systems: StarSystem[]
   hovered: number | null
   selected: number | null
+  /** Найденная поиском система — подсветить, как выбранную. */
+  highlight: number | null
+  /** Прошла ли звезда фильтр обитаемости. Отсеянная гаснет и не ловит курсор. */
+  visible: boolean[]
   onHover: (index: number | null) => void
   onSelect: (index: number) => void
 }) {
@@ -205,11 +212,13 @@ function Stars({
     const colors = geometry.getAttribute('color') as BufferAttribute
     systems.forEach((s, i) => {
       _colour.setHex(s.star.color)
-      if (i === hovered || i === selected) _colour.lerp(_white, 0.6)
+      if (i === hovered || i === selected || i === highlight) _colour.lerp(_white, 0.6)
+      // Отсеянные фильтром гаснут до тлеющей искры: они на месте, но не мешают.
+      else if (!visible[i]) _colour.multiplyScalar(0.14)
       colors.setXYZ(i, _colour.r, _colour.g, _colour.b)
     })
     colors.needsUpdate = true
-  }, [geometry, systems, hovered, selected])
+  }, [geometry, systems, hovered, selected, highlight, visible])
 
   return (
     <points
@@ -218,12 +227,13 @@ function Stars({
       frustumCulled={false}
       onPointerMove={(e) => {
         e.stopPropagation()
-        onHover(e.index ?? null)
+        // Отсеянная фильтром звезда курсора не ловит: наводимся только на видимые.
+        onHover(e.index != null && visible[e.index] ? e.index : null)
       }}
       onPointerOut={() => onHover(null)}
       onClick={(e) => {
         e.stopPropagation()
-        if (e.index != null) onSelect(e.index)
+        if (e.index != null && visible[e.index]) onSelect(e.index)
       }}
     />
   )
@@ -406,17 +416,27 @@ function StarLabel({ at, box }: { at: Vector3 | null; box: React.RefObject<HTMLD
  * Камера-орбита вокруг центра галактики. Своя, а не библиотечная: нужны ровно
  * три жеста, и тащить ради них зависимость незачем.
  */
-function OrbitCamera({ control }: { control: { yaw: number; pitch: number; distance: number } }) {
+/** Центр галактики — цель камеры по умолчанию, пока поиск ни на что не навёл. */
+const _origin = /* @__PURE__ */ new Vector3()
+const _look = /* @__PURE__ */ new Vector3()
+
+function OrbitCamera({
+  control,
+}: {
+  control: { yaw: number; pitch: number; distance: number; target: Vector3 }
+}) {
   const camera = useThree((s) => s.camera) as PerspectiveCamera
 
   useFrame(() => {
-    const { yaw, pitch, distance } = control
+    const { yaw, pitch, distance, target } = control
+    // Точку взгляда ведём к цели плавно: поиск «подлетает» к системе, а не прыгает.
+    _look.lerp(target, 0.12)
     camera.position.set(
-      distance * Math.cos(pitch) * Math.sin(yaw),
-      distance * Math.sin(pitch),
-      distance * Math.cos(pitch) * Math.cos(yaw),
+      _look.x + distance * Math.cos(pitch) * Math.sin(yaw),
+      _look.y + distance * Math.sin(pitch),
+      _look.z + distance * Math.cos(pitch) * Math.cos(yaw),
     )
-    camera.lookAt(0, 0, 0)
+    camera.lookAt(_look)
   })
   return null
 }
@@ -660,6 +680,31 @@ export function GalaxyMap({ onClose, embedded = false }: { onClose: () => void; 
   const [popup, setPopup] = useState<{ x: number; y: number; w: number; h: number } | null>(null)
   const pointer = useRef({ x: 0, y: 0, w: 0, h: 0 })
 
+  // Фильтр обитаемости: всё / только обитаемые / только необитаемые. Отсеянные звёзды
+  // гаснут и перестают ловить курсор — глаз не спорит с сотнями лишних точек.
+  const [filter, setFilter] = useState<'all' | 'inhabited' | 'uninhabited'>('all')
+  // Показывать ли метки знакомых и живых игроков. По умолчанию да — но их можно убрать.
+  const [showContacts, setShowContacts] = useState(true)
+  // Поиск по имени системы / её планеты / причала. Совпадение подсвечиваем и наводим камеру.
+  const [query, setQuery] = useState('')
+
+  const inhabited = useMemo(() => systems.map(isInhabited), [systems])
+  const visible = useMemo(
+    () => systems.map((_, i) => filter === 'all' || (filter === 'inhabited' ? inhabited[i]! : !inhabited[i]!)),
+    [systems, filter, inhabited],
+  )
+  const search = query.trim().toLowerCase()
+  const searchIndex = useMemo(() => {
+    if (search.length < 2) return null
+    const hit = (name: string) => properName(name).toLowerCase().includes(search)
+    for (let i = 0; i < systems.length; i++) {
+      const s = systems[i]!
+      if (hit(s.name)) return i
+      if (s.planets.some((p) => hit(p.name) || (p.station != null && hit(p.station.name)))) return i
+    }
+    return null
+  }, [search, systems])
+
   const chooseSystem = (index: number) => {
     setSelected(index)
     // Затаргетились: выбор переживёт закрытие карты и отчаливание. Точку выхода по
@@ -669,7 +714,7 @@ export function GalaxyMap({ onClose, embedded = false }: { onClose: () => void; 
     world.jumpArrivalPlanet = seat >= 0 ? seat : null
     setPopup({ ...pointer.current })
   }
-  const control = useRef({ yaw: 0.6, pitch: 0.5, distance: GALAXY.RADIUS_LY * 2.6 })
+  const control = useRef({ yaw: 0.6, pitch: 0.5, distance: GALAXY.RADIUS_LY * 2.6, target: new Vector3() })
   const dragging = useRef(false)
   const label = useRef<HTMLDivElement>(null)
   const you = useRef<HTMLDivElement>(null)
@@ -689,8 +734,13 @@ export function GalaxyMap({ onClose, embedded = false }: { onClose: () => void; 
     control.current.distance = Math.max(GALAXY.RADIUS_LY * 0.12, Math.min(GALAXY.RADIUS_LY * 5, d))
   })
 
+  // Камера плавно наезжает на найденную поиском систему; без поиска висит над центром.
+  const searchPos = searchIndex != null ? positionOf(systems[searchIndex]!) : null
+  control.current.target = searchPos ?? _origin
+
   const here = positionOf(systems[world.systemIndex]!)
-  const marked = hovered ?? selected
+  // Наведён курсор → он; иначе найденное поиском; иначе выбранная цель прыжка.
+  const marked = hovered ?? searchIndex ?? selected
   const picked: Picked | null =
     marked != null && systems[marked]
       ? {
@@ -749,16 +799,22 @@ export function GalaxyMap({ onClose, embedded = false }: { onClose: () => void; 
             systems={systems}
             hovered={hovered}
             selected={selected}
+            highlight={searchIndex}
+            visible={visible}
             onHover={setHovered}
             onSelect={chooseSystem}
           />
           <JumpSphere at={here} charge={world.player.jumpCharge} max={world.player.spec.jumpRange} />
           <YouAreHere at={here} />
           <YouLabel at={here} box={you} />
-          <ContactStars systems={contactSystems} />
-          <ContactLabels systems={contactSystems} boxes={contactBoxes} />
-          <PlayerStars systems={playerSystems} />
-          <PlayerLabels systems={playerSystems} boxes={playerBoxes} />
+          {showContacts && (
+            <>
+              <ContactStars systems={contactSystems} />
+              <ContactLabels systems={contactSystems} boxes={contactBoxes} />
+              <PlayerStars systems={playerSystems} />
+              <PlayerLabels systems={playerSystems} boxes={playerBoxes} />
+            </>
+          )}
           <Route from={here} to={picked ? positionOf(picked.system) : null} />
           <StarLabel at={picked ? positionOf(picked.system) : null} box={label} />
         </Canvas>
@@ -770,6 +826,58 @@ export function GalaxyMap({ onClose, embedded = false }: { onClose: () => void; 
           <div className="mt-1 text-xs tracking-widest" style={{ color: UI.DIM }}>
             {galaxyShapeName(galaxy.shape).toUpperCase()} · {t('map.starsCount', { n: systems.length })}
           </div>
+        </div>
+
+        {/* Пульт карты — поиск, фильтр обитаемости, галочка знакомых. Ловит клики сам
+            (`pointer-events-auto`) и гасит pointer-события, чтобы возня в нём не крутила диск. */}
+        <div
+          className="pointer-events-auto absolute right-0 top-0 flex flex-col items-end gap-2 p-6 text-xs"
+          onPointerDown={(e) => e.stopPropagation()}
+        >
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder={t('map.search')}
+            className="w-56 rounded border bg-black/40 px-3 py-1.5 tracking-widest outline-none placeholder:opacity-40"
+            style={{
+              borderColor: search.length >= 2 && searchIndex == null ? UI.WARN : 'rgba(124,196,255,0.35)',
+              color: UI.PRIMARY,
+            }}
+          />
+          {search.length >= 2 && searchIndex == null && (
+            <span style={{ color: UI.WARN }}>{t('map.searchNone')}</span>
+          )}
+
+          <div className="flex gap-1">
+            {(['all', 'inhabited', 'uninhabited'] as const).map((f) => {
+              const on = filter === f
+              return (
+                <button
+                  key={f}
+                  type="button"
+                  onClick={() => setFilter(f)}
+                  className="cursor-pointer border px-2 py-1 tracking-widest transition-colors"
+                  style={{
+                    borderColor: on ? UI.PRIMARY : UI.DIM,
+                    backgroundColor: on ? UI.PRIMARY : 'transparent',
+                    color: on ? '#000' : UI.DIM,
+                  }}
+                >
+                  {t(`map.filter.${f}` as 'map.filter.all')}
+                </button>
+              )
+            })}
+          </div>
+
+          <label className="flex cursor-pointer items-center gap-2 tracking-widest" style={{ color: UI.DIM }}>
+            <input
+              type="checkbox"
+              checked={showContacts}
+              onChange={(e) => setShowContacts(e.target.checked)}
+              className="cursor-pointer accent-[#7fd6ff]"
+            />
+            {t('map.showContacts')}
+          </label>
         </div>
 
         {/* Подпись «ВЫ» и имя под курсором живут всегда: их двигает кадр, а не React. */}
@@ -790,8 +898,9 @@ export function GalaxyMap({ onClose, embedded = false }: { onClose: () => void; 
         </div>
 
         {/* Подписи знакомых — по одной на систему с живым контактом. Позицию каждой
-            двигает кадр (`ContactLabels`), поэтому тут только текст и сбор ссылок. */}
-        {contactSystems.map((s) => (
+            двигает кадр (`ContactLabels`), поэтому тут только текст и сбор ссылок.
+            Скрыты вместе с метками, когда галочка знакомых снята. */}
+        {showContacts && contactSystems.map((s) => (
           <div
             key={s.index}
             ref={(el) => {
@@ -808,7 +917,7 @@ export function GalaxyMap({ onClose, embedded = false }: { onClose: () => void; 
         {/* Подписи имён онлайн-игроков — по одной на систему, где кто-то есть. Позицию
             двигает кадр (`PlayerLabels`); имена — как есть (это подписи людей, не собственные
             имена систем), поэтому без `properName`-транслита. */}
-        {playerSystems.map((s) => (
+        {showContacts && playerSystems.map((s) => (
           <div
             key={s.index}
             ref={(el) => {
@@ -906,6 +1015,14 @@ function SystemPopup({
   const core = index === CORE_INDEX
   const blocked = docked ? null : jumpBlock(world, index)
 
+  // Все причалы системы — индексы их планет. Порядок планет в карте и в мире совпадает
+  // (мост строит SystemDef.planets один-к-одному), поэтому индекс годится и для выхода.
+  const stations = stationsOf(system)
+  const stationPlanets = useMemo(
+    () => new Set(stations.map((s) => system.planets.indexOf(s.planet))),
+    [system, stations],
+  )
+
   // Прижимаем плашку к полю карты: у краёв растёт внутрь, но верх не заходит за верхний
   // край (там срезалось). Плашка широкая — данные слева, схемка справа.
   const PW = 384
@@ -939,7 +1056,7 @@ function SystemPopup({
 
           <dl className="mt-3 space-y-1 text-sm">
             <Row label={t('map.planets')} value={String(system.planets.length)} />
-            <Row label={t('map.stations')} value={String(stationsOf(system).length)} />
+            <Row label={t('map.stations')} value={String(stations.length)} />
             <Row label={t('map.life')} value={lifeName(systemLife(system))} />
           </dl>
 
@@ -960,9 +1077,14 @@ function SystemPopup({
           )}
         </div>
 
-        {/* Справа — схемка выхода. */}
+        {/* Справа — схемка выхода: все причалы системы кликаются, выбранный — крестиком. */}
         <div className="w-40 shrink-0">
-          <StationPicker def={def} selected={world.jumpArrivalPlanet} onPick={onArrival} />
+          <StationPicker def={def} stationPlanets={stationPlanets} selected={world.jumpArrivalPlanet} onPick={onArrival} />
+          {stations.length > 1 && (
+            <p className="mt-2 text-[10px] leading-tight" style={{ color: UI.DIM }}>
+              {t('map.pickStation', { n: stations.length })}
+            </p>
+          )}
         </div>
       </div>
     </div>
@@ -976,15 +1098,18 @@ function SystemPopup({
  */
 function StationPicker({
   def,
+  stationPlanets,
   selected,
   onPick,
 }: {
   def: SystemDef
+  /** Индексы планет со станциями — все они кликаются как точки выхода. */
+  stationPlanets: Set<number>
   /** Индекс планеты-со-станцией, у которой назначен выход, или null — у звезды. */
   selected: number | null
   onPick: (planet: number | null) => void
 }) {
-  const plotted = rings(def)
+  const plotted = rings(def, stationPlanets)
   if (plotted.length === 0) {
     return (
       <p className="text-[11px]" style={{ color: UI.DIM }}>
@@ -1063,8 +1188,7 @@ interface Ring {
   y: number
 }
 
-function rings(def: SystemDef): Ring[] {
-  const seat = stationSeat(def)
+function rings(def: SystemDef, stationPlanets: Set<number>): Ring[] {
   const bounds = arrivalBounds(def)
   if (!bounds) return []
 
@@ -1091,7 +1215,7 @@ function rings(def: SystemDef): Ring[] {
       angle,
       radius,
       giant: p.type === 'Газовый гигант',
-      station: i === seat,
+      station: stationPlanets.has(i),
       x: ORRERY_CENTRE + radius * Math.cos(angle),
       y: ORRERY_CENTRE + radius * Math.sin(angle),
     }
