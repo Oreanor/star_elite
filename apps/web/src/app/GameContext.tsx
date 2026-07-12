@@ -1,10 +1,12 @@
 import { createContext, useContext, useMemo, type ReactNode } from 'react'
 import {
+  addItem,
   aiController,
   autodockController,
   applyPlayerSave,
   createWorld,
   enterSystem,
+  findModule,
   startDocked,
   jump,
   systemDefFor,
@@ -118,6 +120,12 @@ function createSession(initialSave?: PlayerSave | null): Session {
   // Пилота накладываем ПОСЛЕ enterSystem: тот пересобирает окружение, но борт игрока
   // не трогает — значит восстановленные корабль/кошелёк/личность не затрутся.
   if (save) applyPlayerSave(world, save)
+  // DEV: новичку кладём миелофон в трюм — поставить в слот и потестить рост масштаба.
+  // Временно, для отладки фичи; в релизе артефакт добывается, а не выдаётся на старте.
+  if (save === null) {
+    const mielophone = findModule('mielophone_1')
+    if (mielophone) addItem(world.player.hold, { kind: 'module', module: mielophone })
+  }
   // Начинаем ПРИСТЫКОВАННЫМИ у причала — и новичок, и вернувшийся: станция и точка
   // возврата, и безопасный старт. Не в открытом космосе за тысячу километров.
   startDocked(world)

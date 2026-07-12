@@ -164,6 +164,7 @@ export const RU = {
   'stat.damage': 'УРОН',
   'stat.ammo': 'БОЕЗАПАС',
   'stat.drain': 'РАСХОД',
+  'stat.scale': 'РОСТ',
   'stat.mass': 'МАССА',
   'stat.pitch': 'ТАНГАЖ',
   'stat.yaw': 'РЫСКАНИЕ',

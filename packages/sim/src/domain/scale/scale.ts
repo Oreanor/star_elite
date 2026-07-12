@@ -31,6 +31,9 @@ export function effectiveMass(e: ShipEntity): number {
  * команду; право расти выдаёт тот, кто заполняет controls (позже — наличие модуля).
  */
 export function stepScale(e: ShipEntity, dt: number): void {
+  // Право расти даёт УСТРОЙСТВО: нет миелофона в слоте — сигнал роста игнорируется.
+  // Гейт в домене (не в клиенте) — значит и сервер, и чужой клиент согласны, кто может расти.
+  if (!e.spec.hasMielophone) return
   const grow = e.controls.grow
   if (grow !== 0) {
     e.state.scale *= Math.exp(grow * MIELOPHONE.GROW_RATE * dt)

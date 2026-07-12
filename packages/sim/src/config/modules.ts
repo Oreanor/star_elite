@@ -7,6 +7,7 @@ import type {
   EngineModule,
   HyperdriveModule,
   LaserModule,
+  MielophoneModule,
   MissileModule,
   ShieldModule,
   ShipModule,
@@ -1195,6 +1196,22 @@ export const CLOAK_SPECTRE: CloakModule = {
   drain: 12, // экономичнее всех: дольше под полем
 }
 
+/**
+ * Миелофон — древний артефакт непрерывного масштаба: даёт борту РАСТИ (до планеты, звезды и
+ * дальше). Класс 3, ставится в тот же тип слота, что маскировка/гипер — сила гиганта взамен
+ * уловок обычного боя. Тяжёлый и бесценный; с обломка почти не снимается. Стата отдельной нет
+ * — темп роста и пороги в `config/mielophone`, здесь важно лишь «стоит или нет».
+ */
+export const MIELOPHONE_DEVICE: MielophoneModule = {
+  id: 'mielophone_1',
+  name: 'Миелофон',
+  kind: 'mielophone',
+  class: 3,
+  mass: 8,
+  cost: 2_000_000,
+  salvageChance: 0.02,
+}
+
 export const MODULE_CATALOGUE: readonly ShipModule[] = [
   ENGINE_CIVILIAN, ENGINE_CIVILIAN_D,
   ENGINE_STANDARD, ENGINE_STANDARD_B,
@@ -1226,6 +1243,7 @@ export const MODULE_CATALOGUE: readonly ShipModule[] = [
   HYPERDRIVE_HAULER, HYPERDRIVE_HAULER_B,
   CLOAK_FIELD, CLOAK_HAZE, CLOAK_SPECTRE,
   DRONE_BAY, DRONE_BAY_LIGHT, DRONE_BAY_HEAVY,
+  MIELOPHONE_DEVICE,
 ]
 
 export function findModule(id: string): ShipModule | null {

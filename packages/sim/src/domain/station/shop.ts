@@ -1,3 +1,4 @@
+import { MIELOPHONE } from '../../config/mielophone'
 import { SHOP, STOCK } from '../../config/station'
 import { clamp, makeRng } from '../../core/math'
 import { addCommodity, addItem, cargoMass, freeCapacity, removeItem } from '../cargo/hold'
@@ -278,7 +279,7 @@ export function fitFromHold(ship: ShipEntity, holdIndex: number): FitError | nul
  */
 export type StatKey =
   | 'shield' | 'hull' | 'speed' | 'turn' | 'cargo' | 'jump'
-  | 'thrust' | 'damage' | 'ammo' | 'drain'
+  | 'thrust' | 'damage' | 'ammo' | 'drain' | 'scale'
 
 /** Одна строка сравнения: было → станет по конкретной характеристике. */
 export interface StatDelta {
@@ -362,6 +363,9 @@ export function moduleStat(m: ShipModule): { key: StatKey; value: number } {
     case 'cargo': return { key: 'cargo', value: m.capacity }
     case 'hyperdrive': return { key: 'jump', value: m.jumpRange }
     case 'cloak': return { key: 'drain', value: m.drain }
+    // Миелофон: своей числовой характеристики нет (темп и пределы в config/mielophone).
+    // Показываем темп роста — единственное осмысленное число артефакта.
+    case 'mielophone': return { key: 'scale', value: MIELOPHONE.GROW_RATE }
   }
 }
 

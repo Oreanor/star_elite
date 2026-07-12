@@ -1,8 +1,9 @@
 import { Vector3 } from 'three'
 import { describe, expect, it } from 'vitest'
 import { MIELOPHONE } from '../../config/mielophone'
+import { MIELOPHONE_DEVICE } from '../../config/modules'
 import { stepWorld } from '../sim'
-import { createWorld, STARTER_SYSTEM } from '../world'
+import { createWorld, refreshSpec, STARTER_SYSTEM } from '../world'
 import type { ShipEntity, World } from '../world/entities'
 import { effectiveMass, effectiveRadius, stepScale } from './scale'
 
@@ -17,10 +18,27 @@ function withBot(): { world: World; bot: ShipEntity } {
   return { world, bot: world.ships[0]! }
 }
 
+/** Поставить миелофон в слот: без устройства борт не растёт (право на масштаб — от него). */
+function fitMielophone(ship: ShipEntity): void {
+  ship.loadout.internals.push(MIELOPHONE_DEVICE)
+  refreshSpec(ship)
+}
+
 describe('миелофон: масштаб', () => {
-  it('сигнал grow растит масштаб, а его отсутствие держит', () => {
+  it('без устройства сигнал grow НЕ растит: право на масштаб даёт модуль', () => {
     const { world } = withBot()
     const p = world.player
+    expect(p.spec.hasMielophone).toBe(false)
+
+    p.controls.grow = 1
+    stepScale(p, 1)
+    expect(p.state.scale).toBe(1) // нет миелофона — рост игнорируется
+  })
+
+  it('сигнал grow растит масштаб (с устройством), а его отсутствие держит', () => {
+    const { world } = withBot()
+    const p = world.player
+    fitMielophone(p)
     expect(p.state.scale).toBe(1)
 
     p.controls.grow = 1
@@ -36,6 +54,7 @@ describe('миелофон: масштаб', () => {
   it('масштаб зажат снизу единицей и сверху потолком', () => {
     const { world } = withBot()
     const p = world.player
+    fitMielophone(p)
 
     // Усадка ниже 1 невозможна: миелофон только растит.
     p.controls.grow = -1

@@ -6,6 +6,7 @@ import {
   findArmour,
   findCargoRacks,
   findCloak,
+  findMielophone,
   findEngine,
   findHyperdrive,
   findShield,
@@ -56,6 +57,8 @@ export interface ShipSpec {
   jumpRange: number
   /** Расход батарей на маскировку, ед/с. Ноль — поля нет, корабль виден всегда. */
   cloakDrain: number
+  /** Стоит ли миелофон: без него борт не растёт (право на масштаб — от устройства). */
+  hasMielophone: boolean
 }
 
 /** Двигатель без корабля не бывает: эти значения означают «летать нельзя». */
@@ -130,6 +133,7 @@ export function deriveShipSpec(loadout: Loadout, cargoMass = 0): ShipSpec {
     tuning, hull, power, mounts, mass, cargoCapacity,
     jumpRange: findHyperdrive(loadout)?.jumpRange ?? 0,
     cloakDrain: findCloak(loadout)?.drain ?? 0,
+    hasMielophone: findMielophone(loadout) != null,
   }
 }
 

@@ -18,6 +18,7 @@ export type ModuleKind =
   | 'hyperdrive'
   | 'cloak'
   | 'drone'
+  | 'mielophone'
 
 export interface ModuleBase {
   /** Стабильный идентификатор для сохранений и торговли. */
@@ -210,6 +211,16 @@ export interface CloakModule extends ModuleBase {
   drain: number
 }
 
+/**
+ * Миелофон — устройство непрерывного масштаба: даёт право РАСТИ (клавиша роста). Без него
+ * `stepScale` не двигает размер. Характеристики отдельной нет — темп роста и пороги живут в
+ * `config/mielophone`; здесь это просто «есть слот-устройство или нет». Ставится вместо
+ * другого устройства (маскировка/гипер) — сила гиганта взамен уловок обычного боя.
+ */
+export interface MielophoneModule extends ModuleBase {
+  kind: 'mielophone'
+}
+
 export type ShipModule =
   | EngineModule
   | ThrusterModule
@@ -221,6 +232,7 @@ export type ShipModule =
   | CargoModule
   | HyperdriveModule
   | CloakModule
+  | MielophoneModule
 
 /** Сужение по виду — вместо `as`, чтобы `any` не понадобился нигде. */
 export const isEngine = (m: ShipModule): m is EngineModule => m.kind === 'engine'
@@ -233,6 +245,7 @@ export const isCargo = (m: ShipModule): m is CargoModule => m.kind === 'cargo'
 export const isHyperdrive = (m: ShipModule): m is HyperdriveModule => m.kind === 'hyperdrive'
 export const isCloak = (m: ShipModule): m is CloakModule => m.kind === 'cloak'
 export const isDrone = (m: ShipModule): m is DroneModule => m.kind === 'drone'
+export const isMielophone = (m: ShipModule): m is MielophoneModule => m.kind === 'mielophone'
 
 /** Всё, что вешается на точку подвески. Пилон несёт ракету ИЛИ контейнер БПЛА. */
 export type WeaponModule = LaserModule | MissileModule | DroneModule

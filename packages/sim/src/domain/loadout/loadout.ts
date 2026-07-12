@@ -5,6 +5,7 @@ import {
   isCloak,
   isEngine,
   isHyperdrive,
+  isMielophone,
   isShield,
   isThrusters,
   type ArmourModule,
@@ -12,6 +13,7 @@ import {
   type CloakModule,
   type EngineModule,
   type HyperdriveModule,
+  type MielophoneModule,
   type ShieldModule,
   type ShipModule,
   type ThrusterModule,
@@ -63,6 +65,11 @@ export function findCloak(l: Loadout): CloakModule | null {
 /** Без привода межзвёздный прыжок невозможен вовсе — это правило, а не штраф. */
 export function findHyperdrive(l: Loadout): HyperdriveModule | null {
   return l.internals.find(isHyperdrive) ?? null
+}
+
+/** Миелофона может не быть: без него борт не растёт (см. `stepScale`). Редкий артефакт. */
+export function findMielophone(l: Loadout): MielophoneModule | null {
+  return l.internals.find(isMielophone) ?? null
 }
 
 /** Снаряжённая масса: корпус + все модули. Груз добавляется отдельно, он меняется в полёте. */

@@ -156,6 +156,7 @@ export const EN: Record<keyof typeof RU, string> = {
   'stat.damage': 'DAMAGE',
   'stat.ammo': 'AMMO',
   'stat.drain': 'DRAIN',
+  'stat.scale': 'GROWTH',
   'stat.mass': 'MASS',
   'stat.pitch': 'PITCH',
   'stat.yaw': 'YAW',
