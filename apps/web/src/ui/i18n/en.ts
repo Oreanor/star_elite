@@ -10,9 +10,9 @@ export const EN: Record<keyof typeof RU, string> = {
   'menu.start': 'LAUNCH',
   'menu.resume': 'RESUME',
   'menu.continue': 'CONTINUE',
-  'menu.wait': 'ONE MOMENT…',
+  'menu.wait': 'JUST A SEC…',
   // Loading dragged on (>2s) — shift tone to "almost there" so it doesn't read as frozen.
-  'menu.waitLong': 'HANG ON… ALMOST…',
+  'menu.waitLong': 'WAI-WAI-WAIT…',
   'menu.newGame': 'NEW GAME',
   'menu.newGameConfirm': 'ERASE PROGRESS?',
   'menu.newGameWarn': 'A NEW GAME WILL ERASE YOUR SAVE. START OVER?',

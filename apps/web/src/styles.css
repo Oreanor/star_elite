@@ -148,6 +148,15 @@ canvas {
   0%   { transform: translateY(0) scale(1); opacity: 1; }
   100% { transform: translateY(90vh) scale(1.5); opacity: 0; }
 }
+/* Мелкая дрожь кнопки-индикатора «секундочку», когда загрузка затягивается. Слабее
+   корабельной: это подпись, а не корабль — трясётся нервно, но не убегает. */
+@keyframes title-btn-shake {
+  0%, 100% { transform: translate(0, 0); }
+  20% { transform: translate(-1.3px, 0.7px); }
+  40% { transform: translate(1.3px, -0.7px); }
+  60% { transform: translate(-1px, -1px); }
+  80% { transform: translate(1px, 1px); }
+}
 
 /* ХЛОПОК на срыве: дискообразная волна ЗА кораблём. РЕЗКО раздувается из точки на месте
    (никуда не уносится) — растёт аж ЗА КРАЯ ЭКРАНА (scale до 9) и примерно там же

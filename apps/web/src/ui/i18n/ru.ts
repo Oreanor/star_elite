@@ -11,9 +11,9 @@ export const RU = {
   'menu.start': 'СТАРТ',
   'menu.resume': 'В ИГРУ',
   'menu.continue': 'ПРОДОЛЖИТЬ',
-  'menu.wait': 'СЕКУНДУ…',
+  'menu.wait': 'СЕКУНДОЧКУ…',
   // Загрузка затянулась (>2 с) — сменить тон на «уже почти», чтобы не выглядело зависшим.
-  'menu.waitLong': 'ЩА-ЩА… УЖЕ…',
+  'menu.waitLong': 'ИИИИИИИ…',
   'menu.newGame': 'НОВАЯ ИГРА',
   'menu.newGameConfirm': 'СТЕРЕТЬ ПРОГРЕСС?',
   'menu.newGameWarn': 'НОВАЯ ИГРА СОТРЁТ СОХРАНЕНИЕ. НАЧАТЬ ЗАНОВО?',

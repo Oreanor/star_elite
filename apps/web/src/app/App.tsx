@@ -623,8 +623,10 @@ function MenuButton({
  */
 const LOCK_RETRY_MS = 200
 const LOCK_GIVE_UP_MS = 8000
-/** Полная длительность запуска по СТАРТУ, мс: дрожь 0.8с + улёт 0.25с (см. `title-ship-*`). */
-const TITLE_LAUNCH_MS = 1050
+/** Дать тремору корабля и «секундочке» отрисоваться до БЛОКИРУЮЩЕГО onBoot, мс. */
+const TREMBLE_LEAD_MS = 90
+/** Сколько держим «вжух» до перехода в игру, мс: корабль успевает улететь, небо пустеет. */
+const LAUNCH_HOLD_MS = 1000
 
 /** Какой экран паузы раскрыт: главный, таблица клавиш или настройки. */
 type PauseScreen = 'main' | 'keys' | 'settings'
@@ -645,10 +647,13 @@ function restartAnimation(el: HTMLElement | null, animation: string): void {
  */
 function TitleLogo({
   launching,
+  launched,
   imgRef,
   onReady,
 }: {
   launching: boolean
+  /** «Вжух»: логотип вспыхивает в момент срыва корабля, а не в начале ожидания. */
+  launched: boolean
   imgRef: React.RefObject<HTMLImageElement | null>
   onReady: () => void
 }) {
@@ -683,7 +688,7 @@ function TitleLogo({
           src="/logo.png"
           alt="STAR ELITE"
           onLoad={onReady}
-          className={`block w-full ${launching ? 'title-logo-flash' : ''}`}
+          className={`block w-full ${launched ? 'title-logo-flash' : ''}`}
         />
         <div ref={glintRef} className="title-logo-glint" aria-hidden />
       </div>
@@ -707,7 +712,7 @@ function TitleLogo({
  * корабля (тот на ~55%). Стартовые точки и тайминги фиксируем на монтировании (`useMemo`),
  * дальше всё крутит CSS-анимация — ноль ре-рендеров и ноль работы в кадре.
  */
-function TitleDust({ launching, vanishY }: { launching: boolean; vanishY: number }) {
+function TitleDust({ launched, vanishY }: { launched: boolean; vanishY: number }) {
   const bits = useMemo(() => {
     const VANISH_X = 50 // vw
     const VANISH_Y = vanishY // vh — центр звезды логотипа
@@ -732,9 +737,9 @@ function TitleDust({ launching, vanishY }: { launching: boolean; vanishY: number
   return (
     <div
       className="pointer-events-none absolute inset-0 overflow-hidden"
-      // По срыву (0.8с — момент, когда корабль стартует) дрейф гаснет: его сменяют
-      // варп-штрихи (TitleWarp). `forwards` держит погасшим до перехода в игру.
-      style={launching ? { animation: 'title-dust-out 0.25s ease-in 0.8s forwards' } : undefined}
+      // По СРЫВУ (`launched`) дрейф гаснет сразу: его сменяют варп-штрихи (TitleWarp).
+      // `forwards` держит погасшим до перехода в игру. До срыва пыль дрейфует как обычно.
+      style={launched ? { animation: 'title-dust-out 0.25s ease-in forwards' } : undefined}
     >
       {bits.map((b, i) => (
         <span
@@ -788,7 +793,7 @@ function TitleWarp({ vanishY }: { vanishY: number }) {
         dist,
         rot,
         dur: 0.5 + Math.random() * 0.35, // с — успеть увидеть полную линию, потом гаснет
-        delay: 0.8 + Math.random() * 0.2, // от срыва корабля, с разбросом — «поток», а не залп
+        delay: Math.random() * 0.25, // от СРЫВА (компонент монтируется на `launched`), с разбросом — «поток»
         // Чем БЛИЖЕ старт к точке схода (короче луч), тем он «дальше» в перспективе — тем
         // прозрачнее ИЗНАЧАЛЬНО. Иначе у точки схода в кучу сходится десяток резких ярких лучей.
         peak: 0.08 + Math.min(1, dist / 55) * (0.62 + Math.random() * 0.25),
@@ -825,7 +830,7 @@ function TitleWarp({ vanishY }: { vanishY: number }) {
   )
 }
 
-function TitleShip({ launching }: { launching: boolean }) {
+function TitleShip({ trembling, launched }: { trembling: boolean; launched: boolean }) {
   const ref = useRef<HTMLDivElement>(null)
   const shineRef = useRef<HTMLDivElement>(null)
 
@@ -864,7 +869,7 @@ function TitleShip({ launching }: { launching: boolean }) {
           корпуса, поэтому центр чуть ВЫШЕ середины корабля. Диск — лёгкий эллипс 4:3, рост
           равномерный, тонкое симметричное кольцо у кромки. РЕЗКО раздувается из точки аж за
           края экрана и там же растворяется, никуда не улетая (keyframe title-ship-clap). */}
-      {launching && (
+      {launched && (
         <div
           aria-hidden
           className="pointer-events-none absolute left-1/2 top-[40%] mix-blend-screen"
@@ -879,7 +884,7 @@ function TitleShip({ launching }: { launching: boolean }) {
               'radial-gradient(ellipse farthest-side at 50% 50%, transparent 87%, rgba(232,246,255,1) 94%, transparent 100%)',
             transform: 'translate(-50%, -50%) scale(0.12)',
             opacity: 0,
-            animation: 'title-ship-clap 0.55s ease-out 0.8s both', // резкий «пуф», потом растворяется
+            animation: 'title-ship-clap 0.55s ease-out both', // резкий «пуф» на срыве, потом растворяется
           }}
         />
       )}
@@ -887,12 +892,14 @@ function TitleShip({ launching }: { launching: boolean }) {
         <div
           className="relative"
           style={{
-            // Запуск перекрывает качку двумя тактами: сперва дрожь 0.5с (нарастающий
-            // тремор), затем — с задержкой 0.5с — резкий срыв и улёт вниз с ускорением.
-            // `forwards` держит финальный кадр улёта.
-            animation: launching
-              ? 'title-ship-shake 0.8s linear, title-ship-launch 0.25s cubic-bezier(0.85, 0, 1, 1) 0.8s forwards'
-              : 'title-ship-float 7s ease-in-out infinite',
+            // Три такта. Затянулась загрузка (`trembling`, через 3с) — корабль ДРОЖИТ по
+            // нарастающей: тремор и есть индикатор «ещё грузится». Готово (`launched`) —
+            // резкий СРЫВ и улёт вниз (`forwards` держит финал). Иначе — спокойная качка.
+            animation: launched
+              ? 'title-ship-launch 0.25s cubic-bezier(0.85, 0, 1, 1) forwards'
+              : trembling
+                ? 'title-ship-shake 1.1s linear infinite'
+                : 'title-ship-float 7s ease-in-out infinite',
           }}
         >
         <img
@@ -979,10 +986,21 @@ function Paused({
   const session = useSession()
   // Авто-старт новичка начинается сразу «занятым»: индикатор вместо меню, без кадра-мигания.
   const [waiting, setWaiting] = useState(!!auto)
-  // «ЩА-ЩА… УЖЕ…» вместо «СЕКУНДУ…» на время РЕАЛЬНОЙ загрузки — взводим прямо перед `onBoot`
-  // (после улёта корабля, когда строится сцена). Не `setTimeout`: тот стартует гонку с
-  // блокирующим главный поток `onBoot` и таймер не успевал выстрелить до размонтирования.
-  const [waitLong, setWaitLong] = useState(false)
+  // «Вжух»: срыв корабля. Взводится, только когда сцена ПОСТРОЕНА — до этого корабль лишь
+  // дрожит (по нарастающей), а «секундочку» висит. Так тремор и есть индикатор загрузки.
+  const [launched, setLaunched] = useState(false)
+  // Затянувшаяся загрузка эскалирует нетерпение: 0 — спокойно «секундочку»; 1 (через 3с) —
+  // корабль и кнопка начинают дрожать; 2 (через 7с) — подпись срывается на «ИИИИИИИ…».
+  const [stall, setStall] = useState(0)
+  useEffect(() => {
+    if (!waiting || launched) return void setStall(0)
+    const a = window.setTimeout(() => setStall(1), 3000)
+    const b = window.setTimeout(() => setStall(2), 7000)
+    return () => {
+      window.clearTimeout(a)
+      window.clearTimeout(b)
+    }
+  }, [waiting, launched])
   // «Новая игра» стирает прогресс — жмётся в два клика: первый взводит подтверждение.
   const [confirmNew, setConfirmNew] = useState(false)
   const [screen, setScreen] = useState<PauseScreen>('main')
@@ -1027,7 +1045,7 @@ function Paused({
       if (ok) return // захват получен: Paused сейчас размонтируется
       if (performance.now() >= deadline) {
         setWaiting(false) // сдались — пусть кнопка снова принимает нажатие
-        setWaitLong(false) // и текст обратно на «СЕКУНДУ…» к следующей попытке
+        setLaunched(false) // и корабль обратно на место (не «улетевший») к следующей попытке
         return
       }
       timer.current = window.setTimeout(() => poll(deadline), LOCK_RETRY_MS)
@@ -1035,32 +1053,35 @@ function Paused({
   }
 
   /**
-   * Пока ждём захвата, меню НЕ ПРИНИМАЕТ нажатий: кнопка сообщила, что нужна
-   * секунда, и обязана эту секунду держать. Иначе второе нажатие уходит в тот же
-   * `take` и заводит второй цикл повторов, а «КЛАВИШИ» под ним раскрывают таблицу
-   * поверх уже начавшейся игры.
+   * Запуск игры. На ПАУЗЕ корабля нет — грузим и возвращаемся сразу. На ТИТУЛЕ корабль
+   * ДРОЖИТ (нарастающий тремор), пока строится сцена, — сам тремор и есть индикатор
+   * загрузки. Как только сцена готова — «вжух» (`launched`) корабль срывается, и через
+   * секунду (небо успевает опустеть) уходим в игру/док.
    *
-   * Сборка сцены откладывается на макрозадачу. Она занимает главный поток на
-   * секунду с лишним, и запущенная прямо здесь не дала бы React отрисовать
-   * «СЕКУНДУ…»: надпись появилась бы ровно тогда, когда ждать уже нечего.
+   * `onBoot` блокирует поток на ~секунду, поэтому его откладываем на `TREMBLE_LEAD_MS`:
+   * пусть тремор и «секундочку» успеют отрисоваться до блокировки (иначе их не видно).
+   * Пока ждём, меню не принимает нажатий (`waiting`), чтобы второй клик не завёл второй цикл.
    */
   const launch = () => {
     setWaiting(true)
-    // На ПЕРВОМ старте корабль срывается и улетает — игра начинается не раньше, чем он
-    // уйдёт, плюс секунда пустого неба. На «продолжить» (пауза) корабля нет и ждать нечего.
-    const delay = resuming ? 0 : TITLE_LAUNCH_MS + 1000
+    if (resuming) {
+      // Пауза: ни корабля, ни флориша — строим сцену и дожимаем захват.
+      window.setTimeout(() => {
+        onBoot()
+        poll(performance.now() + LOCK_GIVE_UP_MS)
+      }, 0)
+      return
+    }
     window.setTimeout(() => {
-      // Началась реальная загрузка (сцена строится, поток вот-вот заблокируется) — здесь и
-      // меняем «СЕКУНДУ…» на «ЩА-ЩА… УЖЕ…»: надёжно, до блокировки.
-      setWaitLong(true)
-      // Строит сцену. Пока её нет, захват не даётся, и цикл повторов дожидается
-      // канваса — специально для этого он и заведён.
-      onBoot()
-      // Новичок (авто-старт) садится на станцию — курсор ему не захватываем (у причала он
-      // свободен). Возвращающийся жмёт «Продолжить» и уходит в полёт: дожимаем захват.
-      if (auto && onDock) onDock()
-      else poll(performance.now() + LOCK_GIVE_UP_MS)
-    }, delay)
+      onBoot() // строит сцену — блокирует поток; тремор на это время замирает
+      setLaunched(true) // готово — «вжух»: корабль срывается
+      // Дадим кораблю улететь и небу опустеть, затем переход: новичок садится в док,
+      // возвращающийся — уходит в полёт (дожимаем захват циклом повторов).
+      window.setTimeout(() => {
+        if (auto && onDock) onDock()
+        else poll(performance.now() + LOCK_GIVE_UP_MS)
+      }, LAUNCH_HOLD_MS)
+    }, TREMBLE_LEAD_MS)
   }
 
   const take = () => {
@@ -1095,16 +1116,16 @@ function Paused({
           правь bottom/left/w, если сопла окажутся не на месте.
           Корабль — только на ПЕРВОЙ заставке (не на паузе: там пустое небо). По СТАРТУ
           (`waiting`) он срывается и улетает, а затем уходит с экраном паузы. */}
-      {!resuming && <TitleDust launching={waiting} vanishY={vanishY} />}
-      {/* Варп-штрихи — только в момент срыва (по СТАРТУ): пыль слилась в линии. */}
-      {!resuming && waiting && <TitleWarp vanishY={vanishY} />}
-      {!resuming && <TitleShip launching={waiting} />}
+      {!resuming && <TitleDust launched={launched} vanishY={vanishY} />}
+      {/* Варп-штрихи — только в момент СРЫВА (`launched`): пыль слилась в линии. */}
+      {!resuming && launched && <TitleWarp vanishY={vanishY} />}
+      {!resuming && <TitleShip trembling={stall >= 1} launched={launched} />}
 
       {/* Логотип — СВОЙ контейнер, вне общего потока: сдвинуть его нечем, что бы
           ни выросло ниже. Растр, поэтому у него собственная ширина. Заголовок
           остаётся для тех, кто читает страницу не глазами. */}
       <h1 className="sr-only">STAR ELITE</h1>
-      <TitleLogo launching={waiting} imgRef={logoRef} onReady={measureVanish} />
+      <TitleLogo launching={waiting} launched={launched} imgRef={logoRef} onReady={measureVanish} />
 
       {/* Главное меню — просто кнопки на фоне корабля, без плашки: обводка тут ни к чему.
           Клавиши и настройки не живут на этом экране, а всплывают поверх отдельной панелью. */}
@@ -1116,7 +1137,10 @@ function Paused({
             className="transition-transform duration-700 ease-out"
             style={{ transform: !resuming ? 'translateY(calc(18vh - 3rem))' : 'none' }}
           >
-            <MenuButton disabled onClick={() => {}}>{t(waitLong ? 'menu.waitLong' : 'menu.wait')}</MenuButton>
+            {/* Затянулось — подпись нервничает: дрожит (3с) и срывается на «ИИИИИИИ…» (7с). */}
+            <div style={stall >= 1 ? { animation: 'title-btn-shake 0.5s linear infinite' } : undefined}>
+              <MenuButton disabled onClick={() => {}}>{t(stall >= 2 ? 'menu.waitLong' : 'menu.wait')}</MenuButton>
+            </div>
           </div>
         ) : (
           <div className="flex flex-col items-center gap-4">
