@@ -3,9 +3,12 @@ import {
   applyOrder,
   applySocial,
   applyTransfer,
+  assignCollectRun,
+  clearTasks,
   commandableByPlayer,
   defuseGrievance,
   hasGrievance,
+  hasTask,
   interlocutor,
   linesFor,
   rememberPilot,
@@ -48,6 +51,9 @@ function outcomeFace(topic: Topic, agreed: boolean): Emotion | null {
   if (topic === 'escort') return 'joy'
   return null
 }
+
+/** Радиус сбора груза по поручению, м: бот подбирает контейнеры в этой зоне вокруг себя. */
+const TASK_COLLECT_RADIUS = 4000
 
 /** Кнопки приказов СВОЕМУ эскорту без цели — работают и без связи (по ним же зовём домен). */
 const ORDER_BUTTONS: { order: AIOrder; say: string }[] = [
@@ -131,6 +137,24 @@ export function Dialogue({
     if (ended || !applyOrder(other, o)) return
     push({ who: 'you', text: ORDER_DONE[o].replace('Приказ: ', '').toUpperCase() })
     push({ who: 'them', text: 'ЕСТЬ, КОМАНДИР.' })
+    bump()
+  }
+
+  // ─ Поручение эскорту: не приказ послушания (бой), а ЗАДАЧА в очередь. Сбор груза —
+  // канонический пример: бот летит по локатору, собирает контейнеры вокруг себя и
+  // возвращается. Тот же движок очереди (`tasks.ts`), что покрыт тестами, — здесь его дверь.
+  const collect = () => {
+    if (ended) return
+    assignCollectRun(other, other.state.pos, TASK_COLLECT_RADIUS)
+    push({ who: 'you', text: 'СОБЕРИ ГРУЗ ВОКРУГ И ВЕРНИСЬ.' })
+    push({ who: 'them', text: 'ПРИНЯЛ. СОБИРАЮ И ИДУ К ТЕБЕ.' })
+    bump()
+  }
+  const dropTask = () => {
+    if (ended) return
+    clearTasks(other)
+    push({ who: 'you', text: 'БРОСЬ ПОРУЧЕНИЕ.' })
+    push({ who: 'them', text: 'ОТСТАВИЛ.' })
     bump()
   }
 
@@ -324,6 +348,19 @@ export function Dialogue({
                       {b.say}
                     </Button>
                   ))}
+                </div>
+
+                {/* Поручения (задачи в очередь) — отдельно от боевых приказов: бот уходит
+                    делать дело сам. Пока один — сбор груза; движок очереди тянет и цепочки. */}
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <Button small onClick={collect}>
+                    СОБЕРИ ГРУЗ
+                  </Button>
+                  {hasTask(other) && (
+                    <Button small onClick={dropTask}>
+                      БРОСЬ ПОРУЧЕНИЕ
+                    </Button>
+                  )}
                 </div>
               </div>
             )}
