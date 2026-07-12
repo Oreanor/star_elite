@@ -573,6 +573,43 @@ const LOCK_GIVE_UP_MS = 8000
 /** Какой экран паузы раскрыт: главный, таблица клавиш или настройки. */
 type PauseScreen = 'main' | 'keys' | 'settings'
 
+/**
+ * Корабль с дюзами на титуле. Три струи — ЗА корпусом (в DOM раньше корабля → он их
+ * перекрывает): базы прячутся за кормой, плюмажи торчат сверху. Режим screen гасит чёрный
+ * фон струи в свечение над тёмным небом. Центральная — быстрый нервный «пых» (≈0.8 c) и
+ * чуть ниже боковых; боковые крупнее, период ≈2 c, синхронно и с лёгким сносом к центру.
+ */
+function TitleShip() {
+  return (
+    <div className="pointer-events-none absolute inset-x-0 top-[calc(55%+50px)] mx-auto w-full max-w-[43.2rem] -translate-y-1/2 px-8">
+      <div className="relative">
+        <img
+          src="/flame_left.png"
+          alt=""
+          aria-hidden
+          className="absolute bottom-[82%] left-[41%] w-[13%] origin-bottom mix-blend-screen"
+          style={{ animation: 'title-flame-left 2s ease-in-out infinite' }}
+        />
+        <img
+          src="/flame_right.png"
+          alt=""
+          aria-hidden
+          className="absolute bottom-[82%] left-[59%] w-[13%] origin-bottom mix-blend-screen"
+          style={{ animation: 'title-flame-right 2s ease-in-out infinite' }}
+        />
+        <img
+          src="/flame_center.png"
+          alt=""
+          aria-hidden
+          className="absolute bottom-[80%] left-1/2 w-[9%] origin-bottom mix-blend-screen"
+          style={{ animation: 'title-flame-center 0.8s ease-in-out infinite' }}
+        />
+        <img src="/ship.png" alt="" aria-hidden className="relative w-full" />
+      </div>
+    </div>
+  )
+}
+
 function Paused({ resuming, onBoot }: { resuming: boolean; onBoot: () => void }) {
   useLang() // подписка: смена языка перерисует меню
   const session = useSession()
@@ -647,34 +684,7 @@ function Paused({ resuming, onBoot }: { resuming: boolean; onBoot: () => void })
           прячутся за кормой, плюмажи торчат сверху. Режим screen делает чёрный фон струи
           прозрачным и превращает её в свечение над тёмным небом. Позиции в % от корабля —
           правь bottom/left/w, если сопла окажутся не на месте. */}
-      <div className="pointer-events-none absolute inset-x-0 top-[calc(55%+50px)] mx-auto w-full max-w-[43.2rem] -translate-y-1/2 px-8">
-        <div className="relative">
-          {/* Боковые — крупнее, период ≈2 c, синхронно, со сносом к центру (перспектива). */}
-          <img
-            src="/flame_left.png"
-            alt=""
-            aria-hidden
-            className="absolute bottom-[82%] left-[41%] w-[13%] origin-bottom mix-blend-screen"
-            style={{ animation: 'title-flame-left 2s ease-in-out infinite' }}
-          />
-          <img
-            src="/flame_right.png"
-            alt=""
-            aria-hidden
-            className="absolute bottom-[82%] left-[59%] w-[13%] origin-bottom mix-blend-screen"
-            style={{ animation: 'title-flame-right 2s ease-in-out infinite' }}
-          />
-          {/* Центральная — период ≈1 c, ходит вверх-вниз и вытягивается по вертикали. */}
-          <img
-            src="/flame_center.png"
-            alt=""
-            aria-hidden
-            className="absolute bottom-[86%] left-1/2 w-[9%] origin-bottom mix-blend-screen"
-            style={{ animation: 'title-flame-center 1s ease-in-out infinite' }}
-          />
-          <img src="/ship.png" alt="" aria-hidden className="relative w-full" />
-        </div>
-      </div>
+      <TitleShip />
 
       {/* Логотип — СВОЙ контейнер, вне общего потока: сдвинуть его нечем, что бы
           ни выросло ниже. Растр, поэтому у него собственная ширина. Заголовок

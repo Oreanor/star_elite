@@ -58,15 +58,26 @@ canvas {
  * Боковые — крупнее и медленнее (≈2 c), синхронно, и вдобавок сносятся К ЦЕНТРУ на подъёме:
  * так читается перспектива, будто дюзы расходятся от зрителя.
  */
+/* Центральная — быстрый нервный «пых»: шаги нарочно неровные и не сходятся в синус,
+   чтобы читалось как случайное трепыхание, а не мерное дыхание. Короткий период (в разметке
+   ≈0.8 c) добавляет дёрганости. Меняется и длина (scaleY), и чуть высота, и яркость. */
 @keyframes title-flame-center {
-  0%, 100% { transform: translateX(-50%) translateY(0) scaleY(1); }
-  50%      { transform: translateX(-50%) translateY(-4%) scaleY(1.16); }
+  0%   { transform: translateX(-50%) translateY(0)    scaleY(1);    opacity: 0.9; }
+  11%  { transform: translateX(-50%) translateY(-1%)  scaleY(1.22); opacity: 1;   }
+  23%  { transform: translateX(-50%) translateY(-3%)  scaleY(1.05); opacity: 0.86;}
+  34%  { transform: translateX(-50%) translateY(-1%)  scaleY(1.32); opacity: 1;   }
+  46%  { transform: translateX(-50%) translateY(-4%)  scaleY(1.12); opacity: 0.92;}
+  58%  { transform: translateX(-50%) translateY(-2%)  scaleY(1.38); opacity: 1;   }
+  69%  { transform: translateX(-50%) translateY(-3%)  scaleY(1.08); opacity: 0.88;}
+  80%  { transform: translateX(-50%) translateY(-1%)  scaleY(1.26); opacity: 1;   }
+  91%  { transform: translateX(-50%) translateY(-2%)  scaleY(1.1);  opacity: 0.94;}
+  100% { transform: translateX(-50%) translateY(0)    scaleY(1);    opacity: 0.9; }
 }
 @keyframes title-flame-left {
   0%, 100% { transform: translateX(-50%) translateY(0) scaleY(1); }
-  50%      { transform: translateX(calc(-50% + 8px)) translateY(-3%) scaleY(1.1); }
+  50%      { transform: translateX(calc(-50% + 4px)) translateY(-3%) scaleY(1.1); }
 }
 @keyframes title-flame-right {
   0%, 100% { transform: translateX(-50%) translateY(0) scaleY(1); }
-  50%      { transform: translateX(calc(-50% - 8px)) translateY(-3%) scaleY(1.1); }
+  50%      { transform: translateX(calc(-50% - 4px)) translateY(-3%) scaleY(1.1); }
 }
