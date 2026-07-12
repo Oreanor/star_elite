@@ -262,8 +262,11 @@ export function missileMaterial(): MeshStandardMaterial {
 let explosion: MeshBasicMaterial | null = null
 
 export function explosionMaterial(): MeshBasicMaterial {
+  // Белый базовый цвет: тон и затухание каждого взрыва (жар→тьма) приходят инстансным
+  // цветом (setColorAt), поэтому вспышки гаснут ПО ОТДЕЛЬНОСТИ одним аддитивным материалом,
+  // а не всей пачкой разом. Ядро и осколки делят его — оба лишь светящаяся масса.
   explosion ??= new MeshBasicMaterial({
-    color: PALETTE.EXPLOSION,
+    color: 0xffffff,
     transparent: true,
     blending: AdditiveBlending,
     depthWrite: false,

@@ -13,7 +13,7 @@ import {
   Vector3,
 } from 'three'
 import { useSession } from '../../app/GameContext'
-import { LASER, LASER_GLOW, LASER_GLOW_FALLBACK, SHIELD_FLASH, WARP_FLASH } from '../config'
+import { EXPLOSION, LASER, LASER_GLOW, LASER_GLOW_FALLBACK, SHIELD_FLASH, WARP_FLASH } from '../config'
 import {
   explosionMaterial,
   missileMaterial,
@@ -38,6 +38,22 @@ const MAX_TRACERS = 192
 const MAX_EXPLOSIONS = 48
 const MAX_PODS = 48
 const MAX_MISSILES = 24
+
+/**
+ * Двенадцать направлений разлёта осколков — вершины икосаэдра (золотое сечение). Фиксированный
+ * набор вместо RNG: разлёт детерминирован, а разнообразие даёт сдвиг стартового индекса по
+ * взрыву. Считаются один раз на модуль.
+ */
+const _phi = 1.6180339887
+const CHUNK_DIRS = [
+  [0, 1, _phi], [0, 1, -_phi], [0, -1, _phi], [0, -1, -_phi],
+  [1, _phi, 0], [1, -_phi, 0], [-1, _phi, 0], [-1, -_phi, 0],
+  [_phi, 0, 1], [_phi, 0, -1], [-_phi, 0, 1], [-_phi, 0, -1],
+].map(([x, y, z]) => new Vector3(x, y, z).normalize())
+
+const _expHot = /* @__PURE__ */ new Color(EXPLOSION.HOT)
+const _expCool = /* @__PURE__ */ new Color(EXPLOSION.COOL)
+const _expTint = /* @__PURE__ */ new Color()
 
 const _dummy = new Object3D()
 const _nose = new Vector3()
@@ -135,12 +151,25 @@ export function Tracers() {
   )
 }
 
+/** Тон взрыва по возрасту: горячий бело-жёлтый → глубокий оранжевый → к чёрному (гаснет). */
+function explosionTint(age: number, out: Color): Color {
+  out.copy(_expHot).lerp(_expCool, age)
+  // Затухание к чёрному: аддитив над космосом гаснет в ноль. Квадрат — ранний пик, резкий спад.
+  return out.multiplyScalar((1 - age) * (1 - age))
+}
+
 export function Explosions() {
   const session = useSession()
   const ref = useRef<InstancedMesh>(null)
 
   const geometry = useMemo(() => new IcosahedronGeometry(1, 0), [])
   const material = useMemo(explosionMaterial, [])
+  const colors = useMemo(() => new InstancedBufferAttribute(new Float32Array(MAX_EXPLOSIONS * 3), 3), [])
+
+  useEffect(() => {
+    const mesh = ref.current
+    if (mesh) mesh.instanceColor = colors
+  }, [colors])
 
   useFrame(() => {
     const mesh = ref.current
@@ -151,26 +180,88 @@ export function Explosions() {
 
     for (const blast of session.world.explosions) {
       if (count >= MAX_EXPLOSIONS) break
-      const age = (now - blast.born) / 0.55
+      const dt = now - blast.born
+      const age = dt / EXPLOSION.LIFE
 
       _dummy.position.copy(blast.pos)
       // Разлетается и наследует скорость того, что взорвалось.
-      _dummy.position.addScaledVector(blast.vel, now - blast.born)
-      _dummy.scale.setScalar(blast.scale * (1 + age * 5))
+      _dummy.position.addScaledVector(blast.vel, dt)
+      _dummy.scale.setScalar(blast.scale * (1 + age * EXPLOSION.CORE_GROWTH))
       _dummy.rotation.set(age * 3, age * 2, 0)
       _dummy.updateMatrix()
       mesh.setMatrixAt(count, _dummy.matrix)
+      mesh.setColorAt(count, explosionTint(age, _expTint))
       count++
     }
 
-    // Материал общий, поэтому гасим всю пачку разом: отдельная прозрачность
-    // на инстанс требует своего атрибута и лишнего шейдера.
-    material.opacity = count > 0 ? 0.75 : 0
     mesh.count = count
     mesh.instanceMatrix.needsUpdate = true
+    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true
   })
 
   return <instancedMesh ref={ref} args={[geometry, material, MAX_EXPLOSIONS]} frustumCulled={false} />
+}
+
+/**
+ * Осколки взрыва: из одного события — россыпь низкополи-кусков, разлетающихся наружу,
+ * кувыркаясь и гаснут. Только крупным взрывам (гибель корабля/дрона/ракеты), не искре болта —
+ * так «богаче» достаётся тому, что этого стоит. Один InstancedMesh, ноль аллокаций в кадре.
+ */
+export function ExplosionChunks() {
+  const session = useSession()
+  const ref = useRef<InstancedMesh>(null)
+
+  const geometry = useMemo(() => new IcosahedronGeometry(1, 0), [])
+  const material = useMemo(explosionMaterial, [])
+  const colors = useMemo(() => new InstancedBufferAttribute(new Float32Array(EXPLOSION.MAX_CHUNKS * 3), 3), [])
+
+  useEffect(() => {
+    const mesh = ref.current
+    if (mesh) mesh.instanceColor = colors
+  }, [colors])
+
+  useFrame(() => {
+    const mesh = ref.current
+    if (!mesh) return
+
+    const now = session.world.time
+    let count = 0
+
+    for (const blast of session.world.explosions) {
+      if (blast.scale < EXPLOSION.CHUNK_MIN_SCALE) continue
+      const dt = now - blast.born
+      const age = dt / EXPLOSION.LIFE
+
+      const k = Math.min(EXPLOSION.CHUNK_MAX_PER, Math.round(blast.scale * EXPLOSION.CHUNK_PER_SCALE))
+      // Сдвиг стартового направления по взрыву — чтобы соседние гибели не разлетались одинаково.
+      const offset = (blast.born * 13) | 0
+      const spread = blast.scale * EXPLOSION.CHUNK_SPREAD
+      const tint = explosionTint(age, _expTint)
+
+      for (let i = 0; i < k; i++) {
+        if (count >= EXPLOSION.MAX_CHUNKS) break
+        const dir = CHUNK_DIRS[(offset + i) % CHUNK_DIRS.length]!
+
+        _dummy.position.copy(blast.pos)
+        _dummy.position.addScaledVector(blast.vel, dt)
+        // Летит наружу, замедляясь (ease-out), — как разлёт от вспышки.
+        _dummy.position.addScaledVector(dir, spread * age * (2 - age))
+        // Кусок мельче ядра и усыхает к концу.
+        _dummy.scale.setScalar(blast.scale * 0.5 * (1 - age * 0.6))
+        _dummy.rotation.set(age * 6 + i, age * 5 - i, i)
+        _dummy.updateMatrix()
+        mesh.setMatrixAt(count, _dummy.matrix)
+        mesh.setColorAt(count, tint)
+        count++
+      }
+    }
+
+    mesh.count = count
+    mesh.instanceMatrix.needsUpdate = true
+    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true
+  })
+
+  return <instancedMesh ref={ref} args={[geometry, material, EXPLOSION.MAX_CHUNKS]} frustumCulled={false} />
 }
 
 /**
