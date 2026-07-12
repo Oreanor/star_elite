@@ -352,6 +352,8 @@ export function shieldBubbleMaterial(): ShaderMaterial {
     fog: false,
     uniforms: { uPower: { value: SHIELD_BUBBLE.FRESNEL_POWER } },
     vertexShader: /* glsl */ `
+      #include <common>
+      #include <logdepthbuf_pars_vertex>
       attribute vec3 aColor;
       varying vec3 vColor;
       varying vec3 vNormalV;
@@ -369,14 +371,21 @@ export function shieldBubbleMaterial(): ShaderMaterial {
         vNormalV = normalize(nm * normal);
         vViewDir = normalize(-mvPos.xyz);
         gl_Position = projectionMatrix * mvPos;
+        // Сцена с логарифмическим буфером глубины: без этого сфера пишет ОБЫЧНУЮ
+        // глубину, у далёкого корабля она расходится с буфером и depth-test её
+        // отбрасывает — потому щит был виден только вблизи (у себя), но не у врага.
+        #include <logdepthbuf_vertex>
       }
     `,
     fragmentShader: /* glsl */ `
+      #include <common>
+      #include <logdepthbuf_pars_fragment>
       uniform float uPower;
       varying vec3 vColor;
       varying vec3 vNormalV;
       varying vec3 vViewDir;
       void main() {
+        #include <logdepthbuf_fragment>
         float f = 1.0 - abs(dot(normalize(vNormalV), normalize(vViewDir)));
         f = pow(clamp(f, 0.0, 1.0), uPower);
         gl_FragColor = vec4(vColor * f, f);
