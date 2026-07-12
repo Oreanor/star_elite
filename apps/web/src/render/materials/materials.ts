@@ -346,11 +346,13 @@ function shieldRingTexture(): CanvasTexture {
   canvas.height = size
   const ctx = canvas.getContext('2d')!
   const g = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2)
-  g.addColorStop(0.0, 'rgba(255,255,255,0)') // полый центр: корабль виден
-  g.addColorStop(0.55, 'rgba(255,255,255,0)')
-  g.addColorStop(0.78, 'rgba(255,255,255,0.75)') // ободок
-  g.addColorStop(0.9, 'rgba(255,255,255,0.35)')
-  g.addColorStop(1.0, 'rgba(255,255,255,0)') // мягко в ноль к самому краю
+  // Интенсивнее к краю, внутрь градиент быстро гаснет почти в прозрачность — как
+  // френель у сферы: кромка плотная, середина сквозная, но не жёстко полая.
+  g.addColorStop(0.0, 'rgba(255,255,255,0.04)') // центр почти прозрачный (корабль виден)
+  g.addColorStop(0.5, 'rgba(255,255,255,0.1)')
+  g.addColorStop(0.8, 'rgba(255,255,255,0.42)')
+  g.addColorStop(0.92, 'rgba(255,255,255,0.9)') // ярче всего у самого края
+  g.addColorStop(1.0, 'rgba(255,255,255,0)') // мягкий спад к самой кромке
   ctx.fillStyle = g
   ctx.fillRect(0, 0, size, size)
   shieldRing = new CanvasTexture(canvas)
