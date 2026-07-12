@@ -736,26 +736,26 @@ function TitleWarp() {
   const streaks = useMemo(() => {
     const VANISH_X = 50 // vw — та же точка схода, что у пыли
     const VANISH_Y = 24 // vh
-    return Array.from({ length: 120 }, () => {
+    return Array.from({ length: 110 }, () => {
       const startX = -6 + Math.random() * 112 // vw — по всему полю и краям
       const startY = 40 + Math.random() * 72 // vh — снизу и с боков
       // Траектория — РОВНО как у пыли: все сходятся к одной точке (50,24). Никакого гашения,
       // иначе штрихи летят каждый в свою сторону, куда-то выше — что и было не так.
       const dx = VANISH_X - startX + (Math.random() * 8 - 4)
       const dy = VANISH_Y - startY
-      // Хвост тянется ВДОЛЬ движения: поворот = угол вектора −90°.
-      const rot = (Math.atan2(dy, dx) * 180) / Math.PI - 90
+      // Линия рисуется НА ВСЮ дистанцию полёта (start→сход): её длина = длине вектора, в vh.
+      // Так выстраивается почти полный штрих, а не короткий убегающий хвост.
+      const dist = Math.hypot(dx, dy)
+      // Ось линии (её локальный «верх») кладём вдоль вектора (dx,dy): rot = atan2(dx, −dy).
+      const rot = (Math.atan2(dx, -dy) * 180) / Math.PI
       return {
         startX,
         startY,
-        dx,
-        dy,
+        dist,
         rot,
-        stretch: 5 + Math.random() * 9, // во сколько раз вытягивается хвост
-        dur: 0.26 + Math.random() * 0.22, // с — быстрее прежнего
-        delay: 0.8 + Math.random() * 0.18, // от срыва корабля, с разбросом — «поток», а не залп
-        len: 5 + Math.random() * 7, // px — базовая длина хвоста в покое
-        peak: 0.65 + Math.random() * 0.3,
+        dur: 0.5 + Math.random() * 0.35, // с — успеть увидеть полную линию, потом гаснет
+        delay: 0.8 + Math.random() * 0.2, // от срыва корабля, с разбросом — «поток», а не залп
+        peak: 0.7 + Math.random() * 0.3,
       }
     })
   }, [])
@@ -770,19 +770,16 @@ function TitleWarp() {
               left: `${s.startX}vw`,
               top: `${s.startY}vh`,
               width: 1.6,
-              height: s.len,
+              height: `${s.dist}vh`, // длина = вся дистанция полёта
               marginLeft: -0.8,
-              marginTop: -s.len, // голова (низ) — в точке старта; хвост растёт вверх, за голову
-              transformOrigin: '50% 100%', // якорь у ГОЛОВЫ: хвост тянется назад по ходу
-              // Голова яркая, хвост тает — точка «прочерчивает» за собой след, а не штрих.
-              background: 'linear-gradient(to top, rgba(255,255,255,0.95), rgba(255,255,255,0))',
+              marginTop: `-${s.dist}vh`, // низ элемента — в точке старта (хвост), верх — голова
+              transformOrigin: '50% 100%', // якорь у старта: линия прочерчивается ОТ него к сходу
+              // Голова (верх/дальний конец) яркая, старт — прозрачный: точка тянет за собой след.
+              background: 'linear-gradient(to top, rgba(255,255,255,0), rgba(255,255,255,0.95))',
               opacity: 0,
-              '--dx': `${s.dx}vw`,
-              '--dy': `${s.dy}vh`,
               '--rot': `${s.rot}deg`,
-              '--stretch': s.stretch,
               '--peak': s.peak,
-              animation: `title-dust-warp ${s.dur}s ease-in ${s.delay}s both`,
+              animation: `title-dust-warp ${s.dur}s ease-out ${s.delay}s both`,
             } as React.CSSProperties
           }
         />
