@@ -96,8 +96,14 @@ function moonsOf(planet: Planet, radius: number): SystemDef['planets'][number]['
   }))
 }
 
-/** Система карты, развёрнутая в мир. Детерминирована: индекс и зерно задают всё. */
-export function systemDefOf(system: StarSystem, galaxySeed: number): SystemDef {
+/**
+ * Система карты, развёрнутая в мир. Детерминирована: индекс и зерно задают всё.
+ *
+ * `seatOverride` — планета с причалом, ВЫБРАННАЯ игроком на карте, когда станций
+ * в системе несколько. Мир строит именно её станцию (и выход к ней), а не столичную
+ * по умолчанию. Если у выбранной планеты станции нет — молча берём столицу.
+ */
+export function systemDefOf(system: StarSystem, galaxySeed: number, seatOverride?: number): SystemDef {
   const rng = makeRng(galaxySeed ^ (system.index + 1))
 
   const planets = system.planets.map((p, i) => {
@@ -133,15 +139,19 @@ export function systemDefOf(system: StarSystem, galaxySeed: number): SystemDef {
       }
     : null
 
-  // Столица — мир с причалом и наибольшим населением. К ней и выходим.
+  // Столица — мир с причалом и наибольшим населением. К ней и выходим по умолчанию;
+  // но если игрок выбрал на карте другую станцию системы — местом выхода становится она.
   const capital = capitalOf(system)
-  const seat = capital ? system.planets.indexOf(capital) : 0
+  const defaultSeat = capital ? system.planets.indexOf(capital) : 0
+  const seat =
+    seatOverride != null && system.planets[seatOverride]?.station ? seatOverride : defaultSeat
 
+  const seatStation = system.planets[seat]?.station ?? null
   const start = arrivalPoint(system, seat, planets)
-  const capitalPlanet = planets[seat]
-  const stationDef = capital?.station && capitalPlanet
+  const seatPlanet = planets[seat]
+  const stationDef = seatStation && seatPlanet
     ? {
-        name: capital.station.name,
+        name: seatStation.name,
         pos: [start[0], start[1], start[2] - 2_000] as [number, number, number],
         radius: 400,
       }

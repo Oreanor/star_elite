@@ -267,9 +267,11 @@ function makePlanets(rng: Rng, system: string, habitable: boolean): Planet[] {
       // Орбиты расходятся геометрически — как в настоящих системах.
       orbit: Math.round(6000 * 1.7 ** i * (0.85 + rng() * 0.3)),
       settlement,
-      // Пока причал бывает только у обитаемого мира. Шахтёрские аванпосты
-      // у поясов и лун — это данные, а не код: добавятся здесь же.
-      station: settlement ? makeStation(rng, settlement) : null,
+      // Причал ставит только РАЗВИТАЯ раса: примитивная жизнь (тех ≤ 4, уровень
+      // `systemLife` 'primitive') станций не строит — ей ещё нечем. Так «обитаемый»
+      // и «есть куда причалить» перестают быть одним и тем же: мир с дикарями видно
+      // на карте как жизнь, но прыгать к нему незачем.
+      station: settlement && settlement.techLevel > 4 ? makeStation(rng, settlement) : null,
     })
   }
   return planets

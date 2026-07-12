@@ -4,7 +4,7 @@ import { isCruising } from '../cruise/drive'
 import { enterSystem } from '../world/factory'
 import { STARTER_SYSTEM, type SystemDef } from '../world/system'
 import type { World } from '../world/entities'
-import { arrivalPoint, type Arrival } from './arrival'
+import { arrivalPoint, scatterArrival, type Arrival } from './arrival'
 import { systemDefOf } from './bridge'
 import { driftContacts } from './contacts'
 import { spawnResidentContacts } from '../world/traffic'
@@ -33,9 +33,9 @@ export type JumpBlock = 'no-drive' | 'out-of-range' | 'out-of-charge' | 'same-sy
  * где висит МКС. С неё начинается игра, и первый кадр обязан быть тем самым.
  * Всё остальное выводится из зерна — 2500 систем, ни одна не хранится.
  */
-export function systemDefFor(index: number, galaxySeed: number): SystemDef {
+export function systemDefFor(index: number, galaxySeed: number, seatOverride?: number): SystemDef {
   if (index === WORLD.HOME_INDEX && galaxySeed === GALAXY.SEED) return STARTER_SYSTEM
-  return systemDefOf(generateSystem(index, galaxySeed), galaxySeed)
+  return systemDefOf(generateSystem(index, galaxySeed), galaxySeed, seatOverride)
 }
 
 /** Расстояние до системы, световых лет. Диск не заворачивается — метрика прямая. */
@@ -107,8 +107,14 @@ export function jump(world: World, index: number, arrival: Arrival | null = null
   const destIndex = isCore(index) ? CORE_INDEX : index
   if (isCore(index)) world.galaxySeed = nextGalaxySeed(world.galaxySeed)
 
-  const def = systemDefFor(destIndex, world.galaxySeed)
-  enterSystem(world, def, destIndex, arrivalPoint(def, arrival))
+  // Выбранная на карте станция (если станций несколько) становится местом выхода:
+  // мир строит именно её. Разброс точки выхода растёт с длиной прыжка — короткий
+  // кладёт впритык к цели, дальний рассеивает на километры (см. `scatterArrival`).
+  const seatOverride = arrival?.kind === 'body' ? arrival.planet : undefined
+  const def = systemDefFor(destIndex, world.galaxySeed, seatOverride)
+  const drive = world.player.spec.jumpRange
+  const start = scatterArrival(def, arrivalPoint(def, arrival), drive > 0 ? spent / drive : 0, world.rng)
+  enterSystem(world, def, destIndex, start)
   world.player.jumpCharge = Math.max(0, world.player.jumpCharge - spent)
 
   // Прыжок — отрезок времени: сперва знакомые за кулисами делают ход (перелёт, гибель),
