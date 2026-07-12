@@ -1203,8 +1203,12 @@ function Paused({
           /* Идёт загрузка/старт: вместо кнопок — один центрованный индикатор. На первом
              старте (не пауза) он уезжает к середине под улетающий корабль; на паузе стоит. */
           <div
-            className="transition-transform duration-700 ease-out"
-            style={{ transform: !resuming ? 'translateY(calc(18vh - 3rem))' : 'none' }}
+            style={{
+              transform: !resuming ? 'translateY(calc(18vh - 3rem))' : 'none',
+              // На срыве корабля подпись быстро уходит в прозрачность (0.2с); сдвиг — как был (0.7с).
+              opacity: launched ? 0 : 1,
+              transition: 'transform 0.7s ease-out, opacity 0.2s ease-out',
+            }}
           >
             {/* Эскалация подписи и дрожь кнопки — ЧЕРЕЗ CSS (композитор), а не React-таймеры:
                 считается от МОМЕНТА нажатия в реальном времени, даже пока сборка держит поток.
