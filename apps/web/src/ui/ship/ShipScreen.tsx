@@ -11,6 +11,7 @@ import {
   fitOntoChassis,
   freeCapacity,
   isEssential,
+  minTechForClass,
   moduleResaleValue,
   moduleStat,
   priceOf,
@@ -417,10 +418,15 @@ function SlotModal({
         label: `${t('station.upgradeCash')} · ${credits(upgradeCashCost(module))}`,
         run: () => upgradeModule(world, player, module, false),
       })
+    // Ни одной дороги — почему? Мир не тянет этот класс (нужен развитее) — своя причина;
+    // иначе просто нет денег.
+    const lowTech = canUpgrade(world, player, module, false) === 'low-tech'
     setConfirm(
       actions.length > 0
         ? { message: t('ship.confirm.upgrade', { name: displayName(module) }), actions }
-        : { message: t('ship.confirm.noFunds', { price: credits(upgradeCashCost(module)) }), actions: [] },
+        : lowTech
+          ? { message: t('ship.confirm.lowTech', { tech: minTechForClass(module.class) }), actions: [] }
+          : { message: t('ship.confirm.noFunds', { price: credits(upgradeCashCost(module)) }), actions: [] },
     )
   }
 

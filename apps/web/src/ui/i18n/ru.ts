@@ -391,6 +391,7 @@ export const RU = {
   'ship.confirm.buy': 'Купить «{name}» за {price} и установить?',
   'ship.confirm.upgrade': 'Как улучшить «{name}»?',
   'ship.confirm.noFunds': 'Не хватает денег: нужно {price}',
+  'ship.confirm.lowTech': 'Мир слаб для этого класса. Нужен тех-уровень {tech}+ — ищи развитее.',
   'ship.cancel': 'ОТМЕНА',
   'ship.ok': 'ОК',
 

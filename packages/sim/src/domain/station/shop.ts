@@ -1,5 +1,5 @@
 import { MIELOPHONE } from '../../config/mielophone'
-import { SHOP, STOCK } from '../../config/station'
+import { SERVICE, SHOP, STOCK } from '../../config/station'
 import { clamp, makeRng } from '../../core/math'
 import { addCommodity, addItem, cargoMass, freeCapacity, removeItem } from '../cargo/hold'
 import { COMMODITIES, itemValue, type CargoItem, type Commodity } from '../cargo/items'
@@ -170,10 +170,27 @@ export function stockChance(module: ShipModule, settlement: Settlement): number 
  * Оттого магазин синхронизируется по сети даром. Решение по каждому модулю —
  * независимый бросок от собственного зерна, поэтому список стабилен между вызовами.
  */
+/** Минимальный тех-уровень мира, чтобы держать/обслуживать модуль этого КЛАССА. */
+export function minTechForClass(cls: 1 | 2 | 3 | 4): number {
+  return SERVICE.MIN_TECH_BY_CLASS[cls]
+}
+
+/**
+ * Тянет ли ЭТОТ мир такой класс железа — и продать, и обслужить. Развитость поселения
+ * это технологический потолок: класс 4 (вершина, сюда же ремонт инструментов бога)
+ * доступен лишь на тех ≥ 12, а дикарям не собрать и класс 2. Одна дверь для витрины и
+ * для сервиса, чтобы «где куплю» и «где починю» отвечали одинаково.
+ */
+export function canServiceHere(world: World, module: ShipModule): boolean {
+  return localSettlement(world).techLevel >= minTechForClass(module.class)
+}
+
 export function stationStock(world: World): readonly ShipModule[] {
   const settlement = localSettlement(world)
   return MODULE_CATALOGUE.filter((m) => {
     if (m.cost <= 0) return false // бесплатный стартовый хлам не продают
+    // Тех-потолок мира: высокий класс на отсталой планете не сделать — его там и не продают.
+    if (settlement.techLevel < minTechForClass(m.class)) return false
     const rng = makeRng(world.galaxySeed ^ Math.imul(world.systemIndex + 1, 0x9e3779b1) ^ hashModuleId(m.id))
     return rng() < stockChance(m, settlement)
   })
@@ -371,7 +388,7 @@ export function moduleStat(m: ShipModule): { key: StatKey; value: number } {
 
 // ─── Прокачка модуля ──────────────────────────────────────────────────────────
 
-export type UpgradeError = 'maxed' | 'no-copy' | 'no-money'
+export type UpgradeError = 'maxed' | 'no-copy' | 'no-money' | 'low-tech'
 
 /** Накопленная прибавка модуля, доля к стоку: 0 — заводской, 0.5 — «+50%». */
 export function upgradeLevel(module: ShipModule): number {
@@ -401,6 +418,8 @@ export function canUpgrade(
 ): UpgradeError | null {
   // Каждый модуль улучшается один раз: уже прокачанный дальше не берут.
   if (upgradeLevel(module) > 1e-6) return 'maxed'
+  // Мир не тянет этот класс — прокачать его здесь негде (тот же потолок, что и у витрины).
+  if (!canServiceHere(world, module)) return 'low-tech'
   if (useCopy) return upgradeCopyIndex(ship, module) === null ? 'no-copy' : null
   return world.credits < upgradeCashCost(module) ? 'no-money' : null
 }
