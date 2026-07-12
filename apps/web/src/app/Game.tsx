@@ -1,4 +1,4 @@
-import { Canvas } from '@react-three/fiber'
+import { Canvas, useFrame } from '@react-three/fiber'
 import { useEffect, useRef, useState } from 'react'
 import { useSession } from './GameContext'
 import { FlightCamera } from '../render/camera/FlightCamera'
@@ -92,7 +92,22 @@ function Scene() {
  * а полумиллионное небо и геометрия планет строятся уже под нажатием — там это
  * читается как загрузка, а не как поломка.
  */
-export function Game({ ready }: { ready: boolean }) {
+/**
+ * Пингует «сцена готова» ПОСЛЕ первого отрисованного кадра: тяжёлая геометрия и
+ * полумиллионное небо строятся в первом рендере, а первый `useFrame` случается уже
+ * после — значит к этому моменту сцена собрана и видна. По нему титул и даёт «вжух».
+ */
+function ReadyPing({ onReady }: { onReady: () => void }) {
+  const done = useRef(false)
+  useFrame(() => {
+    if (done.current) return
+    done.current = true
+    onReady()
+  })
+  return null
+}
+
+export function Game({ ready, onReady }: { ready: boolean; onReady?: () => void }) {
   const hostRef = useRef<HTMLDivElement>(null)
   const session = useSession()
 
@@ -137,6 +152,7 @@ export function Game({ ready }: { ready: boolean }) {
           <>
             <JumpDirector />
             <Scene key={epoch} />
+            {onReady && <ReadyPing onReady={onReady} />}
           </>
         )}
       </Canvas>

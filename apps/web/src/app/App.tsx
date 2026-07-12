@@ -188,6 +188,9 @@ function Shell({ onRestart }: { onRestart: () => void }) {
    * ещё нет), и кнопка сама повторяет запрос, пока сцена не встанет.
    */
   const [booted, setBooted] = useState(false)
+  // Сцена реально ПОСТРОЕНА (первый кадр отрисован) — по этому сигналу титул даёт «вжух».
+  // `booted` лишь запускает сборку; готовность приходит кадром позже, из `Game`.
+  const [sceneReady, setSceneReady] = useState(false)
 
   /**
    * Новичок только что слепил пилота и запускается: Paused проигрывает флориш взлёта
@@ -443,7 +446,7 @@ function Shell({ onRestart }: { onRestart: () => void }) {
     <div className="relative h-screen w-screen overflow-hidden bg-black">
       {/* Канвас — всегда: захвату курсора нужен готовый канвас уже на первом жесте.
           Тяжёлую сцену он строит только по `booted` (после нажатия СТАРТ). */}
-      <Game ready={booted} />
+      <Game ready={booted} onReady={() => setSceneReady(true)} />
       {/* Онлайн: раз в пару секунд шлём своё присутствие. Ничего не рисует. */}
       {online && <PresencePublisher />}
       {over ? (
@@ -475,6 +478,7 @@ function Shell({ onRestart }: { onRestart: () => void }) {
           <Paused
             resuming={started}
             auto={launching}
+            ready={sceneReady}
             onBoot={() => setBooted(true)}
             onDock={() => {
               setDocked(true)
@@ -647,13 +651,10 @@ function restartAnimation(el: HTMLElement | null, animation: string): void {
  */
 function TitleLogo({
   launching,
-  launched,
   imgRef,
   onReady,
 }: {
   launching: boolean
-  /** «Вжух»: логотип вспыхивает в момент срыва корабля, а не в начале ожидания. */
-  launched: boolean
   imgRef: React.RefObject<HTMLImageElement | null>
   onReady: () => void
 }) {
@@ -688,7 +689,7 @@ function TitleLogo({
           src="/logo.png"
           alt="STAR ELITE"
           onLoad={onReady}
-          className={`block w-full ${launched ? 'title-logo-flash' : ''}`}
+          className={`block w-full ${launching ? 'title-logo-flash' : ''}`}
         />
         <div ref={glintRef} className="title-logo-glint" aria-hidden />
       </div>
@@ -970,6 +971,7 @@ function TitleShip({ trembling, launched }: { trembling: boolean; launched: bool
 function Paused({
   resuming,
   auto,
+  ready,
   onBoot,
   onDock,
   onNewGame,
@@ -977,6 +979,8 @@ function Paused({
   resuming: boolean
   /** Новичок: сразу играем флориш взлёта и садимся на станцию, без меню и без захвата. */
   auto?: boolean
+  /** Сцена ПОСТРОЕНА (первый кадр отрисован). До этого корабль лишь дрожит; по нему — «вжух». */
+  ready: boolean
   onBoot: () => void
   /** Финал авто-старта: посадить новичка на станцию (вместо запроса захвата курсора). */
   onDock?: () => void
@@ -1006,6 +1010,9 @@ function Paused({
   const [screen, setScreen] = useState<PauseScreen>('main')
   const [keyGroup, setKeyGroup] = useState(0)
   const timer = useRef<number | null>(null)
+  // Страж «вжуха»: срыв корабля играем один раз по готовности сцены. Сбрасывается, если
+  // захват так и не дался (сдались) — тогда следующая попытка снова доиграет флориш.
+  const fired = useRef(false)
 
   // Захват получен — Paused размонтируется, и таймер обязан уйти вместе с ним.
   useEffect(() => () => void (timer.current !== null && window.clearTimeout(timer.current)), [])
@@ -1046,6 +1053,7 @@ function Paused({
       if (performance.now() >= deadline) {
         setWaiting(false) // сдались — пусть кнопка снова принимает нажатие
         setLaunched(false) // и корабль обратно на место (не «улетевший») к следующей попытке
+        fired.current = false // разрешаем флоришу сыграть заново на следующей попытке
         return
       }
       timer.current = window.setTimeout(() => poll(deadline), LOCK_RETRY_MS)
@@ -1065,24 +1073,33 @@ function Paused({
   const launch = () => {
     setWaiting(true)
     if (resuming) {
-      // Пауза: ни корабля, ни флориша — строим сцену и дожимаем захват.
+      // Пауза: ни корабля, ни флориша — сцена уже построена, дожимаем захват сразу.
       window.setTimeout(() => {
         onBoot()
         poll(performance.now() + LOCK_GIVE_UP_MS)
       }, 0)
       return
     }
-    window.setTimeout(() => {
-      onBoot() // строит сцену — блокирует поток; тремор на это время замирает
-      setLaunched(true) // готово — «вжух»: корабль срывается
-      // Дадим кораблю улететь и небу опустеть, затем переход: новичок садится в док,
-      // возвращающийся — уходит в полёт (дожимаем захват циклом повторов).
-      window.setTimeout(() => {
-        if (auto && onDock) onDock()
-        else poll(performance.now() + LOCK_GIVE_UP_MS)
-      }, LAUNCH_HOLD_MS)
-    }, TREMBLE_LEAD_MS)
+    // Титул: запускаем СБОРКУ сцены (`onBoot`), а корабль пусть дрожит, пока она идёт.
+    // «Вжух» и переход даст эффект по сигналу готовности (`ready`), не по таймеру —
+    // раньше корабль срывался мгновенно, потому что `onBoot` лишь помечает сборку, а не ждёт её.
+    // Небольшая задержка — чтобы «секундочку» и тремор успели отрисоваться до блокирующей сборки.
+    window.setTimeout(onBoot, TREMBLE_LEAD_MS)
   }
+
+  // Сцена готова — «вжух»: корабль срывается, и через секунду (небо пустеет) уходим в игру/док.
+  // Ref-страж держит один раз: без него cleanup при смене `launched` убил бы таймер перехода.
+  useEffect(() => {
+    if (!ready || !waiting || resuming || fired.current) return
+    fired.current = true
+    setLaunched(true)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    window.setTimeout(() => {
+      if (auto && onDock) onDock()
+      else poll(performance.now() + LOCK_GIVE_UP_MS)
+    }, LAUNCH_HOLD_MS)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready, waiting, resuming])
 
   const take = () => {
     if (waiting) return
@@ -1125,7 +1142,7 @@ function Paused({
           ни выросло ниже. Растр, поэтому у него собственная ширина. Заголовок
           остаётся для тех, кто читает страницу не глазами. */}
       <h1 className="sr-only">STAR ELITE</h1>
-      <TitleLogo launching={waiting} launched={launched} imgRef={logoRef} onReady={measureVanish} />
+      <TitleLogo launching={waiting} imgRef={logoRef} onReady={measureVanish} />
 
       {/* Главное меню — просто кнопки на фоне корабля, без плашки: обводка тут ни к чему.
           Клавиши и настройки не живут на этом экране, а всплывают поверх отдельной панелью. */}
