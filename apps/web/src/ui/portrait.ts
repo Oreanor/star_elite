@@ -147,3 +147,21 @@ export function loadSheet(url: string): HTMLImageElement {
 export function sheetReady(img: HTMLImageElement): boolean {
   return img.complete && img.naturalWidth > 0
 }
+
+/**
+ * Прогреть ВСЕ листы портретов разом: 4 расы × 6 эмоций = 24 файла. Любое лицо в игре —
+ * это клетка одного из них, поэтому грузить порознь незачем: качаем всё на старте (и на
+ * экране создания персонажа лица уже готовы). После этого `useSheetLoading` почти всегда
+ * видит `complete` — помехи-прелоадер остаются лишь подстраховкой на холодной загрузке.
+ */
+export function preloadPortraits(): void {
+  const assets = [...new Set(Object.values(SPECIES_ASSET))]
+  // Нейтральные — первым проходом: это лицо по умолчанию в списках, контактах и на
+  // создании персонажа. Эмоции нужны лишь в разговоре, их догружаем следом.
+  for (const asset of assets) loadSheet(`/portraits/${asset}/${EMOTION_FILE.neutral}.png`)
+  for (const asset of assets) {
+    for (const num of Object.values(EMOTION_FILE)) {
+      if (num !== EMOTION_FILE.neutral) loadSheet(`/portraits/${asset}/${num}.png`)
+    }
+  }
+}

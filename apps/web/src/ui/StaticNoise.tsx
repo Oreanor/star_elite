@@ -66,6 +66,11 @@ export function StaticNoise() {
     const t = tiles
     if (!el || !t.grain[0]) return
 
+    // Первый кадр — СРАЗУ, синхронно: иначе до первого тика rAF (~16 мс) div пустой,
+    // а при быстрой загрузке листа прелоадер успевал размонтироваться пустым — помех не видно.
+    el.style.backgroundImage = `url(${pick(t.grain)})`
+    el.style.transform = 'rotate(0deg) scale(1.18)'
+
     let raf = 0
     let last = 0
     let barsUntil = 0
