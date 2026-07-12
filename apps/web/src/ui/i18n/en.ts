@@ -9,6 +9,7 @@ import type { RU } from './ru'
 export const EN: Record<keyof typeof RU, string> = {
   'menu.start': 'LAUNCH',
   'menu.resume': 'RESUME',
+  'menu.continue': 'CONTINUE',
   'menu.wait': 'ONE MOMENT…',
   // Loading dragged on (>2s) — shift tone to "almost there" so it doesn't read as frozen.
   'menu.waitLong': 'HANG ON… ALMOST…',

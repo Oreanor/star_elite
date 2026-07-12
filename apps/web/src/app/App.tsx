@@ -339,6 +339,11 @@ function Shell({ onRestart }: { onRestart: () => void }) {
       persistSave(serializePlayer(session.world))
       session.isNewGame = false
       setCreated(true)
+      // После создания — СРАЗУ на станцию, без промежуточного меню: новичок стартует
+      // ПРИСТЫКОВАННЫМ (startDocked), поэтому строим сцену и показываем док. Захват курсора
+      // здесь не нужен — он берётся при отчаливании.
+      setBooted(true)
+      setDocked(true)
     },
     [session],
   )
@@ -939,14 +944,10 @@ function Paused({ resuming, onBoot, onNewGame }: { resuming: boolean; onBoot: ()
   useLang() // подписка: смена языка перерисует меню
   const session = useSession()
   const [waiting, setWaiting] = useState(false)
-  // Загрузка затянулась дольше 2с — меняем «СЕКУНДУ…» на «ЩА-ЩА… УЖЕ…», чтобы не выглядело
-  // зависшим. Сбрасывается, как только ожидание кончилось.
+  // «ЩА-ЩА… УЖЕ…» вместо «СЕКУНДУ…» на время РЕАЛЬНОЙ загрузки — взводим прямо перед `onBoot`
+  // (после улёта корабля, когда строится сцена). Не `setTimeout`: тот стартует гонку с
+  // блокирующим главный поток `onBoot` и таймер не успевал выстрелить до размонтирования.
   const [waitLong, setWaitLong] = useState(false)
-  useEffect(() => {
-    if (!waiting) return void setWaitLong(false)
-    const id = window.setTimeout(() => setWaitLong(true), 2500)
-    return () => window.clearTimeout(id)
-  }, [waiting])
   // «Новая игра» стирает прогресс — жмётся в два клика: первый взводит подтверждение.
   const [confirmNew, setConfirmNew] = useState(false)
   const [screen, setScreen] = useState<PauseScreen>('main')
@@ -991,6 +992,7 @@ function Paused({ resuming, onBoot, onNewGame }: { resuming: boolean; onBoot: ()
       if (ok) return // захват получен: Paused сейчас размонтируется
       if (performance.now() >= deadline) {
         setWaiting(false) // сдались — пусть кнопка снова принимает нажатие
+        setWaitLong(false) // и текст обратно на «СЕКУНДУ…» к следующей попытке
         return
       }
       timer.current = window.setTimeout(() => poll(deadline), LOCK_RETRY_MS)
@@ -1014,6 +1016,9 @@ function Paused({ resuming, onBoot, onNewGame }: { resuming: boolean; onBoot: ()
     // уйдёт, плюс секунда пустого неба. На «продолжить» (пауза) корабля нет и ждать нечего.
     const delay = resuming ? 0 : TITLE_LAUNCH_MS + 1000
     window.setTimeout(() => {
+      // Началась реальная загрузка (сцена строится, поток вот-вот заблокируется) — здесь и
+      // меняем «СЕКУНДУ…» на «ЩА-ЩА… УЖЕ…»: надёжно, до блокировки.
+      setWaitLong(true)
       // Строит сцену. Пока её нет, захват не даётся, и цикл повторов дожидается
       // канваса — специально для этого он и заведён.
       onBoot()
@@ -1058,35 +1063,30 @@ function Paused({ resuming, onBoot, onNewGame }: { resuming: boolean; onBoot: ()
       {/* Главное меню — просто кнопки на фоне корабля, без плашки: обводка тут ни к чему.
           Клавиши и настройки не живут на этом экране, а всплывают поверх отдельной панелью. */}
       <div className="absolute inset-0 flex flex-col items-center justify-start pt-[calc(32vh+40px)]">
-        <div className="flex flex-col items-center gap-4">
-          {/* На первом старте кнопка (уже «СЕКУНДУ…») плавно уезжает к середине экрана —
-              пока прочие растворяются, остаётся один центрованный индикатор загрузки. На
-              паузе не двигаем. Сдвиг = от места кнопки (≈32vh) к центру (50vh) за вычетом
-              её половины; transform не трогает вёрстку соседей. */}
+        {waiting ? (
+          /* Идёт загрузка/старт: вместо кнопок — один центрованный индикатор. На первом
+             старте (не пауза) он уезжает к середине под улетающий корабль; на паузе стоит. */
           <div
             className="transition-transform duration-700 ease-out"
-            style={{ transform: waiting && !resuming ? 'translateY(calc(18vh - 3rem))' : 'none' }}
+            style={{ transform: !resuming ? 'translateY(calc(18vh - 3rem))' : 'none' }}
           >
-            <MenuButton onClick={take} disabled={waiting}>
-              {waiting ? t(waitLong ? 'menu.waitLong' : 'menu.wait') : resuming ? t('menu.resume') : t('menu.start')}
-            </MenuButton>
+            <MenuButton disabled onClick={() => {}}>{t(waitLong ? 'menu.waitLong' : 'menu.wait')}</MenuButton>
           </div>
-          {/* Прочие кнопки РАСТВОРЯЮТСЯ только на первом СТАРТЕ (где улёт корабля): на экране
-              остаются лишь «СЕКУНДУ…» и улетающий корабль. На ПАУЗЕ (`resuming`) корабля нет и
-              «Продолжить» мгновенно — там кнопки не гасим, все нужные остаются на месте.
-              Не размонтируем, а гасим прозрачность (и снимаем клики) — уход плавный. */}
-          <div
-            className="flex flex-col items-center gap-4 transition-opacity duration-500"
-            style={{
-              opacity: waiting && !resuming ? 0 : 1,
-              pointerEvents: waiting && !resuming ? 'none' : 'auto',
-            }}
-          >
+        ) : (
+          <div className="flex flex-col items-center gap-4">
+            {/* Порядок: НОВАЯ ИГРА · ПРОДОЛЖИТЬ (если есть сейв/пауза) · КЛАВИШИ · НАСТРОЙКИ.
+                Отдельной «СТАРТ» нет: новичок идёт через создание перса → сразу на станцию,
+                а вход в существующую игру — это «Продолжить». */}
             {/* «Новая игра» стирает прогресс. Есть сейв — спрашиваем МОДАЛКОЙ (Да/Нет);
                 нет сейва (нечего терять) — начинаем сразу, без лишнего вопроса. */}
             <MenuButton onClick={() => (session.isNewGame ? onNewGame() : setConfirmNew(true))}>
               {t('menu.newGame')}
             </MenuButton>
+            {/* «Продолжить» — только когда есть куда возвращаться: сейв (не новая игра) или
+                пауза. Ведёт в игру тем же захватом курсора, что и раньше «Старт». */}
+            {(resuming || !session.isNewGame) && (
+              <MenuButton onClick={take}>{t('menu.continue')}</MenuButton>
+            )}
             <MenuButton onClick={() => { setConfirmNew(false); setScreen('keys') }}>
               {t('menu.keys')}
             </MenuButton>
@@ -1094,7 +1094,7 @@ function Paused({ resuming, onBoot, onNewGame }: { resuming: boolean; onBoot: ()
               {t('menu.settings')}
             </MenuButton>
           </div>
-        </div>
+        )}
       </div>
 
       {/* Новая игра при живом сейве — модалка с прямым «уничтожит, начать?». Клик мимо = отмена. */}
