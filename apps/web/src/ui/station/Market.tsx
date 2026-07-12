@@ -122,9 +122,15 @@ function BuyModal({
       style={{ color: ACCENT }}
     >
       <div
-        className="w-full max-w-sm border bg-black/90 p-6 backdrop-blur-sm"
+        // Стекло как у консоли станции: translucent-синий градиент под размытием, а не глухой
+        // чёрный. Модалка покупки — часть того же терминала, и выглядеть должна так же.
+        className="w-full max-w-sm rounded-2xl border p-6 backdrop-blur-md"
         onClick={(e) => e.stopPropagation()}
-        style={{ borderColor: ACCENT, boxShadow: '0 0 40px rgba(127,214,255,0.2)' }}
+        style={{
+          borderColor: 'rgba(124,196,255,0.3)',
+          background: 'linear-gradient(150deg, rgba(40,95,150,0.28), rgba(8,22,42,0.55))',
+          boxShadow: '0 0 60px rgba(60,150,255,0.18), inset 0 0 80px rgba(80,180,255,0.06)',
+        }}
       >
         <div className="mb-4 flex items-baseline justify-between gap-3">
           <h3 className="text-base tracking-[0.2em]">{commodityName(commodity)}</h3>

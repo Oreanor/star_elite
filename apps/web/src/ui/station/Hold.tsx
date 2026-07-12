@@ -13,7 +13,7 @@ import { UI } from '../theme'
 import { t, useLang } from '../i18n'
 import { Button, Column, DIM, Panel, Table } from './chrome'
 import { credits, formatStat } from './format'
-import { ModuleHeadline, displayName } from './Equipment'
+import { displayName } from './Equipment'
 import { commodityName } from '../i18n/dataNames'
 
 /**
@@ -103,9 +103,7 @@ export function Hold({
             // Ключ обязан пережить продажу соседа: одинаковые товары уже в одной стопке,
             // разные модули различаются именем, а хвост индекса разводит совпадения.
             rowKey={(item, i) => `${itemName(item)}-${i}`}
-            // Модуль в трюме — снятое/трофейное железо: клик раскрывает его характеристику.
-            // Установка живёт на верфи (вкладка СНАРЯЖЕНИЕ), поэтому здесь только справка.
-            detail={(item) => (item.kind === 'module' ? <ModuleHeadline module={item.module} /> : null)}
+            // Раскрытия вниз по клику нет намеренно: строки трюма ничего не разворачивают.
           />
 
           {atStation && (

@@ -554,11 +554,14 @@ const KEY_GROUPS: { title: Key; rows: [Key, Key][] }[] = [
  * корабль просвечивает, но шрифт держится на своём фоне. Самый высокий экран (клавиши)
  * влезает целиком, оттого высота задана заранее, а не тянется по содержимому.
  */
-function MenuPanel({ children }: { children: React.ReactNode }) {
+function MenuPanel({ children, fit = false }: { children: React.ReactNode; fit?: boolean }) {
   return (
     <div
-      className="flex h-[29rem] w-[34rem] max-w-[92vw] flex-col items-center justify-center gap-4
-                 overflow-y-auto rounded-2xl border p-8 backdrop-blur-md"
+      // `fit` — высота по контенту (короткая модалка-подтверждение). Без него плашка держит
+      // фиксированные 29rem: у меню/клавиш/настроек разное наполнение, и общая высота не даёт
+      // им дёргаться при переключении. Модалке из строки текста и двух кнопок это ни к чему.
+      className={`flex ${fit ? 'max-h-[92vh]' : 'h-[29rem]'} w-[34rem] max-w-[92vw] flex-col items-center
+                 justify-center gap-4 overflow-y-auto rounded-2xl border p-8 backdrop-blur-md`}
       style={{ borderColor: 'rgba(63,115,145,0.7)', background: 'rgba(20,44,74,0.38)' }}
     >
       {children}
@@ -1147,7 +1150,7 @@ function Paused({
           onClick={() => setConfirmNew(false)}
         >
           <div onClick={(e) => e.stopPropagation()}>
-            <MenuPanel>
+            <MenuPanel fit>
               <p className="max-w-sm text-center text-sm leading-relaxed tracking-widest text-[#7fd6ff]">
                 {t('menu.newGameWarn')}
               </p>
