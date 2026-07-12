@@ -674,7 +674,7 @@ function TitleLogo({ launching }: { launching: boolean }) {
  * корабля (тот на ~55%). Стартовые точки и тайминги фиксируем на монтировании (`useMemo`),
  * дальше всё крутит CSS-анимация — ноль ре-рендеров и ноль работы в кадре.
  */
-function TitleDust() {
+function TitleDust({ launching }: { launching: boolean }) {
   const bits = useMemo(() => {
     const VANISH_X = 50 // vw
     const VANISH_Y = 24 // vh — за и над кораблём
@@ -697,7 +697,12 @@ function TitleDust() {
     })
   }, [])
   return (
-    <div className="pointer-events-none absolute inset-0 overflow-hidden">
+    <div
+      className="pointer-events-none absolute inset-0 overflow-hidden"
+      // По срыву (0.8с — момент, когда корабль стартует) дрейф гаснет: его сменяют
+      // варп-штрихи (TitleWarp). `forwards` держит погасшим до перехода в игру.
+      style={launching ? { animation: 'title-dust-out 0.25s ease-in 0.8s forwards' } : undefined}
+    >
       {bits.map((b, i) => (
         <span
           key={i}
@@ -712,6 +717,52 @@ function TitleDust() {
               '--dy': `${b.dy}vh`,
               '--peak': b.peak,
               animation: `title-dust ${b.dur}s linear ${b.delay}s infinite`,
+            } as React.CSSProperties
+          }
+        />
+      ))}
+    </div>
+  )
+}
+
+/**
+ * Варп-штрихи «срыва с места»: в момент старта корабля (0.8с) пыль сливается в линии и
+ * рвётся РАДИАЛЬНО от точки схода — как вход в крейсер. Много штрихов разом, очень резко
+ * (ease-in: почти стоят, затем рывок), затем гаснут — и небо пустеет к переходу в игру.
+ * Каждый штрих — тонкая линия, развёрнутая наружу (--rot), летит на --reach, вытягиваясь
+ * в --stretch раз. Стартовые параметры фиксируем на монтировании — дальше всё крутит CSS.
+ */
+function TitleWarp() {
+  const streaks = useMemo(() => {
+    return Array.from({ length: 90 }, () => {
+      const len = 7 + Math.random() * 9 // px — базовая длина штриха до вытяжки
+      return {
+        rot: Math.random() * 360, // радиальное направление от точки схода
+        reach: 42 + Math.random() * 52, // vh — как далеко улетает
+        stretch: 9 + Math.random() * 15, // во сколько раз вытягивается в линию
+        dur: 0.32 + Math.random() * 0.33, // с — коротко и резко
+        delay: 0.8 + Math.random() * 0.12, // синхронно со срывом корабля, с лёгким разбросом
+        len,
+      }
+    })
+  }, [])
+  return (
+    <div className="pointer-events-none absolute inset-0 overflow-hidden">
+      {streaks.map((s, i) => (
+        <span
+          key={i}
+          className="absolute left-1/2 top-[24vh] rounded-full bg-white"
+          style={
+            {
+              width: 1.6,
+              height: s.len,
+              marginLeft: -0.8,
+              marginTop: -s.len / 2, // центр штриха — в точке схода (50vw, 24vh)
+              opacity: 0,
+              '--rot': `${s.rot}deg`,
+              '--reach': `${s.reach}vh`,
+              '--stretch': s.stretch,
+              animation: `title-warp ${s.dur}s ease-in ${s.delay}s both`,
             } as React.CSSProperties
           }
         />
@@ -913,7 +964,9 @@ function Paused({ resuming, onBoot, onNewGame }: { resuming: boolean; onBoot: ()
           правь bottom/left/w, если сопла окажутся не на месте.
           Корабль — только на ПЕРВОЙ заставке (не на паузе: там пустое небо). По СТАРТУ
           (`waiting`) он срывается и улетает, а затем уходит с экраном паузы. */}
-      {!resuming && <TitleDust />}
+      {!resuming && <TitleDust launching={waiting} />}
+      {/* Варп-штрихи — только в момент срыва (по СТАРТУ): пыль слилась в линии. */}
+      {!resuming && waiting && <TitleWarp />}
       {!resuming && <TitleShip launching={waiting} />}
 
       {/* Логотип — СВОЙ контейнер, вне общего потока: сдвинуть его нечем, что бы
