@@ -939,6 +939,14 @@ function Paused({ resuming, onBoot, onNewGame }: { resuming: boolean; onBoot: ()
   useLang() // подписка: смена языка перерисует меню
   const session = useSession()
   const [waiting, setWaiting] = useState(false)
+  // Загрузка затянулась дольше 2с — меняем «СЕКУНДУ…» на «ЩА-ЩА… УЖЕ…», чтобы не выглядело
+  // зависшим. Сбрасывается, как только ожидание кончилось.
+  const [waitLong, setWaitLong] = useState(false)
+  useEffect(() => {
+    if (!waiting) return void setWaitLong(false)
+    const id = window.setTimeout(() => setWaitLong(true), 2000)
+    return () => window.clearTimeout(id)
+  }, [waiting])
   // «Новая игра» стирает прогресс — жмётся в два клика: первый взводит подтверждение.
   const [confirmNew, setConfirmNew] = useState(false)
   const [screen, setScreen] = useState<PauseScreen>('main')
@@ -1060,7 +1068,7 @@ function Paused({ resuming, onBoot, onNewGame }: { resuming: boolean; onBoot: ()
             style={{ transform: waiting && !resuming ? 'translateY(calc(18vh - 3rem))' : 'none' }}
           >
             <MenuButton onClick={take} disabled={waiting}>
-              {waiting ? t('menu.wait') : resuming ? t('menu.resume') : t('menu.start')}
+              {waiting ? t(waitLong ? 'menu.waitLong' : 'menu.wait') : resuming ? t('menu.resume') : t('menu.start')}
             </MenuButton>
           </div>
           {/* Прочие кнопки РАСТВОРЯЮТСЯ только на первом СТАРТЕ (где улёт корабля): на экране
