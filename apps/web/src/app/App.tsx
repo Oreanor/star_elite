@@ -833,22 +833,22 @@ function TitleShip({ launching }: { launching: boolean }) {
 
   return (
     <div className="pointer-events-none absolute inset-x-0 top-[calc(55%+50px)] mx-auto w-full max-w-[43.2rem] -translate-y-1/2 px-8">
-      {/* Хлопок на срыве: дискообразная волна у кормы (сверху — там дюзы), перпендикулярно
-          ходу корабля. Сидит ПОЗАДИ (раньше в DOM → корабль перекрывает), центр не движется —
-          раздувается scale'ом и гаснет. screen делает чёрный прозрачным: кольцо светится. */}
+      {/* Хлопок на срыве: дискообразная волна ЗА кораблём (центр на корпусе), перпендикулярно
+          его ходу. Сидит ПОЗАДИ (раньше в DOM → корабль перекрывает центр), не движется — раздувается
+          scale'ом ШИРЕ корабля и гаснет. screen делает чёрный прозрачным: кольцо светится. */}
       {launching && (
         <div
           aria-hidden
-          className="pointer-events-none absolute left-1/2 top-[26%] mix-blend-screen"
+          className="pointer-events-none absolute left-1/2 top-1/2 mix-blend-screen"
           style={{
-            width: '22vw',
-            height: '6vh',
+            width: '20vw',
+            height: '7vh',
             borderRadius: '50%',
             background:
-              'radial-gradient(ellipse 50% 50% at 50% 50%, rgba(214,240,255,0) 50%, rgba(159,224,255,0.4) 62%, rgba(224,244,255,0.95) 72%, rgba(214,240,255,0) 86%)',
+              'radial-gradient(ellipse 50% 50% at 50% 50%, rgba(214,240,255,0) 46%, rgba(159,224,255,0.45) 60%, rgba(230,246,255,1) 72%, rgba(214,240,255,0) 88%)',
             transform: 'translate(-50%, -50%) scale(0.18, 0.3)',
             opacity: 0,
-            animation: 'title-ship-clap 0.55s ease-out 0.8s both',
+            animation: 'title-ship-clap 0.6s ease-out 0.8s both',
           }}
         />
       )}
