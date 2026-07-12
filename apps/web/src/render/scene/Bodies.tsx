@@ -18,6 +18,7 @@ import { createAtmosphereMaterial } from '../materials/atmosphere'
 import { createCityLightsMaterial } from '../materials/cityLights'
 import { loadPlanetTexture, pickVariant } from '../sky/planets'
 import { MoonSwarm } from './Moons'
+import { StationCompare } from './StationCompare'
 
 /**
  * Крупные тела: звезда, планеты, станция. Их немного и они почти неподвижны,
@@ -242,6 +243,8 @@ export function Bodies() {
         return <Station key={body.id} body={body} />
       })}
       <MoonSwarm moons={swarm} />
+      {/* Временный стенд: четыре варианта станции в ряд у настоящей — для выбора рисунка. */}
+      <StationCompare />
     </>
   )
 }

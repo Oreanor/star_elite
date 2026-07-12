@@ -28,7 +28,9 @@ const RING_RADIUS = 0.8 // радиус осевой линии обода
 const TUBE_RADIUS = 0.17 // полутолщина трубы обода
 const HUB_RADIUS = 0.2
 const HUB_HALF = 0.34 // полудлина ступицы по Z
-const SPOKES = 6
+
+/** Радиус внешнего экватора обода — по нему рендер расставляет мигающие маяки. */
+export const STATION_RIM_RADIUS = RING_RADIUS + TUBE_RADIUS
 
 function torus(major: number, minor: number, majorSegments: number, minorSegments: number): Triangle[] {
   const out: Triangle[] = []
@@ -58,16 +60,27 @@ function torus(major: number, minor: number, majorSegments: number, minorSegment
   return out
 }
 
-/** Балка от ступицы к ободу. Прямоугольное сечение, развёрнутое на `angle` в XY. */
-function spoke(angle: number, r0: number, r1: number, halfWidth: number, halfThick: number): Triangle[] {
+/** Радиусы, между которыми натянута спица: от ступицы до внутренней кромки обода. */
+const SPOKE_HUB = HUB_RADIUS * 0.9
+const SPOKE_RIM = RING_RADIUS - TUBE_RADIUS * 0.4
+
+/**
+ * Балка от ступицы к ободу — одна «спица» рисунка колеса. Обобщена до автомобильного
+ * диска: ширина у ступицы (`hw0`) и у обода (`hw1`) РАЗНАЯ, поэтому спица бывает
+ * клиновидной; `lean` сдвигает конец у обода по касательной, давая наклон крыльчатки
+ * или расхождение раздвоенной спицы. Прямоугольное сечение развёрнуто на `angle` в XY.
+ */
+function arm(angle: number, hw0: number, hw1: number, halfThick: number, lean = 0): Triangle[] {
   const c = Math.cos(angle)
   const s = Math.sin(angle)
   // Радиальная ось наружу, поперечная — по касательной, третья — вдоль Z.
   const at = (r: number, across: number, z: number): Vec3 => [c * r - s * across, s * r + c * across, z]
+  const r0 = SPOKE_HUB
+  const r1 = SPOKE_RIM
 
   const v: Vec3[] = [
-    at(r0, -halfWidth, -halfThick), at(r0, halfWidth, -halfThick), at(r0, halfWidth, halfThick), at(r0, -halfWidth, halfThick),
-    at(r1, -halfWidth, -halfThick), at(r1, halfWidth, -halfThick), at(r1, halfWidth, halfThick), at(r1, -halfWidth, halfThick),
+    at(r0, -hw0, -halfThick), at(r0, hw0, -halfThick), at(r0, hw0, halfThick), at(r0, -hw0, halfThick),
+    at(r1, lean - hw1, -halfThick), at(r1, lean + hw1, -halfThick), at(r1, lean + hw1, halfThick), at(r1, lean - hw1, halfThick),
   ]
   const p = (i: number): Vec3 => v[i]!
 
@@ -80,6 +93,33 @@ function spoke(angle: number, r0: number, r1: number, halfWidth: number, halfThi
     ...quad(p(4), p(5), p(1), p(0), STATION_DARK),
   ]
 }
+
+/**
+ * Вариант станции: тор, ступица и иллюминаторы у всех общие — узнаётся как кориолис, —
+ * а РАЗЛИЧАЕТСЯ рисунком спиц (число и форма, как у литых дисков) и числом мигающих
+ * маяков по ободу (4–8). `arm` рисует ОДНУ спицу на базовом угле; вариант «сплит»
+ * возвращает пару. Данные, а не ветвления: новый диск — новая запись, не правка кода.
+ */
+export interface StationVariant {
+  readonly spokes: number
+  readonly lights: number
+  readonly arm: (angle: number) => Triangle[]
+}
+
+export const STATION_VARIANTS: readonly StationVariant[] = [
+  // 0 — «Классик»: шесть прямых балок, как в оригинале.
+  { spokes: 6, lights: 6, arm: (a) => arm(a, 0.035, 0.035, 0.03) },
+  // 1 — «Спорт-5»: пять клиновидных лучей, широких у ступицы — 5-спицевый литой диск.
+  { spokes: 5, lights: 5, arm: (a) => arm(a, 0.085, 0.028, 0.032) },
+  // 2 — «Сплит»: пять раздвоенных спиц — тонкая пара, расходящаяся к ободу (split-spoke).
+  {
+    spokes: 5,
+    lights: 8,
+    arm: (a) => [...arm(a, 0.02, 0.022, 0.028, 0.1), ...arm(a, 0.02, 0.022, 0.028, -0.1)],
+  },
+  // 3 — «Турбина»: восемь тонких лопастей с наклоном к ободу — колесо-крыльчатка.
+  { spokes: 8, lights: 7, arm: (a) => arm(a, 0.024, 0.055, 0.022, 0.17) },
+]
 
 /** Ступица: восьмигранная призма вдоль оси вращения. В переднем торце — причал. */
 function hub(): Triangle[] {
@@ -142,21 +182,21 @@ function portholes(): Triangle[] {
   return out
 }
 
-function station(): Triangle[] {
+function station(variant: StationVariant): Triangle[] {
   const out: Triangle[] = [...torus(RING_RADIUS, TUBE_RADIUS, 24, 8), ...hub(), ...portholes()]
 
-  for (let i = 0; i < SPOKES; i++) {
-    const angle = (i / SPOKES) * Math.PI * 2
-    out.push(...spoke(angle, HUB_RADIUS * 0.9, RING_RADIUS - TUBE_RADIUS * 0.4, 0.035, 0.03))
+  for (let i = 0; i < variant.spokes; i++) {
+    out.push(...variant.arm((i / variant.spokes) * Math.PI * 2))
   }
   return out
 }
 
-let stationCache: BufferGeometry | null = null
+const stationCache: (BufferGeometry | undefined)[] = []
 
-export function stationGeometry(): BufferGeometry {
-  stationCache ??= buildGeometry(station())
-  return stationCache
+/** Геометрия станции выбранного варианта (0 — классическая шестиспицевая). Кэш по варианту. */
+export function stationGeometry(variant = 0): BufferGeometry {
+  const def = STATION_VARIANTS[variant] ?? STATION_VARIANTS[0]!
+  return (stationCache[variant] ??= buildGeometry(station(def)))
 }
 
 // ─── Грузовой контейнер ──────────────────────────────────────────────────────
