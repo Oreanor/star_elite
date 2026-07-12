@@ -8,11 +8,10 @@ import {
   MeshLambertMaterial,
   MeshStandardMaterial,
   PointsMaterial,
-  ShaderMaterial,
   SpriteMaterial,
   type Texture,
 } from 'three'
-import { MATERIAL, PALETTE, SHIELD_BUBBLE } from '../config'
+import { MATERIAL, PALETTE } from '../config'
 
 /**
  * Материалы создаются один раз на модуль. Каждый новый материал — это новая
@@ -333,64 +332,51 @@ export function shieldFlashMaterial(): MeshBasicMaterial {
   return shieldFlash
 }
 
-let shieldBubble: ShaderMaterial | null = null
+/**
+ * Текстура-КОЛЬЦО для щита корабля: центр полый (корабль виден насквозь), ближе к краю
+ * загорается ободок и мягко гаснет. В отличие от диска станции это не пятно, а окружность
+ * вокруг силуэта — «поле обвело корабль». Аддитив, поэтому центр в ноль = ничего не портит.
+ */
+let shieldRing: CanvasTexture | null = null
+function shieldRingTexture(): CanvasTexture {
+  if (shieldRing) return shieldRing
+  const size = 128
+  const canvas = document.createElement('canvas')
+  canvas.width = size
+  canvas.height = size
+  const ctx = canvas.getContext('2d')!
+  const g = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2)
+  g.addColorStop(0.0, 'rgba(255,255,255,0)') // полый центр: корабль виден
+  g.addColorStop(0.55, 'rgba(255,255,255,0)')
+  g.addColorStop(0.78, 'rgba(255,255,255,0.75)') // ободок
+  g.addColorStop(0.9, 'rgba(255,255,255,0.35)')
+  g.addColorStop(1.0, 'rgba(255,255,255,0)') // мягко в ноль к самому краю
+  ctx.fillStyle = g
+  ctx.fillRect(0, 0, size, size)
+  shieldRing = new CanvasTexture(canvas)
+  return shieldRing
+}
+
+let shieldBubble: MeshBasicMaterial | null = null
 
 /**
- * Защитная сфера корабля с ФРЕНЕЛЕМ: кромка (грань, глядящая вскользь) плотная, центр
- * прозрачный — «поле обтягивает силуэт». Дёшево: аддитив, без текстур, один инстансный
- * вызов на все сферы. Цвет и яркость каждой приходят инстансным атрибутом `aColor`
- * (тон × спад), поэтому вспышки гаснут по отдельности одним материалом.
+ * Защитное поле корабля — плоский КРУЖОК, развёрнутый к камере (billboard в компоненте).
+ * Со всех сторон читается одинаковой окружностью, окружающей корабль, — и не гранёная 3D-сфера,
+ * что вблизи выглядела многоугольником. Встроенный MeshBasicMaterial сам пишет log-depth,
+ * поэтому виден на любой дистанции (у сферы был рукописный шейдер, ронявший глубину вдали).
  *
- * `instanceMatrix` и `USE_INSTANCING` подставляет сам рендер для InstancedMesh; в шейдере
- * лишь пользуемся ими. Нормаль во вью-пространстве против направления взгляда даёт френель.
+ * Двусторонний: как бы billboard ни повернулся, кольцо не исчезнет изнанкой. Базовый цвет
+ * белый и домножается инстансным (голубой фосфор × спад) — все кружки одним вызовом.
  */
-export function shieldBubbleMaterial(): ShaderMaterial {
-  shieldBubble ??= new ShaderMaterial({
+export function shieldBubbleMaterial(): MeshBasicMaterial {
+  shieldBubble ??= new MeshBasicMaterial({
+    color: 0xffffff,
+    map: shieldRingTexture(),
     transparent: true,
     blending: AdditiveBlending,
     depthWrite: false,
+    side: DoubleSide,
     fog: false,
-    uniforms: { uPower: { value: SHIELD_BUBBLE.FRESNEL_POWER } },
-    vertexShader: /* glsl */ `
-      #include <common>
-      #include <logdepthbuf_pars_vertex>
-      attribute vec3 aColor;
-      varying vec3 vColor;
-      varying vec3 vNormalV;
-      varying vec3 vViewDir;
-      void main() {
-        vColor = aColor;
-        #ifdef USE_INSTANCING
-          mat4 mv = modelViewMatrix * instanceMatrix;
-          mat3 nm = mat3(mv);
-        #else
-          mat4 mv = modelViewMatrix;
-          mat3 nm = normalMatrix;
-        #endif
-        vec4 mvPos = mv * vec4(position, 1.0);
-        vNormalV = normalize(nm * normal);
-        vViewDir = normalize(-mvPos.xyz);
-        gl_Position = projectionMatrix * mvPos;
-        // Сцена с логарифмическим буфером глубины: без этого сфера пишет ОБЫЧНУЮ
-        // глубину, у далёкого корабля она расходится с буфером и depth-test её
-        // отбрасывает — потому щит был виден только вблизи (у себя), но не у врага.
-        #include <logdepthbuf_vertex>
-      }
-    `,
-    fragmentShader: /* glsl */ `
-      #include <common>
-      #include <logdepthbuf_pars_fragment>
-      uniform float uPower;
-      varying vec3 vColor;
-      varying vec3 vNormalV;
-      varying vec3 vViewDir;
-      void main() {
-        #include <logdepthbuf_fragment>
-        float f = 1.0 - abs(dot(normalize(vNormalV), normalize(vViewDir)));
-        f = pow(clamp(f, 0.0, 1.0), uPower);
-        gl_FragColor = vec4(vColor * f, f);
-      }
-    `,
   })
   return shieldBubble
 }
