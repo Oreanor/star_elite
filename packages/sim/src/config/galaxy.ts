@@ -250,6 +250,13 @@ export const SPECIES: readonly SpeciesDef[] = [
  */
 export const PLAYABLE_SPECIES: readonly string[] = [HUMAN_SPECIES, ...SPECIES.map((s) => s.name)]
 
+/**
+ * Мир с ЖИЗНЬЮ, но БЕЗ разумных колонистов: примитивная фауна («раки»). Это не раса и
+ * не член `PLAYABLE_SPECIES` — потому станцию тут не строят (незачем: колонизировать
+ * некому и нечем). Отличает «обитаемый дикий мир» от «колонии одной из четырёх рас».
+ */
+export const FAUNA_SPECIES = 'Примитивная фауна'
+
 /** Астрономическая единица, м. */
 const AU = 149_597_870_700
 

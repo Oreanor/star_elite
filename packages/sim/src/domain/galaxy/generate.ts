@@ -1,9 +1,11 @@
 import {
   CORE_INDEX,
+  FAUNA_SPECIES,
   GALAXY,
   GOVERNMENTS,
   HUMAN_SPECIES,
   PLANET_TYPES,
+  PLAYABLE_SPECIES,
   SECURITY_LEVELS,
   SPECIES,
   STAR_CLASSES,
@@ -216,12 +218,15 @@ function makeSettlement(rng: Rng, prominence: number): Settlement {
   const population =
     Math.round(clamp((techLevel / 15) ** 2.2 * 12 * (0.3 + rng() * 1.4) * prominence, 0.01, 14) * 100) / 100
 
+  // Бросок расы делаем всегда (стабильность RNG-потока), но у ПРИМИТИВНОГО мира (тех ≤ 4)
+  // разумных колонистов нет — там лишь фауна. Раса встаёт только с развитого уровня.
+  const race = makeSpecies(rng)
   return {
     economy: economyFor(rng, techLevel),
     government,
     techLevel,
     population,
-    species: makeSpecies(rng),
+    species: techLevel <= 4 ? FAUNA_SPECIES : race,
   }
 }
 
@@ -267,11 +272,11 @@ function makePlanets(rng: Rng, system: string, habitable: boolean): Planet[] {
       // Орбиты расходятся геометрически — как в настоящих системах.
       orbit: Math.round(6000 * 1.7 ** i * (0.85 + rng() * 0.3)),
       settlement,
-      // Причал ставит только РАЗВИТАЯ раса: примитивная жизнь (тех ≤ 4, уровень
-      // `systemLife` 'primitive') станций не строит — ей ещё нечем. Так «обитаемый»
-      // и «есть куда причалить» перестают быть одним и тем же: мир с дикарями видно
-      // на карте как жизнь, но прыгать к нему незачем.
-      station: settlement && settlement.techLevel > 4 ? makeStation(rng, settlement) : null,
+      // Станцию строят, только если мир КОЛОНИЗИРОВАН одной из четырёх рас — просто так
+      // причал никто не возводит. У примитивной фауны («раки», не раса) колонистов нет,
+      // значит и станции быть не может в принципе. Разные планеты системы могут
+      // принадлежать разным расам — поселение per-planet, и раса у каждого своя.
+      station: settlement && PLAYABLE_SPECIES.includes(settlement.species) ? makeStation(rng, settlement) : null,
     })
   }
   return planets
