@@ -587,14 +587,14 @@ function TitleShip() {
           src="/flame_left.png"
           alt=""
           aria-hidden
-          className="absolute bottom-[82%] left-[41%] w-[13%] origin-bottom mix-blend-screen"
+          className="absolute bottom-[82%] left-[39.8%] w-[13%] origin-bottom mix-blend-screen"
           style={{ animation: 'title-flame-left 2s ease-in-out infinite' }}
         />
         <img
           src="/flame_right.png"
           alt=""
           aria-hidden
-          className="absolute bottom-[82%] left-[59%] w-[13%] origin-bottom mix-blend-screen"
+          className="absolute bottom-[82%] left-[60.2%] w-[13%] origin-bottom mix-blend-screen"
           style={{ animation: 'title-flame-right 2s ease-in-out infinite' }}
         />
         <img
