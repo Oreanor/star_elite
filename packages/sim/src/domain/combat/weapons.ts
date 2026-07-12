@@ -1,6 +1,7 @@
 import { Quaternion, Vector3 } from 'three'
 import { GUNNERY } from '../../config/weapons'
 import { shipAxes } from '../flight/axes'
+import { phasedOut } from '../scale/scale'
 import { isLaser, isMissile, type LaserModule } from '../loadout'
 import type { BoltEntity, MissileEntity, ShipEntity, World } from '../world/entities'
 
@@ -36,6 +37,9 @@ export function muzzleWorldPos(e: ShipEntity, mountIndex: number, out: Vector3):
  */
 export function fireLasers(world: World, e: ShipEntity, hostile: boolean): boolean {
   if (!e.alive) return false
+  // Фаза: ушёл в «большой мир» (крупнее кораблей) — стрелять уже не в кого, лазер молчит.
+  // Болт в реальных метрах у центра гиганта всё равно был бы невидимой бессмыслицей.
+  if (phasedOut(e.state.scale)) return false
 
   shipAxes(e.state.quat, _fwd, _right, _up)
   _convergence.copy(e.state.pos).addScaledVector(_fwd, GUNNERY.CONVERGENCE)

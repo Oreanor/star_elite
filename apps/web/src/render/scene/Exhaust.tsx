@@ -141,8 +141,9 @@ function Flames({ cone }: { cone: Cone }) {
     }
 
     const emitShip = (ship: ShipEntity) => {
-      // Под полем дюзы не горят: факел выдал бы невидимку вернее корпуса.
-      if (!ship.alive || ship.cloaked) {
+      // Под полем дюзы не горят: факел выдал бы невидимку вернее корпуса. И на планетном
+      // масштабе (миелофон) струи пропадают — факел размером с систему бессмыслен.
+      if (!ship.alive || ship.cloaked || ship.state.scale > EXHAUST.HIDE_SCALE) {
         surges.delete(ship.id)
         return
       }
