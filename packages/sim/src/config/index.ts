@@ -1,4 +1,5 @@
 export { PHYSICS } from './physics'
+export { MIELOPHONE } from './mielophone'
 export { BODY_KINDS, GRAVITY, MOON, type BodyKind } from './bodies'
 export { ASTEROID, DEBRIS, SCORE, WORLD } from './world'
 export { TITAN } from './titans'

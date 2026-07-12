@@ -2,6 +2,7 @@ import { Vector3 } from 'three'
 import { IMPACT } from '../../config/weapons'
 import { SHIELD } from '../../config/station'
 import type { ShipEntity } from '../world/entities'
+import { effectiveMass, effectiveRadius } from '../scale/scale'
 import { applyDamage } from './damage'
 
 const _delta = new Vector3()
@@ -27,7 +28,7 @@ export function resolveShipVsSphere(
 ): number {
   _delta.copy(ship.state.pos).sub(otherPos)
   const distance = _delta.length()
-  const minDistance = ship.spec.hull.radius + otherRadius
+  const minDistance = effectiveRadius(ship) + otherRadius
 
   if (distance >= minDistance || distance < 1e-6) return 0
 
@@ -39,19 +40,64 @@ export function resolveShipVsSphere(
   const closingSpeed = _relVel.copy(ship.state.vel).sub(otherVel).dot(_normal)
   if (closingSpeed >= 0) return 0 // уже расходятся
 
-  // Доля импульса, достающаяся кораблю: лёгкий отлетает от тяжёлого.
-  const massRatio = otherMass / (ship.spec.mass + otherMass)
+  // Доля импульса, достающаяся кораблю: лёгкий отлетает от тяжёлого. У гиганта масса
+  // растёт кубом масштаба — от камня он не дрогнет.
+  const massRatio = otherMass / (effectiveMass(ship) + otherMass)
   ship.state.vel.addScaledVector(_normal, -closingSpeed * (1 + IMPACT.RESTITUTION) * massRatio)
 
-  const damage = Math.min(
+  // «Сырая» сила удара — по ней вызывающий решает, колоть ли камень; она от масштаба
+  // не зависит. А вот УРОН кораблю делим на масштаб: большому таран не так смертелен.
+  const rawImpact = Math.min(
     IMPACT.RAM_DAMAGE_MAX,
     Math.abs(closingSpeed) * IMPACT.RAM_DAMAGE_PER_SPEED,
   )
-  if (damage > 1) {
-    applyDamage(ship, damage, time)
-    return damage
-  }
-  return 0
+  const damage = rawImpact / ship.state.scale
+  if (damage > 1) applyDamage(ship, damage, time)
+  return rawImpact
+}
+
+const _cdelta = new Vector3()
+const _cnormal = new Vector3()
+const _crel = new Vector3()
+
+/**
+ * Столкновение двух КОРАБЛЕЙ — нужно миелофону: гигант давит мелочь, сам почти цел.
+ *
+ * Обычные корабли (масштаб ~1) сквозные, как и были: этот резолвер вызывается лишь для
+ * пар, где есть выросший борт (см. `stepShipCollisions`). Импульс и раздвижка — по массе
+ * (куб масштаба), поэтому лёгкого отбрасывает, а гигант не шелохнётся. Урон каждому — по
+ * ОТНОШЕНИЮ размеров: кого ударило БОЛЬШЕЕ, тому смертельно; большому — почти ничто.
+ */
+export function resolveShipVsShip(a: ShipEntity, b: ShipEntity, time: number): void {
+  _cdelta.copy(a.state.pos).sub(b.state.pos)
+  const distance = _cdelta.length()
+  const minDistance = effectiveRadius(a) + effectiveRadius(b)
+  if (distance >= minDistance || distance < 1e-6) return
+
+  _cnormal.copy(_cdelta).divideScalar(distance)
+
+  const mA = effectiveMass(a)
+  const mB = effectiveMass(b)
+  const total = mA + mB
+  const overlap = minDistance - distance
+
+  // Раздвигаем по массе: тяжёлый почти не двигается, лёгкого выталкивает наружу.
+  a.state.pos.addScaledVector(_cnormal, overlap * (mB / total))
+  b.state.pos.addScaledVector(_cnormal, -overlap * (mA / total))
+
+  const closing = _crel.copy(a.state.vel).sub(b.state.vel).dot(_cnormal)
+  if (closing >= 0) return // уже расходятся — только развели позиции
+
+  // Отталкивание с восстановлением, обоим обратно массе.
+  const j = -closing * (1 + IMPACT.RESTITUTION)
+  a.state.vel.addScaledVector(_cnormal, j * (mB / total))
+  b.state.vel.addScaledVector(_cnormal, -j * (mA / total))
+
+  // Урон по отношению размеров: врезаться в НАМНОГО большее — смертельно, а большому
+  // от малого — почти ничего. При равных масштабах (два гиганта рядом) — поровну.
+  const base = Math.abs(closing) * IMPACT.RAM_DAMAGE_PER_SPEED
+  applyDamage(a, base * (b.state.scale / a.state.scale), time)
+  applyDamage(b, base * (a.state.scale / b.state.scale), time)
 }
 
 const _sdelta = new Vector3()

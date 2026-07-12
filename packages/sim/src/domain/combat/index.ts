@@ -1,7 +1,7 @@
 export { canCloak, hasCloak, isVisible, stepCloak, toggleCloak } from './cloak'
 export { activeDrones, expireDrones, isDroneShip, launchDrone } from './drones'
 export { bombReady, fireBomb, regenBomb } from './bomb'
-export { bounceOffShield, resolveShipVsSphere } from './collision'
+export { bounceOffShield, resolveShipVsShip, resolveShipVsSphere } from './collision'
 export { applyDamage, healthFraction, regenShield, shieldFraction } from './damage'
 export { defuseGrievance, hasGrievance, pendingHail, provoke, registerPlayerHit, stepGrievances } from './grievance'
 export { energyFraction, fireEcm, regenEnergy } from './ecm'

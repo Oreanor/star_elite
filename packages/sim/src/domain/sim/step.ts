@@ -21,6 +21,7 @@ import {
   regenBomb,
   regenEnergy,
   regenShield,
+  resolveShipVsShip,
   resolveShipVsSphere,
   scoopAsteroid,
   shatter,
@@ -37,6 +38,8 @@ import {
   tryScoop,
 } from '../combat'
 import { isPhased, updateCruise } from '../cruise/drive'
+import { MIELOPHONE } from '../../config/mielophone'
+import { effectiveRadius, stepScale } from '../scale/scale'
 import { stepShip } from '../flight/model'
 import { stepDocking } from '../station/docking'
 import type { ShipEntity, World } from '../world/entities'
@@ -105,6 +108,7 @@ export function stepWorld(world: World, frameDt: number, controllers: Controller
     // попадание считается по свежим позициям целей, а не по вчерашним.
     stepBolts(world, dt)
     stepCollisions(world)
+    stepShipCollisions(world)
     stepBodyCollisions(world)
     stepScooping(world, controllers, dt)
     stepDocking(world)
@@ -143,6 +147,9 @@ function stepPhysics(world: World, dt: number): void {
     // Кинематический борт не интегрируем: его позу ставит внешний источник.
     if (ship.kinematic) continue
     stepShip(ship.state, ship.controls, ship.spec.tuning, dt)
+    // Миелофон: рост/усадка масштаба от сигнала. До столкновений — они считаются по
+    // свежему размеру этого шага.
+    stepScale(ship, dt)
     // Нагрев звездой ДО регенерации щита: если корона течёт, `applyDamage`
     // пометит попадание, и щит в этом же шаге восстанавливаться не станет.
     stepStarHeat(ship, world, dt)
@@ -238,7 +245,7 @@ function stepCollisions(world: World): void {
 
     for (const a of world.asteroids) {
       if (!a.alive) continue
-      const reach = a.radius + ship.spec.hull.radius
+      const reach = a.radius + effectiveRadius(ship)
       if (a.pos.distanceToSquared(ship.state.pos) > reach * reach) continue
 
       // Мелкий камень уходит в трюм — если там есть место. Тогда удара не было вовсе.
@@ -259,6 +266,38 @@ function stepCollisions(world: World): void {
        * угол, под которым корабль пришёл.
        */
       if (impact >= ASTEROID.SHATTER_DAMAGE) shatter(world, a)
+    }
+  }
+}
+
+/**
+ * Столкновения кораблей друг с другом — нужны только миелофону: выросший борт давит
+ * мелочь, сам почти цел. Пока гиганта в системе нет, весь проход пропускается, и обычные
+ * корабли остаются сквозными, как были (бой — это манёвр, а не бильярд). Пара считается,
+ * лишь если в ней есть выросший борт: два обычных корабля друг о друга не бьются.
+ */
+function stepShipCollisions(world: World): void {
+  const ships = allShips(world)
+
+  // Дёшево отсекаем весь проход, пока никто не вырос.
+  let anyBig = false
+  for (const s of ships) {
+    if (s.state.scale > MIELOPHONE.COLLIDE_MIN_SCALE) {
+      anyBig = true
+      break
+    }
+  }
+  if (!anyBig) return
+
+  for (let i = 0; i < ships.length; i++) {
+    const a = ships[i]!
+    if (!a.alive || a.kinematic || isPhased(a)) continue
+    for (let j = i + 1; j < ships.length; j++) {
+      const b = ships[j]!
+      if (!b.alive || b.kinematic || isPhased(b)) continue
+      // Сталкиваются только пары, где есть гигант.
+      if (Math.max(a.state.scale, b.state.scale) <= MIELOPHONE.COLLIDE_MIN_SCALE) continue
+      resolveShipVsShip(a, b, world.time)
     }
   }
 }
@@ -294,7 +333,7 @@ function stepBodyCollisions(world: World): void {
         // Допуск — билет сквозь поле: корабль идёт коридором на стыковку, поле молчит.
         if (ship.clearance) continue
         const shieldR = body.radius * SHIELD.RADIUS_FACTOR
-        const reach = shieldR + ship.spec.hull.radius
+        const reach = shieldR + effectiveRadius(ship)
         if (body.pos.distanceToSquared(ship.state.pos) > reach * reach) continue
         // Вспышка при любом касании поля (`impact >= 0`), но ЯРКОСТЬ — по силе удара:
         // упор тягой еле светится (поле «на месте», но не слепит), таран — в полную силу.
@@ -310,7 +349,7 @@ function stepBodyCollisions(world: World): void {
         continue
       }
 
-      const reach = body.radius + ship.spec.hull.radius
+      const reach = body.radius + effectiveRadius(ship)
       if (body.pos.distanceToSquared(ship.state.pos) > reach * reach) continue
 
       // Щит от планеты не спасает: он держит лучи и обломки, а не кору.

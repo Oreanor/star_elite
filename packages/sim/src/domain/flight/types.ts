@@ -65,6 +65,12 @@ export interface ShipControls {
   retro: number
   /** Гасить снос. false => чистый ньютоновский дрейф. */
   flightAssist: boolean
+  /**
+   * Миелофон: команда масштаба, [-1,1]. +1 — расти, −1 — уменьшаться, 0 — держать.
+   * Как и вся ShipControls — это лишь «отклонение ручки»; интегрирует его `stepScale`,
+   * а вправе ли борт вообще расти (есть ли артефакт) — забота того, кто заполняет controls.
+   */
+  grow: number
 }
 
 export function createControls(): ShipControls {
@@ -80,6 +86,7 @@ export function createControls(): ShipControls {
     cruise: 1,
     retro: 0,
     flightAssist: true,
+    grow: 0,
   }
 }
 
@@ -90,6 +97,12 @@ export interface ShipState {
   quat: Quaternion
   /** Угловая скорость в СВЯЗАННЫХ осях: x — тангаж, y — рыскание, z — крен. */
   angVel: Vector3
+  /**
+   * Масштаб борта (миелофон), 1 = обычный размер. Живёт в СОСТОЯНИИ, а не в камере:
+   * от него зависят коллизии и то, каким тебя видят другие, — значит он сетевой и
+   * детерминированный, а не визуальный трюк. Интегрирует его `domain/scale`.
+   */
+  scale: number
 }
 
 export function createShipState(pos = new Vector3(), quat = new Quaternion()): ShipState {
@@ -98,5 +111,6 @@ export function createShipState(pos = new Vector3(), quat = new Quaternion()): S
     vel: new Vector3(),
     quat: quat.clone(),
     angVel: new Vector3(),
+    scale: 1,
   }
 }
