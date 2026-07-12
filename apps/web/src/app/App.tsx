@@ -724,7 +724,8 @@ function TitleShip({ launching }: { launching: boolean }) {
   const ref = useRef<HTMLDivElement>(null)
   const shineRef = useRef<HTMLDivElement>(null)
 
-  // Инверсный параллакс: корабль чуть смещается ПРОТИВ курсора — до ±10 px по каждой оси,
+  // Инверсный параллакс: корабль чуть смещается ПРОТИВ курсора — до ±20 px вбок и ±10 px
+  // по вертикали (вбок вдвое, чтобы это читалось смещением, а не только креном),
   // плюс небольшой skewX растра по горизонтали, будто кренится в сторону хода. Пишем прямо
   // в style по pointermove, без ре-рендера. Отдельная обёртка под параллакс, чтобы не спорить
   // с качкой (`title-ship-float`) и улётом на внутреннем div — трансформы вкладываются.
@@ -733,13 +734,14 @@ function TitleShip({ launching }: { launching: boolean }) {
   // Разные слои едут с РАЗНОЙ силой (глубина), оттого при сползании корабля свет «перетекает»
   // по нему — иллюзия наклона и смены освещения. Блики замаскированы силуэтом (см. разметку).
   useEffect(() => {
-    const AMPLITUDE = 10 // px в каждую сторону
+    const AMPLITUDE = 10 // px вертикаль
+    const AMPLITUDE_X = 20 // px вбок — вдвое больше вертикали: корабль СМЕЩАЕТСЯ, а не только кренится
     const SKEW = 4 // градусов на самом краю экрана — «небольшой» крен
     const onMove = (e: PointerEvent) => {
       const nx = e.clientX / window.innerWidth - 0.5 // −0.5..0.5
       const ny = e.clientY / window.innerHeight - 0.5
       const el = ref.current
-      if (el) el.style.transform = `translate(${-nx * AMPLITUDE * 2}px, ${-ny * AMPLITUDE * 2}px) skewX(${-nx * SKEW * 2}deg)`
+      if (el) el.style.transform = `translate(${-nx * AMPLITUDE_X * 2}px, ${-ny * AMPLITUDE * 2}px) skewX(${-nx * SKEW * 2}deg)`
       const sh = shineRef.current
       if (sh) {
         // Центр большого блика ходит по корпусу против курсора — свет «перетекает» при сдвиге.
@@ -818,7 +820,7 @@ function TitleShip({ launching }: { launching: boolean }) {
                 WebkitMaskRepeat: 'no-repeat',
                 maskRepeat: 'no-repeat',
                 background:
-                  'radial-gradient(70% 26% at calc(50% + var(--sx, 0%)) calc(36% + var(--sy, 0%)), rgba(226,240,255,0.72), rgba(210,232,255,0.22) 34%, rgba(200,224,255,0) 56%)',
+                  'radial-gradient(176% 88% at calc(50% + var(--sx, 0%)) calc(30% + var(--sy, 0%)), rgba(226,240,255,0.6), rgba(210,232,255,0.17) 34%, rgba(200,224,255,0) 56%)',
               }}
             />
           </div>
