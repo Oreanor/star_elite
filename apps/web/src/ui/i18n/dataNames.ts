@@ -99,10 +99,11 @@ const MODULE_EN: Record<string, string> = {
   cloak_2: 'Cloak Field «Phantom»',
 }
 
-/** Виды — именованные, переводим целиком. Три: земляне, сборные гуманоиды, роботы-синтеты. */
+/** Виды — именованные, переводим целиком. Четыре: земляне, гуманоиды, фелиды, синтеты. */
 const SPECIES_EN: Record<string, string> = {
   'Земляне': 'Earthers',
   'Гуманоиды': 'Humanoids',
+  'Фелиды': 'Felids',
   'Синтеты': 'Synths',
 }
 
@@ -245,6 +246,24 @@ export function occupationName(originKind: string | null, faction: string): stri
   if (originKind && byKind[originKind]) return byKind[originKind]!
   const byFaction = en() ? OCCUPATION_FACTION_EN : OCCUPATION_FACTION_RU
   return byFaction[faction] ?? (en() ? 'Pilot' : 'Пилот')
+}
+
+/**
+ * Профессия ИГРОКА словом (самоназвание, `persona.profession`). Публичный род занятий:
+ * его открыто видит собеседник и относится соответственно, за правду. Пустая (старый
+ * сейв без выбора) — нейтральный «вольный делец».
+ */
+const PROFESSION_RU: Record<string, string> = {
+  traveler: 'Путешественник', explorer: 'Исследователь', businessman: 'Бизнесмен',
+  military: 'Военный', pirate: 'Пират',
+}
+const PROFESSION_EN: Record<string, string> = {
+  traveler: 'Traveler', explorer: 'Explorer', businessman: 'Businessman',
+  military: 'Serviceman', pirate: 'Pirate',
+}
+export function professionName(profession: string | undefined): string {
+  const by = en() ? PROFESSION_EN : PROFESSION_RU
+  return (profession && by[profession]) || (en() ? 'Free agent' : 'вольный делец')
 }
 
 /** Имена корпусов — собственные (бренд): в RU как есть, в EN по таблице. */

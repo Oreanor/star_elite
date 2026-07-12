@@ -69,6 +69,50 @@ export function cycleTarget(world: World, currentId: number | null): number | nu
   return scored[(index + 1) % scored.length]?.id ?? scored[0]?.id ?? null
 }
 
+/** Станции системы — цели для СВЯЗИ (T), не для атаки. Обычно одна, но перебор общий. */
+export function targetableStationsOf(world: World): BodyEntity[] {
+  return world.bodies.filter((b) => b.kind === 'station')
+}
+
+/**
+ * Tab по РАЗДЕЛЬНЫМ классам. Перебирает борта И станции как один круг по углу к прицелу
+ * (Tab берёт того, на кого смотришь), но выбранное кладёт в СВОЁ поле: `lockedTargetId`
+ * (борт) ИЛИ `lockedStationId` (станция), второе гасит. Классы держим врозь ради будущих
+ * настроек листания; захвачено всегда что-то одно. Станцию нельзя бить — её берут, чтобы
+ * связаться. Мутирует мир (как и прежняя однострочная установка `lockedTargetId`).
+ */
+export function cycleLock(world: World): void {
+  const cands: { id: number; station: boolean; pos: Vector3 }[] = [
+    ...targetablesOf(world).map((s) => ({ id: s.id, station: false, pos: s.state.pos })),
+    ...targetableStationsOf(world).map((b) => ({ id: b.id, station: true, pos: b.pos })),
+  ]
+  if (cands.length === 0) {
+    world.lockedTargetId = null
+    world.lockedStationId = null
+    return
+  }
+
+  shipAxes(world.player.state.quat, _fwd, _right, _up)
+  const scored = cands
+    .map((c) => {
+      _toTarget.copy(c.pos).sub(world.player.state.pos)
+      const distance = _toTarget.length()
+      _toTarget.divideScalar(Math.max(distance, 1e-6))
+      // Угол к оси прицела важнее дистанции: сначала те, кто перед носом.
+      return { c, angle: Math.acos(Math.max(-1, Math.min(1, _fwd.dot(_toTarget)))), distance }
+    })
+    .sort((a, b) => a.angle - b.angle || a.distance - b.distance)
+
+  // Текущий захват — что бы ни было выбрано (борт или станция), оба id уникальны.
+  const currentId = world.lockedStationId ?? world.lockedTargetId
+  const index = currentId === null ? -1 : scored.findIndex((s) => s.c.id === currentId)
+  const next = scored[(index + 1) % scored.length]?.c ?? scored[0]?.c
+  if (!next) return
+
+  world.lockedTargetId = next.station ? null : next.id
+  world.lockedStationId = next.station ? next.id : null
+}
+
 /** Ближайший контейнер в радиусе захвата — HUD подсказывает, что можно подобрать. */
 export function nearestPod(world: World, radius: number) {
   let best = null

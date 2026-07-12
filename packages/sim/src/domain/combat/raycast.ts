@@ -14,7 +14,21 @@ export interface LaserHit {
 }
 
 /**
- * Мгновенный луч против сфер столкновений.
+ * Кто стреляет — с точки зрения луча. Раньше сюда шёл весь `ShipEntity`, но лучу
+ * нужны лишь две вещи: чей это выстрел (не задеть стрелка) и был ли он из-под
+ * маскировки. Лёгкий контекст позволяет тем же лучом заметать лазерный БОЛТ,
+ * чей стрелок к моменту попадания мог уже погибнуть. `ShipEntity` подходит под
+ * этот тип структурно, поэтому старые вызовы менять не нужно.
+ */
+export interface ShotSource {
+  id: number
+  cloaked: boolean
+}
+
+/**
+ * Луч против сфер столкновений: находит ПЕРВОЕ пересечение в пределах `range`.
+ * Зовётся и мгновенным лучом (на всю дальность), и болтом (на длину шага —
+ * заметание отрезка, пройденного за 1/120 с).
  *
  * Перебор линейный: на сотнях объектов это дешевле, чем поддерживать дерево,
  * которое надо перестраивать каждый кадр — тут всё движется.
@@ -23,7 +37,7 @@ export function castLaser(
   world: World,
   origin: Vector3,
   dir: Vector3,
-  shooter: ShipEntity,
+  shooter: ShotSource,
   range: number,
 ): LaserHit {
   const hit: LaserHit = { distance: range, ship: null, asteroid: null, missile: null, platform: null }
@@ -44,13 +58,14 @@ export function castLaser(
   const cloaked = shooter.cloaked
 
   // Игрок не может попасть в себя, бот — тоже; но бот может попасть в игрока.
+  // Сверяем по id, а не по ссылке: болт хранит id владельца, а не сам объект.
   for (const target of world.ships) {
-    if (!target.alive || target === shooter) continue
+    if (!target.alive || target.id === shooter.id) continue
     if (cloaked && !target.ai?.dormant) continue
     const t = raySphere(origin, dir, target.state.pos, target.spec.hull.radius)
     if (closer(t)) set(t, { ship: target })
   }
-  if (!cloaked && shooter !== world.player && world.player.alive) {
+  if (!cloaked && shooter.id !== world.player.id && world.player.alive) {
     const t = raySphere(origin, dir, world.player.state.pos, world.player.spec.hull.radius)
     if (closer(t)) set(t, { ship: world.player })
   }

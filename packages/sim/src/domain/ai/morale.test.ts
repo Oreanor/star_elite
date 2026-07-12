@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { pirateLoadout } from '../../config/loadouts'
 import { createWorld, STARTER_SYSTEM, type World } from '../world'
 import { makeShip } from '../world/factory'
-import type { Disposition } from '../world/persona'
+import { DEFAULT_PERSONA, type Disposition } from '../world/persona'
 import type { ShipEntity } from '../world/entities'
 import { fearLevel, wantsToFlee } from './morale'
 
@@ -16,7 +16,7 @@ import { fearLevel, wantsToFlee } from './morale'
 
 function ship(world: World, disposition: Disposition, willpower = 3): ShipEntity {
   const s = makeShip(world.ids, 'hostile', 'Бот', pirateLoadout(), new Vector3(), new Quaternion())
-  s.persona = { disposition, intellect: 3, temperament: 3, charisma: 3, willpower, species: 'Земляне' }
+  s.persona = { ...DEFAULT_PERSONA, disposition, willpower }
   return s
 }
 

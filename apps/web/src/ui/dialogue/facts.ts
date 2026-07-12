@@ -22,7 +22,7 @@ import {
   type Transfer,
   type World,
 } from '@elite/sim'
-import { chassisName, economyName, governmentName, properName, speciesName } from '../i18n/dataNames'
+import { chassisName, economyName, governmentName, professionName, properName, speciesName } from '../i18n/dataNames'
 
 /**
  * СНИМОК МИРА для разговора. Чтобы собеседник не сочинял вселенную из воздуха,
@@ -83,8 +83,6 @@ export interface SeenParty {
   ship: string
 }
 
-/** Род занятий игрока по умолчанию: намеренно СЕРЫЙ — вольный делец, а не пират/торговец. */
-const PLAYER_ROLE = 'вольный делец'
 
 /**
  * Ближний борт в поле зрения на момент разговора. Нужен, чтобы собеседник понимал
@@ -399,7 +397,9 @@ export function buildContext(world: World, other: ShipEntity, allowedIntents: To
     // и планы собеседнику не отдаём: узнает, лишь если игрок сам скажет.
     you: {
       name: player.name,
-      role: PLAYER_ROLE,
+      // Род занятий игрока — его ВЫБРАННАЯ профессия (самоназвание, но публичное и за
+      // правду): собеседник видит её открыто и по ней задаёт тон и общий стиль общения.
+      role: professionName(player.persona.profession),
       species: speciesName(player.persona.species),
       ship: chassisName(player.loadout.chassis.name),
     },

@@ -16,6 +16,7 @@ import { CargoPods, Explosions, Missiles, TractorBeam, Tracers, WarpFlashes } fr
 import { Exhaust } from '../render/scene/Exhaust'
 import { Lighting } from '../render/scene/Lighting'
 import { Drones, EnemyShips, FreighterShips, PlayerShip } from '../render/scene/Ships'
+import { RemotePlayers } from '../render/scene/RemotePlayers'
 import { Simulation } from '../render/scene/Simulation'
 import { Sky } from '../render/scene/Sky'
 import { Starfield } from '../render/scene/Starfield'
@@ -54,6 +55,7 @@ function Scene() {
       <EnemyShips />
       <FreighterShips />
       <Drones />
+      <RemotePlayers />
       <CargoPods />
       <TractorBeam />
       <Missiles />

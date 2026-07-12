@@ -1,4 +1,4 @@
-import { useReducer } from 'react'
+import { useEffect, useReducer } from 'react'
 import {
   contactWhereabouts,
   findChassis,
@@ -9,13 +9,15 @@ import {
   localSettlement,
   roamContact,
   sendContactTo,
+  stepDockedBerth,
   type BodyEntity,
   type Contact,
   type ShipEntity,
   type World,
 } from '@elite/sim'
+import { useOnlinePlayers, type OnlinePlayer } from '../../app/net/presence'
 import { currentLang, t, useLang } from '../i18n'
-import { chassisName, economyName, governmentName, occupationName, properName, speciesName } from '../i18n/dataNames'
+import { chassisName, economyName, governmentName, occupationName, professionName, properName, speciesName } from '../i18n/dataNames'
 import { ACCENT, Button, Column, DIM, PilotPortrait, Table } from '../station/chrome'
 import { Hold } from '../station/Hold'
 import { Market } from '../station/Market'
@@ -48,6 +50,7 @@ export function Console({
   onTalk,
   onLocate,
   onRoute,
+  onChat,
 }: {
   world: World
   docked: boolean
@@ -61,9 +64,22 @@ export function Console({
   onLocate: (shipId: number) => void
   /** Проложить курс к системе: пометить её целью прыжка и открыть карту галактики. */
   onRoute: (systemIndex: number) => void
+  /** Открыть чат с живым игроком (кнопка на плашке в блоке В СЕТИ). */
+  onChat: (player: OnlinePlayer) => void
 }) {
   useLang()
   const [, bump] = useReducer((n: number) => n + 1, 0)
+
+  // Причал не застывает, пока сидишь в доке: мир на паузе, поэтому смену лиц у причала
+  // ведём отдельным тиком по реальному времени. Изменился состав — перерисовываем плашки.
+  useEffect(() => {
+    if (!docked) return
+    const dt = 2 // с реального времени между попытками
+    const id = window.setInterval(() => {
+      if (stepDockedBerth(world, dt)) bump()
+    }, dt * 1000)
+    return () => window.clearInterval(id)
+  }, [docked, world])
 
   const station = findStation(world)
   const planet = capitalWorld(world)
@@ -89,8 +105,15 @@ export function Console({
 
   return (
     <div
-      className="absolute inset-0 flex items-center justify-center backdrop-blur-md"
-      style={{ background: 'radial-gradient(ellipse at center, rgba(12,34,60,0.66), rgba(0,3,8,0.93))' }}
+      className={`absolute inset-0 flex items-center justify-center ${docked ? '' : 'backdrop-blur-md'}`}
+      // У причала фон НЕПРОЗРАЧНЫЙ: ты внутри станции, космос и собственный корабль
+      // просвечивать сквозь экран не должны. В полёте же вкладка (карта, трюм) — оверлей
+      // поверх боя, и там полупрозрачность с блюром уместна: мир под ней продолжает жить.
+      style={{
+        background: docked
+          ? 'radial-gradient(ellipse at center, #0c223c, #000308)'
+          : 'radial-gradient(ellipse at center, rgba(12,34,60,0.66), rgba(0,3,8,0.93))',
+      }}
     >
       <div
         className="flex h-[calc(100vh-3rem)] w-[calc(100vw-3rem)] max-w-6xl flex-col rounded-2xl border p-7 font-mono"
@@ -147,16 +170,16 @@ export function Console({
         <div className="mt-5 flex min-h-0 flex-1 flex-col overflow-y-auto pr-1">
           {tab === 'planet' &&
             (docked ? (
-              <StationReadout world={world} station={station} planet={planet} onTalk={onTalk} />
+              <StationReadout world={world} station={station} planet={planet} />
             ) : (
               <LocationReadout world={world} planet={planet} />
             ))}
-          {tab === 'ship' && <ShipScreen world={world} docked={docked} embedded onClose={() => onTab('planet')} />}
+          {tab === 'ship' && <ShipScreen world={world} docked={docked} embedded onChange={bump} onClose={() => onTab('planet')} />}
           {tab === 'shipyard' && docked && <HullShop world={world} onChange={bump} />}
           {tab === 'shop' && docked && <Market world={world} onChange={bump} />}
           {tab === 'cargo' && <Hold world={world} onChange={bump} atStation={docked} />}
           {tab === 'people' && (
-            <PeopleTab world={world} docked={docked} onTalk={onTalk} onLocate={onLocate} onRoute={onRoute} onChange={bump} />
+            <PeopleTab world={world} docked={docked} onTalk={onTalk} onLocate={onLocate} onRoute={onRoute} onChat={onChat} onChange={bump} />
           )}
           {tab === 'system' && <SystemMap world={world} embedded onClose={() => onTab('planet')} />}
           {/* onClose у карты галактики срабатывает только при старте прыжка — тогда
@@ -194,6 +217,7 @@ function PeopleTab({
   onTalk,
   onLocate,
   onRoute,
+  onChat,
   onChange,
 }: {
   world: World
@@ -201,37 +225,131 @@ function PeopleTab({
   onTalk: (shipId: number) => void
   onLocate: (shipId: number) => void
   onRoute: (systemIndex: number) => void
+  onChat: (player: OnlinePlayer) => void
   onChange: () => void
 }) {
   const contacts = livingContacts(world)
+  // Кто стоит у ЭТОГО причала прямо сейчас — из манифеста мира, но без себя (первый
+  // в `dockedPilots` — игрок). Только у причала: в полёте рядом никто не пристыкован.
+  const dockedHere = docked ? dockedPilots(world).slice(1).filter((s) => s.alive) : []
 
   return (
     <div>
       <h1 className="text-2xl tracking-[0.2em]">{t('people.title')}</h1>
-      <p className="mt-1 text-xs tracking-widest" style={{ color: DIM }}>
-        {t('people.subtitle')}
-      </p>
 
-      {contacts.length === 0 ? (
-        <p className="mt-8 text-sm" style={{ color: DIM }}>
-          {t('people.empty')}
-        </p>
-      ) : (
-        <div className="mt-6 flex flex-col gap-3">
-          {contacts.map((c) => (
-            <ContactCard
-              key={c.record.id}
-              world={world}
-              contact={c}
-              docked={docked}
-              onTalk={onTalk}
-              onLocate={onLocate}
-              onRoute={onRoute}
-              onChange={onChange}
-            />
-          ))}
+      {/* ПРИСТЫКОВАНЫ — кто физически здесь, у причала: к ним можно подойти и заговорить.
+          Могут быть и вовсе незнакомцы. Себя не показываем — свою плашку видеть незачем.
+          У причала показываем всегда (даже пустой): пусто в начале — борта заходят со
+          временем, а пока стоишь в доке мир на паузе, так что причал наполнится по возврате. */}
+      {docked && (
+        <div className="mt-6">
+          <h2 className="text-sm tracking-[0.3em]" style={{ color: ACCENT }}>
+            {t('people.docked')}
+          </h2>
+          {dockedHere.length > 0 ? (
+            <div className="mt-3 flex flex-wrap gap-3">
+              {dockedHere.map((p) => (
+                <DockPlaque key={p.id} ship={p} you={false} onTalk={onTalk} />
+              ))}
+            </div>
+          ) : (
+            <p className="mt-2 text-sm" style={{ color: DIM }}>
+              {t('people.docked.empty')}
+            </p>
+          )}
         </div>
       )}
+
+      {/* Живые игроки онлайн — отдельным блоком. Пусто в офлайне. */}
+      <OnlineList onChat={onChat} />
+
+      {/* ЗНАКОМЫЕ — с кем говорил и кто ещё жив, где бы ни были. */}
+      {contacts.length > 0 && (
+        <div className="mt-6">
+          <h2 className="text-sm tracking-[0.3em]" style={{ color: ACCENT }}>
+            {t('people.acquaintances')}
+          </h2>
+          <p className="mt-1 text-xs tracking-widest" style={{ color: DIM }}>
+            {t('people.subtitle')}
+          </p>
+          <div className="mt-3 flex flex-col gap-3">
+            {contacts.map((c) => (
+              <ContactCard
+                key={c.record.id}
+                world={world}
+                contact={c}
+                docked={docked}
+                onTalk={onTalk}
+                onLocate={onLocate}
+                onRoute={onRoute}
+                onChange={onChange}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
+    </div>
+  )
+}
+
+/**
+ * Живые игроки в сети (presence): кто онлайн, в какой системе и где стоит. Связаться
+ * можно с любым — окно то же, что с ботами. Пусто в офлайне: список приходит из RTDB.
+ */
+function OnlineList({ onChat }: { onChat: (player: OnlinePlayer) => void }) {
+  const players = useOnlinePlayers()
+  if (players.length === 0) return null
+
+  return (
+    <div className="mt-6">
+      <h2 className="text-sm tracking-[0.3em]" style={{ color: ACCENT }}>
+        {t('people.online')}
+      </h2>
+      <div className="mt-3 flex flex-wrap gap-3">
+        {players.map((p) => {
+          const where = p.place
+            ? t('people.online.dock', { place: p.place, sys: p.systemName })
+            : t('people.online.sys', { sys: p.systemName })
+          // Та же плашка, что у пилотов у причала: портрет из вида+лица (пришли в presence),
+          // имя, род занятий; ниже — где он.
+          return (
+            <div
+              key={p.uid}
+              className="flex items-center gap-3 border px-3 py-2"
+              style={{ borderColor: DIM, minWidth: '15rem' }}
+            >
+              {/* Клик по портрету = «СВЯЗАТЬСЯ»: то же действие, что кнопка ниже. */}
+              <PilotPortrait
+                species={p.species}
+                face={p.face}
+                muted={p.paused}
+                size={96}
+                onClick={() => onChat(p)}
+                title={t('people.talk')}
+              />
+              <div className="min-w-0 text-left">
+                <div className="truncate text-sm tracking-widest" style={{ color: ACCENT }}>
+                  {p.name}
+                </div>
+                <div className="truncate text-xs tracking-widest" style={{ color: DIM }}>
+                  {professionName(p.profession).toUpperCase()}
+                </div>
+                <div className="truncate text-xs" style={{ color: DIM }}>
+                  {/* Отошёл (пауза) — так и пишем: в игре его нет, локатор его не найдёт. */}
+                  {p.paused ? t('people.online.paused') : where}
+                </div>
+                <div className="mt-1">
+                  {/* Тот же глагол, что у знакомых-ботов (СВЯЗАТЬСЯ): люди и боты равноправны. */}
+                  <Button small onClick={() => onChat(p)}>
+                    {t('people.talk')}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )
+        })}
+      </div>
     </div>
   )
 }
@@ -280,7 +398,15 @@ function ContactCard({
       style={{ borderColor: DIM, background: 'rgba(127,214,255,0.03)' }}
     >
       {ship ? (
-        <PilotPortrait ship={ship} world={world} size={72} />
+        // Клик по портрету = «СВЯЗАТЬСЯ», но только когда собеседник рядом (иначе связи нет —
+        // отсутствующего сперва зовут или прокладывают курс кнопками справа).
+        <PilotPortrait
+          ship={ship}
+          world={world}
+          size={72}
+          onClick={where.present ? () => onTalk(ship.id) : undefined}
+          title={t('people.talk')}
+        />
       ) : (
         <PilotPortrait name={record.name} size={72} />
       )}
@@ -423,8 +549,15 @@ function DockPlaque({ ship, you, onTalk }: { ship: ShipEntity; you: boolean; onT
       {/* У причала пилот спокоен — портрет нейтральный. */}
       <PilotPortrait ship={ship} emotion="neutral" size={96} />
       <div className="min-w-0 text-left">
+        {/* Своё имя, а не «ТЫ»: в манифесте это ты по имени, как и все прочие. Свою
+            плашку и так видно — она без кнопки разговора. */}
         <div className="truncate text-sm tracking-widest" style={{ color: ACCENT }}>
-          {you ? t('station.you') : ship.pilotName}
+          {ship.pilotName}
+        </div>
+        {/* Род занятий — сразу в манифесте: с кем имеешь дело, видно до разговора. У себя
+            это ВЫБРАННАЯ профессия, у прочих — тип борта (`originKind`). */}
+        <div className="truncate text-xs tracking-widest" style={{ color: DIM }}>
+          {(you ? professionName(ship.persona.profession) : occupationName(ship.originKind, ship.faction)).toUpperCase()}
         </div>
         {/* Род занятий — сразу в манифесте: с кем имеешь дело, видно до разговора. */}
         {!you && (
@@ -467,12 +600,10 @@ function StationReadout({
   world,
   station,
   planet,
-  onTalk,
 }: {
   world: World
   station: BodyEntity | null
   planet: BodyEntity | null
-  onTalk: (shipId: number) => void
 }) {
   const s = localSettlement(world)
   const population = Math.round(s.population * 10) / 10
@@ -488,27 +619,13 @@ function StationReadout({
     { key: 'species', label: t('station.species'), value: speciesName(s.species) },
   ]
 
-  const pilots = dockedPilots(world)
-
   return (
     <div>
       <h1 className="text-2xl tracking-[0.2em]">{properName(station ? station.name : world.systemName)}</h1>
       <div className="mt-6 max-w-md text-sm">
         <Table columns={FACT_COLUMNS} rows={rows} rowKey={(r) => r.key} />
       </div>
-
-      <h2 className="mb-3 mt-8 text-sm tracking-[0.3em]">{t('station.docked.title')}</h2>
-      {pilots.length === 0 ? (
-        <p className="text-sm" style={{ color: DIM }}>
-          {t('station.docked.empty')}
-        </p>
-      ) : (
-        <div className="flex flex-wrap gap-3">
-          {pilots.map((p, i) => (
-            <DockPlaque key={p.id} ship={p} you={i === 0} onTalk={onTalk} />
-          ))}
-        </div>
-      )}
+      {/* Кто пристыкован — теперь во вкладке ЛЮДИ (раздел ПРИСТЫКОВАНЫ), рядом со знакомыми. */}
     </div>
   )
 }

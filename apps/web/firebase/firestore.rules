@@ -1,0 +1,20 @@
+// Star Elite — правила Firestore для сетевого прогона.
+//
+// Применить ОДИН раз: Firebase Console → Firestore Database → вкладка «Rules» → вставить
+// это и Publish. (Или через firebase CLI: `firebase deploy --only firestore:rules`.)
+//
+// Аналог RLS: сейв игрока — документ `saves/{uid}`, и трогать его может ТОЛЬКО владелец
+// (тот, чей вход совпал с id документа). Чужой прогресс не прочитать даже с валидным
+// публичным ключом — ключ публичен намеренно, доступ стерегут эти правила.
+
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Сейвы: читать/писать только свой документ. Всё прочее закрыто по умолчанию.
+    match /saves/{uid} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+  }
+}

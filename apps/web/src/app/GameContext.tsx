@@ -2,9 +2,10 @@ import { createContext, useContext, useMemo, type ReactNode } from 'react'
 import {
   aiController,
   autodockController,
+  applyPlayerSave,
   createWorld,
   enterSystem,
-  startAtStation,
+  startDocked,
   jump,
   systemDefFor,
   CORE_INDEX,
@@ -12,9 +13,12 @@ import {
   WORLD,
   type Arrival,
   type Controller,
+  type PlayerSave,
   type World,
 } from '@elite/sim'
 import { createIntent, createPlayerController, type PlayerIntent } from './control/playerController'
+import { online } from './net/firebase'
+import { loadSave } from './save/saveStore'
 
 export type PilotMode = 'manual' | 'autodock'
 
@@ -31,6 +35,8 @@ export interface Session {
   controllers: Map<number, Controller>
   /** Контроллер игрока. Автопилот его временно подменяет — и только его. */
   pilot: Controller
+  /** Новая игра (сейва не было): UI покажет экран создания персонажа перед стартом. */
+  isNewGame: boolean
   mode: PilotMode
   intent: PlayerIntent
   view: ViewMode
@@ -85,13 +91,36 @@ function randomStartIndex(): number {
   return fallback === CORE_INDEX ? WORLD.HOME_INDEX : fallback
 }
 
-function createSession(): Session {
+/**
+ * ОБЩАЯ стартовая система для новичков в СЕТИ: все начинают у одной станции, чтобы
+ * встречаться, а не искать друг друга по всей галактике. Детерминированно (без
+ * Math.random): первая от начала обитаемая система со станцией, кроме ядра и дома.
+ * Один сид — одна точка сбора для всех.
+ */
+function sharedStartIndex(): number {
+  for (let index = 0; index < GALAXY.COUNT; index++) {
+    if (index === CORE_INDEX || index === WORLD.HOME_INDEX) continue
+    if (systemDefFor(index, GALAXY.SEED).station) return index
+  }
+  return WORLD.HOME_INDEX
+}
+
+function createSession(initialSave?: PlayerSave | null): Session {
+  // `undefined` — офлайн-путь: сейв берём из localStorage. Иначе (в т.ч. `null`) — тот,
+  // что дали снаружи: онлайн уже загрузил серверный сейв (null = новичок без прогресса).
+  const save = initialSave !== undefined ? initialSave : loadSave()
   const world = createWorld()
-  const start = randomStartIndex()
-  enterSystem(world, systemDefFor(start, world.galaxySeed), start)
-  // Новая игра начинается ВПЛОТНУЮ к причалу, а не за тысячу километров, как выход
-  // из гиперпрыжка: первый кадр — станция в паре секунд хода, а не долгий подлёт.
-  startAtStation(world)
+  // Повторный вход — в СВОЮ сохранённую систему своим сидом. Новичок: в сети — ОБЩАЯ
+  // точка сбора (чтоб встречаться), офлайн — случайная. Систему строим по (сид, индекс).
+  const index = save ? save.systemIndex : online ? sharedStartIndex() : randomStartIndex()
+  const seed = save ? save.galaxySeed : world.galaxySeed
+  enterSystem(world, systemDefFor(index, seed), index)
+  // Пилота накладываем ПОСЛЕ enterSystem: тот пересобирает окружение, но борт игрока
+  // не трогает — значит восстановленные корабль/кошелёк/личность не затрутся.
+  if (save) applyPlayerSave(world, save)
+  // Начинаем ПРИСТЫКОВАННЫМИ у причала — и новичок, и вернувшийся: станция и точка
+  // возврата, и безопасный старт. Не в открытом космосе за тысячу километров.
+  startDocked(world)
 
   const intent = createIntent()
   const pilot = createPlayerController(intent)
@@ -105,6 +134,7 @@ function createSession(): Session {
     world,
     controllers,
     pilot,
+    isNewGame: save === null,
     mode: 'manual',
     intent,
     view: 'chase',
@@ -164,9 +194,17 @@ export function jumpTo(session: Session, index: number, arrival: Arrival | null 
   return true
 }
 
-export function GameProvider({ children }: { children: ReactNode }) {
-  // useMemo, а не useState: сессия не должна перерождаться при перерисовке.
-  const session = useMemo(createSession, [])
+export function GameProvider({
+  children,
+  initialSave,
+}: {
+  children: ReactNode
+  /** Уже загруженный сейв (онлайн) или `undefined` — тогда возьмём из localStorage (офлайн). */
+  initialSave?: PlayerSave | null
+}) {
+  // useMemo, а не useState: сессия не должна перерождаться при перерисовке. initialSave
+  // фиксируется на монтировании — новая сессия (вход, перезапуск) приходит через key.
+  const session = useMemo(() => createSession(initialSave), [])
   return <GameContext.Provider value={session}>{children}</GameContext.Provider>
 }
 

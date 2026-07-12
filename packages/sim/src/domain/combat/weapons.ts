@@ -1,13 +1,8 @@
 import { Quaternion, Vector3 } from 'three'
 import { GUNNERY } from '../../config/weapons'
 import { shipAxes } from '../flight/axes'
-import { isLaser, isMissile } from '../loadout'
-import type { MissileEntity, ShipEntity, World } from '../world/entities'
-import { applyDamage } from './damage'
-import { spawnExplosion, spawnTracer } from './effects'
-import { registerPlayerHit } from './grievance'
-import { damageAsteroid } from './mining'
-import { castLaser } from './raycast'
+import { isLaser, isMissile, type LaserModule } from '../loadout'
+import type { BoltEntity, MissileEntity, ShipEntity, World } from '../world/entities'
 
 const _fwd = new Vector3()
 const _right = new Vector3()
@@ -15,9 +10,6 @@ const _up = new Vector3()
 const _muzzle = new Vector3()
 const _convergence = new Vector3()
 const _dir = new Vector3()
-const _hitPos = new Vector3()
-/** Неподвижная сфера платформы: скорость обломков от неё — ноль. Не мутируется. */
-const _still = new Vector3()
 
 /** Мировая позиция ствола `mountIndex`. Нужна и симуляции, и рендеру вспышки. */
 export function muzzleWorldPos(e: ShipEntity, mountIndex: number, out: Vector3): Vector3 {
@@ -38,6 +30,9 @@ export function muzzleWorldPos(e: ShipEntity, mountIndex: number, out: Vector3):
  * Залп из всех лазеров. Стволы разнесены по крылу и сведены в точку на дистанции
  * CONVERGENCE — поэтому в прицел они попадают только там. Ближе и дальше лучи расходятся,
  * и это честно: так устроена пристрелка настоящего оружия.
+ *
+ * Лазер выпускает БОЛТ (снаряд), а не бьёт мгновенно: попадание случится позже, в
+ * `stepBolts`, когда болт долетит. Здесь только рождается снаряд и тратится ствол.
  */
 export function fireLasers(world: World, e: ShipEntity, hostile: boolean): boolean {
   if (!e.alive) return false
@@ -58,36 +53,38 @@ export function fireLasers(world: World, e: ShipEntity, hostile: boolean): boole
     fired = true
 
     muzzleWorldPos(e, i, _muzzle)
+    // Нацелен в точку сведения: болт наследует направление ствола, но не скорость носителя.
     _dir.copy(_convergence).sub(_muzzle).normalize()
-
-    const hit = castLaser(world, _muzzle, _dir, e, laser.range)
-    _hitPos.copy(_muzzle).addScaledVector(_dir, hit.distance)
-    spawnTracer(world, _muzzle, _hitPos, hostile, laser.id)
-
-    if (hit.ship) {
-      applyDamage(hit.ship, laser.damage, world.time)
-      spawnExplosion(world, _hitPos, hit.ship.state.vel, 0.6)
-      // Попал игрок по не-врагу — это повод к обиде, а не к мгновенной войне:
-      // копим претензию, а во враги переводит уже сам `registerPlayerHit` на пороге.
-      if (e.faction === 'player') registerPlayerHit(world, hit.ship)
-    } else if (hit.asteroid) {
-      spawnExplosion(world, _hitPos, hit.asteroid.vel, 0.4)
-      // Камень не исчезает — он раскалывается. Правило дробления живёт в одном
-      // месте, `damageAsteroid`, а не переписывается у каждого, кто может его ударить.
-      damageAsteroid(world, hit.asteroid, laser.damage)
-    } else if (hit.missile) {
-      // Ракета не «повреждается»: у неё нет прочности, только боевая часть.
-      hit.missile.alive = false
-      spawnExplosion(world, hit.missile.pos, hit.missile.vel, 1.2)
-    } else if (hit.platform) {
-      // Ядро платформы принимает урон корпусом: щита у гнезда нет. Гибель,
-      // взрыв и металл — забота `stepPlatforms`, когда прочность уйдёт в ноль.
-      hit.platform.hull = Math.max(0, hit.platform.hull - laser.damage)
-      spawnExplosion(world, _hitPos, _still, 0.6)
-    }
+    spawnBolt(world, e, laser, _muzzle, _dir, hostile)
   })
 
   return fired
+}
+
+/** Родить лазерный болт из ствола. Позиция и направление уже посчитаны стрелком. */
+export function spawnBolt(
+  world: World,
+  shooter: ShipEntity,
+  laser: LaserModule,
+  origin: Vector3,
+  dir: Vector3,
+  hostile: boolean,
+): void {
+  const bolt: BoltEntity = {
+    id: world.ids.next(),
+    kind: 'bolt',
+    pos: origin.clone(),
+    vel: dir.clone().multiplyScalar(GUNNERY.BOLT_SPEED),
+    ownerId: shooter.id,
+    hostile,
+    cloaked: shooter.cloaked,
+    damage: laser.damage,
+    weapon: laser.id,
+    distanceLeft: laser.range,
+    born: world.time,
+    alive: true,
+  }
+  world.bolts.push(bolt)
 }
 
 const _launchQuat = new Quaternion()

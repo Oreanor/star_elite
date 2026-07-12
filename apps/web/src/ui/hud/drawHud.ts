@@ -290,10 +290,10 @@ function drawTargets({ ctx, camera, world, width, height }: HudFrame): void {
 
     const locked = ship.id === world.lockedTargetId
     // Захваченную цель красим фосфором (голубым): среди красных рамок врагов она —
-    // единственная не-красная, и глаз сразу находит, ЗА КЕМ гоняться. На локаторе
-    // захват метит кольцом (форма), а здесь — цветом: рамок на экране немного,
-    // и другой цвет читается быстрее, чем искать обводку среди одинаковых треугольников.
-    const color = locked ? HUD_COLORS.PRIMARY : radarColor(ship, world)
+    // единственная не-красная, и глаз сразу находит, ЗА КЕМ гоняться. Исключение —
+    // живой игрок: он остаётся РОЗОВЫМ даже залоченным (что выбран — видно по HP-полосам
+    // и подписи ниже), чтобы человек не терялся в цвете захвата, когда листаешь Tab по людям.
+    const color = locked && !ship.kinematic ? HUD_COLORS.PRIMARY : radarColor(ship, world)
 
     // Минимум крупный: корабль в 12 м на километре занимает меньше пикселя,
     // и без рамки его физически не найти глазом.
@@ -337,9 +337,9 @@ function drawOffscreenArrows(frame: HudFrame): void {
     if (!ship.alive || !isVisible(ship)) continue
     const locked = ship.id === world.lockedTargetId
     if (ship.faction !== 'hostile' && !locked) continue
-    // Стрелка захваченной цели — голубая, как и её рамка: среди красных треугольников
-    // врагов сразу видно, в какую сторону вращать нос к ВЫБРАННОМУ, а не к любому.
-    offscreenArrow(frame, ship.state.pos, locked ? HUD_COLORS.PRIMARY : radarColor(ship, world))
+    // Стрелка захваченной цели — голубая, как и её рамка (живой игрок — розовым, как и
+    // его рамка): среди красных треугольников сразу видно, куда вращать нос к ВЫБРАННОМУ.
+    offscreenArrow(frame, ship.state.pos, locked && !ship.kinematic ? HUD_COLORS.PRIMARY : radarColor(ship, world))
   }
 
   // Цвет тела, а не отдельный «цвет навигации»: жёлтая стрелка ведёт к звезде,
@@ -675,6 +675,9 @@ function bodyColor(body: BodyEntity): string {
  */
 function radarColor(ship: ShipEntity, world: World): string {
   if (ship.faction === 'hostile') return HUD_COLORS.DANGER
+  // Живой игрок — розовым, ПОСЛЕ проверки на врага: враждебный человек должен
+  // гореть красным (в бою читается «стрелять?»), а мирный — отличаться от NPC.
+  if (ship.kinematic) return HUD_COLORS.PLAYER
   // Свои — зелёным: беспилотник обязан читаться союзником, а не встречным
   // торговцем. Различает их сторона, а не то, кем они рождены.
   return ship.faction === world.player.faction ? HUD_COLORS.ALLY : HUD_COLORS.NEUTRAL

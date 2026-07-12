@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { TRAFFIC } from '../../config/world'
+import { NPC_DOCK } from '../../config/station'
 import { isHostileTo } from '../ai/targeting'
 import { createWorld, STARTER_SYSTEM } from './index'
 import type { ShipEntity, World } from './entities'
-import { ENCOUNTERS, biasedWeight, remoteness, stepTraffic } from './traffic'
+import { ENCOUNTERS, biasedWeight, remoteness, stepDockedBerth, stepTraffic } from './traffic'
 
 /**
  * Встречи. Космос без них — тир, а не место, где живут; но и встреча по
@@ -318,5 +319,47 @@ describe('встречи в космосе', () => {
       world.ships = []
     }
     expect(sawBattle).toBe(true)
+  })
+})
+
+/**
+ * Жизнь причала, пока игрок пристыкован и мир стоит. Обычный трафик заморожен, но
+ * плашки у причала не должны застыть: раз в несколько секунд кто-то отходит, кто-то
+ * швартуется. Меряем поведение, а не числа: причал наполняется, но не сверх нормы, и
+ * отстоявшийся уходит.
+ */
+describe('жизнь причала в доке', () => {
+  const berthedCount = (world: World): number =>
+    world.ships.filter((s) => s.alive && s.ai?.dock === 'berthed' && s.faction === 'neutral').length
+
+  it('причал наполняется со временем, но не сверх нормы', () => {
+    const world = quiet()
+    let maxBerthed = 0
+    // Пара минут «стоянки» шагами по 2 с реального времени.
+    for (let t = 0; t < 600; t += 2) {
+      stepDockedBerth(world, 2)
+      const berthed = berthedCount(world)
+      maxBerthed = Math.max(maxBerthed, berthed)
+      // Норма не превышается ни на одном тике — иначе причал распух бы без предела.
+      expect(berthed).toBeLessThanOrEqual(TRAFFIC.STATION_REGULARS)
+    }
+    expect(maxBerthed).toBeGreaterThan(0)
+  })
+
+  it('отстоявшийся у причала отходит сам (dock=done)', () => {
+    const world = quiet()
+    // Ждём первого швартующегося.
+    for (let t = 0; t < 600 && berthedCount(world) === 0; t += 2) stepDockedBerth(world, 2)
+    const guest = world.ships.find((s) => s.ai?.dock === 'berthed')
+    expect(guest).toBeTruthy()
+    // Дольше самой длинной стоянки — гость обязан отойти, освободив причал.
+    for (let t = 0; t < NPC_DOCK.DWELL * 2; t += 2) stepDockedBerth(world, 2)
+    expect(guest!.ai!.dock).toBe('done')
+  })
+
+  it('без станции причал не выдумывается', () => {
+    const world = deepSpace()
+    for (let t = 0; t < 200; t += 2) expect(stepDockedBerth(world, 2)).toBe(false)
+    expect(berthedCount(world)).toBe(0)
   })
 })

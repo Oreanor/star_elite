@@ -99,8 +99,9 @@ export function EnemyShips() {
     let count = 0
     for (const ship of session.world.ships) {
       // Замаскированный чужой не рисуется вовсе: правило видимости — из домена.
-      // Беспилотник и грузовик — свои меши: корпус у них другой.
-      if (isDroneShip(ship) || isFreighter(ship) || !isVisible(ship) || count >= MAX_ENEMIES) continue
+      // Беспилотник и грузовик — свои меши: корпус у них другой. Кинематический борт
+      // (удалённый игрок) рисует свой компонент `RemotePlayers` — здесь его пропускаем.
+      if (isDroneShip(ship) || isFreighter(ship) || ship.kinematic || !isVisible(ship) || count >= MAX_ENEMIES) continue
 
       _dummy.position.copy(ship.state.pos)
       _dummy.quaternion.copy(ship.state.quat)

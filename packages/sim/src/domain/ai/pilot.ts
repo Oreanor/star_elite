@@ -1,5 +1,6 @@
 import { Vector3 } from 'three'
 import { AI, WARP } from '../../config/ai'
+import { GUNNERY } from '../../config/weapons'
 import { NPC_DOCK } from '../../config/station'
 import { TRAFFIC } from '../../config/world'
 import { clamp, signed } from '../../core/math'
@@ -28,12 +29,13 @@ import type { AIMode, AIState } from './types'
  */
 
 /**
- * Горизонт упреждения для СБЛИЖЕНИЯ, не для стрельбы.
+ * Горизонт упреждения для СБЛИЖЕНИЯ (кривой погони), не для стрельбы. Условная
+ * «скорость снаряда», которой срезается угол при заходе на цель, — крупнее реальной
+ * скорости болта: на погоне важно не попасть, а перехватить курс, целясь дальше вперёд.
  *
- * Лазер попадает в тот же шаг, в котором выпущен, поэтому стрелять надо ПРЯМО в цель.
- * Упреждение при мгновенном оружии — систематический промах: на 300 м оно уводит
- * луч на 16 м при радиусе корабля 12 м. Оно осмысленно только для ракет
- * и на кривой погони, где срезает угол.
+ * Стрельба ведёт нос иначе — в точку упреждения по НАСТОЯЩЕЙ скорости болта
+ * (`GUNNERY.BOLT_SPEED`, см. режим `attack`): лазер теперь снаряд, и по цели, идущей
+ * поперёк, без упреждения он ляжет позади неё.
  */
 const PURSUIT_HORIZON = 900
 
@@ -155,8 +157,10 @@ export const aiController: Controller = {
         break
 
       case 'attack':
-        // Оружие мгновенное — ведём нос ПРЯМО в цель. Дрожание руки добавляется здесь.
-        _aim.copy(target.state.pos).add(ai.aimJitter)
+        // Лазер — снаряд: ведём нос в точку УПРЕЖДЕНИЯ (куда цель придёт за время
+        // полёта болта), а не в саму цель. Дрожание руки добавляется здесь.
+        leadPoint(e, target, GUNNERY.BOLT_SPEED, _aim)
+        _aim.add(ai.aimJitter)
         // Медленно: ω = v/d, и на боевой скорости цель не удержать в прицеле.
         throttle = distance > AI.ATTACK_SLOW_RANGE ? AI.ATTACK_THROTTLE_FAR : AI.ATTACK_THROTTLE_NEAR
         break
@@ -187,7 +191,9 @@ export const aiController: Controller = {
       c.yaw = clamp(c.yaw + Math.cos(world.time * 1.9 + ai.phase) * 0.3, -1, 1)
     }
 
-    decideFire(e, ai, target, distance)
+    // `_aim` в режиме атаки — уже точка упреждения с дрожанием; решение стрелять
+    // меряется до неё же, чтобы огонь совпадал с наведением носа.
+    decideFire(e, ai, target, distance, _aim)
   },
 
   wantsFire(e: ShipEntity): boolean {
@@ -592,14 +598,16 @@ function updateAimJitter(ai: AIState, world: World, distance: number, dt: number
 }
 
 /**
- * Открывать ли огонь. Угол меряется до САМОЙ цели, а не до точки упреждения:
- * решение стрелять и направление луча обязаны совпадать.
+ * Открывать ли огонь. Угол меряется до ТОЧКИ УПРЕЖДЕНИЯ (`aim`), а не до самой цели:
+ * лазер теперь снаряд, нос ведётся туда, где цель окажется, и решение стрелять обязано
+ * совпадать с этим направлением — иначе бот палит, когда смотрит на цель, а болт уходит
+ * в упреждённую точку мимо. `aim` уже содержит упреждение и дрожание руки из режима `attack`.
  */
-function decideFire(e: ShipEntity, ai: AIState, target: ShipEntity, distance: number): void {
+function decideFire(e: ShipEntity, ai: AIState, target: ShipEntity, distance: number, aim: Vector3): void {
   if (ai.mode !== 'attack' || !isEngageable(target) || distance > AI.FIRE_RANGE) return
 
   shipAxes(e.state.quat, _fwd, _right, _up)
-  _toTarget.copy(target.state.pos).sub(e.state.pos).normalize()
+  _toTarget.copy(aim).sub(e.state.pos).normalize()
 
   const cone = Math.acos(clamp(_fwd.dot(_toTarget), -1, 1))
   // Угловой размер цели падает как 1/d. Стрелять «примерно туда» издали —

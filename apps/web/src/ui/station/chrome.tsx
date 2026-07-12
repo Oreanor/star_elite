@@ -97,21 +97,46 @@ export function PilotPortrait({
   world,
   emotion,
   name,
+  species,
+  face,
+  muted,
   size = 46,
+  onClick,
+  title,
 }: {
   ship?: ShipEntity
   world?: World
   emotion?: Emotion
   name?: string
+  /** Вид и лицо напрямую (без борта) — для удалённых игроков из presence. */
+  species?: string
+  face?: number
+  /** «Отошёл»: гасим аватар в серый — игрока в мире сейчас нет. */
+  muted?: boolean
   size?: number
+  /** Клик по самому портрету — связаться. Задан → портрет кликабелен (курсор, обводка, клавиатура). */
+  onClick?: () => void
+  /** Подсказка/ARIA-имя для кликабельного портрета: что произойдёт по клику. */
+  title?: string
 }) {
   const label = (ship?.name ?? name ?? '?').trim()
   const initial = label.charAt(0).toUpperCase() || '?'
   const emo: Emotion | null = ship ? emotion ?? (world ? pilotEmotion(ship, world) : 'neutral') : null
-  const crop = ship && emo ? portraitStyle(ship.persona.species, portraitIndex(ship), emo) : null
+  const crop = ship && emo
+    ? portraitStyle(ship.persona.species, portraitIndex(ship), emo)
+    : species !== undefined && face !== undefined
+      ? portraitStyle(species, face, 'neutral')
+      : null
+  const interactive = onClick !== undefined
   return (
     <div
-      className="relative flex shrink-0 select-none items-center justify-center border"
+      // Кликабельный портрет — связаться прямо с лица. Обводка на ховере/фокусе (ring, а не
+      // border: рамку тут задаёт inline-style и она бы перебила класс) даёт понять, что он живой.
+      className={`relative flex shrink-0 select-none items-center justify-center border ${
+        interactive
+          ? 'cursor-pointer transition hover:ring-2 hover:ring-inset hover:ring-[#7fd6ff] focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#7fd6ff]'
+          : ''
+      }`}
       style={{
         width: size,
         height: size,
@@ -119,8 +144,26 @@ export function PilotPortrait({
         color: DIM,
         background: 'rgba(127,214,255,0.05)',
         fontSize: size * 0.42,
+        // Отошёл — серый и приглушённый: в игре его сейчас нет.
+        filter: muted ? 'grayscale(1) brightness(0.65)' : undefined,
+        opacity: muted ? 0.6 : undefined,
       }}
-      aria-hidden
+      onClick={onClick}
+      role={interactive ? 'button' : undefined}
+      tabIndex={interactive ? 0 : undefined}
+      aria-label={interactive ? title : undefined}
+      aria-hidden={interactive ? undefined : true}
+      title={interactive ? title : undefined}
+      onKeyDown={
+        interactive
+          ? (e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault()
+                onClick?.()
+              }
+            }
+          : undefined
+      }
     >
       {initial}
       {crop && <div className="absolute inset-0" style={crop} />}

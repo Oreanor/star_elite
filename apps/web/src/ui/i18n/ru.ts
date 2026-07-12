@@ -11,6 +11,8 @@ export const RU = {
   'menu.start': 'СТАРТ',
   'menu.resume': 'В ИГРУ',
   'menu.wait': 'СЕКУНДУ…',
+  'menu.newGame': 'НОВАЯ ИГРА',
+  'menu.newGameConfirm': 'СТЕРЕТЬ ПРОГРЕСС?',
   'menu.keys': 'КЛАВИШИ',
   'menu.settings': 'НАСТРОЙКИ',
   'menu.back': 'НАЗАД',
@@ -22,6 +24,29 @@ export const RU = {
   'menu.lost': 'КОРАБЛЬ ПОТЕРЯН',
   'menu.score': 'ОЧКОВ: {score}',
   'menu.restart': 'НАЧАТЬ ЗАНОВО',
+
+  // ─── Вход в сеть ───────────────────────────────────────────────────────────
+  'auth.login': 'ВХОД',
+  'auth.register': 'РЕГИСТРАЦИЯ',
+  'auth.email': 'ПОЧТА',
+  'auth.password': 'ПАРОЛЬ',
+  'auth.enter': 'ВОЙТИ',
+  'auth.create': 'СОЗДАТЬ АККАУНТ',
+  'auth.toRegister': 'Нет аккаунта? Зарегистрироваться',
+  'auth.toLogin': 'Уже есть аккаунт? Войти',
+  'auth.wait': 'СЕКУНДУ…',
+  'auth.confirm': 'Аккаунт создан. Если нужен — подтверди почту по ссылке из письма.',
+  'auth.loading': 'ЗАГРУЗКА ПРОГРЕССА…',
+  'auth.signout': 'ВЫЙТИ',
+
+  // ─── Создание пилота ───────────────────────────────────────────────────────
+  'create.title': 'СОЗДАНИЕ ПИЛОТА',
+  'create.name': 'ИМЯ',
+  'create.name.placeholder': 'Как тебя звать…',
+  'create.species': 'ВИД',
+  'create.profession': 'РОД ЗАНЯТИЙ',
+  'create.portrait': 'ЛИЦО',
+  'create.launch': 'В ПОЛЁТ',
 
   // ─── Клавиши ──────────────────────────────────────────────────────────────
   'key.mouse': 'Мышь',
@@ -250,8 +275,6 @@ export const RU = {
   // Навигация со стартового экрана станции.
   'station.nav.planet': 'ПЛАНЕТА',
   'station.nav.station': 'СТАНЦИЯ',
-  'station.docked.title': 'ПРИСТЫКОВАНЫ',
-  'station.docked.empty': 'Причал пуст — только ты.',
   'station.you': 'ТЫ',
   'station.nav.ship': 'ВЕРФЬ',
   'station.nav.cargo': 'ГРУЗ',
@@ -261,9 +284,11 @@ export const RU = {
   'station.nav.galaxy': 'КАРТА ГАЛАКТИКИ',
 
   // ─── Люди: реестр знакомых ───────────────────────────────────────────────────
-  'people.title': 'ЗНАКОМЫЕ',
+  'people.title': 'ЛЮДИ',
+  'people.docked': 'ПРИСТЫКОВАНЫ',
+  'people.docked.empty': 'Причал пуст — ты один. Борта заходят со временем.',
+  'people.acquaintances': 'ЗНАКОМЫЕ',
   'people.subtitle': 'С кем ты говорил и кто ещё жив. Их положение известно всегда.',
-  'people.empty': 'Ты пока ни с кем не знаком. Заговори с кем-нибудь в космосе.',
   'people.here': 'здесь, рядом',
   'people.at.near': 'у {place}',
   'people.at.dock': 'в доке {place}',
@@ -276,6 +301,18 @@ export const RU = {
   'people.route': 'ПРОЛОЖИТЬ КУРС',
   'people.hold': 'ПУСТЬ ЖДЁТ',
   'people.roam': 'ОТПУСТИТЬ',
+  'people.online': 'В СЕТИ',
+  'people.online.sys': 'в системе {sys}',
+  'people.online.dock': 'в доке {place} · {sys}',
+  'people.online.paused': 'отошёл (пауза)',
+  'chat.online': 'ОНЛАЙН',
+  'chat.you': 'ТЫ',
+  'chat.empty': 'Канал открыт. Он на связи.',
+  'chat.placeholder': 'Сказать что-нибудь…',
+  'chat.send': 'СКАЗАТЬ',
+  'chat.close': 'T — ПОЛОЖИТЬ ТРУБКУ',
+  'chat.incoming': 'ВХОДЯЩИЙ ВЫЗОВ',
+  'chat.incoming.hint': 'заверши текущий разговор, чтобы ответить',
   // Весть на HUD, когда знакомый пропал (погиб вне поля зрения или на глазах).
   'hud.contactLost': '{name} ПРОПАЛ С РАДАРА — ВЕРОЯТНО, ПОГИБ',
 

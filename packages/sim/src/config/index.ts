@@ -8,11 +8,15 @@ export {
   CORE_INDEX,
   GALAXY,
   GALAXY_SHAPES,
+  HUMAN_SPECIES,
   PLANET_TYPES,
+  PLAYABLE_SPECIES,
   STAR_CLASSES,
+  SYNTH_SPECIES,
   type GalaxyShapeId,
   type PlanetType,
 } from './galaxy'
+export { CHARACTER } from './character'
 export { AI, GRIEVANCE, MORALE, WARP } from './ai'
 export { CRUISE } from './cruise'
 export { DYSON, type DysonSpec } from './dyson'

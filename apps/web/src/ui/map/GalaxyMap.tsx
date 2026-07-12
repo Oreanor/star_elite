@@ -34,6 +34,7 @@ import {
   type World,
 } from '@elite/sim'
 import { useSession } from '../../app/GameContext'
+import { useOnlinePlayers } from '../../app/net/presence'
 import { jumping, startDepart } from '../../app/control/jumpFx'
 import { UI } from '../theme'
 import { t, useLang } from '../i18n'
@@ -522,6 +523,104 @@ function ContactLabels({
   return null
 }
 
+/** Тон живого игрока на карте — розовый, как на радаре (`UI.PLAYER`): одна семантика. */
+const PLAYER_MAP = UI.PLAYER
+
+/** Ромб-метка игрока: чуть крупнее контактной (r=2.0), билборд в плоскости XY. */
+const playerMarkerGeometry = (() => {
+  const g = new BufferGeometry()
+  const r = 2.0
+  g.setAttribute(
+    'position',
+    new BufferAttribute(new Float32Array([0, r, 0, r, 0, 0, 0, -r, 0, 0, r, 0, 0, -r, 0, -r, 0, 0]), 3),
+  )
+  return g
+})()
+
+/** Система с онлайн-игроками и их имена — для меток на карте галактики. */
+interface PlayerSystem {
+  index: number
+  names: string[]
+  pos: Vector3
+}
+
+/** Сгруппировать онлайн-игроков по системам: одна метка на систему, имена под ней. */
+function playerSystemsOf(
+  peers: readonly { systemIndex: number; name: string }[],
+  systems: readonly StarSystem[],
+): PlayerSystem[] {
+  const byIndex = new Map<number, string[]>()
+  for (const p of peers) {
+    const names = byIndex.get(p.systemIndex) ?? []
+    names.push(p.name)
+    byIndex.set(p.systemIndex, names)
+  }
+  const out: PlayerSystem[] = []
+  for (const [index, names] of byIndex) {
+    const system = systems[index]
+    if (system) out.push({ index, names, pos: positionOf(system) })
+  }
+  return out
+}
+
+/**
+ * Метки ЖИВЫХ игроков на звёздном поле: розовый ромб у каждой системы, где сейчас
+ * онлайн-игрок (из presence). Отдельно от меток знакомых (`ContactStars` — NPC из
+ * реестра): это «где сейчас люди». Цвет тот же, что игроку на радаре.
+ */
+function PlayerStars({ systems }: { systems: PlayerSystem[] }) {
+  const material = useMemo(() => new MeshBasicMaterial({ color: PLAYER_MAP, toneMapped: false }), [])
+  useEffect(() => () => material.dispose(), [material])
+  const refs = useRef<(Mesh | null)[]>([])
+  useFrame((state) => {
+    for (const m of refs.current) if (m) m.quaternion.copy(state.camera.quaternion)
+  })
+  return (
+    <>
+      {systems.map((s, i) => (
+        <mesh
+          key={s.index}
+          ref={(m) => {
+            refs.current[i] = m
+          }}
+          geometry={playerMarkerGeometry}
+          material={material}
+          position={s.pos}
+          raycast={() => null}
+        />
+      ))}
+    </>
+  )
+}
+
+/** Подписи имён игроков у их меток. DOM поверх канваса, двигается кадром (не React). */
+function PlayerLabels({
+  systems,
+  boxes,
+}: {
+  systems: PlayerSystem[]
+  boxes: React.RefObject<Map<number, HTMLDivElement>>
+}) {
+  const { camera, size } = useThree()
+  useFrame(() => {
+    for (const s of systems) {
+      const el = boxes.current.get(s.index)
+      if (!el) continue
+      _screen.copy(s.pos).project(camera)
+      if (_screen.z > 1) {
+        el.style.opacity = '0'
+        continue
+      }
+      const x = (_screen.x * 0.5 + 0.5) * size.width
+      const y = (-_screen.y * 0.5 + 0.5) * size.height
+      el.style.opacity = '1'
+      // Ниже метки: имена игроков смещаем вниз, чтоб не наложиться на подпись знакомого.
+      el.style.transform = `translate(${Math.round(x + 9)}px, ${Math.round(y + 12)}px) translate(0, -50%)`
+    }
+  })
+  return null
+}
+
 function formatRange(ly: number): string {
   return `${ly.toFixed(1)} ${t('unit.ly')} · ${(ly / LY_PER_PARSEC).toFixed(2)} ${t('unit.pc')}`
 }
@@ -579,6 +678,10 @@ export function GalaxyMap({ onClose, embedded = false }: { onClose: () => void; 
   // индексу системы — их позицию каждый кадр двигает `ContactLabels`, а не React.
   const contactSystems = contactSystemsOf(world, systems)
   const contactBoxes = useRef<Map<number, HTMLDivElement>>(new Map())
+  // Онлайн-игроки по системам (из presence) — розовые метки рядом с метками знакомых.
+  const peers = useOnlinePlayers()
+  const playerSystems = playerSystemsOf(peers, systems)
+  const playerBoxes = useRef<Map<number, HTMLDivElement>>(new Map())
 
   // Зум колесом/щипком — только карта. Нативный слушатель гасит браузерный зум.
   useWheelZoom(viewport, (deltaY) => {
@@ -654,6 +757,8 @@ export function GalaxyMap({ onClose, embedded = false }: { onClose: () => void; 
           <YouLabel at={here} box={you} />
           <ContactStars systems={contactSystems} />
           <ContactLabels systems={contactSystems} boxes={contactBoxes} />
+          <PlayerStars systems={playerSystems} />
+          <PlayerLabels systems={playerSystems} boxes={playerBoxes} />
           <Route from={here} to={picked ? positionOf(picked.system) : null} />
           <StarLabel at={picked ? positionOf(picked.system) : null} box={label} />
         </Canvas>
@@ -697,6 +802,23 @@ export function GalaxyMap({ onClose, embedded = false }: { onClose: () => void; 
             style={{ color: CONTACT_MAP, willChange: 'transform' }}
           >
             {s.names.map((n) => properName(n)).join(', ').toUpperCase()}
+          </div>
+        ))}
+
+        {/* Подписи имён онлайн-игроков — по одной на систему, где кто-то есть. Позицию
+            двигает кадр (`PlayerLabels`); имена — как есть (это подписи людей, не собственные
+            имена систем), поэтому без `properName`-транслита. */}
+        {playerSystems.map((s) => (
+          <div
+            key={s.index}
+            ref={(el) => {
+              if (el) playerBoxes.current.set(s.index, el)
+              else playerBoxes.current.delete(s.index)
+            }}
+            className="pointer-events-none absolute left-0 top-0 text-[11px] font-bold tracking-widest opacity-0"
+            style={{ color: PLAYER_MAP, willChange: 'transform' }}
+          >
+            {s.names.join(', ').toUpperCase()}
           </div>
         ))}
 

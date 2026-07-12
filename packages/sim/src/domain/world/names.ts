@@ -1,4 +1,4 @@
-import { HUMAN_SPECIES, SYNTH_SPECIES } from '../../config/galaxy'
+import { FELINE_SPECIES, HUMAN_SPECIES, SYNTH_SPECIES } from '../../config/galaxy'
 import type { Rng } from '../../core/math'
 
 /**
@@ -129,11 +129,31 @@ function synthName(rng: Rng): string {
 }
 
 /**
+ * Слоги фелидов: мягкие и тягучие, с «мурлычущим» удвоенным р и открытыми гласными.
+ * Отличаются от общего SYLL нарочно — имя кошкообразного должно звучать иначе, чем у
+ * прочих гуманоидов: «Ррау», «Мьясса», «Наэлли».
+ */
+const FELINE_SYLL = [
+  'ра', 'рра', 'мья', 'ня', 'ша', 'лаа', 'ми', 'рэ', 'сэ', 'нао', 'уа', 'аи',
+  'ррау', 'мурр', 'нэ', 'льо', 'таа', 'рин', 'исс', 'аш', 'эйр', 'сси',
+]
+
+/** Имя фелида: 2..3 мягких слога, изредка двойное через дефис — как у прочих слоговых. */
+function felineName(rng: Rng): string {
+  const n = 2 + Math.floor(rng() * 2) // 2..3 слога
+  let word = ''
+  for (let i = 0; i < n; i++) word += pick(rng, FELINE_SYLL)
+  word = cap(word)
+  return rng() < 0.25 ? `${word}-${cap(pick(rng, FELINE_SYLL))}` : word
+}
+
+/**
  * Имя пилота ПО ВИДУ. Земляне — земные имена (чаще) и позывные; синтеты — приставка
- * плюс слоговое ядро; прочие гуманоиды (валдри) — слоговые клички.
+ * плюс слоговое ядро; фелиды — мягкие «мурлычущие» слоги; прочие гуманоиды — слоговые клички.
  */
 export function makePilotName(rng: Rng, species: string): string {
   if (species === HUMAN_SPECIES) return rng() < 0.72 ? earthName(rng) : callsign(rng)
   if (species === SYNTH_SPECIES) return synthName(rng)
+  if (species === FELINE_SPECIES) return felineName(rng)
   return syllableName(rng)
 }
