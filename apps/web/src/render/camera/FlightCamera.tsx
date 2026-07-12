@@ -20,17 +20,20 @@ import { CAMERA, RENDER } from '../config'
 const _target = new Vector3()
 const _offset = new Vector3()
 const _rel = new Vector3()
-const _swing = new Quaternion()
 const _twist = new Quaternion()
 const _desiredQuat = new Quaternion()
 const _shake = new Vector3()
 const _bombShake = new Vector3()
 const _jumpShake = new Vector3()
-const _axis = new Vector3()
 const _camRot = new Quaternion()
 
-/** Ось крена в связанных осях. Нос смотрит в −Z, значит крутимся вокруг Z. */
-const _rollAxis = /* @__PURE__ */ new Vector3(0, 0, 1)
+/** Направление носа и взгляда камеры — для инкрементального доворота курса. */
+const _noseFwd = new Vector3()
+const _camFwd = new Vector3()
+const _deltaRot = new Quaternion()
+const _identity = new Quaternion()
+/** Опорное «вперёд»: нос смотрит в −Z. */
+const _refFwd = /* @__PURE__ */ new Vector3(0, 0, -1)
 
 /**
  * Постоянный наклон камеры вниз. Поворот вокруг локальной X на отрицательный угол
@@ -39,41 +42,13 @@ const _rollAxis = /* @__PURE__ */ new Vector3(0, 0, 1)
 const _pitchDown = /* @__PURE__ */ new Quaternion().setFromAxisAngle(new Vector3(1, 0, 0), -CAMERA.CHASE_PITCH)
 
 /**
- * Разложение поворота на крен вокруг оси и всё остальное (курс с тангажом).
- *
- * Нужно, чтобы камера следовала за НАПРАВЛЕНИЕМ носа, но не крутилась вместе
- * с кораблём. В бочке корабль проворачивается на полный оборот; камера, которая
- * повторяет его кватернион целиком, переворачивает кадр и вызывает тошноту.
- * Здесь крен отделяется и берётся долей — или не берётся вовсе.
+ * Крен корабля относительно текущего курса камеры: остаток ориентации после снятия
+ * `camSwing`. Канонизируем полушарие (`w ≥ 0`) — иначе цель крена перепрыгивает на
+ * «перевёрнутую» версию себя, и пружина идёт длинным путём.
  */
-function swingTwist(q: Quaternion, axis: Vector3, outSwing: Quaternion, outTwist: Quaternion): void {
-  // Проекция векторной части кватерниона на ось и есть его «закрученная» часть.
-  _axis.set(q.x, q.y, q.z)
-  const projection = _axis.dot(axis)
-  outTwist.set(axis.x * projection, axis.y * projection, axis.z * projection, q.w)
-
-  /**
-   * ВЫРОЖДЕНИЕ. Когда курс уходит на ~180° (в бою — разворот на цель за спиной),
-   * и `q.z`, и `q.w` обращаются в ноль: крен от такого поворота НЕОТДЕЛИМ, а
-   * нормировка почти нулевого вектора даёт шум, скачущий от кадра к кадру. Жёсткая
-   * пружина крена ловит этот скачок и доворачивает кадр по длинной дуге — та самая
-   * «камера сама крутит не по короткому пути». Не выдумываем крен из шума: у
-   * вырождения берём нулевой (камера просто следует за носом, не пытаясь «выпрямить»).
-   */
-  if (outTwist.lengthSq() < 1e-8) {
-    outTwist.identity()
-  } else {
-    outTwist.normalize()
-    /**
-     * Канонизируем полушарие: q и −q — ОДИН поворот, но дают twist противоположного
-     * знака. Без этого цель крена перепрыгивает на «перевёрнутую» версию себя, и
-     * пружина снова идёт длинным путём. Держим `w ≥ 0` — тогда цель непрерывна.
-     */
-    if (outTwist.w < 0) outTwist.set(-outTwist.x, -outTwist.y, -outTwist.z, -outTwist.w)
-  }
-
-  // swing = q · twist⁻¹
-  outSwing.copy(outTwist).invert().premultiply(q)
+function residualTwist(shipQuat: Quaternion, camSwing: Quaternion, out: Quaternion): void {
+  out.copy(camSwing).invert().multiply(shipQuat)
+  if (out.w < 0) out.set(-out.x, -out.y, -out.z, -out.w)
 }
 
 /** Псевдослучайная тряска: две несоизмеримые синусоиды не дают заметного периода. */
@@ -228,27 +203,38 @@ export function FlightCamera() {
       camera.quaternion.copy(state.quat)
     } else {
       /**
-       * Ориентация корабля разбирается на КУРС С ТАНГАЖОМ (swing) и КРЕН (twist),
-       * и каждая часть догоняется своей пружиной. Никакого lookAt: он строит базис
-       * через мировой «верх», и на перевёрнутом корабле вырождается — камера
-       * скачком переворачивается ровно на середине бочки.
+       * КУРС С ТАНГАЖОМ (swing) камера доворачивает к носу МИНИМАЛЬНЫМ поворотом
+       * (parallel transport), а не slerp'ом целевого кватерниона. Разница видна на
+       * быстром развороте: когда камера отстаёт почти на 180°, slerp композитного
+       * «курс+тангаж» режет угол через НАКРЕНЁННЫЕ ориентации — и камера делает кульбит
+       * (замер `scratch/camera.ts`: до 73° крена, скачок 18° за кадр). Доворот идёт вдоль
+       * ПУТИ носа и крен не выдумывает: тот же манёвр даёт 13° плавно, без скачка.
        *
-       * Две пружины нужны потому, что физика больше не выравнивает корабль сама.
-       * Курс камера подхватывает мягко — отсюда ощущение массы в вираже. Крен
-       * подхватывает жёстко, иначе закрученный кадр таким и останется навсегда.
+       * КРЕН (twist) — настоящий крен корабля относительно курса камеры, отдельной
+       * жёсткой пружиной: бочку и вираж с креном камера отыгрывает, а конический крен
+       * от разворота — нет. Никакого lookAt: он строит базис через мировой «верх» и на
+       * перевёрнутом корабле вырождается скачком.
        */
-      swingTwist(state.quat, _rollAxis, _swing, _twist)
+      _noseFwd.set(0, 0, -1).applyQuaternion(state.quat)
 
       if (held) {
         // Камера стоит и ждёт. Ориентацию не трогаем совсем — только позицию,
         // которая уже посчитана от этой самой ориентации.
         camera.position.lerp(_target, 1 - Math.exp(-CAMERA.CHASE_STIFFNESS * dt))
       } else if (running) {
-        camSwing.slerp(_swing, 1 - Math.exp(-CAMERA.CHASE_ROT_STIFFNESS * dt))
+        // Доворот курса на кратчайший поворот от «куда смотрит камера» к носу, долей dt.
+        _camFwd.set(0, 0, -1).applyQuaternion(camSwing)
+        _deltaRot.setFromUnitVectors(_camFwd, _noseFwd)
+        camSwing
+          .premultiply(_identity.identity().slerp(_deltaRot, 1 - Math.exp(-CAMERA.CHASE_ROT_STIFFNESS * dt)))
+          .normalize()
+        residualTwist(state.quat, camSwing, _twist)
         camTwist.slerp(_twist, 1 - Math.exp(-CAMERA.ROLL_STIFFNESS * dt))
         camera.position.lerp(_target, 1 - Math.exp(-CAMERA.CHASE_STIFFNESS * dt))
       } else {
-        camSwing.copy(_swing)
+        // Стоящий мир: камера строго за носом, крен — по кораблю, без пружины.
+        camSwing.setFromUnitVectors(_refFwd, _noseFwd)
+        residualTwist(state.quat, camSwing, _twist)
         camTwist.copy(_twist)
         camera.position.copy(_target)
       }
