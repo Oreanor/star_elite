@@ -641,15 +641,40 @@ function Paused({ resuming, onBoot }: { resuming: boolean; onBoot: () => void })
           редкие и мелкие, лягут в пустотах между логотипом и кнопками, не мешая тексту. */}
       <TitleStars />
 
-      {/* Корабль — часть фона, но ПОВЕРХ звёзд: стоит по центру, чуть ниже, ловит провал
-          звёздного поля в bg.png и заслоняет собой мерцание — небо мигает вокруг него, а
-          не сквозь корпус. Курсор его не трогает, кнопки рисуются поверх. */}
-      <img
-        src="/ship.png"
-        alt=""
-        aria-hidden
-        className="pointer-events-none absolute inset-x-0 top-[calc(55%+50px)] mx-auto w-full max-w-[43.2rem] -translate-y-1/2 px-8"
-      />
+      {/* Корабль с дюзами — часть фона, но ПОВЕРХ звёзд: по центру, чуть ниже, ловит провал
+          звёздного поля в bg.png и заслоняет собой мерцание. Курсор не трогает, кнопки поверх.
+          Пламя — ТРИ струи ПОД корпусом (в DOM раньше корабля → он их перекрывает): базы
+          прячутся за кормой, плюмажи торчат сверху. Режим screen делает чёрный фон струи
+          прозрачным и превращает её в свечение над тёмным небом. Позиции в % от корабля —
+          правь bottom/left/w, если сопла окажутся не на месте. */}
+      <div className="pointer-events-none absolute inset-x-0 top-[calc(55%+50px)] mx-auto w-full max-w-[43.2rem] -translate-y-1/2 px-8">
+        <div className="relative">
+          {/* Боковые — крупнее, период ≈2 c, синхронно, со сносом к центру (перспектива). */}
+          <img
+            src="/flame_left.png"
+            alt=""
+            aria-hidden
+            className="absolute bottom-[82%] left-[41%] w-[13%] origin-bottom mix-blend-screen"
+            style={{ animation: 'title-flame-left 2s ease-in-out infinite' }}
+          />
+          <img
+            src="/flame_right.png"
+            alt=""
+            aria-hidden
+            className="absolute bottom-[82%] left-[59%] w-[13%] origin-bottom mix-blend-screen"
+            style={{ animation: 'title-flame-right 2s ease-in-out infinite' }}
+          />
+          {/* Центральная — период ≈1 c, ходит вверх-вниз и вытягивается по вертикали. */}
+          <img
+            src="/flame_center.png"
+            alt=""
+            aria-hidden
+            className="absolute bottom-[86%] left-1/2 w-[9%] origin-bottom mix-blend-screen"
+            style={{ animation: 'title-flame-center 1s ease-in-out infinite' }}
+          />
+          <img src="/ship.png" alt="" aria-hidden className="relative w-full" />
+        </div>
+      </div>
 
       {/* Логотип — СВОЙ контейнер, вне общего потока: сдвинуть его нечем, что бы
           ни выросло ниже. Растр, поэтому у него собственная ширина. Заголовок

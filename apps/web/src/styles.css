@@ -47,3 +47,26 @@ canvas {
 *::-webkit-scrollbar-thumb:hover {
   background: rgba(127, 214, 255, 0.55);
 }
+
+/*
+ * Пламя дюз на титульном экране: три струи ЗА кораблём (центральная и две больших по
+ * бокам), базой уходят под корму, плюмажи торчат над ней. Живут циклом. transform-origin
+ * снизу — струя тянется ВВЕРХ от сопла, а не пухнет из середины. В каждом кадре сохраняем
+ * translateX(-50%): им же струя отцентрована к своей точке (left:%), и терять его нельзя.
+ *
+ * Центральная — быстрее (≈1 c), чуть ходит вверх-вниз и вытягивается по вертикали.
+ * Боковые — крупнее и медленнее (≈2 c), синхронно, и вдобавок сносятся К ЦЕНТРУ на подъёме:
+ * так читается перспектива, будто дюзы расходятся от зрителя.
+ */
+@keyframes title-flame-center {
+  0%, 100% { transform: translateX(-50%) translateY(0) scaleY(1); }
+  50%      { transform: translateX(-50%) translateY(-4%) scaleY(1.16); }
+}
+@keyframes title-flame-left {
+  0%, 100% { transform: translateX(-50%) translateY(0) scaleY(1); }
+  50%      { transform: translateX(calc(-50% + 8px)) translateY(-3%) scaleY(1.1); }
+}
+@keyframes title-flame-right {
+  0%, 100% { transform: translateX(-50%) translateY(0) scaleY(1); }
+  50%      { transform: translateX(calc(-50% - 8px)) translateY(-3%) scaleY(1.1); }
+}
