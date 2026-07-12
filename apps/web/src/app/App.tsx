@@ -198,7 +198,13 @@ function Shell({ onRestart }: { onRestart: () => void }) {
     let raf = requestAnimationFrame(() => {
       raf = requestAnimationFrame(() => setSceneReady(true))
     })
-    return () => cancelAnimationFrame(raf)
+    // Подстраховка: если rAF почему-то не отработал (был заморожен сборкой и т.п.), всё равно
+    // объявляем готовность — иначе «вжуха» и перехода не будет вовсе («не улетает»).
+    const fallback = window.setTimeout(() => setSceneReady(true), 2000)
+    return () => {
+      cancelAnimationFrame(raf)
+      window.clearTimeout(fallback)
+    }
   }, [booted])
 
   /**
@@ -850,39 +856,10 @@ function TitleWarp({ vanishY }: { vanishY: number }) {
 function TitleShip({ trembling, launched }: { trembling: boolean; launched: boolean }) {
   const ref = useRef<HTMLDivElement>(null)
   const shineRef = useRef<HTMLDivElement>(null)
-  const shakeRef = useRef<HTMLDivElement>(null)
 
-  // Дрожь ПРОГРАММНАЯ, а не CSS-кейфрейм: она обязана нарастать сколько угодно долго (хоть
-  // минуту загрузки) и по тонкой формуле. rAF-петля пишет transform внутреннего div: частота
-  // высокая (мелкая частая дрожь) и слегка учащается; горизонтальная амплитуда растёт с нуля,
-  // вертикальная — совсем чуть и позже. transform идёт на композиторе, поэтому дрожь не
-  // замирает даже под блокирующей сборкой сцены.
-  useEffect(() => {
-    const el = shakeRef.current
-    if (!trembling || launched || !el) return
-    const start = performance.now()
-    let prev = start
-    let phase = 0
-    let raf = 0
-    const tick = (now: number) => {
-      const dt = Math.min(0.05, (now - prev) / 1000)
-      prev = now
-      const t = (now - start) / 1000
-      const freq = 18 + t * 3 // Гц: частая мелкая дрожь, слегка учащается
-      phase += freq * dt * Math.PI * 2
-      const ampX = Math.min(5, 0.4 + t * 0.9) // горизонталь растёт с мелкой
-      const ampY = Math.min(1.1, Math.max(0, t - 0.4) * 0.28) // вертикаль — чуть и позже
-      const x = (Math.sin(phase) * 0.75 + Math.sin(phase * 1.87 + 0.6) * 0.25) * ampX
-      const y = Math.sin(phase * 0.83 + 1.1) * ampY
-      el.style.transform = `translate(${x.toFixed(2)}px, ${y.toFixed(2)}px)`
-      raf = requestAnimationFrame(tick)
-    }
-    raf = requestAnimationFrame(tick)
-    return () => {
-      cancelAnimationFrame(raf)
-      el.style.transform = ''
-    }
-  }, [trembling, launched])
+  // Дрожь — КЕЙФРЕЙМ (не JS): CSS-анимация transform идёт на КОМПОЗИТОРЕ и потому не замирает,
+  // пока сборка сцены блокирует главный поток. JS-петля на rAF там бы застыла (это и была
+  // причина «не дрожит»). Кейфрейм частый и мелкий, амплитуда нарастает внутри цикла.
 
   // Инверсный параллакс: корабль чуть смещается ПРОТИВ курсора — до ±20 px вбок и ±10 px
   // по вертикали (вбок вдвое, чтобы это читалось смещением, а не только креном),
@@ -940,16 +917,15 @@ function TitleShip({ trembling, launched }: { trembling: boolean; launched: bool
       )}
       <div ref={ref} style={{ transition: 'transform 0.25s ease-out' }}>
         <div
-          ref={shakeRef}
           className="relative"
           style={{
-            // Три такта. Пока грузимся (`trembling`) — дрожь ведёт rAF-петля выше (animation
-            // выключен, transform пишем сами). Готово (`launched`) — резкий СРЫВ и улёт вниз
-            // (`forwards` держит финал). Иначе — спокойная качка кейфреймом.
+            // Три такта. Грузимся (`trembling`) — частая мелкая ДРОЖЬ кейфреймом (композитор,
+            // не мрёт под сборкой). Готово (`launched`) — резкий СРЫВ и улёт вниз (`forwards`
+            // держит финал). Иначе — спокойная качка.
             animation: launched
               ? 'title-ship-launch 0.25s cubic-bezier(0.85, 0, 1, 1) forwards'
               : trembling
-                ? 'none'
+                ? 'title-ship-tremble 1.3s linear infinite'
                 : 'title-ship-float 7s ease-in-out infinite',
           }}
         >
@@ -1049,7 +1025,7 @@ function Paused({
   useEffect(() => {
     if (!waiting || launched) return void setStall(0)
     const a = window.setTimeout(() => setStall(1), 3000)
-    const b = window.setTimeout(() => setStall(2), 7000)
+    const b = window.setTimeout(() => setStall(2), 6000)
     return () => {
       window.clearTimeout(a)
       window.clearTimeout(b)
@@ -1204,9 +1180,11 @@ function Paused({
             className="transition-transform duration-700 ease-out"
             style={{ transform: !resuming ? 'translateY(calc(18vh - 3rem))' : 'none' }}
           >
-            {/* Затянулось — подпись нервничает: дрожит (3с) и срывается на «ИИИИИИИ…» (7с). */}
+            {/* Затянулось — подпись нервничает: меняется на 3с и на 6с, и дрожит с 3с. */}
             <div style={stall >= 1 ? { animation: 'title-btn-shake 0.5s linear infinite' } : undefined}>
-              <MenuButton disabled onClick={() => {}}>{t(stall >= 2 ? 'menu.waitLong' : 'menu.wait')}</MenuButton>
+              <MenuButton disabled onClick={() => {}}>
+                {t(stall >= 2 ? 'menu.waitLong' : stall >= 1 ? 'menu.wait2' : 'menu.wait')}
+              </MenuButton>
             </div>
           </div>
         ) : (

@@ -11,8 +11,9 @@ export const EN: Record<keyof typeof RU, string> = {
   'menu.resume': 'RESUME',
   'menu.continue': 'CONTINUE',
   'menu.wait': 'JUST A SEC…',
-  // Loading dragged on (>2s) — shift tone to "almost there" so it doesn't read as frozen.
-  'menu.waitLong': 'WAI-WAI-WAIT…',
+  // Loading drags on: the caption gets antsy — at 3s and at 6s.
+  'menu.wait2': 'WAI-WAI-WAIT…',
+  'menu.waitLong': 'AAAAA…',
   'menu.newGame': 'NEW GAME',
   'menu.newGameConfirm': 'ERASE PROGRESS?',
   'menu.newGameWarn': 'A NEW GAME WILL ERASE YOUR SAVE. START OVER?',
