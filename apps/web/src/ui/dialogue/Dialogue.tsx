@@ -19,7 +19,7 @@ import { useSession } from '../../app/GameContext'
 import { Button, PilotPortrait } from '../station/chrome'
 import { markOutcomeEmotion, type Emotion } from '../portrait'
 import { UI } from '../theme'
-import { occupationName } from '../i18n/dataNames'
+import { chassisName, occupationName } from '../i18n/dataNames'
 import { buildContext, type ChatTurn, type NegotiatorReply } from './facts'
 
 /**
@@ -233,6 +233,10 @@ export function Dialogue({
                 отношение — одно из трёх честных слов, а не размытое «мирный». */}
             <div className="text-xs tracking-widest" style={{ color: UI.DIM }}>
               {occupationName(other.originKind, other.faction).toUpperCase()} · {STANCE_WORD[stance]}
+            </div>
+            {/* И корабль — с кем говоришь видно так же полно, как на плашке у причала. */}
+            <div className="text-xs tracking-widest" style={{ color: UI.DIM }}>
+              {chassisName(other.loadout.chassis.name).toUpperCase()}
             </div>
           </div>
         </div>
