@@ -878,13 +878,13 @@ function TitleShip({ trembling, launched }: { trembling: boolean; launched: bool
   useEffect(() => {
     const el = shakeRef.current
     if (!trembling || launched || !el) return
-    const N = 260
-    const CYCLES = 46 // всего колебаний за проход → частота = CYCLES / duration
+    const N = 320
+    const CYCLES = 62 // всего колебаний за проход → частота = CYCLES / duration ≈ 12 Гц
     const DURATION = 5000
     const frames: Keyframe[] = []
     for (let i = 0; i <= N; i++) {
       const t = i / N
-      const amp = 1.2 + t * 4.8 // горизонталь растёт
+      const amp = 0.35 + t * 4.65 // СПЕРВА мелко (0.35 px), к концу крупно (5 px)
       const ph = t * CYCLES * 2 * Math.PI
       const x = Math.sin(ph) * amp
       const y = Math.sin(ph * 0.8 + 1.1) * amp * 0.12
@@ -1059,7 +1059,10 @@ function Paused({
   // корабль и кнопка начинают дрожать; 2 (через 7с) — подпись срывается на «ИИИИИИИ…».
   const [stall, setStall] = useState(0)
   useEffect(() => {
-    if (!waiting || launched) return void setStall(0)
+    if (!waiting) return void setStall(0)
+    // «Вжух» подписи НЕ сбрасывает: держим тот уровень, до которого доэскалировали, иначе
+    // на срыве лейбл прыгал обратно на «секундочку». Просто больше не наращиваем.
+    if (launched) return
     const a = window.setTimeout(() => setStall(1), 3000)
     const b = window.setTimeout(() => setStall(2), 6000)
     return () => {
