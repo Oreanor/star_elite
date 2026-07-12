@@ -79,6 +79,8 @@ export function makeShip(
     // Привод заряжен полностью: первый прыжок доступен без визита к звезде.
     jumpCharge: spec.jumpRange,
     lastHitAt: -1e9,
+    lastShieldHitAt: -1e9,
+    lastHullHitAt: -1e9,
     energy: spec.power.capacity,
     ecmCooldown: 0,
     // Бомба есть только у игрока, и это НЕ привилегия физики: пират, снимающий

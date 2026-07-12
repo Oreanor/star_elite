@@ -7,6 +7,7 @@ import { isLaser } from '../loadout'
 import { createWorld, STARTER_SYSTEM } from '../world'
 import type { BodyEntity, MissileEntity, World } from '../world/entities'
 import { stepBolts } from './bolts'
+import { applyDamage } from './damage'
 import { stepMissiles } from './missiles'
 import { spawnBolt } from './weapons'
 
@@ -97,5 +98,29 @@ describe('защитное поле станции', () => {
     const flash = world.shieldFlashes[0]!
     const radial = flash.pos.clone().sub(flash.center)
     expect(radial.length()).toBeGreaterThan(0) // есть куда ориентировать: точка не в центре
+  })
+})
+
+describe('метки попадания: щит против корпуса', () => {
+  it('удар по щиту метит lastShieldHitAt, а по корпусу — lastHullHitAt', () => {
+    const { world } = stationWorld()
+    const ship = world.player
+    ship.shield = ship.spec.hull.shield
+    expect(ship.shield).toBeGreaterThan(0)
+
+    // Малый удар целиком гасит щит — корпус не задет.
+    applyDamage(ship, 1, 10)
+    expect(ship.lastShieldHitAt).toBe(10)
+    expect(ship.lastHullHitAt).toBeLessThan(0) // корпус ещё не трогали
+
+    // Пробойный удар: щит в ноль, остаток — по корпусу. Метятся ОБЕ.
+    applyDamage(ship, ship.shield + 20, 20)
+    expect(ship.lastShieldHitAt).toBe(20)
+    expect(ship.lastHullHitAt).toBe(20)
+
+    // Щита нет — попадание идёт прямо в корпус, метится только он.
+    applyDamage(ship, 5, 30)
+    expect(ship.lastHullHitAt).toBe(30)
+    expect(ship.lastShieldHitAt).toBe(20) // по щиту больше не метили
   })
 })

@@ -8,10 +8,11 @@ import {
   MeshLambertMaterial,
   MeshStandardMaterial,
   PointsMaterial,
+  ShaderMaterial,
   SpriteMaterial,
   type Texture,
 } from 'three'
-import { MATERIAL, PALETTE } from '../config'
+import { MATERIAL, PALETTE, SHIELD_BUBBLE } from '../config'
 
 /**
  * Материалы создаются один раз на модуль. Каждый новый материал — это новая
@@ -330,6 +331,59 @@ export function shieldFlashMaterial(): MeshBasicMaterial {
     fog: false,
   })
   return shieldFlash
+}
+
+let shieldBubble: ShaderMaterial | null = null
+
+/**
+ * Защитная сфера корабля с ФРЕНЕЛЕМ: кромка (грань, глядящая вскользь) плотная, центр
+ * прозрачный — «поле обтягивает силуэт». Дёшево: аддитив, без текстур, один инстансный
+ * вызов на все сферы. Цвет и яркость каждой приходят инстансным атрибутом `aColor`
+ * (тон × спад), поэтому вспышки гаснут по отдельности одним материалом.
+ *
+ * `instanceMatrix` и `USE_INSTANCING` подставляет сам рендер для InstancedMesh; в шейдере
+ * лишь пользуемся ими. Нормаль во вью-пространстве против направления взгляда даёт френель.
+ */
+export function shieldBubbleMaterial(): ShaderMaterial {
+  shieldBubble ??= new ShaderMaterial({
+    transparent: true,
+    blending: AdditiveBlending,
+    depthWrite: false,
+    fog: false,
+    uniforms: { uPower: { value: SHIELD_BUBBLE.FRESNEL_POWER } },
+    vertexShader: /* glsl */ `
+      attribute vec3 aColor;
+      varying vec3 vColor;
+      varying vec3 vNormalV;
+      varying vec3 vViewDir;
+      void main() {
+        vColor = aColor;
+        #ifdef USE_INSTANCING
+          mat4 mv = modelViewMatrix * instanceMatrix;
+          mat3 nm = mat3(mv);
+        #else
+          mat4 mv = modelViewMatrix;
+          mat3 nm = normalMatrix;
+        #endif
+        vec4 mvPos = mv * vec4(position, 1.0);
+        vNormalV = normalize(nm * normal);
+        vViewDir = normalize(-mvPos.xyz);
+        gl_Position = projectionMatrix * mvPos;
+      }
+    `,
+    fragmentShader: /* glsl */ `
+      uniform float uPower;
+      varying vec3 vColor;
+      varying vec3 vNormalV;
+      varying vec3 vViewDir;
+      void main() {
+        float f = 1.0 - abs(dot(normalize(vNormalV), normalize(vViewDir)));
+        f = pow(clamp(f, 0.0, 1.0), uPower);
+        gl_FragColor = vec4(vColor * f, f);
+      }
+    `,
+  })
+  return shieldBubble
 }
 
 const tracers = new Map<string, MeshBasicMaterial>()

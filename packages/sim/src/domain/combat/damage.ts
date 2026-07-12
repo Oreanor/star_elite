@@ -10,8 +10,12 @@ export function applyDamage(e: ShipEntity, amount: number, time: number): void {
     const absorbed = Math.min(e.shield, remaining)
     e.shield -= absorbed
     remaining -= absorbed
+    e.lastShieldHitAt = time // щит принял удар — рендер вспыхнёт защитной сферой
   }
-  if (remaining > 0) e.hull -= remaining
+  if (remaining > 0) {
+    e.hull -= remaining
+    e.lastHullHitAt = time // удар дошёл до корпуса — рендер тряхнёт кабину
+  }
 
   if (e.hull <= 0) {
     e.hull = 0

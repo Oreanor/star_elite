@@ -13,6 +13,7 @@ import { DockingCorridor } from '../render/scene/DockingCorridor'
 import { Dyson } from '../render/scene/Dyson'
 import { Dust } from '../render/scene/Dust'
 import { CargoPods, Explosions, Missiles, StationShields, TractorBeam, Tracers, WarpFlashes } from '../render/scene/Effects'
+import { ShieldBubbles } from '../render/scene/ShieldBubbles'
 import { Exhaust } from '../render/scene/Exhaust'
 import { Lighting } from '../render/scene/Lighting'
 import { Drones, EnemyShips, FreighterShips, PlayerShip } from '../render/scene/Ships'
@@ -68,6 +69,7 @@ function Scene() {
       <Explosions />
       <WarpFlashes />
       <StationShields />
+      <ShieldBubbles />
       <JumpRing />
       <Cockpit />
 

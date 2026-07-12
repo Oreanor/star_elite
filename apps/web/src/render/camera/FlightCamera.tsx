@@ -271,6 +271,16 @@ export function FlightCamera() {
       camera.position.add(_bombShake.applyQuaternion(camera.quaternion))
     }
 
+    // Толчок кабины на попадании по КОРПУСУ (щит пробит). Короткий вздрог + лёгкий увод
+    // кадра — «как будто на миг тряхнуло управление». Мимо физики: домен лишь метит момент.
+    const hullAge = (session.world.time - player.lastHullHitAt) / CAMERA.HULL_HIT_SHAKE_LIFE
+    if (hullAge >= 0 && hullAge < 1) {
+      const time = session.world.time
+      const amp = CAMERA.HULL_HIT_SHAKE_MAX * (1 - hullAge)
+      _shake.set(shakeAt(time, 3.1), shakeAt(time, 6.7), shakeAt(time, 0.9)).multiplyScalar(amp)
+      camera.position.add(_shake.applyQuaternion(camera.quaternion))
+    }
+
     const baseFov = cockpit ? RENDER.FOV_COCKPIT : RENDER.FOV_CHASE
     const wantFov = baseFov + RENDER.FOV_CRUISE_BOOST * cruiseFraction
     if (Math.abs(camera.fov - wantFov) > 0.01) {
