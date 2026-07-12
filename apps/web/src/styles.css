@@ -155,9 +155,9 @@ canvas {
    рвётся вверх на `--clap-rise` (до звезды), пропорционально УМЕНЬШАЯСЬ и тая.
    translate по Y = центрирование (−50%) плюс подъём к точке схода. */
 @keyframes title-ship-clap {
-  0%   { transform: translate(-50%, -50%) scale(0.2); opacity: 0; }
-  10%  { opacity: 1; }
-  28%  { transform: translate(-50%, -50%) scale(3.2); opacity: 0.9; }
+  0%   { transform: translate(-50%, -50%) scale(0.08); opacity: 0; }
+  5%   { opacity: 1; }
+  15%  { transform: translate(-50%, -50%) scale(3.2); opacity: 0.95; } /* НАПОРИСТЫЙ бросок из точки */
   100% { transform: translate(-50%, calc(-50% + var(--clap-rise, -40vh))) scale(0.7); opacity: 0; }
 }
 
