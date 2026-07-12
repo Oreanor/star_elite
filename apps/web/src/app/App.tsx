@@ -207,6 +207,9 @@ function Shell({ onRestart }: { onRestart: () => void }) {
    * этот переход — гаснет, как только показан док.
    */
   const [launching, setLaunching] = useState(false)
+  // Тот же флаг в ref — читать из колбэка стыковки (`onDockChange`), не пересобирая его.
+  const launchingRef = useRef(false)
+  useEffect(() => void (launchingRef.current = launching), [launching])
 
   /**
    * Персонаж уже создан. Новичку (сейва не было) сперва показываем экран создания —
@@ -242,6 +245,10 @@ function Shell({ onRestart }: { onRestart: () => void }) {
   useEffect(() => {
     session.onOver = () => setOver(true)
     session.onDockChange = (d) => {
+      // Во время флориша взлёта новичка стартовую стыковку из сима ИГНОРИРУЕМ: док покажем
+      // сами, ПОСЛЕ «вжуха» (onDock в Paused). Иначе первый же кадр сима вырезал бы флориш —
+      // корабль дрожал, а станция всплывала мгновенно, минуя срыв.
+      if (d && launchingRef.current) return
       setDocked(d)
       // Пристыковались — консоль открыта на планете; отчалили — закрыта.
       setTab(d ? 'planet' : null)
@@ -843,6 +850,39 @@ function TitleWarp({ vanishY }: { vanishY: number }) {
 function TitleShip({ trembling, launched }: { trembling: boolean; launched: boolean }) {
   const ref = useRef<HTMLDivElement>(null)
   const shineRef = useRef<HTMLDivElement>(null)
+  const shakeRef = useRef<HTMLDivElement>(null)
+
+  // Дрожь ПРОГРАММНАЯ, а не CSS-кейфрейм: она обязана нарастать сколько угодно долго (хоть
+  // минуту загрузки) и по тонкой формуле. rAF-петля пишет transform внутреннего div: частота
+  // высокая (мелкая частая дрожь) и слегка учащается; горизонтальная амплитуда растёт с нуля,
+  // вертикальная — совсем чуть и позже. transform идёт на композиторе, поэтому дрожь не
+  // замирает даже под блокирующей сборкой сцены.
+  useEffect(() => {
+    const el = shakeRef.current
+    if (!trembling || launched || !el) return
+    const start = performance.now()
+    let prev = start
+    let phase = 0
+    let raf = 0
+    const tick = (now: number) => {
+      const dt = Math.min(0.05, (now - prev) / 1000)
+      prev = now
+      const t = (now - start) / 1000
+      const freq = 18 + t * 3 // Гц: частая мелкая дрожь, слегка учащается
+      phase += freq * dt * Math.PI * 2
+      const ampX = Math.min(5, 0.4 + t * 0.9) // горизонталь растёт с мелкой
+      const ampY = Math.min(1.1, Math.max(0, t - 0.4) * 0.28) // вертикаль — чуть и позже
+      const x = (Math.sin(phase) * 0.75 + Math.sin(phase * 1.87 + 0.6) * 0.25) * ampX
+      const y = Math.sin(phase * 0.83 + 1.1) * ampY
+      el.style.transform = `translate(${x.toFixed(2)}px, ${y.toFixed(2)}px)`
+      raf = requestAnimationFrame(tick)
+    }
+    raf = requestAnimationFrame(tick)
+    return () => {
+      cancelAnimationFrame(raf)
+      el.style.transform = ''
+    }
+  }, [trembling, launched])
 
   // Инверсный параллакс: корабль чуть смещается ПРОТИВ курсора — до ±20 px вбок и ±10 px
   // по вертикали (вбок вдвое, чтобы это читалось смещением, а не только креном),
@@ -900,15 +940,16 @@ function TitleShip({ trembling, launched }: { trembling: boolean; launched: bool
       )}
       <div ref={ref} style={{ transition: 'transform 0.25s ease-out' }}>
         <div
+          ref={shakeRef}
           className="relative"
           style={{
-            // Три такта. Затянулась загрузка (`trembling`, через 3с) — корабль ДРОЖИТ по
-            // нарастающей: тремор и есть индикатор «ещё грузится». Готово (`launched`) —
-            // резкий СРЫВ и улёт вниз (`forwards` держит финал). Иначе — спокойная качка.
+            // Три такта. Пока грузимся (`trembling`) — дрожь ведёт rAF-петля выше (animation
+            // выключен, transform пишем сами). Готово (`launched`) — резкий СРЫВ и улёт вниз
+            // (`forwards` держит финал). Иначе — спокойная качка кейфреймом.
             animation: launched
               ? 'title-ship-launch 0.25s cubic-bezier(0.85, 0, 1, 1) forwards'
               : trembling
-                ? 'title-ship-tremble 4.5s linear forwards'
+                ? 'none'
                 : 'title-ship-float 7s ease-in-out infinite',
           }}
         >
