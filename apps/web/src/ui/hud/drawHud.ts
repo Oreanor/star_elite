@@ -32,7 +32,7 @@ import { bombFlash, bombRing } from '../../render/bombFeel'
 import { HUD_SCALE } from '../../render/config'
 import { HUD_COLORS, bar, circle, corners, dot, line, rect, text } from './draw'
 import { t } from '../i18n'
-import { properName, shipTypeName } from '../i18n/dataNames'
+import { chassisName, occupationName, properName, shipTypeName } from '../i18n/dataNames'
 import { drawFlare } from './drawFlare'
 import { angularSize, formatDistance, formatSpeed, projectPoint } from './project'
 import {
@@ -315,8 +315,11 @@ function drawTargets({ ctx, camera, world, width, height }: HudFrame): void {
     if (locked) {
       const shield = ship.spec.hull.shield > 0 ? ship.shield / ship.spec.hull.shield : 0
       const hull = ship.hull / ship.spec.hull.hull
-      bar(ctx, p.x - 20 * S, p.y - size / 2 - 10 * S, 40 * S, 3 * S, shield, HUD_COLORS.PRIMARY)
-      bar(ctx, p.x - 20 * S, p.y - size / 2 - 5 * S, 40 * S, 3 * S, hull, HUD_COLORS.DANGER)
+      // Щит, корпус И ЭНЕРГИЯ цели: по батарее видно, может ли он бустить/стрелять,
+      // или уже выдохся — тогда дожать проще. Три полоски стопкой над рамкой.
+      bar(ctx, p.x - 20 * S, p.y - size / 2 - 15 * S, 40 * S, 3 * S, shield, HUD_COLORS.PRIMARY)
+      bar(ctx, p.x - 20 * S, p.y - size / 2 - 10 * S, 40 * S, 3 * S, hull, HUD_COLORS.DANGER)
+      bar(ctx, p.x - 20 * S, p.y - size / 2 - 5 * S, 40 * S, 3 * S, energyFraction(ship), HUD_COLORS.WARN)
     }
   }
 }
@@ -507,11 +510,13 @@ function drawTargetPortrait({ ctx, world, width, height }: HudFrame): void {
   const ship = world.ships.find((s) => s.id === world.lockedTargetId)
   if (!ship || !ship.alive || !isVisible(ship)) return
 
-  const size = 66 * S
+  // Того же размера, что портреты у причала (96). Раньше был мельче — цель в бою
+  // читалась хуже, чем сосед в доке.
+  const size = 96 * S
   const x = width - 12 * S - size
   // Над локатором: его верхняя кромка — height − 2·radius(36) − отступ(12).
   const radarTop = height - 72 * S - 12 * S
-  const y = radarTop - 8 * S - size - 7 * S // ещё выше на строку имени
+  const y = radarTop - 8 * S - size - 26 * S // выше на ТРИ строки подписи (имя/род/корабль)
 
   ctx.strokeStyle = HUD_COLORS.DIM
   ctx.lineWidth = 1
@@ -527,8 +532,13 @@ function drawTargetPortrait({ ctx, world, width, height }: HudFrame): void {
     text(ctx, (ship.name.trim().charAt(0) || '?').toUpperCase(), x + size / 2, y + size / 2 - 5 * S, HUD_COLORS.DIM, 'center')
   }
 
-  // Имя под портретом — кто это.
-  text(ctx, ship.name.toUpperCase(), x + size / 2, y + size + 2 * S, HUD_COLORS.PRIMARY, 'center')
+  // Под портретом — ИМЯ, РОД занятий и КОРАБЛЬ, а не одна роль «Торговец»: с кем имеешь
+  // дело, видно так же полно, как на плашке у причала.
+  const midX = x + size / 2
+  const nameY = y + size + 2 * S
+  text(ctx, ship.pilotName.toUpperCase(), midX, nameY, HUD_COLORS.PRIMARY, 'center')
+  text(ctx, occupationName(ship.originKind, ship.faction).toUpperCase(), midX, nameY + 8 * S, HUD_COLORS.DIM, 'center')
+  text(ctx, chassisName(ship.loadout.chassis.name).toUpperCase(), midX, nameY + 16 * S, HUD_COLORS.DIM, 'center')
 }
 
 /**
