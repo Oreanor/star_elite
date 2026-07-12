@@ -833,19 +833,19 @@ function TitleShip({ launching }: { launching: boolean }) {
 
   return (
     <div className="pointer-events-none absolute inset-x-0 top-[calc(55%+50px)] mx-auto w-full max-w-[43.2rem] -translate-y-1/2 px-8">
-      {/* Хлопок на срыве: волна ЗА кораблём (центр на корпусе). Проекция диска — простой КРУГ
-          (равные стороны, равномерный рост). Сидит ПОЗАДИ (раньше в DOM → корабль перекрывает
-          центр), не движется — раздувается ШИРЕ корабля и гаснет. screen делает чёрный прозрачным. */}
+      {/* Хлопок на срыве: волна ЗА кораблём (центр на корпусе). Проекция диска — лёгкий эллипс
+          4:3 (шире, чем выше); рост РАВНОМЕРНЫЙ, оттого соотношение держится. Сидит ПОЗАДИ (раньше
+          в DOM → корабль перекрывает центр), не движется — раздувается ШИРЕ корабля и гаснет. */}
       {launching && (
         <div
           aria-hidden
           className="pointer-events-none absolute left-1/2 top-1/2 mix-blend-screen"
           style={{
-            width: '15vw',
-            height: '15vw',
+            width: '16vw',
+            height: '12vw', // 4:3 — лёгкий эллипс
             borderRadius: '50%',
             background:
-              'radial-gradient(circle at 50% 50%, rgba(214,240,255,0) 46%, rgba(159,224,255,0.45) 60%, rgba(230,246,255,1) 72%, rgba(214,240,255,0) 88%)',
+              'radial-gradient(ellipse at 50% 50%, rgba(214,240,255,0) 46%, rgba(159,224,255,0.45) 60%, rgba(230,246,255,1) 72%, rgba(214,240,255,0) 88%)',
             transform: 'translate(-50%, -50%) scale(0.2)',
             opacity: 0,
             animation: 'title-ship-clap 0.6s ease-out 0.8s both',
