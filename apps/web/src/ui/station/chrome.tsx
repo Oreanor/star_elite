@@ -290,6 +290,7 @@ export function Table<Row>({
   detail,
   onRowClick,
   selectedKey,
+  rowDisabled,
 }: {
   columns: readonly Column<Row>[]
   rows: readonly Row[]
@@ -299,6 +300,9 @@ export function Table<Row>({
   onRowClick?: (row: Row) => void
   /** Ключ выбранной строки — она подсвечена. */
   selectedKey?: string | null
+  /** Строка НЕАКТИВНА: не кликается и приглушена. Данные видны (цена в столбце), а
+   *  делать нечего — например товар, который ни купить, ни продать сейчас. */
+  rowDisabled?: (row: Row) => boolean
 }) {
   const [open, setOpen] = useState<ReadonlySet<string>>(new Set())
   const toggle = (k: string) =>
@@ -337,15 +341,17 @@ export function Table<Row>({
           const isOpen = card !== null && open.has(key)
           // Клик по строке либо ВЫБИРАЕТ её (колонка-компаньон), либо раскрывает карточку.
           const select = onRowClick !== undefined
-          const interactive = select || card !== null
+          const disabled = rowDisabled?.(row) ?? false
+          const interactive = (select || card !== null) && !disabled
           const onAct = select ? () => onRowClick(row) : () => toggle(key)
           const marker = select ? '' : isOpen ? '▾ ' : '▸ '
           const selected = selectedKey === key
           // Кликабельна ВСЯ строка, а не одно имя: раньше мимо первой ячейки клик пропадал.
+          // Неактивная строка приглушена и не кликается — делать в ней нечего.
           return (
             <Fragment key={key}>
               <tr
-                className={`align-baseline ${interactive ? 'cursor-pointer transition-colors hover:bg-[#7fd6ff]/[0.06]' : ''}`}
+                className={`align-baseline ${interactive ? 'cursor-pointer transition-colors hover:bg-[#7fd6ff]/[0.06]' : ''} ${disabled ? 'opacity-40' : ''}`}
                 style={selected ? { backgroundColor: 'rgba(127,214,255,0.10)' } : undefined}
                 onClick={interactive ? onAct : undefined}
                 role={interactive ? 'button' : undefined}
