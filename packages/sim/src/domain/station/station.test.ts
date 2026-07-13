@@ -9,7 +9,7 @@ import { stepWorld, type Controller, type ControllerMap } from '../sim'
 import { createWorld, STARTER_SYSTEM, type World } from '../world'
 import { autodockController, canEngageAutodock } from './autopilot'
 import { canDockAt, dock, findStation, stationRange, undock } from './docking'
-import { buy, buyCommodity, canBuyCommodity, commodityBuyPrice, commoditySellPrice, repair, repairCost, sellItem } from './shop'
+import { buy, buyCommodity, canBuyCommodity, commodityBuyPrice, commoditySellPrice, masterClass, repair, repairChance, repairCost, sellItem } from './shop'
 
 function quiet(): World {
   return createWorld({ ...STARTER_SYSTEM, patrols: [], belt: null })
@@ -168,27 +168,60 @@ describe('стыковка', () => {
 })
 
 describe('магазин', () => {
-  it('ремонт стоит денег и чинит только корпус', () => {
+  // Ремонт корпуса — БРОСОК у мастерской (класс от развития планеты). Исход зависит от
+  // системы, поэтому проверяем ИНВАРИАНТ по каждому исходу, а не конкретный успех:
+  // успех — корпус в норму и деньги списаны; провал — денег не берут, корпус не лучше;
+  // не берутся — ничего не изменилось. Щит за деньги не чинят никогда.
+  it('ремонт корпуса: успех чинит и списывает, провал не берёт денег, отказ ничего не трогает', () => {
     const world = quiet()
     const player = world.player
     applyDamage(player, player.spec.hull.shield + 40, 0)
+    expect(repairCost(player)).toBeGreaterThan(0)
 
-    const cost = repairCost(player)
-    expect(cost).toBeGreaterThan(0)
-
-    const credits = world.credits
-    expect(repair(world, player)).toBe(true)
-    expect(player.hull).toBe(player.spec.hull.hull)
-    expect(world.credits).toBe(credits - cost)
-    // Щит восстанавливается сам — за него не берут.
-    expect(player.shield).toBe(0)
+    const creditsBefore = world.credits
+    const hullBefore = player.hull
+    const out = repair(world, player)
+    if (out === 'repaired') {
+      expect(player.hull).toBe(player.spec.hull.hull)
+      expect(world.credits).toBeLessThan(creditsBefore)
+      expect(player.shield).toBe(0)
+    } else if (out === 'botched') {
+      expect(player.hull).toBeLessThanOrEqual(hullBefore) // доломали или без изменений
+      expect(world.credits).toBe(creditsBefore) // за провал денег не берут
+    } else {
+      expect(out).toBe('refused') // местная мастерская не тянет класс корпуса
+      expect(player.hull).toBe(hullBefore)
+      expect(world.credits).toBe(creditsBefore)
+    }
   })
 
-  it('нет денег — нет ремонта', () => {
+  it('нет денег — ремонт не списывает и корпус не чинит', () => {
     const world = quiet()
     applyDamage(world.player, world.player.spec.hull.shield + 40, 0)
     world.credits = 0
-    expect(repair(world, world.player)).toBe(false)
+    const out = repair(world, world.player)
+    // Либо не хватило денег, либо тут вообще не берутся — но платы нет и корпус не в норме.
+    expect(['no-money', 'refused']).toContain(out)
+    expect(world.credits).toBe(0)
+    expect(world.player.hull).toBeLessThan(world.player.spec.hull.hull)
+  })
+
+  // Таблица шансов мастерской — прямой инвариант задумки, без случайности.
+  it('мастерская: класс от развития и шанс ремонта по классу вещи', () => {
+    // Класс мастерской растёт с тех-уровнем поселения (пороги те же, что у сервиса).
+    expect(masterClass({ techLevel: 2 } as never)).toBe(1)
+    expect(masterClass({ techLevel: 6 } as never)).toBe(2)
+    expect(masterClass({ techLevel: 12 } as never)).toBe(3)
+    // Мастер 1 не берётся за класс-3 (разрыв в два), но уверенно чинит свой класс.
+    expect(repairChance(1, 3, 1)).toBe(0)
+    expect(repairChance(1, 1, 0)).toBeCloseTo(0.7)
+    expect(repairChance(1, 1, 1)).toBeCloseTo(1)
+    // Мастер 3 при зашкале развития чинит класс-3 наверняка; класс ниже — всегда.
+    expect(repairChance(3, 3, 1)).toBeCloseTo(1)
+    expect(repairChance(3, 1, 0)).toBe(1)
+    // Тянется на класс выше — берётся, но с риском (не ноль и не единица).
+    expect(repairChance(2, 3, 0.5)).toBeGreaterThan(0)
+    expect(repairChance(2, 3, 0.5)).toBeLessThan(1)
   })
 
   /**

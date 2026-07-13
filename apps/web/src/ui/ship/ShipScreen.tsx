@@ -19,7 +19,7 @@ import {
   rearm,
   rearmCost,
   repair,
-  repairCost,
+  repairQuote,
   sellModule,
   slotCategoryOf,
   stationStock,
@@ -471,11 +471,13 @@ function SlotModal({
     onClose()
   }
 
-  // Действие, что оставляет тот же модуль в слоте (ремонт корпуса, дозарядка) — модалку
-  // НЕ закрываем: чини и улучшай подряд, не открывая слот заново. Только перерисовать.
-  const commitStay = (run: () => void) => {
-    run()
+  // Ремонт корпуса — БРОСОК: жмём, домен решает исход, показываем его сообщением и НЕ
+  // закрываем окно (чини/дозаряжай/улучшай подряд). Провал денег не берёт, но может доломать.
+  const doRepair = () => {
+    if (!module) return
+    const outcome = runRepair(world, module)
     onChange()
+    setConfirm({ message: t(('ship.repair.' + outcome) as Key), actions: [] })
   }
 
   // Клик по МОЕМУ варианту из трюма — спросить и поставить взамен (даром, железо своё).
@@ -589,7 +591,7 @@ function SlotModal({
               world={world}
               module={module}
               onStrip={() => module && commit(() => unfitModule(player, module))}
-              onRepair={() => module && commitStay(() => runRepair(world, module))}
+              onRepair={doRepair}
               onUpgrade={askUpgrade}
               onSell={() => module && commit(() => sellModule(world, player, module))}
             />
@@ -656,28 +658,36 @@ function ActionBar({
   const player = world.player
   const essential = module ? isEssential(module) : false
   const noRoom = module ? freeCapacity(player.hold) < module.mass : true
-  const repairCostNow = module ? repairCostFor(world, module) : 0
+  const repair = module ? repairInfoFor(world, module) : { price: 0, can: false, refused: false }
   const maxed = module ? canUpgrade(world, player, module, true) === 'maxed' : true
   // Деталь не изнашивается и не чинится: «ремонт» на бронеплите латает КОРПУС корабля
-  // (общий, до нового максимума), на ракете — ДОЗАРЯДКА боезапаса. Зовём по делу, чтобы
-  // не читалось как «эта деталь с износом» — изношенного мы не продаём.
+  // (общий), на ракете — ДОЗАРЯДКА боезапаса. Зовём по делу, чтобы не читалось как
+  // «эта деталь с износом» — изношенного мы не продаём.
   const repairLabel = module?.kind === 'missile' ? t('station.rearm') : t('station.repairHull')
 
   return (
-    <div className="mt-4 flex flex-wrap gap-2 border-t pt-4" style={{ borderColor: DIM }}>
-      <Button small disabled={!module || essential || noRoom} onClick={onStrip}>
-        {t('station.strip')}
-      </Button>
-      <Button small disabled={repairCostNow <= 0 || world.credits < repairCostNow} onClick={onRepair}>
-        {repairCostNow > 0 ? `${repairLabel} · ${credits(repairCostNow)}` : repairLabel}
-      </Button>
-      <Button small disabled={!module || maxed} onClick={onUpgrade}>
-        {t('station.upgrade')}
-      </Button>
-      <Button small disabled={!module || essential} onClick={onSell}>
-        {module ? t('station.sellModule', { value: credits(moduleResaleValue(player, module)) }) : t('station.sell')}
-      </Button>
-    </div>
+    <>
+      <div className="mt-4 flex flex-wrap gap-2 border-t pt-4" style={{ borderColor: DIM }}>
+        <Button small disabled={!module || essential || noRoom} onClick={onStrip}>
+          {t('station.strip')}
+        </Button>
+        <Button small disabled={!repair.can} onClick={onRepair}>
+          {repair.price > 0 ? `${repairLabel} · ${credits(repair.price)}` : repairLabel}
+        </Button>
+        <Button small disabled={!module || maxed} onClick={onUpgrade}>
+          {t('station.upgrade')}
+        </Button>
+        <Button small disabled={!module || essential} onClick={onSell}>
+          {module ? t('station.sellModule', { value: credits(moduleResaleValue(player, module)) }) : t('station.sell')}
+        </Button>
+      </div>
+      {/* Захолустная мастерская за такой корпус не берётся — так и говорим, а не молчим кнопкой. */}
+      {repair.refused && (
+        <p className="mt-2 text-xs" style={{ color: DIM }}>
+          {t('ship.repair.tooComplex')}
+        </p>
+      )}
+    </>
   )
 }
 
@@ -765,18 +775,35 @@ function ConfirmBox({
   )
 }
 
-/** Почём чинить у этого модуля: у брони — корпус, у пусковой — ракеты; иначе нечего.
- *  Одна точка правды и для гашения кнопки, и для самого ремонта — чтобы не разошлись. */
-function repairCostFor(world: World, module: ShipModule): number {
-  if (module.kind === 'armour') return repairCost(world.player)
-  if (module.kind === 'missile') return rearmCost(world.player)
-  return 0
+interface RepairInfo {
+  /** Цена работы (при успехе для корпуса, полная для дозарядки). 0 — чинить нечего. */
+  price: number
+  /** Можно ли жать кнопку: есть что чинить, хватает денег и мастерская берётся. */
+  can: boolean
+  /** Тут за такой корпус не берутся (мастер класса ниже вещи на два) — гасим и поясняем. */
+  refused: boolean
 }
 
-/** Собственно ремонт: корпус у брони, боезапас у пусковой. Домен решает, хватит ли денег. */
-function runRepair(world: World, module: ShipModule): void {
-  if (module.kind === 'armour') repair(world, world.player)
-  else if (module.kind === 'missile') rearm(world, world.player)
+/** Расклад ремонта у этого модуля: у брони — корпус (через мастерскую), у пусковой — ракеты. */
+function repairInfoFor(world: World, module: ShipModule): RepairInfo {
+  if (module.kind === 'armour') {
+    const q = repairQuote(world, world.player)
+    if (q.price <= 0) return { price: 0, can: false, refused: false } // корпус цел
+    if (q.chance <= 0) return { price: q.price, can: false, refused: true } // не берутся
+    return { price: q.price, can: world.credits >= q.price, refused: false }
+  }
+  if (module.kind === 'missile') {
+    const price = rearmCost(world.player)
+    return { price, can: price > 0 && world.credits >= price, refused: false }
+  }
+  return { price: 0, can: false, refused: false }
+}
+
+/** Собственно ремонт. Возвращает КЛЮЧ исхода для сообщения игроку (ремонт — бросок). */
+function runRepair(world: World, module: ShipModule): string {
+  if (module.kind === 'armour') return repair(world, world.player) // 'repaired'|'botched'|'refused'|...
+  if (module.kind === 'missile') return rearm(world, world.player) ? 'rearmed' : 'no-money'
+  return 'nothing'
 }
 
 /** Строки характеристик корабля. Читаются из `spec` при каждом рендере — после
