@@ -24,7 +24,11 @@ export function starExposure(ship: ShipEntity, world: World): number {
   for (const body of world.bodies) {
     if (body.kind !== 'star') continue
     const altitude = body.pos.distanceTo(ship.state.pos) - body.radius
-    const ratio = altitude / body.radius
+    // Высота — в радиусах звезды, но ДОМНОЖЕННАЯ на масштаб борта (миелофон). Гигант
+    // видит звезду в `scale` раз мельче (камера отъезжает / тела съёживаются за потолком),
+    // и опасная дистанция обязана съёжиться так же: иначе тебя жжёт там, где светило —
+    // далёкая точка. Для обычного корабля scale=1 — правило то же, что и было.
+    const ratio = (altitude / body.radius) * ship.state.scale
     const e = clamp((STAR_HEAT.SAFE_RATIO - ratio) / (STAR_HEAT.SAFE_RATIO - STAR_HEAT.DANGER_RATIO), 0, 1)
     if (e > hottest) hottest = e
   }

@@ -18,6 +18,10 @@ export interface GalaxyRadarState {
   /** Цвета звёзд, 3 (r,g,b) на звезду. */
   colors: Float32Array | null
   count: number
+  /** Индекс СВОЕЙ звезды (текущей системы): она в локальном начале (p≈0), всегда у якоря.
+   *  Локатор рисует её ВСЕГДА и подписывает — даже когда прочие ещё вне сферы видимости:
+   *  так подмена «система → звезда галактики» бесшовна, а игрок видит точку отсчёта. */
+  originIndex: number
   /** Локальный якорь слоя ЭТОГО кадра (points.position). */
   anchor: Vector3
   /** Метров кадра в одном св.году: мир-позиция звезды = anchor + p·layerScale. */
@@ -29,6 +33,7 @@ const state: GalaxyRadarState = {
   positions: null,
   colors: null,
   count: 0,
+  originIndex: 0,
   anchor: new Vector3(),
   layerScale: 1,
 }

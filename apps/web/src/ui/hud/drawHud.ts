@@ -608,12 +608,10 @@ function drawRadar({ ctx, camera, world, width, height }: HudFrame): void {
     const range = GALAXY_LAYER.SPHERE_RADIUS_M
     const pos = gr.positions
     const col = gr.colors
-    let nearestSq = Infinity
-    let nearX = 0
-    let nearY = 0
-    let nearFound = false
-    for (let i = 0; i < gr.count; i++) {
-      const b = i * 3
+
+    // Проецирует звезду (индекс·3) на локатор. `force` игнорирует сферу видимости (для
+    // своей звезды — её показываем всегда). Возвращает экранную точку или null.
+    const projStar = (b: number, force: boolean): { px: number; my: number } | null => {
       // Мир-позиция звезды = якорь слоя + локальные·масштаб; сразу берём относительно борта.
       _point.set(
         gr.anchor.x + pos[b]! * gr.layerScale - player.state.pos.x,
@@ -621,30 +619,41 @@ function drawRadar({ ctx, camera, world, width, height }: HudFrame): void {
         gr.anchor.z + pos[b + 2]! * gr.layerScale - player.state.pos.z,
       )
       const distSq = _point.lengthSq()
-      if (distSq > range * range) continue // только в сфере видимости
-      const distance = Math.sqrt(distSq)
+      if (!force && distSq > range * range) return null // вне сферы видимости
+      const distance = Math.sqrt(distSq) || 1
       const x = _point.dot(_right)
       const z = _point.dot(_fwd)
       const flat = Math.hypot(x, z)
-      if (flat < 1e-3) continue
-      // Линейно (не лог): локатор здесь — top-down мини-карта окрестности, а не сжатие порядков.
-      const k = distance / range
+      if (flat < 1e-3) return { px: cx, my: cy } // прямо над/под кораблём — в центр
+      // Линейно (не лог): локатор здесь — top-down мини-карта окрестности. За сферой (своя
+      // звезда, если отлетел) прижимаем к ободу.
+      const k = Math.min(1, distance / range)
       const px = cx + (x / flat) * k * radiusX
       const py = cy - (z / flat) * k * radiusY
       const lift = Math.max(-10 * S, Math.min(10 * S, (_point.dot(_up) / distance) * 20 * S))
       const my = py - lift
       if (Math.abs(lift) > S) line(ctx, px, py, px, my, HUD_COLORS.DIM)
-      const color = `rgb(${Math.round(col[b]! * 255)},${Math.round(col[b + 1]! * 255)},${Math.round(col[b + 2]! * 255)})`
-      dot(ctx, px, my, Math.max(1, 1.5 * S), color)
-      if (distSq < nearestSq) {
-        nearestSq = distSq
-        nearX = px
-        nearY = my
-        nearFound = true
-      }
+      return { px, my }
     }
-    // Ближайшую обводим кольцом — это звезда «под рукой», в неё и нырять.
-    if (nearFound) circle(ctx, nearX, nearY, 3 * S, HUD_COLORS.PRIMARY)
+
+    for (let i = 0; i < gr.count; i++) {
+      if (i === gr.originIndex) continue // своя звезда — отдельно, всегда и с подписью
+      const b = i * 3
+      const p = projStar(b, false)
+      if (!p) continue
+      const color = `rgb(${Math.round(col[b]! * 255)},${Math.round(col[b + 1]! * 255)},${Math.round(col[b + 2]! * 255)})`
+      dot(ctx, p.px, p.my, Math.max(1, 1.5 * S), color)
+    }
+
+    // СВОЯ звезда (текущая система) — ВСЕГДА, кольцом и подписью, даже вне сферы: это
+    // бесшовная подмена «система → звезда галактики» и точка отсчёта. Прочие подтянутся
+    // на радар по мере роста — игрок видит, куда всё сходится.
+    const own = projStar(gr.originIndex * 3, true)
+    if (own) {
+      dot(ctx, own.px, own.my, Math.max(1, 2 * S), HUD_COLORS.PRIMARY)
+      circle(ctx, own.px, own.my, 3 * S, HUD_COLORS.PRIMARY)
+      text(ctx, properName(world.systemName), own.px - 5 * S, own.my - 3 * S, HUD_COLORS.PRIMARY, 'right')
+    }
     return
   }
 

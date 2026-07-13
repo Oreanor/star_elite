@@ -1,5 +1,6 @@
 import { useEffect, useReducer } from 'react'
 import {
+  MIELOPHONE,
   contactWhereabouts,
   findChassis,
   findStation,
@@ -192,36 +193,46 @@ export function Console({
             <PeopleTab world={world} docked={docked} onTalk={onTalk} onLocate={onLocate} onRoute={onRoute} onChat={onChat} onChange={bump} />
           )}
           {/* КАРТА — три вида под одной вкладкой: ряд переключателей и выбранный вид. */}
-          {isMapView(tab) && (
+          {isMapView(tab) && (() => {
+            // За масштабом (миелофон) единичная система растворилась — её карта неактивна.
+            // Вид системы подменяется галактическим, а его кнопка гаснет. Локатор при этом
+            // работает: он переключается на галактические звёзды (см. drawRadar).
+            const giant = world.player.state.scale >= MIELOPHONE.PHASE_START
+            const view: MapView = giant && tab === 'system' ? 'galaxy' : (tab as MapView)
+            return (
             <div className="flex min-h-0 flex-1 flex-col">
               <div className="mb-4 flex gap-2">
-                {MAP_VIEWS.map((view) => {
-                  const on = view === tab
+                {MAP_VIEWS.map((v) => {
+                  const on = v === view
+                  const disabled = v === 'system' && giant
                   return (
                     <button
-                      key={view}
+                      key={v}
                       type="button"
-                      onClick={() => onTab(view)}
+                      onClick={disabled ? undefined : () => onTab(v)}
+                      disabled={disabled}
                       aria-current={on ? 'page' : undefined}
-                      className="cursor-pointer border px-4 py-1.5 text-xs tracking-[0.25em] transition-colors hover:bg-[#7fd6ff] hover:text-black"
+                      className="border px-4 py-1.5 text-xs tracking-[0.25em] transition-colors disabled:cursor-not-allowed enabled:cursor-pointer enabled:hover:bg-[#7fd6ff] enabled:hover:text-black"
                       style={{
                         borderColor: on ? ACCENT : DIM,
                         backgroundColor: on ? ACCENT : 'transparent',
                         color: on ? '#000' : DIM,
+                        opacity: disabled ? 0.35 : 1,
                       }}
                     >
-                      {t(`map.view.${view}` as 'map.view.locator')}
+                      {t(`map.view.${v}` as 'map.view.locator')}
                     </button>
                   )
                 })}
               </div>
-              {tab === 'locator' && <Locator world={world} />}
-              {tab === 'system' && <SystemMap world={world} embedded onClose={() => onTab('planet')} />}
+              {view === 'locator' && <Locator world={world} />}
+              {view === 'system' && <SystemMap world={world} embedded onClose={() => onTab('planet')} />}
               {/* onClose у карты галактики срабатывает только при старте прыжка — тогда
                   консоль закрывается целиком и мир оживает под кино, а не переходит на вкладку. */}
-              {tab === 'galaxy' && <GalaxyMap embedded onClose={onClose} />}
+              {view === 'galaxy' && <GalaxyMap embedded onClose={onClose} />}
             </div>
-          )}
+            )
+          })()}
         </div>
       </div>
     </div>

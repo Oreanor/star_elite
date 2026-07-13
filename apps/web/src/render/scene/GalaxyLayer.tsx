@@ -225,6 +225,7 @@ export function GalaxyLayer() {
     gr.active = t > 0 && starData.current !== null
     gr.anchor.copy(points.position)
     gr.layerScale = layerScale
+    gr.originIndex = world.systemIndex
     if (starData.current) {
       gr.positions = starData.current.positions
       gr.colors = starData.current.colors

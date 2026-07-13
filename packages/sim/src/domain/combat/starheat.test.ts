@@ -67,6 +67,22 @@ describe('нагрев у звезды', () => {
     expect(bigger).toBeCloseTo(asIs, 5)
   })
 
+  it('в масштабе (миелофон) опасная зона съёживается пропорционально росту', () => {
+    // Гигант видит звезду в `scale` раз мельче, значит и жечь она должна с `scale` раз
+    // меньшей дистанции — иначе корпус калится там, где светило уже далёкая точка.
+    const world = quiet()
+
+    place(world, 0.1) // обычному кораблю тут почти максимум облучения
+    expect(starExposure(world.player, world)).toBeGreaterThan(0.9)
+
+    world.player.state.scale = 100 // вырос миелофоном
+    expect(starExposure(world.player, world)).toBe(0) // та же высота, но звезда далеко
+
+    // Чтобы жгло так же, гиганту надо подойти в ~scale раз ближе по доле радиуса.
+    place(world, 0.1 / 100)
+    expect(starExposure(world.player, world)).toBeGreaterThan(0.9)
+  })
+
   it('щит горит раньше корпуса', () => {
     const world = quiet()
     place(world, 0.1)
