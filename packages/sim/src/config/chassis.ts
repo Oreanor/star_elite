@@ -10,7 +10,7 @@ export const AURORA_MK3: Chassis = {
   name: 'Аврора Мк III',
   class: 3,
   baseMass: 8, // т, пустой
-  baseHull: 90,
+  baseHull: 225,
   cargoCapacity: 22, // истребитель-универсал: хватает на обвес да немного поторговать
   auxCapacity: 100,
   /** м. Аврора — корабль метров 25 в длину; сфера ~половина размаха.
@@ -64,7 +64,7 @@ export const SIDEWINDER: Chassis = {
   name: 'Арес',
   class: 2,
   baseMass: 6,
-  baseHull: 40,
+  baseHull: 100,
   cargoCapacity: 16, // мелкий боец: трюма едва на обвес
   auxCapacity: 100,
   /** м. Мелкий истребитель: труднее попасть, но и брони нет. */
@@ -111,7 +111,7 @@ export const LARGE_FREIGHTER: Chassis = {
   name: 'Деметра',
   class: 3,
   baseMass: 90, // т, пустой — на порядок тяжелее истребителя
-  baseHull: 320,
+  baseHull: 800,
   cargoCapacity: 200, // летающий трюм: грузоподъёмность на порядок выше боевых корпусов
   auxCapacity: 100,
   /** м. Втрое длиннее «Авроры»: тушу видно издалека, и попасть по ней нетрудно. */
@@ -149,7 +149,7 @@ export const APOLLO: Chassis = {
   name: 'Аполлон',
   class: 3,
   baseMass: 7,
-  baseHull: 70,
+  baseHull: 175,
   cargoCapacity: 20,
   auxCapacity: 100,
   radius: 11,
@@ -182,7 +182,7 @@ export const ARTEMIS: Chassis = {
   name: 'Артемида',
   class: 3,
   baseMass: 9,
-  baseHull: 105,
+  baseHull: 260,
   cargoCapacity: 24,
   auxCapacity: 100,
   radius: 10,
@@ -214,7 +214,7 @@ export const ATHENA: Chassis = {
   name: 'Афина',
   class: 3,
   baseMass: 8,
-  baseHull: 80,
+  baseHull: 200,
   cargoCapacity: 22,
   auxCapacity: 100,
   radius: 10,
@@ -271,7 +271,7 @@ export const DRONE: Chassis = {
   name: 'Каллиопа',
   class: 1,
   baseMass: 0.9,
-  baseHull: 22,
+  baseHull: 55,
   // Спасательная капсула: 10 т грузоподъёмности — ровно чтобы вынести из осколков
   // миелофон или важный груз (см. эскейп-под). Аукс-энергия — его живучесть в роли пода.
   cargoCapacity: 10,

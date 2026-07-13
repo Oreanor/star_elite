@@ -310,7 +310,7 @@ export const SHIELD_LIGHT: ShieldModule = {
   mass: 0.6,
   cost: 0,
   salvageChance: 0.5,
-  capacity: 80,
+  capacity: 170,
   regen: 2.0,
   regenDelay: 5,
 }
@@ -323,7 +323,7 @@ export const SHIELD_STANDARD: ShieldModule = {
   mass: 1.2,
   cost: 21000,
   salvageChance: 0.3,
-  capacity: 120,
+  capacity: 250,
   regen: 4.5,
   regenDelay: 4,
 }
@@ -337,7 +337,7 @@ export const SHIELD_HEAVY: ShieldModule = {
   mass: 2.6,
   cost: 88000,
   salvageChance: 0.12,
-  capacity: 210,
+  capacity: 440,
   regen: 6.0,
   regenDelay: 4.5,
 }
@@ -352,7 +352,7 @@ export const SHIELD_LIGHT_D: ShieldModule = {
   mass: 0.85,
   cost: 8000,
   salvageChance: 0.5,
-  capacity: 90,
+  capacity: 190,
   regen: 2.6,
   regenDelay: 4.8,
 }
@@ -366,7 +366,7 @@ export const SHIELD_STANDARD_B: ShieldModule = {
   mass: 1.6,
   cost: 40000,
   salvageChance: 0.28,
-  capacity: 135,
+  capacity: 285,
   regen: 5.2,
   regenDelay: 3.8,
 }
@@ -382,7 +382,7 @@ export const SHIELD_MIRAGE: ShieldModule = {
   mass: 0.9, // легче стокового 2C
   cost: 52000,
   salvageChance: 0.22,
-  capacity: 95, // чуть меньше 2C: линия берёт не ёмкостью
+  capacity: 200, // чуть меньше 2C: линия берёт не ёмкостью
   regen: 6.5, // зато отходит вдвое быстрее
   regenDelay: 3.0,
 }
@@ -395,7 +395,7 @@ export const SHIELD_MIRAGE_B: ShieldModule = {
   mass: 1.9, // легче «Бастиона», оттого и манёвр щадит
   cost: 130000,
   salvageChance: 0.1,
-  capacity: 170, // ёмкости меньше топового «Бастиона»
+  capacity: 355, // ёмкости меньше топового «Бастиона»
   regen: 9.0, // но регенерация лучшая в каталоге
   regenDelay: 3.2,
 }
@@ -410,7 +410,7 @@ export const SHIELD_HEAVY_C: ShieldModule = {
   mass: 2.3,
   cost: 60000,
   salvageChance: 0.15,
-  capacity: 160,
+  capacity: 335,
   regen: 5.0,
   regenDelay: 4.6,
 }
@@ -425,7 +425,7 @@ export const ARMOUR_PLATE: ArmourModule = {
   mass: 1.5,
   cost: 9000,
   salvageChance: 0.6,
-  hull: 40,
+  hull: 100,
 }
 
 export const ARMOUR_COMPOSITE: ArmourModule = {
@@ -436,7 +436,7 @@ export const ARMOUR_COMPOSITE: ArmourModule = {
   mass: 2.2,
   cost: 34000,
   salvageChance: 0.4,
-  hull: 85,
+  hull: 210,
 }
 
 // «Сталь» — дешёвый мясистый прокат: прочности за кредит много, но масса зверская.
@@ -450,7 +450,7 @@ export const ARMOUR_STEEL_2: ArmourModule = {
   mass: 3.2, // тяжелее композита в полтора раза
   cost: 22000, // и заметно дешевле его
   salvageChance: 0.45,
-  hull: 110,
+  hull: 275,
 }
 
 export const ARMOUR_STEEL_3: ArmourModule = {
@@ -461,7 +461,7 @@ export const ARMOUR_STEEL_3: ArmourModule = {
   mass: 4.5, // самый прочный корпус в каталоге и самый тяжёлый
   cost: 55000,
   salvageChance: 0.2,
-  hull: 180,
+  hull: 450,
 }
 
 // «Композит» — сбалансированная середина. 2B поверх стокового композита: чуть
@@ -474,7 +474,7 @@ export const ARMOUR_COMPOSITE_B: ArmourModule = {
   mass: 2.5,
   cost: 48000,
   salvageChance: 0.35,
-  hull: 105,
+  hull: 260,
 }
 
 // «Керамет» — лёгкая дорогая линия. Прочности на тонну больше, чем у стали, но и
@@ -487,7 +487,7 @@ export const ARMOUR_CERAMET_1: ArmourModule = {
   mass: 1.3, // легче «Бронеплит» при большем корпусе
   cost: 24000,
   salvageChance: 0.45,
-  hull: 55,
+  hull: 140,
 }
 
 export const ARMOUR_CERAMET_2: ArmourModule = {
@@ -498,7 +498,7 @@ export const ARMOUR_CERAMET_2: ArmourModule = {
   mass: 1.9, // легче даже стокового композита
   cost: 52000,
   salvageChance: 0.3,
-  hull: 100,
+  hull: 250,
 }
 
 export const ARMOUR_CERAMET_3: ArmourModule = {
@@ -509,7 +509,7 @@ export const ARMOUR_CERAMET_3: ArmourModule = {
   mass: 2.6, // вдвое легче стального 3C при корпусе лишь немногим меньше
   cost: 78000,
   salvageChance: 0.15,
-  hull: 150,
+  hull: 375,
 }
 
 // ─── Лазеры ──────────────────────────────────────────────────────────────────
@@ -712,10 +712,10 @@ export const PLASMA_GUN_HEAVY: LaserModule = {
  * пилонов, поэтому «выпускать по одной» получается само собой, а пустая подвеска
  * сразу видна на крыле.
  *
- * Урон 60 — примерно половина живучести «Сайдвиндера» (щит 80 + корпус 40 = 120).
- * Ракета больше не сбивает с одного попадания: она сносит половину, а добивают
- * стволы. Так у боя есть длительность, у щита — видимая фаза, а у боезапаса из
- * шести ракет — вес: две ракеты на цель, не одна.
+ * Урон 200 — примерно 3/4 живучести «Сайдвиндера» (щит 170 + корпус 100 = 270),
+ * а у среднего борта — около половины. Ракета больше не сбивает с одного попадания:
+ * она сносит крупный кусок, а добивают стволы. Так у боя есть длительность, у щита —
+ * видимая фаза, а у боезапаса из шести ракет — вес: две ракеты на цель, не одна.
  */
 export const MISSILE_PYLON: MissileModule = {
   id: 'missile_p',
@@ -727,7 +727,7 @@ export const MISSILE_PYLON: MissileModule = {
   salvageChance: 0.35,
   /** Две на пилон. У «Авроры» четыре пилона — значит восемь ракет на вылет. */
   ammo: 2,
-  damage: 60,
+  damage: 200,
   /**
    * Замер (`scratch/missiles.ts`): с пропорциональным наведением 550 м/с дают
    * 4 попадания из 4 по вертящейся цели с любой дистанции, а 420 — только 3 из 4.
@@ -756,7 +756,7 @@ export const MISSILE_HOMING: MissileModule = {
   cost: 12000,
   salvageChance: 0.3,
   ammo: 6,
-  damage: 55,
+  damage: 185,
   speed: 500,
   armTime: 0.15,
   boostTime: 0.5,
@@ -775,7 +775,7 @@ export const MISSILE_HEAVY: MissileModule = {
   cost: 39000,
   salvageChance: 0.18,
   ammo: 4,
-  damage: 110,
+  damage: 365,
   speed: 420,
   /** Тяжёлой нужно дольше отходить от пилона. */
   armTime: 0.25,
@@ -798,7 +798,7 @@ export const MISSILE_STING: MissileModule = {
   cost: 2200,
   salvageChance: 0.4,
   ammo: 2,
-  damage: 100,
+  damage: 330,
   speed: 540,
   armTime: 0.18,
   boostTime: 0.55,
@@ -816,7 +816,7 @@ export const MISSILE_WASP: MissileModule = {
   cost: 6000,
   salvageChance: 0.32,
   ammo: 2,
-  damage: 150, // крупнее «Шершня» — попала, значит наверняка сбила
+  damage: 500, // крупнее «Шершня» — попала, значит наверняка сбила
   speed: 560,
   armTime: 0.18,
   boostTime: 0.55,
@@ -837,7 +837,7 @@ export const MISSILE_SWARM: MissileModule = {
   cost: 8000,
   salvageChance: 0.32,
   ammo: 5,
-  damage: 45,
+  damage: 150,
   speed: 500,
   armTime: 0.15,
   boostTime: 0.5,
@@ -855,7 +855,7 @@ export const MISSILE_HOUND: MissileModule = {
   cost: 19000,
   salvageChance: 0.28,
   ammo: 6,
-  damage: 65,
+  damage: 215,
   speed: 500,
   armTime: 0.15,
   boostTime: 0.5,
@@ -875,7 +875,7 @@ export const MISSILE_SLEDGE: MissileModule = {
   cost: 58000,
   salvageChance: 0.14,
   ammo: 3,
-  damage: 160,
+  damage: 530,
   speed: 410,
   armTime: 0.28,
   boostTime: 0.75,
