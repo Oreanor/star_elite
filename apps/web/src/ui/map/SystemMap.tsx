@@ -9,8 +9,9 @@ import { useWheelZoom } from './useWheelZoom'
 /**
  * Карта системы — голограмма над консолью.
  *
- * Вид сверху, плоскость XZ, оси МИРОВЫЕ: карта не крутится вместе с носом, иначе
- * ею невозможно пользоваться как картой.
+ * По умолчанию — вид сверху, плоскость XZ, оси МИРОВЫЕ (карта не крутится вместе с
+ * носом). Но её можно КРУТИТЬ и НАКЛОНЯТЬ драгом, как локатор: yaw поворачивает диск,
+ * tilt кладёт его в эллипс. Зум — колесом. Всё через ту же проекцию `project`.
  *
  * Центр — ЗВЕЗДА, а карта показывает СИСТЕМУ целиком: звезда, планеты, луны,
  * причал — все на своих орбитах, а игрок отмечен там, где он в системе есть.
@@ -19,8 +20,8 @@ import { useWheelZoom } from './useWheelZoom'
  * дистанции сваливал внутренние миры в точку у светила; отношение разводит
  * орбиты по диску ровно, и «что дальше» видно всё сразу, без прокрутки масштаба.
  *
- * Высота (Y) не показывается наклоном — наклонная проекция врёт о расстояниях;
- * вместо неё вертикальный штрих, как на радаре.
+ * Высота (Y) — вертикальным штрихом от плоскости эклиптики к телу; при наклоне он
+ * честно поднимает тело над диском, как на радаре.
  *
  * Карта ничего не решает: она пишет `world.navTargetId` и на этом заканчивается.
  */
@@ -85,6 +86,17 @@ interface Marker {
   range: number
   /** Центральное светило: стоит в центре, орбитой не мерится. */
   isStar: boolean
+}
+
+/**
+ * Проекция точки диска на экран — та же, что у локатора: поворот в плоскости (yaw),
+ * затем наклон (tilt) сжимает ось «от звезды» и поднимает высоту, зум множит. Плоский
+ * вид сверху при tilt=0; драгом превращаем диск в наклонный эллипс, как радар.
+ */
+function project(x: number, y: number, h: number, yaw: number, tilt: number, zoom: number): { x: number; y: number; depth: number } {
+  const rx = (x * Math.cos(yaw) - y * Math.sin(yaw)) * zoom
+  const fy = (x * Math.sin(yaw) + y * Math.cos(yaw)) * zoom
+  return { x: rx, y: -(fy * Math.cos(tilt) + h * zoom * Math.sin(tilt)), depth: fy }
 }
 
 /** Логарифм отношения орбиты к внутренней сжимает разброс орбит в радиус диска. */
@@ -217,16 +229,16 @@ export function SystemMap({
   // Мир мутируется напрямую; React о нём не знает и сам перерисоваться не может.
   const [, bump] = useState(0)
 
-  // Масштаб голограммы: 1 — вся система в поле, больше — ближе. Колесо и щипок его
-  // крутят, сама SVG тянется по контейнеру, поэтому карта всегда влезает в экран.
+  // Масштаб голограммы: 1 — вся система в поле, больше — ближе. Колесо его крутит.
   const [zoom, setZoom] = useState(1)
   const holoRef = useRef<HTMLDivElement>(null)
-  useWheelZoom(holoRef, (dy) => setZoom((z) => Math.min(12, Math.max(0.6, z * (dy > 0 ? 0.9 : 1.1)))))
+  useWheelZoom(holoRef, (dy) => setZoom((z) => Math.min(6, Math.max(0.6, z * (dy > 0 ? 0.9 : 1.1)))))
 
-  // Панорамирование: карту можно ТАСКАТЬ, а не только зумить. `pan` — сдвиг центра кадра
-  // в единицах SVG, поверх авто-наводки на фокус. Драг за пустое место двигает вид; клик
-  // по метке по-прежнему выбирает цель (если это не был драг — см. `dragged`).
-  const [pan, setPan] = useState({ x: 0, y: 0 })
+  // Поворот и наклон — как у локатора: драг по X крутит диск (yaw), по Y кладёт его в
+  // наклон (tilt), превращая круг орбит в эллипс. Плоский вид сверху при tilt=0. `dragged`
+  // отличает вращение от клика по метке, чтобы драг не выбирал цель.
+  const [yaw, setYaw] = useState(0)
+  const [tilt, setTilt] = useState(0.5)
   const drag = useRef<{ x: number; y: number } | null>(null)
   const dragged = useRef(false)
 
@@ -237,15 +249,12 @@ export function SystemMap({
   }
   const onPointerMove = (e: React.PointerEvent) => {
     const start = drag.current
-    const el = holoRef.current
-    if (!start || !el) return
+    if (!start) return
     const dxp = e.clientX - start.x
     const dyp = e.clientY - start.y
     if (!dragged.current && Math.hypot(dxp, dyp) > 3) dragged.current = true
-    // Экранные пиксели → единицы SVG: поле зрения (VIEW/zoom) на ширину контейнера.
-    const perPx = VIEW / zoom / el.clientWidth
-    // Тащим содержимое ЗА курсором: вид смещается против движения (viewBox−).
-    setPan((p) => ({ x: p.x - dxp * perPx, y: p.y - dyp * perPx }))
+    setYaw((yw) => yw - dxp * 0.008)
+    setTilt((tl) => Math.max(0, Math.min(1.35, tl + dyp * 0.006)))
     drag.current = { x: e.clientX, y: e.clientY }
   }
   const onPointerUp = () => {
@@ -271,9 +280,9 @@ export function SystemMap({
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerUp}
-        className="relative aspect-square w-full min-w-0 max-w-[34rem] shrink cursor-grab touch-none select-none active:cursor-grabbing"
+        className="relative aspect-square w-full min-w-0 max-w-[min(31rem,calc(100vh-17rem))] shrink cursor-grab touch-none select-none active:cursor-grabbing"
       >
-        <Hologram points={points} heading={headingOf(world)} navTargetId={world.navTargetId} zoom={zoom} pan={pan} onSelect={select} />
+        <Hologram points={points} heading={headingOf(world)} navTargetId={world.navTargetId} zoom={zoom} yaw={yaw} tilt={tilt} onSelect={select} />
       </div>
 
       <div className="flex w-72 shrink-0 flex-col" style={{ color: BODY }}>
@@ -347,34 +356,32 @@ function Hologram({
   heading,
   navTargetId,
   zoom,
-  pan,
+  yaw,
+  tilt,
   onSelect,
 }: {
   points: Marker[]
   heading: { x: number; y: number }
   navTargetId: number | null
-  /** Масштаб: делит поле зрения. Больше — ближе. Тела не растут, растёт разлёт орбит. */
+  /** Масштаб: множит разлёт орбит. Больше — ближе. Значки не растут. */
   zoom: number
-  /** Сдвиг кадра от перетаскивания, единицы SVG. Накладывается поверх авто-наводки. */
-  pan: { x: number; y: number }
+  /** Поворот диска в плоскости и наклон «на себя» — как у локатора. */
+  yaw: number
+  tilt: number
   onSelect: (id: number) => void
 }) {
-  // Кольца-орбиты: у каждого тела своя окружность вокруг звезды. Дубли (причал у
-  // планеты) сливаются в одну — это честно, они и правда на одной орбите.
   const ships = points.find((m) => m.kind === 'ship')
+  const cos = Math.cos(tilt)
+  const proj = (x: number, y: number, h: number) => project(x, y, h, yaw, tilt, zoom)
 
-  // Центр кадра тянется к тому, что рассматриваешь: выбранная цель, иначе игрок. На
-  // zoom=1 стоит на звезде (k=0) — вся система в кадре; с приближением (k→1) наезжает на
-  // фокус, поэтому цель не убегает за край. SVG тянется на весь контейнер (`h-full w-full`).
-  const focus = points.find((m) => m.id === navTargetId && selectable(m)) ?? ships ?? { x: 0, y: 0 }
-  const box = VIEW / zoom
-  const k = 1 - 1 / zoom
-  // Центр кадра = авто-наводка на фокус ПЛЮС ручной сдвиг перетаскиванием.
-  const cx = focus.x * k + pan.x
-  const cy = focus.y * k + pan.y
+  // Проецируем каждую метку: плоскость (base) и вершина штриха высоты (tip). Дальние
+  // (по глубине после поворота) рисуем первыми — ближние лягут поверх, как на локаторе.
+  const marks = points
+    .map((m) => ({ m, base: proj(m.x, m.y, 0), tip: proj(m.x, m.y, m.lift) }))
+    .sort((a, b) => b.base.depth - a.base.depth)
 
   return (
-    <svg className="absolute inset-0 h-full w-full" viewBox={`${cx - box / 2} ${cy - box / 2} ${box} ${box}`}>
+    <svg className="absolute inset-0 h-full w-full" viewBox={`${-VIEW / 2} ${-VIEW / 2} ${VIEW} ${VIEW}`}>
       <defs>
         <radialGradient id="map-disc">
           <stop offset="0%" stopColor="rgba(124,196,255,0.14)" />
@@ -383,30 +390,30 @@ function Hologram({
         </radialGradient>
       </defs>
 
-      <circle r={DISC} fill="url(#map-disc)" />
+      {/* Диск и орбиты кладутся в наклон эллипсами: ry = rx·cos(tilt), центр — звезда. */}
+      <ellipse rx={DISC * zoom} ry={DISC * cos * zoom} fill="url(#map-disc)" />
 
-      {/* Орбиты тел — настоящие окружности вокруг светила, а не деления шкалы. */}
       {points
         .filter((m) => !m.isStar && m.kind !== 'ship' && m.ring > 0)
         .map((m) => (
-          <circle key={`ring-${m.id}`} r={m.ring} fill="none" stroke="rgba(124,196,255,0.12)" strokeDasharray="2 6" />
+          <ellipse
+            key={`ring-${m.id}`}
+            rx={m.ring * zoom}
+            ry={m.ring * cos * zoom}
+            fill="none"
+            stroke="rgba(124,196,255,0.12)"
+            strokeDasharray="2 6"
+          />
         ))}
 
-      {/* Игла курса от корабля: единственное, что связывает карту с тем, куда повёрнут нос. */}
-      {ships && (
-        // Игла курса — тоже постоянной длины на экране (÷zoom), в лад с меткой корабля.
-        <line
-          x1={ships.x}
-          y1={ships.y - ships.lift / zoom}
-          x2={ships.x + (heading.x * 34) / zoom}
-          y2={ships.y - ships.lift / zoom + (heading.y * 34) / zoom}
-          stroke={SHIP}
-          strokeOpacity={0.4}
-          strokeDasharray="6 5"
-        />
-      )}
+      {/* Игла курса от корабля: куда повёрнут нос. Тоже через проекцию. */}
+      {ships && (() => {
+        const a = proj(ships.x, ships.y, ships.lift)
+        const b = proj(ships.x + heading.x * 34, ships.y + heading.y * 34, ships.lift)
+        return <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke={SHIP} strokeOpacity={0.4} strokeDasharray="6 5" />
+      })()}
 
-      {points.map((m) => {
+      {marks.map(({ m, base, tip }) => {
         const active = m.id === navTargetId
         const clickable = selectable(m)
         const colour = colourOf(m.kind)
@@ -414,18 +421,15 @@ function Hologram({
         return (
           <g
             key={m.id}
-            transform={`translate(${m.x} ${m.y})`}
             onClick={clickable ? () => onSelect(m.id) : undefined}
             style={{ cursor: clickable ? 'pointer' : 'default' }}
           >
-            {/* Метки — постоянного размера на экране (контр-масштаб 1/zoom): их МЕСТА на
-                диске раздвигаются зумом, а сами значки не растут, поэтому слипшиеся у
-                планеты луна и причал наконец расходятся. Иначе зум — просто скейл, без пользы. */}
-            <g transform={`scale(${1 / zoom})`}>
-            {/* Штрих от плоскости эклиптики к телу: единственный носитель высоты. */}
-            {Math.abs(m.lift) > 1 && <line x1={0} y1={0} x2={0} y2={-m.lift} stroke={colour} strokeOpacity={0.35} />}
+            {/* Штрих высоты: от плоскости эклиптики (base) к телу (tip) — виден при наклоне. */}
+            {Math.hypot(tip.x - base.x, tip.y - base.y) > 1 && (
+              <line x1={base.x} y1={base.y} x2={tip.x} y2={tip.y} stroke={colour} strokeOpacity={0.35} />
+            )}
 
-            <g transform={`translate(0 ${-m.lift})`}>
+            <g transform={`translate(${tip.x} ${tip.y})`}>
               {/* Кружок под палец: у планеты радиус 6 единиц, попасть в него мышью тяжело. */}
               {clickable && <circle r={18} fill="transparent" />}
 
@@ -461,7 +465,6 @@ function Hologram({
               >
                 {properName(m.name)}
               </text>
-            </g>
             </g>
           </g>
         )

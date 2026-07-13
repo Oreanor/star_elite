@@ -183,8 +183,9 @@ export function Locator({ world }: { world: World }) {
         onPointerUp={() => (drag.current = null)}
         onPointerCancel={() => (drag.current = null)}
         // Круг обязан влезать в высоту панели, иначе появляется скролл: сторона квадрата
-        // ограничена и шириной колонки, и оставшейся высотой экрана.
-        className="relative aspect-square w-full max-w-[min(34rem,calc(100vh-15rem))] shrink cursor-grab touch-none select-none active:cursor-grabbing"
+        // ограничена и шириной колонки, и оставшейся высотой экрана. Хром консоли над
+        // картой (шапка + вкладки + ряд видов) ≈16rem — вычитаем с запасом, чтоб не скроллило.
+        className="relative aspect-square w-full max-w-[min(31rem,calc(100vh-17rem))] shrink cursor-grab touch-none select-none active:cursor-grabbing"
       >
         <svg className="absolute inset-0 h-full w-full" viewBox={`${-VIEW / 2} ${-VIEW / 2} ${VIEW} ${VIEW}`}>
           {/* Конус обзора — сектор от центра между лучами FOV, залит еле-еле. */}
