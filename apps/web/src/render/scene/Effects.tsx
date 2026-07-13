@@ -1,5 +1,5 @@
 import { useFrame } from '@react-three/fiber'
-import { useEffect, useMemo, useRef } from 'react'
+import { Fragment, useEffect, useMemo, useRef } from 'react'
 import {
   BufferAttribute,
   BufferGeometry,
@@ -12,8 +12,9 @@ import {
   PlaneGeometry,
   Vector3,
 } from 'three'
+import { findModule } from '@elite/sim'
 import { useSession } from '../../app/GameContext'
-import { EXPLOSION, LASER, LASER_GLOW, LASER_GLOW_FALLBACK, SHIELD_FLASH, WARP_FLASH } from '../config'
+import { EXPLOSION, LASER, LASER_CLASS_GLOW, LASER_CLASS_WIDTH, LASER_GLOW_FALLBACK, SHIELD_FLASH, WARP_FLASH } from '../config'
 import {
   explosionMaterial,
   missileMaterial,
@@ -123,30 +124,38 @@ function TracerBatch({
   )
 }
 
-const glowOf = (weapon: string) => LASER_GLOW[weapon] ?? LASER_GLOW_FALLBACK
+/**
+ * Класс ствола по id — рендер узнаёт его из каталога модулей (домен несёт на трассе
+ * лишь id). Класс 4 (если появится) читаем как 3; неизвестный id — класс 1 (голубой).
+ */
+const classOf = (weapon: string): 1 | 2 | 3 => {
+  const cls = findModule(weapon)?.class ?? 1
+  return (cls >= 3 ? 3 : cls) as 1 | 2 | 3
+}
 
-/** По батчу на каждый встречающийся цвет ореола — а не на каждый ствол. */
-const GLOW_COLORS = [...new Set([...Object.values(LASER_GLOW), LASER_GLOW_FALLBACK])]
+/** Три класса лазеров: у каждого свой цвет ореола и своя толщина луча. */
+const LASER_CLASSES = [1, 2, 3] as const
 
 /**
- * Ядро у всех лазеров белое, цветной только ореол. Так болт читается как
- * раскалённый луч, а не как цветная палка: цвет несёт информацию о стволе,
- * яркость — о том, что это выстрел.
+ * Ядро у всех лазеров белое, цветной только ореол. Батчей — по КЛАССУ ствола: цвет
+ * (голубой/зелёный/красный) и толщина растут с классом, так что тип оружия читается в
+ * бою раньше, чем долетит болт. По два инстанс-меша на класс (ореол + ядро), не по стволу.
  */
 export function Tracers() {
   return (
     <>
-      {GLOW_COLORS.map((color) => (
-        <TracerBatch
-          key={color}
-          accepts={(weapon) => glowOf(weapon) === color}
-          color={color}
-          radius={LASER.GLOW_RADIUS}
-          opacity={LASER.GLOW_OPACITY}
-        />
-      ))}
-      {/* Ядро рисуется поверх ореола одним батчем: цвет у него общий. */}
-      <TracerBatch accepts={() => true} color={LASER.CORE_COLOR} radius={LASER.CORE_RADIUS} opacity={1} />
+      {LASER_CLASSES.map((cls) => {
+        const width = LASER_CLASS_WIDTH[cls] ?? 1
+        const glow = LASER_CLASS_GLOW[cls] ?? LASER_GLOW_FALLBACK
+        const accepts = (weapon: string) => classOf(weapon) === cls
+        return (
+          <Fragment key={cls}>
+            <TracerBatch accepts={accepts} color={glow} radius={LASER.GLOW_RADIUS * width} opacity={LASER.GLOW_OPACITY} />
+            {/* Ядро поверх ореола: раскалённое добела, толщина по тому же классу. */}
+            <TracerBatch accepts={accepts} color={LASER.CORE_COLOR} radius={LASER.CORE_RADIUS * width} opacity={1} />
+          </Fragment>
+        )
+      })}
     </>
   )
 }

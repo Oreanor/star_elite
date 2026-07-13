@@ -492,6 +492,21 @@ function SlotModal({
   const isMissileSlot = kinds.includes('missile')
   const [confirm, setConfirm] = useState<Confirm | null>(null)
 
+  // Escape закрывает ИМЕННО эту модалку (а сперва — подтверждение внутри неё), а не весь
+  // экран/консоль под ней. Слушаем в фазе ЗАХВАТА и глушим событие: так внутренняя
+  // модалка перехватывает Escape раньше центрального обработчика App, который иначе закрыл
+  // бы всю консоль. Следующий Escape (модалки уже нет) закроет экран как обычно.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.code !== 'Escape') return
+      e.stopPropagation()
+      if (confirm) setConfirm(null)
+      else onClose()
+    }
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
+  }, [confirm, onClose])
+
   // Действие, ПОСЛЕ которого слот меняет смысл (снял/продал) — перерисовать и закрыть:
   // держать модалку поверх исчезнувшего модуля значило бы врать.
   const commit = (run: () => void) => {

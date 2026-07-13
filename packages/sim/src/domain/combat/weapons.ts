@@ -12,19 +12,23 @@ const _muzzle = new Vector3()
 const _convergence = new Vector3()
 const _dir = new Vector3()
 
-/** Мировая позиция ствола `mountIndex`. Нужна и симуляции, и рендеру вспышки. */
-export function muzzleWorldPos(e: ShipEntity, mountIndex: number, out: Vector3): Vector3 {
-  const mount = e.spec.mounts[mountIndex]
-  if (!mount) return out.copy(e.state.pos)
-
-  shipAxes(e.state.quat, _fwd, _right, _up)
-  const [x, y, z] = mount.hardpoint.offset
+/** Мировая позиция связанного смещения [x,y,z] (нос в -Z, +z назад). Оси уже посчитаны. */
+function offsetToWorld(e: ShipEntity, offset: readonly [number, number, number], out: Vector3): Vector3 {
+  const [x, y, z] = offset
   return out
     .copy(e.state.pos)
     .addScaledVector(_right, x)
     .addScaledVector(_up, y)
     // Нос смотрит в -Z, а смещение задано в связанных осях, где +Z назад.
     .addScaledVector(_fwd, -z)
+}
+
+/** Мировая позиция ствола `mountIndex` (по `offset` — центр установки). Нужна рендеру вспышки. */
+export function muzzleWorldPos(e: ShipEntity, mountIndex: number, out: Vector3): Vector3 {
+  const mount = e.spec.mounts[mountIndex]
+  if (!mount) return out.copy(e.state.pos)
+  shipAxes(e.state.quat, _fwd, _right, _up)
+  return offsetToWorld(e, mount.hardpoint.offset, out)
 }
 
 /**
@@ -52,20 +56,35 @@ export function fireLasers(world: World, e: ShipEntity, hostile: boolean): boole
     if (!gun || gun.cooldown > 0 || gun.heat >= 1) return
 
     const laser = mount.weapon
+    // Перезаряд и нагрев — на УСТАНОВКУ, раз за залп, а не на каждое дуло: два ствола
+    // одного оружия греются как один. Иначе многодульный лазер стрелял бы вдвое реже.
     gun.cooldown = laser.cooldown
     gun.heat = Math.min(1, gun.heat + laser.heatPerShot)
     fired = true
 
-    muzzleWorldPos(e, i, _muzzle)
-    // Нацелен в точку сведения: болт наследует направление ствола, но не скорость носителя.
-    _dir.copy(_convergence).sub(_muzzle).normalize()
-    spawnBolt(world, e, laser, _muzzle, _dir, hostile)
+    // Дула установки. Нет списка — одно дуло в `offset`. Общая мощность делится поровну:
+    // два дула — по половине урона, в сумме тот же лазер.
+    //
+    // Урон ∝ МАСШТАБУ стрелка (миелофон): вырос в 100 раз — бьёшь в 100 раз сильнее, и
+    // снесёшь корабль поколений (с его гигантским корпусом) в 100 раз быстрее. При обычном
+    // размере scale=1 — правило ничего не меняет. Так гигант дерётся с гигантом по логике.
+    const nozzles = mount.hardpoint.nozzles ?? [mount.hardpoint.offset]
+    const perNozzle = (laser.damage / nozzles.length) * e.state.scale
+    for (const nozzle of nozzles) {
+      offsetToWorld(e, nozzle, _muzzle)
+      // Нацелен в точку сведения: болт наследует направление ствола, но не скорость носителя.
+      _dir.copy(_convergence).sub(_muzzle).normalize()
+      spawnBolt(world, e, laser, _muzzle, _dir, hostile, perNozzle)
+    }
   })
 
   return fired
 }
 
-/** Родить лазерный болт из ствола. Позиция и направление уже посчитаны стрелком. */
+/**
+ * Родить лазерный болт из ствола. Позиция и направление уже посчитаны стрелком.
+ * `damage` по умолчанию — паспортный урон лазера; многодульная установка передаёт долю.
+ */
 export function spawnBolt(
   world: World,
   shooter: ShipEntity,
@@ -73,6 +92,7 @@ export function spawnBolt(
   origin: Vector3,
   dir: Vector3,
   hostile: boolean,
+  damage: number = laser.damage,
 ): void {
   const bolt: BoltEntity = {
     id: world.ids.next(),
@@ -82,7 +102,7 @@ export function spawnBolt(
     ownerId: shooter.id,
     hostile,
     cloaked: shooter.cloaked,
-    damage: laser.damage,
+    damage,
     weapon: laser.id,
     distanceLeft: laser.range,
     born: world.time,
