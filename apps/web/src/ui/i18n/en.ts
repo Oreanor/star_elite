@@ -100,8 +100,6 @@ export const EN: Record<keyof typeof RU, string> = {
   'key.dock.what': 'autodock',
   'key.flyto': 'J',
   'key.flyto.what': 'autopilot to locked target',
-  'key.view': 'V',
-  'key.view.what': 'view: chase / cockpit',
   'key.pause': 'Esc',
   'key.pause.what': 'pause and cursor',
 

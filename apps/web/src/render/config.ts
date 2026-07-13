@@ -43,7 +43,6 @@ export const RENDER = {
   LOG_DEPTH: true,
 
   FOV_CHASE: 70,
-  FOV_COCKPIT: 78,
   /** Прибавка к полю зрения на полном крейсерском ходу, градусы. Ощущение скорости. */
   FOV_CRUISE_BOOST: 18,
 } as const
@@ -86,9 +85,6 @@ export const CAMERA = {
    */
   LOOP_PULLBACK_GAIN: 2,
   LOOP_PULLBACK_MAX: 3.2,
-
-  /** Кабина: глаз пилота в связанных осях. */
-  COCKPIT_OFFSET: [0, 1.15, -1.4] as const,
 
   /**
    * Тряска на крейсере. ТОЛЬКО камера — физику она не трогает никогда,

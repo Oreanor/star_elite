@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { UI } from '../theme'
 import { Vector3 } from 'three'
 import { shipAxes, type BodyEntity, type World } from '@elite/sim'
@@ -232,6 +232,7 @@ export function SystemMap({
   // Масштаб голограммы: 1 — вся система в поле, больше — ближе. Колесо его крутит.
   const [zoom, setZoom] = useState(1)
   const holoRef = useRef<HTMLDivElement>(null)
+  const listRef = useRef<HTMLUListElement>(null)
   useWheelZoom(holoRef, (dy) => setZoom((z) => Math.min(6, Math.max(0.6, z * (dy > 0 ? 0.9 : 1.1)))))
 
   // Поворот и наклон — как у локатора: драг по X крутит диск (yaw), по Y кладёт его в
@@ -245,14 +246,21 @@ export function SystemMap({
   const onPointerDown = (e: React.PointerEvent) => {
     drag.current = { x: e.clientX, y: e.clientY }
     dragged.current = false
-    e.currentTarget.setPointerCapture(e.pointerId)
+    // НЕ захватываем указатель здесь: setPointerCapture перенаправляет ПОСЛЕДУЮЩИЙ click
+    // на этот div, и клик по метке до неё не доходит — выбор объекта не срабатывает.
+    // Захват берём в onPointerMove, только когда началось реальное вращение.
   }
   const onPointerMove = (e: React.PointerEvent) => {
     const start = drag.current
     if (!start) return
     const dxp = e.clientX - start.x
     const dyp = e.clientY - start.y
-    if (!dragged.current && Math.hypot(dxp, dyp) > 3) dragged.current = true
+    // До порога это ещё клик, а не драг: не крутим и не захватываем указатель.
+    if (!dragged.current) {
+      if (Math.hypot(dxp, dyp) <= 3) return
+      dragged.current = true
+      e.currentTarget.setPointerCapture(e.pointerId)
+    }
     setYaw((yw) => yw - dxp * 0.008)
     setTilt((tl) => Math.max(0, Math.min(1.35, tl + dyp * 0.006)))
     drag.current = { x: e.clientX, y: e.clientY }
@@ -262,15 +270,24 @@ export function SystemMap({
   }
 
   const points = markers(world)
-  const select = (id: number) => {
-    // Драг завершился на метке — это перетаскивание, а не выбор: клик гасим.
-    if (dragged.current) {
-      dragged.current = false
-      return
-    }
+  // Выбор цели: и клик по метке на диске, и строка списка ведут сюда — одно состояние
+  // `navTargetId`, одна подсветка. Тот же клик по выбранному снимает выбор.
+  const applySelect = (id: number) => {
     world.navTargetId = world.navTargetId === id ? null : id
     bump((n) => n + 1)
   }
+  // С диска — только если это был клик, а не завершение вращения (dragged сбросится на
+  // следующем pointerdown). Список к драгу отношения не имеет и зовёт applySelect напрямую.
+  const selectFromMap = (id: number) => {
+    if (dragged.current) return
+    applySelect(id)
+  }
+
+  // Выбранную строку подтягиваем в видимую часть списка: клик по дальней планете на диске
+  // не должен «подсвечивать» её где-то за прокруткой.
+  useEffect(() => {
+    listRef.current?.querySelector('[data-active="true"]')?.scrollIntoView({ block: 'nearest' })
+  }, [world.navTargetId])
 
   const content = (
     <>
@@ -284,7 +301,7 @@ export function SystemMap({
         onPointerCancel={onPointerUp}
         className="relative aspect-square w-full min-w-0 max-w-[min(31rem,calc(100vh-17rem))] shrink cursor-grab touch-none select-none active:cursor-grabbing"
       >
-        <Hologram points={points} heading={headingOf(world)} navTargetId={world.navTargetId} zoom={zoom} yaw={yaw} tilt={tilt} onSelect={select} />
+        <Hologram points={points} heading={headingOf(world)} navTargetId={world.navTargetId} zoom={zoom} yaw={yaw} tilt={tilt} onSelect={selectFromMap} />
       </div>
       </div>
 
@@ -294,14 +311,15 @@ export function SystemMap({
         <p className="mb-6 mt-1 text-[11px] tracking-widest opacity-50">{census(world)}</p>
 
         {/* Длинный список объектов не должен распирать карточку — он скроллится сам. */}
-        <ul className="min-h-0 flex-1 space-y-1 overflow-y-auto pr-1">
+        <ul ref={listRef} className="min-h-0 flex-1 space-y-1 overflow-y-auto pr-1">
           {points.filter(selectable).map((m) => {
             const active = m.id === world.navTargetId
             return (
               <li key={m.id}>
                 <button
                   type="button"
-                  onClick={() => select(m.id)}
+                  data-active={active}
+                  onClick={() => applySelect(m.id)}
                   className="flex w-full cursor-pointer items-baseline gap-3 rounded border px-3 py-2 text-left text-sm transition-colors"
                   style={{
                     borderColor: active ? BODY : 'rgba(124,196,255,0.16)',

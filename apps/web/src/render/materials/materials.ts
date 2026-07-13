@@ -443,18 +443,6 @@ export function starfieldMaterial(size: number): PointsMaterial {
   return stars
 }
 
-let cockpit: MeshStandardMaterial | null = null
-
-export function cockpitMaterial(): MeshStandardMaterial {
-  cockpit ??= new MeshStandardMaterial({
-    vertexColors: true,
-    flatShading: true,
-    side: DoubleSide,
-    metalness: MATERIAL.HULL_METALNESS,
-    roughness: MATERIAL.HULL_ROUGHNESS,
-  })
-  return cockpit
-}
 
 let tractor: LineBasicMaterial | null = null
 

@@ -104,8 +104,6 @@ export const RU = {
   'key.dock.what': 'автостыковка',
   'key.flyto': 'J',
   'key.flyto.what': 'автопилот к захваченной цели',
-  'key.view': 'V',
-  'key.view.what': 'вид: сзади / кабина',
   'key.pause': 'Esc',
   'key.pause.what': 'пауза и курсор',
 

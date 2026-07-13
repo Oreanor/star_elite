@@ -1,6 +1,6 @@
 import { BoxGeometry, CylinderGeometry, TorusGeometry, type BufferGeometry } from 'three'
 import { CORRIDOR, PALETTE } from '../config'
-import { buildGeometry, quad, symmetric, tri, type Triangle, type Vec3 } from './build'
+import { buildGeometry, quad, tri, type Triangle, type Vec3 } from './build'
 
 /**
  * Мелкий реквизит: станция и грузовой контейнер.
@@ -209,36 +209,6 @@ export function podGeometry(): BufferGeometry {
   return podCache
 }
 
-// ─── Рамка кабины ────────────────────────────────────────────────────────────
-
-const FRAME = 0x1b2028
-
-/** Только правый борт: `symmetric` достроит левый. */
-const canopyHalf: Triangle[] = [
-  ...quad([0.85, 0.75, -2.6], [1.15, 0.15, -2.2], [1.15, 0.15, 0.4], [0.85, 0.75, 0.2], FRAME),
-]
-
-/**
- * Детали по осевой линии зеркалить НЕЛЬЗЯ: они пересекают X=0, и отражение
- * ляжет поверх оригинала. Две совпадающие грани мерцают (z-fighting).
- */
-const canopyCentre: Triangle[] = [
-  // Нижняя панель приборов: перекрывает низ экрана, как настоящий козырёк.
-  ...quad([-1.6, -0.62, -1.4], [1.6, -0.62, -1.4], [1.6, -0.35, 0.6], [-1.6, -0.35, 0.6], FRAME),
-  // Верхняя перемычка.
-  ...quad([-1.0, 0.86, -2.4], [1.0, 0.86, -2.4], [1.0, 0.78, -1.9], [-1.0, 0.78, -1.9], FRAME),
-]
-
-let cockpitCache: BufferGeometry | null = null
-
-/**
- * Геометрия кабины, а не картинка: стойки честно закрывают обзор и смещаются
- * при вираже вместе с кораблём. Нарисованная рамка так не умеет.
- */
-export function cockpitGeometry(): BufferGeometry {
-  cockpitCache ??= buildGeometry([...symmetric(canopyHalf), ...canopyCentre])
-  return cockpitCache
-}
 
 let boltCache: BufferGeometry | null = null
 

@@ -9,7 +9,6 @@ import { Bodies } from '../render/scene/Bodies'
 import { GalaxyLayer } from '../render/scene/GalaxyLayer'
 import { Titans } from '../render/scene/Titans'
 import { Platforms } from '../render/scene/Platforms'
-import { Cockpit } from '../render/scene/Cockpit'
 import { DockingCorridor } from '../render/scene/DockingCorridor'
 import { Dyson } from '../render/scene/Dyson'
 import { Dust } from '../render/scene/Dust'
@@ -74,7 +73,6 @@ function Scene() {
       <StationShields />
       <ShieldBubbles />
       <JumpRing />
-      <Cockpit />
 
       <FlightCamera />
       <Hud />

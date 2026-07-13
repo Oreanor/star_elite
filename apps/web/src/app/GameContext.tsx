@@ -30,8 +30,6 @@ export type PilotMode = 'manual' | 'autodock' | 'flyto'
  * React здесь только собирает дерево один раз; кадры рисует three.
  */
 
-export type ViewMode = 'chase' | 'cockpit'
-
 /** То, что меняется в кадре, но не должно вызывать перерисовку. */
 export interface Session {
   world: World
@@ -42,7 +40,6 @@ export interface Session {
   isNewGame: boolean
   mode: PilotMode
   intent: PlayerIntent
-  view: ViewMode
   /**
    * Шагнул ли мир в этом кадре. Не второй флаг паузы: решение принимает один
    * `Simulation`, остальные его читают. Всё, что движется по `dt` реального
@@ -159,7 +156,6 @@ function createSession(initialSave?: PlayerSave | null): Session {
     isNewGame: save === null,
     mode: 'manual',
     intent,
-    view: 'chase',
     running: false,
     menuFlying: false,
     over: false,

@@ -95,7 +95,6 @@ export function FlightCamera() {
 
     const player = session.world.player
     const state = player.state
-    const cockpit = session.view === 'cockpit'
 
     /**
      * ОТПРАВЛЕНИЕ В ПРЫЖОК: камера НАБЛЮДАЕТ, а не преследует. Она встаёт за точкой
@@ -136,9 +135,9 @@ export function FlightCamera() {
      * Когда фигура кончится, пружина сама перенесёт камеру в хвост. После
      * разворота хвост оказывается с другой стороны — это и есть «перебежать».
      */
-    const held = !cockpit && manoeuvreHoldsCamera(session.intent)
+    const held = manoeuvreHoldsCamera(session.intent)
     // Бочка — крен без смены курса. Обрабатывается особо, сразу ниже.
-    const barrel = !cockpit && session.intent.manoeuvre.kind === 'barrel'
+    const barrel = session.intent.manoeuvre.kind === 'barrel'
 
     /**
      * БОЧКА: камеру не трогаем СОВСЕМ. Раньше она разбирала кватернион корабля на
@@ -167,7 +166,7 @@ export function FlightCamera() {
     }
     frozen.current = null
 
-    const offset = cockpit ? CAMERA.COCKPIT_OFFSET : CAMERA.CHASE_OFFSET
+    const offset = CAMERA.CHASE_OFFSET
     _offset.set(offset[0], offset[1], offset[2])
     if (held) {
       /**
@@ -202,52 +201,45 @@ export function FlightCamera() {
     _offset.multiplyScalar(Math.min(state.scale, GIANT_RENDER_CAP))
     _target.copy(state.pos).add(_offset)
 
-    if (cockpit) {
-      // Кабина жёстко привязана к кораблю: никакой пружины. Здесь крен настоящий —
-      // пилот сидит внутри и крутится вместе с кораблём.
-      camera.position.copy(_target)
-      camera.quaternion.copy(state.quat)
+    /**
+     * КУРС С ТАНГАЖОМ (swing) камера доворачивает к носу МИНИМАЛЬНЫМ поворотом
+     * (parallel transport), а не slerp'ом целевого кватерниона. Разница видна на
+     * быстром развороте: когда камера отстаёт почти на 180°, slerp композитного
+     * «курс+тангаж» режет угол через НАКРЕНЁННЫЕ ориентации — и камера делает кульбит
+     * (замер `scratch/camera.ts`: до 73° крена, скачок 18° за кадр). Доворот идёт вдоль
+     * ПУТИ носа и крен не выдумывает: тот же манёвр даёт 13° плавно, без скачка.
+     *
+     * КРЕН (twist) — настоящий крен корабля относительно курса камеры, отдельной
+     * жёсткой пружиной: бочку и вираж с креном камера отыгрывает, а конический крен
+     * от разворота — нет. Никакого lookAt: он строит базис через мировой «верх» и на
+     * перевёрнутом корабле вырождается скачком.
+     */
+    _noseFwd.set(0, 0, -1).applyQuaternion(state.quat)
+
+    if (held) {
+      // Камера стоит и ждёт. Ориентацию не трогаем совсем — только позицию,
+      // которая уже посчитана от этой самой ориентации.
+      camera.position.lerp(_target, 1 - Math.exp(-CAMERA.CHASE_STIFFNESS * dt))
+    } else if (running) {
+      // Доворот курса на кратчайший поворот от «куда смотрит камера» к носу, долей dt.
+      _camFwd.set(0, 0, -1).applyQuaternion(camSwing)
+      _deltaRot.setFromUnitVectors(_camFwd, _noseFwd)
+      camSwing
+        .premultiply(_identity.identity().slerp(_deltaRot, 1 - Math.exp(-CAMERA.CHASE_ROT_STIFFNESS * dt)))
+        .normalize()
+      residualTwist(state.quat, camSwing, _twist)
+      camTwist.slerp(_twist, 1 - Math.exp(-CAMERA.ROLL_STIFFNESS * dt))
+      camera.position.lerp(_target, 1 - Math.exp(-CAMERA.CHASE_STIFFNESS * dt))
     } else {
-      /**
-       * КУРС С ТАНГАЖОМ (swing) камера доворачивает к носу МИНИМАЛЬНЫМ поворотом
-       * (parallel transport), а не slerp'ом целевого кватерниона. Разница видна на
-       * быстром развороте: когда камера отстаёт почти на 180°, slerp композитного
-       * «курс+тангаж» режет угол через НАКРЕНЁННЫЕ ориентации — и камера делает кульбит
-       * (замер `scratch/camera.ts`: до 73° крена, скачок 18° за кадр). Доворот идёт вдоль
-       * ПУТИ носа и крен не выдумывает: тот же манёвр даёт 13° плавно, без скачка.
-       *
-       * КРЕН (twist) — настоящий крен корабля относительно курса камеры, отдельной
-       * жёсткой пружиной: бочку и вираж с креном камера отыгрывает, а конический крен
-       * от разворота — нет. Никакого lookAt: он строит базис через мировой «верх» и на
-       * перевёрнутом корабле вырождается скачком.
-       */
-      _noseFwd.set(0, 0, -1).applyQuaternion(state.quat)
-
-      if (held) {
-        // Камера стоит и ждёт. Ориентацию не трогаем совсем — только позицию,
-        // которая уже посчитана от этой самой ориентации.
-        camera.position.lerp(_target, 1 - Math.exp(-CAMERA.CHASE_STIFFNESS * dt))
-      } else if (running) {
-        // Доворот курса на кратчайший поворот от «куда смотрит камера» к носу, долей dt.
-        _camFwd.set(0, 0, -1).applyQuaternion(camSwing)
-        _deltaRot.setFromUnitVectors(_camFwd, _noseFwd)
-        camSwing
-          .premultiply(_identity.identity().slerp(_deltaRot, 1 - Math.exp(-CAMERA.CHASE_ROT_STIFFNESS * dt)))
-          .normalize()
-        residualTwist(state.quat, camSwing, _twist)
-        camTwist.slerp(_twist, 1 - Math.exp(-CAMERA.ROLL_STIFFNESS * dt))
-        camera.position.lerp(_target, 1 - Math.exp(-CAMERA.CHASE_STIFFNESS * dt))
-      } else {
-        // Стоящий мир: камера строго за носом, крен — по кораблю, без пружины.
-        camSwing.setFromUnitVectors(_refFwd, _noseFwd)
-        residualTwist(state.quat, camSwing, _twist)
-        camTwist.copy(_twist)
-        camera.position.copy(_target)
-      }
-
-      _desiredQuat.copy(camSwing).multiply(camTwist).multiply(_pitchDown)
-      camera.quaternion.copy(_desiredQuat)
+      // Стоящий мир: камера строго за носом, крен — по кораблю, без пружины.
+      camSwing.setFromUnitVectors(_refFwd, _noseFwd)
+      residualTwist(state.quat, camSwing, _twist)
+      camTwist.copy(_twist)
+      camera.position.copy(_target)
     }
+
+    _desiredQuat.copy(camSwing).multiply(camTwist).multiply(_pitchDown)
+    camera.quaternion.copy(_desiredQuat)
 
     // ── Крейсер: поле зрения и тряска ────────────────────────────────────────
     const factor = player.cruise.factor
@@ -287,7 +279,7 @@ export function FlightCamera() {
       camera.position.add(_shake.applyQuaternion(camera.quaternion))
     }
 
-    const baseFov = cockpit ? RENDER.FOV_COCKPIT : RENDER.FOV_CHASE
+    const baseFov = RENDER.FOV_CHASE
     const wantFov = baseFov + RENDER.FOV_CRUISE_BOOST * cruiseFraction
     if (Math.abs(camera.fov - wantFov) > 0.01) {
       camera.fov = running ? camera.fov + (wantFov - camera.fov) * (1 - Math.exp(-6 * dt)) : wantFov

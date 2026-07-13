@@ -35,8 +35,8 @@ export function WingMissiles() {
     if (!mesh) return
 
     const player = session.world.player
-    // Из кабины крылья не видно, а мёртвый корабль ракет не носит.
-    if (!player.alive || session.view !== 'chase') {
+    // Мёртвый корабль ракет не носит.
+    if (!player.alive) {
       mesh.count = 0
       return
     }

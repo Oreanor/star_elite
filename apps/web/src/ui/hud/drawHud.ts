@@ -475,7 +475,7 @@ function drawBodyMarkers({ ctx, camera, world, width, height }: HudFrame): void 
 }
 
 /**
- * Портрет захваченной цели — «того, кто с тобой» — над локатором справа. Лицо
+ * Портрет захваченной цели — «того, кто с тобой» — НАД локатором справа. Лицо
  * вырезается из листа расы ПО КООРДИНАТАМ (клетка index в сетке 6×6), эмоция — из
  * состояния борта. Пока листа нет, рамка с инициалом держит место; догрузится —
  * лицо встанет само. Невидимку (в маскировке) не показываем, как и локатор.
@@ -488,10 +488,14 @@ function drawTargetPortrait({ ctx, world, width, height }: HudFrame): void {
   // HUD рисуется в уменьшенном внутреннем разрешении и растягивается, поэтому размер
   // тут «крупнее», чем то же число в DOM. 48 — компактный портрет цели.
   const size = 48 * S
-  // Локатор уехал в центр — портрет занимает правый НИЖНИЙ угол. Оставляем снизу три
-  // строки мелкой подписи (имя/род/корабль) плюс кромку.
-  const x = width - 12 * S - size
-  const y = height - 12 * S - size - 24 * S
+  // Стоит НАД локатором (тот вернулся в правый нижний угол): портрет центрирован по его
+  // оси, а снизу — три строки мелкой подписи (имя/род/корабль) до самого обода локатора.
+  const radiusX = 47 * 1.5 * S
+  const radiusY = 47 * 0.75 * S
+  const radarCx = width - radiusX - 12 * S
+  const radarTop = height - 2 * radiusY - 12 * S
+  const x = radarCx - size / 2
+  const y = radarTop - size - 24 * S
 
   ctx.strokeStyle = HUD_COLORS.DIM
   ctx.lineWidth = 1
@@ -527,7 +531,7 @@ function drawTargetPortrait({ ctx, world, width, height }: HudFrame): void {
 function drawRadar({ ctx, camera, world, width, height }: HudFrame): void {
   const radiusX = 47 * 1.5 * S // ширина эллипса локатора (прежняя, ~70): читается на скорости
   const radiusY = 47 * 0.75 * S // высота на 25% МЕНЬШЕ прежней (47→35): локатор стал площе
-  const cx = width / 2 // по центру нижней кромки: портрет цели уехал в правый угол
+  const cx = width - radiusX - 12 * S // снова в правом нижнем углу: по центру он мешал
   const cy = height - radiusY - 12 * S
   const FRAME_W = 2 // обод и лучи чуть толще одинарной линии — крупный локатор их держит
 
@@ -826,18 +830,35 @@ function bigValue(
   unit: string,
   color: string,
   trend: number,
+  maxWidth: number,
 ): void {
-  const big = 18 * S
-  const small = 9 * S
+  const gap = 3 * S
+  const arrow = 12 * S // отступ до тренд-стрелки плюс её ширина
+  // База мельче прежней (было 18) и ужимается ещё, если число+единица+стрелка не влезают
+  // в свою половину: «1.2млн м/с ▲» иначе наползало бы на соседний столбец.
+  let big = 15 * S
+  let small = big * 0.5
+  ctx.font = hudFont(big)
+  let numW = ctx.measureText(value).width
+  ctx.font = hudFont(small)
+  let unitW = ctx.measureText(unit).width
+  const total = numW + gap + unitW + arrow
+  if (total > maxWidth) {
+    const k = maxWidth / total
+    big *= k
+    small *= k
+    ctx.font = hudFont(big)
+    numW = ctx.measureText(value).width
+    ctx.font = hudFont(small)
+    unitW = ctx.measureText(unit).width
+  }
   const baseFont = ctx.font
   ctx.font = hudFont(big)
   text(ctx, value, x, top, color)
-  const numW = ctx.measureText(value).width
   ctx.font = hudFont(small)
-  text(ctx, unit, x + numW + 3 * S, top + big - small, color)
-  const unitW = ctx.measureText(unit).width
+  text(ctx, unit, x + numW + gap, top + big - small, color)
   ctx.font = baseFont
-  trendArrow(ctx, x + numW + 3 * S + unitW + 8 * S, top + big / 2, trend, color)
+  trendArrow(ctx, x + numW + gap + unitW + 8 * S, top + big / 2, trend, color)
 }
 
 function drawReadouts({ ctx, world, height }: HudFrame): void {
@@ -867,7 +888,7 @@ function drawReadouts({ ctx, world, height }: HudFrame): void {
   // Назад — с минусом (U+2212): реверс это не «ноль хода», а движение против носа.
   const sp = speedParts(speedMag)
   const reversing = vel.dot(_fwd) < -1
-  bigValue(ctx, x, speedTop, reversing ? `−${sp.value}` : sp.value, sp.unit, HUD_COLORS.PRIMARY, speedTrend)
+  bigValue(ctx, x, speedTop, reversing ? `−${sp.value}` : sp.value, sp.unit, HUD_COLORS.PRIMARY, speedTrend, halfWidth)
 
   // Множитель крейсера — СРЕДНИМ кеглем под скоростью. Скорость уже сверхсветовая
   // (vel уже умножен на factor); ×N лишь говорит, насколько разогнан ход. Показываем,
@@ -888,7 +909,7 @@ function drawReadouts({ ctx, world, height }: HudFrame): void {
     const scaleTrend = ds > scaleEps ? 1 : ds < -scaleEps ? -1 : 0
     _prevScale = scale
     const sc = scaleParts(scale)
-    bigValue(ctx, x + halfWidth, speedTop, sc.value, sc.unit, HUD_COLORS.TARGET, scaleTrend)
+    bigValue(ctx, x + halfWidth, speedTop, sc.value, sc.unit, HUD_COLORS.TARGET, scaleTrend, halfWidth)
   }
 
   // ── Шкалы состояния: восемь строк по `step` ─────────────────────────────────
