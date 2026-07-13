@@ -24,45 +24,52 @@ import { GALAXY_LAYER } from '../config'
  * Пока борт мал (обычная игра) — слой СПИТ: геометрия из 2500 систем не строится вовсе,
  * а точки где-то за краем вселенной и погашены. Просыпается только на росте.
  */
+// Кривая входа в сферу: vT = 0 у внешней границы (только коснулся сферы) → 1 глубоко
+// внутри. По ней и проявление, и ВСПЫШКА зажигания — звезда не появляется, а загорается.
 const vertex = /* glsl */ `
 attribute float size;
 
+uniform float uRadius;
+uniform float uEdge;
+
 varying vec3 vColor;
-varying float vDist;
+varying float vT;
 
 void main() {
   vColor = color;
   vec4 mv = modelViewMatrix * vec4(position, 1.0);
-  // Экранное расстояние звезды — по нему сфера отрисовки решает, зажечь ли её.
-  vDist = length(mv.xyz);
+  float dist = length(mv.xyz); // экранное расстояние — по нему сфера решает, зажечь ли
+  vT = clamp((uRadius - dist) / uEdge, 0.0, 1.0);
   gl_Position = projectionMatrix * mv;
+
+  // Автоплей-вспышка на входе: точка кратко раздувается, потом оседает. Пик у vT≈0.2.
+  float flare = smoothstep(0.0, 0.2, vT) * (1.0 - smoothstep(0.2, 0.6, vT));
   // Размер — в ПИКСЕЛЯХ, без ослабления по дальности: масштаб слоя гуляет на 10+ порядков,
-  // и любая привязка к -mv.z дала бы то исчезающие, то во весь экран точки. Плоское поле
-  // звёзд читается как карта — глубину даёт параллакс при движении, а не размер.
-  gl_PointSize = size;
+  // и любая привязка к -mv.z дала бы то исчезающие, то во весь экран точки.
+  gl_PointSize = size * (1.0 + 1.4 * flare);
 }
 `
 
 const fragment = /* glsl */ `
 uniform float uOpacity;
-uniform float uRadius;
-uniform float uEdge;
 
 varying vec3 vColor;
-varying float vDist;
+varying float vT;
 
 void main() {
   // Круг с мягким краем — точка в пару пикселей без него мерцает.
   float d = length(gl_PointCoord - vec2(0.5));
   float round = 1.0 - smoothstep(0.34, 0.5, d);
 
-  // Мягкая граница СФЕРЫ ОТРИСОВКИ: у края звезда плавно ЗАГОРАЕТСЯ, а не выскакивает.
-  // Растёшь — слой сжимается, экранное расстояние падает, следующий сосед входит в сферу.
-  float sphere = 1.0 - smoothstep(uRadius - uEdge, uRadius, vDist);
+  // Проявление по входу в сферу + вспышка к белому: звезда ЗАГОРАЕТСЯ, а не выскакивает.
+  // vT=0 (вне сферы) → всё в ноль; растёшь — vT ползёт к 1, звезда вспыхивает и оседает.
+  float fade = smoothstep(0.0, 1.0, vT);
+  float flare = smoothstep(0.0, 0.2, vT) * (1.0 - smoothstep(0.2, 0.6, vT));
 
-  float alpha = round * sphere * uOpacity;
+  vec3 col = vColor + vec3(0.9 * flare);           // вспышка выбеливает, затем спадает
+  float alpha = round * clamp(fade + 0.6 * flare, 0.0, 1.0) * uOpacity;
   if (alpha < 0.01) discard;
-  gl_FragColor = vec4(vColor, alpha);
+  gl_FragColor = vec4(col, alpha);
 }
 `
 
