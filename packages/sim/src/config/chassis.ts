@@ -145,8 +145,11 @@ export const APOLLO: Chassis = {
   assistLateralDamp: 1.2,
   assistSpeedDamp: 0.35,
   hardpoints: [
-    { offset: [-1.7, -0.1, -2], kind: 'gun', maxClass: 2 },
-    { offset: [1.7, -0.1, -2], kind: 'gun', maxClass: 2 },
+    // X-винговый расклад: лазер 1 — концы НИЖНИХ крыльев, лазер 2 — концы ВЕРХНИХ,
+    // лазер 3 — одно ТОЛСТОЕ дуло из центра (класс до 3). `offset` — центр установки.
+    { offset: [0, -0.7, -1.8], kind: 'gun', maxClass: 2, nozzles: [[-2.6, -0.7, -1.8], [2.6, -0.7, -1.8]] },
+    { offset: [0, 0.7, -1.8], kind: 'gun', maxClass: 2, nozzles: [[-2.6, 0.7, -1.8], [2.6, 0.7, -1.8]] },
+    { offset: [0, 0, -2.6], kind: 'gun', maxClass: 3, nozzles: [[0, 0, -2.6]] },
     { offset: [-5.5, -0.2, 3], kind: 'pylon', maxClass: 1 },
     { offset: [5.5, -0.2, 3], kind: 'pylon', maxClass: 1 },
   ],

@@ -122,12 +122,12 @@ export function calliopeLoadout(): Loadout {
   return createLoadout(DRONE, [ENGINE_CIVILIAN, RCS_CIVILIAN, HYPERDRIVE_COMPACT], [PULSE_LASER])
 }
 
-/** «Аполлон» — дельта-перехватчик: два ствола и два ракетных пилона. */
+/** «Аполлон» — X-винг-перехватчик: лазеры на нижних и верхних крыльях, центр пуст, два пилона. */
 export function apolloLoadout(): Loadout {
   return createLoadout(
     APOLLO,
     [ENGINE_STANDARD, RCS_STANDARD, SHIELD_STANDARD, ARMOUR_PLATE, CARGO_SMALL, HYPERDRIVE_BASIC],
-    [PULSE_LASER, PULSE_LASER, MISSILE_PYLON, MISSILE_PYLON],
+    [PULSE_LASER, PULSE_LASER, null, MISSILE_PYLON, MISSILE_PYLON],
   )
 }
 
