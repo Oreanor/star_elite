@@ -34,7 +34,7 @@ import { HUD_COLORS, bar, circle, corners, dot, ellipse, line, rect, text } from
 import { t } from '../i18n'
 import { chassisName, occupationName, properName, shipTypeName } from '../i18n/dataNames'
 import { drawFlare } from './drawFlare'
-import { angularSize, formatDistance, formatSpeed, projectPoint } from './project'
+import { angularSize, formatDistance, formatScale, formatSpeed, projectPoint } from './project'
 import {
   PORTRAIT_GRID,
   loadSheet,
@@ -775,8 +775,7 @@ function drawReadouts({ ctx, world, height }: HudFrame): void {
   // Множитель масштаба: иначе рост в пустом космосе не на чем увидеть. Растёт с E.
   if (scaled) {
     y += step
-    const shown = scale < 100 ? scale.toFixed(1) : Math.round(scale).toString()
-    text(ctx, `МАСШТАБ x${shown}`, x, y, HUD_COLORS.TARGET)
+    text(ctx, `МАСШТАБ x${formatScale(scale)}`, x, y, HUD_COLORS.TARGET)
   }
 }
 

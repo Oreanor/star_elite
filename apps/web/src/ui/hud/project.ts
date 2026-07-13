@@ -67,3 +67,18 @@ export function formatSpeed(metresPerSecond: number): string {
   if (metresPerSecond >= 1000) return `${(metresPerSecond / 1000).toFixed(1)} ${t('unit.kmps')}`
   return `${metresPerSecond.toFixed(0)} ${t('unit.mps')}`
 }
+
+/**
+ * Множитель миелофона за пару десятков секунд доходит до сотен миллиардов — девять цифр
+ * в строке HUD не читаются (а в неё влезает ~40 символов). Сжимаем в разряды:
+ * 1299 · 12.5к · 199тыс · 1.22млн · 1.56млрд. Суффиксы русские намеренно — как и сама
+ * подпись МАСШТАБ рядом; локали HUD тут пока нет.
+ */
+export function formatScale(scale: number): string {
+  if (scale < 100) return scale.toFixed(1)
+  if (scale < 1e4) return Math.round(scale).toString()
+  if (scale < 1e5) return `${(scale / 1e3).toFixed(1)}к`
+  if (scale < 1e6) return `${Math.round(scale / 1e3)}тыс`
+  if (scale < 1e9) return `${(scale / 1e6).toFixed(2)}млн`
+  return `${(scale / 1e9).toFixed(2)}млрд`
+}
