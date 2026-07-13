@@ -58,6 +58,8 @@ export interface PlayerSave {
   /** Личный реестр знакомств: с кем виделся и отношение. Чистые данные. */
   acquaintances: Acquaintance[]
   loadout: SavedLoadout
+  /** Уровень апгрейда корпуса. Необязателен: старые сейвы — заводской корпус (0). */
+  hullLevel?: number
   hold: SavedStack[]
   hull: number
   shield: number
@@ -145,6 +147,7 @@ export function serializePlayer(world: World): PlayerSave {
     persona: { ...p.persona },
     acquaintances: world.acquaintances.map((a) => ({ ...a })),
     loadout: serializeLoadout(p.loadout),
+    hullLevel: p.hullLevel,
     hold,
     hull: p.hull,
     shield: p.shield,
@@ -178,6 +181,8 @@ export function applyPlayerSave(world: World, save: PlayerSave): void {
   p.pilotName = save.name
   p.persona = { ...save.persona }
   p.loadout = rehydrateLoadout(save.loadout)
+  // Уровень корпуса — ДО refreshSpec: от него зависят HP/трюм/аукс сборки.
+  p.hullLevel = save.hullLevel ?? 0
 
   // Свежий трюм: вместимость проставит первый refreshSpec из грузовых контейнеров,
   // затем наполняем — addItem считает свободное место по уже верной вместимости.

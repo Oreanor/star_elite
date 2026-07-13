@@ -46,7 +46,8 @@ export function makeShip(
   rng?: Rng,
 ): ShipEntity {
   const hold = createHold(0)
-  const spec = deriveShipSpec(loadout, cargoMass(hold))
+  // Свежий корабль — корпус заводского уровня (0). Апгрейд копится только у игрока в полёте.
+  const spec = deriveShipSpec(loadout, cargoMass(hold), 0)
   hold.capacity = spec.cargoCapacity
 
   const guns: GunState[] = spec.mounts.map((mount) => ({
@@ -71,6 +72,7 @@ export function makeShip(
     pilotName,
     loadout,
     spec,
+    hullLevel: 0,
     state: createShipState(pos, quat),
     controls: createControls(),
     hull: spec.hull.hull,
@@ -105,7 +107,7 @@ export function makeShip(
 
 /** Пересобрать характеристики после смены модулей или груза. Вызывать на СОБЫТИЕ. */
 export function refreshSpec(e: ShipEntity): void {
-  const spec = deriveShipSpec(e.loadout, cargoMass(e.hold))
+  const spec = deriveShipSpec(e.loadout, cargoMass(e.hold), e.hullLevel)
   e.spec = spec
   e.hold.capacity = spec.cargoCapacity
 

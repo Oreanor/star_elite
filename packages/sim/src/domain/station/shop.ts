@@ -718,6 +718,45 @@ export function upgradeModule(
   return null
 }
 
+// ─── Апгрейд КОРПУСА ──────────────────────────────────────────────────────────
+//
+// В отличие от модуля (один раз), корпус качается БЕЗ ПРЕДЕЛА, уровнями: каждый
+// растит три базовые х-ки рамы (HP / грузоподъёмность / аукс-ёмкость) на +10%, а
+// цена уровня растёт геометрически — «до упаду», но всё дороже. Число уровня живёт
+// на сущности (`hullLevel`), характеристики выводит `deriveShipSpec` из него.
+
+export type HullUpgradeError = 'no-money'
+
+/** Цена СЛЕДУЮЩЕГО уровня: доля цены рамы × рост^текущий-уровень. Растёт с каждым разом. */
+export function hullUpgradeCost(ship: ShipEntity): number {
+  return Math.ceil(SHOP.HULL_COST_FRACTION * ship.loadout.chassis.cost * SHOP.HULL_COST_GROWTH ** ship.hullLevel)
+}
+
+/** Проверка без побочных эффектов: ею UI гасит кнопку, ею же `upgradeHull` решает. */
+export function canUpgradeHull(world: World, ship: ShipEntity): HullUpgradeError | null {
+  return world.credits < hullUpgradeCost(ship) ? 'no-money' : null
+}
+
+/**
+ * Улучшить КОРПУС на уровень: `hullLevel += 1` множит базовые HP/грузоподъёмность/аукс
+ * на 1.1 (см. `deriveShipSpec`). Прирост потолка HP и аукс-заряда отдаём СРАЗУ — усиленная
+ * рама уже на борту, а не «оплачена, но пуста». Предела нет; цена растёт (`hullUpgradeCost`).
+ */
+export function upgradeHull(world: World, ship: ShipEntity): HullUpgradeError | null {
+  const error = canUpgradeHull(world, ship)
+  if (error) return error
+
+  world.credits -= hullUpgradeCost(ship)
+  const beforeHull = ship.spec.hull.hull
+  const beforeAux = ship.spec.power.auxCapacity
+  ship.hullLevel += 1
+  refreshSpec(ship)
+  // Дельта потолка — сразу на борт: свежие тонны корпуса и аукс-заряд не в долг.
+  ship.hull += ship.spec.hull.hull - beforeHull
+  ship.auxEnergy += ship.spec.power.auxCapacity - beforeAux
+  return null
+}
+
 // ─── Ракетный (мунишн) слот: ОДИН тип на всю подвеску ─────────────────────────
 //
 // Ракеты — ОДНА ячейка на все пилоны: один тип, боезапас общий. Дрон-ракеты — ПРОСТО

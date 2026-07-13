@@ -45,6 +45,12 @@ export interface ShipEntity {
   loadout: Loadout
   /** Выведено из loadout + массы груза. Пересобирается на СОБЫТИЕ, не каждый кадр. */
   spec: ShipSpec
+  /**
+   * Уровень апгрейда КОРПУСА: 0 — заводской, растёт без предела. Каждый уровень множит
+   * базовые HP / грузоподъёмность / аукс-ёмкость на 1.1^level (см. `deriveShipSpec`).
+   * Сбрасывается в 0 при смене корпуса — качаешь именно эту раму. Хранится в сейве игрока.
+   */
+  hullLevel: number
 
   state: ShipState
   controls: ShipControls

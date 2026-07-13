@@ -78,6 +78,8 @@ export function swapHull(world: World, chassis: Chassis, cost: number): HullErro
 
   world.credits -= cost
   player.loadout = loadout
+  // Новый корпус — заводского уровня: апгрейд копится на КОНКРЕТНОЙ раме, не переезжает.
+  player.hullLevel = 0
   refreshSpec(player) // пересчитает и вместимость трюма — под неё и кладём overflow
   for (const module of overflow) addItem(player.hold, { kind: 'module', module })
   player.hull = player.spec.hull.hull

@@ -8,7 +8,9 @@ import {
   buy,
   canBuy,
   canUpgrade,
+  canUpgradeHull,
   deriveShipSpec,
+  hullUpgradeCost,
   fitFromHold,
   fitOntoChassis,
   freeCapacity,
@@ -35,6 +37,7 @@ import {
   unfitModule,
   upgradeCashCost,
   upgradedStatValue,
+  upgradeHull,
   upgradeModule,
   type CargoItem,
   type ModuleKind,
@@ -126,6 +129,14 @@ export function ShipScreen({
     else if (err === 'no-room') setNoRoom(true)
   }
 
+  // Апгрейд СВОЕГО корпуса: без предела, цена растёт с уровнем. Кнопка — под статами,
+  // только когда смотришь свой корабль (owned) у причала. Свежие HP/аукс даёт домен.
+  const hullCost = hullUpgradeCost(player)
+  const canBuyHull = canUpgradeHull(world, player) === null
+  const doUpgradeHull = () => {
+    if (upgradeHull(world, player) === null) refresh()
+  }
+
   // Escape закрывает экран — как на карте галактики. Клавишу I гасит App.
   // Встроенным в станцию клавишами заведует сама станция — второго слушателя не вешаем.
   useEffect(() => {
@@ -214,6 +225,28 @@ export function ShipScreen({
             name={chassisName((owned ? player.loadout.chassis : offer.chassis).name)}
             baseline={docked && !owned ? player.spec : null}
           />
+
+          {/* Апгрейд корпуса — только у своего борта на верфи: качает HP/трюм/аукс на +10%
+              за уровень, без предела, цена прогрессивная. Гаснет, когда не хватает денег. */}
+          {docked && owned && (
+            <div className="space-y-1">
+              <div className="flex items-center justify-between text-xs tracking-[0.15em]" style={{ color: DIM }}>
+                <span>{t('ship.hullLevel', { level: String(player.hullLevel) })}</span>
+                <span>{t('ship.hullUpgradeHint')}</span>
+              </div>
+              <button
+                type="button"
+                disabled={!canBuyHull}
+                onClick={doUpgradeHull}
+                className={`w-full border px-4 py-2 text-sm tracking-[0.2em] transition-colors ${
+                  canBuyHull ? 'cursor-pointer hover:bg-[#7fd6ff] hover:text-black' : 'cursor-not-allowed opacity-40'
+                }`}
+                style={{ borderColor: ACCENT, color: ACCENT }}
+              >
+                {t('ship.hullUpgrade', { price: credits(hullCost) })}
+              </button>
+            </div>
+          )}
         </div>
 
         <SlotGrid slots={slots} onOpen={setOpenKey} docked={docked} />

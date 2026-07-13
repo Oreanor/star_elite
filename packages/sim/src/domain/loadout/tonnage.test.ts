@@ -53,4 +53,14 @@ describe('грузоподъёмность корпуса (тоннаж)', () =>
     const l = createLoadout(AURORA_MK3, [ENGINE_STANDARD, RCS_STANDARD], [])
     expect(deriveShipSpec(l).power.auxCapacity).toBe(AURORA_MK3.auxCapacity)
   })
+
+  it('уровень корпуса множит базовые HP / трюм / аукс (три оси разом)', () => {
+    const l = createLoadout(AURORA_MK3, [ENGINE_STANDARD, RCS_STANDARD], [])
+    const s0 = deriveShipSpec(l, 0, 0)
+    const s1 = deriveShipSpec(l, 0, 1)
+    // Один шаг апгрейда поднял все три базовые х-ки — это свойство модели, не число.
+    expect(s1.hull.hull).toBeGreaterThan(s0.hull.hull)
+    expect(s1.cargoCapacity).toBeGreaterThan(s0.cargoCapacity)
+    expect(s1.power.auxCapacity).toBe(Math.round(AURORA_MK3.auxCapacity * 1.1))
+  })
 })
