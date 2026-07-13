@@ -16,6 +16,7 @@ import {
 } from '../materials/materials'
 import { createAtmosphereMaterial } from '../materials/atmosphere'
 import { createCityLightsMaterial } from '../materials/cityLights'
+import { createStarSurfaceMaterial, loadStarSurface } from '../materials/starSurface'
 import { loadPlanetTexture, pickVariant } from '../sky/planets'
 import { MoonSwarm } from './Moons'
 
@@ -181,9 +182,30 @@ function Star({ body }: { body: BodyEntity }) {
   const material = useMemo(() => coronaMaterial(texture, body.color), [texture, body.color])
   const glowSize = body.radius * CORONA.SCALE
 
-  useFrame(() => {
+  // Карта поверхности класса. Грузится лениво по цвету звезды; пока её нет (или у
+  // класса карты не бывает — T/N/чёрная дыра) — диск остаётся на плоском цвете.
+  const [surface, setSurface] = useState<Texture | null>(null)
+  useEffect(() => {
+    setSurface(null)
+    loadStarSurface(body.color, setSurface)
+  }, [body.color])
+  const surfaceMaterial = useMemo(
+    () => (surface ? createStarSurfaceMaterial(surface) : null),
+    [surface],
+  )
+  // GPU-ресурсы освобождаем явно: смена системы размонтирует звезду, а текстура и
+  // шейдер живут в видеопамяти и сами не уйдут. Иначе каждый прыжок — утечка карты.
+  useEffect(() => () => {
+    surface?.dispose()
+    surfaceMaterial?.dispose()
+  }, [surface, surfaceMaterial])
+
+  useFrame((_, dt) => {
     ref.current?.position.copy(body.pos)
     glowRef.current?.position.copy(body.pos)
+    // Плазма кипит и вращается в шейдере — двигаем только время. Реальное (не мировое):
+    // это косметика, шаг симуляции ей не нужен, а под паузой звезда пусть живёт.
+    if (surfaceMaterial) surfaceMaterial.uniforms.uTime!.value += dt
   })
 
   return (
@@ -191,7 +213,7 @@ function Star({ body }: { body: BodyEntity }) {
       <mesh
         ref={ref}
         geometry={starGeometry()}
-        material={starMaterial(body.color)}
+        material={surfaceMaterial ?? starMaterial(body.color)}
         scale={body.radius}
         frustumCulled={false}
       />
