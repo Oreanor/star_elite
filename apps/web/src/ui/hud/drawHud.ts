@@ -30,7 +30,8 @@ import {
   type World,
 } from '@elite/sim'
 import { bombFlash, bombRing } from '../../render/bombFeel'
-import { HUD_SCALE } from '../../render/config'
+import { GALAXY_LAYER, HUD_SCALE } from '../../render/config'
+import { galaxyRadar } from '../../render/scene/galaxyRadar'
 import { HUD_COLORS, bar, circle, corners, dot, ellipse, line, rect, text } from './draw'
 import { t } from '../i18n'
 import { chassisName, occupationName, properName, shipTypeName } from '../i18n/dataNames'
@@ -580,11 +581,70 @@ function drawRadar({ ctx, camera, world, width, height }: HudFrame): void {
   line(ctx, cx, cy - 3 * S, cx, cy + 3 * S, HUD_COLORS.DIM)
   line(ctx, cx - 3 * S, cy, cx + 3 * S, cy, HUD_COLORS.DIM)
 
-  // За масштабом (миелофон) система осталась далеко — локатор ей уже не сканер. Рамку
-  // держим (пилот привык к ней в углу), но внутри честно пусто: отметки тел на таком
-  // масштабе только глючат. Ни лучей поля зрения, ни блипов — только «НЕТ ДАННЫХ».
+  // За масштабом (миелофон) система осталась далеко, зато проявилась ГАЛАКТИКА — и локатор
+  // переключается на неё: показывает звёзды в СФЕРЕ ВИДИМОСТИ слоя (те же, что горят в
+  // мире), чтобы найти, куда лететь. Пока галактика ещё не проявилась (борт вырос, но слой
+  // спит/прозрачен) — честно «НЕТ ДАННЫХ».
   if (world.player.state.scale >= MIELOPHONE.PHASE_START) {
-    text(ctx, t('hud.noData'), cx, cy - 4 * S, HUD_COLORS.DIM, 'center')
+    const gr = galaxyRadar()
+    if (!gr.active || !gr.positions || !gr.colors) {
+      text(ctx, t('hud.noData'), cx, cy - 4 * S, HUD_COLORS.DIM, 'center')
+      return
+    }
+
+    // Лучи поля зрения — как в системном режиме: по ним целишься носом на звезду.
+    const gfov = (camera as PerspectiveCamera).fov
+    const gHalf = Math.atan(Math.tan((gfov * Math.PI) / 360) * (width / height))
+    for (const s of [-1, 1]) {
+      const dx = Math.sin(gHalf) * s
+      const dy = -Math.cos(gHalf)
+      const reach = 1 / Math.hypot(dx / radiusX, dy / radiusY)
+      line(ctx, cx, cy, cx + dx * reach, cy + dy * reach, HUD_COLORS.DIM)
+    }
+
+    const player = world.player
+    shipAxes(player.state.quat, _fwd, _right, _up)
+    // Дальность локатора = сфера видимости слоя: в круге ровно те звёзды, что зажжены.
+    const range = GALAXY_LAYER.SPHERE_RADIUS_M
+    const pos = gr.positions
+    const col = gr.colors
+    let nearestSq = Infinity
+    let nearX = 0
+    let nearY = 0
+    let nearFound = false
+    for (let i = 0; i < gr.count; i++) {
+      const b = i * 3
+      // Мир-позиция звезды = якорь слоя + локальные·масштаб; сразу берём относительно борта.
+      _point.set(
+        gr.anchor.x + pos[b]! * gr.layerScale - player.state.pos.x,
+        gr.anchor.y + pos[b + 1]! * gr.layerScale - player.state.pos.y,
+        gr.anchor.z + pos[b + 2]! * gr.layerScale - player.state.pos.z,
+      )
+      const distSq = _point.lengthSq()
+      if (distSq > range * range) continue // только в сфере видимости
+      const distance = Math.sqrt(distSq)
+      const x = _point.dot(_right)
+      const z = _point.dot(_fwd)
+      const flat = Math.hypot(x, z)
+      if (flat < 1e-3) continue
+      // Линейно (не лог): локатор здесь — top-down мини-карта окрестности, а не сжатие порядков.
+      const k = distance / range
+      const px = cx + (x / flat) * k * radiusX
+      const py = cy - (z / flat) * k * radiusY
+      const lift = Math.max(-10 * S, Math.min(10 * S, (_point.dot(_up) / distance) * 20 * S))
+      const my = py - lift
+      if (Math.abs(lift) > S) line(ctx, px, py, px, my, HUD_COLORS.DIM)
+      const color = `rgb(${Math.round(col[b]! * 255)},${Math.round(col[b + 1]! * 255)},${Math.round(col[b + 2]! * 255)})`
+      dot(ctx, px, my, Math.max(1, 1.5 * S), color)
+      if (distSq < nearestSq) {
+        nearestSq = distSq
+        nearX = px
+        nearY = my
+        nearFound = true
+      }
+    }
+    // Ближайшую обводим кольцом — это звезда «под рукой», в неё и нырять.
+    if (nearFound) circle(ctx, nearX, nearY, 3 * S, HUD_COLORS.PRIMARY)
     return
   }
 

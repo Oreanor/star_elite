@@ -13,6 +13,7 @@ import {
 import { clamp, generateGalaxy } from '@elite/sim'
 import { useSession } from '../../app/GameContext'
 import { GALAXY_LAYER } from '../config'
+import { galaxyRadar } from './galaxyRadar'
 
 /**
  * Галактика как дальний край зума миелофона. Когда борт вырос до звёздного масштаба,
@@ -111,6 +112,9 @@ export function GalaxyLayer() {
   // уезжая с каждой пересадкой. В истинных она стоит намертво, сквозь неё можно лететь.
   const anchorTrue = useRef(new Vector3())
 
+  // Буферы звёзд держим и здесь — их читает локатор (galaxyRadar), рисуя те же звёзды.
+  const starData = useRef<{ positions: Float32Array; colors: Float32Array; count: number } | null>(null)
+
   const geometry = useMemo(() => {
     if (!awake) return null
     const world = session.world
@@ -139,6 +143,8 @@ export function GalaxyLayer() {
     g.setAttribute('position', new BufferAttribute(positions, 3))
     g.setAttribute('color', new BufferAttribute(colors, 3))
     g.setAttribute('size', new BufferAttribute(sizes, 1))
+    // Те же буферы отдаём локатору: он рисует те же звёзды в той же системе координат.
+    starData.current = { positions, colors, count: n }
     return g
     // Пересобираем при смене системы (world.epoch): своя звезда — другая точка отсчёта.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -177,6 +183,7 @@ export function GalaxyLayer() {
     const world = session.world
     const scale = world.player.state.scale
     if (!awake) {
+      galaxyRadar().active = false
       if (scale >= GALAXY_LAYER.WAKE_SCALE) {
         // Фиксируем якорь ЗДЕСЬ и в истинных координатах — вокруг него развернём галактику.
         anchorTrue.current.copy(world.player.state.pos).add(world.originOffset)
@@ -212,6 +219,17 @@ export function GalaxyLayer() {
     )
     material.uniforms.uOpacity!.value = t
     points.visible = t > 0
+
+    // Публикуем состояние для локатора: те же звёзды, тот же якорь и масштаб этого кадра.
+    const gr = galaxyRadar()
+    gr.active = t > 0 && starData.current !== null
+    gr.anchor.copy(points.position)
+    gr.layerScale = layerScale
+    if (starData.current) {
+      gr.positions = starData.current.positions
+      gr.colors = starData.current.colors
+      gr.count = starData.current.count
+    }
   })
 
   if (!geometry) return null
