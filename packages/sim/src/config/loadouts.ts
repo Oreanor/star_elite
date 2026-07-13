@@ -131,21 +131,21 @@ export function apolloLoadout(): Loadout {
   )
 }
 
-/** «Артемида» — ударный: крепкий щит и броня, два ствола и два пилона. */
+/** «Артемида» — ударный: крепкий щит и броня, лазеры на киле, центр пуст, два пилона. */
 export function artemisLoadout(): Loadout {
   return createLoadout(
     ARTEMIS,
     [ENGINE_STANDARD, RCS_STANDARD, SHIELD_STANDARD, ARMOUR_PLATE, CARGO_SMALL, HYPERDRIVE_BASIC],
-    [PULSE_LASER, PULSE_LASER, MISSILE_PYLON, MISSILE_PYLON],
+    [PULSE_LASER, PULSE_LASER, null, MISSILE_PYLON, MISSILE_PYLON],
   )
 }
 
-/** «Афина» — стелс: маскировочное поле на борту, два ствола и пилон. */
+/** «Афина» — стелс: маскировочное поле на борту, лазеры на крыле, центр пуст, пилон. */
 export function athenaLoadout(): Loadout {
   return createLoadout(
     ATHENA,
     [ENGINE_STANDARD, RCS_STANDARD, SHIELD_LIGHT, ARMOUR_PLATE, CARGO_SMALL, HYPERDRIVE_BASIC, CLOAK_FIELD],
-    [PULSE_LASER, PULSE_LASER, MISSILE_PYLON],
+    [PULSE_LASER, PULSE_LASER, null, MISSILE_PYLON],
   )
 }
 

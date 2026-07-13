@@ -176,8 +176,10 @@ export const ARTEMIS: Chassis = {
   assistLateralDamp: 1.1,
   assistSpeedDamp: 0.35,
   hardpoints: [
-    { offset: [-1.8, -0.1, -2.5], kind: 'gun', maxClass: 2 },
-    { offset: [1.8, -0.1, -2.5], kind: 'gun', maxClass: 2 },
+    // Лазер 1 — внутренняя пара, лазер 2 — пара на разнесённых КИЛЯХ, лазер 3 — толстый центр.
+    { offset: [0, -0.1, -2.3], kind: 'gun', maxClass: 2, nozzles: [[-1.8, -0.1, -2.3], [1.8, -0.1, -2.3]] },
+    { offset: [0, -0.1, -1.9], kind: 'gun', maxClass: 2, nozzles: [[-3.4, -0.1, -1.9], [3.4, -0.1, -1.9]] },
+    { offset: [0, -0.1, -2.8], kind: 'gun', maxClass: 3, nozzles: [[0, -0.1, -2.8]] },
     { offset: [-4.5, -0.2, 2], kind: 'pylon', maxClass: 1 },
     { offset: [4.5, -0.2, 2], kind: 'pylon', maxClass: 1 },
   ],
@@ -204,8 +206,11 @@ export const ATHENA: Chassis = {
   assistLateralDamp: 1.25,
   assistSpeedDamp: 0.35,
   hardpoints: [
-    { offset: [-2, -0.1, -2], kind: 'gun', maxClass: 2 },
-    { offset: [2, -0.1, -2], kind: 'gun', maxClass: 2 },
+    // «Летающее крыло»: лазер 1 — внутренняя пара, лазер 2 — широкая пара на концах крыла,
+    // лазер 3 — толстый центр.
+    { offset: [0, -0.1, -1.9], kind: 'gun', maxClass: 2, nozzles: [[-2, -0.1, -1.9], [2, -0.1, -1.9]] },
+    { offset: [0, -0.1, -1.6], kind: 'gun', maxClass: 2, nozzles: [[-3.8, -0.1, -1.6], [3.8, -0.1, -1.6]] },
+    { offset: [0, -0.1, -2.4], kind: 'gun', maxClass: 3, nozzles: [[0, -0.1, -2.4]] },
     { offset: [-4.5, -0.2, 0], kind: 'pylon', maxClass: 1 },
   ],
   slots: [
