@@ -218,6 +218,47 @@ export function Panel({ title, children }: { title: string; children: React.Reac
 }
 
 /**
+ * Единая модалка станции: затемнённый фон + СТЕКЛЯННАЯ панель (тот же translucent-синий
+ * градиент под размытием, что у консоли и карты). Раньше рецепт стекла копировался в
+ * каждую модалку врозь, и оборудование по недосмотру осталось глухо-чёрным — теперь он
+ * один. Клик по фону закрывает, клик по панели гасится.
+ *
+ * `wide` — крупная модалка со скроллом (варианты снаряжения); `z` поднимает вложенную
+ * (вопрос-подтверждение поверх уже открытой) выше родителя.
+ */
+export function Modal({
+  onClose,
+  children,
+  wide,
+  z = 50,
+}: {
+  onClose: () => void
+  children: React.ReactNode
+  wide?: boolean
+  z?: number
+}) {
+  return (
+    <div
+      className="fixed inset-0 flex items-center justify-center bg-black/70 p-6 font-mono"
+      style={{ color: ACCENT, zIndex: z }}
+      onClick={onClose}
+    >
+      <div
+        className={`w-full rounded-2xl border p-6 backdrop-blur-md ${wide ? 'max-h-[85vh] max-w-2xl overflow-y-auto' : 'max-w-sm'}`}
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          borderColor: 'rgba(124,196,255,0.3)',
+          background: 'linear-gradient(150deg, rgba(40,95,150,0.28), rgba(8,22,42,0.55))',
+          boxShadow: '0 0 60px rgba(60,150,255,0.18), inset 0 0 80px rgba(80,180,255,0.06)',
+        }}
+      >
+        {children}
+      </div>
+    </div>
+  )
+}
+
+/**
  * Колонка таблицы: заголовок, выравнивание, ширина и как из строки достать ячейку.
  * `header: ''` — колонка без подписи (действие); если пусты ВСЕ, шапка не рисуется.
  */
@@ -294,29 +335,43 @@ export function Table<Row>({
           const key = rowKey(row, index)
           const card = detail?.(row) ?? null
           const isOpen = card !== null && open.has(key)
-          // Клик по имени либо ВЫБИРАЕТ строку (колонка-компаньон), либо раскрывает карточку.
+          // Клик по строке либо ВЫБИРАЕТ её (колонка-компаньон), либо раскрывает карточку.
           const select = onRowClick !== undefined
           const interactive = select || card !== null
-          const onName = select ? () => onRowClick(row) : () => toggle(key)
+          const onAct = select ? () => onRowClick(row) : () => toggle(key)
           const marker = select ? '' : isOpen ? '▾ ' : '▸ '
+          const selected = selectedKey === key
+          // Кликабельна ВСЯ строка, а не одно имя: раньше мимо первой ячейки клик пропадал.
           return (
             <Fragment key={key}>
               <tr
-                className="align-baseline"
-                style={selectedKey === key ? { backgroundColor: 'rgba(127,214,255,0.10)' } : undefined}
+                className={`align-baseline ${interactive ? 'cursor-pointer transition-colors hover:bg-[#7fd6ff]/[0.06]' : ''}`}
+                style={selected ? { backgroundColor: 'rgba(127,214,255,0.10)' } : undefined}
+                onClick={interactive ? onAct : undefined}
+                role={interactive ? 'button' : undefined}
+                tabIndex={interactive ? 0 : undefined}
+                onKeyDown={
+                  interactive
+                    ? (e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault()
+                          onAct()
+                        }
+                      }
+                    : undefined
+                }
               >
                 {columns.map((c, ci) => (
-                  <td key={c.key} className={`px-2 py-1 first:pl-0 last:pr-0 ${alignClass(c.align)}`} style={{ width: c.width }}>
+                  <td
+                    key={c.key}
+                    className={`px-2 py-1 first:pl-0 last:pr-0 ${alignClass(c.align)} ${ci === 0 && interactive ? 'tracking-wide' : ''}`}
+                    style={{ width: c.width, color: ci === 0 && interactive ? ACCENT : undefined }}
+                  >
                     {ci === 0 && interactive ? (
-                      <button
-                        type="button"
-                        onClick={onName}
-                        className="cursor-pointer text-left tracking-wide hover:underline"
-                        style={{ color: ACCENT }}
-                      >
+                      <>
                         {marker}
                         {c.cell(row)}
-                      </button>
+                      </>
                     ) : (
                       c.cell(row)
                     )}

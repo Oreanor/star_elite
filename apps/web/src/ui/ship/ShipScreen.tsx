@@ -49,7 +49,7 @@ import { chassisGeometry } from '../../render/geometry/ships'
 import { hullMaterial } from '../../render/materials/materials'
 import { t, useLang, type Key } from '../i18n'
 import { UI } from '../theme'
-import { ACCENT, Button, Column, DIM, Panel, Table } from '../station/chrome'
+import { ACCENT, Button, Column, DIM, Modal, Panel, Table } from '../station/chrome'
 import { StatId, credits, formatStat, statLabel } from '../station/format'
 import { displayName, headlineCompare, headlineNumber, weaponSlot } from '../station/Equipment'
 import { chassisName, properName } from '../i18n/dataNames'
@@ -258,19 +258,10 @@ export function ShipScreen({
         <SlotModal world={world} docked={docked} slot={openSlot} onChange={refresh} onClose={() => setOpenKey(null)} />
       )}
 
-      {/* Не хватило грузоподъёмности на перенос обвеса — модалка (то же стекло, что у покупки). */}
+      {/* Не хватило грузоподъёмности на перенос обвеса — та же стеклянная модалка. */}
       {noRoom && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-6 font-mono" onClick={() => setNoRoom(false)}>
-          <div
-            className="w-full max-w-sm rounded-2xl border p-6 text-center backdrop-blur-md"
-            onClick={(e) => e.stopPropagation()}
-            style={{
-              borderColor: 'rgba(124,196,255,0.3)',
-              background: 'linear-gradient(150deg, rgba(40,95,150,0.28), rgba(8,22,42,0.55))',
-              boxShadow: '0 0 60px rgba(60,150,255,0.18), inset 0 0 80px rgba(80,180,255,0.06)',
-              color: ACCENT,
-            }}
-          >
+        <Modal onClose={() => setNoRoom(false)}>
+          <div className="text-center">
             <p className="text-sm leading-relaxed" style={{ color: UI.WARN }}>
               {t('ship.hullNoRoom')}
             </p>
@@ -283,7 +274,7 @@ export function ShipScreen({
               {t('ship.ok')}
             </button>
           </div>
-        </div>
+        </Modal>
       )}
     </>
   )
@@ -639,16 +630,7 @@ function SlotModal({
     )
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-6 font-mono"
-      onClick={onClose}
-      style={{ color: ACCENT }}
-    >
-      <div
-        className="max-h-[85vh] w-full max-w-2xl overflow-y-auto border bg-black/85 p-6 backdrop-blur-sm"
-        onClick={(e) => e.stopPropagation()}
-        style={{ borderColor: ACCENT, boxShadow: '0 0 40px rgba(127,214,255,0.15)' }}
-      >
+    <Modal onClose={onClose} wide>
         {/* Шапка: вид слота словом и кнопка закрытия. */}
         <div className="flex items-start justify-between gap-4">
           <h3 className="text-sm tracking-[0.25em]" style={{ color: DIM }}>
@@ -737,8 +719,7 @@ function SlotModal({
             onCancel={() => setConfirm(null)}
           />
         )}
-      </div>
-    </div>
+    </Modal>
   )
 }
 
@@ -862,25 +843,19 @@ function ConfirmBox({
   onCancel: () => void
 }) {
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-6" onClick={onCancel}>
-      <div
-        className="w-full max-w-sm border bg-black/90 p-6 backdrop-blur-sm"
-        onClick={(e) => e.stopPropagation()}
-        style={{ borderColor: ACCENT, boxShadow: '0 0 40px rgba(127,214,255,0.2)' }}
-      >
-        <p className="text-sm">{confirm.message}</p>
-        <div className="mt-5 flex flex-wrap justify-end gap-2">
-          {confirm.actions.map((a) => (
-            <Button key={a.label} small onClick={() => onRun(a)}>
-              {a.label}
-            </Button>
-          ))}
-          <Button small onClick={onCancel}>
-            {confirm.actions.length > 0 ? t('ship.cancel') : t('ship.ok')}
+    <Modal onClose={onCancel} z={60}>
+      <p className="text-sm">{confirm.message}</p>
+      <div className="mt-5 flex flex-wrap justify-end gap-2">
+        {confirm.actions.map((a) => (
+          <Button key={a.label} small onClick={() => onRun(a)}>
+            {a.label}
           </Button>
-        </div>
+        ))}
+        <Button small onClick={onCancel}>
+          {confirm.actions.length > 0 ? t('ship.cancel') : t('ship.ok')}
+        </Button>
       </div>
-    </div>
+    </Modal>
   )
 }
 

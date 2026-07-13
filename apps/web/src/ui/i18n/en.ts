@@ -226,8 +226,12 @@ export const EN: Record<keyof typeof RU, string> = {
   'station.qty': 'QTY',
   'station.total': 'TOTAL',
   'station.max': 'MAX',
+  'station.trade.buy': 'BUY',
+  'station.trade.sell': 'SELL',
+  'station.trade.stock': 'in stock {n}',
+  'station.trade.have': 'in hold {n}',
 
-  'station.hold.title': 'HOLD',
+  'station.hold.title': 'CARGO',
   'station.hold.empty': 'Empty. Down a pirate and scoop the pod — it comes in on its own if you approach quietly.',
   'station.sell': 'SELL',
   'station.strip': 'REMOVE',

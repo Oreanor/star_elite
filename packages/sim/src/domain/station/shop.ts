@@ -1071,6 +1071,48 @@ export function sellItem(world: World, ship: ShipEntity, index: number): number 
   return value
 }
 
+/** Сколько единиц этого товара уже в трюме — источник максимума для ползунка продажи. */
+export function commodityHeld(ship: ShipEntity, commodity: Commodity): number {
+  const stack = ship.hold.items.find(
+    (i): i is Extract<CargoItem, { kind: 'commodity' }> =>
+      i.kind === 'commodity' && i.commodity.id === commodity.id,
+  )
+  return stack?.units ?? 0
+}
+
+/**
+ * Продать N единиц конкретного товара — для ползунка «продать столько-то». В отличие
+ * от sellItem (весь предмет по индексу) берёт ЧАСТЬ стопки: costBasis режется
+ * пропорционально проданной доле, чтобы выгода на остатке считалась честно.
+ *
+ * @returns выручка, ноль — если такого товара нет или units<=0.
+ */
+export function sellCommodity(world: World, ship: ShipEntity, commodity: Commodity, units: number): number {
+  if (units <= 0) return 0
+  const stack = ship.hold.items.find(
+    (i): i is Extract<CargoItem, { kind: 'commodity' }> =>
+      i.kind === 'commodity' && i.commodity.id === commodity.id,
+  )
+  if (!stack) return 0
+
+  const sold = Math.min(units, stack.units)
+  if (sold <= 0) return 0
+
+  const value = commoditySellPrice(world, commodity) * sold
+  // Цену входа режем пропорционально: остаток хранит basis только своих единиц.
+  if (stack.costBasis !== undefined) {
+    stack.costBasis = sold >= stack.units ? 0 : Math.round(stack.costBasis * ((stack.units - sold) / stack.units))
+  }
+  stack.units -= sold
+  if (stack.units <= 0) {
+    const idx = ship.hold.items.indexOf(stack)
+    if (idx >= 0) removeItem(ship.hold, idx)
+  }
+  world.credits += value
+  refreshSpec(ship)
+  return value
+}
+
 /**
  * Продать весь трюм разом. Возвращает выручку; ноль, если продавать нечего.
  *

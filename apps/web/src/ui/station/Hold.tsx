@@ -1,9 +1,11 @@
+import { useState } from 'react'
 import {
   cargoMass,
   holdSellValue,
   itemMass,
   itemName,
   itemSellValue,
+  moduleFault,
   sellCargo,
   sellItem,
   type CargoItem,
@@ -11,19 +13,19 @@ import {
 } from '@elite/sim'
 import { UI } from '../theme'
 import { t, useLang } from '../i18n'
-import { Button, Column, DIM, Panel, Table } from './chrome'
+import { Button, Column, DIM, Modal, Panel, Table } from './chrome'
 import { credits, formatStat } from './format'
-import { displayName } from './Equipment'
-import { commodityName } from '../i18n/dataNames'
+import { displayName, moduleBenefit } from './Equipment'
+import { commodityDesc, commodityName } from '../i18n/dataNames'
 
 /**
- * Трюм — ОДИН компонент и в магазине станции, и на вкладке груза корабля.
- * Разница только в праве продавать: `atStation` открывает кнопки сделки; в полёте
- * их нет — торговать посреди космоса не с кем, экран груза там только витрина.
+ * Груз — ОДИН компонент и в магазине станции, и на вкладке груза корабля.
+ * Разница только в праве продавать: `atStation` открывает кнопку сделки; в полёте
+ * её нет — торговать посреди космоса не с кем, экран груза там только витрина.
  *
- * Цена продажи местная, рыночная: тот же груз в другой системе стоит иначе.
- * У купленного помечена ВЫГОДА (выручка минус уплаченное), у добычи и трофеев —
- * «находка»: сравнивать не с чем, вся выручка в плюс.
+ * Клик по строке открывает карточку предмета: что это, вес, цена продажи здесь,
+ * выгода и — у снятого железа — степень поломки. Продажа теперь живёт в карточке,
+ * а не отдельной колонкой: строка перестала быть тесной от кнопок.
  */
 export function Hold({
   world,
@@ -37,6 +39,9 @@ export function Hold({
   useLang()
   const player = world.player
   const hold = player.hold
+  // Клик по строке раскрывает карточку предмета. Индекс держим отдельно: продажа соседа
+  // сдвигает список, а карточку по индексу мы к тому моменту уже закрываем.
+  const [detail, setDetail] = useState<CargoItem | null>(null)
 
   const columns: Column<CargoItem>[] = [
     // Модуль в трюме — с «+», если прокачан; товар — обычным именем со счётом.
@@ -64,27 +69,6 @@ export function Hold({
     },
   ]
 
-  // Продажа — только на станции. В полёте колонки действия нет вовсе.
-  if (atStation) {
-    columns.push({
-      key: 'sell',
-      header: '',
-      align: 'right',
-      cell: (item) => (
-        <Button
-          small
-          onClick={() => {
-            // Индекс берём в момент клика из живого трюма: продажа соседа его сдвигает.
-            const index = hold.items.indexOf(item)
-            if (index >= 0 && sellItem(world, player, index) > 0) onChange()
-          }}
-        >
-          {t('station.sell')}
-        </Button>
-      ),
-    })
-  }
-
   return (
     <Panel title={t('station.hold.title')}>
       <p className="mb-3 text-xs tracking-widest" style={{ color: DIM }}>
@@ -103,7 +87,7 @@ export function Hold({
             // Ключ обязан пережить продажу соседа: одинаковые товары уже в одной стопке,
             // разные модули различаются именем, а хвост индекса разводит совпадения.
             rowKey={(item, i) => `${itemName(item)}-${i}`}
-            // Раскрытия вниз по клику нет намеренно: строки трюма ничего не разворачивают.
+            onRowClick={(item) => setDetail(item)}
           />
 
           {atStation && (
@@ -117,7 +101,97 @@ export function Hold({
           )}
         </>
       )}
+
+      {detail && (
+        <ItemModal
+          world={world}
+          item={detail}
+          atStation={atStation}
+          onChange={onChange}
+          onClose={() => setDetail(null)}
+        />
+      )}
     </Panel>
+  )
+}
+
+/**
+ * Карточка предмета трюма: имя, вес, цена продажи здесь, выгода. У товара — описание,
+ * у снятого модуля — его характеристика и степень поломки (если сломан). Продать —
+ * прямо отсюда, на станции: карточка И есть место сделки.
+ */
+function ItemModal({
+  world,
+  item,
+  atStation,
+  onChange,
+  onClose,
+}: {
+  world: World
+  item: CargoItem
+  atStation: boolean
+  onChange: () => void
+  onClose: () => void
+}) {
+  useLang()
+  const value = itemSellValue(world, item)
+  const mark = profitMark(item, value)
+  const fault = item.kind === 'module' ? moduleFault(item.module) : 0
+
+  return (
+    <Modal onClose={onClose}>
+      <div className="mb-3 flex items-baseline justify-between gap-3">
+        <h3 className="text-base tracking-[0.2em]">
+          {item.kind === 'module' ? displayName(item.module) : `${commodityName(item.commodity)} ×${item.units}`}
+        </h3>
+        <span className="text-xs" style={{ color: DIM }}>
+          {formatStat('mass', itemMass(item))}
+        </span>
+      </div>
+
+      {item.kind === 'commodity' ? (
+        <p className="mb-4 text-xs leading-relaxed" style={{ color: DIM }}>
+          {commodityDesc(item.commodity)}
+        </p>
+      ) : (
+        <div className="mb-4 text-sm">
+          <p style={{ color: DIM }}>{moduleBenefit(item.module)}</p>
+          {/* Поломка — это урон в бою, а не износ на продажу: красным и в процентах. */}
+          {fault > 0 && (
+            <p style={{ color: UI.DANGER }}>{t('ship.broken', { pct: Math.round(fault * 100) })}</p>
+          )}
+        </div>
+      )}
+
+      {/* Цена продажи здесь — крупно; под ней выгода/находка тем же знаком, что в списке. */}
+      <div className="text-center">
+        <div className="text-2xl tabular-nums" style={{ color: UI.PRIMARY }}>
+          {credits(value)}
+        </div>
+        <div className="mt-1 text-xs" style={{ color: mark.color }}>
+          {mark.text}
+        </div>
+      </div>
+
+      <div className="mt-5 flex justify-end gap-2">
+        {atStation && (
+          <Button
+            small
+            onClick={() => {
+              // Индекс берём в момент клика из живого трюма: продажа соседа его сдвигает.
+              const index = world.player.hold.items.indexOf(item)
+              if (index >= 0 && sellItem(world, world.player, index) > 0) onChange()
+              onClose()
+            }}
+          >
+            {t('station.sell')}
+          </Button>
+        )}
+        <Button small onClick={onClose}>
+          {t('ship.close')}
+        </Button>
+      </div>
+    </Modal>
   )
 }
 

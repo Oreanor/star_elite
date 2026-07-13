@@ -23,6 +23,18 @@ const COMMODITY_EN: Record<string, string> = {
   narcotics: 'Narcotics',
 }
 
+const COMMODITY_DESC_EN: Record<string, string> = {
+  scrap: 'Crushed metal and dead electronics. Cheap everywhere, wanted by refiners.',
+  food: 'Synth rations and live cultures. Everyone hauls it, nobody pays much.',
+  minerals: 'Raw ore from asteroid belts. Feedstock for metallurgy.',
+  metals: 'Refined ingots and alloys. The bread of heavy industry.',
+  machinery: 'Tools, drives, spare parts. Dear where nothing gets built.',
+  electronics: 'Boards and chips, high value-add. Light, pricey, wanted everywhere.',
+  slaves: 'Living cargo. Outlawed in civilized worlds — hence the price.',
+  luxuries: 'Rarities for those with money to burn. Low mass, high margin.',
+  narcotics: 'Banned chemistry. Costly, compact, and smells of fines.',
+}
+
 const MODULE_EN: Record<string, string> = {
   engine_1e: 'Drive 1E «Civilian»',
   engine_2c: 'Drive 2C «Standard»',
@@ -111,6 +123,11 @@ const en = (): boolean => currentLang() === 'en'
 
 export function commodityName(c: Commodity): string {
   return en() ? COMMODITY_EN[c.id] ?? c.name : c.name
+}
+
+/** Описание товара на языке интерфейса — откат на русский канон домена, если нет строки. */
+export function commodityDesc(c: Commodity): string {
+  return en() ? COMMODITY_DESC_EN[c.id] ?? c.description : c.description
 }
 
 export function moduleName(m: ShipModule): string {
