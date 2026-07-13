@@ -4,7 +4,7 @@ import { AdditiveBlending, InstancedMesh, MeshBasicMaterial, Object3D, Quaternio
 import { clamp, shipAxes, type ShipEntity } from '@elite/sim'
 import { useSession } from '../../app/GameContext'
 import { shipHidden } from '../../app/control/jumpFx'
-import { EXHAUST } from '../config'
+import { EXHAUST, GIANT_RENDER_CAP } from '../config'
 import { flameGeometry } from '../geometry/flame'
 import { chassisNozzles, MISSILE_NOZZLE, type Nozzle } from '../geometry/ships'
 
@@ -156,7 +156,10 @@ function Flames({ cone }: { cone: Cone }) {
       const length =
         (EXHAUST.IDLE_LENGTH + throttle * EXHAUST.THROTTLE_LENGTH + surge * EXHAUST.SURGE_LENGTH) * flicker
 
-      emit(ship.state.pos, ship.state.quat, nozzlesFor(ship), length, ship.state.scale)
+      // Масштаб факела зажат тем же потолком, что меш корабля и камера (GIANT_RENDER_CAP):
+      // без этого выше потолка меш замирает, а факел растёт дальше — и сопла «отрываются»
+      // назад от замёрзшего корпуса. С зажимом струя остаётся приклеена к дюзам.
+      emit(ship.state.pos, ship.state.quat, nozzlesFor(ship), length, Math.min(ship.state.scale, GIANT_RENDER_CAP))
     }
 
     // Корабль игрока канул в кольцо — гасим и его факел вместе с корпусом.
