@@ -57,6 +57,14 @@ export function Dust() {
 
     const world = session.world
     const player = world.player
+
+    // За звёздным масштабом пыль гаснет: мир за потолком отвода замер, а её куб всё растёт
+    // с ростом борта — на галактике он вжимается трясущейся коробкой и мельтешит. Ощущение
+    // скорости там даёт сама галактика. Гасим целиком — дешевле, чем гонять мёртвый буфер.
+    const dead = player.state.scale >= DUST.HIDE_SCALE
+    mesh.visible = !dead
+    if (dead) return
+
     const origin = player.state.pos
     const velocity = player.state.vel
 

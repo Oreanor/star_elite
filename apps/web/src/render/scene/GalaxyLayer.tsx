@@ -5,6 +5,7 @@ import {
   BufferGeometry,
   Color,
   NormalBlending,
+  type PerspectiveCamera,
   Points,
   ShaderMaterial,
   Vector3,
@@ -15,23 +16,31 @@ import { GALAXY_LAYER } from '../config'
 
 /**
  * Галактика как дальний край зума миелофона. Когда борт вырос до звёздного масштаба,
- * вокруг ЕГО звезды проявляются все 2500 систем точками — те же, что на карте, но в
- * мире. «Твоя» звезда сидит в НАЧАЛЕ координат (там же реальное светило), поэтому в миг
- * подмены точка ложится ровно на диск: звезда-в-звезду, без шва.
+ * вокруг ЕГО звезды проявляются все 2500 систем — те же, что на карте, но в мире. «Твоя»
+ * звезда сидит в НАЧАЛЕ координат (там же реальное светило), поэтому в миг подмены точка
+ * ложится ровно на диск: звезда-в-звезду, без шва.
  *
- * Слой сам приближает галактику: его масштаб = LY_TO_M / рост. Растёшь — световые годы
- * сжимаются в метры кадра, соседи входят в поле. От потолка отвода камеры не зависит.
+ * Звёзды — не пиксельные точки, а ШАРЫ с настоящей перспективой: ближняя раздувается в
+ * мячик, дальняя оседает. По ним и летишь «от мячика к мячику». Экранный размер = радиус
+ * (в св.годах) × масштаб слоя / дальность — то есть угловой, а не привязанный к дальности
+ * пикселем. Зажат в [MIN_PIXELS, MAX_PIXELS], чтобы дальний не пропал, а ближний не залил кадр.
  *
- * Пока борт мал (обычная игра) — слой СПИТ: геометрия из 2500 систем не строится вовсе,
- * а точки где-то за краем вселенной и погашены. Просыпается только на росте.
+ * Масштаб слоя = LY_TO_M / рост, но НЕ ниже LOCK_SCALE: выше него слой замирает. Без этого
+ * галактика сжимается с ростом бесконечно и к десяткам млрд× съёживается в облачко перед
+ * носом; с фиксацией она встаёт стабильным полем, крупнее корабля, по которому летишь.
+ *
+ * Пока борт мал (обычная игра) — слой СПИТ: геометрия из 2500 систем не строится, точки
+ * погашены. Просыпается только на росте.
  */
-// Кривая входа в сферу: vT = 0 у внешней границы (только коснулся сферы) → 1 глубоко
-// внутри. По ней и проявление, и ВСПЫШКА зажигания — звезда не появляется, а загорается.
 const vertex = /* glsl */ `
-attribute float size;
+attribute float size; // РАДИУС звезды в световых годах (не пиксели)
 
-uniform float uRadius;
+uniform float uRadius;     // сфера зажигания, метры кадра
 uniform float uEdge;
+uniform float uLayerScale; // метров кадра в одном св.году (LY_TO_M / effScale)
+uniform float uProj;       // H_framebuffer / tan(fov/2): радиус кадра → пиксели
+uniform float uMinPx;
+uniform float uMaxPx;
 
 varying vec3 vColor;
 varying float vT;
@@ -43,11 +52,14 @@ void main() {
   vT = clamp((uRadius - dist) / uEdge, 0.0, 1.0);
   gl_Position = projectionMatrix * mv;
 
-  // Автоплей-вспышка на входе: точка кратко раздувается, потом оседает. Пик у vT≈0.2.
+  // Диаметр шара в пикселях по перспективе: rRender(м) = size(св.г)×масштаб_слоя.
+  // Близкая звезда раздувается, дальняя оседает; зажато, чтоб не пропасть и не залить кадр.
+  float rRender = size * uLayerScale;
+  float px = uProj * rRender / max(dist, 1.0);
+
+  // Автоплей-вспышка на входе в сферу: точка кратко раздувается. Пик у vT≈0.2.
   float flare = smoothstep(0.0, 0.2, vT) * (1.0 - smoothstep(0.2, 0.6, vT));
-  // Размер — в ПИКСЕЛЯХ, без ослабления по дальности: масштаб слоя гуляет на 10+ порядков,
-  // и любая привязка к -mv.z дала бы то исчезающие, то во весь экран точки.
-  gl_PointSize = size * (1.0 + 1.4 * flare);
+  gl_PointSize = clamp(px, uMinPx, uMaxPx) * (1.0 + 0.6 * flare);
 }
 `
 
@@ -58,28 +70,33 @@ varying vec3 vColor;
 varying float vT;
 
 void main() {
-  // Круг с мягким краем — точка в пару пикселей без него мерцает.
-  float d = length(gl_PointCoord - vec2(0.5));
-  float round = 1.0 - smoothstep(0.34, 0.5, d);
+  vec2 pc = gl_PointCoord - vec2(0.5);
+  float r = length(pc) * 2.0; // 0 в центре → 1 у края
+  if (r > 1.0) discard;
+
+  // Псевдосфера: ярче в центре, темнее к краю — точка читается объёмным мячиком, а не диском.
+  float sphere = sqrt(max(0.0, 1.0 - r * r));
 
   // Проявление по входу в сферу + вспышка к белому: звезда ЗАГОРАЕТСЯ, а не выскакивает.
-  // vT=0 (вне сферы) → всё в ноль; растёшь — vT ползёт к 1, звезда вспыхивает и оседает.
   float fade = smoothstep(0.0, 1.0, vT);
   float flare = smoothstep(0.0, 0.2, vT) * (1.0 - smoothstep(0.2, 0.6, vT));
 
-  vec3 col = vColor + vec3(0.9 * flare);           // вспышка выбеливает, затем спадает
-  float alpha = round * clamp(fade + 0.6 * flare, 0.0, 1.0) * uOpacity;
+  vec3 col = vColor * (0.45 + 0.55 * sphere) + vec3(0.9 * flare);
+  float edge = 1.0 - smoothstep(0.82, 1.0, r);   // мягкий край, иначе мячик пикселит
+  float alpha = edge * clamp(fade + 0.6 * flare, 0.0, 1.0) * uOpacity;
   if (alpha < 0.01) discard;
   gl_FragColor = vec4(col, alpha);
 }
 `
 
 const _colour = new Color()
+const DEG2RAD = Math.PI / 180
 
-/** Размер точки по радиусу класса: карлик — мелкая, голубой гигант — крупнее. */
-function pixelSize(radiusUnits: number): number {
-  const { MIN_PIXELS, MAX_PIXELS } = GALAXY_LAYER
-  return MIN_PIXELS + Math.sqrt(clamp(radiusUnits / 2400, 0, 1)) * (MAX_PIXELS - MIN_PIXELS)
+/** Радиус звезды в световых годах: карлик мельче, гигант крупнее. Раздут против физики
+ *  намеренно — настоящая звезда (7e8 м) между св.годами была бы невидимой точкой. */
+function lyRadius(radiusUnits: number): number {
+  const { STAR_LY_MIN, STAR_LY_MAX } = GALAXY_LAYER
+  return STAR_LY_MIN + Math.sqrt(clamp(radiusUnits / 2400, 0, 1)) * (STAR_LY_MAX - STAR_LY_MIN)
 }
 
 export function GalaxyLayer() {
@@ -88,10 +105,11 @@ export function GalaxyLayer() {
 
   // Слой спит, пока борт не дорос: 2500 систем не генерим зря. Просыпается один раз.
   const [awake, setAwake] = useState(false)
-  // Якорь галактики — позиция корабля в МИГ пробуждения, зафиксированная в мире. Слой
-  // расцветает вокруг этой точки (а не вокруг далёкой звезды: до неё ~а.е., комок звёзд
-  // туда бы не попал в сферу). Точка неподвижна — сквозь галактику можно лететь к соседу.
-  const anchor = useRef(new Vector3())
+  // Якорь галактики — позиция корабля в миг пробуждения, в ИСТИННЫХ координатах
+  // (`pos + originOffset`). Плавающее начало координат периодически пересаживает мир на
+  // четыре километра; храни якорь в локальных — и галактика «прилипла бы» к кораблю,
+  // уезжая с каждой пересадкой. В истинных она стоит намертво, сквозь неё можно лететь.
+  const anchorTrue = useRef(new Vector3())
 
   const geometry = useMemo(() => {
     if (!awake) return null
@@ -114,7 +132,7 @@ export function GalaxyLayer() {
       colors[i * 3] = _colour.r
       colors[i * 3 + 1] = _colour.g
       colors[i * 3 + 2] = _colour.b
-      sizes[i] = pixelSize(s.star.radius)
+      sizes[i] = lyRadius(s.star.radius)
     }
 
     const g = new BufferGeometry()
@@ -138,10 +156,13 @@ export function GalaxyLayer() {
           uOpacity: { value: 0 },
           uRadius: { value: GALAXY_LAYER.SPHERE_RADIUS_M },
           uEdge: { value: GALAXY_LAYER.SPHERE_EDGE_M },
+          uLayerScale: { value: 1 },
+          uProj: { value: 1000 },
+          uMinPx: { value: GALAXY_LAYER.MIN_PIXELS },
+          uMaxPx: { value: GALAXY_LAYER.MAX_PIXELS },
         },
         transparent: true,
-        // Фон: глубину не трогаем — слой это дальний холст, корабль и тела рисуются
-        // поверх. Проще и надёжнее, чем стыковать точки с логарифмическим буфером.
+        // Фон: глубину не трогаем — слой это дальний холст, корабль рисуется поверх.
         depthTest: false,
         depthWrite: false,
         vertexColors: true,
@@ -152,12 +173,13 @@ export function GalaxyLayer() {
   )
   useEffect(() => () => material.dispose(), [material])
 
-  useFrame(() => {
-    const scale = session.world.player.state.scale
+  useFrame((state) => {
+    const world = session.world
+    const scale = world.player.state.scale
     if (!awake) {
       if (scale >= GALAXY_LAYER.WAKE_SCALE) {
-        // Фиксируем якорь ЗДЕСЬ, где корабль сейчас, — вокруг этой точки развернём галактику.
-        anchor.current.copy(session.world.player.state.pos)
+        // Фиксируем якорь ЗДЕСЬ и в истинных координатах — вокруг него развернём галактику.
+        anchorTrue.current.copy(world.player.state.pos).add(world.originOffset)
         setAwake(true)
       }
       return
@@ -165,10 +187,22 @@ export function GalaxyLayer() {
     const points = ref.current
     if (!points) return
 
-    // Слой стоит на якоре в мире (не следует за кораблём): летя, ты движешься сквозь него.
-    points.position.copy(anchor.current)
-    // Приближаем галактику собственным масштабом: св.годы → метры кадра, делённые на рост.
-    points.scale.setScalar(GALAXY_LAYER.LY_TO_M / scale)
+    // Слой стоит на якоре в истинном мире; локальную позицию берём вычитанием сдвига
+    // начала координат — тогда пересадки floating-origin его не двигают, а летя, ты
+    // проходишь СКВОЗЬ него (галактика не «прилипает» к носу и не уезжает с камерой).
+    points.position.copy(anchorTrue.current).sub(world.originOffset)
+
+    // Приближаем галактику собственным масштабом, но не мельче LOCK_SCALE: выше него слой
+    // замирает стабильным полем, иначе к десяткам млрд× он съёжится в облачко перед носом.
+    const effScale = Math.min(scale, GALAXY_LAYER.LOCK_SCALE)
+    const layerScale = GALAXY_LAYER.LY_TO_M / effScale
+    points.scale.setScalar(layerScale)
+    material.uniforms.uLayerScale!.value = layerScale
+
+    // Перевод радиуса шара (метры кадра) в пиксели: H_framebuffer / tan(fov/2). Обновляем
+    // каждый кадр — окно и поле зрения могут меняться (ресайз, зум камеры).
+    const cam = state.camera as PerspectiveCamera
+    material.uniforms.uProj!.value = state.gl.domElement.height / Math.tan((cam.fov * DEG2RAD) / 2)
 
     // Проявление: от FADE_IN_START к FADE_IN_END. Ниже — прозрачно (система ещё на виду).
     const t = clamp(

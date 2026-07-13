@@ -1,9 +1,9 @@
 import { useFrame } from '@react-three/fiber'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Mesh, Quaternion, Sprite, Vector3, type Texture } from 'three'
-import type { BodyEntity, PlanetType } from '@elite/sim'
+import { clamp, type BodyEntity, type PlanetType } from '@elite/sim'
 import { useSession } from '../../app/GameContext'
-import { ATMOSPHERE, ATMOSPHERE_COLOR, BODY_SEGMENTS, CITY_LIGHTS, CORONA, GIANT_RENDER_CAP, MOON_DECOR } from '../config'
+import { ATMOSPHERE, ATMOSPHERE_COLOR, BODY_FADE, BODY_SEGMENTS, CITY_LIGHTS, CORONA, GIANT_RENDER_CAP, MOON_DECOR } from '../config'
 import { atmosphereGeometry, planetGeometry, starGeometry, type PlanetLook } from '../geometry/bodies'
 import { coronaTexture } from '../geometry/corona'
 import { stationGeometry } from '../geometry/props'
@@ -79,11 +79,16 @@ const _toStar = new Vector3()
 /**
  * За потолком отвода камеры (`GIANT_RENDER_CAP`) мир ЗАМИРАЕТ: борт и камера дальше не
  * растут, поэтому реальные тела перестают отъезжать и повисли бы в кадре огромными. Домножаем
- * их размер на cap/рост — на звёздном масштабе планеты и светило съёживаются в точки, будто
- * уплыли вдаль, освобождая кадр под галактику. Реальная звезда становится одной из её точек.
+ * их размер на cap/рост — на звёздном масштабе планеты и светило съёживаются, будто уплыли
+ * вдаль. Но сжатая в пиксель звезда всё равно СВЕТИТ яркой точкой, поэтому к BODY_FADE.END
+ * размер догашивается в ноль (меш схлопывается в точку и пропадает) — система освобождает
+ * кадр под галактику ещё до её проявления.
  */
 function worldShrink(scale: number): number {
-  return scale > GIANT_RENDER_CAP ? GIANT_RENDER_CAP / scale : 1
+  if (scale <= GIANT_RENDER_CAP) return 1
+  const recede = GIANT_RENDER_CAP / scale
+  const fade = 1 - clamp((scale - BODY_FADE.START) / (BODY_FADE.END - BODY_FADE.START), 0, 1)
+  return recede * fade
 }
 
 function Planet({ body }: { body: BodyEntity }) {
