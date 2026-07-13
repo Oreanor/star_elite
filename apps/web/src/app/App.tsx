@@ -219,6 +219,22 @@ function Shell({ onRestart }: { onRestart: () => void }) {
   const flourishRef = useRef(false)
 
   /**
+   * Чёрная пелена перехода из титула в игру. После того как корабль улетел и небо
+   * секунду постояло пустым, экран гаснет в чёрное (0.4с), ПОД пеленой меняется вид
+   * (титул → станция), и затем светлеет уже на игровом кадре (0.4с). Всего 0.8с.
+   * Смену вида нельзя показывать «встык» — чёрный шов скрывает подмену дерева.
+   */
+  const [veil, setVeil] = useState(false)
+  const fadeIntoGame = useCallback((swap: () => void) => {
+    setVeil(true)
+    window.setTimeout(() => {
+      swap()
+      // Светлеем только со СЛЕДУЮЩЕГО кадра после подмены: под пеленой уже игра, не титул.
+      requestAnimationFrame(() => requestAnimationFrame(() => setVeil(false)))
+    }, VEIL_FADE_MS)
+  }, [])
+
+  /**
    * Персонаж уже создан. Новичку (сейва не было) сперва показываем экран создания —
    * до всякого старта сцены; вернувшемуся игроку создавать нечего. Экран — не пауза:
    * он живёт вместо титульного меню, пока личность не выбрана.
@@ -502,6 +518,7 @@ function Shell({ onRestart }: { onRestart: () => void }) {
             auto={launching}
             ready={sceneReady}
             flourishRef={flourishRef}
+            onFade={fadeIntoGame}
             onBoot={() => setBooted(true)}
             onDock={() => {
               setDocked(true)
@@ -516,6 +533,13 @@ function Shell({ onRestart }: { onRestart: () => void }) {
       {chatWith && <PlayerChat player={chatWith} onClose={closeChat} />}
       {/* Второй вызов пока занят — баннер поверх текущего окна. Заверши текущий, чтобы перейти. */}
       {waiting && <IncomingCall caller={waiting} />}
+
+      {/* Чёрная пелена перехода из титула в игру — ПОВЕРХ всего. Под ней меняется дерево
+          (титул → станция), сам шов не виден. Клики пропускает: живёт лишь 0.8с. */}
+      <div
+        className="pointer-events-none absolute inset-0 z-[60] bg-black"
+        style={{ opacity: veil ? 1 : 0, transition: `opacity ${VEIL_FADE_MS}ms ease-in-out` }}
+      />
     </div>
   )
 }
@@ -654,6 +678,8 @@ const LOCK_GIVE_UP_MS = 8000
 const TREMBLE_LEAD_MS = 90
 /** Сколько держим «вжух» до перехода в игру, мс: корабль успевает улететь, небо пустеет. */
 const LAUNCH_HOLD_MS = 1000
+/** Затемнение/просветление перехода в игру, мс каждое (полный цикл — 0.8с). */
+const VEIL_FADE_MS = 400
 
 /** Какой экран паузы раскрыт: главный, таблица клавиш или настройки. */
 type PauseScreen = 'main' | 'keys' | 'settings'
@@ -1032,6 +1058,7 @@ function Paused({
   auto,
   ready,
   flourishRef,
+  onFade,
   onBoot,
   onDock,
   onNewGame,
@@ -1043,6 +1070,8 @@ function Paused({
   ready: boolean
   /** Флаг «идёт флориш» — Paused взводит его, чтобы Shell не дал станции накрыть корабль. */
   flourishRef: React.MutableRefObject<boolean>
+  /** Переход в игру через затемнение: Shell гасит экран, под пеленой зовёт swap, светлеет. */
+  onFade?: (swap: () => void) => void
   onBoot: () => void
   /** Финал авто-старта: посадить новичка на станцию (вместо запроса захвата курсора). */
   onDock?: () => void
@@ -1144,11 +1173,17 @@ function Paused({
     setLaunched(true)
     // eslint-disable-next-line react-hooks/exhaustive-deps
     window.setTimeout(() => {
-      flourishRef.current = false // флориш кончился — станция снова вправе всплывать
-      // Куда переходим — по фактическому состоянию мира: пристыкован (новичок ИЛИ сейв у
-      // причала) → станция; в полёте → дожимаем захват. Так «продолжить» тоже улетает.
-      if (session.world.docked) onDock?.()
-      else poll(performance.now() + LOCK_GIVE_UP_MS)
+      // Смена вида идёт под чёрной пеленой (затемнение→просветление), чтобы шов подмены
+      // дерева не мелькнул. Небо к этому моменту уже секунду постояло пустым (LAUNCH_HOLD_MS).
+      const swap = () => {
+        flourishRef.current = false // флориш кончился — станция снова вправе всплывать
+        // Куда переходим — по фактическому состоянию мира: пристыкован (новичок ИЛИ сейв у
+        // причала) → станция; в полёте → дожимаем захват. Так «продолжить» тоже улетает.
+        if (session.world.docked) onDock?.()
+        else poll(performance.now() + LOCK_GIVE_UP_MS)
+      }
+      if (onFade) onFade(swap)
+      else swap()
     }, LAUNCH_HOLD_MS)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready, waiting, resuming])
