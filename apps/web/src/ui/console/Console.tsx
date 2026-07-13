@@ -140,17 +140,19 @@ export function Console({
             В полёте причала нет — тогда пишем хотя бы систему, чтобы шапка не пустовала.
             Кредиты и паспорт мира — не сюда: деньги у корабля, планета — в первой вкладке. */}
         <div className="flex items-start justify-between gap-6">
-          <h1 className="text-xl tracking-[0.3em]">
-            {docked && station
-              ? `${properName(station.name)}${planet ? ` (${properName(planet.name)})` : ''}`
-              : `${t('station.system')}: ${properName(world.systemName).toUpperCase()}`}
-          </h1>
+          <div>
+            <h1 className="text-xl tracking-[0.3em]">
+              {docked && station
+                ? `${properName(station.name)}${planet ? ` (${properName(planet.name)})` : ''}`
+                : `${t('station.system')}: ${properName(world.systemName).toUpperCase()}`}
+            </h1>
+            {/* Дата мира — под заголовком: снимок на момент захода. Время ведёт клиент (`ui/clock`). */}
+            <p className="mt-1 text-sm tracking-widest" style={{ color: DIM }}>
+              {currentGameDate()}
+            </p>
+          </div>
           {/* Кошелёк — единожды и на виду: слева от выхода, а не в каждой вкладке. */}
           <div className="flex items-center gap-4">
-            {/* Дата мира: снимок на момент захода на станцию. Время ведёт клиент (`ui/clock`). */}
-            <span className="whitespace-nowrap text-sm tracking-widest" style={{ color: DIM }}>
-              {currentGameDate()}
-            </span>
             <span className="whitespace-nowrap text-sm tracking-widest" style={{ color: DIM }}>
               {t('station.credits')} {world.credits.toLocaleString(currentLang() === 'ru' ? 'ru' : 'en-US')}
             </span>
