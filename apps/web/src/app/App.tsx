@@ -267,6 +267,31 @@ function Shell({ onRestart }: { onRestart: () => void }) {
     }
   }, [])
 
+  /**
+   * «Полёт под меню»: открыт оверлей (карта/консоль/диалог) в ПОЛЁТЕ и окно в фокусе —
+   * мир не замирает, корабль коастит (см. `session.menuFlying`). Свернул вкладку/ушёл в
+   * другое окно (`blur`/hidden) — флаг гаснет, и Simulation падает в честную паузу: корабль
+   * не должен лететь без присмотра. Док/гибель/титул сюда не попадают (нет `started`/есть
+   * `docked`/`over`). Пересчёт и на смену оверлея, и на фокус — оба меняют условие.
+   */
+  useEffect(() => {
+    const menuOpen = tab !== null || talking || dispatching || chatWith !== null
+    const apply = () => {
+      const focused = document.visibilityState === 'visible' && document.hasFocus()
+      session.menuFlying = started && !over && !docked && menuOpen && focused
+    }
+    apply()
+    window.addEventListener('focus', apply)
+    window.addEventListener('blur', apply)
+    document.addEventListener('visibilitychange', apply)
+    return () => {
+      window.removeEventListener('focus', apply)
+      window.removeEventListener('blur', apply)
+      document.removeEventListener('visibilitychange', apply)
+      session.menuFlying = false
+    }
+  }, [session, tab, talking, dispatching, chatWith, started, over, docked])
+
   // Симуляция сообщает о событиях один раз, из кадра. React узнаёт о них отсюда.
   useEffect(() => {
     session.onOver = () => setOver(true)

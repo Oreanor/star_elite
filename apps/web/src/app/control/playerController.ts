@@ -231,6 +231,32 @@ function pollAutofight(world: World, intent: PlayerIntent): boolean {
   return true
 }
 
+/**
+ * Коастинг под ОТКРЫТЫМ МЕНЮ (см. `session.menuFlying`): пилота нет за штурвалом, но мир
+ * летит. Рулёжку и рост обнуляем — корабль идёт прежним курсом по инерции; газ и крейсер
+ * НЕ трогаем, чтобы ход не сбрасывался при взгляде на карту. Оружие молчит (`wantsFire`
+ * = false, прочие `wants*` не заданы — значит «нет»). Тот же `Controller`, что у пилота и
+ * бота: физика не знает, что рулят не мышью, а «никем».
+ */
+export const coastController: Controller = {
+  update(ship: ShipEntity): void {
+    const c = ship.controls
+    c.pitch = 0
+    c.yaw = 0
+    c.roll = 0
+    c.rudder = 0
+    c.strafe = 0
+    c.strafeUp = 0
+    c.boost = 1
+    c.retro = 0
+    c.grow = 0
+    c.flightAssist = true
+  },
+  wantsFire(): boolean {
+    return false
+  },
+}
+
 export function createPlayerController(intent: PlayerIntent): Controller {
   /** Сколько каждая тап-клавиша зажата без отрыва, с. Обнуляется при отпускании. */
   const heldFor = new Map<string, number>()

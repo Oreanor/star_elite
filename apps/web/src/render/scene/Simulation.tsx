@@ -1,6 +1,7 @@
 import { useFrame, useThree } from '@react-three/fiber'
 import { autodockController, canEngageAutodock, cycleLock, serializePlayer, stepWorld } from '@elite/sim'
 import { syncControllers, useSession, type Session } from '../../app/GameContext'
+import { coastController } from '../../app/control/playerController'
 import { persistSave } from '../../app/save/saveStore'
 import { clearPresses, consumePress, input, releaseLock } from '../../platform/input/input'
 
@@ -66,14 +67,30 @@ export function Simulation() {
     if (world.docked) return
 
     /**
-     * Пауза — это отсутствие захвата курсора, и ничего больше. Escape отдаёт
-     * курсор браузеру, мир замирает; клик по канвасу возвращает и то, и другое.
-     * Отдельного флага не нужно: два источника правды о паузе разъедутся.
+     * Курсор отпущен. Два случая:
+     *  — ЧЕСТНАЯ ПАУЗА (титул, Escape, свёрнутая вкладка): мир замирает.
+     *  — ОТКРЫТО МЕНЮ при живом фокусе (`menuFlying`): мир ЛЕТИТ ДАЛЬШЕ — можно глянуть
+     *    карту «на ходу». Пилота за штурвалом нет: корабль коастит по инерции прежним
+     *    курсом, без боя, слежения и роста (см. `coastController`). Свернул окно —
+     *    `menuFlying` гаснет в App, и мы падаем в честную паузу выше.
      */
     if (!input.pointerLocked) {
       clearPresses()
+      if (!session.menuFlying) return
+
+      session.running = true
+      syncControllers(session)
+      // Штурвал — коастящему контроллеру (или автопилоту стыковки, если он вёл): мышь на
+      // меню, пилот не рулит. Ставим ПОСЛЕ syncControllers, чтобы пересборка не вернула ввод.
+      controllers.set(world.player.id, session.mode === 'autodock' ? autodockController : coastController)
+      stepWorld(world, dt, controllers)
+      camera.position.add(world.originShift)
       return
     }
+
+    // Курсор захвачен — штурвал у пилота. Мог остаться коастинг-контроллер от меню-полёта:
+    // возвращаем управление (автопилот стыковки сохраняем — его ставит L, а не этот кадр).
+    controllers.set(world.player.id, session.mode === 'autodock' ? autodockController : session.pilot)
 
     // Тумблеры читаются один раз за кадр, до шага симуляции.
     //
