@@ -12,6 +12,7 @@ import {
   freeCapacity,
   isEssential,
   minTechForClass,
+  moduleFault,
   moduleResaleValue,
   moduleStat,
   priceOf,
@@ -19,6 +20,8 @@ import {
   rearm,
   rearmCost,
   repair,
+  repairModule,
+  repairModuleQuote,
   repairQuote,
   sellModule,
   slotCategoryOf,
@@ -401,13 +404,22 @@ function SlotGrid({
                 >
                   <span
                     className="truncate text-xs leading-tight"
-                    style={{ color: s.module ? ACCENT : DIM }}
+                    style={{ color: s.module && moduleFault(s.module) > 0 ? UI.DANGER : s.module ? ACCENT : DIM }}
                   >
                     {s.module ? displayName(s.module) : t('ship.slotEmpty')}
                   </span>
                   {s.module && (
-                    <span className="shrink-0 text-[0.6rem]" style={{ color: DIM }}>
-                      {s.ammoTotal !== undefined ? formatStat('ammo', s.ammoTotal) : formatStat('mass', s.module.mass)}
+                    // Сломанную деталь метим красным процентом поломки вместо массы —
+                    // видно прямо на карточке, какую вести на ремонт, не открывая слот.
+                    <span
+                      className="shrink-0 text-[0.6rem]"
+                      style={{ color: moduleFault(s.module) > 0 ? UI.DANGER : DIM }}
+                    >
+                      {moduleFault(s.module) > 0
+                        ? `−${Math.round(moduleFault(s.module) * 100)}%`
+                        : s.ammoTotal !== undefined
+                          ? formatStat('ammo', s.ammoTotal)
+                          : formatStat('mass', s.module.mass)}
                     </span>
                   )}
                 </button>
@@ -577,6 +589,12 @@ function SlotModal({
               <p className="text-sm" style={{ color: DIM }}>
                 {statLabel(moduleStat(module).key)} {formatStat(moduleStat(module).key, moduleStat(module).value)}
               </p>
+              {/* Поломка: сколько силы потеряно. Красным — это не «износ на продажу», а урон в бою. */}
+              {moduleFault(module) > 0 && (
+                <p className="text-sm" style={{ color: UI.DANGER }}>
+                  {t('ship.broken', { pct: Math.round(moduleFault(module) * 100) })}
+                </p>
+              )}
             </>
           ) : (
             <p className="text-lg" style={{ color: DIM }}>
@@ -660,10 +678,14 @@ function ActionBar({
   const noRoom = module ? freeCapacity(player.hold) < module.mass : true
   const repair = module ? repairInfoFor(world, module) : { price: 0, can: false, refused: false }
   const maxed = module ? canUpgrade(world, player, module, true) === 'maxed' : true
-  // Деталь не изнашивается и не чинится: «ремонт» на бронеплите латает КОРПУС корабля
-  // (общий), на ракете — ДОЗАРЯДКА боезапаса. Зовём по делу, чтобы не читалось как
-  // «эта деталь с износом» — изношенного мы не продаём.
-  const repairLabel = module?.kind === 'missile' ? t('station.rearm') : t('station.repairHull')
+  // «Ремонт» значит РАЗНОЕ по виду: у бронеплиты латает КОРПУС корабля (общий), у
+  // пусковой — ДОЗАРЯДКА ракет, у прочего железа — чинит ПОЛОМКУ самой детали.
+  const repairLabel =
+    module?.kind === 'missile'
+      ? t('station.rearm')
+      : module?.kind === 'armour'
+        ? t('station.repairHull')
+        : t('station.repairModule')
 
   return (
     <>
@@ -784,7 +806,10 @@ interface RepairInfo {
   refused: boolean
 }
 
-/** Расклад ремонта у этого модуля: у брони — корпус (через мастерскую), у пусковой — ракеты. */
+/**
+ * Расклад ремонта у этого модуля: у брони — КОРПУС (через мастерскую), у пусковой —
+ * ДОЗАРЯДКА ракет, у прочего рабочего железа — ПОЛОМКА самой детали (если сломана).
+ */
 function repairInfoFor(world: World, module: ShipModule): RepairInfo {
   if (module.kind === 'armour') {
     const q = repairQuote(world, world.player)
@@ -796,14 +821,21 @@ function repairInfoFor(world: World, module: ShipModule): RepairInfo {
     const price = rearmCost(world.player)
     return { price, can: price > 0 && world.credits >= price, refused: false }
   }
-  return { price: 0, can: false, refused: false }
+  if (moduleFault(module) > 0) {
+    const q = repairModuleQuote(world, module)
+    if (q.chance <= 0) return { price: q.price, can: false, refused: true } // класс не по зубам
+    return { price: q.price, can: world.credits >= q.price, refused: false }
+  }
+  return { price: 0, can: false, refused: false } // исправна — чинить нечего
 }
 
 /** Собственно ремонт. Возвращает КЛЮЧ исхода для сообщения игроку (ремонт — бросок). */
 function runRepair(world: World, module: ShipModule): string {
   if (module.kind === 'armour') return repair(world, world.player) // 'repaired'|'botched'|'refused'|...
   if (module.kind === 'missile') return rearm(world, world.player) ? 'rearmed' : 'no-money'
-  return 'nothing'
+  // Поломка детали — тот же бросок мастеров, но свой текст (не «корпус», а «деталь»).
+  const o = repairModule(world, world.player, module)
+  return o === 'repaired' ? 'partRepaired' : o === 'botched' ? 'partBotched' : o === 'refused' ? 'partRefused' : o
 }
 
 /** Строки характеристик корабля. Читаются из `spec` при каждом рендере — после

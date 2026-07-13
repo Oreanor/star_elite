@@ -3,6 +3,7 @@ import { GUNNERY } from '../../config/weapons'
 import { SHIELD } from '../../config/station'
 import type { MissileEntity, ShipEntity, World } from '../world/entities'
 import { isEngageable } from './engage'
+import { breakFromHit } from './breakage'
 import { applyDamage } from './damage'
 import { spawnExplosion, spawnShieldFlash } from './effects'
 
@@ -48,7 +49,11 @@ function findTarget(world: World, id: number | null): ShipEntity | null {
 function detonate(world: World, m: MissileEntity, victim: ShipEntity | null): void {
   m.alive = false
   spawnExplosion(world, m.pos, m.vel, 2.2)
-  if (victim) applyDamage(victim, m.module.damage, world.time)
+  if (victim) {
+    const shieldUp = victim.shield > 0 // до удара — им решается поломка (см. breakFromHit)
+    applyDamage(victim, m.module.damage, world.time)
+    if (victim.faction === 'player') breakFromHit(victim, shieldUp, world.rng)
+  }
 }
 
 /**

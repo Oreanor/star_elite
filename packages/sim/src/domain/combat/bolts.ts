@@ -1,5 +1,6 @@
 import { Vector3 } from 'three'
 import type { BoltEntity, World } from '../world/entities'
+import { breakFromHit } from './breakage'
 import { applyDamage } from './damage'
 import { spawnExplosion, spawnShieldFlash, spawnTracer } from './effects'
 import { registerPlayerHit } from './grievance'
@@ -38,7 +39,13 @@ function resolveHit(world: World, bolt: BoltEntity, hitPos: Vector3, hit: Return
       // Ни урона, ни обиды: это не наш бот, а внешний игрок; его реакция — на его стороне.
       world.remoteHits.push({ targetId: hit.ship.id, damage: bolt.damage })
     } else {
+      // Щит ДО удара: по нему решается, изнашивается ли сам щит (цел) или ломается
+      // деталь (пробит). Считаем до applyDamage — оно этот щит и просадит.
+      const shieldUp = hit.ship.shield > 0
       applyDamage(hit.ship, bolt.damage, world.time)
+      // Поломка снаряжения — только у игрока (боты не чинятся). Враг ли стрелял, не
+      // важно: попали по игроку — железо под ударом. Кинематический борт (чужой) — мимо.
+      if (hit.ship.faction === 'player') breakFromHit(hit.ship, shieldUp, world.rng)
       // Попал болт игрока по не-врагу — повод к обиде, а не к мгновенной войне: копим
       // претензию, во враги переводит уже сам `registerPlayerHit` на пороге. `hostile`
       // ложно ровно у выстрелов игрока — по нему и узнаём стрелка, стрелок мог погибнуть.

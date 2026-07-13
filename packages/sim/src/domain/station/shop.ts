@@ -141,6 +141,69 @@ export function repair(world: World, ship: ShipEntity): RepairOutcome {
   return 'botched'
 }
 
+// ─── Ремонт ПОЛОМКИ детали ─────────────────────────────────────────────────────
+//
+// Отдельно от корпуса: ломается КОНКРЕТНАЯ деталь (лазер, щит, двигатель), и чинят её
+// же — тем же мастером и тем же броском, что и корпус, но по классу самой детали.
+
+/** Поломка детали, доля: 0 — исправна, 1 — молчит. */
+export function moduleFault(module: ShipModule): number {
+  return module.fault ?? 0
+}
+
+/** Базовая цена починки поломки, без скидки тира: доля цены детали × доля поломки. */
+export function moduleRepairCost(module: ShipModule): number {
+  return Math.ceil(module.cost * moduleFault(module) * SHOP.MODULE_REPAIR_FRACTION)
+}
+
+/** Расклад ремонта ДЕТАЛИ: кто чинит, с каким шансом и почём при успехе — по классу детали. */
+export function repairModuleQuote(world: World, module: ShipModule): RepairQuote {
+  const settlement = localSettlement(world)
+  const master = masterClass(settlement)
+  const chance = repairChance(master, module.class, masterDev(settlement, master))
+  const price = Math.ceil(moduleRepairCost(module) * SHOP.REPAIR_TIER_PRICE[master])
+  return { master, itemClass: module.class, chance, price }
+}
+
+/**
+ * Починить ПОЛОМКУ детали броском (см. `repairModuleQuote`). Успех — деталь в норму,
+ * деньги списаны. Провал — денег НЕ берут, но криворукий мастер доломал: поломка
+ * растёт «как за выстрел», следующий ремонт дороже. Сид от системы, класса и текущей
+ * поломки — детерминирован и МЕНЯЕТСЯ от попытки к попытке (провал двигает поломку).
+ */
+export function repairModule(world: World, ship: ShipEntity, module: ShipModule): RepairOutcome {
+  const fault = moduleFault(module)
+  if (fault <= 0) return 'nothing'
+  const quote = repairModuleQuote(world, module)
+  if (quote.chance <= 0) return 'refused'
+  if (world.credits < quote.price) return 'no-money'
+
+  const rng = makeRng(
+    world.galaxySeed ^
+      Math.imul(world.systemIndex + 1, 0x9e3779b1) ^
+      Math.imul(Math.round(fault * 100), 0x85ebca6b) ^
+      Math.imul(hashModuleId(module.id), 0x27d4eb2f),
+  )
+  if (rng() < quote.chance) {
+    world.credits -= quote.price
+    replaceInstalled(ship, module, withFault(module, -fault)) // в ноль: деталь как новая
+    refreshSpec(ship)
+    return 'repaired'
+  }
+  // Провал: доломали. Характеристика просела ещё — пересобираем spec.
+  replaceInstalled(ship, module, withFault(module, SHOP.MODULE_REPAIR_BOTCH_FAULT))
+  refreshSpec(ship)
+  return 'botched'
+}
+
+/** Подменить установленный модуль его новым экземпляром НА ТОМ ЖЕ месте (клон-правка). */
+function replaceInstalled(ship: ShipEntity, module: ShipModule, next: ShipModule): void {
+  const at = locateInstalled(ship, module)
+  if (!at) return
+  if ('weapon' in at) ship.loadout.weapons[at.weapon] = next as WeaponModule
+  else ship.loadout.internals[at.internal] = next
+}
+
 export function priceOf(module: ShipModule): number {
   return Math.ceil(module.cost * SHOP.MARKUP)
 }
@@ -570,11 +633,36 @@ function scaleToBase(m: ShipModule, base: ShipModule, k: number): void {
   if (isCloak(m) && isCloak(base)) { m.drain = base.drain / k }
 }
 
+/**
+ * Общий множитель характеристики экземпляра: прокачка усиливает, поломка ослабляет.
+ * base × (1+upgrade) × (1−fault). Печём ОБА через один `scaleToBase` от стока —
+ * иначе прокачка сломанной детали или поломка прокачанной считались бы друг от друга
+ * с накоплением ошибок. Поломка ракеты/контейнера не бывает (fault=0) — множитель их не трогает.
+ */
+function combinedScale(m: ShipModule): number {
+  return (1 + (m.upgrade ?? 0)) * (1 - (m.fault ?? 0))
+}
+
 /** Собственный прокачанный экземпляр модуля. Конфиг не трогаем — он общий на всех. */
 function withUpgrade(module: ShipModule, level: number): ShipModule {
   const base = findModule(module.id) ?? module
   const clone: ShipModule = { ...module, upgrade: level }
-  scaleToBase(clone, base, 1 + level)
+  // От стока с УЧЁТОМ уже накопленной поломки: прокачка чинёного не «лечит» его.
+  scaleToBase(clone, base, combinedScale(clone))
+  return clone
+}
+
+/**
+ * Собственный экземпляр модуля с изменённой ПОЛОМКОЙ (в бою — от попадания, у мастера —
+ * при провале/успехе ремонта). Возвращает КЛОН, а не мутирует вход: установленные модули
+ * ссылаются прямо на каталог (и `[LASER, LASER]` — один объект дважды), поэтому правка на
+ * месте испортила бы сток всем кораблям сразу. Тот же приём, что у `withUpgrade`. Ракету и
+ * контейнер сюда не зовут: им ломаться нечем (расходник / ёмкость от поломки не тает).
+ */
+export function withFault(module: ShipModule, delta: number): ShipModule {
+  const base = findModule(module.id) ?? module
+  const clone: ShipModule = { ...module, fault: clamp((module.fault ?? 0) + delta, 0, 1) }
+  scaleToBase(clone, base, combinedScale(clone))
   return clone
 }
 
@@ -674,6 +762,8 @@ export function unfitModule(ship: ShipEntity, module: ShipModule): StripError | 
  */
 export function moduleResaleValue(ship: ShipEntity, module: ShipModule): number {
   let value = module.cost * SHOP.RESALE * (1 + upgradeLevel(module))
+  // Поломка сбивает цену: сломанное железо продают дешевле целого, пропорционально.
+  value *= 1 - moduleFault(module)
   if (isArmour(module) && ship.spec.hull.hull > 0) {
     value *= 1 - hullDamage(ship) / ship.spec.hull.hull
   }
