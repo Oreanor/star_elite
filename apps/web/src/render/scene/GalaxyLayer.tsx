@@ -7,6 +7,7 @@ import {
   NormalBlending,
   Points,
   ShaderMaterial,
+  Vector3,
 } from 'three'
 import { clamp, generateGalaxy } from '@elite/sim'
 import { useSession } from '../../app/GameContext'
@@ -87,6 +88,10 @@ export function GalaxyLayer() {
 
   // Слой спит, пока борт не дорос: 2500 систем не генерим зря. Просыпается один раз.
   const [awake, setAwake] = useState(false)
+  // Якорь галактики — позиция корабля в МИГ пробуждения, зафиксированная в мире. Слой
+  // расцветает вокруг этой точки (а не вокруг далёкой звезды: до неё ~а.е., комок звёзд
+  // туда бы не попал в сферу). Точка неподвижна — сквозь галактику можно лететь к соседу.
+  const anchor = useRef(new Vector3())
 
   const geometry = useMemo(() => {
     if (!awake) return null
@@ -100,8 +105,8 @@ export function GalaxyLayer() {
 
     for (let i = 0; i < n; i++) {
       const s = galaxy[i]!
-      // Локальные координаты относительно СВОЕЙ звезды — она в начале, точка ляжет на
-      // реальное светило. Диск кладём горизонтально: ly(x,y) → мир(x,z), толщина по Y.
+      // Локальные координаты относительно СВОЕЙ звезды — она в начале (ляжет на якорь),
+      // соседи расходятся от неё. Диск кладём горизонтально: ly(x,y) → мир(x,z), толщина по Y.
       positions[i * 3] = s.x - origin.x
       positions[i * 3 + 1] = s.z - origin.z
       positions[i * 3 + 2] = s.y - origin.y
@@ -150,12 +155,18 @@ export function GalaxyLayer() {
   useFrame(() => {
     const scale = session.world.player.state.scale
     if (!awake) {
-      if (scale >= GALAXY_LAYER.WAKE_SCALE) setAwake(true)
+      if (scale >= GALAXY_LAYER.WAKE_SCALE) {
+        // Фиксируем якорь ЗДЕСЬ, где корабль сейчас, — вокруг этой точки развернём галактику.
+        anchor.current.copy(session.world.player.state.pos)
+        setAwake(true)
+      }
       return
     }
     const points = ref.current
     if (!points) return
 
+    // Слой стоит на якоре в мире (не следует за кораблём): летя, ты движешься сквозь него.
+    points.position.copy(anchor.current)
     // Приближаем галактику собственным масштабом: св.годы → метры кадра, делённые на рост.
     points.scale.setScalar(GALAXY_LAYER.LY_TO_M / scale)
 
