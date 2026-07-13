@@ -12,7 +12,8 @@ import { SRGBColorSpace, TextureLoader, type Texture } from 'three'
  * Файла нет — остаёмся на покраске по вершинам. Это не аварийный режим:
  * гранёный крашеный камень выглядит прилично и грузится мгновенно.
  *
- * Файлы: `public/asteroids/<номер формы>.jpg`.
+ * Файлы: `public/asteroids/<номер формы>.webp` (1024×512, из исходников 1774×887 —
+ * прежние 512×256 мутнели вблизи).
  */
 
 const cache = new Map<number, Texture>()
@@ -30,7 +31,7 @@ export function loadRockTexture(shape: number, onLoaded: (texture: Texture) => v
 
   let cancelled = false
   new TextureLoader().load(
-    `/asteroids/${shape}.jpg`,
+    `/asteroids/${shape}.webp`,
     (texture) => {
       texture.colorSpace = SRGBColorSpace
       cache.set(shape, texture)
