@@ -5,6 +5,7 @@ import {
   BufferAttribute,
   BufferGeometry,
   Color,
+  Group,
   LineBasicMaterial,
   LineDashedMaterial,
   LineSegments,
@@ -301,9 +302,10 @@ const jumpRingGeometry = (() => {
   const points = new Float32Array(JUMP_RING_SEGMENTS * 3)
   for (let i = 0; i < JUMP_RING_SEGMENTS; i++) {
     const angle = (i / JUMP_RING_SEGMENTS) * Math.PI * 2
+    // Окружность в ЛОКАЛЬНОЙ плоскости XY (нормаль +Z): билборд ниже развернёт её к камере.
     points[i * 3] = Math.cos(angle)
-    points[i * 3 + 1] = 0 // окружность лежит в плоскости диска
-    points[i * 3 + 2] = Math.sin(angle)
+    points[i * 3 + 1] = Math.sin(angle)
+    points[i * 3 + 2] = 0
   }
   const g = new BufferGeometry()
   g.setAttribute('position', new BufferAttribute(points, 3))
@@ -314,8 +316,18 @@ const jumpRingGeometry = (() => {
  * Две окружности достижимости: сплошная — текущий ЗАРЯД (докуда долетишь сейчас),
  * тусклая снаружи — предел МОДЕЛИ (докуда с полным баком). Разрыв между ними и
  * есть израсходованное топливо; заправишься — сплошная дорастёт до тусклой.
+ *
+ * БИЛБОРД: кольцо всегда развёрнуто к камере (кватернион группы = кватернион камеры),
+ * поэтому на экране это ровный КРУГ при любом наклоне/повороте карты, а не лежачий
+ * эллипс, что вращается с диском. Так радиус достижимости читается как СФЕРА вокруг
+ * звезды — «докуда дотянешься», — а не как плоское кольцо в плоскости галактики.
  */
 function JumpSphere({ at, charge, max }: { at: Vector3; charge: number; max: number }) {
+  const ref = useRef<Group>(null)
+  useFrame((state) => {
+    if (ref.current) ref.current.quaternion.copy(state.camera.quaternion)
+  })
+
   const chargeMat = useMemo(
     () => new LineBasicMaterial({ color: UI.PRIMARY, transparent: true, opacity: 0.6, toneMapped: false }),
     [],
@@ -327,14 +339,14 @@ function JumpSphere({ at, charge, max }: { at: Vector3; charge: number; max: num
 
   if (max <= 0) return null
   return (
-    <>
+    <group ref={ref} position={at}>
       {charge < max - 1e-6 && (
-        <lineLoop geometry={jumpRingGeometry} material={maxMat} position={at} scale={max} raycast={() => null} />
+        <lineLoop geometry={jumpRingGeometry} material={maxMat} scale={max} raycast={() => null} />
       )}
       {charge > 0 && (
-        <lineLoop geometry={jumpRingGeometry} material={chargeMat} position={at} scale={charge} raycast={() => null} />
+        <lineLoop geometry={jumpRingGeometry} material={chargeMat} scale={charge} raycast={() => null} />
       )}
-    </>
+    </group>
   )
 }
 
