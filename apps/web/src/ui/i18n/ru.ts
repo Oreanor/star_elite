@@ -411,7 +411,7 @@ export const RU = {
   'ship.hullUpgrade': 'УКРЕПИТЬ · {price}',
   'ship.hullUpgradeHint': '+10% прочность · трюм · доп-энергия',
   'hud.boostPlate': 'ФОРСАЖ',
-  'hud.scalePlate': 'МАСШТАБИРОВАНИЕ',
+  'hud.scalePlate': 'РЕКАЛИБРОВКА',
   'hud.growPlate': 'Всё чудесатее и чудесатее!',
   'hud.shrinkPlate': 'Складываюсь, как подзорная труба!',
   'ship.selectSlot': 'Выбери модуль слева — почини, замени или улучши его.',
