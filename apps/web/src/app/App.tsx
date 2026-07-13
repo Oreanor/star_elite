@@ -994,11 +994,11 @@ function TitleShip({ trembling, launched }: { trembling: boolean; launched: bool
             width: '16vw',
             height: '12vw', // 4:3 — лёгкий эллипс
             borderRadius: '50%',
-            // Обод — яркое кольцо у самого КРАЯ (пик на 94%), затухает СИММЕТРИЧНО в обе
-            // стороны: к центру (87%) и к краю (100%). Нутро прозрачно, не пузырь. Почти
-            // белое для видимости. farthest-side сажает градиент ровно на кромку эллипса.
+            // Обод — яркое кольцо, пик сдвинут ПОБЛИЖЕ к центру (80%) и затухает СИММЕТРИЧНО
+            // на ±18% в обе стороны: к центру (62%) и к краю (98%). Нутро прозрачно, не пузырь.
+            // Почти белое для видимости. farthest-side сажает градиент ровно на кромку эллипса.
             background:
-              'radial-gradient(ellipse farthest-side at 50% 50%, transparent 87%, rgba(232,246,255,1) 94%, transparent 100%)',
+              'radial-gradient(ellipse farthest-side at 50% 50%, transparent 62%, rgba(232,246,255,1) 80%, transparent 98%)',
             transform: 'translate(-50%, -50%) scale(0.12)',
             opacity: 0,
             animation: 'title-ship-clap 0.55s ease-out both', // резкий «пуф» на срыве, потом растворяется
