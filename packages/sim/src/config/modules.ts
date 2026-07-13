@@ -882,6 +882,12 @@ export const MISSILE_SLEDGE: MissileModule = {
 }
 
 // ─── Трюм ────────────────────────────────────────────────────────────────────
+//
+// Контейнеры БЕСКЛАССОВЫ: любой грузовой слот принимает любой отсек. Различаются
+// они лишь ВМЕСТИМОСТЬЮ, ВЕСОМ и ценой — а не «размером под слот». Оттого крупная
+// стойка не вылетает при пересадке на корпус с мелким грузовым слотом, а честный
+// компромисс задаёт масса: набитый тяжёлый трюм режет манёвр, как ему и положено.
+// (Поле `class` держим на 1, чтобы отсек влезал в слот любого класса.)
 
 export const CARGO_SMALL: CargoModule = {
   id: 'cargo_1',
@@ -898,7 +904,7 @@ export const CARGO_MEDIUM: CargoModule = {
   id: 'cargo_2',
   name: 'Грузовой контейнер 2',
   kind: 'cargo',
-  class: 2,
+  class: 1,
   mass: 0.8,
   cost: 6500,
   salvageChance: 0.6,
@@ -909,7 +915,7 @@ export const CARGO_LARGE: CargoModule = {
   id: 'cargo_3',
   name: 'Грузовой контейнер 3',
   kind: 'cargo',
-  class: 3,
+  class: 1,
   mass: 1.5,
   cost: 17000,
   salvageChance: 0.5,
@@ -920,7 +926,7 @@ export const CARGO_LARGE: CargoModule = {
 
 // «Композит» — лёгкая дорогая линия трюма. Вместимости чуть больше стандартной, а
 // массы меньше: отсек для боевого торговца, которому нельзя терять манёвр под грузом.
-// Платят кредитами. Композитный класс-3 держит полсотни тонн вдвое легче стокового.
+// Платят кредитами. Композитный 50-тонник держит столько же вдвое легче стокового.
 export const CARGO_COMPOSITE_1: CargoModule = {
   id: 'cargo_1a',
   name: 'Грузовой отсек 1A «Композит»',
@@ -936,7 +942,7 @@ export const CARGO_COMPOSITE_2: CargoModule = {
   id: 'cargo_2a',
   name: 'Грузовой отсек 2A «Композит»',
   kind: 'cargo',
-  class: 2,
+  class: 1,
   mass: 0.5,
   cost: 14000,
   salvageChance: 0.5,
@@ -947,8 +953,8 @@ export const CARGO_COMPOSITE_3: CargoModule = {
   id: 'cargo_3a',
   name: 'Грузовой отсек 3A «Композит»',
   kind: 'cargo',
-  class: 3,
-  mass: 1.0, // против полутора тонн стокового класса-3
+  class: 1,
+  mass: 1.0, // против полутора тонн стокового 50-тонника
   cost: 42000,
   salvageChance: 0.4,
   capacity: 52,
@@ -960,8 +966,8 @@ export const CARGO_BULK_2: CargoModule = {
   id: 'cargo_2h',
   name: 'Грузовой трюм 2E «Балкер»',
   kind: 'cargo',
-  class: 2,
-  mass: 1.4, // тяжелее стандартного класса-2 почти вдвое
+  class: 1,
+  mass: 1.4, // тяжелее стандартного 9-тонника почти вдвое
   cost: 4500, // и дешевле его
   salvageChance: 0.6,
   capacity: 12,
@@ -971,7 +977,7 @@ export const CARGO_BULK_3: CargoModule = {
   id: 'cargo_3h',
   name: 'Грузовой трюм 3E «Балкер»',
   kind: 'cargo',
-  class: 3,
+  class: 1,
   mass: 2.4, // против полутора тонн стокового — вся разница в потерянном манёвре
   cost: 12000,
   salvageChance: 0.5,
