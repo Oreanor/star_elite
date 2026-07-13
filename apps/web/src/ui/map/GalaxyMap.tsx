@@ -937,8 +937,9 @@ export function GalaxyMap({ onClose, embedded = false }: { onClose: () => void; 
           {t('map.showContacts')}
         </label>
 
-        {/* Выбранная система — карточка прямо в колонке (раньше плашка у курсора). */}
-        {selected != null && systems[selected] ? (
+        {/* Выбранная система — карточка прямо в колонке (раньше плашка у курсора).
+            Ничего не выбрано — столбец пуст, без подсказок. */}
+        {selected != null && systems[selected] && (
           <SystemPopup
             key={selected}
             inline
@@ -958,8 +959,6 @@ export function GalaxyMap({ onClose, embedded = false }: { onClose: () => void; 
               bump()
             }}
           />
-        ) : (
-          <p className="mt-2 opacity-60" style={{ color: UI.DIM }}>{t('map.pickSystem')}</p>
         )}
       </div>
     </>
