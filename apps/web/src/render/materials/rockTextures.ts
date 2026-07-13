@@ -34,6 +34,7 @@ export function loadRockTexture(shape: number, onLoaded: (texture: Texture) => v
     `/asteroids/${shape}.webp`,
     (texture) => {
       texture.colorSpace = SRGBColorSpace
+      texture.anisotropy = 16 // камень виден вскользь у лимба — иначе мыло; three зажмёт до макс
       cache.set(shape, texture)
       if (!cancelled) onLoaded(texture)
     },

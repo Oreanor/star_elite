@@ -57,6 +57,9 @@ export function loadPlanetTexture(
     `/planets/${key}.jpg`,
     (texture) => {
       texture.colorSpace = SRGBColorSpace
+      // Планета почти всегда видна ВСКОЛЬЗЬ (шар), и у лимба текстура сжимается по
+      // одной оси — без анизотропии там мыло. 16 — потолок; three сам зажмёт до макс.
+      texture.anisotropy = 16
       cache.set(key, texture)
       if (!cancelled) onLoaded(texture)
     },

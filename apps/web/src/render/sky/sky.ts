@@ -24,6 +24,7 @@ function skyUrl(galaxyIndex: number): string {
 function configure(texture: Texture): Texture {
   texture.mapping = EquirectangularReflectionMapping
   texture.colorSpace = SRGBColorSpace
+  texture.anisotropy = 16 // фон уходит к горизонту вскользь — без анизотропии полоса мылит
   return texture
 }
 

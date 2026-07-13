@@ -41,6 +41,7 @@ function configure(texture: Texture): Texture {
   // этого «кипящее» смещение UV за край дало бы шов. Вертикаль (полюса) — зажата.
   texture.wrapS = RepeatWrapping
   texture.colorSpace = SRGBColorSpace
+  texture.anisotropy = 16 // поверхность видна вскользь у лимба звезды; three зажмёт до макс
   return texture
 }
 
