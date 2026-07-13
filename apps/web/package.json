@@ -2,6 +2,7 @@
   "name": "@elite/web",
   "private": true,
   "version": "0.0.1",
+  "versionAnchor": 261,
   "type": "module",
   "scripts": {
     "dev": "vite",
