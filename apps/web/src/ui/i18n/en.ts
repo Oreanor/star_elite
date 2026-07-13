@@ -386,7 +386,7 @@ export const EN: Record<keyof typeof RU, string> = {
   'ship.hullUpgrade': 'REINFORCE · {price}',
   'ship.hullUpgradeHint': '+10% hull · cargo · aux',
   'hud.boostPlate': 'AFTERBURNER',
-  'hud.scalePlate': 'RECALIBRATION',
+  'hud.scalePlate': 'SPATIAL RECALIBRATION',
   'hud.growPlate': 'Curiouser and curiouser!',
   'hud.shrinkPlate': 'Shutting up like a telescope!',
   'ship.hulls.hint': 'pick a hull on the right → “TAKE”',
