@@ -16,6 +16,7 @@ export {
   findArmour,
   findCargoRacks,
   findCloak,
+  findEcm,
   findEngine,
   findHyperdrive,
   findMielophone,

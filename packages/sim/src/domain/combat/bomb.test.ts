@@ -6,14 +6,18 @@ import { stepWorld } from '../sim'
 import { createWorld, STARTER_SYSTEM, type World } from '../world'
 import type { MissileEntity, ShipEntity } from '../world/entities'
 import { aiController } from '../ai'
-import { bombReady, fireBomb, regenBomb } from './bomb'
+import { bombReady, fireBomb } from './bomb'
+import { regenAux } from './ecm'
 import { applyDamage } from './damage'
 
 /**
- * Энергетическая бомба. Она одна, копится от реактора поверх целого щита, и
- * подрывается любым накопленным запасом. Купить её негде — значит каждое её
- * свойство обязано быть правилом, а не случайностью реализации.
+ * Энергетическая бомба. Питается от батареи ДОП-ОТСЕКА (аукс) — общего запаса всех
+ * аукс-устройств. Подрывается любым накопленным запасом: мощность равна доле заряда.
+ * Купить её негде — значит каждое её свойство обязано быть правилом, а не случайностью.
  */
+
+/** Полная ёмкость батареи доп-отсека этого борта. */
+const cap = (s: ShipEntity): number => s.spec.power.auxCapacity
 
 /** Мир с одним пиратом и одним мирным. Оба в двухстах метрах, ИИ выключен. */
 function withCrowd(): { world: World; pirate: ShipEntity; neutral: ShipEntity } {
@@ -78,12 +82,12 @@ describe('энергетическая бомба', () => {
     expect(world.player.hull).toBe(world.player.spec.hull.hull)
   })
 
-  it('бомба одна: пустая не подрывается и волны не рождает', () => {
+  it('бомба выгребает доп-отсек досуха: пустая не подрывается и волны не рождает', () => {
     const { world } = withCrowd()
-    expect(world.player.bombCharge).toBe(1)
+    expect(bombReady(world.player)).toBe(true) // старт с полной батареи доп-отсека
 
     expect(fireBomb(world, world.player)).toBe(true)
-    expect(world.player.bombCharge).toBe(0)
+    expect(world.player.auxEnergy).toBe(0)
 
     expect(fireBomb(world, world.player)).toBe(false)
     // Отказ не должен рождать волну: она обещает поражение, которого не будет.
@@ -111,7 +115,7 @@ describe('энергетическая бомба', () => {
   it('половинный заряд не убивает целого, но добивает раненого', () => {
     const tough = withCrowd()
     const fullShield = tough.pirate.spec.hull.shield
-    tough.world.player.bombCharge = 0.5
+    tough.world.player.auxEnergy = cap(tough.world.player) * 0.5
     fireBomb(tough.world, tough.world.player)
     expect(tough.pirate.alive).toBe(true)
     // Половина полного пула — тяжёлый, но не смертельный удар: щит надкушен, целого не убить.
@@ -120,7 +124,7 @@ describe('энергетическая бомба', () => {
     const wounded = withCrowd()
     wounded.pirate.shield = 0
     wounded.pirate.hull = wounded.pirate.spec.hull.hull * 0.2
-    wounded.world.player.bombCharge = 0.5
+    wounded.world.player.auxEnergy = cap(wounded.world.player) * 0.5
     fireBomb(wounded.world, wounded.world.player)
     expect(wounded.pirate.alive).toBe(false)
   })
@@ -138,7 +142,7 @@ describe('энергетическая бомба', () => {
     pirate.shield = 0
     pirate.hull = pirate.spec.hull.hull
 
-    world.player.bombCharge = 0.5
+    world.player.auxEnergy = cap(world.player) * 0.5
     fireBomb(world, world.player)
 
     // Урон 0.5 × полный запас, а не 0.5 × текущий корпус.
@@ -146,67 +150,56 @@ describe('энергетическая бомба', () => {
   })
 
   /**
-   * Реактор кормит щит первым. Пока щит не полон, в накопитель не уходит НИЧЕГО:
-   * получить второй импульс, не выходя из-под огня, невозможно — в этом вся её цена.
+   * Батарея доп-отсека — свой пул: копится сама, БЕЗ оглядки на щит (в отличие от
+   * прежнего накопителя бомбы). Заряд для бомбы теперь общий с ПРО и маскировкой.
    */
-  it('не заряжается, пока щит не полон', () => {
+  it('доп-отсек копится сам и упирается в полную ёмкость', () => {
     const { world } = withCrowd()
     const player = world.player
-    player.bombCharge = 0
+    player.auxEnergy = 0
+
+    // Щит наполовину — на восполнение доп-отсека это больше не влияет.
     player.shield = player.spec.hull.shield * 0.5
+    regenAux(player, 1)
+    expect(player.auxEnergy).toBeGreaterThan(0)
 
-    regenBomb(player, 10)
-    expect(player.bombCharge).toBe(0)
-
-    player.shield = player.spec.hull.shield
-    regenBomb(player, 10)
-    expect(player.bombCharge).toBeCloseTo(BOMB.RECHARGE * 10)
-  })
-
-  it('копится до единицы и выше не растёт', () => {
-    const { world } = withCrowd()
-    const player = world.player
-    player.bombCharge = 0
-    player.shield = player.spec.hull.shield
-
-    regenBomb(player, 1e6)
-    expect(player.bombCharge).toBe(1)
+    regenAux(player, 1e6)
+    expect(player.auxEnergy).toBe(cap(player))
     expect(bombReady(player)).toBe(true)
   })
 
   /**
-   * Набранный заряд неприкосновенен: бомбу нельзя ни разбить, как щит, ни испортить.
-   * Попадание сбивает НАКОПЛЕНИЕ, но не отнимает НАКОПЛЕННОЕ. Единственный, кто
-   * её тратит, — сам пилот.
+   * Набранный заряд неприкосновенен попаданием: доп-отсек — не щит, его не разбить
+   * ударом. Тратит его только пилот (бомбой/ПРО/маскировкой), а не входящий урон.
    */
-  it('попадание не разряжает уже заряженную бомбу', () => {
+  it('попадание не разряжает батарею доп-отсека', () => {
     const { world } = withCrowd()
     const player = world.player
-    expect(player.bombCharge).toBe(1)
+    const full = cap(player)
+    expect(player.auxEnergy).toBe(full)
 
     applyDamage(player, player.spec.hull.shield + 20, world.time)
     expect(player.shield).toBe(0)
-    expect(player.bombCharge).toBe(1)
+    expect(player.auxEnergy).toBe(full)
 
-    // И даже разряженной вреда не будет: заряд убывает ровно в одном месте.
-    player.bombCharge = 0.6
+    player.auxEnergy = full * 0.6
     applyDamage(player, 30, world.time)
-    expect(player.bombCharge).toBe(0.6)
+    expect(player.auxEnergy).toBe(full * 0.6)
   })
 
   /**
-   * Бомбы у бота нет — но НЕ потому, что физика ему отказывает. Игрок и бот для
-   * симуляции неразличимы: `fireBomb` сработал бы и у пирата. Разница в одном —
-   * `wantsBomb` есть только у контроллера игрока, а `aiController` про бомбу
-   * не знает вовсе. Привилегия живёт в решении, а не в законах мира.
+   * Бомба у бота не срабатывает не потому, что физика ему отказывает: игрок и бот
+   * неразличимы, и `fireBomb` сработал бы у пирата, будь у того бомба-модуль и решение.
+   * Разница в одном — `wantsBomb` есть только у контроллера игрока, а `aiController`
+   * про бомбу не знает вовсе. Привилегия живёт в решении, а не в законах мира.
    */
-  it('пират стартует без заряда, и решение о бомбе принимает не физика', () => {
+  it('решение о бомбе принимает не физика: у бота нет намерения её жать', () => {
     const { world, pirate } = withCrowd()
-    expect(pirate.bombCharge).toBe(0)
+    // Доп-отсек у пирата полон — он питает его ПРО; но бомбу за него жать некому.
+    expect(pirate.auxEnergy).toBe(cap(pirate))
     expect(aiController.wantsBomb).toBeUndefined()
 
-    // Дай пирату заряд руками — правило подрыва отработает и для него.
-    pirate.bombCharge = 1
+    // Позови подрыв руками — правило отработает и для пирата (физика неотличима).
     expect(fireBomb(world, pirate)).toBe(true)
     expect(world.player.alive).toBe(true) // игрок ему не «hostile»: он сам hostile
   })
@@ -243,7 +236,6 @@ describe('энергетическая бомба', () => {
     expect(world.credits).toBeGreaterThan(creditsBefore)
   })
 
-
   /**
    * Поражение МГНОВЕННО: урон наносится в том же кадре, в котором нажата клавиша.
    * Фронт его не догоняет и догонять не обязан — он рисованный.
@@ -259,18 +251,15 @@ describe('энергетическая бомба', () => {
 
   /**
    * У вспышки нет ни места в мире, ни радиуса, ни скорости фронта. Это зрелище
-   * на пару секунд, а не тело: пересекать ей нечего, урон уже нанесён. Стоит
-   * завести здесь `pos` — и его придётся сдвигать вместе с плавающим началом
-   * координат, гасить при прыжке и синхронизировать по сети. Всё ради круга,
-   * который рисуется в середине кадра.
+   * на пару секунд, а не тело: пересекать ей нечего, урон уже нанесён.
    */
   it('вспышка помнит только мощность и время рождения', () => {
     const { world } = withCrowd()
-    world.player.bombCharge = 0.4
+    world.player.auxEnergy = cap(world.player) * 0.4
     fireBomb(world, world.player)
 
     const wave = world.shockwaves[0]!
-    expect(wave.power).toBe(0.4)
+    expect(wave.power).toBeCloseTo(0.4, 5)
     expect(wave.born).toBe(world.time)
     expect(Object.keys(wave).sort()).toEqual(['born', 'power'])
   })

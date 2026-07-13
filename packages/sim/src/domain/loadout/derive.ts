@@ -1,3 +1,4 @@
+import { AUX_POWER } from '../../config/weapons'
 import { clamp } from '../../core/math'
 import type { ShipTuning } from '../flight/types'
 import type { Hardpoint } from './chassis'
@@ -39,10 +40,17 @@ export interface HullSpec {
   radius: number
 }
 
-/** Батареи. Пока их тратит только противоракетная система. */
+/**
+ * Батареи. Их ДВЕ: главная (реактор двигателя — полёт, форсаж, оружие) и доп-отсека
+ * (аукс — бомба, ПРО, маскировка). Раздельные пулы: расход гаджетов не сажает главную.
+ */
 export interface PowerSpec {
   capacity: number
   regen: number
+  /** Ёмкость батареи доп-отсека, ед. */
+  auxCapacity: number
+  /** Восполнение батареи доп-отсека, ед/с. */
+  auxRegen: number
 }
 
 export interface ShipSpec {
@@ -124,7 +132,12 @@ export function deriveShipSpec(loadout: Loadout, cargoMass = 0): ShipSpec {
     if (weapon && hardpoint) mounts.push({ hardpoint, weapon, index })
   })
 
-  const power: PowerSpec = { capacity: engine.energy, regen: engine.energyRegen }
+  const power: PowerSpec = {
+    capacity: engine.energy,
+    regen: engine.energyRegen,
+    auxCapacity: AUX_POWER.CAPACITY,
+    auxRegen: AUX_POWER.REGEN,
+  }
 
   let cargoCapacity = 0
   for (const rack of findCargoRacks(loadout)) cargoCapacity += rack.capacity

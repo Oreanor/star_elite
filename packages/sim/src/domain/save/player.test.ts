@@ -22,7 +22,7 @@ function playedWorld(): World {
 
   w.credits = 123_456
   w.score = 42
-  p.bombCharge = 0.25
+  p.auxEnergy = 25
 
   // Прокачка ЭКЗЕМПЛЯРА: клонируем модуль сборки, не трогая синглтон каталога.
   const shieldIdx = p.loadout.internals.findIndex(isShield)
@@ -105,7 +105,7 @@ describe('round-trip сейва игрока', () => {
     expect(dst.player.shield).toBeCloseTo(src.player.shield)
     expect(dst.player.energy).toBeCloseTo(src.player.energy)
     expect(dst.player.jumpCharge).toBeCloseTo(src.player.jumpCharge)
-    expect(dst.player.bombCharge).toBeCloseTo(src.player.bombCharge)
+    expect(dst.player.auxEnergy).toBeCloseTo(src.player.auxEnergy)
     expect(dst.player.guns.map((g) => g.ammo)).toEqual(src.player.guns.map((g) => g.ammo))
   })
 

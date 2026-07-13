@@ -53,26 +53,26 @@ describe('маскировочное поле', () => {
   it('держится, пока хватает батарей, и опадает само', () => {
     const { world } = withPirate()
     const player = world.player
-    player.energy = player.spec.power.capacity
+    player.auxEnergy = player.spec.power.auxCapacity
     toggleCloak(player)
 
-    // Расход обязан превышать восполнение, иначе поле держалось бы вечно.
-    expect(player.spec.cloakDrain).toBeGreaterThan(player.spec.power.regen)
+    // Расход обязан превышать восполнение доп-отсека, иначе поле держалось бы вечно.
+    expect(player.spec.cloakDrain).toBeGreaterThan(player.spec.power.auxRegen)
 
-    // Шагаем БЕЗ восполнения: здесь проверяется только расход.
-    const life = player.energy / player.spec.cloakDrain
+    // Шагаем БЕЗ восполнения: здесь проверяется только расход (маскировка ест аукс).
+    const life = player.auxEnergy / player.spec.cloakDrain
     for (let t = 0; t < life - 0.02; t += 0.01) stepCloak(player, 0.01)
     expect(player.cloaked).toBe(true)
 
     for (let i = 0; i < 10; i++) stepCloak(player, 0.01)
     expect(player.cloaked).toBe(false)
-    expect(player.energy).toBe(0)
+    expect(player.auxEnergy).toBe(0)
   })
 
-  it('на пустых батареях поле не поднять', () => {
+  it('на пустой батарее доп-отсека поле не поднять', () => {
     const { world } = withPirate()
     const player = world.player
-    player.energy = 0
+    player.auxEnergy = 0
     expect(canCloak(player)).toBe(false)
     expect(toggleCloak(player)).toBe(false)
   })

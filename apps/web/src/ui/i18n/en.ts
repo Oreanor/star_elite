@@ -110,6 +110,8 @@ export const EN: Record<keyof typeof RU, string> = {
   'hud.shield': 'SHLD',
   'hud.hull': 'HULL',
   'hud.energy': 'ENRG',
+  'hud.battery': 'BAT',
+  'hud.aux': 'AUX',
   'hud.bomb': 'BOMB',
   'hud.heat': 'HEAT',
   'hud.laser': 'LASER',

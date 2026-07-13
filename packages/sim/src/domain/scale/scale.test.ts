@@ -1,4 +1,3 @@
-import { Vector3 } from 'three'
 import { describe, expect, it } from 'vitest'
 import { MIELOPHONE } from '../../config/mielophone'
 import { MIELOPHONE_DEVICE } from '../../config/modules'
@@ -61,10 +60,32 @@ describe('миелофон: масштаб', () => {
     stepScale(p, 5)
     expect(p.state.scale).toBe(MIELOPHONE.MIN_SCALE)
 
-    // Долгий рост упирается в потолок, а не уходит в бесконечность.
+    // Долгий рост упирается в потолок, а не уходит в бесконечность. Аукс подзаряжаем
+    // вручную каждый шаг — иначе рост встал бы на пустой батарее раньше потолка.
     p.controls.grow = 1
-    for (let i = 0; i < 100; i++) stepScale(p, 1)
+    for (let i = 0; i < 100; i++) {
+      p.auxEnergy = p.spec.power.auxCapacity
+      stepScale(p, 1)
+    }
     expect(p.state.scale).toBe(MIELOPHONE.MAX_SCALE)
+  })
+
+  it('рост ТРАТИТ батарею доп-отсека и встаёт на нуле заряда', () => {
+    const { world } = withBot()
+    const p = world.player
+    fitMielophone(p)
+    p.auxEnergy = p.spec.power.auxCapacity
+    expect(p.state.scale).toBe(1)
+
+    // Растём, пока не иссякнет аукс (полного заряда хватает примерно на ×GROW_FULL_FACTOR).
+    p.controls.grow = 1
+    for (let i = 0; i < 50; i++) stepScale(p, 1)
+    expect(p.auxEnergy).toBe(0) // доп-отсек выкачан ростом
+    expect(p.state.scale).toBeGreaterThan(1)
+
+    const stalled = p.state.scale
+    stepScale(p, 1)
+    expect(p.state.scale).toBe(stalled) // без заряда рост не идёт — жди подзарядки
   })
 
   it('радиус и масса растут с масштабом: масса — кубом (объём)', () => {

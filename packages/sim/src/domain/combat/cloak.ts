@@ -38,7 +38,8 @@ export const isVisible = (e: ShipEntity): boolean => e.alive && !e.cloaked
 const MIN_SECONDS = 1
 
 export function canCloak(e: ShipEntity): boolean {
-  return e.alive && hasCloak(e) && e.energy >= e.spec.cloakDrain * MIN_SECONDS
+  // Маскировка питается от доп-отсека (аукс) — по нему и проверяем запас.
+  return e.alive && hasCloak(e) && e.auxEnergy >= e.spec.cloakDrain * MIN_SECONDS
 }
 
 /** Одна клавиша поднимает поле и она же его опускает. @returns новое состояние. */
@@ -55,7 +56,7 @@ export function toggleCloak(e: ShipEntity): boolean {
 /**
  * Расход поля за шаг. Зовётся каждый шаг для каждого корабля.
  *
- * Батареи копятся `regenEnergy` в том же шаге, поэтому расход должен превышать
+ * Доп-отсек копится `regenAux` в том же шаге, поэтому расход должен превышать
  * восполнение — иначе поле держалось бы вечно и было бы не решением, а режимом.
  */
 export function stepCloak(e: ShipEntity, dt: number): void {
@@ -67,6 +68,8 @@ export function stepCloak(e: ShipEntity, dt: number): void {
     return
   }
 
-  e.energy = Math.max(0, e.energy - e.spec.cloakDrain * dt)
-  if (e.energy <= 0) e.cloaked = false
+  // Маскировка питается от ДОП-ОТСЕКА (аукс), а не от главной батареи: тот же общий пул,
+  // что бомба и ПРО. Оттого под полем не набрать бомбу — размен, а не бесплатный режим.
+  e.auxEnergy = Math.max(0, e.auxEnergy - e.spec.cloakDrain * dt)
+  if (e.auxEnergy <= 0) e.cloaked = false
 }

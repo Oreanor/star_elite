@@ -11,6 +11,7 @@ import {
   findBody,
   findStation,
   autofightActive,
+  auxFraction,
   bombReady,
   clamp,
   incomingMissile,
@@ -838,6 +839,7 @@ function drawReadouts({ ctx, world, height }: HudFrame): void {
   const hull = player.hull / player.spec.hull.hull
   const laser = peakHeat(player)
   const energy = energyFraction(player)
+  const aux = auxFraction(player)
   const temp = player.hullHeat
   // Заряд привода как доля предела модели. Нет привода — шкала пустая и тусклая.
   const jump = player.spec.jumpRange > 0 ? player.jumpCharge / player.spec.jumpRange : 0
@@ -846,11 +848,11 @@ function drawReadouts({ ctx, world, height }: HudFrame): void {
   const rows: [string, number, string][] = [
     [t('hud.shield'), shield, HUD_COLORS.PRIMARY],
     [t('hud.hull'), hull, hull < 0.3 ? HUD_COLORS.DANGER : HUD_COLORS.PRIMARY],
-    // Батареи: один импульс ПРО стоит десятой доли шкалы.
-    [t('hud.energy'), energy, energy < 0.15 ? HUD_COLORS.DANGER : HUD_COLORS.PRIMARY],
-    // Бомба копится поверх целого щита. Заряженная светится целью — её видно
-    // боковым зрением, и это единственная шкала, которую пилот ждёт заполненной.
-    [t('hud.bomb'), player.bombCharge, bombReady(player) ? HUD_COLORS.TARGET : HUD_COLORS.DIM],
+    // Главная батарея корабля: полёт, форсаж, оружие.
+    [t('hud.battery'), energy, energy < 0.15 ? HUD_COLORS.DANGER : HUD_COLORS.PRIMARY],
+    // Батарея ДОП-ОТСЕКА (аукс): общий запас бомбы, ПРО и маскировки. Полная светится
+    // целью — бомба готова; на нуле красная — ни импульса, ни поля. Оттого счётчик один.
+    [t('hud.aux'), aux, bombReady(player) ? HUD_COLORS.TARGET : aux < 0.15 ? HUD_COLORS.DANGER : HUD_COLORS.PRIMARY],
     // Нагрев СТВОЛА от стрельбы — отдельно от нагрева корпуса звездой.
     [t('hud.laser'), laser, laser > 0.7 ? HUD_COLORS.DANGER : HUD_COLORS.WARN],
     // Температура КОРПУСА от близкой звезды. За порогом течёт щит, потом обшивка.

@@ -116,6 +116,8 @@ export const RU = {
   'hud.shield': 'ЩИТ',
   'hud.hull': 'КОРП',
   'hud.energy': 'ЭНРГ',
+  'hud.battery': 'БАТ',
+  'hud.aux': 'АУКС',
   'hud.bomb': 'БОМБА',
   'hud.heat': 'ТЕПЛО',
   'hud.laser': 'ЛАЗЕР',

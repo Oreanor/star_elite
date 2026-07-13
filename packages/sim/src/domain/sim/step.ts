@@ -18,7 +18,7 @@ import {
   bounceOffShield,
   isDroneShip,
   launchDrone,
-  regenBomb,
+  regenAux,
   regenEnergy,
   regenShield,
   resolveShipVsShip,
@@ -167,8 +167,8 @@ function stepWeapons(world: World, controllers: ControllerMap, dt: number): void
     if (ship.kinematic) continue
     coolGuns(ship, dt)
     regenEnergy(ship, dt)
-    // После щита: `regenShield` уже отработал в этом шаге, в `stepPhysics`.
-    regenBomb(ship, dt)
+    // Батарея доп-отсека (аукс) копится своим пулом — для бомбы, ПРО и маскировки.
+    regenAux(ship, dt)
     if (!ship.alive) continue
 
     const controller = controllerFor(controllers, ship)

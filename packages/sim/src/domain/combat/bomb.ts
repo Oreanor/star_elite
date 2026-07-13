@@ -1,6 +1,6 @@
 import { BOMB } from '../../config/weapons'
 import type { ShipEntity, World } from '../world/entities'
-import { applyDamage, shieldFraction } from './damage'
+import { applyDamage } from './damage'
 import { spawnExplosion, spawnShockwave } from './effects'
 
 /**
@@ -26,10 +26,12 @@ import { spawnExplosion, spawnShockwave } from './effects'
  * оружие массового поражения не должно делать этот выбор за пилота.
  */
 export function fireBomb(world: World, e: ShipEntity): boolean {
-  if (!e.alive || e.bombCharge <= 0) return false
+  if (!e.alive || e.auxEnergy <= 0) return false
 
-  const power = e.bombCharge
-  e.bombCharge = 0
+  // Мощность — доля батареи доп-отсека: залил маскировку/ПРО — бомба выйдет слабее.
+  const cap = e.spec.power.auxCapacity
+  const power = cap > 0 ? e.auxEnergy / cap : 0
+  e.auxEnergy = 0 // бомба выгребает доп-отсек досуха
   spawnShockwave(world, power)
 
   const radiusSq = BOMB.RADIUS * BOMB.RADIUS
@@ -57,23 +59,9 @@ export function fireBomb(world: World, e: ShipEntity): boolean {
 }
 
 /**
- * Накопитель копится сам — но реактор кормит ЩИТ первым, и в бомбу уходят только
- * его излишки. Пока щит не полон, бомба не заряжается вовсе.
- *
- * Отсюда её единственная цена: набрать полную мощность, не выходя из-под огня,
- * невозможно. Кораблю без щита бомба не светит никогда, и это не частный случай,
- * а то же правило: излишков у него не бывает.
- *
- * Набранный заряд НЕПРИКОСНОВЕНЕН. Попадание сбивает накопление, но не отнимает
- * накопленное: бомбу нельзя ни разбить, как щит, ни испортить. Единственный, кто
- * её тратит, — сам пилот. Поэтому `applyDamage` про `bombCharge` не знает и знать
- * не должен: заряд убывает ровно в одном месте — в `fireBomb`.
+ * Полностью ли заряжена бомба — то есть полна ли батарея доп-отсека. Ниже полного она тоже
+ * сработает, но слабее (мощность — доля запаса). Восполняет доп-отсек общий `regenAux`
+ * (см. `ecm.ts`): бомба больше не копится «поверх щита» — у неё теперь своя батарея.
  */
-export function regenBomb(e: ShipEntity, dt: number): void {
-  if (!e.alive || e.bombCharge >= 1) return
-  if (e.spec.hull.shield <= 0 || shieldFraction(e) < 1) return
-  e.bombCharge = Math.min(1, e.bombCharge + BOMB.RECHARGE * dt)
-}
-
-/** Полностью ли заряжена. Ниже единицы бомба тоже сработает — но слабее. */
-export const bombReady = (e: ShipEntity): boolean => e.bombCharge >= 1
+export const bombReady = (e: ShipEntity): boolean =>
+  e.spec.power.auxCapacity > 0 && e.auxEnergy >= e.spec.power.auxCapacity

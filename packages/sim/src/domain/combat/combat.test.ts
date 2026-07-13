@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { MISSILE_PYLON, MODULE_CATALOGUE } from '../../config/modules'
 import { ECM, GUNNERY } from '../../config/weapons'
 import { raySphere } from '../../core/math'
-import { isLaser, isMissile } from '../loadout'
+import { findEcm, isLaser, isMissile } from '../loadout'
 import { createWorld, STARTER_SYSTEM } from '../world'
 import type { MissileEntity, ShipEntity, World } from '../world/entities'
 import { stepBolts } from './bolts'
@@ -261,23 +261,25 @@ describe('противоракетная система', () => {
     return { world, victim: enemy, missile }
   }
 
-  it('подрывает ближайшую чужую ракету и тратит долю батарей', () => {
+  it('подрывает ближайшую чужую ракету и тратит долю доп-отсека по классу ПРО', () => {
     const { world, victim, missile } = incoming()
-    const before = victim.energy
+    const before = victim.auxEnergy
+    const ecmClass = findEcm(victim.loadout)!.class
 
     expect(fireEcm(world, victim)).toBe(true)
     expect(missile.alive).toBe(false)
-    expect(before - victim.energy).toBeCloseTo(victim.spec.power.capacity * ECM.ENERGY_COST, 5)
+    // Расход — по КЛАССУ модуля ПРО (старший экономичнее), от батареи ДОП-ОТСЕКА.
+    expect(before - victim.auxEnergy).toBeCloseTo(victim.spec.power.auxCapacity * ECM.COST_BY_CLASS[ecmClass]!, 5)
   })
 
   /** Холостой импульс не должен стоить энергии: платим за результат. */
-  it('не тратит энергию, когда сбивать нечего', () => {
+  it('не тратит заряд доп-отсека, когда сбивать нечего', () => {
     const { world } = withOneEnemy()
     const player = world.player
-    const before = player.energy
+    const before = player.auxEnergy
 
     expect(fireEcm(world, player)).toBe(false)
-    expect(player.energy).toBe(before)
+    expect(player.auxEnergy).toBe(before)
   })
 
   it('не подрывает собственную ракету', () => {

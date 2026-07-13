@@ -83,9 +83,9 @@ export function makeShip(
     lastHullHitAt: -1e9,
     energy: spec.power.capacity,
     ecmCooldown: 0,
-    // Бомба есть только у игрока, и это НЕ привилегия физики: пират, снимающий
-    // звено одной кнопкой, — не бой, а лотерея. Заряжена с первого кадра.
-    bombCharge: faction === 'player' ? 1 : 0,
+    // Батарея доп-отсека заряжена с первого кадра — и у игрока, и у ботов (ПРО пирата
+    // питается отсюда же: аукс-устройства «неотличимы» для физики, как и весь бой).
+    auxEnergy: spec.power.auxCapacity,
     cloaked: false,
     hold,
     guns,
@@ -113,6 +113,7 @@ export function refreshSpec(e: ShipEntity): void {
   e.hull = Math.min(e.hull, spec.hull.hull)
   e.shield = Math.min(e.shield, spec.hull.shield)
   e.energy = Math.min(e.energy, spec.power.capacity)
+  e.auxEnergy = Math.min(e.auxEnergy, spec.power.auxCapacity)
   // Сменили привод — заряд не может превышать дальность новой модели.
   e.jumpCharge = Math.min(e.jumpCharge, spec.jumpRange)
 

@@ -35,7 +35,19 @@ export function stepScale(e: ShipEntity, dt: number): void {
   // Гейт в домене (не в клиенте) — значит и сервер, и чужой клиент согласны, кто может расти.
   if (!e.spec.hasMielophone) return
   const grow = e.controls.grow
-  if (grow !== 0) {
+  if (grow > 0) {
+    // РОСТ питается от батареи доп-отсека. Расход — по логарифму (масштаб множится):
+    // полного заряда хватает на ln(GROW_FULL_FACTOR) лог-единиц. Кончился аукс — рост встал,
+    // жди подзарядки. Растём ровно на столько, на сколько хватило заряда (частичный шаг).
+    const perLog = e.spec.power.auxCapacity / Math.log(MIELOPHONE.GROW_FULL_FACTOR)
+    const wantLog = grow * MIELOPHONE.GROW_RATE * dt
+    const doLog = perLog > 0 ? Math.min(wantLog, e.auxEnergy / perLog) : wantLog
+    if (doLog > 0) {
+      e.state.scale *= Math.exp(doLog)
+      e.auxEnergy = Math.max(0, e.auxEnergy - doLog * perLog)
+    }
+  } else if (grow < 0) {
+    // Сжатие обратно — бесплатно: возвращать размер батарея не мешает.
     e.state.scale *= Math.exp(grow * MIELOPHONE.GROW_RATE * dt)
   }
   e.state.scale = clamp(e.state.scale, MIELOPHONE.MIN_SCALE, MIELOPHONE.MAX_SCALE)

@@ -1,4 +1,5 @@
 import { ECM } from '../../config/weapons'
+import { findEcm } from '../loadout'
 import type { ShipEntity, World } from '../world/entities'
 import { spawnExplosion } from './effects'
 
@@ -14,8 +15,11 @@ import { spawnExplosion } from './effects'
 export function fireEcm(world: World, e: ShipEntity): boolean {
   if (!e.alive || e.ecmCooldown > 0) return false
 
-  const cost = e.spec.power.capacity * ECM.ENERGY_COST
-  if (cost <= 0 || e.energy < cost) return false
+  // Расход импульса — по КЛАССУ установленного ПРО: старший модуль экономичнее.
+  const ecm = findEcm(e.loadout)
+  const fraction = ecm ? ECM.COST_BY_CLASS[ecm.class] ?? ECM.COST_DEFAULT : ECM.COST_DEFAULT
+  const cost = e.spec.power.auxCapacity * fraction
+  if (cost <= 0 || e.auxEnergy < cost) return false
 
   let nearest = null
   let nearestSq = ECM.RADIUS * ECM.RADIUS
@@ -32,21 +36,32 @@ export function fireEcm(world: World, e: ShipEntity): boolean {
   // Энергию жжём только за результат: холостой импульс — это просто «нечего сбивать».
   if (!nearest) return false
 
-  e.energy -= cost
+  e.auxEnergy -= cost
   e.ecmCooldown = ECM.COOLDOWN
   nearest.alive = false
   spawnExplosion(world, nearest.pos, nearest.vel, 1.2)
   return true
 }
 
-/** Батареи копятся сами. Зовётся каждый шаг для каждого корабля. */
+/** ГЛАВНАЯ батарея копится сама. Зовётся каждый шаг для каждого корабля. */
 export function regenEnergy(e: ShipEntity, dt: number): void {
   e.ecmCooldown = Math.max(0, e.ecmCooldown - dt)
   if (!e.alive) return
   e.energy = Math.min(e.spec.power.capacity, e.energy + e.spec.power.regen * dt)
 }
 
-/** Доля заряда батарей, 0..1. Нужно HUD и ИИ. */
+/** Батарея ДОП-ОТСЕКА копится сама (свой пул для бомбы/ПРО/маскировки). Зовётся каждый шаг. */
+export function regenAux(e: ShipEntity, dt: number): void {
+  if (!e.alive) return
+  e.auxEnergy = Math.min(e.spec.power.auxCapacity, e.auxEnergy + e.spec.power.auxRegen * dt)
+}
+
+/** Доля заряда ГЛАВНОЙ батареи, 0..1. Нужно HUD и ИИ. */
 export function energyFraction(e: ShipEntity): number {
   return e.spec.power.capacity > 0 ? e.energy / e.spec.power.capacity : 0
+}
+
+/** Доля заряда батареи ДОП-ОТСЕКА, 0..1. Нужно HUD. */
+export function auxFraction(e: ShipEntity): number {
+  return e.spec.power.auxCapacity > 0 ? e.auxEnergy / e.spec.power.auxCapacity : 0
 }

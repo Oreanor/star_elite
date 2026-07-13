@@ -15,6 +15,7 @@ import {
   type ArmourModule,
   type CargoModule,
   type CloakModule,
+  type EcmModule,
   type EngineModule,
   type HyperdriveModule,
   type MielophoneModule,
@@ -82,6 +83,10 @@ export function findMielophone(l: Loadout): MielophoneModule | null {
  */
 export function hasEcm(l: Loadout): boolean {
   return l.internals.some(isEcm)
+}
+/** Установленный модуль ПРО — по нему берут класс (класс задаёт расход импульса). */
+export function findEcm(l: Loadout): EcmModule | null {
+  return l.internals.find(isEcm) ?? null
 }
 export function hasBomb(l: Loadout): boolean {
   return l.internals.some(isBomb)

@@ -63,7 +63,8 @@ export interface PlayerSave {
   shield: number
   energy: number
   jumpCharge: number
-  bombCharge: number
+  /** Заряд батареи доп-отсека, ед. Необязателен: старые сейвы (с bombCharge) грузятся полными. */
+  auxEnergy?: number
   /** Боезапас по индексам подвесок (`spec.mounts`): у ствола 0, у ракеты/БПЛА — остаток. */
   guns: number[]
 }
@@ -149,7 +150,7 @@ export function serializePlayer(world: World): PlayerSave {
     shield: p.shield,
     energy: p.energy,
     jumpCharge: p.jumpCharge,
-    bombCharge: p.bombCharge,
+    auxEnergy: p.auxEnergy,
     guns: p.guns.map((g) => g.ammo),
   }
 }
@@ -196,7 +197,8 @@ export function applyPlayerSave(world: World, save: PlayerSave): void {
   p.shield = Math.min(save.shield, p.spec.hull.shield)
   p.energy = Math.min(save.energy, p.spec.power.capacity)
   p.jumpCharge = Math.min(save.jumpCharge, p.spec.jumpRange)
-  p.bombCharge = save.bombCharge
+  // Старые сейвы без доп-отсека грузятся полными — потеря заряда бомбы не критична.
+  p.auxEnergy = Math.min(save.auxEnergy ?? p.spec.power.auxCapacity, p.spec.power.auxCapacity)
   p.hullHeat = 0
   save.guns.forEach((ammo, i) => {
     const g = p.guns[i]
