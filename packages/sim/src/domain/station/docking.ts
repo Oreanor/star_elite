@@ -11,8 +11,25 @@ import { startAtStation } from '../world/factory'
 const _toStation = new Vector3()
 const _noseRest = new Vector3(0, 0, -1)
 
+/**
+ * Станция, к которой пилот сейчас имеет дело, — БЛИЖАЙШАЯ. В системе бывает две станции
+ * (два Кориолиса у разных планет); брать первую в списке значило бы, что подсказка и
+ * автопилот дёргают не ту, а стыковка «триггерится» у обеих разом. Ближайшая — та, к
+ * которой ты и подлетаешь.
+ */
 export function findStation(world: World): BodyEntity | null {
-  return world.bodies.find((b) => b.kind === 'station') ?? null
+  const from = world.player.state.pos
+  let best: BodyEntity | null = null
+  let bestSq = Infinity
+  for (const b of world.bodies) {
+    if (b.kind !== 'station') continue
+    const d = b.pos.distanceToSquared(from)
+    if (d < bestSq) {
+      bestSq = d
+      best = b
+    }
+  }
+  return best
 }
 
 /** Расстояние до причального кольца, м. Отрицательного не бывает. */

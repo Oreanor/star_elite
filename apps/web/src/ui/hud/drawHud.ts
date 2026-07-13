@@ -99,13 +99,15 @@ export function drawHud(frame: HudFrame): void {
     drawTargets(frame)
     drawPods(frame)
     drawOffscreenArrows(frame)
-    drawRadar(frame)
     drawTargetPortrait(frame)
     drawDocking(frame)
   }
 
   drawGunsight(frame)
   drawFlightPathMarker(frame)
+  // Локатор рисуется всегда, но за PHASE_START внутри — пустая рамка с «НЕТ ДАННЫХ»:
+  // отметки системы там глючат (тела далеко, камера в сотне км позади корпуса).
+  drawRadar(frame)
   drawReadouts(frame)
   drawCruise(frame)
   drawAlerts(frame)
@@ -577,6 +579,14 @@ function drawRadar({ ctx, camera, world, width, height }: HudFrame): void {
   ellipse(ctx, cx, cy, radiusX / 2, radiusY / 2, HUD_COLORS.DIM)
   line(ctx, cx, cy - 3 * S, cx, cy + 3 * S, HUD_COLORS.DIM)
   line(ctx, cx - 3 * S, cy, cx + 3 * S, cy, HUD_COLORS.DIM)
+
+  // За масштабом (миелофон) система осталась далеко — локатор ей уже не сканер. Рамку
+  // держим (пилот привык к ней в углу), но внутри честно пусто: отметки тел на таком
+  // масштабе только глючат. Ни лучей поля зрения, ни блипов — только «НЕТ ДАННЫХ».
+  if (world.player.state.scale >= MIELOPHONE.PHASE_START) {
+    text(ctx, t('hud.noData'), cx, cy - 4 * S, HUD_COLORS.DIM, 'center')
+    return
+  }
 
   // Лучи границ угла зрения от центра ВВЕРХ (нос — вверху): что между ними, то в кадре
   // перед тобой; что снаружи — за краем экрана. Горизонтальный FOV выводим из вертикального

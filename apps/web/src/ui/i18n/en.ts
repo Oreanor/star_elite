@@ -138,6 +138,7 @@ export const EN: Record<keyof typeof RU, string> = {
   'hud.dockReady': 'PAD CLEAR · L — DOCK',
   'hud.dockTooFast': 'SLOW DOWN TO {speed} M/S',
   'hud.dockHint': 'L — AUTODOCK · PAD {range}',
+  'hud.noData': 'NO DATA',
 
   'unit.m': 'm',
   'unit.km': 'km',
