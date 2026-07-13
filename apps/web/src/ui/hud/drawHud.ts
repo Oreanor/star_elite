@@ -15,7 +15,6 @@ import {
   bombReady,
   clamp,
   incomingMissile,
-  isCruising,
   itemName,
   missileAmmo,
   nearestPod,
@@ -34,11 +33,12 @@ import { bombFlash, bombRing } from '../../render/bombFeel'
 import { currentGameDate } from '../clock'
 import { GALAXY_LAYER, HUD_SCALE } from '../../render/config'
 import { galaxyRadar } from '../../render/scene/galaxyRadar'
-import { HUD_COLORS, bar, circle, corners, dot, ellipse, line, rect, text } from './draw'
+import { HUD_COLORS, bar, circle, corners, dot, ellipse, line, text } from './draw'
 import { t } from '../i18n'
 import { chassisName, occupationName, properName, shipTypeName } from '../i18n/dataNames'
 import { drawFlare } from './drawFlare'
-import { angularSize, formatDistance, formatScale, formatSpeed, projectPoint } from './project'
+import { angularSize, formatDistance, formatScale, projectPoint, scaleParts, speedParts } from './project'
+import { activeWarning, pushWarning } from './warnings'
 import {
   PORTRAIT_GRID,
   loadSheet,
@@ -104,7 +104,6 @@ export function drawHud(frame: HudFrame): void {
     drawPods(frame)
     drawOffscreenArrows(frame)
     drawTargetPortrait(frame)
-    drawDocking(frame)
   }
 
   drawGunsight(frame)
@@ -113,7 +112,7 @@ export function drawHud(frame: HudFrame): void {
   // отметки системы там глючат (тела далеко, камера в сотне км позади корпуса).
   drawRadar(frame)
   drawReadouts(frame)
-  drawCruise(frame)
+  drawWarnings(frame)
   drawAlerts(frame)
 
   // Последним: круг бомбы бьёт поверх всего, включая прицел.
@@ -195,9 +194,6 @@ function drawDate({ ctx }: HudFrame): void {
   text(ctx, currentGameDate(), 6 * S, 5 * S, HUD_COLORS.DIM, 'left')
 }
 
-/** Частота мигания лампы стыковки, Гц. Медленнее — не заметишь, быстрее — раздражает. */
-const DOCK_BLINK_HZ = 2.2
-
 type DockState = 'engaged' | 'ready' | 'too-fast' | 'approach'
 
 function dockState(world: World, station: BodyEntity, autodock: boolean): DockState {
@@ -206,60 +202,6 @@ function dockState(world: World, station: BodyEntity, autodock: boolean): DockSt
   // Причал рядом, а скорость больше разрешённой — это не стыковка, а таран.
   if (stationRange(world.player, station) < DOCKING.RANGE) return 'too-fast'
   return 'approach'
-}
-
-/**
- * Индикатор стыковки: лампа и надпись. Молчит, пока станция дальше, чем берётся
- * автопилот, — HUD и так тесный, а лампа, горящая всегда, ничего не сообщает.
- *
- * Лампа МИГАЕТ, когда от тебя ждут действия (можно стыковаться, надо сбросить
- * скорость), и горит ровно, когда действовать не нужно: ведёт автопилот или
- * ты просто подлетаешь. Мигание — это просьба, а не украшение.
- */
-function drawDocking(frame: HudFrame): void {
-  const { ctx, world, width, height, autodock } = frame
-
-  // В масштабе (миелофон) стыковка невозможна — гигант не влезет в причал (`canDockAt`
-  // требует scale<=1). Значит и подсказку не показываем: у неё к тому же путалась дистанция
-  // (камера у потолка отвода стоит в ~100 км позади огромного корпуса, а причал мерит от
-  // корпуса — числа расходились). Сожмись до обычного размера — тогда и появится.
-  if (world.player.state.scale > 1) return
-
-  const station = findStation(world)
-  if (!station) return
-
-  const range = stationRange(world.player, station)
-  if (range > AUTODOCK.ENGAGE_RANGE) return
-
-  const state = dockState(world, station, autodock)
-
-  const color =
-    state === 'ready' ? HUD_COLORS.PRIMARY : state === 'too-fast' ? HUD_COLORS.WARN : HUD_COLORS.DIM
-
-  const label =
-    state === 'engaged'
-      ? // Не «автопилот»: пилот и так видит, что руль не его. Важнее, что станция
-        // взяла его под защиту, — и это единственное место, где об этом говорят.
-        t('hud.dockCorridor', { range: formatDistance(range) })
-      : state === 'ready'
-        ? t('hud.dockReady')
-        : state === 'too-fast'
-          ? t('hud.dockTooFast', { speed: DOCKING.MAX_SPEED })
-          : t('hud.dockHint', { range: formatDistance(range) })
-
-  const blinking = state === 'ready' || state === 'too-fast'
-  const lit = !blinking || Math.sin(world.time * DOCK_BLINK_HZ * Math.PI * 2) > 0
-
-  // Панель по ширине надписи: пустая рамка вокруг короткого текста читается как брак.
-  const textWidth = ctx.measureText(label).width
-  const boxWidth = textWidth + 30 * S
-  const boxHeight = 17 * S
-  const boxX = Math.round((width - boxWidth) / 2)
-  const boxY = Math.round(height - 34 * S)
-
-  rect(ctx, boxX, boxY, boxWidth, boxHeight, lit ? color : HUD_COLORS.DIM)
-  dot(ctx, boxX + 11 * S, boxY + boxHeight / 2, 3.5 * S, lit ? color : HUD_COLORS.DIM)
-  text(ctx, label, boxX + 21 * S, boxY + 4 * S, lit ? color : HUD_COLORS.DIM)
 }
 
 /**
@@ -325,9 +267,10 @@ function drawTargets({ ctx, camera, world, width, height }: HudFrame): void {
     const color = locked && !ship.kinematic ? HUD_COLORS.PRIMARY : radarColor(ship, world)
 
     // Минимум крупный: корабль в 12 м на километре занимает меньше пикселя,
-    // и без рамки его физически не найти глазом.
+    // и без рамки его физически не найти глазом. Захваченную обводим ТОЛЩЕ (и голубым
+    // из `color` выше): активная цель должна выделяться понятнее любой другой рамки.
     const size = Math.max(14 * S, Math.min(90 * S, angularSize(ship.spec.hull.radius, p.distance) * height * 1.2))
-    corners(ctx, p.x, p.y, size, color)
+    corners(ctx, p.x, p.y, size, color, locked ? 2.5 : 1)
 
     // Дистанция у каждого врага, а не только у захваченного: она нужна, чтобы
     // понять, кто рядом, а кто в километре.
@@ -369,11 +312,11 @@ function drawOffscreenArrows(frame: HudFrame): void {
     if (!ship.alive || !isVisible(ship)) continue
     const locked = ship.id === world.lockedTargetId
     if (ship.faction !== 'hostile' && !locked) continue
-    // Стрелка захваченной цели — ВСЕГДА голубая, без исключений для живого игрока. На
-    // экране рамка и HP-полосы уже говорят «выбран», а у стрелки за кадром сигнал один —
-    // цвет. Оставь её розовой/красной (как радар), и захваченный человек или враждебный
-    // пилот сольётся с чужими стрелками: непонятно, куда вращать нос к ВЫБРАННОМУ.
-    offscreenArrow(frame, ship.state.pos, locked ? HUD_COLORS.PRIMARY : radarColor(ship, world))
+    // Стрелка захваченной цели — ВСЕГДА голубая и КРУПНЕЕ прочих: за кадром её сигнал
+    // один (цвет+размер), и она должна выделяться понятнее любой другой. Оставь её
+    // розовой/красной (как радар) и одного размера — захваченный сольётся с чужими
+    // стрелками, и непонятно, куда вращать нос к ВЫБРАННОМУ.
+    offscreenArrow(frame, ship.state.pos, locked ? HUD_COLORS.PRIMARY : radarColor(ship, world), locked)
   }
 
   // Цвет тела, а не отдельный «цвет навигации»: жёлтая стрелка ведёт к звезде,
@@ -383,7 +326,7 @@ function drawOffscreenArrows(frame: HudFrame): void {
 }
 
 /** Рисует треугольник у края кадра, если точка за кадром. Иначе молчит. */
-function offscreenArrow({ ctx, camera, width, height }: HudFrame, pos: Vector3, color: string): void {
+function offscreenArrow({ ctx, camera, width, height }: HudFrame, pos: Vector3, color: string, emphasis = false): void {
   const p = projectPoint(pos, camera, width, height)
   if (!p.behind && isOnScreen(p.x, p.y, width, height, 20 * S)) return
 
@@ -408,7 +351,7 @@ function offscreenArrow({ ctx, camera, width, height }: HudFrame, pos: Vector3, 
   const scale = Math.min((cx - inset) / Math.abs(dx || 1e-6), (cy - inset) / Math.abs(dy || 1e-6))
   const ax = cx + dx * scale
   const ay = cy + dy * scale
-  const size = 7 * S
+  const size = emphasis ? 12 * S : 7 * S // захваченная цель — крупнее прочих
 
   // Треугольник, смотрящий наружу.
   ctx.fillStyle = color
@@ -543,12 +486,12 @@ function drawTargetPortrait({ ctx, world, width, height }: HudFrame): void {
   if (!ship || !ship.alive || !isVisible(ship)) return
 
   // HUD рисуется в уменьшенном внутреннем разрешении и растягивается, поэтому размер
-  // тут «крупнее», чем то же число в DOM. 48 — компактный портрет цели над локатором.
+  // тут «крупнее», чем то же число в DOM. 48 — компактный портрет цели.
   const size = 48 * S
+  // Локатор уехал в центр — портрет занимает правый НИЖНИЙ угол. Оставляем снизу три
+  // строки мелкой подписи (имя/род/корабль) плюс кромку.
   const x = width - 12 * S - size
-  // Над локатором: его верхняя кромка — height − 2·radius(36) − отступ(12).
-  const radarTop = height - 72 * S - 12 * S
-  const y = radarTop - 8 * S - size - 22 * S // выше на ТРИ строки мелкой подписи (имя/род/корабль)
+  const y = height - 12 * S - size - 24 * S
 
   ctx.strokeStyle = HUD_COLORS.DIM
   ctx.lineWidth = 1
@@ -582,15 +525,16 @@ function drawTargetPortrait({ ctx, world, width, height }: HudFrame): void {
  * логарифмическая: иначе планета в 400 км сплющит всё остальное к центру.
  */
 function drawRadar({ ctx, camera, world, width, height }: HudFrame): void {
-  const radiusY = 36 * S
+  const radiusY = 47 * S // локатор на ~30% крупнее прежнего (36): читается на скорости
   const radiusX = radiusY * 1.5 // локатор на 50% шире — эллипс, а не круг
-  const cx = width - radiusX - 12 * S
+  const cx = width / 2 // по центру нижней кромки: портрет цели уехал в правый угол
   const cy = height - radiusY - 12 * S
+  const FRAME_W = 2 // обод и лучи чуть толще одинарной линии — крупный локатор их держит
 
-  ellipse(ctx, cx, cy, radiusX, radiusY, HUD_COLORS.DIM)
-  ellipse(ctx, cx, cy, radiusX / 2, radiusY / 2, HUD_COLORS.DIM)
-  line(ctx, cx, cy - 3 * S, cx, cy + 3 * S, HUD_COLORS.DIM)
-  line(ctx, cx - 3 * S, cy, cx + 3 * S, cy, HUD_COLORS.DIM)
+  ellipse(ctx, cx, cy, radiusX, radiusY, HUD_COLORS.DIM, FRAME_W)
+  ellipse(ctx, cx, cy, radiusX / 2, radiusY / 2, HUD_COLORS.DIM, FRAME_W)
+  line(ctx, cx, cy - 3 * S, cx, cy + 3 * S, HUD_COLORS.DIM, FRAME_W)
+  line(ctx, cx - 3 * S, cy, cx + 3 * S, cy, HUD_COLORS.DIM, FRAME_W)
 
   // За масштабом (миелофон) система осталась далеко, зато проявилась ГАЛАКТИКА — и локатор
   // переключается на неё: показывает звёзды в СФЕРЕ ВИДИМОСТИ слоя (те же, что горят в
@@ -726,16 +670,19 @@ function drawRadar({ ctx, camera, world, width, height }: HudFrame): void {
     if (shape === 'round') {
       dot(ctx, px, my, Math.max(1, size / 2), color)
     } else if (shape === 'diamond') {
-      // Ромб — квадрат на угол. Держим компактным: станция не должна раздуваться
-      // крупнее планеты рядом.
-      const r = size / 2
-      ctx.fillStyle = color
+      // Ромб КОНТУРОМ с точкой внутри (а не залитый): станция — «место, куда летят».
+      // Ромбик держим чуть крупнее, чтобы точка внутри читалась; квадрат на угол.
+      const r = size * 0.8
+      ctx.strokeStyle = color
+      ctx.lineWidth = 1
       ctx.beginPath()
       ctx.moveTo(Math.round(px), Math.round(my - r))
       ctx.lineTo(Math.round(px + r), Math.round(my))
       ctx.lineTo(Math.round(px), Math.round(my + r))
       ctx.lineTo(Math.round(px - r), Math.round(my))
-      ctx.fill()
+      ctx.closePath()
+      ctx.stroke()
+      dot(ctx, px, my, Math.max(1, r * 0.35), color)
     } else {
       ctx.fillStyle = color
       ctx.fillRect(Math.round(px - size / 2), Math.round(my - size / 2), size, size)
@@ -820,15 +767,124 @@ function radarColor(ship: ShipEntity, world: World): string {
   return ship.faction === world.player.faction ? HUD_COLORS.ALLY : HUD_COLORS.NEUTRAL
 }
 
+/** Шрифт HUD заданного кегля. Кегль в пикселях внутреннего буфера, как и всё в S. */
+const hudFont = (px: number) => `${Math.round(px)}px "Consolas", "DejaVu Sans Mono", monospace`
+
+/**
+ * Тренд-стрелка «растёт/падает». Треугольник вверх — величина увеличивается, вниз —
+ * уменьшается. Ноль — молчит: индикатор нужен, только когда есть что показать.
+ */
+function trendArrow(ctx: CanvasRenderingContext2D, x: number, cy: number, dir: number, color: string): void {
+  if (dir === 0) return
+  const w = 4 * S
+  const h = 6 * S
+  ctx.fillStyle = color
+  ctx.beginPath()
+  if (dir > 0) {
+    ctx.moveTo(x, cy - h)
+    ctx.lineTo(x + w, cy + h)
+    ctx.lineTo(x - w, cy + h)
+  } else {
+    ctx.moveTo(x, cy + h)
+    ctx.lineTo(x + w, cy - h)
+    ctx.lineTo(x - w, cy - h)
+  }
+  ctx.closePath()
+  ctx.fill()
+}
+
+/** Черепашка: панцирь-кружок и четыре лапки-луча по диагоналям. Одна ракета в обойме. */
+function turtle(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: number, color: string): void {
+  circle(ctx, cx, cy, r, color)
+  for (const [sx, sy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]] as const) {
+    line(ctx, cx + sx * r * 0.6, cy + sy * r * 0.6, cx + sx * r * 1.5, cy + sy * r * 1.5, color)
+  }
+}
+
+// Прошлые значения — чтобы отличить рост от падения. HUD один на корабль, поэтому
+// модульная память безопасна: второго игрока в кадре нет.
+let _prevSpeed = 0
+let _prevScale = 1
+
+/**
+ * Крупная величина: цифра большим кеглем, единица вдвое мельче справа, тренд-стрелка
+ * рядом. `unitSuffix` рисуется на базовой линии низа цифры, чтобы не «висеть» вверху.
+ * @returns правый край нарисованного (для соседних блоков).
+ */
+function bigValue(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  top: number,
+  value: string,
+  unit: string,
+  color: string,
+  trend: number,
+): void {
+  const big = 18 * S
+  const small = 9 * S
+  const baseFont = ctx.font
+  ctx.font = hudFont(big)
+  text(ctx, value, x, top, color)
+  const numW = ctx.measureText(value).width
+  ctx.font = hudFont(small)
+  text(ctx, unit, x + numW + 3 * S, top + big - small, color)
+  const unitW = ctx.measureText(unit).width
+  ctx.font = baseFont
+  trendArrow(ctx, x + numW + 3 * S + unitW + 8 * S, top + big / 2, trend, color)
+}
+
 function drawReadouts({ ctx, world, height }: HudFrame): void {
   const player: ShipEntity = world.player
   const x = 10 * S
   const labelWidth = 34 * S
   const barWidth = 66 * S
+  const columnWidth = labelWidth + barWidth
+  const halfWidth = columnWidth / 2
   const barHeight = 5 * S
   const step = 11 * S
+  const baseFont = ctx.font
 
-  // Восемь строк по `step`: к прочим добавились нагрев корпуса и заряд привода.
+  // ── Скорость и масштаб — САМЫМИ ПЕРВЫМИ, крупной цифрой ──────────────────────
+  const speedTop = height - 150 * S
+  shipAxes(player.state.quat, _fwd, _right, _up)
+  const vel = player.state.vel
+  const speedMag = vel.length()
+
+  // Тренд по МОДУЛЮ скорости: разгон — вверх, торможение — вниз, ровный ход — ничего.
+  // Мёртвая зона относительная: на сверхсветовом крейсере абсолютный дребезг огромен.
+  const speedEps = Math.max(0.5, speedMag * 0.002)
+  const dv = speedMag - _prevSpeed
+  const speedTrend = dv > speedEps ? 1 : dv < -speedEps ? -1 : 0
+  _prevSpeed = speedMag
+
+  // Назад — с минусом (U+2212): реверс это не «ноль хода», а движение против носа.
+  const sp = speedParts(speedMag)
+  const reversing = vel.dot(_fwd) < -1
+  bigValue(ctx, x, speedTop, reversing ? `−${sp.value}` : sp.value, sp.unit, HUD_COLORS.PRIMARY, speedTrend)
+
+  // Множитель крейсера — СРЕДНИМ кеглем под скоростью. Скорость уже сверхсветовая
+  // (vel уже умножен на factor); ×N лишь говорит, насколько разогнан ход. Показываем,
+  // только когда крейсер реально включён, иначе «×1» висело бы всегда.
+  const factor = player.cruise.factor
+  if (factor > CRUISE.IDLE_EPSILON) {
+    ctx.font = hudFont(13 * S)
+    text(ctx, `×${formatScale(factor)}`, x, speedTop + 18 * S + 2 * S, HUD_COLORS.WARN)
+    ctx.font = baseFont
+  }
+
+  // Масштаб (миелофон) — справа, жёлтым, так же крупно. Появляется, только когда
+  // прибор установлен: без него о масштабе речи нет.
+  if (player.spec.hasMielophone) {
+    const scale = player.state.scale
+    const ds = scale - _prevScale
+    const scaleEps = Math.max(1e-3, _prevScale * 0.002)
+    const scaleTrend = ds > scaleEps ? 1 : ds < -scaleEps ? -1 : 0
+    _prevScale = scale
+    const sc = scaleParts(scale)
+    bigValue(ctx, x + halfWidth, speedTop, sc.value, sc.unit, HUD_COLORS.TARGET, scaleTrend)
+  }
+
+  // ── Шкалы состояния: восемь строк по `step` ─────────────────────────────────
   let y = height - 110 * S
 
   if (!player.controls.flightAssist) {
@@ -869,58 +925,139 @@ function drawReadouts({ ctx, world, height }: HudFrame): void {
     y += step
   }
 
-  y += 3 * S
-  const scale = player.state.scale
-  const scaled = scale > 1.001
-  // Скорость — ОБЫЧНАЯ (реальные м/с). Если борт в масштабе (миелофон), рядом жёлтая
-  // ЗВЁЗДОЧКА: число честное, но на глаз мир проходишь в `scale` раз быстрее.
-  const speedStr = formatSpeed(player.state.vel.length())
-  text(ctx, speedStr, x, y, HUD_COLORS.PRIMARY)
-  if (scaled) text(ctx, '*', x + ctx.measureText(speedStr).width, y, HUD_COLORS.WARN)
-
+  // ── РАКЕТ: обойма черепашками ───────────────────────────────────────────────
   const ammo = missileAmmo(player)
-  if (ammo > 0) text(ctx, t('hud.missiles', { ammo }), x + barWidth, y, HUD_COLORS.WARN)
-
-  // Множитель масштаба: иначе рост в пустом космосе не на чем увидеть. Растёт с E.
-  if (scaled) {
-    y += step
-    text(ctx, `МАСШТАБ x${formatScale(scale)}`, x, y, HUD_COLORS.TARGET)
+  if (ammo > 0) {
+    y += 4 * S
+    text(ctx, t('hud.rockets'), x, y, HUD_COLORS.DIM)
+    // Восемь значков должны уместиться в ширину столбца (barWidth): мельче панцирь,
+    // чуть шире шаг — на глаз черепашки не слипаются, а обойма влезает целиком.
+    const r = 2 * S
+    const gap = 8 * S
+    const iconX = x + labelWidth + 3 * S
+    const iconY = y + 5 * S
+    const maxIcons = 8 // столько ракет в обойме максимум — рисуем все, без «остатка числом»
+    const shown = Math.min(ammo, maxIcons)
+    for (let i = 0; i < shown; i++) turtle(ctx, iconX + i * gap, iconY, r, HUD_COLORS.WARN)
+    // Страховка, если обойму когда-нибудь расширят: остаток — числом.
+    if (ammo > maxIcons) text(ctx, `×${ammo}`, iconX + shown * gap + 2 * S, y, HUD_COLORS.WARN)
   }
 }
 
-/** Крейсер: множитель и причина, по которой он не включается. */
-function drawCruise({ ctx, world, width }: HudFrame): void {
-  const cruise = world.player.cruise
-
-  // Перегрев корпуса важнее любой надписи про крейсер: он убивает. За порогом
-  // течи кричим красным, до него — предупреждаем жёлтым, что жар близок.
-  const temp = world.player.hullHeat
-  if (temp > STAR_HEAT.LEAK_THRESHOLD) {
-    text(ctx, t('hud.overheat'), width / 2, 10 * S, HUD_COLORS.DANGER, 'center')
-    return
+/**
+ * Уголковая рамка плашки: четыре L-образных угла прямоугольника. Сплошная рамка
+ * давила бы на кадр — уголки читаются как «важно», но не запирают вид под собой.
+ */
+function bracketRect(
+  ctx: CanvasRenderingContext2D,
+  cx: number,
+  cy: number,
+  w: number,
+  h: number,
+  color: string,
+  lineW: number,
+): void {
+  const arm = Math.min(w * 0.18, h * 0.5)
+  const l = cx - w / 2
+  const r = cx + w / 2
+  const tp = cy - h / 2
+  const bt = cy + h / 2
+  for (const [px, py, sx, sy] of [[l, tp, 1, 1], [r, tp, -1, 1], [l, bt, 1, -1], [r, bt, -1, -1]] as const) {
+    line(ctx, px, py, px + sx * arm, py, color, lineW)
+    line(ctx, px, py, px, py + sy * arm, color, lineW)
   }
-  if (temp > 0.6) {
-    text(ctx, t('hud.hullHot'), width / 2, 10 * S, HUD_COLORS.WARN, 'center')
-    return
-  }
-  // Прогрелся достаточно, чтобы черпать топливо, но ещё не горишь: удержись здесь.
-  if (scooping(world.player)) {
-    text(ctx, t('hud.refuel'), width / 2, 10 * S, HUD_COLORS.TARGET, 'center')
-    return
+}
+
+/**
+ * Плашки-предупреждения — ЕДИНЫЙ канал ситуативных сообщений (см. `warnings.ts`).
+ * Здесь собираются ЧИТАЕМЫЕ из мира состояния и заявляются в очередь; транзиентные
+ * «нет ракет/лазера/…» приходят из ввода (`playerController`). Рисуется ОДНА самая
+ * важная живая плашка по центру-верху: уголковая рамка, полупрозрачный фон в её цвет
+ * (~22%) и мигающая надпись. Старые разрозненные строки-предупреждения этим и заменены.
+ */
+function drawWarnings(frame: HudFrame): void {
+  const { ctx, world, width, autodock } = frame
+  const player = world.player
+  const now = world.time
+
+  // ── Читаемые из мира состояния ──────────────────────────────────────────────
+  const temp = player.hullHeat
+  if (temp > STAR_HEAT.LEAK_THRESHOLD) pushWarning('overheat', now)
+  else if (temp > 0.6) pushWarning('hullHot', now)
+
+  if (player.hull / player.spec.hull.hull < 0.25) pushWarning('hullCritical', now)
+  if (peakHeat(player) >= 1) pushWarning('laserHot', now)
+  if (energyFraction(player) < 0.12) pushWarning('lowEnergy', now)
+  if (player.cruise.block === 'mass-lock') pushWarning('massLock', now)
+  if (scooping(player)) pushWarning('refuel', now)
+
+  // Стыковка — только в обычном размере: гигант (миелофон) в причал не влезет.
+  if (player.state.scale <= 1) {
+    const station = findStation(world)
+    if (station) {
+      const range = stationRange(player, station)
+      if (range <= AUTODOCK.ENGAGE_RANGE) {
+        const st = dockState(world, station, autodock)
+        if (st === 'too-fast') pushWarning('dockFast', now, { label: t('hud.dockTooFast', { speed: DOCKING.MAX_SPEED }) })
+        else if (st === 'ready') pushWarning('dockReady', now)
+        else if (st === 'engaged') pushWarning('dockCorridor', now, { label: t('hud.dockCorridor', { range: formatDistance(range) }) })
+      }
+    }
   }
 
-  if (cruise.block === 'mass-lock') {
-    text(ctx, t('hud.massLock'), width / 2, 10 * S, HUD_COLORS.DANGER, 'center')
-    return
+  // Входящая ракета: чем ближе, тем чаще мигает; `repeat:0` держит плашку на экране,
+  // пока ракета в воздухе, — это угроза жизни, а не разовая весть.
+  const threat = incomingMissile(world)
+  if (threat && threat.seconds <= MISSILE_ALERT_SECONDS) {
+    const urgency = clamp(1 - threat.seconds / MISSILE_ALERT_SECONDS, 0, 1)
+    pushWarning('missileIn', now, {
+      label: t('hud.missileWarn', { seconds: threat.seconds.toFixed(1) }),
+      hz: 2 + urgency * 4,
+      repeat: 0,
+    })
   }
-  if (!isCruising(world.player)) return
 
-  const fraction = (cruise.factor - 1) / (CRUISE.MAX_FACTOR - 1)
-  text(ctx, t('hud.cruise', { factor: cruise.factor.toFixed(0) }), width / 2, 10 * S, HUD_COLORS.PRIMARY, 'center')
-  bar(ctx, width / 2 - 40 * S, 22 * S, 80 * S, 4 * S, fraction, HUD_COLORS.PRIMARY)
+  // Социальные вести — вызов по связи и гибель/уход знакомого — тем же каналом.
+  const hail = pendingHail(world)
+  if (hail) pushWarning('hail', now, { label: t('hud.hail', { name: hail.name.toUpperCase() }) })
 
-  if (cruise.block === 'proximity') {
-    text(ctx, t('hud.gravityBrake'), width / 2, 30 * S, HUD_COLORS.WARN, 'center')
+  const notice = world.notices[world.notices.length - 1]
+  if (notice) {
+    const left = notice.kind === 'player-left'
+    pushWarning(left ? 'playerLeft' : 'contactLost', now, {
+      label: t(left ? 'hud.playerLeft' : 'hud.contactLost', { name: notice.name.toUpperCase() }),
+    })
+  }
+
+  // ── Показываем самую важную живую плашку ────────────────────────────────────
+  const plate = activeWarning(now)
+  if (!plate) return
+
+  const font = hudFont(15 * S)
+  const baseFont = ctx.font
+  ctx.font = font
+  const bw = ctx.measureText(plate.label).width + 44 * S
+  ctx.font = baseFont
+  const bh = 30 * S
+  // Вверху по центру, с тем же отступом от кромки, что у даты и счётчика кадров (~8px):
+  // не вплотную к краю, но и не в глубине кадра, где перекрыло бы прицел.
+  const cx = width / 2
+  const cy = 8 * S + bh / 2
+
+  // Полупрозрачный фон в цвет рамки: плашку видно, но мир под ней всё ещё читается.
+  ctx.save()
+  ctx.globalAlpha = 0.22
+  ctx.fillStyle = plate.color
+  ctx.fillRect(Math.round(cx - bw / 2), Math.round(cy - bh / 2), Math.round(bw), Math.round(bh))
+  ctx.restore()
+
+  // Рамка стоит ровно, мигает только надпись: рамка держит место, текст просит взгляд.
+  bracketRect(ctx, cx, cy, bw, bh, plate.color, 3)
+  const lit = plate.hz <= 0 || Math.sin(now * plate.hz * Math.PI * 2) > -0.35
+  if (lit) {
+    ctx.font = font
+    text(ctx, plate.label, cx, cy - 7 * S, plate.color, 'center')
+    ctx.font = baseFont
   }
 }
 
@@ -986,53 +1123,22 @@ function drawBombBurst({ ctx, world, width, height }: HudFrame): void {
 }
 
 /**
- * Тревоги: автобой и ракета на подходе.
+ * Постоянные РЕЖИМЫ у нижней кромки: автобой и маскировка.
  *
- * Оба индикатора — состояния МИРА, а не HUD: он их читает, а не выводит.
- * `autofightActive` смотрит, сидит ли за штурвалом пилот; `incomingMissile`
- * считает время по скорости сближения, а не по скорости ракеты.
- *
- * Мигание — единственный способ пробиться сквозь бой: неподвижную строку
- * в перестрелке не замечают. Частота растёт по мере приближения ракеты, потому
- * что «через шесть секунд» и «через одну» требуют разной степени паники.
+ * Это не транзиентные вести (перегрев, вызов, ракета — те ушли в плашки-`drawWarnings`),
+ * а тумблеры, которые обязаны висеть, ПОКА включены: пилот должен в любой момент видеть,
+ * что рулит автопилот или что гашетка мертва под полем. Мигать им незачем — они не
+ * просят действия сию секунду, а сообщают текущее состояние.
  */
 function drawAlerts({ ctx, world, width, height }: HudFrame): void {
-  // Обиженный вызывает по связи (ты его задел): входящий вызов сверху по центру,
-  // мягко мигает — «ответь по T, разряди, пока не перелило во враги». Не тревога,
-  // а социальный сигнал: цвет цели, не опасности. Пока говоришь — окно поверх скроет.
-  const hail = pendingHail(world)
-  if (hail && Math.sin(world.time * Math.PI * 2) > -0.5) {
-    text(ctx, t('hud.hail', { name: hail.name.toUpperCase() }), width / 2, 46 * S, HUD_COLORS.TARGET, 'center')
-  }
-
-  // Пропал знакомый — вероятно, погиб. Весть держится секунды (`CONTACTS.NOTICE_LIFE`,
-  // уборка гасит) и мягко мигает: это утрата, не боевая тревога, но и не рядовой лог.
-  // Показываем самую свежую — если разом пришло несколько, старшие подождут своей уборки.
-  const notice = world.notices[world.notices.length - 1]
-  if (notice && Math.sin(world.time * Math.PI * 2) > -0.5) {
-    // Ушедший игрок — весть мягче (жёлтым): он не погиб под твоим прицелом, а вышел.
-    const left = notice.kind === 'player-left'
-    const msg = t(left ? 'hud.playerLeft' : 'hud.contactLost', { name: notice.name.toUpperCase() })
-    text(ctx, msg, width / 2, 64 * S, left ? HUD_COLORS.WARN : HUD_COLORS.DANGER, 'center')
-  }
-
-  // Выше панели стыковки: она занимает низ по центру и перекрыла бы обе строки.
+  // Выше верхней кромки локатора (он теперь по центру внизу, ~height−106): иначе
+  // строки легли бы прямо на эллипс радара.
   if (autofightActive(world)) {
-    text(ctx, t('hud.autofight'), width / 2, height - 64 * S, HUD_COLORS.TARGET, 'center')
+    text(ctx, t('hud.autofight'), width / 2, height - 120 * S, HUD_COLORS.TARGET, 'center')
   }
 
   // Под полем не стреляют, и пилот обязан знать, почему у него мёртвый гашетка.
   if (world.player.cloaked) {
-    text(ctx, t('hud.cloak'), width / 2, height - 76 * S, HUD_COLORS.NAV, 'center')
+    text(ctx, t('hud.cloak'), width / 2, height - 132 * S, HUD_COLORS.NAV, 'center')
   }
-
-  const threat = incomingMissile(world)
-  if (!threat || threat.seconds > MISSILE_ALERT_SECONDS) return
-
-  // От 1.6 Гц за шесть секунд до 6 Гц в последнюю. Горит половину периода.
-  const urgency = clamp(1 - threat.seconds / MISSILE_ALERT_SECONDS, 0, 1)
-  const hz = 1.6 + urgency * 4.4
-  if (Math.sin(world.time * hz * Math.PI * 2) < 0) return
-
-  text(ctx, t('hud.missileWarn', { seconds: threat.seconds.toFixed(1) }), width / 2, height - 50 * S, HUD_COLORS.DANGER, 'center')
 }

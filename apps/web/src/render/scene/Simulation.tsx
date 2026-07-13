@@ -1,9 +1,21 @@
 import { useFrame, useThree } from '@react-three/fiber'
-import { autodockController, canEngageAutodock, cycleLock, serializePlayer, stepWorld } from '@elite/sim'
+import {
+  autodockController,
+  canEngageAutodock,
+  cycleLock,
+  findCloak,
+  hasBomb,
+  hasEcm,
+  isLaser,
+  missileAmmo,
+  serializePlayer,
+  stepWorld,
+} from '@elite/sim'
 import { syncControllers, useSession, type Session } from '../../app/GameContext'
 import { coastController } from '../../app/control/playerController'
 import { persistSave } from '../../app/save/saveStore'
-import { clearPresses, consumePress, input, releaseLock } from '../../platform/input/input'
+import { clearPresses, consumePress, input, isHeld, releaseLock } from '../../platform/input/input'
+import { pushWarning } from '../../ui/hud/warnings'
 
 /**
  * Ведущий кадра. Монтируется ПЕРВЫМ в сцене: R3F вызывает useFrame в порядке
@@ -98,11 +110,31 @@ export function Simulation() {
     // без курсора не шагает — до этой строки кадр уже не доходит. Её тумблер живёт
     // в Shell, на обычном слушателе окна.
     if (consumePress('KeyV')) session.view = session.view === 'chase' ? 'cockpit' : 'chase'
-    if (consumePress('KeyR')) intent.missile = true
-    if (consumePress('KeyE')) intent.ecm = true
-    if (consumePress('KeyB')) intent.bomb = true
-    if (consumePress('KeyX')) intent.cloak = true
+    // Пытаешься применить прибор, которого нет (или пустую обойму) — плашка объясняет,
+    // почему клавиша молчит. Иначе «нажал — ничего» читается как баг, а не как «не куплено».
+    if (consumePress('KeyR')) {
+      if (missileAmmo(world.player) > 0) intent.missile = true
+      else pushWarning('noRockets', world.time)
+    }
+    if (consumePress('KeyE')) {
+      if (hasEcm(world.player.loadout)) intent.ecm = true
+      else pushWarning('noAux', world.time)
+    }
+    if (consumePress('KeyB')) {
+      if (hasBomb(world.player.loadout)) intent.bomb = true
+      else pushWarning('noAux', world.time)
+    }
+    if (consumePress('KeyX')) {
+      if (findCloak(world.player.loadout)) intent.cloak = true
+      else pushWarning('noAux', world.time)
+    }
     if (consumePress('KeyQ')) intent.drone = true
+
+    // Жмёшь гашетку без единого лазера на борту — то же напоминание (ракеты/дрон — своя
+    // клавиша). Держание, а не тап: плашка сама не частит, её гасит кулдаун очереди.
+    if ((input.firing || isHeld('Space')) && !world.player.spec.mounts.some((m) => isLaser(m.weapon))) {
+      pushWarning('noLaser', world.time)
+    }
     // Tab перебирает борта И станции как один круг, но кладёт выбор в своё поле
     // (`lockedTargetId` / `lockedStationId`): станцию не бьют, с ней связываются (T).
     if (consumePress('Tab')) cycleLock(world)

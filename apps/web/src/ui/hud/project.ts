@@ -69,6 +69,21 @@ export function formatSpeed(metresPerSecond: number): string {
 }
 
 /**
+ * Скорость РАЗДЕЛЬНО: число и единица. Нужно HUD, где цифра рисуется крупно, а единица
+ * вдвое мельче рядом, — цельная строка `formatSpeed` для этого не годится.
+ */
+export function speedParts(metresPerSecond: number): { value: string; unit: string } {
+  if (metresPerSecond >= 0.01 * C) return { value: (metresPerSecond / C).toFixed(2), unit: 'c' }
+  if (metresPerSecond >= 1000) return { value: (metresPerSecond / 1000).toFixed(1), unit: t('unit.kmps') }
+  return { value: metresPerSecond.toFixed(0), unit: t('unit.mps') }
+}
+
+/** Масштаб РАЗДЕЛЬНО: разрядное число и знак «×». То же деление, что у скорости. */
+export function scaleParts(scale: number): { value: string; unit: string } {
+  return { value: formatScale(scale), unit: '×' }
+}
+
+/**
  * Множитель миелофона за пару десятков секунд доходит до сотен миллиардов — девять цифр
  * в строке HUD не читаются (а в неё влезает ~40 символов). Сжимаем в разряды:
  * 1299 · 12.5к · 199тыс · 1.22млн · 1.56млрд. Суффиксы русские намеренно — как и сама
