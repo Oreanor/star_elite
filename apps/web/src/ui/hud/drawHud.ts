@@ -523,8 +523,8 @@ function drawTargetPortrait({ ctx, world, width, height }: HudFrame): void {
  * логарифмическая: иначе планета в 400 км сплющит всё остальное к центру.
  */
 function drawRadar({ ctx, camera, world, width, height }: HudFrame): void {
-  const radiusY = 47 * S // локатор на ~30% крупнее прежнего (36): читается на скорости
-  const radiusX = radiusY * 1.5 // локатор на 50% шире — эллипс, а не круг
+  const radiusX = 47 * 1.5 * S // ширина эллипса локатора (прежняя, ~70): читается на скорости
+  const radiusY = 47 * 0.75 * S // высота на 25% МЕНЬШЕ прежней (47→35): локатор стал площе
   const cx = width / 2 // по центру нижней кромки: портрет цели уехал в правый угол
   const cy = height - radiusY - 12 * S
   const FRAME_W = 2 // обод и лучи чуть толще одинарной линии — крупный локатор их держит
@@ -1061,10 +1061,21 @@ function drawWarnings(frame: HudFrame): void {
   const plate = activeWarning(now) ?? scalePlate ?? boostPlate
   if (!plate) return
 
-  const font = hudFont(15 * S)
   const baseFont = ctx.font
-  ctx.font = font
-  const bw = ctx.measureText(plate.label).width + 44 * S
+  const pad = 44 * S
+  // Плашка вверху по центру — места по ширине много, но не до самых краёв. Если подпись
+  // (с полями) не влезает в доступную ширину, УЖИМАЕМ шрифт под неё, а не обрезаем текст.
+  const maxW = width - 24 * S
+  let fontPx = 15 * S
+  ctx.font = hudFont(fontPx)
+  let textW = ctx.measureText(plate.label).width
+  if (textW + pad > maxW) {
+    fontPx = Math.max(8 * S, (fontPx * (maxW - pad)) / textW)
+    ctx.font = hudFont(fontPx)
+    textW = ctx.measureText(plate.label).width
+  }
+  const font = hudFont(fontPx)
+  const bw = Math.min(maxW, textW + pad)
   ctx.font = baseFont
   const bh = 30 * S
   // Вверху по центру, с тем же отступом от кромки, что у даты и счётчика кадров (~8px):
@@ -1084,7 +1095,8 @@ function drawWarnings(frame: HudFrame): void {
   const lit = plate.hz <= 0 || Math.sin(now * plate.hz * Math.PI * 2) > -0.35
   if (lit) {
     ctx.font = font
-    text(ctx, plate.label, cx, cy - 7 * S, plate.color, 'center')
+    // Центрируем по высоте под текущий кегль (baseline='top'): при ужатом шрифте не съедет.
+    text(ctx, plate.label, cx, cy - fontPx / 2, plate.color, 'center')
     ctx.font = baseFont
   }
 }
