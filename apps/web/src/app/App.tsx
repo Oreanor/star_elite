@@ -1314,6 +1314,14 @@ function Paused({
         )}
       </div>
 
+      {/* Копирайт и версия — тихой строкой у нижнего края. Версия из package.json (см.
+          __APP_VERSION__), потому число само едет за релизом. На срыве гаснет вместе со сценой. */}
+      {!launched && (
+        <div className="pointer-events-none absolute inset-x-0 bottom-3 text-center font-mono text-[11px] tracking-wide text-[#7fd6ff]/40">
+          © 2026 Oreanor Aurgilion · v{__APP_VERSION__}
+        </div>
+      )}
+
       {/* Новая игра при живом сейве — модалка с прямым «уничтожит, начать?». Клик мимо = отмена. */}
       {confirmNew && (
         <div
