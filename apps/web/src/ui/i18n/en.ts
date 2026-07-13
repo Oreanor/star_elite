@@ -182,6 +182,10 @@ export const EN: Record<keyof typeof RU, string> = {
   'kind.cloak': 'cloak',
   'kind.drone': 'drone',
   'kind.mielophone': 'mielophone',
+  'kind.aux': 'utility',
+  'kind.ecm': 'ECM',
+  'kind.bomb': 'energy bomb',
+  'kind.scoop': 'fuel scoop',
 
   'station.tab.service': 'REPAIR',
   'station.tab.upgrade': 'OUTFIT',

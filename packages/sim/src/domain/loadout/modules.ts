@@ -19,6 +19,40 @@ export type ModuleKind =
   | 'cloak'
   | 'drone'
   | 'mielophone'
+  | 'ecm'
+  | 'bomb'
+  | 'scoop'
+
+/**
+ * КАТЕГОРИЯ СЛОТА. Не то же, что вид модуля: разные устройства (маскировка, ECM,
+ * бомба, скуп, миелофон) делят один слот «аукс». Всё остальное — своя категория.
+ * Оружие (laser/missile/drone) живёт на hardpoints, а не в слотах.
+ */
+export type SlotCategory =
+  | 'engine'
+  | 'thrusters'
+  | 'shield'
+  | 'armour'
+  | 'cargo'
+  | 'hyperdrive'
+  | 'aux'
+
+/** Виды модулей, что кладутся в универсальный слот «аукс». */
+export const AUX_KINDS: ReadonlySet<ModuleKind> = new Set<ModuleKind>([
+  'cloak',
+  'mielophone',
+  'ecm',
+  'bomb',
+  'scoop',
+])
+
+/**
+ * В какую категорию слота просится этот вид модуля. Аукс-виды → 'aux' (общий слот),
+ * прочие внутренние — сами в себя. Оружие сюда не приходит: оно на hardpoints.
+ */
+export function slotCategoryOf(kind: ModuleKind): SlotCategory {
+  return AUX_KINDS.has(kind) ? 'aux' : (kind as SlotCategory)
+}
 
 export interface ModuleBase {
   /** Стабильный идентификатор для сохранений и торговли. */
@@ -221,6 +255,21 @@ export interface MielophoneModule extends ModuleBase {
   kind: 'mielophone'
 }
 
+/**
+ * Аукс-устройства. Каждое работает по-своему, а числовые параметры срабатывания
+ * живут в `config/weapons` (ECM/BOMB) — здесь модуль лишь «есть слот-устройство или
+ * нет», как у миелофона. Прокачке аукс не подлежит: «на 25% лучше ECM» смысла не имеет.
+ */
+export interface EcmModule extends ModuleBase {
+  kind: 'ecm'
+}
+export interface BombModule extends ModuleBase {
+  kind: 'bomb'
+}
+export interface ScoopModule extends ModuleBase {
+  kind: 'scoop'
+}
+
 export type ShipModule =
   | EngineModule
   | ThrusterModule
@@ -233,6 +282,9 @@ export type ShipModule =
   | HyperdriveModule
   | CloakModule
   | MielophoneModule
+  | EcmModule
+  | BombModule
+  | ScoopModule
 
 /** Сужение по виду — вместо `as`, чтобы `any` не понадобился нигде. */
 export const isEngine = (m: ShipModule): m is EngineModule => m.kind === 'engine'
@@ -246,6 +298,11 @@ export const isHyperdrive = (m: ShipModule): m is HyperdriveModule => m.kind ===
 export const isCloak = (m: ShipModule): m is CloakModule => m.kind === 'cloak'
 export const isDrone = (m: ShipModule): m is DroneModule => m.kind === 'drone'
 export const isMielophone = (m: ShipModule): m is MielophoneModule => m.kind === 'mielophone'
+export const isEcm = (m: ShipModule): m is EcmModule => m.kind === 'ecm'
+export const isBomb = (m: ShipModule): m is BombModule => m.kind === 'bomb'
+export const isScoop = (m: ShipModule): m is ScoopModule => m.kind === 'scoop'
+/** Любое аукс-устройство: делит общий слот, прокачке не подлежит. */
+export const isAux = (m: ShipModule): boolean => AUX_KINDS.has(m.kind)
 
 /** Всё, что вешается на точку подвески. Пилон несёт ракету ИЛИ контейнер БПЛА. */
 export type WeaponModule = LaserModule | MissileModule | DroneModule

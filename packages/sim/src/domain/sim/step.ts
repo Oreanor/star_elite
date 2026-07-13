@@ -38,6 +38,7 @@ import {
   tryScoop,
 } from '../combat'
 import { isPhased, updateCruise } from '../cruise/drive'
+import { hasBomb, hasEcm } from '../loadout'
 import { MIELOPHONE } from '../../config/mielophone'
 import { effectiveRadius, stepScale } from '../scale/scale'
 import { stepShip } from '../flight/model'
@@ -179,7 +180,9 @@ function stepWeapons(world: World, controllers: ControllerMap, dt: number): void
 
     // ПРО работает и на крейсерском ходу, и под полем: ракета уже летит, а
     // импульс никого не убивает — он лишь снимает то, что летит в тебя.
-    if (controller.wantsEcm?.(ship, world)) fireEcm(world, ship)
+    // Способность гейтится модулем — для всех, и игрока, и ИИ (принцип «неотличимы»):
+    // без установленного РЭБ импульса нет, хоть контроллер и просит.
+    if (controller.wantsEcm?.(ship, world) && hasEcm(ship.loadout)) fireEcm(world, ship)
 
     // Под маскировкой стволы обычно холодны: вся мощность в поле, и невидимка не
     // бьёт живое без ответа. Единственное исключение — СПЯЩЕЕ гнездо: спящий пират
@@ -193,7 +196,7 @@ function stepWeapons(world: World, controllers: ControllerMap, dt: number): void
       continue
     }
 
-    if (controller.wantsBomb?.(ship, world)) fireBomb(world, ship)
+    if (controller.wantsBomb?.(ship, world) && hasBomb(ship.loadout)) fireBomb(world, ship)
     if (controller.wantsDrone?.(ship, world)) launchDrone(world, ship)
 
     // На крейсерском ходу корабль вне фазы: лазер с относительной скоростью

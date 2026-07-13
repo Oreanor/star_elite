@@ -1,14 +1,17 @@
 import { GALAXY } from './galaxy'
 import type {
   ArmourModule,
+  BombModule,
   CargoModule,
   CloakModule,
   DroneModule,
+  EcmModule,
   EngineModule,
   HyperdriveModule,
   LaserModule,
   MielophoneModule,
   MissileModule,
+  ScoopModule,
   ShieldModule,
   ShipModule,
   ThrusterModule,
@@ -1218,6 +1221,46 @@ export const MIELOPHONE_DEVICE: MielophoneModule = {
   salvageChance: 0.02,
 }
 
+// ─── Аукс-устройства (ECM / бомба / скуп) ────────────────────────────────────
+//
+// Каждое — снаряжаемый модуль в универсальный аукс-слот, а не врождённая способность:
+// без него не воспользуешься (гейт в `sim/step`). Числа срабатывания живут в
+// `config/weapons` (ECM/BOMB); здесь — только «есть устройство или нет», масса и цена.
+// Прокачке аукс не подлежит: каждое работает по-своему.
+
+/** Противоракетный импульс: снимает налетающие ракеты, жжёт батареи (см. ECM в weapons). */
+export const ECM_UNIT: EcmModule = {
+  id: 'ecm_1',
+  name: 'Система РЭБ «Заслон»',
+  kind: 'ecm',
+  class: 2,
+  mass: 2,
+  cost: 42000,
+  salvageChance: 0.35,
+}
+
+/** Энергобомба: разовый импульс по площади, полторы минуты на перезаряд (см. BOMB). */
+export const BOMB_UNIT: BombModule = {
+  id: 'bomb_1',
+  name: 'Энергобомба «Удар»',
+  kind: 'bomb',
+  class: 3,
+  mass: 4,
+  cost: 160000,
+  salvageChance: 0.15,
+}
+
+/** Топливный скуп: черпает вещество короны звезды (механика топлива — позже). */
+export const SCOOP_UNIT: ScoopModule = {
+  id: 'scoop_1',
+  name: 'Топливозаборник «Черпак»',
+  kind: 'scoop',
+  class: 1,
+  mass: 1.5,
+  cost: 18000,
+  salvageChance: 0.5,
+}
+
 export const MODULE_CATALOGUE: readonly ShipModule[] = [
   ENGINE_CIVILIAN, ENGINE_CIVILIAN_D,
   ENGINE_STANDARD, ENGINE_STANDARD_B,
@@ -1250,6 +1293,7 @@ export const MODULE_CATALOGUE: readonly ShipModule[] = [
   CLOAK_FIELD, CLOAK_HAZE, CLOAK_SPECTRE,
   DRONE_BAY, DRONE_BAY_LIGHT, DRONE_BAY_HEAVY,
   MIELOPHONE_DEVICE,
+  ECM_UNIT, BOMB_UNIT, SCOOP_UNIT,
 ]
 
 export function findModule(id: string): ShipModule | null {

@@ -1,9 +1,16 @@
 import { describe, expect, it } from 'vitest'
-import { SIDEWINDER } from '../../config/chassis'
-import { CARGO_LARGE, SHIELD_HEAVY, SHIELD_STANDARD } from '../../config/modules'
+import { AURORA_MK3, SIDEWINDER } from '../../config/chassis'
+import {
+  BOMB_UNIT,
+  CARGO_LARGE,
+  CLOAK_FIELD,
+  ECM_UNIT,
+  SHIELD_HEAVY,
+  SHIELD_STANDARD,
+} from '../../config/modules'
 import { addCommodity, addItem } from '../cargo/hold'
 import { COMMODITIES } from '../cargo/items'
-import { canInstallInternal, createLoadout } from '../loadout'
+import { canInstallInternal, createLoadout, hasBomb, hasEcm } from '../loadout'
 import { createWorld } from '../world'
 import { fitDeltas, fitFromHold } from './shop'
 
@@ -67,5 +74,35 @@ describe('класс корпуса ограничивает железо', () =
     const bare = createLoadout(SIDEWINDER, [], [])
     // CARGO_LARGE вместимости 50 т — «класс 1», значит любой корпус его тянет.
     expect(canInstallInternal(bare, CARGO_LARGE)).toBeNull()
+  })
+})
+
+/**
+ * Аукс-слот делят РАЗНЫЕ виды (маскировка/ECM/бомба/…), и занятость считается по всей
+ * КАТЕГОРИИ, а не по виду. Иначе примерка ошибётся: бомба «не заметит» клоак и ECM,
+ * занявшие обе аукс-ячейки, и решит, что место есть. «Аврора» — два аукс-слота.
+ */
+describe('аукс-слот: занятость по категории', () => {
+  it('заполненный аукс (клоак + ECM) не пускает третье устройство', () => {
+    const one = createLoadout(AURORA_MK3, [CLOAK_FIELD], []) // 1 из 2 аукс занят
+    expect(canInstallInternal(one, ECM_UNIT)).toBeNull() // второе устройство — влезает
+    const full = createLoadout(AURORA_MK3, [CLOAK_FIELD, ECM_UNIT], []) // оба аукс заняты
+    // Бомба — иного вида, но той же КАТЕГОРИИ: свободных ячеек нет.
+    expect(canInstallInternal(full, BOMB_UNIT)).toBe('no-free-slot')
+  })
+})
+
+/**
+ * Способность гейтится наличием модуля — для всех (принцип «игрок и бот неотличимы»).
+ * Голый борт без ECM/бомбы ими не пользуется, хоть контроллер и попросит.
+ */
+describe('способности требуют аукс-модуль', () => {
+  it('без ECM/бомбы — способности нет; с модулем — есть', () => {
+    const bare = createLoadout(AURORA_MK3, [], [])
+    expect(hasEcm(bare)).toBe(false)
+    expect(hasBomb(bare)).toBe(false)
+    const armed = createLoadout(AURORA_MK3, [ECM_UNIT, BOMB_UNIT], [])
+    expect(hasEcm(armed)).toBe(true)
+    expect(hasBomb(armed)).toBe(true)
   })
 })

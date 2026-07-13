@@ -9,6 +9,7 @@ import { MODULE_CATALOGUE, findModule } from '../../config/modules'
 import {
   deriveShipSpec,
   isArmour,
+  isAux,
   isCargo,
   isCloak,
   isDrone,
@@ -20,6 +21,7 @@ import {
   isShield,
   isThrusters,
   isWeapon,
+  slotCategoryOf,
   type Loadout,
   type ShipModule,
   type ShipSpec,
@@ -63,14 +65,21 @@ export function resaleOf(module: ShipModule): number {
 
 export type PurchaseError = 'no-money' | 'wrong-kind' | 'class-too-large' | 'no-hardpoint' | 'already-installed'
 
-/** Слоты корпуса под этот вид модуля. Класс гейтит корпус (`chassis.class`), не слот. */
+/** Слоты корпуса под КАТЕГОРИЮ этого модуля. Класс гейтит корпус (`chassis.class`), не слот. */
 function fittingSlots(ship: ShipEntity, module: ShipModule): number {
   if (module.class > ship.loadout.chassis.class) return 0 // не по классу корпуса — некуда
-  return ship.loadout.chassis.slots.filter((s) => s.kind === module.kind).length
+  const cat = slotCategoryOf(module.kind)
+  return ship.loadout.chassis.slots.filter((s) => s.kind === cat).length
 }
 
 function installedOfKind(ship: ShipEntity, kind: ShipModule['kind']): ShipModule[] {
   return ship.loadout.internals.filter((m) => m.kind === kind)
+}
+
+/** Установленные модули той же КАТЕГОРИИ (аукс-виды считаются вместе). */
+function installedOfCategory(ship: ShipEntity, module: ShipModule): ShipModule[] {
+  const cat = slotCategoryOf(module.kind)
+  return ship.loadout.internals.filter((m) => slotCategoryOf(m.kind) === cat)
 }
 
 /**
@@ -103,8 +112,9 @@ export function canBuy(
 
   const slots = fittingSlots(ship, module)
   if (slots === 0) {
-    // Вида слота нет вовсе — или он есть, но модуль не по классу корпуса.
-    const anyKind = ship.loadout.chassis.slots.some((s) => s.kind === module.kind)
+    // Слота такой категории нет вовсе — или он есть, но модуль не по классу корпуса.
+    const cat = slotCategoryOf(module.kind)
+    const anyKind = ship.loadout.chassis.slots.some((s) => s.kind === cat)
     return anyKind ? 'class-too-large' : 'wrong-kind'
   }
 
@@ -207,10 +217,11 @@ function hashModuleId(id: string): number {
 
 export type FitError = 'not-a-module' | 'wrong-kind' | 'class-too-large' | 'no-hardpoint' | 'already-installed' | 'no-room'
 
-/** Слоты корпуса под этот вид модуля — без корабля, от одного шасси. Класс гейтит корпус. */
+/** Слоты корпуса под КАТЕГОРИЮ модуля — без корабля, от одного шасси. Класс гейтит корпус. */
 function slotsForChassis(loadout: Loadout, module: ShipModule): number {
   if (module.class > loadout.chassis.class) return 0
-  return loadout.chassis.slots.filter((s) => s.kind === module.kind).length
+  const cat = slotCategoryOf(module.kind)
+  return loadout.chassis.slots.filter((s) => s.kind === cat).length
 }
 
 /** Первая подходящая точка подвески: пустая предпочтительнее занятой. */
@@ -230,7 +241,8 @@ function autoHardpoint(ship: ShipEntity, module: ShipModule): number | undefined
 /** Какой модуль вытеснит установка: снимаемое оружие или самый дешёвый из того же вида. */
 function moduleToReplace(ship: ShipEntity, module: ShipModule, hardpointIndex?: number): ShipModule | null {
   if (isWeapon(module)) return hardpointIndex !== undefined ? ship.loadout.weapons[hardpointIndex] ?? null : null
-  const installed = installedOfKind(ship, module.kind)
+  // Категория полна — вытесняем самый дешёвый той же категории (аукс-виды считаются вместе).
+  const installed = installedOfCategory(ship, module)
   return installed.length >= fittingSlots(ship, module) ? installed.reduce((a, b) => (a.cost <= b.cost ? a : b)) : null
 }
 
@@ -248,7 +260,8 @@ export function canFit(ship: ShipEntity, module: ShipModule, hardpointIndex?: nu
   }
   const slots = fittingSlots(ship, module)
   if (slots === 0) {
-    const anyKind = ship.loadout.chassis.slots.some((s) => s.kind === module.kind)
+    const cat = slotCategoryOf(module.kind)
+    const anyKind = ship.loadout.chassis.slots.some((s) => s.kind === cat)
     return anyKind ? 'class-too-large' : 'wrong-kind'
   }
   const installed = installedOfKind(ship, module.kind)
@@ -298,7 +311,7 @@ export function fitFromHold(ship: ShipEntity, holdIndex: number): FitError | nul
  */
 export type StatKey =
   | 'shield' | 'hull' | 'speed' | 'turn' | 'cargo' | 'jump'
-  | 'thrust' | 'damage' | 'ammo' | 'drain' | 'scale'
+  | 'thrust' | 'damage' | 'ammo' | 'drain' | 'scale' | 'mass'
 
 /** Одна строка сравнения: было → станет по конкретной характеристике. */
 export interface StatDelta {
@@ -367,7 +380,8 @@ export function fitDeltas(ship: ShipEntity, module: ShipModule): StatDelta[] {
  * тот, что круче. Домен знает смысл каждой оси — пусть интерфейс не гадает.
  */
 export function statHigherBetter(key: StatKey): boolean {
-  return key !== 'drain'
+  // У расхода и массы меньшее число — выигрыш.
+  return key !== 'drain' && key !== 'mass'
 }
 
 export function moduleStat(m: ShipModule): { key: StatKey; value: number } {
@@ -385,6 +399,11 @@ export function moduleStat(m: ShipModule): { key: StatKey; value: number } {
     // Миелофон: своей числовой характеристики нет (темп и пределы в config/mielophone).
     // Показываем темп роста — единственное осмысленное число артефакта.
     case 'mielophone': return { key: 'scale', value: MIELOPHONE.GROW_RATE }
+    // Аукс-устройства (ECM/бомба/скуп) числовой характеристики не имеют — показываем
+    // массу как честный скаляр (меньше — лучше). Параметры срабатывания живут в config.
+    case 'ecm':
+    case 'bomb':
+    case 'scoop': return { key: 'mass', value: m.mass }
   }
 }
 
@@ -418,6 +437,9 @@ export function canUpgrade(
   module: ShipModule,
   useCopy: boolean,
 ): UpgradeError | null {
+  // Аукс-устройства не прокачиваются: каждое работает по-своему, «+25% к ECM» бессмыслен.
+  // Гасим как «предельный» — отдельного кода в UI заводить незачем.
+  if (isAux(module)) return 'maxed'
   // Каждый модуль улучшается один раз: уже прокачанный дальше не берут.
   if (upgradeLevel(module) > 1e-6) return 'maxed'
   // Мир не тянет этот класс — прокачать его здесь негде (тот же потолок, что и у витрины).

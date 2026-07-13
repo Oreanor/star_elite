@@ -6,6 +6,7 @@ import {
   BURST_LASER,
   CLOAK_FIELD,
   DRONE_BAY,
+  ECM_UNIT,
   CARGO_LARGE,
   CARGO_SMALL,
   ENGINE_CIVILIAN,
@@ -50,8 +51,10 @@ export function playerStartLoadout(): Loadout {
 /** Рядовой пират: слабее игрока по железу, опасен числом. */
 export function pirateLoadout(): Loadout {
   return createLoadout(
+    // РЭБ в аукс-слоте: пират глушит налетающие ракеты, как и раньше (теперь это модуль,
+    // а не врождённая способность — гейт в step одинаков для игрока и бота).
     SIDEWINDER,
-    [ENGINE_CIVILIAN, RCS_CIVILIAN, SHIELD_LIGHT],
+    [ENGINE_CIVILIAN, RCS_CIVILIAN, SHIELD_LIGHT, ECM_UNIT],
     [PULSE_LASER_WORN, PULSE_LASER_WORN],
   )
 }
@@ -81,7 +84,7 @@ export function traderLoadout(): Loadout {
 export function pirateLeaderLoadout(): Loadout {
   return createLoadout(
     SIDEWINDER,
-    [ENGINE_CIVILIAN, RCS_STANDARD, SHIELD_LIGHT, HYPERDRIVE_COMPACT],
+    [ENGINE_CIVILIAN, RCS_STANDARD, SHIELD_LIGHT, HYPERDRIVE_COMPACT, ECM_UNIT],
     [PULSE_LASER, PULSE_LASER, MISSILE_PYLON],
   )
 }

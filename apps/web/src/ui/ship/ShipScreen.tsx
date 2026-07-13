@@ -2,6 +2,7 @@ import { Canvas, useFrame } from '@react-three/fiber'
 import { useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import { Group, Vector3, type BufferGeometry } from 'three'
 import {
+  AUX_KINDS,
   buy,
   canBuy,
   canUpgrade,
@@ -20,6 +21,7 @@ import {
   repair,
   repairCost,
   sellModule,
+  slotCategoryOf,
   stationStock,
   swapHull,
   unfitModule,
@@ -282,9 +284,12 @@ function buildSlots(world: World): SlotView[] {
   // по видам; на что не хватило — слот пуст. Порядок слотов — порядок корпуса.
   const pool = [...loadout.internals]
   loadout.chassis.slots.forEach((slot, i) => {
-    const idx = pool.findIndex((m) => m.kind === slot.kind)
+    // Слот сравниваем по КАТЕГОРИИ: аукс-ячейку могут занимать разные виды устройств.
+    const idx = pool.findIndex((m) => slotCategoryOf(m.kind) === slot.kind)
     const module = idx >= 0 ? pool.splice(idx, 1)[0]! : null
-    rows.push({ key: `int-${i}`, module, optionKinds: [slot.kind] })
+    // Аукс предлагает ВСЕ свои виды (маскировка/ECM/бомба/скуп/миелофон); прочее — один вид.
+    const optionKinds: ModuleKind[] = slot.kind === 'aux' ? [...AUX_KINDS] : [slot.kind]
+    rows.push({ key: `int-${i}`, module, optionKinds })
   })
 
   // Орудийные точки — всегда в сетке, пустые тоже: снял ствол — ставь заново.
@@ -350,7 +355,7 @@ function SlotGrid({
           >
             {/* Вид слота — что за оборудование сюда ставится, а не имя конкретной модели. */}
             <span className="text-[0.6rem] tracking-[0.2em]" style={{ color: DIM }}>
-              {t(('kind.' + s.optionKinds[0]) as Key).toUpperCase()}
+              {t(('kind.' + (s.optionKinds.length > 1 ? 'aux' : s.optionKinds[0])) as Key).toUpperCase()}
             </span>
             <span className="text-sm leading-tight" style={{ color: s.module ? ACCENT : DIM }}>
               {s.module ? displayName(s.module) : t('ship.slotEmpty')}
@@ -403,7 +408,9 @@ function SlotModal({
 }) {
   const player = world.player
   const module = slot.module
-  const kind = slot.optionKinds[0] ?? 'engine'
+  // Виды, что принимает слот: у аукса их несколько, у прочих один. Фильтр — по вхождению.
+  const kinds = slot.optionKinds
+  const labelKind = kinds.length > 1 ? 'aux' : (kinds[0] ?? 'engine')
   const [confirm, setConfirm] = useState<Confirm | null>(null)
 
   // Любое действие меняет оснастку — перерисовать и закрыть: ключ слота после операции
@@ -465,12 +472,14 @@ function SlotModal({
     )
   }
 
-  const shopOptions = docked ? stationStock(world).filter((m) => m.kind === kind && m.id !== module?.id).slice(0, 8) : []
+  const shopOptions = docked
+    ? stationStock(world).filter((m) => kinds.includes(m.kind) && m.id !== module?.id).slice(0, 8)
+    : []
   const holdOptions = player.hold.items
     .map((it, i) => ({ it, i }))
     .filter(
       (x): x is { it: Extract<CargoItem, { kind: 'module' }>; i: number } =>
-        x.it.kind === 'module' && x.it.module.kind === kind && x.it.module.id !== module?.id,
+        x.it.kind === 'module' && kinds.includes(x.it.module.kind) && x.it.module.id !== module?.id,
     )
 
   return (
@@ -487,7 +496,7 @@ function SlotModal({
         {/* Шапка: вид слота словом и кнопка закрытия. */}
         <div className="flex items-start justify-between gap-4">
           <h3 className="text-sm tracking-[0.25em]" style={{ color: DIM }}>
-            {t(('kind.' + kind) as Key).toUpperCase()}
+            {t(('kind.' + labelKind) as Key).toUpperCase()}
           </h3>
           <button
             type="button"

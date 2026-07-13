@@ -1,4 +1,4 @@
-import type { ModuleKind } from './modules'
+import type { SlotCategory } from './modules'
 
 /**
  * Что вешается в точку подвески. Пилон под крылом не орудийная турель:
@@ -16,7 +16,8 @@ export interface Hardpoint {
 }
 
 export interface Slot {
-  kind: ModuleKind
+  /** Категория слота: аукс-виды (маскировка/ECM/бомба/скуп/миелофон) делят слот 'aux'. */
+  kind: SlotCategory
   /**
    * УСТАРЕЛО. Предел класса теперь един на корпус (`Chassis.class`), а не на слот:
    * установка гейтится им. Поле оставлено, пока идёт категориальная переработка

@@ -2,6 +2,7 @@ import { addItem, usedCapacityOf } from '../cargo/hold'
 import {
   createLoadout,
   deriveShipSpec,
+  slotCategoryOf,
   type Chassis,
   type Loadout,
   type ShipModule,
@@ -39,8 +40,8 @@ export function fitOntoChassis(current: Loadout, chassis: Chassis): HullFit {
   const pool = [...current.internals]
   const fitted: ShipModule[] = []
   for (const slot of chassis.slots) {
-    // Класс гейтит корпус, не слот: модуль встаёт, если не выше класса рамы.
-    const idx = pool.findIndex((m) => m.kind === slot.kind && m.class <= chassis.class)
+    // По КАТЕГОРИИ (аукс делят разные виды) и по классу корпуса, не слота.
+    const idx = pool.findIndex((m) => slotCategoryOf(m.kind) === slot.kind && m.class <= chassis.class)
     if (idx >= 0) fitted.push(pool.splice(idx, 1)[0]!)
   }
 

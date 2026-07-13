@@ -1,13 +1,17 @@
 import type { Chassis } from './chassis'
 import {
   isArmour,
+  isBomb,
   isCargo,
   isCloak,
+  isEcm,
   isEngine,
   isHyperdrive,
   isMielophone,
+  isScoop,
   isShield,
   isThrusters,
+  slotCategoryOf,
   type ArmourModule,
   type CargoModule,
   type CloakModule,
@@ -72,6 +76,20 @@ export function findMielophone(l: Loadout): MielophoneModule | null {
   return l.internals.find(isMielophone) ?? null
 }
 
+/**
+ * Аукс-способности гейтятся НАЛИЧИЕМ модуля — для всех, и игрока, и ИИ (принцип
+ * «неотличимы»): без устройства нельзя ни глушить ракеты, ни бить бомбой.
+ */
+export function hasEcm(l: Loadout): boolean {
+  return l.internals.some(isEcm)
+}
+export function hasBomb(l: Loadout): boolean {
+  return l.internals.some(isBomb)
+}
+export function hasScoop(l: Loadout): boolean {
+  return l.internals.some(isScoop)
+}
+
 /** Снаряжённая масса: корпус + все модули. Груз добавляется отдельно, он меняется в полёте. */
 export function dryMass(l: Loadout): number {
   let m = l.chassis.baseMass
@@ -104,18 +122,16 @@ function fits(hardpointKind: 'gun' | 'pylon', weaponKind: WeaponModule['kind']):
 
 /** Проверка перед установкой. Возвращает null, если модуль влезает. */
 export function canInstallInternal(l: Loadout, mod: ShipModule): InstallError | null {
-  const used = new Map<string, number>()
-  for (const m of l.internals) {
-    const key = m.kind
-    used.set(key, (used.get(key) ?? 0) + 1)
-  }
-  const candidates = l.chassis.slots.filter((s) => s.kind === mod.kind)
+  // Категория, а НЕ вид: аукс-слот делят разные устройства, и занятость считается
+  // по всей категории. Иначе бомба «не увидит» клоак, занявший ту же аукс-ячейку.
+  const cat = slotCategoryOf(mod.kind)
+  const candidates = l.chassis.slots.filter((s) => s.kind === cat)
   if (candidates.length === 0) return 'wrong-kind'
 
   // Класс гейтит корпус, не слот (груз — бесклассовый, class 1, лезет всегда).
   if (mod.class > l.chassis.class) return 'class-too-large'
 
-  const occupied = used.get(mod.kind) ?? 0
+  const occupied = l.internals.filter((m) => slotCategoryOf(m.kind) === cat).length
   if (occupied >= candidates.length) return 'no-free-slot'
   return null
 }
