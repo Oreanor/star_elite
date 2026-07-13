@@ -463,12 +463,19 @@ function SlotModal({
   const labelKind = kinds.length > 1 ? 'aux' : (kinds[0] ?? 'engine')
   const [confirm, setConfirm] = useState<Confirm | null>(null)
 
-  // Любое действие меняет оснастку — перерисовать и закрыть: ключ слота после операции
-  // мог бы указывать уже на другой модуль, а держать модалку открытой поверх — врать.
+  // Действие, ПОСЛЕ которого слот меняет смысл (снял/продал) — перерисовать и закрыть:
+  // держать модалку поверх исчезнувшего модуля значило бы врать.
   const commit = (run: () => void) => {
     run()
     onChange()
     onClose()
+  }
+
+  // Действие, что оставляет тот же модуль в слоте (ремонт корпуса, дозарядка) — модалку
+  // НЕ закрываем: чини и улучшай подряд, не открывая слот заново. Только перерисовать.
+  const commitStay = (run: () => void) => {
+    run()
+    onChange()
   }
 
   // Клик по МОЕМУ варианту из трюма — спросить и поставить взамен (даром, железо своё).
@@ -503,12 +510,14 @@ function SlotModal({
     const arrow = (useCopy: boolean) =>
       `${formatStat(stat.key, stat.value)} → ${formatStat(stat.key, upgradedStatValue(module, useCopy))}`
     const actions: Confirm['actions'] = []
+    // stay: улучшение оставляет модуль в слоте — модалку держим открытой (чини/улучшай подряд).
     if (canUpgrade(world, player, module, true) === null)
-      actions.push({ label: `${t('station.upgradeCopy')} · ${arrow(true)}`, run: () => upgradeModule(world, player, module, true) })
+      actions.push({ label: `${t('station.upgradeCopy')} · ${arrow(true)}`, run: () => upgradeModule(world, player, module, true), stay: true })
     if (canUpgrade(world, player, module, false) === null)
       actions.push({
         label: `${t('station.upgradeCash')} · ${credits(upgradeCashCost(module))} · ${arrow(false)}`,
         run: () => upgradeModule(world, player, module, false),
+        stay: true,
       })
     // Ни одной дороги — почему? Мир не тянет этот класс (нужен развитее) — своя причина;
     // иначе просто нет денег.
@@ -580,7 +589,7 @@ function SlotModal({
               world={world}
               module={module}
               onStrip={() => module && commit(() => unfitModule(player, module))}
-              onRepair={() => module && commit(() => runRepair(world, module))}
+              onRepair={() => module && commitStay(() => runRepair(world, module))}
               onUpgrade={askUpgrade}
               onSell={() => module && commit(() => sellModule(world, player, module))}
             />
@@ -649,6 +658,10 @@ function ActionBar({
   const noRoom = module ? freeCapacity(player.hold) < module.mass : true
   const repairCostNow = module ? repairCostFor(world, module) : 0
   const maxed = module ? canUpgrade(world, player, module, true) === 'maxed' : true
+  // Деталь не изнашивается и не чинится: «ремонт» на бронеплите латает КОРПУС корабля
+  // (общий, до нового максимума), на ракете — ДОЗАРЯДКА боезапаса. Зовём по делу, чтобы
+  // не читалось как «эта деталь с износом» — изношенного мы не продаём.
+  const repairLabel = module?.kind === 'missile' ? t('station.rearm') : t('station.repairHull')
 
   return (
     <div className="mt-4 flex flex-wrap gap-2 border-t pt-4" style={{ borderColor: DIM }}>
@@ -656,7 +669,7 @@ function ActionBar({
         {t('station.strip')}
       </Button>
       <Button small disabled={repairCostNow <= 0 || world.credits < repairCostNow} onClick={onRepair}>
-        {repairCostNow > 0 ? `${t('station.repair')} · ${credits(repairCostNow)}` : t('station.repair')}
+        {repairCostNow > 0 ? `${repairLabel} · ${credits(repairCostNow)}` : repairLabel}
       </Button>
       <Button small disabled={!module || maxed} onClick={onUpgrade}>
         {t('station.upgrade')}

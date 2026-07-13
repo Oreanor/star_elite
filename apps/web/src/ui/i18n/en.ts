@@ -233,6 +233,8 @@ export const EN: Record<keyof typeof RU, string> = {
   'station.cost': 'COST',
   'station.improvement': 'VS CURRENT',
   'station.repair': 'REPAIR',
+  'station.repairHull': 'REPAIR HULL',
+  'station.rearm': 'REARM',
   'station.replace': 'REPLACE',
   'station.upgrade': 'UPGRADE',
   'station.installed': 'INSTALLED',

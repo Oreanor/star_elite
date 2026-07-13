@@ -248,6 +248,8 @@ export const RU = {
   'station.cost': 'СТОИМОСТЬ',
   'station.improvement': 'ОТ ТЕКУЩЕГО',
   'station.repair': 'ПОЧИНИТЬ',
+  'station.repairHull': 'РЕМОНТ КОРПУСА',
+  'station.rearm': 'ЗАРЯДИТЬ',
   'station.replace': 'ЗАМЕНИТЬ',
   'station.upgrade': 'УЛУЧШИТЬ',
   'station.installed': 'УСТАНОВЛЕНО',
