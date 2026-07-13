@@ -4,6 +4,7 @@ import {
   CRUISE,
   DOCKING,
   GUNNERY,
+  MIELOPHONE,
   STAR_HEAT,
   canDockAt,
   energyFraction,
@@ -88,17 +89,25 @@ export function drawHud(frame: HudFrame): void {
   // Экран смерти — React-оверлей: там нужны кнопки и курсор.
   if (!world.player.alive) return
 
-  drawBodyMarkers(frame)
-  drawTargets(frame)
-  drawPods(frame)
-  drawOffscreenArrows(frame)
+  // Приборы СИСТЕМЫ (метки тел, цели, контейнеры, стрелки, локатор, портрет, стыковка)
+  // молчат, когда борт вырос за PHASE_START (=1000): к этому масштабу единичный мир
+  // растворяется, тела далеко и не для точной наводки, а камера у потолка отвода стоит в
+  // сотне км позади корпуса — дистанции и метки начинают глючить. Остаётся полётная суть:
+  // прицел, вектор скорости, показания, крейсер, тревоги.
+  if (world.player.state.scale < MIELOPHONE.PHASE_START) {
+    drawBodyMarkers(frame)
+    drawTargets(frame)
+    drawPods(frame)
+    drawOffscreenArrows(frame)
+    drawRadar(frame)
+    drawTargetPortrait(frame)
+    drawDocking(frame)
+  }
+
   drawGunsight(frame)
   drawFlightPathMarker(frame)
-  drawRadar(frame)
-  drawTargetPortrait(frame)
   drawReadouts(frame)
   drawCruise(frame)
-  drawDocking(frame)
   drawAlerts(frame)
 
   // Последним: круг бомбы бьёт поверх всего, включая прицел.
