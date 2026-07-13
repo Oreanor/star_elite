@@ -166,7 +166,9 @@ export function Locator({ world }: { world: World }) {
   const fovB = proj(Math.sin(-HALF_FOV) * R, Math.cos(-HALF_FOV) * R, 0)
 
   return (
-    <div className="flex w-full items-start justify-center gap-6 py-1 font-mono">
+    <div className="flex w-full items-start gap-6 py-1 font-mono">
+      {/* Единый расклад всех трёх карт: диск в левых 2/3 (центрован), инфо — в правой 1/3. */}
+      <div className="flex w-2/3 justify-center">
       <div
         ref={box}
         onPointerDown={(e) => {
@@ -253,8 +255,9 @@ export function Locator({ world }: { world: World }) {
           })}
         </svg>
       </div>
+      </div>
 
-      <div className="flex w-64 shrink-0 flex-col" style={{ color: UI.PRIMARY }}>
+      <div className="flex w-1/3 shrink-0 flex-col" style={{ color: UI.PRIMARY }}>
         <h1 className="text-xl tracking-[0.3em]">{t('locator.title')}</h1>
         <p className="mb-6 mt-1 text-[11px] tracking-widest opacity-50">{t('locator.count', { n: marks.length })}</p>
         {active ? (

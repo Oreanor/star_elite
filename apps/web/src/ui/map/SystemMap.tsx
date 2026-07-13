@@ -274,6 +274,8 @@ export function SystemMap({
 
   const content = (
     <>
+      {/* Единый расклад всех трёх карт: диск в левых 2/3 (центрован), инфо — в правой 1/3. */}
+      <div className="flex w-2/3 justify-center">
       <div
         ref={holoRef}
         onPointerDown={onPointerDown}
@@ -284,8 +286,9 @@ export function SystemMap({
       >
         <Hologram points={points} heading={headingOf(world)} navTargetId={world.navTargetId} zoom={zoom} yaw={yaw} tilt={tilt} onSelect={select} />
       </div>
+      </div>
 
-      <div className="flex w-72 shrink-0 flex-col" style={{ color: BODY }}>
+      <div className="flex w-1/3 shrink-0 flex-col" style={{ color: BODY }}>
         <h1 className="text-xl tracking-[0.3em]">{properName(world.systemName).toUpperCase()}</h1>
         {/* Состав системы: сколько звёзд, планет, лун и причалов — видно, что тут есть. */}
         <p className="mb-6 mt-1 text-[11px] tracking-widest opacity-50">{census(world)}</p>
@@ -329,7 +332,7 @@ export function SystemMap({
   )
 
   if (embedded) {
-    return <div className="flex items-start justify-center gap-6 py-2 font-mono">{content}</div>
+    return <div className="flex w-full items-start gap-6 py-2 font-mono">{content}</div>
   }
 
   return (

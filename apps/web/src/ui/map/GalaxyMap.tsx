@@ -677,21 +677,29 @@ export function GalaxyMap({ onClose, embedded = false }: { onClose: () => void; 
   // Выбор берётся из МИРА и туда же пишется: намеченная у причала цель обязана
   // пережить закрытие карты и отчаливание — прыгать-то можно только отчалив.
   const [selected, setSelected] = useState<number | null>(world.jumpTargetIndex)
-  const [popup, setPopup] = useState<{ x: number; y: number; w: number; h: number } | null>(null)
-  const pointer = useRef({ x: 0, y: 0, w: 0, h: 0 })
 
-  // Фильтр обитаемости: всё / только обитаемые / только необитаемые. Отсеянные звёзды
-  // гаснут и перестают ловить курсор — глаз не спорит с сотнями лишних точек.
-  const [filter, setFilter] = useState<'all' | 'inhabited' | 'uninhabited'>('all')
+  // Фильтр по характеру системы: всё / со станциями (разумная раса колонизовала) /
+  // с примитивной жизнью (фауна, без причала) / пустые (нет обитаемых миров). Отсеянные
+  // звёзды гаснут и перестают ловить курсор — глаз не спорит с сотнями лишних точек.
+  const [filter, setFilter] = useState<'all' | 'stations' | 'primitive' | 'empty'>('all')
   // Показывать ли метки знакомых и живых игроков. По умолчанию да — но их можно убрать.
   const [showContacts, setShowContacts] = useState(true)
   // Поиск по имени системы / её планеты / причала. Совпадение подсвечиваем и наводим камеру.
   const [query, setQuery] = useState('')
 
-  const inhabited = useMemo(() => systems.map(isInhabited), [systems])
+  // Категория системы: станция (раса колонизовала) → примитивная жизнь (фауна, без
+  // причала) → пусто (нет обитаемых миров). Правило то же, что в генерации: причал
+  // строят только играбельные расы, у одной фауны его не бывает.
+  const category = useMemo(
+    () =>
+      systems.map((s): 'stations' | 'primitive' | 'empty' =>
+        stationsOf(s).length > 0 ? 'stations' : isInhabited(s) ? 'primitive' : 'empty',
+      ),
+    [systems],
+  )
   const visible = useMemo(
-    () => systems.map((_, i) => filter === 'all' || (filter === 'inhabited' ? inhabited[i]! : !inhabited[i]!)),
-    [systems, filter, inhabited],
+    () => systems.map((_, i) => filter === 'all' || category[i] === filter),
+    [systems, filter, category],
   )
   const search = query.trim().toLowerCase()
   const searchIndex = useMemo(() => {
@@ -712,7 +720,6 @@ export function GalaxyMap({ onClose, embedded = false }: { onClose: () => void; 
     world.jumpTargetIndex = index
     const seat = stationSeat(systemDefFor(index, world.galaxySeed))
     world.jumpArrivalPlanet = seat >= 0 ? seat : null
-    setPopup({ ...pointer.current })
   }
   const control = useRef({ yaw: 0.6, pitch: 0.5, distance: GALAXY.RADIUS_LY * 2.6, target: new Vector3() })
   const dragging = useRef(false)
@@ -771,14 +778,11 @@ export function GalaxyMap({ onClose, embedded = false }: { onClose: () => void; 
 
   const content = (
     <>
+      {/* Единый расклад всех трёх карт: полотно в левых 2/3, пульт и инфо — в правой 1/3. */}
       <div
         ref={viewport}
-        className="relative flex-1 cursor-grab active:cursor-grabbing"
-        onPointerDown={(e) => {
-          dragging.current = true
-          const box = e.currentTarget.getBoundingClientRect()
-          pointer.current = { x: e.clientX - box.left, y: e.clientY - box.top, w: box.width, h: box.height }
-        }}
+        className="relative w-2/3 cursor-grab active:cursor-grabbing"
+        onPointerDown={() => (dragging.current = true)}
         onPointerUp={() => (dragging.current = false)}
         onPointerLeave={() => (dragging.current = false)}
         onPointerMove={(e) => {
@@ -818,67 +822,6 @@ export function GalaxyMap({ onClose, embedded = false }: { onClose: () => void; 
           <Route from={here} to={picked ? positionOf(picked.system) : null} />
           <StarLabel at={picked ? positionOf(picked.system) : null} box={label} />
         </Canvas>
-
-        <div className="pointer-events-none absolute inset-x-0 top-0 p-6">
-          <div className="text-xl tracking-[0.3em]">
-            {t('map.galaxy')} {properName(galaxy.name).toUpperCase()}
-          </div>
-          <div className="mt-1 text-xs tracking-widest" style={{ color: UI.DIM }}>
-            {galaxyShapeName(galaxy.shape).toUpperCase()} · {t('map.starsCount', { n: systems.length })}
-          </div>
-        </div>
-
-        {/* Пульт карты — поиск, фильтр обитаемости, галочка знакомых. Ловит клики сам
-            (`pointer-events-auto`) и гасит pointer-события, чтобы возня в нём не крутила диск. */}
-        <div
-          className="pointer-events-auto absolute right-0 top-0 flex flex-col items-end gap-2 p-6 text-xs"
-          onPointerDown={(e) => e.stopPropagation()}
-        >
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder={t('map.search')}
-            className="w-56 rounded border bg-black/40 px-3 py-1.5 tracking-widest outline-none placeholder:opacity-40"
-            style={{
-              borderColor: search.length >= 2 && searchIndex == null ? UI.WARN : 'rgba(124,196,255,0.35)',
-              color: UI.PRIMARY,
-            }}
-          />
-          {search.length >= 2 && searchIndex == null && (
-            <span style={{ color: UI.WARN }}>{t('map.searchNone')}</span>
-          )}
-
-          <div className="flex gap-1">
-            {(['all', 'inhabited', 'uninhabited'] as const).map((f) => {
-              const on = filter === f
-              return (
-                <button
-                  key={f}
-                  type="button"
-                  onClick={() => setFilter(f)}
-                  className="cursor-pointer border px-2 py-1 tracking-widest transition-colors"
-                  style={{
-                    borderColor: on ? UI.PRIMARY : UI.DIM,
-                    backgroundColor: on ? UI.PRIMARY : 'transparent',
-                    color: on ? '#000' : UI.DIM,
-                  }}
-                >
-                  {t(`map.filter.${f}` as 'map.filter.all')}
-                </button>
-              )
-            })}
-          </div>
-
-          <label className="flex cursor-pointer items-center gap-2 tracking-widest" style={{ color: UI.DIM }}>
-            <input
-              type="checkbox"
-              checked={showContacts}
-              onChange={(e) => setShowContacts(e.target.checked)}
-              className="cursor-pointer accent-[#7fd6ff]"
-            />
-            {t('map.showContacts')}
-          </label>
-        </div>
 
         {/* Подпись «ВЫ» и имя под курсором живут всегда: их двигает кадр, а не React. */}
         <div
@@ -931,23 +874,92 @@ export function GalaxyMap({ onClose, embedded = false }: { onClose: () => void; 
           </div>
         ))}
 
-        {/* Плашка выбранной системы — прямо у курсора. Правой колонки больше нет:
-            карта звёзд занимает всё поле и центрируется сама. */}
-        {popup && selected != null && systems[selected] && (
+      </div>
+
+      {/* Правая 1/3: заголовок галактики, пульт (поиск / фильтр / знакомые) и выбранная
+          система. Гасим pointer-события, чтобы возня в пульте не крутила диск карты. */}
+      <div
+        className="flex w-1/3 shrink-0 flex-col gap-3 overflow-y-auto pl-1 text-xs"
+        onPointerDown={(e) => e.stopPropagation()}
+      >
+        <div>
+          <div className="text-xl tracking-[0.3em]">
+            {t('map.galaxy')} {properName(galaxy.name).toUpperCase()}
+          </div>
+          <div className="mt-1 tracking-widest" style={{ color: UI.DIM }}>
+            {galaxyShapeName(galaxy.shape).toUpperCase()} · {t('map.starsCount', { n: systems.length })}
+          </div>
+        </div>
+
+        <input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder={t('map.search')}
+          className="w-full rounded border bg-black/40 px-3 py-1.5 tracking-widest outline-none placeholder:opacity-40"
+          style={{
+            borderColor: search.length >= 2 && searchIndex == null ? UI.WARN : 'rgba(124,196,255,0.35)',
+            color: UI.PRIMARY,
+          }}
+        />
+        {search.length >= 2 && searchIndex == null && (
+          <span style={{ color: UI.WARN }}>{t('map.searchNone')}</span>
+        )}
+
+        {/* Фильтр по характеру системы: все / со станциями / примитивная жизнь / пусто. */}
+        <div className="flex flex-wrap gap-1">
+          {(['all', 'stations', 'primitive', 'empty'] as const).map((f) => {
+            const on = filter === f
+            return (
+              <button
+                key={f}
+                type="button"
+                onClick={() => setFilter(f)}
+                className="cursor-pointer border px-2 py-1 tracking-widest transition-colors"
+                style={{
+                  borderColor: on ? UI.PRIMARY : UI.DIM,
+                  backgroundColor: on ? UI.PRIMARY : 'transparent',
+                  color: on ? '#000' : UI.DIM,
+                }}
+              >
+                {t(`map.filter.${f}` as 'map.filter.all')}
+              </button>
+            )
+          })}
+        </div>
+
+        <label className="flex cursor-pointer items-center gap-2 tracking-widest" style={{ color: UI.DIM }}>
+          <input
+            type="checkbox"
+            checked={showContacts}
+            onChange={(e) => setShowContacts(e.target.checked)}
+            className="cursor-pointer accent-[#7fd6ff]"
+          />
+          {t('map.showContacts')}
+        </label>
+
+        {/* Выбранная система — карточка прямо в колонке (раньше плашка у курсора). */}
+        {selected != null && systems[selected] ? (
           <SystemPopup
             key={selected}
+            inline
             system={systems[selected]!}
             world={world}
             index={selected}
             docked={world.docked}
-            at={popup}
             onArrival={(planet) => {
               world.jumpArrivalPlanet = planet
               bump()
             }}
             onJump={() => doJump(selected, world.jumpArrivalPlanet != null ? { kind: 'body', planet: world.jumpArrivalPlanet } : null)}
-            onClose={() => setPopup(null)}
+            onClose={() => {
+              setSelected(null)
+              world.jumpTargetIndex = null
+              world.jumpArrivalPlanet = null
+              bump()
+            }}
           />
+        ) : (
+          <p className="mt-2 opacity-60" style={{ color: UI.DIM }}>{t('map.pickSystem')}</p>
         )}
       </div>
     </>
@@ -956,7 +968,7 @@ export function GalaxyMap({ onClose, embedded = false }: { onClose: () => void; 
   // Встроена в консоль: рамку и фон даёт стеклянная панель, карте — заполнить её.
   if (embedded) {
     return (
-      <div className="flex h-full min-h-[30rem] items-stretch overflow-hidden font-mono" style={{ color: UI.PRIMARY }}>
+      <div className="flex h-full min-h-[30rem] items-stretch gap-6 overflow-hidden font-mono" style={{ color: UI.PRIMARY }}>
         {content}
       </div>
     )
@@ -971,7 +983,7 @@ export function GalaxyMap({ onClose, embedded = false }: { onClose: () => void; 
       style={{ background: 'radial-gradient(ellipse at center, rgba(12,34,60,0.66), rgba(0,3,8,0.93))' }}
     >
       <div
-        className="flex h-[calc(100vh-3rem)] w-[calc(100vw-3rem)] items-stretch overflow-hidden rounded-2xl border font-mono"
+        className="flex h-[calc(100vh-3rem)] w-[calc(100vw-3rem)] items-stretch gap-6 overflow-hidden rounded-2xl border p-6 font-mono"
         style={{
           color: UI.PRIMARY,
           borderColor: 'rgba(124,196,255,0.3)',
@@ -998,6 +1010,7 @@ function SystemPopup({
   index,
   docked,
   at,
+  inline = false,
   onArrival,
   onJump,
   onClose,
@@ -1006,7 +1019,10 @@ function SystemPopup({
   world: World
   index: number
   docked: boolean
-  at: { x: number; y: number; w: number; h: number }
+  /** Позиция плашки у курсора — только для всплывающего режима. В `inline` не нужна. */
+  at?: { x: number; y: number; w: number; h: number }
+  /** Встроена в колонку инфо (статичная карточка), а не всплывает у курсора. */
+  inline?: boolean
   onArrival: (planet: number | null) => void
   onJump: () => void
   onClose: () => void
@@ -1023,19 +1039,19 @@ function SystemPopup({
     [system, stations],
   )
 
-  // Прижимаем плашку к полю карты: у краёв растёт внутрь, но верх не заходит за верхний
-  // край (там срезалось). Плашка широкая — данные слева, схемка справа.
+  // Всплывающий режим — прижимаем плашку к полю карты у курсора. Встроенная (`inline`)
+  // карточка просто течёт в колонке инфо: ни абсолюта, ни фиксированной ширины.
   const PW = 384
   const PH = 220
-  const left = Math.max(8, Math.min(at.x + 12, at.w - PW - 8))
-  const top = Math.max(8, Math.min(at.y, at.h - PH - 8))
+  const pos = at && !inline
+    ? { left: Math.max(8, Math.min(at.x + 12, at.w - PW - 8)), top: Math.max(8, Math.min(at.y, at.h - PH - 8)) }
+    : null
 
   return (
     <div
-      className="absolute z-30 w-96 rounded-lg border p-4 backdrop-blur-md"
+      className={inline ? 'rounded-lg border p-4' : 'absolute z-30 w-96 rounded-lg border p-4 backdrop-blur-md'}
       style={{
-        left,
-        top,
+        ...(pos ?? {}),
         borderColor: 'rgba(124,196,255,0.4)',
         background: 'rgba(8,22,42,0.88)',
         boxShadow: '0 0 30px rgba(60,150,255,0.2)',
