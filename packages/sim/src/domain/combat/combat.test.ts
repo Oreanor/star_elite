@@ -112,6 +112,26 @@ describe('лазер', () => {
     expect(before - enemy.shield).toBeCloseTo(expected, 0)
   })
 
+  /**
+   * Усилитель корпуса (`laserAmp`) множит урон ЛЮБОГО лазера — так «корабль поколений»
+   * бьёт своим орудием ×1000. Это свойство ЖЕЛЕЗА (шасси), а не привилегия игрока:
+   * тот же множитель считался бы и у бота на таком корпусе. Проверяем на ×5.
+   */
+  it('усилитель корпуса (laserAmp) множит урон лазера', () => {
+    const { world, enemy } = withOneEnemy()
+    enemyAhead(world, 700)
+    enemy.shield = 5000 // с запасом: весь залп ляжет в щит, меряем чистое вычитание
+    const p = world.player
+    // Клон шасси с усилителем: каталог (общий синглтон) не мутируем.
+    p.loadout = { ...p.loadout, chassis: { ...p.loadout.chassis, laserAmp: 5 } }
+    const base = p.spec.mounts.reduce((s, m) => s + (isLaser(m.weapon) ? m.weapon.damage : 0), 0)
+
+    const before = enemy.shield
+    fireLasers(world, p, false)
+    settleBolts(world)
+    expect(before - enemy.shield).toBeCloseTo(base * 5, 0)
+  })
+
   it('перегрев блокирует стрельбу', () => {
     const { world } = withOneEnemy()
     enemyAhead(world, 500)

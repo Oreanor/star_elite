@@ -65,11 +65,12 @@ export function fireLasers(world: World, e: ShipEntity, hostile: boolean): boole
     // Дула установки. Нет списка — одно дуло в `offset`. Общая мощность делится поровну:
     // два дула — по половине урона, в сумме тот же лазер.
     //
-    // Урон ∝ МАСШТАБУ стрелка (миелофон): вырос в 100 раз — бьёшь в 100 раз сильнее, и
-    // снесёшь корабль поколений (с его гигантским корпусом) в 100 раз быстрее. При обычном
-    // размере scale=1 — правило ничего не меняет. Так гигант дерётся с гигантом по логике.
+    // Множитель урона = МАСШТАБ стрелка (миелофон: вырос ×100 — бьёшь ×100) × УСИЛИТЕЛЬ
+    // корпуса (`laserAmp`: у «корабля поколений» ×1000, у обычных 1). Оба честные свойства
+    // мира, а не привилегия игрока: то же и у ботов. Так гигант дерётся с гигантом по логике.
+    const amp = e.state.scale * (e.loadout.chassis.laserAmp ?? 1)
     const nozzles = mount.hardpoint.nozzles ?? [mount.hardpoint.offset]
-    const perNozzle = (laser.damage / nozzles.length) * e.state.scale
+    const perNozzle = (laser.damage / nozzles.length) * amp
     for (const nozzle of nozzles) {
       offsetToWorld(e, nozzle, _muzzle)
       // Нацелен в точку сведения: болт наследует направление ствола, но не скорость носителя.
