@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Mesh, Quaternion, Sprite, Vector3, type Texture } from 'three'
 import type { BodyEntity, PlanetType } from '@elite/sim'
 import { useSession } from '../../app/GameContext'
-import { ATMOSPHERE, ATMOSPHERE_COLOR, BODY_SEGMENTS, CITY_LIGHTS, CORONA, MOON_DECOR } from '../config'
+import { ATMOSPHERE, ATMOSPHERE_COLOR, BODY_SEGMENTS, CITY_LIGHTS, CORONA, GIANT_RENDER_CAP, MOON_DECOR } from '../config'
 import { atmosphereGeometry, planetGeometry, starGeometry, type PlanetLook } from '../geometry/bodies'
 import { coronaTexture } from '../geometry/corona'
 import { stationGeometry } from '../geometry/props'
@@ -76,6 +76,16 @@ function place(mesh: Mesh, body: BodyEntity, time: number, rest: Vector3): void 
 
 const _toStar = new Vector3()
 
+/**
+ * За потолком отвода камеры (`GIANT_RENDER_CAP`) мир ЗАМИРАЕТ: борт и камера дальше не
+ * растут, поэтому реальные тела перестают отъезжать и повисли бы в кадре огромными. Домножаем
+ * их размер на cap/рост — на звёздном масштабе планеты и светило съёживаются в точки, будто
+ * уплыли вдаль, освобождая кадр под галактику. Реальная звезда становится одной из её точек.
+ */
+function worldShrink(scale: number): number {
+  return scale > GIANT_RENDER_CAP ? GIANT_RENDER_CAP / scale : 1
+}
+
 function Planet({ body }: { body: BodyEntity }) {
   const ref = useRef<Mesh>(null)
   const airRef = useRef<Mesh>(null)
@@ -123,18 +133,30 @@ function Planet({ body }: { body: BodyEntity }) {
   useEffect(() => () => lightsMaterial?.dispose(), [lightsMaterial])
 
   useFrame(() => {
-    if (ref.current) place(ref.current, body, session.world.time, REST_POLE)
+    // Размер жмётся к точке за потолком камеры: гигантский борт «отъезжает» от системы.
+    const shrink = worldShrink(session.world.player.state.scale)
+
+    if (ref.current) {
+      place(ref.current, body, session.world.time, REST_POLE)
+      ref.current.scale.setScalar(body.radius * shrink)
+    }
 
     /**
      * Оболочка огней вращается ВМЕСТЕ с планетой: сетка городов считается в её
      * связанных осях. Оболочка воздуха — нет: она гладкая, и вращать в ней нечего.
      */
-    if (lightsRef.current) place(lightsRef.current, body, session.world.time, REST_POLE)
+    if (lightsRef.current) {
+      place(lightsRef.current, body, session.world.time, REST_POLE)
+      lightsRef.current.scale.setScalar(body.radius * CITY_LIGHTS.SCALE * shrink)
+    }
 
     const air = airRef.current
     // Позиция — из тела, свет — из звезды. Плавающее начало координат двигает
     // и то и другое.
-    if (air) air.position.copy(body.pos)
+    if (air) {
+      air.position.copy(body.pos)
+      air.scale.setScalar(body.radius * airScale * shrink)
+    }
 
     if (!airMaterial && !lightsMaterial) return
 
@@ -177,6 +199,7 @@ function Planet({ body }: { body: BodyEntity }) {
 function Star({ body }: { body: BodyEntity }) {
   const ref = useRef<Mesh>(null)
   const glowRef = useRef<Sprite>(null)
+  const session = useSession()
 
   const texture = useMemo(coronaTexture, [])
   const material = useMemo(() => coronaMaterial(texture, body.color), [texture, body.color])
@@ -201,8 +224,17 @@ function Star({ body }: { body: BodyEntity }) {
   }, [surface, surfaceMaterial])
 
   useFrame((_, dt) => {
-    ref.current?.position.copy(body.pos)
-    glowRef.current?.position.copy(body.pos)
+    // Светило тоже съёживается за потолком: на галактическом масштабе оно становится
+    // одной из точек галактики, а не висит огромным диском поверх звёздного поля.
+    const shrink = worldShrink(session.world.player.state.scale)
+    if (ref.current) {
+      ref.current.position.copy(body.pos)
+      ref.current.scale.setScalar(body.radius * shrink)
+    }
+    if (glowRef.current) {
+      glowRef.current.position.copy(body.pos)
+      glowRef.current.scale.set(glowSize * shrink, glowSize * shrink, 1)
+    }
     // Плазма кипит и вращается в шейдере — двигаем только время. Реальное (не мировое):
     // это косметика, шаг симуляции ей не нужен, а под паузой звезда пусть живёт.
     if (surfaceMaterial) surfaceMaterial.uniforms.uTime!.value += dt
@@ -231,7 +263,10 @@ function Station({ body }: { body: BodyEntity }) {
   // Кориолис вращается вокруг продольной оси — так было в оригинале. Домен задаёт
   // ей `spinAxis = Z`, поэтому наклон здесь вырождается в тождество, а не в поворот.
   useFrame(() => {
-    if (ref.current) place(ref.current, body, session.world.time, REST_BARREL)
+    if (ref.current) {
+      place(ref.current, body, session.world.time, REST_BARREL)
+      ref.current.scale.setScalar(body.radius * worldShrink(session.world.player.state.scale))
+    }
   })
 
   return <mesh ref={ref} geometry={stationGeometry()} material={stationMaterial()} scale={body.radius} />
