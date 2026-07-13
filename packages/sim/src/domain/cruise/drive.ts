@@ -27,10 +27,15 @@ export interface CruiseState {
   factor: number
   /** Почему не разгоняемся. Показывается на HUD: игрок должен понимать причину. */
   block: CruiseBlock
+  /**
+   * Держит ли пилот клавишу крейсера ПРЯМО СЕЙЧАС. Отдельно от `factor` (тот после
+   * отпускания ещё стекает): HUD гасит плашку «форсажа» в тот же миг, как отпустили.
+   */
+  engaged: boolean
 }
 
 export function createCruiseState(): CruiseState {
-  return { factor: 1, block: null }
+  return { factor: 1, block: null, engaged: false }
 }
 
 /** Разогнан ли настолько, что вышел из обычного взаимодействия с миром. */
@@ -120,5 +125,6 @@ export function updateCruise(ship: ShipEntity, world: World, want: boolean, dt: 
   if (target <= 1 && cruise.factor < CRUISE.IDLE_EPSILON) cruise.factor = 1
 
   cruise.block = block
+  cruise.engaged = want && ship.alive
   ship.controls.cruise = cruise.factor
 }

@@ -7,7 +7,6 @@ import {
   MIELOPHONE,
   STAR_HEAT,
   canDockAt,
-  energyFraction,
   findBody,
   findStation,
   autofightActive,
@@ -34,11 +33,11 @@ import { currentGameDate } from '../clock'
 import { GALAXY_LAYER, HUD_SCALE } from '../../render/config'
 import { galaxyRadar } from '../../render/scene/galaxyRadar'
 import { HUD_COLORS, bar, circle, corners, dot, ellipse, line, text } from './draw'
-import { t } from '../i18n'
+import { t, type Key } from '../i18n'
 import { chassisName, occupationName, properName, shipTypeName } from '../i18n/dataNames'
 import { drawFlare } from './drawFlare'
 import { angularSize, formatDistance, formatScale, projectPoint, scaleParts, speedParts } from './project'
-import { activeWarning, pushWarning } from './warnings'
+import { activeWarning, pushWarning, type Plate } from './warnings'
 import {
   PORTRAIT_GRID,
   loadSheet,
@@ -287,11 +286,10 @@ function drawTargets({ ctx, camera, world, width, height }: HudFrame): void {
     if (locked) {
       const shield = ship.spec.hull.shield > 0 ? ship.shield / ship.spec.hull.shield : 0
       const hull = ship.hull / ship.spec.hull.hull
-      // Щит, корпус И ЭНЕРГИЯ цели: по батарее видно, может ли он бустить/стрелять,
-      // или уже выдохся — тогда дожать проще. Три полоски стопкой над рамкой.
-      bar(ctx, p.x - 20 * S, p.y - size / 2 - 15 * S, 40 * S, 3 * S, shield, HUD_COLORS.PRIMARY)
-      bar(ctx, p.x - 20 * S, p.y - size / 2 - 10 * S, 40 * S, 3 * S, hull, HUD_COLORS.DANGER)
-      bar(ctx, p.x - 20 * S, p.y - size / 2 - 5 * S, 40 * S, 3 * S, energyFraction(ship), HUD_COLORS.WARN)
+      // Щит и корпус цели — две полоски стопкой над рамкой. Энергию не показываем:
+      // её ничто не тратит, шкала всегда была бы полной (см. убранную БАТ).
+      bar(ctx, p.x - 20 * S, p.y - size / 2 - 10 * S, 40 * S, 3 * S, shield, HUD_COLORS.PRIMARY)
+      bar(ctx, p.x - 20 * S, p.y - size / 2 - 5 * S, 40 * S, 3 * S, hull, HUD_COLORS.DANGER)
     }
   }
 }
@@ -806,6 +804,13 @@ function turtle(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: number
 let _prevSpeed = 0
 let _prevScale = 1
 
+// Подпись плашки масштабирования выбирается ОДИН раз на сессию удержания (иначе она
+// мигала бы между вариантами каждый кадр). По умолчанию сухое «МАСШТАБИРОВАНИЕ», и лишь
+// изредка (ALICE_CHANCE) — цитата из «Алисы». `_scaleSign` помнит знак текущей сессии.
+let _scaleSign = 0
+let _scaleLabelKey: Key = 'hud.scalePlate'
+const ALICE_CHANCE = 0.2
+
 /**
  * Крупная величина: цифра большим кеглем, единица вдвое мельче справа, тренд-стрелка
  * рядом. `unitSuffix` рисуется на базовой линии низа цифры, чтобы не «висеть» вверху.
@@ -894,7 +899,6 @@ function drawReadouts({ ctx, world, height }: HudFrame): void {
   const shield = player.spec.hull.shield > 0 ? player.shield / player.spec.hull.shield : 0
   const hull = player.hull / player.spec.hull.hull
   const laser = peakHeat(player)
-  const energy = energyFraction(player)
   const aux = auxFraction(player)
   const temp = player.hullHeat
   // Заряд привода как доля предела модели. Нет привода — шкала пустая и тусклая.
@@ -902,10 +906,13 @@ function drawReadouts({ ctx, world, height }: HudFrame): void {
   const jumpColor = player.spec.jumpRange <= 0 ? HUD_COLORS.DIM : scooping(player) ? HUD_COLORS.TARGET : HUD_COLORS.PRIMARY
 
   const rows: [string, number, string][] = [
+    // Тяга — первой строкой, сразу под цифрами скорости: главный орган хода на виду.
+    // Задний ход той же шкалой, но жёлтым и по модулю: реверс — не «ноль тяги».
+    [t('hud.throttle'), Math.abs(player.controls.throttle), player.controls.throttle < 0 ? HUD_COLORS.WARN : HUD_COLORS.PRIMARY],
     [t('hud.shield'), shield, HUD_COLORS.PRIMARY],
     [t('hud.hull'), hull, hull < 0.3 ? HUD_COLORS.DANGER : HUD_COLORS.PRIMARY],
-    // Главная батарея корабля: полёт, форсаж, оружие.
-    [t('hud.battery'), energy, energy < 0.15 ? HUD_COLORS.DANGER : HUD_COLORS.PRIMARY],
+    // Главной батареи (БАТ) на HUD больше нет: её ничто не расходовало (полёт/форсаж/оружие
+    // энергию не тратят) — декоративная шкала убрана. Осталась аукс-батарея, которую тратят реально.
     // Батарея ДОП-ОТСЕКА (аукс): общий запас бомбы, ПРО и маскировки. Полная светится
     // целью — бомба готова; на нуле красная — ни импульса, ни поля. Оттого счётчик один.
     [t('hud.aux'), aux, bombReady(player) ? HUD_COLORS.TARGET : aux < 0.15 ? HUD_COLORS.DANGER : HUD_COLORS.PRIMARY],
@@ -915,8 +922,6 @@ function drawReadouts({ ctx, world, height }: HudFrame): void {
     [t('hud.temp'), temp, temp > STAR_HEAT.LEAK_THRESHOLD ? HUD_COLORS.DANGER : temp > 0.5 ? HUD_COLORS.WARN : HUD_COLORS.DIM],
     // Заряд гиперпривода: тратится прыжком, черпается у звезды (светится целью).
     [t('hud.jump'), jump, jumpColor],
-    // Задний ход рисуем той же шкалой, но жёлтым и по модулю: реверс — не «ноль тяги».
-    [t('hud.throttle'), Math.abs(player.controls.throttle), player.controls.throttle < 0 ? HUD_COLORS.WARN : HUD_COLORS.PRIMARY],
   ]
 
   for (const [label, value, color] of rows) {
@@ -987,7 +992,6 @@ function drawWarnings(frame: HudFrame): void {
 
   if (player.hull / player.spec.hull.hull < 0.25) pushWarning('hullCritical', now)
   if (peakHeat(player) >= 1) pushWarning('laserHot', now)
-  if (energyFraction(player) < 0.12) pushWarning('lowEnergy', now)
   if (player.cruise.block === 'mass-lock') pushWarning('massLock', now)
   if (scooping(player)) pushWarning('refuel', now)
 
@@ -1030,7 +1034,31 @@ function drawWarnings(frame: HudFrame): void {
   }
 
   // ── Показываем самую важную живую плашку ────────────────────────────────────
-  const plate = activeWarning(now)
+  // Форсаж (крейсерский разгон на Shift) — не транзиентная весть, а СОСТОЯНИЕ: мигает,
+  // пока держишь, и гаснет в тот же миг, как отпустил (флаг `cruise.engaged`, не тающий
+  // `factor`). Оттого рисуем её отдельным «синтетическим» плашко-состоянием, а не через
+  // очередь `pushWarning` (та живёт WARN_LIFE и не погасла бы сразу). Реальные предупреждения
+  // важнее — если есть живая плашка из очереди, показываем её, а форсаж уступает.
+  const boostPlate: Plate | null = player.cruise.engaged
+    ? { color: HUD_COLORS.PRIMARY, hz: 2, rank: 0, label: t('hud.boostPlate'), born: now }
+    : null
+  // Масштабирование миелофоном (клавиша роста) — ЖЁЛТОЕ состояние. Тот же принцип, что
+  // у форсажа: пока держишь `grow`, мигает; отпустил — гаснет. Обычно сухое «МАСШТАБИРОВАНИЕ»,
+  // и лишь изредка (ALICE_CHANCE) — цитата из «Алисы»: рост — «чудесатее», сжатие — «подзорная
+  // труба». Подпись выбираем РАЗ на сессию удержания (модульная память), а не каждый кадр.
+  const grow = player.controls.grow
+  const growSign = Math.sign(grow)
+  if (growSign === 0) {
+    _scaleSign = 0
+  } else if (growSign !== _scaleSign) {
+    _scaleSign = growSign
+    _scaleLabelKey =
+      Math.random() < ALICE_CHANCE ? (grow > 0 ? 'hud.growPlate' : 'hud.shrinkPlate') : 'hud.scalePlate'
+  }
+  const scalePlate: Plate | null =
+    growSign !== 0 ? { color: HUD_COLORS.WARN, hz: 1.5, rank: 0, label: t(_scaleLabelKey), born: now } : null
+  // Реальные предупреждения важнее; из состояний масштаб (нарратив) впереди форсажа.
+  const plate = activeWarning(now) ?? scalePlate ?? boostPlate
   if (!plate) return
 
   const font = hudFont(15 * S)
