@@ -637,13 +637,14 @@ function MenuButton({
       type="button"
       disabled={disabled}
       onPointerDown={onClick}
-      // Заливка и размытие — как у стеклянной плашки (rgba(20,44,74,0.38)): на пёстром
-      // фоне титула 8%-я муть тонула, а эта читается. Наведение по-прежнему заливает целиком.
-      className="w-56 cursor-pointer border border-[#7fd6ff] bg-[#142c4a]/[0.38] px-8 py-3 text-base
+      // Тёмная плотная заливка: на СВЕТЛОМ фоне (белая/голубая звезда за меню) прежние
+      // 38% тонули, и светлый текст сливался с белым. 82% тёмного тёмно-синего держит
+      // контраст на любом фоне. Наведение по-прежнему заливает кнопку целиком.
+      className="w-56 cursor-pointer border border-[#7fd6ff] bg-[#0a1a2f]/[0.82] px-8 py-3 text-base
                  backdrop-blur-md tracking-[0.3em] text-[#7fd6ff] transition-colors
                  hover:bg-[#7fd6ff] hover:text-black
-                 disabled:cursor-wait disabled:border-[#3f7391] disabled:bg-transparent
-                 disabled:text-[#3f7391]"
+                 disabled:cursor-wait disabled:border-[#3f7391] disabled:bg-[#0a1a2f]/[0.7]
+                 disabled:text-[#8fb4cc]"
     >
       {children}
     </button>
