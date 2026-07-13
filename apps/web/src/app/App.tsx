@@ -229,8 +229,11 @@ function Shell({ onRestart }: { onRestart: () => void }) {
     setVeil(true)
     window.setTimeout(() => {
       swap()
-      // Светлеем только со СЛЕДУЮЩЕГО кадра после подмены: под пеленой уже игра, не титул.
-      requestAnimationFrame(() => requestAnimationFrame(() => setVeil(false)))
+      // Под пеленой держим чёрное ещё полсекунды — не рвём переход встык, — и лишь потом
+      // светлеем со следующего кадра: под пеленой уже игра, не титул.
+      window.setTimeout(() => {
+        requestAnimationFrame(() => requestAnimationFrame(() => setVeil(false)))
+      }, VEIL_HOLD_MS)
     }, VEIL_FADE_MS)
   }, [])
 
@@ -678,8 +681,10 @@ const LOCK_GIVE_UP_MS = 8000
 const TREMBLE_LEAD_MS = 90
 /** Сколько держим «вжух» до перехода в игру, мс: корабль успевает улететь, небо пустеет. */
 const LAUNCH_HOLD_MS = 1000
-/** Затемнение/просветление перехода в игру, мс каждое (полный цикл — 0.8с). */
+/** Затемнение/просветление перехода в игру, мс каждое. */
 const VEIL_FADE_MS = 400
+/** Держим чёрное между затемнением и просветлением, мс: переход не рвётся встык. */
+const VEIL_HOLD_MS = 500
 
 /** Какой экран паузы раскрыт: главный, таблица клавиш или настройки. */
 type PauseScreen = 'main' | 'keys' | 'settings'
