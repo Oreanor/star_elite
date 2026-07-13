@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useState } from 'react'
 import type { ShipEntity, World } from '@elite/sim'
 import { UI } from '../theme'
+import { GLASS_PANEL } from './backdrop'
 import { loadSheet, pilotEmotion, portraitIndex, portraitSheet, portraitStyle, type Emotion } from '../portrait'
 import { StaticNoise } from '../StaticNoise'
 
@@ -246,11 +247,7 @@ export function Modal({
       <div
         className={`w-full rounded-2xl border p-6 backdrop-blur-md ${wide ? 'max-h-[85vh] max-w-2xl overflow-y-auto' : 'max-w-sm'}`}
         onClick={(e) => e.stopPropagation()}
-        style={{
-          borderColor: 'rgba(124,196,255,0.3)',
-          background: 'linear-gradient(150deg, rgba(40,95,150,0.28), rgba(8,22,42,0.55))',
-          boxShadow: '0 0 60px rgba(60,150,255,0.18), inset 0 0 80px rgba(80,180,255,0.06)',
-        }}
+        style={GLASS_PANEL}
       >
         {children}
       </div>

@@ -27,6 +27,7 @@ function withContact(at: number, over: Partial<Acquaintance> = {}): { world: Wor
     roaming: true,
     meetings: 1,
     relationship: 'neutral',
+    history: [{ kind: 'met', at: 0 }],
     alive: true,
     ...over,
   }

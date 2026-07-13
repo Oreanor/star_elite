@@ -274,6 +274,9 @@ export function spawnResidentContacts(world: World): ShipEntity[] {
     ship.persona = rec.persona
     ship.faction = rec.faction
     ship.acquaintanceId = rec.id
+    // Снова свиделись: ты вернулся в его систему и застал его на радаре. Отсюда бот
+    // при разговоре знает, что вы не впервые (`metBefore`), а не встречает как чужого.
+    rec.meetings += 1
     born.push(ship)
   }
   return born

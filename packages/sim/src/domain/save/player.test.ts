@@ -59,6 +59,11 @@ function playedWorld(): World {
     roaming: true,
     meetings: 2,
     relationship: 'friendly',
+    history: [
+      { kind: 'met', at: 0 },
+      { kind: 'deal', at: 12, toPlayer: true, credits: 5000, commodityName: null, units: 0 },
+      { kind: 'note', at: 20, text: 'обещал придержать для меня редкую руду' },
+    ],
     alive: true,
   }
   w.acquaintances.push(met)

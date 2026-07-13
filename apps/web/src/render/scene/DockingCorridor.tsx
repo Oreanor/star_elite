@@ -70,6 +70,13 @@ export function DockingCorridor() {
 
   /** Направление на корабль в момент выдачи допуска. Ноль — допуска не было. */
   const axis = useRef(new Vector3())
+  /**
+   * Дальняя граница коридора вдоль оси, м: кольца за ней (дальше игрока) не рисуем.
+   * Замораживается В МОМЕНТ нажатия L (включения автодока) по плоскости игрока — иначе
+   * кольца торчали бы за корму. −1 — предела нет (автодок ещё не включали): рисуем все.
+   */
+  const limit = useRef(-1)
+  const prevAuto = useRef(false)
 
   useFrame(() => {
     const mesh = ref.current
@@ -81,6 +88,8 @@ export function DockingCorridor() {
     mesh.visible = show
     if (!show || !station) {
       axis.current.setScalar(0)
+      limit.current = -1
+      prevAuto.current = false
       return
     }
 
@@ -92,6 +101,21 @@ export function DockingCorridor() {
       axis.current.copy(_dir.lengthSq() > 1 ? _dir.normalize() : AXIS)
       mesh.quaternion.setFromUnitVectors(AXIS, axis.current)
     }
+
+    // Фронт нажатия L: замораживаем дальнюю границу по плоскости игрока — проекция его
+    // позиции на ось коридора. Кольца дальше этой плоскости больше не рисуем.
+    const auto = session.mode === 'autodock'
+    if (auto && !prevAuto.current) {
+      limit.current = _dir.copy(world.player.state.pos).sub(station.pos).dot(axis.current)
+    }
+    prevAuto.current = auto
+
+    // Сколько колец влезает до границы (кольца идут FIRST, +SPACING, … от станции наружу).
+    // Предела нет — рисуем все; есть — режем draw-range, ближние к станции остаются.
+    mesh.count =
+      limit.current < 0
+        ? CORRIDOR.COUNT
+        : Math.max(0, Math.min(CORRIDOR.COUNT, Math.floor((limit.current - CORRIDOR.FIRST) / CORRIDOR.SPACING) + 1))
 
     mesh.position.copy(station.pos)
 

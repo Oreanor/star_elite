@@ -87,4 +87,7 @@ export function drawUndockTunnel(ctx: CanvasRenderingContext2D, width: number, h
   for (const delay of RING_DELAYS) {
     ring(ctx, cx, cy, ringFrac(p, delay) * reach, ringAlpha(p, delay))
   }
+
+  // Напутствие «ДОБРОГО ПУТИ!» — не рисуем тут своим текстом: короткие вести идут единым
+  // каналом плашек (`pushWarning('bonVoyage')` при отчаливании), голубым. См. warnings.ts.
 }

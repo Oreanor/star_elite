@@ -145,7 +145,8 @@ export function serializePlayer(world: World): PlayerSave {
     name: p.pilotName,
     // Плоские данные — мелкий клон, чтобы сейв не держал ссылку на живой мир.
     persona: { ...p.persona },
-    acquaintances: world.acquaintances.map((a) => ({ ...a })),
+    // Журнал знакомства клонируем отдельно: без этого сейв держал бы ссылку на живой массив.
+    acquaintances: world.acquaintances.map((a) => ({ ...a, history: [...a.history] })),
     loadout: serializeLoadout(p.loadout),
     hullUp: { ...p.hullUp },
     hold,
@@ -173,7 +174,8 @@ export function applyPlayerSave(world: World, save: PlayerSave): void {
   world.systemIndex = save.systemIndex
   world.credits = save.credits
   world.score = save.score
-  world.acquaintances = save.acquaintances.map((a) => ({ ...a }))
+  // Старые сейвы журнала не знали — подставляем пустой, иначе чтение `history` падало бы.
+  world.acquaintances = save.acquaintances.map((a) => ({ ...a, history: a.history ? [...a.history] : [] }))
 
   const p = world.player
   // Имя игрока открыто — это он сам. Ставим и отображаемое, и истинное.

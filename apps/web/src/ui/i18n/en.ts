@@ -146,10 +146,11 @@ export const EN: Record<keyof typeof RU, string> = {
   'hud.podBeam': 'BEAM · {item}',
   'hud.podPull': 'C — TRACTOR · {item}',
 
-  'hud.dockCorridor': 'CORRIDOR OPEN · {range} · L — CANCEL',
+  'hud.dockCorridor': 'DOCKING · {range} · L — CANCEL',
   'hud.dockReady': 'PAD CLEAR · L — DOCK',
   'hud.dockTooFast': 'SLOW DOWN TO {speed} M/S',
   'hud.dockHint': 'L — AUTODOCK · PAD {range}',
+  'hud.bonVoyage': 'SAFE TRAVELS!',
   'hud.noData': 'NO DATA',
 
   'unit.m': 'm',

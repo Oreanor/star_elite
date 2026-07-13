@@ -1,5 +1,7 @@
 import {
+  type AcquaintanceEvent,
   capitalOf,
+  type Command,
   commandableByPlayer,
   commodityBuyPrice,
   commoditySellPrice,
@@ -14,15 +16,14 @@ import {
   type Mood,
   type Persona,
   type Relationship,
-  type AIOrder,
   type ShipEntity,
-  type Social,
   type StarSystem,
+  TIME,
   type Topic,
-  type Transfer,
   type World,
 } from '@elite/sim'
 import { chassisName, economyName, governmentName, professionName, properName, speciesName } from '../i18n/dataNames'
+import { formatGameDate } from '../i18n/date'
 
 /**
  * СНИМОК МИРА для разговора. Чтобы собеседник не сочинял вселенную из воздуха,
@@ -113,6 +114,12 @@ export interface NegotiationContext {
   you: SeenParty
   /** Где сам собеседник — с точностью до системы и приметного места (док станции, у планеты). */
   theirLocation: string
+  /** Пришвартован ли он к станции ПРЯМО СЕЙЧАС: тогда брифинг — про станцию, а не про полёт. */
+  docked: boolean
+  /** Родная планета и система персонажа — свой дом он знает всегда, умом не гейтится. */
+  home: string
+  /** Куда он сейчас направляется — по роли и делам: к станции, за нанимателем, по службе. */
+  heading: string
   distanceM: number
   /** Кто ещё рядом на момент разговора: обстановка для приказов «атакуй вот того». */
   nearby: NearbyShip[]
@@ -136,10 +143,15 @@ export interface NegotiationContext {
   /** Что механически можно у него попросить прямо сейчас (незаблокированное). */
   allowedIntents: Topic[]
   /**
-   * Встречались ли раньше. Пока всегда false: корабли трафика случайны и мир их
-   * не помнит. Поле — задел под будущую память знакомств (репутация, старые долги).
+   * Встречались ли раньше — виделись повторно или в журнале уже есть дела. Бот помнит.
    */
   metBefore: boolean
+  /**
+   * ЛИЧНЫЙ журнал знакомого готовыми датированными фразами: «12 марта 3000 года — он
+   * передал тебе 5000 кр», «14 марта — просил взять в эскорт, ты согласился». Старое
+   * сверху. Бот обязан это помнить: без журнала он «забывал» только что данные деньги.
+   */
+  history: string[]
 }
 
 /** Местная цена товара: пилот знает цифры и может их назвать, не выдумывая. */
@@ -172,16 +184,13 @@ export interface ChatTurn {
  */
 export interface NegotiatorReply {
   text: string
-  /** Триггер: какое из доступных действий озвучил игрок. null — просто разговор. */
-  intent: Topic | null
-  /** Соц-тон реплики игрока (нахамил/польстил). Следствие считает домен. null — нейтрально. */
-  social: Social | null
-  /** Приказ послушания СВОЕМУ эскорту, если игрок его отдал. null — не приказ. */
-  command: AIOrder | null
-  /** Кого атаковать по приказу `command:"attack"` — id ближнего борта. null — не задан. */
-  commandTarget: number | null
-  /** Скрытая команда на передачу товара/денег, если по разговору добро сменит хозяина. */
-  transfer: Transfer | null
+  /**
+   * Что игрок ВЕЛЕЛ/о чём договорились, распознанное моделью и собранное в команды
+   * {action, payload}: `ask` (просьба-действие), `order` (приказ эскорту), `social`
+   * (тон), `transfer` (передача добра), `note` (запомнить факт). Исполняет их домен
+   * (`applyCommand`) — модель лишь ловит и раскладывает. Пусто — просто болтовня.
+   */
+  commands: Command[]
   /** Собеседник кладёт трубку: договорено, надоело или психанул. */
   hangup: boolean
   /** Откуда реплика: живая модель или локальный запас на случай обрыва связи. */
@@ -234,6 +243,62 @@ function cargoList(ship: ShipEntity): { id: string; name: string; units: number 
     if (it.kind === 'commodity') out.push({ id: it.commodity.id, name: it.commodity.name, units: it.units })
   }
   return out
+}
+
+/**
+ * Личный журнал знакомого — готовыми ДАТИРОВАННЫМИ фразами ОТ ЛИЦА БОТА («ты»/«он»),
+ * как их и читает системный промпт. Хронологически, старое сверху; берём хвост — длинную
+ * летопись free-модель в промпте не удержит, а помнят обычно последнее и памятное.
+ *
+ * Дату выводим из `at` (`world.time`) тем же календарём, что HUD: EPOCH + сжатие `SCALE`.
+ */
+const HISTORY_SHOWN = 8
+
+const ASK_PAST_RU: Record<string, string> = {
+  surrender: 'требовал сдаться',
+  mercy: 'просил пощады',
+  escort: 'звал к себе в эскорт',
+  plunder: 'сдавался на разграбление',
+}
+const ORDER_PAST_RU: Record<string, string> = {
+  attack: 'приказал атаковать цель',
+  engageAll: 'приказал бить всех врагов',
+  hold: 'приказал ждать на месте',
+  standDown: 'приказал отбой',
+  keepBack: 'приказал беречь себя',
+  resume: 'отпустил вольно',
+}
+
+function transferPhrase(m: { toPlayer: boolean; credits: number; commodityName: string | null; units: number }): string {
+  const parts: string[] = []
+  if (m.commodityName && m.units > 0) parts.push(`${m.commodityName} ×${m.units}`)
+  if (m.credits > 0) parts.push(`${m.credits} кр`)
+  const what = parts.join(' и ')
+  return m.toPlayer ? `ты передал ему ${what}` : `он передал тебе ${what}`
+}
+
+function eventPhrase(ev: AcquaintanceEvent): string {
+  switch (ev.kind) {
+    case 'met':
+      return 'вы познакомились'
+    case 'asked':
+      return `${ASK_PAST_RU[ev.topic] ?? `просил (${ev.topic})`} — ты ${ev.agreed ? 'согласился' : 'отказал'}`
+    case 'deal':
+      return transferPhrase(ev)
+    case 'order':
+      return ORDER_PAST_RU[ev.order] ?? `отдал приказ (${ev.order})`
+    case 'social':
+      return ev.tone === 'insult' ? 'ты нахамил ему' : 'ты ему польстил'
+    case 'note':
+      return `ты просил запомнить: ${ev.text}`
+  }
+}
+
+function historyLines(history: AcquaintanceEvent[]): string[] {
+  return history.slice(-HISTORY_SHOWN).map((ev) => {
+    const date = formatGameDate(TIME.EPOCH_MS + ev.at * 1000 * TIME.SCALE)
+    return `${date} — ${eventPhrase(ev)}`
+  })
 }
 
 function party(ship: ShipEntity, role: string): PartySnapshot {
@@ -317,6 +382,30 @@ function computeNeighbours(world: World): NeighbourWorld[] {
       techLevel: x.cap.settlement.techLevel,
       ly: Math.round(x.ly),
     }))
+}
+
+/**
+ * Родная планета и система персонажа — он их знает всегда. Стабильного «дома» пока не
+ * храним (это дело будущего объекта Character); берём правдоподобный: обитаемый мир ЕГО
+ * ВИДА в текущей системе, иначе — просто система. Транзитника это слегка упрощает.
+ */
+function homeOf(world: World, other: ShipEntity): string {
+  const sys = properName(world.systemName)
+  const match = world.bodies.find((b) => b.settlement && b.settlement.species === other.persona.species)
+  return match ? `${properName(match.name)} (система ${sys})` : `система ${sys}`
+}
+
+/**
+ * Куда он сейчас держит путь — по роли и делам. У нанятого — за нанимателем; у патрульного
+ * «при исполнении» — по службе; у причала — стоит там; иначе мирный, скорее всего, к станции.
+ */
+function headingOf(world: World, other: ShipEntity, docked: boolean): string {
+  if (other.ai?.escortOf === world.player.id) return 'следуешь за своим нанимателем'
+  if (occupationSelf(other) === 'патрульный') {
+    return docked ? 'несёшь службу у причала' : 'на службе — патрулируешь систему, идёшь по служебному делу'
+  }
+  if (docked) return 'стоишь у причала станции'
+  return 'по своим делам — вероятнее всего, идёшь к станции'
 }
 
 /**
@@ -404,6 +493,9 @@ export function buildContext(world: World, other: ShipEntity, allowedIntents: To
       ship: chassisName(player.loadout.chassis.name),
     },
     theirLocation,
+    docked: at.docked,
+    home: homeOf(world, other),
+    heading: headingOf(world, other, at.docked),
     distanceM: Math.round(other.state.pos.distanceTo(world.player.state.pos)),
     nearby,
     localMarket: localMarket(world),
@@ -412,8 +504,9 @@ export function buildContext(world: World, other: ShipEntity, allowedIntents: To
     stance: record?.relationship ?? 'neutral',
     mood: moodTo(world, other),
     allowedIntents,
-    // Узнаёт, только если виделись РАНЬШЕ: у записи больше одной встречи. В первый
-    // разговор запись родится по ходу дела, но встреча всё ещё первая — не «узнаёт».
-    metBefore: (record?.meetings ?? 0) > 1,
+    // Узнаёт, если виделись РАНЬШЕ (встреча не первая) ИЛИ в журнале уже есть что-то
+    // сверх самого знакомства (сделка, просьба, факт) — тогда встреча памятная.
+    metBefore: (record?.meetings ?? 0) > 1 || (record?.history.length ?? 0) > 1,
+    history: record ? historyLines(record.history) : [],
   }
 }

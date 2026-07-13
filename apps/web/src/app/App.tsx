@@ -3,6 +3,7 @@ import { applyPilotProfile, interlocutor, jumpBlock, pendingHail, serializePlaye
 import { GameProvider, useSession } from './GameContext'
 import { jumping, startDepart } from './control/jumpFx'
 import { startUndock } from './control/undockFx'
+import { pushWarning } from '../ui/hud/warnings'
 import { negotiate, negotiatorAvailable } from './control/negotiator'
 import { Game } from './Game'
 import { Paused, GameOver } from './TitleScreen'
@@ -411,6 +412,8 @@ function Shell({ onRestart }: { onRestart: () => void }) {
   const undockAndResume = useCallback(() => {
     undock(session.world)
     startUndock()
+    // Короткое напутствие — единым каналом плашек, голубым (сообщение/состояние).
+    pushWarning('bonVoyage', session.world.time)
     void requestLock()
   }, [session])
   // Создание пилота завершено: накладываем профиль на борт игрока и пишем стартовый

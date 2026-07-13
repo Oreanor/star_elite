@@ -21,6 +21,7 @@ import { currentLang, t, useLang } from '../i18n'
 import { currentGameDate } from '../clock'
 import { chassisName, economyName, governmentName, occupationName, professionName, properName, speciesName } from '../i18n/dataNames'
 import { ACCENT, Button, Column, DIM, PilotPortrait, Table } from '../station/chrome'
+import { GLASS_PANEL, screenBackground } from '../station/backdrop'
 import { Hold } from '../station/Hold'
 import { Market } from '../station/Market'
 import { ShipScreen } from '../ship/ShipScreen'
@@ -121,20 +122,13 @@ export function Console({
       // У причала фон НЕПРОЗРАЧНЫЙ: ты внутри станции, космос и собственный корабль
       // просвечивать сквозь экран не должны. В полёте же вкладка (карта, трюм) — оверлей
       // поверх боя, и там полупрозрачность с блюром уместна: мир под ней продолжает жить.
-      style={{
-        background: docked
-          ? 'radial-gradient(ellipse at center, #0c223c, #000308)'
-          : 'radial-gradient(ellipse at center, rgba(12,34,60,0.66), rgba(0,3,8,0.93))',
-      }}
+      // У причала фон — снимок станции по тех-уровню; в полёте тёмное стекло поверх боя.
+      // Единый источник с окном разговора и модалками: `screenBackground`.
+      style={{ background: screenBackground(world, docked) }}
     >
       <div
         className="flex h-[calc(100vh-3rem)] w-[calc(100vw-3rem)] max-w-6xl flex-col rounded-2xl border p-7 font-mono"
-        style={{
-          borderColor: 'rgba(124,196,255,0.3)',
-          background: 'linear-gradient(150deg, rgba(40,95,150,0.18), rgba(8,22,42,0.4))',
-          boxShadow: '0 0 70px rgba(60,150,255,0.16), inset 0 0 90px rgba(80,180,255,0.06)',
-          color: ACCENT,
-        }}
+        style={{ ...GLASS_PANEL, color: ACCENT }}
       >
         {/* Заголовок модалки — ПРИЧАЛ, где стоим: имя станции и в скобках её планета.
             В полёте причала нет — тогда пишем хотя бы систему, чтобы шапка не пустовала.

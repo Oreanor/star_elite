@@ -1,8 +1,6 @@
 import { useEffect, useReducer, useRef, useState } from 'react'
 import {
-  applyOrder,
-  applySocial,
-  applyTransfer,
+  applyCommand,
   assignApproach,
   assignCollectRun,
   clearTasks,
@@ -13,7 +11,6 @@ import {
   interlocutor,
   linesFor,
   rememberPilot,
-  say,
   stanceTo,
   type AIOrder,
   type Relationship,
@@ -21,6 +18,7 @@ import {
 } from '@elite/sim'
 import { useSession } from '../../app/GameContext'
 import { Button, PilotPortrait } from '../station/chrome'
+import { GLASS_PANEL, screenBackground } from '../station/backdrop'
 import { markOutcomeEmotion, type Emotion } from '../portrait'
 import { UI } from '../theme'
 import { chassisName, occupationName } from '../i18n/dataNames'
@@ -72,28 +70,6 @@ const STANCE_WORD: Record<Relationship, string> = {
   hostile: 'ВРАЖДЕБНЫЙ',
 }
 
-/** Подтверждение приказа строкой в ленте (когда его распознала модель из речи). */
-const ORDER_DONE: Record<AIOrder, string> = {
-  attack: 'Приказ: атаковать цель.',
-  engageAll: 'Приказ: огонь по всем врагам.',
-  hold: 'Приказ: ждать на месте.',
-  standDown: 'Приказ: отбой, прекратить огонь.',
-  keepBack: 'Приказ: держаться в хвосте.',
-  resume: 'Приказ: действовать как обычно.',
-}
-
-/** Итог сделки строкой для ленты. null — ничего не перешло (обещал, да нечем). */
-function transferLine(r: ReturnType<typeof applyTransfer>): string | null {
-  const parts: string[] = []
-  if (r.units > 0 && r.commodityName) {
-    parts.push(r.direction === 'toThem' ? `Передано: ${r.commodityName} ×${r.units}` : `Получено: ${r.commodityName} ×${r.units}`)
-  }
-  if (r.credits > 0) {
-    parts.push(r.direction === 'toThem' ? `Списано: ${r.credits} кр` : `Зачислено: ${r.credits} кр`)
-  }
-  return parts.length ? parts.join(' · ') : null
-}
-
 export function Dialogue({
   onClose,
   negotiate,
@@ -135,8 +111,12 @@ export function Dialogue({
 
   // ─ Приказ эскорту кнопкой: домен исполняет напрямую (послушание, не уговоры).
   const order = (o: AIOrder) => {
-    if (ended || !applyOrder(other, o)) return
-    push({ who: 'you', text: ORDER_DONE[o].replace('Приказ: ', '').toUpperCase() })
+    if (ended) return
+    // Приказ идёт через ту же шину, что и распознанный из речи: домен исполнит и вернёт
+    // строку-подтверждение. Не подчинён/не удалось — шина даст null, кнопка промолчит.
+    const out = applyCommand(world, other, { action: 'order', payload: { order: o, target: null } })
+    if (!out) return
+    push({ who: 'you', text: (out.line ?? '').replace('Приказ: ', '').toUpperCase() })
     push({ who: 'them', text: 'ЕСТЬ, КОМАНДИР.' })
     bump()
   }
@@ -183,13 +163,15 @@ export function Dialogue({
     if (ended) return
     const line = lines.find((l) => l.topic === topic)
     if (!line || line.blocked) return
-    const reply = say(world, other, topic)
     push({ who: 'you', text: line.say })
-    push({ who: 'them', text: reply.text })
-    // Заговорил — значит теперь знаком: у пилота появляется имя, и мир его запоминает.
+    // Заговорил — значит теперь знаком: имя открывается, и мир его запоминает. ДО команды:
+    // её журнал ложится на уже существующую запись.
     rememberPilot(world, other)
+    // Та же шина, что и в свободном чате. Без модели бот произносит канонную реплику домена.
+    const out = applyCommand(world, other, { action: 'ask', payload: { topic } })
+    push({ who: 'them', text: out?.spoken ?? '…' })
     // Исход красит лицо: сдался — грусть, сделка — радость (портрет подхватит).
-    const emo = outcomeFace(topic, reply.agreed)
+    const emo = outcomeFace(topic, out?.agreed ?? false)
     if (emo) markOutcomeEmotion(other.id, emo, world.time)
     bump()
   }
@@ -207,40 +189,31 @@ export function Dialogue({
     const ctx = buildContext(world, other, allowed)
     const reply = await negotiate(ctx, history, text)
 
-    // Разговор состоялся — запоминаем пилота (имя, характер) на будущие встречи.
+    // Разговор состоялся — запоминаем пилота ДО команд: их журнал ложится на запись.
     rememberPilot(world, other)
 
-    // Соц-тон реплики (нахамил/польстил) двигает отношение в данных — следствие
-    // считает движок: оскорбление копит обиду (может порвать эскорт), лесть гасит её.
-    if (reply.social) applySocial(world, other, reply.social)
+    // Модель разложила речь на команды {action, payload}; ИСПОЛНЯЕТ их домен — все через
+    // одну шину. Соц-тон, приказ, просьба, сделка, «запомни» — здесь единый цикл, а не
+    // ветка на каждый случай. Собираем исходы: подтверждения в ленту и итог просьбы.
+    const outcomes = reply.commands.map((cmd) => ({ cmd, out: applyCommand(world, other, cmd) }))
+    const askEntry = outcomes.find((o) => o.cmd.action === 'ask') ?? null
 
-    // Приказ послушания СВОЕМУ эскорту — домен исполняет напрямую. Стережём, что это
-    // и вправду подчинённый борт: чужому приказывать нельзя, сколько бы модель ни ловила.
-    if (reply.command && commandableByPlayer(other, world.player.id)) {
-      applyOrder(other, reply.command, reply.commandTarget)
-      push({ who: 'system', text: ORDER_DONE[reply.command] })
-    }
+    // Что бот ПРОИЗНОСИТ: на согласии — живые слова модели (разнообразие); на отказе
+    // просьбы — КАНОННУЮ реплику домена (`spoken`), чтобы «послал → чистого неба» не
+    // случилось. Нет просьбы — просто слова модели.
+    const refused = askEntry?.out?.agreed === false
+    push({ who: 'them', text: refused ? (askEntry!.out!.spoken ?? reply.text) : reply.text })
 
-    // Триггер есть — домен РЕШАЕТ исход и меняет мир (тот же `say`, что и кнопка,
-    // взвешивает нрав и здоровье). На согласии показываем слова модели — ради
-    // разнообразия; на отказе КАНОННУЮ реплику домена, чтобы «послал → чистого неба»
-    // не случилось. Нет триггера — просто болтовня, слова модели как есть.
-    if (reply.intent) {
-      const outcome = say(world, other, reply.intent)
-      push({ who: 'them', text: outcome.agreed ? reply.text : outcome.text })
-      // Исход красит лицо: сдался — грусть, сделка — радость (портрет подхватит).
-      const emo = outcomeFace(reply.intent, outcome.agreed)
+    // Системные подтверждения (сделка, приказ) — следом за репликой, в порядке команд.
+    for (const { out } of outcomes) if (out?.line) push({ who: 'system', text: out.line })
+
+    // Исход просьбы красит портрет: сдался — грусть, сделка — радость.
+    if (askEntry?.out) {
+      const topic = (askEntry.cmd.payload as { topic: Topic }).topic
+      const emo = outcomeFace(topic, askEntry.out.agreed ?? false)
       if (emo) markOutcomeEmotion(other.id, emo, world.time)
-    } else {
-      push({ who: 'them', text: reply.text })
     }
 
-    // Сделка: передача товара/денег. Домен двигает ровно что есть и влезает.
-    if (reply.transfer) {
-      const r = applyTransfer(world, other, reply.transfer)
-      const line = transferLine(r)
-      if (line) push({ who: 'system', text: line })
-    }
     bump()
     setBusy(false)
     // Психанул или договорил — кладём трубку ПОСЛЕ его последней реплики.
@@ -249,28 +222,37 @@ export function Dialogue({
 
   return (
     <div
-      className="absolute inset-0 flex items-center justify-center bg-black/80 font-mono"
-      style={{ color: UI.PRIMARY }}
+      // Фон под окном — тот же, что у консоли: у причала снимок станции (не теряем его в
+      // космос), в полёте тёмное стекло с блюром поверх боя. Разговор — не отдельный мир.
+      className={`absolute inset-0 flex items-center justify-center font-mono ${world.docked ? '' : 'backdrop-blur-md'}`}
+      style={{ color: UI.PRIMARY, background: screenBackground(world, world.docked) }}
     >
       {/* Высота окна ФИКСИРОВАНА: лента (`flex-1`) забирает остаток и скроллится внутри,
-          поэтому окно не прыгает по мере набегания реплик — растёт лишь прокрутка. */}
-      <div className="flex h-[38rem] max-h-[85vh] w-[40rem] flex-col border px-8 py-6" style={{ borderColor: UI.PRIMARY }}>
+          поэтому окно не прыгает по мере набегания реплик — растёт лишь прокрутка.
+          Панель — единое «стекло» (`GLASS_PANEL`), как консоль и модалки. */}
+      <div
+        className="flex h-[38rem] max-h-[85vh] w-[40rem] flex-col rounded-2xl border px-8 py-6 backdrop-blur-md"
+        style={{ ...GLASS_PANEL, color: UI.PRIMARY }}
+      >
         {/* Слева — портрет собеседника, справа имя и статус. */}
         <div className="mb-4 flex items-center gap-4">
           <PilotPortrait ship={other} world={world} size={108} />
           <div className="min-w-0">
-            {/* Имя пилота (`pilotName`), а не роль «Торговец»: в разговоре ты обращаешься
-                к человеку. Оно дано при рождении и есть всегда, до всякого знакомства. */}
+            {/* Порядок как на паспорте: сперва КТО он (имя, должность, корабль), и только
+                ПОТОМ как он к тебе (отношение). Имя — `pilotName`, а не роль «Торговец»:
+                в разговоре обращаешься к человеку; оно есть всегда, до знакомства. */}
             <div className="text-lg tracking-[0.3em]">{other.pilotName.toUpperCase()}</div>
-            {/* Род занятий и ОТНОШЕНИЕ — сразу, до всякого приглашения: чтобы не звать
-                в напарники пирата вслепую. Дистанции нет (разговор бывает и в доке);
-                отношение — одно из трёх честных слов, а не размытое «мирный». */}
+            {/* Должность и корабль — что видно снаружи, как на плашке у причала. */}
             <div className="text-xs tracking-widest" style={{ color: UI.DIM }}>
-              {occupationName(other.originKind, other.faction).toUpperCase()} · {STANCE_WORD[stance]}
+              {occupationName(other.originKind, other.faction).toUpperCase()}
             </div>
-            {/* И корабль — с кем говоришь видно так же полно, как на плашке у причала. */}
             <div className="text-xs tracking-widest" style={{ color: UI.DIM }}>
               {chassisName(other.loadout.chassis.name).toUpperCase()}
+            </div>
+            {/* Отношение — последним: одно из трёх честных слов, чтобы не звать пирата
+                в напарники вслепую. Отделяем сверху, это уже не «паспорт», а расклад. */}
+            <div className="mt-1 text-xs tracking-widest" style={{ color: UI.PRIMARY }}>
+              {STANCE_WORD[stance]}
             </div>
           </div>
         </div>

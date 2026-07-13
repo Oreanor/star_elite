@@ -18,6 +18,40 @@ import type { ShipEntity, World } from './entities'
 /** Как пилот относится к игроку. Итог разговоров, помнится между встречами. */
 export type Relationship = 'friendly' | 'neutral' | 'hostile'
 
+/**
+ * Прошедшее СОБЫТИЕ знакомства — факт из вашей общей истории, который бот обязан
+ * помнить при новой встрече: когда свиделись, о чём просил, чем менялись. Зеркало
+ * очереди планов компаньона, только не «что сделать», а «что уже было»: завершённое
+ * стекает СЮДА и становится памятью. Отношение (`relationship`) — «как он ко мне»,
+ * а журнал — «что между нами произошло»: без него бот, только что подаривший тебе
+ * денег, при следующем разговоре встречает как чужого.
+ *
+ * Структурой, не фразой: домен языка не знает, слова собирает ui (`facts`) при показе.
+ * `at` — момент мира (`world.time`), из него ui выводит и порядок, и календарную дату.
+ */
+export type AcquaintanceEvent =
+  | { kind: 'met'; at: number } // свиделись впервые
+  | {
+      kind: 'asked' // игрок призвал к действию, и бот согласился или отказал
+      at: number
+      /** id темы (`Topic`): surrender/mercy/escort/plunder/greet. Строкой — домен `world` не тянет тип из `dialogue`. */
+      topic: string
+      agreed: boolean
+    }
+  | {
+      kind: 'deal' // передача добра словами
+      at: number
+      /** true — он передал ТЕБЕ (подарил/вернул/поделился); false — ты ему. */
+      toPlayer: boolean
+      credits: number
+      /** Имя товара, если двигался груз (как в `TransferResult`). null — только деньги. */
+      commodityName: string | null
+      units: number
+    }
+  | { kind: 'order'; at: number; order: string } // приказ нанятому эскорту (attack/hold/…)
+  | { kind: 'social'; at: number; tone: 'insult' | 'flatter' } // игрок нахамил или польстил
+  | { kind: 'note'; at: number; text: string } // произвольный факт, который игрок ПОПРОСИЛ запомнить
+
 export interface Acquaintance {
   /** Стабильный id ЗНАКОМСТВА, не корабля: корабль эфемерен, знакомство — нет. */
   id: number
@@ -53,6 +87,13 @@ export interface Acquaintance {
   /** Отношение к игроку по итогу бесед. Хранится тут и переносится на новую встречу. */
   relationship: Relationship
   /**
+   * ЛИЧНЫЙ журнал этого знакомого: что между вами было — встречи, просьбы и их исход,
+   * сделки, приказы, тон, и произвольные факты, которые игрок ПОПРОСИЛ запомнить.
+   * У каждого знакомого свой, не общий. Хронологически: новое добавляем в конец.
+   * Это и есть память, из которой бот при новой встрече знает, кто ты ему.
+   */
+  history: AcquaintanceEvent[]
+  /**
    * Жив ли пилот. Знакомство переживает гибель БОРТА (пилот пересаживается), но не
    * гибель самого пилота: изредка контакт нарывается вне поля зрения (`driftContacts`)
    * или его сбивают у тебя на глазах. Мёртвый не отвечает и уходит из списка живых —
@@ -84,6 +125,8 @@ export function rememberPilot(world: World, ship: ShipEntity): void {
     roaming: true,
     meetings: 1,
     relationship: 'neutral',
+    // Первая запись журнала — сам факт знакомства: с этого момента вам есть что помнить.
+    history: [{ kind: 'met', at: world.time }],
     alive: true,
   }
   world.acquaintances.push(record)
@@ -113,6 +156,28 @@ export function applyStance(world: World, ship: ShipEntity, stance: Relationship
       ship.ai.orderedTargetId = null
     }
   }
+}
+
+/** Как `Omit`, но ПО КАЖДОМУ члену объединения — иначе теряются поля конкретного вида. */
+type WithoutAt<T> = T extends unknown ? Omit<T, 'at'> : never
+
+/** Верхний предел факта-заметки, символов ≈ абзац: длиннее free-модель в промпте не удержит. */
+export const NOTE_MAX_CHARS = 280
+
+/**
+ * Дописать событие в журнал ЗНАКОМОГО — ЕДИНСТВЕННАЯ точка записи журнала. Все команды
+ * бота (сделка, приказ, просьба, факт…) идут через шину `applyCommand`, а она — сюда;
+ * отдельных `remember*` на каждый вид нет, событие описывается данными `{kind, …}`.
+ *
+ * Момент штампуем сами (`world.time`), чтобы `at` не забыли на месте вызова. С безымянным
+ * прохожим память не заводится — записи у него нет, событие молча гаснет (как и
+ * `rememberPilot` пропускает чужого).
+ */
+export function recordEvent(world: World, ship: ShipEntity, event: WithoutAt<AcquaintanceEvent>): void {
+  const record = world.acquaintances.find((a) => a.id === ship.acquaintanceId)
+  if (!record) return
+  // Спред восстанавливает конкретный член объединения; TS этого не выводит — приводим.
+  record.history.push({ ...event, at: world.time } as AcquaintanceEvent)
 }
 
 /** Знакомый и его живой борт, если он сейчас здесь. Для вкладки «Люди» и меток карт. */

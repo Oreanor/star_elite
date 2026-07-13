@@ -152,10 +152,11 @@ export const RU = {
   'hud.podBeam': 'ЛУЧ · {item}',
   'hud.podPull': 'C — ПРИТЯНУТЬ · {item}',
 
-  'hud.dockCorridor': 'КОРИДОР ОТКРЫТ · {range} · L — ОТМЕНА',
+  'hud.dockCorridor': 'ШВАРТОВКА · {range} · L — ОТМЕНА',
   'hud.dockReady': 'ПРИЧАЛ СВОБОДЕН · L — СТЫКОВКА',
   'hud.dockTooFast': 'СБРОСЬ СКОРОСТЬ ДО {speed} М/С',
   'hud.dockHint': 'L — АВТОСТЫКОВКА · ПРИЧАЛ {range}',
+  'hud.bonVoyage': 'ДОБРОГО ПУТИ!',
   'hud.noData': 'НЕТ ДАННЫХ',
 
   // ─── Единицы ──────────────────────────────────────────────────────────────

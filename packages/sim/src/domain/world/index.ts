@@ -35,9 +35,12 @@ export {
 } from './persona'
 export {
   type Acquaintance,
+  type AcquaintanceEvent,
   type Contact,
   type Relationship,
   rememberPilot,
+  recordEvent,
+  NOTE_MAX_CHARS,
   residentAcquaintances,
   applyStance,
   livingContacts,

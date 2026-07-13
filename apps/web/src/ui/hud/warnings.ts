@@ -36,6 +36,7 @@ export type WarnCode =
   | 'dockCorridor'
   | 'hail'
   | 'refuel'
+  | 'bonVoyage'
 
 interface Def {
   /** Цвет рамки, текста и полупрозрачного фона. */
@@ -69,6 +70,9 @@ const DEFS: Record<WarnCode, Def> = {
   dockReady: { color: UI.PRIMARY, hz: 2, rank: 40, key: 'hud.dockReady' },
   dockCorridor: { color: UI.PRIMARY, hz: 0, rank: 35, key: 'hud.dockCorridor' },
   refuel: { color: UI.PRIMARY, hz: 1.5, rank: 20, key: 'hud.refuel' },
+  // Напутствие при вылете: голубое, ровно горит (не мигает). Приоритет невысок — реальная
+  // угроза на отходе (если вдруг) должна перебить добрые пожелания.
+  bonVoyage: { color: UI.PRIMARY, hz: 0, rank: 42, key: 'hud.bonVoyage' },
 }
 
 export interface Plate {

@@ -1,4 +1,4 @@
-import type { AIOrder, Disposition, Mood, Persona, Relationship, Social, Topic, Transfer } from '@elite/sim'
+import type { AIOrder, Command, Disposition, Mood, Persona, Relationship, Topic, Transfer } from '@elite/sim'
 import type { ChatTurn, NegotiationContext, NegotiatorReply } from '../../ui/dialogue/facts'
 
 /**
@@ -182,6 +182,19 @@ function systemPrompt(ctx: NegotiationContext): string {
       ctx.nearby.map((s) => `${s.id}=${s.name}(${s.standing}, ${s.distanceM}м)${s.locked ? '←захвачен' : ''}`).join('; ')
     : ''
 
+  // ТВОЯ СИТУАЦИЯ СЕЙЧАС — личные вводные персонажа: где он и кто вокруг. У причала брифинг
+  // про станцию (что тут можно купить/починить по тех-уровню), в полёте — про окружение, и
+  // собеседник (игрок) в нём как минимум. Всё под тем же гейтом ума, что и факты о мирах.
+  const around = ctx.nearby.length
+    ? ` Кроме него поблизости: ${ctx.nearby.map((s) => `${s.name} (${s.standing}, ${s.distanceM}м)`).join('; ')}.`
+    : ' Больше поблизости никого — только вы двое.'
+  const situation = ctx.docked
+    ? `ТЫ У ПРИЧАЛА: ${ctx.theirLocation}. Тут, на станции, торгуют, чинят и ставят оснастку по тех-уровню ${w.techLevel} — чем он выше, тем лучше железо в продаже и ремонте (тир ${w.techLevel} — что примерно доступно). С тобой говорит ${y.role} ${y.name} на «${y.ship}».${around}`
+    : `ТЫ В ПОЛЁТЕ: ${ctx.theirLocation}. Говоришь ты с тем, кто прямо перед тобой, — ${y.role} ${y.name} на «${y.ship}», в ${ctx.distanceM} м.${around}`
+
+  // Дом и курс — личные вводные персонажа. Дом он знает ВСЕГДА; куда идёт — тем более.
+  const origin = `РОДОМ ТЫ: ${ctx.home} — свой дом помнишь всегда. СЕЙЧАС ${ctx.heading}.`
+
   // Блок послушания — только когда собеседник ТВОЙ эскорт: он не торгуется, а исполняет.
   const obedience = ctx.theyObeyYou
     ? [
@@ -205,6 +218,11 @@ function systemPrompt(ctx: NegotiationContext): string {
     // словам, недоверчивый усомнится. Соврёт — поймать можешь лишь своим умом, не «анкетой».
     'Ты НЕ знаешь его характер, кошелёк, груз и намерения — только имя, род занятий, вид и борт. Не приписывай ему черт, которых не видел. Каков он — суди по своему нраву и по его словам и делам: во что веришь, в то и веришь.',
     ctx.metBefore ? 'Вы уже пересекались раньше — ты его помнишь.' : 'Вы видите друг друга впервые.',
+    // Личный журнал знакомства — ты ПОМНИШЬ всё это и можешь помянуть: дал денег, о чём
+    // просил, что велел запомнить. Не «забывай» того, что между вами реально было.
+    ctx.history.length
+      ? 'ЧТО МЕЖДУ ВАМИ БЫЛО (ты это ТОЧНО помнишь, по датам):\n' + ctx.history.map((h) => `• ${h}`).join('\n')
+      : '',
     `Сейчас ты относишься к нему: ${STANCE_RU[ctx.stance]}.`,
     // Профессия игрока — публичный род занятий, за правду. Она задаёт МЯГКУЮ поправку к
     // тону и общему стилю (не приговор: суть разговора, твой нрав и его дела сильнее).
@@ -219,13 +237,14 @@ function systemPrompt(ctx: NegotiationContext): string {
     obedience,
     '',
     `ГДЕ ВЫ: система ${w.systemName}. Планет: ${w.planets}, лун: ${w.moons}, станций: ${w.stations}.`,
-    `ГДЕ ТЫ САМ (если спросят): ${ctx.theirLocation}. Отвечай про своё место честно, не выдумывай другую систему.`,
+    situation,
+    origin,
     'ОБИТАЕМЫЕ МИРЫ (у каждого СВОЙ строй, экономика и раса — не путай их):',
     w.worlds.length
       ? w.worlds.map((o) => `• ${o.name} (${o.type}): ${o.economy}, ${o.government}, ${o.species}, ~${o.populationM} млн`).join('\n')
       : '• обитаемых нет — пустая система',
     `Обстановка: ${w.danger}.`,
-    'Эти факты о мирах ты знаешь ПО УМУ И БЫВАЛОСТИ: умный и бывалый пилот выложит их толково; если ты недалёк или сам нигде не бывал — так и скажи, мол «да фиг знает, я тут проездом», не выдумывай.',
+    'Про своё место, станцию и окружение отвечай честно, другую систему не выдумывай. А эти факты о мирах ты знаешь ПО УМУ И БЫВАЛОСТИ: умный и бывалый выложит толково; если недалёк или нигде не бывал — так и скажи, мол «да фиг знает, я тут проездом», не сочиняй (и тех-уровень станции на глаз тоже не всякий назовёт).',
     '',
     'МЕСТНЫЕ ЦЕНЫ (здешняя станция, кредитов за единицу — ПОКУПКА / ПРОДАЖА). Их ты знаешь наверняка и можешь назвать, если спросят про торговлю:',
     ctx.localMarket.map((m) => `• ${m.name}: купить ${m.buy}, сбыть ${m.sell}`).join('\n'),
@@ -256,6 +275,8 @@ function systemPrompt(ctx: NegotiationContext): string {
     '— direction: "toThem" — командир отдаёт ТЕБЕ; "toYou" — ты отдаёшь ЕМУ (вернул, поделился, откупился).',
     '— commodityId — id товара из списков выше (в квадратных скобках), units — сколько; credits — сколько кредитов в ту же сторону. Лишнее опусти. Бери груз только если ВЛЕЗЕТ в твой трюм (свободно ~' + `${ctx.them.freeHold}` + ' т).',
     '',
+    'ЗАПОМНИТЬ ФАКТ. Если командир ПРОСИТ тебя что-то запомнить (уговор, примету, имя, «передай тому-то», «в следующий раз сделай так») — коротко подтверди в реплике и верни сам факт ОДНОЙ короткой фразой (не длиннее пары строк) в поле remember. Не просил запоминать — remember=null. Это не пересказ болтовни, а именно то, что велено держать в памяти.',
+    '',
     'Действия, которые он может у тебя просить прямо сейчас (это и есть допустимые intent):',
     intents,
     '',
@@ -266,8 +287,8 @@ function systemPrompt(ctx: NegotiationContext): string {
       (ctx.theyObeyYou
         ? '"command": "attack"|"engageAll"|"hold"|"standDown"|"keepBack"|"resume"|null, "commandTarget": число|null, '
         : '') +
-      '"transfer": {"direction":"toThem"|"toYou","commodityId":строка|null,"units":число,"credits":число}|null, "hangup": true|false}',
-    'intent — только если он ИМЕННО СЕЙЧАС призвал к этому действию; иначе null. social — тон его реплики к тебе. transfer — только когда добро реально меняет хозяина, иначе null.' +
+      '"transfer": {"direction":"toThem"|"toYou","commodityId":строка|null,"units":число,"credits":число}|null, "remember": строка|null, "hangup": true|false}',
+    'intent — только если он ИМЕННО СЕЙЧАС призвал к этому действию; иначе null. social — тон его реплики к тебе. transfer — только когда добро реально меняет хозяина, иначе null. remember — факт, который он ПРОСИЛ запомнить, иначе null.' +
       (ctx.theyObeyYou ? ' command — приказ послушания от нанимателя; для "attack" укажи commandTarget (id из «РЯДОМ»).' : ''),
   ].join('\n')
 }
@@ -293,21 +314,29 @@ function coerceReply(parsed: unknown, allowed: Topic[]): NegotiatorReply | null 
   const text = typeof o.reply === 'string' ? o.reply.trim() : ''
   if (!text) return null
 
+  // Вариант А: модель отдаёт ПЛОСКИЕ поля (проще для слабых free-моделей), а команды
+  // {action, payload} собираем здесь, на границе. Дальше их исполняет домен `applyCommand`.
+  // Что механически сейчас нельзя — не верим на слово; исход и отношение решает домен.
+  const commands: Command[] = []
+
   const rawIntent = typeof o.intent === 'string' ? (o.intent as Topic) : null
-  // Модель могла назвать действие, которого сейчас нельзя, — не верим на слово.
-  // agree/stance модель больше не диктует: исход и отношение решает домен по триггеру.
-  const intent = rawIntent && allowed.includes(rawIntent) ? rawIntent : null
-  const social: Social | null = o.social === 'insult' || o.social === 'flatter' ? o.social : null
-  return {
-    text,
-    intent,
-    social,
-    command: coerceOrder(o.command),
-    commandTarget: typeof o.commandTarget === 'number' ? o.commandTarget : null,
-    transfer: coerceTransfer(o.transfer),
-    hangup: o.hangup === true,
-    source: 'model',
+  if (rawIntent && allowed.includes(rawIntent)) commands.push({ action: 'ask', payload: { topic: rawIntent } })
+
+  if (o.social === 'insult' || o.social === 'flatter') commands.push({ action: 'social', payload: { tone: o.social } })
+
+  const order = coerceOrder(o.command)
+  if (order) {
+    const target = typeof o.commandTarget === 'number' ? o.commandTarget : null
+    commands.push({ action: 'order', payload: { order, target } })
   }
+
+  const transfer = coerceTransfer(o.transfer)
+  if (transfer) commands.push({ action: 'transfer', payload: transfer })
+
+  const remember = typeof o.remember === 'string' && o.remember.trim() ? o.remember.trim() : null
+  if (remember) commands.push({ action: 'note', payload: { text: remember } })
+
+  return { text, commands, hangup: o.hangup === true, source: 'model' }
 }
 
 const ORDERS: readonly AIOrder[] = ['attack', 'engageAll', 'hold', 'standDown', 'keepBack', 'resume']
@@ -343,11 +372,7 @@ const STATIC_LINES = [
 function staticNoise(history: ChatTurn[]): NegotiatorReply {
   return {
     text: STATIC_LINES[history.length % STATIC_LINES.length]!,
-    intent: null,
-    social: null,
-    command: null,
-    commandTarget: null,
-    transfer: null,
+    commands: [],
     hangup: false,
     source: 'fallback',
   }
