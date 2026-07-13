@@ -78,6 +78,7 @@ export function Hud() {
       width: canvas.width,
       height: canvas.height,
       autodock: session.mode === 'autodock',
+      flyto: session.mode === 'flyto',
       fps: fpsRef.current,
     })
   })

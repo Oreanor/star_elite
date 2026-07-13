@@ -3,6 +3,7 @@ import {
   addItem,
   aiController,
   autodockController,
+  flyToController,
   applyPlayerSave,
   createWorld,
   enterSystem,
@@ -22,7 +23,7 @@ import { createIntent, createPlayerController, type PlayerIntent } from './contr
 import { online } from './net/firebase'
 import { loadSave } from './save/saveStore'
 
-export type PilotMode = 'manual' | 'autodock'
+export type PilotMode = 'manual' | 'autodock' | 'flyto'
 
 /**
  * Мир живёт в обычном мутируемом объекте и НИКОГДА не попадает в состояние React.
@@ -178,7 +179,8 @@ function createSession(initialSave?: PlayerSave | null): Session {
  */
 function bindControllers(session: Session): void {
   session.controllers.clear()
-  const atTheHelm = session.mode === 'autodock' ? autodockController : session.pilot
+  const atTheHelm =
+    session.mode === 'autodock' ? autodockController : session.mode === 'flyto' ? flyToController : session.pilot
   session.controllers.set(session.world.player.id, atTheHelm)
   for (const ship of session.world.ships) session.controllers.set(ship.id, aiController)
 }

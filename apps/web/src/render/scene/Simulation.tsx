@@ -2,6 +2,9 @@ import { useFrame, useThree } from '@react-three/fiber'
 import {
   autodockController,
   canEngageAutodock,
+  canEngageFlyTo,
+  flyToArrived,
+  flyToController,
   cycleLock,
   findCloak,
   hasBomb,
@@ -10,6 +13,7 @@ import {
   missileAmmo,
   serializePlayer,
   stepWorld,
+  type Controller,
 } from '@elite/sim'
 import { syncControllers, useSession, type Session } from '../../app/GameContext'
 import { coastController } from '../../app/control/playerController'
@@ -30,12 +34,24 @@ import { pushWarning } from '../../ui/hud/warnings'
  * ни физика не знают, что за штурвалом сменился пилот: ровно ради этого
  * `Controller` и существует.
  */
+/**
+ * Кто за штурвалом по режиму сессии. `coasting` — под открытым меню-полётом (курсор
+ * отпущен): пилота нет, корабль коастит, НО автопилоты (стыковка, полёт-к-цели) ведут и
+ * там — иначе, глянув карту, ты бы ронял их с полпути.
+ */
+function helmController(session: Session, coasting: boolean): Controller {
+  if (session.mode === 'autodock') return autodockController
+  if (session.mode === 'flyto') return flyToController
+  return coasting ? coastController : session.pilot
+}
+
 function setPilot(session: Session, mode: Session['mode']): void {
   session.mode = mode
-  session.controllers.set(session.world.player.id, mode === 'autodock' ? autodockController : session.pilot)
+  session.controllers.set(session.world.player.id, helmController(session, false))
 
-  // Допуск в створ станции выдаётся вместе с автопилотом и снимается вместе с ним.
+  // Допуск в створ станции выдаётся вместе с АВТОСТЫКОВКОЙ и снимается вместе с ней.
   // Он живёт в МИРЕ, а не в сессии: по нему решает ИИ, а тот про сессию не знает.
+  // Полёт-к-цели допуска не даёт — он не заходит в створ, а тормозит поодаль.
   session.world.player.clearance = mode === 'autodock'
 }
 
@@ -92,17 +108,17 @@ export function Simulation() {
 
       session.running = true
       syncControllers(session)
-      // Штурвал — коастящему контроллеру (или автопилоту стыковки, если он вёл): мышь на
-      // меню, пилот не рулит. Ставим ПОСЛЕ syncControllers, чтобы пересборка не вернула ввод.
-      controllers.set(world.player.id, session.mode === 'autodock' ? autodockController : coastController)
+      // Штурвал — коастящему контроллеру (или автопилоту стыковки/полёта-к-цели, если он вёл):
+      // мышь на меню, пилот не рулит. Ставим ПОСЛЕ syncControllers, чтобы пересборка не вернула ввод.
+      controllers.set(world.player.id, helmController(session, true))
       stepWorld(world, dt, controllers)
       camera.position.add(world.originShift)
       return
     }
 
     // Курсор захвачен — штурвал у пилота. Мог остаться коастинг-контроллер от меню-полёта:
-    // возвращаем управление (автопилот стыковки сохраняем — его ставит L, а не этот кадр).
-    controllers.set(world.player.id, session.mode === 'autodock' ? autodockController : session.pilot)
+    // возвращаем управление (автопилоты сохраняем — их ставят L/J, а не этот кадр).
+    controllers.set(world.player.id, helmController(session, false))
 
     // Тумблеры читаются один раз за кадр, до шага симуляции.
     //
@@ -143,6 +159,15 @@ export function Simulation() {
       if (session.mode === 'autodock') setPilot(session, 'manual')
       else if (canEngageAutodock(world)) setPilot(session, 'autodock')
     }
+
+    // J — автопилот НА ЦЕЛЬ: лети к захваченному борту/станции. Нет захвата — плашка объясняет.
+    if (consumePress('KeyJ')) {
+      if (session.mode === 'flyto') setPilot(session, 'manual')
+      else if (canEngageFlyTo(world)) setPilot(session, 'flyto')
+      else pushWarning('noTarget', world.time)
+    }
+    // Долетели (или цель пропала) — возвращаем штурвал: автопилот-к-цели не залипает.
+    if (session.mode === 'flyto' && flyToArrived(world)) setPilot(session, 'manual')
 
     // Отсюда и до конца кадра мир живёт: камера может догонять, факелы — дышать.
     session.running = true

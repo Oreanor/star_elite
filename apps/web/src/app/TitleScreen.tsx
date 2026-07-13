@@ -48,6 +48,7 @@ const KEY_GROUPS: { title: Key; rows: [Key, Key][] }[] = [
     rows: [
       ['key.tractor', 'key.tractor.what'],
       ['key.dock', 'key.dock.what'],
+      ['key.flyto', 'key.flyto.what'],
       ['key.ship', 'key.ship.what'],
       ['key.system', 'key.system.what'],
       ['key.galaxy', 'key.galaxy.what'],

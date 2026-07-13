@@ -69,8 +69,10 @@ export interface HudFrame {
   world: World
   width: number
   height: number
-  /** За штурвалом автопилот. Это состояние сессии, а не мира: домен о нём не знает. */
+  /** За штурвалом автопилот стыковки. Состояние сессии, а не мира: домен о нём не знает. */
   autodock: boolean
+  /** За штурвалом автопилот-к-цели (лети к захваченному). Тоже состояние сессии. */
+  flyto: boolean
   /** Сглаженная частота кадров. Ни на что в игре не влияет — только показывается. */
   fps: number
 }
@@ -1170,11 +1172,15 @@ function drawBombBurst({ ctx, world, width, height }: HudFrame): void {
  * что рулит автопилот или что гашетка мертва под полем. Мигать им незачем — они не
  * просят действия сию секунду, а сообщают текущее состояние.
  */
-function drawAlerts({ ctx, world, width, height }: HudFrame): void {
+function drawAlerts({ ctx, world, width, height, flyto }: HudFrame): void {
   // Выше верхней кромки локатора (он теперь по центру внизу, ~height−106): иначе
   // строки легли бы прямо на эллипс радара.
   if (autofightActive(world)) {
     text(ctx, t('hud.autofight'), width / 2, height - 120 * S, HUD_COLORS.TARGET, 'center')
+  }
+  // Автопилот-к-цели ведёт корабль сам — говорим об этом, как и про автобой.
+  if (flyto) {
+    text(ctx, t('hud.autopilot'), width / 2, height - 120 * S, HUD_COLORS.NAV, 'center')
   }
 
   // Под полем не стреляют, и пилот обязан знать, почему у него мёртвый гашетка.

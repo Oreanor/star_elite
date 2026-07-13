@@ -31,6 +31,7 @@ export type WarnCode =
   | 'noLaser'
   | 'noJump'
   | 'noAux'
+  | 'noTarget'
   | 'dockReady'
   | 'dockCorridor'
   | 'hail'
@@ -57,6 +58,7 @@ const DEFS: Record<WarnCode, Def> = {
   noLaser: { color: UI.WARN, hz: 0, rank: 84, key: 'hud.noLaser' },
   noJump: { color: UI.WARN, hz: 0, rank: 84, key: 'hud.noJump' },
   noAux: { color: UI.WARN, hz: 0, rank: 84, key: 'hud.noAux' },
+  noTarget: { color: UI.WARN, hz: 0, rank: 84, key: 'hud.noTarget' },
   dockFast: { color: UI.WARN, hz: 2.5, rank: 70, key: 'hud.dockTooFast' },
   contactLost: { color: UI.DANGER, hz: 0, rank: 68, key: 'hud.contactLost' },
   hullHot: { color: UI.WARN, hz: 2, rank: 60, key: 'hud.hullHot' },
