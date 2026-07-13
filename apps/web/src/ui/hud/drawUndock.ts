@@ -19,8 +19,8 @@ const clamp01 = (x: number): number => (x < 0 ? 0 : x > 1 ? 1 : x)
 /** Ускоряющаяся кривая: медленно у нуля, круто к единице. */
 const easeIn = (u: number, p: number): number => Math.pow(clamp01(u), p)
 
-/** Кольцо проходит свой путь БЫСТРЕЕ маски и раньше — оно идёт «перед» прорезью. */
-const RING_SPAN = 0.5
+/** Сколько кольцо проходит свой путь. Больше — медленнее (было 0.5, +50% = плавнее). */
+const RING_SPAN = 0.75
 /** Старт второго кольца позже первого — два раздельных «вжуу». */
 const RING_DELAYS = [0, 0.14] as const
 
@@ -78,6 +78,9 @@ export function drawUndockTunnel(ctx: CanvasRenderingContext2D, width: number, h
   ctx.arc(cx, cy, hole, 0, TAU)
   ctx.fill()
   ctx.restore()
+
+  // Обрамление самой прорези: голубое кольцо по её растущему краю — стенка тоннеля светится.
+  ring(ctx, cx, cy, hole, 0.85 * clamp01(p * 8))
 
   // ── Кольца ПОВЕРХ маски, впереди прорези («с запасом» за край экрана) ────────────
   const reach = diag * 0.78
