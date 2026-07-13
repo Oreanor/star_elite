@@ -1,6 +1,6 @@
 import { useFrame, useThree } from '@react-three/fiber'
 import { useRef } from 'react'
-import { Object3D, PerspectiveCamera, Quaternion, Vector3 } from 'three'
+import { PerspectiveCamera, Quaternion, Vector3 } from 'three'
 import { CRUISE, clamp } from '@elite/sim'
 import { manoeuvreHoldsCamera } from '../../app/control/playerController'
 import { useSession } from '../../app/GameContext'
@@ -26,10 +26,6 @@ const _shake = new Vector3()
 const _bombShake = new Vector3()
 const _jumpShake = new Vector3()
 const _camRot = new Quaternion()
-/** Вспомогательный узел для «подсмотра» по Tab: строит ориентацию взгляда на цель. */
-const _peekLook = /* @__PURE__ */ new Object3D()
-/** Сколько длится подсмотр цели, с: наводимся к центру и возвращаемся (0→1→0). */
-const PEEK_DUR = 1.1
 
 /** Направление носа и взгляда камеры — для инкрементального доворота курса. */
 const _noseFwd = new Vector3()
@@ -66,9 +62,6 @@ export function FlightCamera() {
 
   /** Множитель крейсера в прошлом кадре: по его росту и виден разгон. */
   const previousFactor = useRef(1)
-
-  /** Подсмотр по Tab: какая цель была захвачена и когда начался наплыв на новую. */
-  const peek = useRef<{ id: number | null; start: number }>({ id: null, start: -1 })
 
   /**
    * Ориентация камеры хранится РАЗОБРАННОЙ — курс с тангажом отдельно, крен
@@ -254,34 +247,6 @@ export function FlightCamera() {
 
       _desiredQuat.copy(camSwing).multiply(camTwist).multiply(_pitchDown)
       camera.quaternion.copy(_desiredQuat)
-    }
-
-    /**
-     * TAB-ПОДСМОТР: сменил захват — камера коротко наводит новую цель в ЦЕНТР кадра,
-     * чтобы её успеть разглядеть, и плавно возвращается за корму. Чистый камерный эффект:
-     * позиция и слежение посчитаны выше как обычно, здесь лишь домешиваем взгляд на цель.
-     * Кабину не трогаем — там камера жёстко привязана к пилоту.
-     */
-    if (!cockpit) {
-      const lockedId = session.world.lockedTargetId
-      if (lockedId !== peek.current.id) {
-        peek.current.id = lockedId
-        peek.current.start = lockedId != null ? session.world.time : -1
-      }
-      if (peek.current.start >= 0 && lockedId != null) {
-        const elapsed = session.world.time - peek.current.start
-        const tgt = elapsed <= PEEK_DUR ? session.world.ships.find((s) => s.id === lockedId) : undefined
-        if (tgt) {
-          // Синус 0→1→0: плавный наплыв взгляда к цели и обратно, без рывка на концах.
-          const e = Math.sin((Math.PI * elapsed) / PEEK_DUR)
-          _peekLook.position.copy(camera.position)
-          _peekLook.up.set(0, 1, 0)
-          _peekLook.lookAt(tgt.state.pos)
-          camera.quaternion.slerp(_peekLook.quaternion, e)
-        } else {
-          peek.current.start = -1 // цель исчезла или подсмотр кончился
-        }
-      }
     }
 
     // ── Крейсер: поле зрения и тряска ────────────────────────────────────────
