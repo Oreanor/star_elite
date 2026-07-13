@@ -40,7 +40,7 @@ import { t, useLang, type Key } from '../i18n'
 import { UI } from '../theme'
 import { ACCENT, Button, Column, DIM, Panel, Table } from '../station/chrome'
 import { StatId, credits, formatStat, statLabel } from '../station/format'
-import { displayName, headlineCompare, headlineNumber, moduleBenefit, weaponSlot } from '../station/Equipment'
+import { displayName, headlineCompare, headlineNumber, weaponSlot } from '../station/Equipment'
 import { chassisName, properName } from '../i18n/dataNames'
 
 /**
@@ -322,11 +322,38 @@ function buildSlots(world: World): SlotView[] {
   return rows
 }
 
+/** Категория слота у карточки: аукс-виды под 'aux', оружие — своими, прочее — само. */
+function categoryOf(s: SlotView): string {
+  return s.optionKinds.length > 1 ? 'aux' : (s.optionKinds[0] ?? 'engine')
+}
+
+/** Порядок категорий в сетке — от «сердца» корабля к грузу и допам. */
+const CATEGORY_ORDER = [
+  'engine', 'thrusters', 'shield', 'hyperdrive',
+  'laser', 'missile', 'armour', 'cargo', 'aux',
+] as const
+
+interface CategoryCard {
+  cat: string
+  subs: SlotView[]
+}
+
+/** Свернуть плоские под-слоты в карточки по КАТЕГОРИИ, в заданном порядке. Пустых нет. */
+function groupCards(slots: readonly SlotView[]): CategoryCard[] {
+  const cards: CategoryCard[] = []
+  for (const cat of CATEGORY_ORDER) {
+    const subs = slots.filter((s) => categoryOf(s) === cat)
+    if (subs.length > 0) cards.push({ cat, subs })
+  }
+  return cards
+}
+
 /**
- * Оснастка ПЛИТКОЙ, а не таблицей: каждая ячейка — вид слота, что в нём стоит
- * («нет» — свободен), его характеристика и вес прямо на карточке. У причала плитка
- * кликабельна — по ней встаёт мастерская-модалка; в полёте карточки только читают,
- * клик ничего не открывает (незачем модалка ради тех же цифр).
+ * Оснастка КАРТОЧКАМИ ПО КАТЕГОРИИ: одна карточка на вид оборудования, а внутри —
+ * 1–3 под-слота (лазеры, броня, груз, аукс), куда и ставят конкретные штуки. Под-слот
+ * пуст — тускло «нет», занят — ярко краткое имя. Клик по под-слоту у причала открывает
+ * мастерскую-модалку (выбрать/заменить/снять/купить); в полёте карточки только читают.
+ * У груза под под-слотами — сводка суммарного тоннажа.
  */
 function SlotGrid({
   slots,
@@ -337,40 +364,63 @@ function SlotGrid({
   onOpen: (key: string) => void
   docked: boolean
 }) {
-  // Своя секция, а не общий Panel: у того `mt-6` роняет модули на строку ниже модельки.
-  // Здесь верх плитки встаёт вровень с контейнером чертежа — как и просили.
+  const cards = groupCards(slots)
   return (
     <section className="border p-5" style={{ borderColor: DIM }}>
       <h2 className="mb-3 text-sm tracking-[0.3em]">{t('ship.tab.modules')}</h2>
       <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
-        {slots.map((s) => (
-          <button
-            key={s.key}
-            type="button"
-            onClick={docked ? () => onOpen(s.key) : undefined}
-            className={`flex flex-col gap-1 border p-3 text-left transition-colors ${
-              docked ? 'cursor-pointer hover:border-[#7fd6ff] hover:bg-[#7fd6ff]/10' : 'cursor-default'
-            }`}
-            style={{ borderColor: DIM }}
-          >
-            {/* Вид слота — что за оборудование сюда ставится, а не имя конкретной модели. */}
-            <span className="text-[0.6rem] tracking-[0.2em]" style={{ color: DIM }}>
-              {t(('kind.' + (s.optionKinds.length > 1 ? 'aux' : s.optionKinds[0])) as Key).toUpperCase()}
-            </span>
-            <span className="text-sm leading-tight" style={{ color: s.module ? ACCENT : DIM }}>
-              {s.module ? displayName(s.module) : t('ship.slotEmpty')}
-            </span>
-            {/* Харка и вес — прямо на карточке. У ракет заголовочная цифра — суммарный
-                боезапас пилонов, а не боезапас одного; вес показываем модуля. */}
-            {s.module && (
-              <span className="text-[0.7rem]" style={{ color: DIM }}>
-                {s.ammoTotal !== undefined ? formatStat('ammo', s.ammoTotal) : moduleBenefit(s.module)}
-                {' · '}
-                {formatStat('mass', s.module.mass)}
-              </span>
-            )}
-          </button>
-        ))}
+        {cards.map(({ cat, subs }) => {
+          const filled = subs.filter((s) => s.module)
+          const cargoTons =
+            cat === 'cargo'
+              ? filled.reduce((sum, s) => sum + moduleStat(s.module!).value, 0)
+              : null
+          return (
+            <div key={cat} className="flex flex-col gap-1.5 border p-3" style={{ borderColor: DIM }}>
+              {/* Шапка карточки: имя категории и «занято/всего», если под-слотов больше одного. */}
+              <div className="flex items-baseline justify-between">
+                <span className="text-[0.6rem] tracking-[0.2em]" style={{ color: DIM }}>
+                  {t(('kind.' + cat) as Key).toUpperCase()}
+                </span>
+                {subs.length > 1 && (
+                  <span className="text-[0.6rem]" style={{ color: DIM }}>
+                    {filled.length}/{subs.length}
+                  </span>
+                )}
+              </div>
+              {/* Под-слоты: каждая единица — своя строка-кнопка. Пусто — тускло «нет». */}
+              {subs.map((s) => (
+                <button
+                  key={s.key}
+                  type="button"
+                  onClick={docked ? () => onOpen(s.key) : undefined}
+                  className={`flex items-baseline justify-between gap-2 border px-2 py-1 text-left transition-colors ${
+                    docked ? 'cursor-pointer hover:border-[#7fd6ff] hover:bg-[#7fd6ff]/10' : 'cursor-default'
+                  }`}
+                  style={{ borderColor: 'rgba(127,214,255,0.12)' }}
+                >
+                  <span
+                    className="truncate text-xs leading-tight"
+                    style={{ color: s.module ? ACCENT : DIM }}
+                  >
+                    {s.module ? displayName(s.module) : t('ship.slotEmpty')}
+                  </span>
+                  {s.module && (
+                    <span className="shrink-0 text-[0.6rem]" style={{ color: DIM }}>
+                      {s.ammoTotal !== undefined ? formatStat('ammo', s.ammoTotal) : formatStat('mass', s.module.mass)}
+                    </span>
+                  )}
+                </button>
+              ))}
+              {/* Груз: суммарный тоннаж установленных отсеков — то, что реально влезет. */}
+              {cargoTons !== null && filled.length > 0 && (
+                <span className="text-[0.6rem]" style={{ color: DIM }}>
+                  {t('ship.cargoTotal', { tons: formatStat('cargo', cargoTons) })}
+                </span>
+              )}
+            </div>
+          )
+        })}
       </div>
     </section>
   )
