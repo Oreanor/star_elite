@@ -63,9 +63,10 @@ export function resaleOf(module: ShipModule): number {
 
 export type PurchaseError = 'no-money' | 'wrong-kind' | 'class-too-large' | 'no-hardpoint' | 'already-installed'
 
-/** Слоты корпуса под этот вид модуля, в которые он влезает по классу. */
+/** Слоты корпуса под этот вид модуля. Класс гейтит корпус (`chassis.class`), не слот. */
 function fittingSlots(ship: ShipEntity, module: ShipModule): number {
-  return ship.loadout.chassis.slots.filter((s) => s.kind === module.kind && s.maxClass >= module.class).length
+  if (module.class > ship.loadout.chassis.class) return 0 // не по классу корпуса — некуда
+  return ship.loadout.chassis.slots.filter((s) => s.kind === module.kind).length
 }
 
 function installedOfKind(ship: ShipEntity, kind: ShipModule['kind']): ShipModule[] {
@@ -95,14 +96,14 @@ export function canBuy(
 
     const wanted = module.kind === 'missile' ? 'pylon' : 'gun'
     if (hardpoint.kind !== wanted) return 'wrong-kind'
-    if (hardpoint.maxClass < module.class) return 'class-too-large'
+    if (module.class > ship.loadout.chassis.class) return 'class-too-large'
     if (ship.loadout.weapons[hardpointIndex]?.id === module.id) return 'already-installed'
     return null
   }
 
   const slots = fittingSlots(ship, module)
   if (slots === 0) {
-    // Слот под такой вид есть, но модуль в него не лезет по классу — или вида нет вовсе.
+    // Вида слота нет вовсе — или он есть, но модуль не по классу корпуса.
     const anyKind = ship.loadout.chassis.slots.some((s) => s.kind === module.kind)
     return anyKind ? 'class-too-large' : 'wrong-kind'
   }
@@ -206,9 +207,10 @@ function hashModuleId(id: string): number {
 
 export type FitError = 'not-a-module' | 'wrong-kind' | 'class-too-large' | 'no-hardpoint' | 'already-installed' | 'no-room'
 
-/** Слоты корпуса под этот вид модуля по классу — без корабля, от одного шасси. */
+/** Слоты корпуса под этот вид модуля — без корабля, от одного шасси. Класс гейтит корпус. */
 function slotsForChassis(loadout: Loadout, module: ShipModule): number {
-  return loadout.chassis.slots.filter((s) => s.kind === module.kind && s.maxClass >= module.class).length
+  if (module.class > loadout.chassis.class) return 0
+  return loadout.chassis.slots.filter((s) => s.kind === module.kind).length
 }
 
 /** Первая подходящая точка подвески: пустая предпочтительнее занятой. */
@@ -218,7 +220,7 @@ function autoHardpoint(ship: ShipEntity, module: ShipModule): number | undefined
   let firstFit: number | undefined
   for (let i = 0; i < points.length; i++) {
     const h = points[i]!
-    if (h.kind !== wanted || h.maxClass < module.class) continue
+    if (h.kind !== wanted || module.class > ship.loadout.chassis.class) continue
     if (!ship.loadout.weapons[i]) return i
     if (firstFit === undefined) firstFit = i
   }
@@ -240,7 +242,7 @@ export function canFit(ship: ShipEntity, module: ShipModule, hardpointIndex?: nu
     if (!hp) return 'no-hardpoint'
     const wanted = module.kind === 'missile' ? 'pylon' : 'gun'
     if (hp.kind !== wanted) return 'wrong-kind'
-    if (hp.maxClass < module.class) return 'class-too-large'
+    if (module.class > ship.loadout.chassis.class) return 'class-too-large'
     if (ship.loadout.weapons[hardpointIndex]?.id === module.id) return 'already-installed'
     return null
   }

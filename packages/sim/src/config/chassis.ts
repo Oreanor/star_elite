@@ -8,6 +8,7 @@ import type { Chassis } from '../domain/loadout'
 export const AURORA_MK3: Chassis = {
   id: 'aurora_mk3',
   name: 'Аврора Мк III',
+  class: 3,
   baseMass: 8, // т, пустой
   baseHull: 90,
   /** м. Аврора — корабль метров 25 в длину; сфера ~половина размаха.
@@ -52,6 +53,7 @@ export const AURORA_MK3: Chassis = {
 export const SIDEWINDER: Chassis = {
   id: 'sidewinder',
   name: 'Арес',
+  class: 2,
   baseMass: 6,
   baseHull: 40,
   /** м. Мелкий истребитель: труднее попасть, но и брони нет. */
@@ -94,6 +96,7 @@ export const SIDEWINDER: Chassis = {
 export const LARGE_FREIGHTER: Chassis = {
   id: 'freighter',
   name: 'Деметра',
+  class: 3,
   baseMass: 90, // т, пустой — на порядок тяжелее истребителя
   baseHull: 320,
   /** м. Втрое длиннее «Авроры»: тушу видно издалека, и попасть по ней нетрудно. */
@@ -129,6 +132,7 @@ export const LARGE_FREIGHTER: Chassis = {
 export const APOLLO: Chassis = {
   id: 'apollo',
   name: 'Аполлон',
+  class: 3,
   baseMass: 7,
   baseHull: 70,
   radius: 11,
@@ -156,6 +160,7 @@ export const APOLLO: Chassis = {
 export const ARTEMIS: Chassis = {
   id: 'artemis',
   name: 'Артемида',
+  class: 3,
   baseMass: 9,
   baseHull: 105,
   radius: 10,
@@ -183,6 +188,7 @@ export const ARTEMIS: Chassis = {
 export const ATHENA: Chassis = {
   id: 'athena',
   name: 'Афина',
+  class: 3,
   baseMass: 8,
   baseHull: 80,
   radius: 10,
@@ -233,6 +239,7 @@ export function findChassis(id: string): Chassis | null {
 export const DRONE: Chassis = {
   id: 'drone',
   name: 'Каллиопа',
+  class: 1,
   baseMass: 0.9,
   baseHull: 22,
   /** м. Втрое мельче «Ареса»: попасть в него — отдельная задача. */

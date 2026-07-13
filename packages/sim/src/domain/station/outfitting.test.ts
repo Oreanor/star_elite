@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { SHIELD_HEAVY, SHIELD_STANDARD } from '../../config/modules'
+import { SIDEWINDER } from '../../config/chassis'
+import { CARGO_LARGE, SHIELD_HEAVY, SHIELD_STANDARD } from '../../config/modules'
 import { addCommodity, addItem } from '../cargo/hold'
 import { COMMODITIES } from '../cargo/items'
+import { canInstallInternal, createLoadout } from '../loadout'
 import { createWorld } from '../world'
 import { fitDeltas, fitFromHold } from './shop'
 
@@ -44,5 +46,26 @@ describe('перестановка железа из трюма', () => {
     const world = createWorld()
     addCommodity(world.player.hold, COMMODITIES.FOOD, 1)
     expect(fitFromHold(world.player, world.player.hold.items.length - 1)).toBe('not-a-module')
+  })
+})
+
+/**
+ * Класс гейтит КОРПУС, а не отдельный слот: железо выше класса рамы не встаёт,
+ * какой бы слот под него ни был. Груз — бесклассовый и лезет всегда. «Арес»
+ * (SIDEWINDER) класса 2 — на нём это и проверяем.
+ */
+describe('класс корпуса ограничивает железо', () => {
+  it('модуль класса выше корпуса — отказ, свой класс и ниже — встаёт', () => {
+    const bare = createLoadout(SIDEWINDER, [], []) // класс корпуса 2
+    // SHIELD_STANDARD класса 2 — ровно по корпусу, слот щита есть.
+    expect(canInstallInternal(bare, SHIELD_STANDARD)).toBeNull()
+    // SHIELD_HEAVY класса 3 — выше класса «Ареса», не по корпусу.
+    expect(canInstallInternal(bare, SHIELD_HEAVY)).toBe('class-too-large')
+  })
+
+  it('груз бесклассовый — крупный контейнер лезет и в корпус низкого класса', () => {
+    const bare = createLoadout(SIDEWINDER, [], [])
+    // CARGO_LARGE вместимости 50 т — «класс 1», значит любой корпус его тянет.
+    expect(canInstallInternal(bare, CARGO_LARGE)).toBeNull()
   })
 })

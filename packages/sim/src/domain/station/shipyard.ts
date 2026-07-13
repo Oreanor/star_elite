@@ -39,7 +39,8 @@ export function fitOntoChassis(current: Loadout, chassis: Chassis): HullFit {
   const pool = [...current.internals]
   const fitted: ShipModule[] = []
   for (const slot of chassis.slots) {
-    const idx = pool.findIndex((m) => m.kind === slot.kind && m.class <= slot.maxClass)
+    // Класс гейтит корпус, не слот: модуль встаёт, если не выше класса рамы.
+    const idx = pool.findIndex((m) => m.kind === slot.kind && m.class <= chassis.class)
     if (idx >= 0) fitted.push(pool.splice(idx, 1)[0]!)
   }
 
@@ -49,7 +50,7 @@ export function fitOntoChassis(current: Loadout, chassis: Chassis): HullFit {
   const weapons: (WeaponModule | null)[] = chassis.hardpoints.map(() => null)
   chassis.hardpoints.forEach((hp, i) => {
     const accepts = (k: WeaponModule['kind']) => (hp.kind === 'pylon' ? k === 'missile' || k === 'drone' : k === 'laser')
-    const idx = guns.findIndex((w) => accepts(w.kind) && w.class <= hp.maxClass)
+    const idx = guns.findIndex((w) => accepts(w.kind) && w.class <= chassis.class)
     if (idx >= 0) weapons[i] = guns.splice(idx, 1)[0]!
   })
 

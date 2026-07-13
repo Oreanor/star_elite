@@ -112,8 +112,8 @@ export function canInstallInternal(l: Loadout, mod: ShipModule): InstallError | 
   const candidates = l.chassis.slots.filter((s) => s.kind === mod.kind)
   if (candidates.length === 0) return 'wrong-kind'
 
-  const free = candidates.filter((s) => s.maxClass >= mod.class)
-  if (free.length === 0) return 'class-too-large'
+  // Класс гейтит корпус, не слот (груз — бесклассовый, class 1, лезет всегда).
+  if (mod.class > l.chassis.class) return 'class-too-large'
 
   const occupied = used.get(mod.kind) ?? 0
   if (occupied >= candidates.length) return 'no-free-slot'
@@ -124,7 +124,7 @@ export function canInstallWeapon(l: Loadout, mod: WeaponModule, hardpointIndex: 
   const hp = l.chassis.hardpoints[hardpointIndex]
   if (!hp) return 'no-hardpoint'
   if (!fits(hp.kind, mod.kind)) return 'wrong-kind'
-  if (hp.maxClass < mod.class) return 'class-too-large'
+  if (mod.class > l.chassis.class) return 'class-too-large'
   return null
 }
 
