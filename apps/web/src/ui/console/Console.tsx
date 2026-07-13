@@ -18,6 +18,7 @@ import {
 } from '@elite/sim'
 import { useOnlinePlayers, type OnlinePlayer } from '../../app/net/presence'
 import { currentLang, t, useLang } from '../i18n'
+import { currentGameDate } from '../clock'
 import { chassisName, economyName, governmentName, occupationName, professionName, properName, speciesName } from '../i18n/dataNames'
 import { ACCENT, Button, Column, DIM, PilotPortrait, Table } from '../station/chrome'
 import { Hold } from '../station/Hold'
@@ -146,6 +147,10 @@ export function Console({
           </h1>
           {/* Кошелёк — единожды и на виду: слева от выхода, а не в каждой вкладке. */}
           <div className="flex items-center gap-4">
+            {/* Дата мира: снимок на момент захода на станцию. Время ведёт клиент (`ui/clock`). */}
+            <span className="whitespace-nowrap text-sm tracking-widest" style={{ color: DIM }}>
+              {currentGameDate()}
+            </span>
             <span className="whitespace-nowrap text-sm tracking-widest" style={{ color: DIM }}>
               {t('station.credits')} {world.credits.toLocaleString(currentLang() === 'ru' ? 'ru' : 'en-US')}
             </span>

@@ -30,6 +30,7 @@ import {
   type World,
 } from '@elite/sim'
 import { bombFlash, bombRing } from '../../render/bombFeel'
+import { currentGameDate } from '../clock'
 import { GALAXY_LAYER, HUD_SCALE } from '../../render/config'
 import { galaxyRadar } from '../../render/scene/galaxyRadar'
 import { HUD_COLORS, bar, circle, corners, dot, ellipse, line, rect, text } from './draw'
@@ -86,6 +87,7 @@ export function drawHud(frame: HudFrame): void {
   // Счётчик кадров рисуется ДО проверки на гибель: узнать, во что превратилась
   // частота, важнее всего именно тогда, когда на экране взрыв.
   drawFps(frame)
+  drawDate(frame)
 
   // Экран смерти — React-оверлей: там нужны кнопки и курсор.
   if (!world.player.alive) return
@@ -182,6 +184,14 @@ function drawPods(frame: HudFrame): void {
 function drawFps({ ctx, width, fps }: HudFrame): void {
   const color = fps >= 55 ? HUD_COLORS.DIM : fps >= 30 ? HUD_COLORS.WARN : HUD_COLORS.DANGER
   text(ctx, `${Math.round(fps)} FPS`, width - 6 * S, 5 * S, color, 'right')
+}
+
+/**
+ * Игровая дата в левом верхнем углу — симметрично счётчику кадров справа. Тускло:
+ * это фон мира, а не прибор для наводки. Время ведёт клиент (`ui/clock`), не домен.
+ */
+function drawDate({ ctx }: HudFrame): void {
+  text(ctx, currentGameDate(), 6 * S, 5 * S, HUD_COLORS.DIM, 'left')
 }
 
 /** Частота мигания лампы стыковки, Гц. Медленнее — не заметишь, быстрее — раздражает. */
