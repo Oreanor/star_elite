@@ -26,6 +26,9 @@ const held = (world: World, id: string): number =>
 describe('сделки', () => {
   it('игрок отдаёт товар — не больше своего запаса и чужого трюма', () => {
     const { world, ship } = scene()
+    // Ёмкость трюма игрока задаём явно: тест про правила сделки, а не про тюнинг
+    // стартовой грузоподъёмности — иначе он ломается от любой перебалансировки корпуса.
+    world.player.hold.capacity = 40
     addCommodity(world.player.hold, COMMODITIES.FOOD, 20)
     ship.hold.capacity = 8
 

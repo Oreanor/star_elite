@@ -11,6 +11,8 @@ export const AURORA_MK3: Chassis = {
   class: 3,
   baseMass: 8, // т, пустой
   baseHull: 90,
+  cargoCapacity: 22, // истребитель-универсал: хватает на обвес да немного поторговать
+  auxCapacity: 100,
   /** м. Аврора — корабль метров 25 в длину; сфера ~половина размаха.
    *  Это не косметика: угловой размер цели решает, возможно ли попасть вообще. */
   radius: 12,
@@ -50,7 +52,11 @@ export const AURORA_MK3: Chassis = {
     { kind: 'aux', maxClass: 3 },
     { kind: 'aux', maxClass: 3 },
   ],
-  cost: 0, // стартовый корабль
+  // Игрок стартует на ней уже в собственности (кредиты не списываются), но как ТОВАР у
+  // «Авроры» честная цена: крепкий универсал класса 3 (корпус 90, 3 орудия + 4 пилона,
+  // ДВА аукс-слота — больше всех на верфи). Дороже стеклянного «Аполлона» (58k), дешевле
+  // ударной «Артемиды» (88k). Цена — ещё и база апгрейда корпуса (20% за первый уровень).
+  cost: 70000,
 }
 
 export const SIDEWINDER: Chassis = {
@@ -59,6 +65,8 @@ export const SIDEWINDER: Chassis = {
   class: 2,
   baseMass: 6,
   baseHull: 40,
+  cargoCapacity: 16, // мелкий боец: трюма едва на обвес
+  auxCapacity: 100,
   /** м. Мелкий истребитель: труднее попасть, но и брони нет. */
   radius: 9,
   // Компактный: поворачивается легче «Авроры» при той же массе.
@@ -104,6 +112,8 @@ export const LARGE_FREIGHTER: Chassis = {
   class: 3,
   baseMass: 90, // т, пустой — на порядок тяжелее истребителя
   baseHull: 320,
+  cargoCapacity: 200, // летающий трюм: грузоподъёмность на порядок выше боевых корпусов
+  auxCapacity: 100,
   /** м. Втрое длиннее «Авроры»: тушу видно издалека, и попасть по ней нетрудно. */
   radius: 34,
   inertiaFactor: 5.0,
@@ -140,6 +150,8 @@ export const APOLLO: Chassis = {
   class: 3,
   baseMass: 7,
   baseHull: 70,
+  cargoCapacity: 20,
+  auxCapacity: 100,
   radius: 11,
   inertiaFactor: 0.8,
   assistLateralDamp: 1.2,
@@ -171,6 +183,8 @@ export const ARTEMIS: Chassis = {
   class: 3,
   baseMass: 9,
   baseHull: 105,
+  cargoCapacity: 24,
+  auxCapacity: 100,
   radius: 10,
   inertiaFactor: 1.0,
   assistLateralDamp: 1.1,
@@ -201,6 +215,8 @@ export const ATHENA: Chassis = {
   class: 3,
   baseMass: 8,
   baseHull: 80,
+  cargoCapacity: 22,
+  auxCapacity: 100,
   radius: 10,
   inertiaFactor: 0.9,
   assistLateralDamp: 1.25,
@@ -256,6 +272,10 @@ export const DRONE: Chassis = {
   class: 1,
   baseMass: 0.9,
   baseHull: 22,
+  // Спасательная капсула: 10 т грузоподъёмности — ровно чтобы вынести из осколков
+  // миелофон или важный груз (см. эскейп-под). Аукс-энергия — его живучесть в роли пода.
+  cargoCapacity: 10,
+  auxCapacity: 100,
   /** м. Втрое мельче «Ареса»: попасть в него — отдельная задача. */
   radius: 3,
   inertiaFactor: 0.4,

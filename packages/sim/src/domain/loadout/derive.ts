@@ -135,12 +135,19 @@ export function deriveShipSpec(loadout: Loadout, cargoMass = 0): ShipSpec {
   const power: PowerSpec = {
     capacity: engine.energy,
     regen: engine.energyRegen,
-    auxCapacity: AUX_POWER.CAPACITY,
+    // Ёмкость доп-отсека теперь свойство корпуса (была глобальной): апгрейд рамы её растит.
+    auxCapacity: chassis.auxCapacity,
     auxRegen: AUX_POWER.REGEN,
   }
 
-  let cargoCapacity = 0
+  // Грузоподъёмность корпуса — массовый бюджет под нагрузку. Оборудование ест его своей
+  // массой (без пустой массы корпуса); контейнеры добавляют вместимость (их `capacity` ≈
+  // 10× массы); остаток — сколько тонн товара влезет. Пустеет до нуля, но не уходит в минус.
+  const equipmentMass = mass - cargoMass - chassis.baseMass // = dryMass − baseMass = обвес
+  let cargoCapacity = chassis.cargoCapacity - equipmentMass
   for (const rack of findCargoRacks(loadout)) cargoCapacity += rack.capacity
+  // Трюм считается целыми тоннами (товар — целые единицы): округляем ВНИЗ, не в минус.
+  cargoCapacity = Math.max(0, Math.floor(cargoCapacity))
 
   return {
     tuning, hull, power, mounts, mass, cargoCapacity,
