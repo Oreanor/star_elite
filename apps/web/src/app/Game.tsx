@@ -6,6 +6,7 @@ import { Post } from '../render/post/Post'
 import { PIXEL_SCALE, RENDER } from '../render/config'
 import { AsteroidField } from '../render/scene/Asteroids'
 import { Bodies } from '../render/scene/Bodies'
+import { GalaxyLayer } from '../render/scene/GalaxyLayer'
 import { Titans } from '../render/scene/Titans'
 import { Platforms } from '../render/scene/Platforms'
 import { Cockpit } from '../render/scene/Cockpit'
@@ -42,6 +43,7 @@ function Scene() {
       <Sky />
       <Lighting />
       <Starfield />
+      <GalaxyLayer />
       <Dust />
 
       <Bodies />
