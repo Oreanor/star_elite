@@ -718,6 +718,134 @@ export function upgradeModule(
   return null
 }
 
+// ─── Ракетный (мунишн) слот: ОДИН тип на всю подвеску ─────────────────────────
+//
+// Ракеты — ОДНА ячейка на все пилоны: один тип, боезапас общий. Дрон-ракеты — ПРОСТО
+// ДРУГОЙ ТИП ракет (контейнер БПЛА вместо боеголовки): их покупают и ставят в тот же слот
+// ВЗАМЕН обычных. Оттого «мунишн» = ракета ИЛИ дрон, но на всех пилонах один и тот же.
+// Домен хранит их по пилонам (точки пуска для боя и рендера), но операции — по слоту ЦЕЛИКОМ.
+
+/** Ракета или дрон-контейнер — оба сходят с пилона и делят один мунишн-слот. */
+function isMunition(m: ShipModule): boolean {
+  return isMissile(m) || isDrone(m)
+}
+
+/** Индексы ВСЕХ ракетных пилонов корпуса (точки подвески 'pylon'). */
+export function missilePylonIndices(ship: ShipEntity): number[] {
+  const out: number[] = []
+  ship.loadout.chassis.hardpoints.forEach((hp, i) => {
+    if (hp.kind === 'pylon') out.push(i)
+  })
+  return out
+}
+
+/** Мунишн, стоящий в слоте сейчас (ракета или дрон, тип один на всех). null — слот пуст. */
+export function installedMissile(ship: ShipEntity): ShipModule | null {
+  for (const i of missilePylonIndices(ship)) {
+    const w = ship.loadout.weapons[i]
+    if (w && isMunition(w)) return w
+  }
+  return null
+}
+
+/** Тот же тип уже на ВСЕХ пилонах — слот полностью снаряжён им. */
+function missilesAllOfType(ship: ShipEntity, id: string): boolean {
+  const pylons = missilePylonIndices(ship)
+  return pylons.length > 0 && pylons.every((i) => ship.loadout.weapons[i]?.id === id)
+}
+
+/**
+ * Снарядить слот КУПЛЕННЫМ типом (ракеты или дрон-ракеты): один тип на все пилоны, плата —
+ * как за один комплект (слот один). Прежний тип (если стоял другой) уходит станции по
+ * остаточной цене ОДИН раз — комплект, а не по пилону.
+ */
+export function armMissiles(world: World, ship: ShipEntity, module: ShipModule): PurchaseError | null {
+  if (!isMunition(module)) return 'wrong-kind'
+  if (module.class > ship.loadout.chassis.class) return 'class-too-large'
+  const pylons = missilePylonIndices(ship)
+  if (pylons.length === 0) return 'no-hardpoint'
+  if (missilesAllOfType(ship, module.id)) return 'already-installed'
+  if (world.credits < priceOf(module)) return 'no-money'
+
+  const prev = installedMissile(ship) // прежний тип (инвариант: один на всех)
+  world.credits -= priceOf(module)
+  if (prev) world.credits += resaleOf(prev) // один комплект — одна выручка
+  for (const i of pylons) ship.loadout.weapons[i] = module as WeaponModule
+  refreshSpec(ship)
+  return null
+}
+
+/** Снарядить слот типом ИЗ ТРЮМА (даром — своё). Прежний тип возвращается в трюм. */
+export function armMissilesFromHold(ship: ShipEntity, holdIndex: number): FitError | null {
+  const item = ship.hold.items[holdIndex]
+  if (!item || item.kind !== 'module') return 'not-a-module'
+  const module = item.module
+  if (!isMunition(module)) return 'wrong-kind'
+  if (module.class > ship.loadout.chassis.class) return 'class-too-large'
+  const pylons = missilePylonIndices(ship)
+  if (pylons.length === 0) return 'no-hardpoint'
+  if (missilesAllOfType(ship, module.id)) return 'already-installed'
+
+  const prev = installedMissile(ship)
+  removeItem(ship.hold, holdIndex) // входящий уходит из трюма — освобождает место под прежний
+  if (prev) addItem(ship.hold, { kind: 'module', module: prev })
+  for (const i of pylons) ship.loadout.weapons[i] = module as WeaponModule
+  refreshSpec(ship)
+  return null
+}
+
+/**
+ * Прокачать слот ЦЕЛИКОМ: усиленный тип встаёт на ВСЕ пилоны разом, иначе прокачался бы
+ * один пилон, а прочие остались стоком — боезапас слота вырос бы лишь на треть. Копия/деньги —
+ * как в `upgradeModule`, но по слоту, а не по одному стволу.
+ */
+export function upgradeMissiles(world: World, ship: ShipEntity, useCopy: boolean): UpgradeError | null {
+  const module = installedMissile(ship)
+  if (!module) return 'maxed' // слот пуст — прокачивать нечего
+  const error = canUpgrade(world, ship, module, useCopy)
+  if (error) return error
+
+  const level = useCopy ? SHOP.UPGRADE_COPY_STEP : SHOP.UPGRADE_CASH_STEP
+  const upgraded = withUpgrade(module, level) as WeaponModule
+  for (const i of missilePylonIndices(ship)) {
+    if (ship.loadout.weapons[i] && isMunition(ship.loadout.weapons[i]!)) ship.loadout.weapons[i] = upgraded
+  }
+  if (useCopy) {
+    const idx = upgradeCopyIndex(ship, module)
+    if (idx !== null) removeItem(ship.hold, idx)
+  } else {
+    world.credits -= upgradeCashCost(module)
+  }
+  refreshSpec(ship)
+  return null
+}
+
+/** Снять мунишн В ТРЮМ (весь слот, один комплект). Не влезет — операция не идёт. */
+export function stripMissiles(ship: ShipEntity): StripError | null {
+  const module = installedMissile(ship)
+  if (!module) return 'not-installed'
+  if (freeCapacity(ship.hold) < module.mass) return 'no-room'
+  for (const i of missilePylonIndices(ship)) {
+    if (ship.loadout.weapons[i] && isMunition(ship.loadout.weapons[i]!)) ship.loadout.weapons[i] = null
+  }
+  addItem(ship.hold, { kind: 'module', module })
+  refreshSpec(ship)
+  return null
+}
+
+/** Продать мунишн-слот целиком по остаточной цене (один комплект). */
+export function sellMissiles(world: World, ship: ShipEntity): StripError | null {
+  const module = installedMissile(ship)
+  if (!module) return 'not-installed'
+  const value = moduleResaleValue(ship, module)
+  for (const i of missilePylonIndices(ship)) {
+    if (ship.loadout.weapons[i] && isMunition(ship.loadout.weapons[i]!)) ship.loadout.weapons[i] = null
+  }
+  world.credits += value
+  refreshSpec(ship)
+  return null
+}
+
 // ─── Снятие и продажа установленного модуля ───────────────────────────────────
 
 export type StripError = 'not-installed' | 'no-room' | 'essential'

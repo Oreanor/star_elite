@@ -9,9 +9,15 @@ export {
   type DispatcherBriefing,
 } from './dispatcher'
 export {
+  armMissiles,
+  armMissilesFromHold,
   buy,
   buyCommodity,
   canBuy,
+  installedMissile,
+  sellMissiles,
+  stripMissiles,
+  upgradeMissiles,
   canBuyCommodity,
   canFit,
   canServiceHere,

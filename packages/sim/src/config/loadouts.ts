@@ -5,7 +5,6 @@ import {
   ARMOUR_PLATE,
   BURST_LASER,
   CLOAK_FIELD,
-  DRONE_BAY,
   ECM_UNIT,
   CARGO_LARGE,
   CARGO_SMALL,
@@ -41,10 +40,10 @@ export function playerStartLoadout(): Loadout {
     // а «заработай сорок пять тысяч, чтобы впервые куда-то полететь» — не начало игры.
     // Дальний рейс всё равно надо покупать: девять световых лет — это соседи.
     [ENGINE_STANDARD, RCS_STANDARD, SHIELD_STANDARD, ARMOUR_PLATE, CARGO_LARGE, HYPERDRIVE_BASIC, CLOAK_FIELD],
-    // Два ствола и четыре пусковых на пилонах — по индексам точек подвески шасси.
-    // Каждая несёт по две ракеты, итого восемь на вылет.
-    // Последний пилон отдан контейнеру БПЛА: три пилона ракет — шесть ракет.
-    [BURST_LASER, BURST_LASER, MISSILE_PYLON, MISSILE_PYLON, MISSILE_PYLON, DRONE_BAY],
+    // Два ствола и ракеты на пилонах. Мунишн-слот держит ОДИН тип на ВСЕХ пилонах: на старте
+    // это обычные ракеты (четыре пилона снаряжены). Дрон-ракеты — другой тип того же слота,
+    // их покупают на станции и ставят ВЗАМЕН, поэтому на старте контейнера БПЛА нет.
+    [BURST_LASER, BURST_LASER, MISSILE_PYLON, MISSILE_PYLON, MISSILE_PYLON, MISSILE_PYLON],
   )
 }
 

@@ -1,7 +1,7 @@
 import { useFrame } from '@react-three/fiber'
 import { useMemo, useRef } from 'react'
 import { InstancedMesh, Object3D, Vector3 } from 'three'
-import { hardpointIndices, shipAxes } from '@elite/sim'
+import { hardpointIndices, isMissile, shipAxes } from '@elite/sim'
 import { useSession } from '../../app/GameContext'
 import { missileGeometry } from '../geometry/ships'
 import { missileMaterial } from '../materials/materials'
@@ -47,10 +47,13 @@ export function WingMissiles() {
     for (const index of pylons) {
       const mountIndex = player.spec.mounts.findIndex((m) => m.index === index)
       if (mountIndex < 0) continue
-      if ((player.guns[mountIndex]?.ammo ?? 0) <= 0) continue
 
       const mount = player.spec.mounts[mountIndex]
       if (!mount || count >= MAX_PYLONS) continue
+      // Только настоящие ракеты: дрон-ракеты (тот же слот, другой тип) на крыле рисует не эта
+      // подвеска — иначе контейнер БПЛА висел бы боеголовкой.
+      if (!isMissile(mount.weapon)) continue
+      if ((player.guns[mountIndex]?.ammo ?? 0) <= 0) continue
 
       const [x, y, z] = mount.hardpoint.offset
       _pos

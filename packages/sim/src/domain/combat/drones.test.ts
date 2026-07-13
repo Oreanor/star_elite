@@ -7,6 +7,7 @@ import { stepWorld } from '../sim'
 import { createWorld, STARTER_SYSTEM, type World } from '../world'
 import type { ShipEntity } from '../world/entities'
 import { activeDrones, expireDrones, isDroneShip, launchDrone } from './drones'
+import { armMissiles } from '../station/shop'
 
 /**
  * Беспилотники. Их ценность — не урон, а то, что враг тратит на них внимание.
@@ -22,6 +23,9 @@ function withPirate(): { world: World; pirate: ShipEntity } {
   })
   const pirate = world.ships[0]
   if (!pirate) throw new Error('нет пирата')
+  // Дрон-ракеты — покупной тип мунишн-слота: на старте их нет, снаряжаем явно.
+  world.credits = 1_000_000
+  armMissiles(world, world.player, DRONE_BAY)
   world.player.state.pos.set(0, 0, 0)
   pirate.state.pos.set(0, 0, -300)
   pirate.ai = createAIState(new Vector3(0, 0, -300), world.rng)

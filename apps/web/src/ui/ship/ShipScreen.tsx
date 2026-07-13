@@ -2,6 +2,8 @@ import { Canvas, useFrame } from '@react-three/fiber'
 import { useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import { Group, Vector3, type BufferGeometry } from 'three'
 import {
+  armMissiles,
+  armMissilesFromHold,
   AUX_KINDS,
   buy,
   canBuy,
@@ -23,7 +25,10 @@ import {
   repairModule,
   repairModuleQuote,
   repairQuote,
+  sellMissiles,
   sellModule,
+  stripMissiles,
+  upgradeMissiles,
   slotCategoryOf,
   stationStock,
   swapHull,
@@ -296,18 +301,19 @@ function buildSlots(world: World): SlotView[] {
   })
 
   // Орудийные точки — всегда в сетке, пустые тоже: снял ствол — ставь заново.
+  // Ствол — своя строка; пилоны — ОДИН мунишн-слот (ракеты ИЛИ дрон-ракеты, один тип).
   const pylons: number[] = []
   loadout.chassis.hardpoints.forEach((hp, i) => {
     if (hp.kind === 'pylon') {
       pylons.push(i)
       return
     }
-    const weapon = loadout.weapons[i]
-    rows.push({ key: `hp-${i}`, module: weapon ?? null, hardpointIndex: i, optionKinds: ['laser'] })
+    rows.push({ key: `hp-${i}`, module: loadout.weapons[i] ?? null, hardpointIndex: i, optionKinds: ['laser'] })
   })
 
-  // Пилоны одной плиткой: заряжены — суммарный боезапас, пусты — плитка «СВОБОДНО»,
-  // чтобы было куда снарядить. Пилона нет вовсе — плитки тоже нет.
+  // Мунишн — ОДНА плитка над всеми пилонами: один тип (ракеты или дрон), суммарный боезапас.
+  // Пусто — плитка «СВОБОДНО», чтобы было куда снарядить. Пилонов нет вовсе — плитки нет.
+  // Дрон-ракеты предлагаются тут же, как другой тип: слот принимает и 'missile', и 'drone'.
   const loaded = pylons.filter((i) => loadout.weapons[i])
   if (loaded.length > 0) {
     const ammoTotal = loaded.reduce((sum, i) => sum + moduleStat(loadout.weapons[i]!).value, 0)
@@ -315,19 +321,26 @@ function buildSlots(world: World): SlotView[] {
       key: 'missiles',
       module: loadout.weapons[loaded[0]!]!,
       hardpointIndex: loaded[0],
-      optionKinds: ['missile'],
+      optionKinds: ['missile', 'drone'],
       ammoTotal,
     })
   } else if (pylons.length > 0) {
-    rows.push({ key: 'missiles-empty', module: null, hardpointIndex: pylons[0], optionKinds: ['missile'] })
+    rows.push({ key: 'missiles-empty', module: null, hardpointIndex: pylons[0], optionKinds: ['missile', 'drone'] })
   }
 
   return rows
 }
 
-/** Категория слота у карточки: аукс-виды под 'aux', оружие — своими, прочее — само. */
+/**
+ * Категория слота у карточки. Мунишн ('missile'+'drone') → 'missile' (ракеты и дрон-ракеты
+ * в одной ячейке), аукс-виды → 'aux', прочее — само. По первому виду, а не по числу видов:
+ * у мунишна их два, но это НЕ аукс.
+ */
 function categoryOf(s: SlotView): string {
-  return s.optionKinds.length > 1 ? 'aux' : (s.optionKinds[0] ?? 'engine')
+  const first = s.optionKinds[0] ?? 'engine'
+  if (AUX_KINDS.has(first)) return 'aux'
+  if (first === 'missile' || first === 'drone') return 'missile'
+  return first
 }
 
 /** Порядок категорий в сетке — от «сердца» корабля к грузу и допам. */
@@ -472,7 +485,11 @@ function SlotModal({
   const module = slot.module
   // Виды, что принимает слот: у аукса их несколько, у прочих один. Фильтр — по вхождению.
   const kinds = slot.optionKinds
-  const labelKind = kinds.length > 1 ? 'aux' : (kinds[0] ?? 'engine')
+  // Мунишн ('missile'+'drone') подписываем как «ракеты», аукс — «доп», прочее — своим видом.
+  const labelKind = kinds.includes('missile') ? 'missile' : kinds.length > 1 ? 'aux' : (kinds[0] ?? 'engine')
+  // Мунишн-слот особый: один тип на ВСЕ пилоны, поэтому купить/поставить/снять/продать/качать
+  // идут по слоту целиком (armMissiles/…), а не по одному пилону, как прочее оружие.
+  const isMissileSlot = kinds.includes('missile')
   const [confirm, setConfirm] = useState<Confirm | null>(null)
 
   // Действие, ПОСЛЕ которого слот меняет смысл (снял/продал) — перерисовать и закрыть:
@@ -497,20 +514,33 @@ function SlotModal({
     setConfirm({
       message: t('ship.confirm.fit', { name: displayName(m) }),
       // Установка не закрывает слот: деталь встала — можно сразу улучшить.
-      actions: [{ label: t('station.fit'), run: () => fitFromHold(player, holdIndex), stay: true }],
+      actions: [
+        {
+          label: t('station.fit'),
+          run: () => (isMissileSlot ? armMissilesFromHold(player, holdIndex) : fitFromHold(player, holdIndex)),
+          stay: true,
+        },
+      ],
     })
 
   // Клик по варианту из МАГАЗИНА — спросить, купить и поставить; нет денег — так и сказать.
   const askBuy = (m: ShipModule) => {
     const at = weaponSlot(world, m)
-    if (canBuy(world, player, m, at) === 'no-money') {
+    const affordable = isMissileSlot ? world.credits >= priceOf(m) : canBuy(world, player, m, at) !== 'no-money'
+    if (!affordable) {
       setConfirm({ message: t('ship.confirm.noFunds', { price: credits(priceOf(m)) }), actions: [] })
       return
     }
     setConfirm({
       message: t('ship.confirm.buy', { name: displayName(m), price: credits(priceOf(m)) }),
       // Покупка не закрывает слот: деталь встала взамен — можно тут же жать «улучшить».
-      actions: [{ label: t('station.buy'), run: () => buy(world, player, m, at), stay: true }],
+      actions: [
+        {
+          label: t('station.buy'),
+          run: () => (isMissileSlot ? armMissiles(world, player, m) : buy(world, player, m, at)),
+          stay: true,
+        },
+      ],
     })
   }
 
@@ -526,11 +556,16 @@ function SlotModal({
     const actions: Confirm['actions'] = []
     // stay: улучшение оставляет модуль в слоте — модалку держим открытой (чини/улучшай подряд).
     if (canUpgrade(world, player, module, true) === null)
-      actions.push({ label: `${t('station.upgradeCopy')} · ${arrow(true)}`, run: () => upgradeModule(world, player, module, true), stay: true })
+      actions.push({
+        label: `${t('station.upgradeCopy')} · ${arrow(true)}`,
+        // Ракетный слот качаем целиком (все пилоны), прочее — по одному модулю.
+        run: () => (isMissileSlot ? upgradeMissiles(world, player, true) : upgradeModule(world, player, module, true)),
+        stay: true,
+      })
     if (canUpgrade(world, player, module, false) === null)
       actions.push({
         label: `${t('station.upgradeCash')} · ${credits(upgradeCashCost(module))} · ${arrow(false)}`,
-        run: () => upgradeModule(world, player, module, false),
+        run: () => (isMissileSlot ? upgradeMissiles(world, player, false) : upgradeModule(world, player, module, false)),
         stay: true,
       })
     // Ни одной дороги — почему? Мир не тянет этот класс (нужен развитее) — своя причина;
@@ -608,10 +643,14 @@ function SlotModal({
             <ActionBar
               world={world}
               module={module}
-              onStrip={() => module && commit(() => unfitModule(player, module))}
+              onStrip={() =>
+                module && commit(() => (isMissileSlot ? stripMissiles(player) : unfitModule(player, module)))
+              }
               onRepair={doRepair}
               onUpgrade={askUpgrade}
-              onSell={() => module && commit(() => sellModule(world, player, module))}
+              onSell={() =>
+                module && commit(() => (isMissileSlot ? sellMissiles(world, player) : sellModule(world, player, module)))
+              }
             />
             {module && isEssential(module) && (
               <p className="mt-2 text-xs" style={{ color: DIM }}>
