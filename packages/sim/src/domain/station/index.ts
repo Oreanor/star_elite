@@ -22,6 +22,7 @@ export {
   fitFromHold,
   moduleResaleValue,
   moduleStat,
+  upgradedStatValue,
   upgradeCashCost,
   upgradeCopyIndex,
   upgradeLevel,

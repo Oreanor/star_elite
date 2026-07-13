@@ -457,6 +457,16 @@ function withUpgrade(module: ShipModule, level: number): ShipModule {
 }
 
 /**
+ * Значение главной характеристики ПОСЛЕ прокачки (копией +50% / деньгами +25%) — для
+ * предпросмотра «было → станет» в верфи. Считает ровно тем путём, что и сама прокачка,
+ * поэтому число в окне не разойдётся с делом.
+ */
+export function upgradedStatValue(module: ShipModule, useCopy: boolean): number {
+  const level = useCopy ? SHOP.UPGRADE_COPY_STEP : SHOP.UPGRADE_CASH_STEP
+  return moduleStat(withUpgrade(module, level)).value
+}
+
+/**
  * Прокачать установленный модуль. Клон заменяет ИМЕННО тот экземпляр, что стоит в
  * оснастке (сверяем по ссылке — UI передаёт реальный модуль из loadout). Копия из
  * трюма расходуется; денежная дорога — списывает кредиты. Массу не трогаем: усиление

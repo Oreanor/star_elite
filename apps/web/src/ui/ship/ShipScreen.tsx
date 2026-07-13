@@ -24,6 +24,7 @@ import {
   swapHull,
   unfitModule,
   upgradeCashCost,
+  upgradedStatValue,
   upgradeModule,
   type CargoItem,
   type ModuleKind,
@@ -439,12 +440,17 @@ function SlotModal({
   // или деньгами (+25%). Показываем обе доступные; ни одной — значит просто нет денег.
   const askUpgrade = () => {
     if (!module) return
+    // «было → станет» по главной оси модуля. Копия (+50%) и деньги (+25%) дают разный
+    // прирост — показываем абсолютные числа в каждой кнопке, рядом с процентом.
+    const stat = moduleStat(module)
+    const arrow = (useCopy: boolean) =>
+      `${formatStat(stat.key, stat.value)} → ${formatStat(stat.key, upgradedStatValue(module, useCopy))}`
     const actions: Confirm['actions'] = []
     if (canUpgrade(world, player, module, true) === null)
-      actions.push({ label: t('station.upgradeCopy'), run: () => upgradeModule(world, player, module, true) })
+      actions.push({ label: `${t('station.upgradeCopy')} · ${arrow(true)}`, run: () => upgradeModule(world, player, module, true) })
     if (canUpgrade(world, player, module, false) === null)
       actions.push({
-        label: `${t('station.upgradeCash')} · ${credits(upgradeCashCost(module))}`,
+        label: `${t('station.upgradeCash')} · ${credits(upgradeCashCost(module))} · ${arrow(false)}`,
         run: () => upgradeModule(world, player, module, false),
       })
     // Ни одной дороги — почему? Мир не тянет этот класс (нужен развитее) — своя причина;
