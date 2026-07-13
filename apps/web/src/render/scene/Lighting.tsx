@@ -1,6 +1,6 @@
 import { useFrame, useThree } from '@react-three/fiber'
 import { useRef } from 'react'
-import { DirectionalLight, Vector3 } from 'three'
+import { Color, DirectionalLight, Vector3 } from 'three'
 import type { BodyEntity } from '@elite/sim'
 import { useSession } from '../../app/GameContext'
 
@@ -18,6 +18,14 @@ import { useSession } from '../../app/GameContext'
 
 const _sunDirection = new Vector3()
 const _fillOffset = new Vector3()
+
+// Цвет ключевого света берём от класса звезды, но подмешиваем к тёплому белому: чистый
+// спектральный оттенок выжёг бы читаемость (голубой гигант красил бы корпус в синьку), а
+// так у красного карлика сцена явно теплеет, у голубого — холодеет, но борт не «перекрашен».
+const _sunColor = new Color()
+const _starColor = new Color()
+const SUN_BASE = new Color(0xfff2dd) // прежний тёплый белый — к нему тянем от цвета звезды
+const SUN_TINT = 0.45 // доля цвета звезды в свете (0 — как было, 1 — чистый спектр)
 
 /**
  * Какая звезда светит. У одиночной выбор очевиден; у двойной свет и терминатор
@@ -57,6 +65,11 @@ export function Lighting() {
       sun.position.copy(player).addScaledVector(_sunDirection, 1000)
       sun.target.position.copy(player)
       sun.target.updateMatrixWorld()
+      // Свет наследует спектр звезды (подмешан к тёплому белому): у красного карлика
+      // сцена теплеет, у голубого гиганта — холодеет. Так класс звезды виден не только
+      // на диске, но и на освещении корпуса. Без аллокаций — переиспользуем _sunColor.
+      _sunColor.copy(SUN_BASE).lerp(_starColor.set(star.color), SUN_TINT)
+      sun.color.copy(_sunColor)
     }
 
     const fill = fillRef.current
@@ -76,6 +89,8 @@ export function Lighting() {
        * убавить, иначе освещённый борт выгорает в плоское белое пятно и гранёность
        * пропадает ровно так же, как пропадала от темноты.
        */}
+      {/* Цвет ключевого света задаётся в кадре по классу звезды (см. useFrame выше);
+          здесь лишь стартовый тёплый белый на первый кадр до его установки. */}
       <directionalLight ref={sunRef} intensity={1.9} color={0xfff2dd} />
       {/* Заполняющий: холоднее и слабее ключевого, иначе сцена станет плоской. */}
       <directionalLight ref={fillRef} intensity={0.55} color={0xa8c4e6} />

@@ -128,14 +128,19 @@ export const SHAPE = {
   IRREGULAR_SPREAD: 0.26,
 } as const
 
+// Цвета — это ВИДИМЫЙ диск: звезда рисуется плоским MeshBasicMaterial, блум её не
+// размывает, значит на экране ровно этот hex. Прежняя палитра жалась в тёплый жёлто-белый
+// угол (даже «красный карлик» был жёлтым 0xffcc6f), и весь космос выходил одноцветным —
+// а именно G/K/M занимают 70/100 веса, то есть почти всё небо. Разводим по спектру:
+// голубой → белый → жёлтый → оранжевый → красный, чтобы класс читался с одного взгляда.
 export const STAR_CLASSES = [
-  { id: 'O', name: 'Голубой гигант', color: 0x9bb0ff, radius: 2400, scoopable: true, weight: 1 },
-  { id: 'B', name: 'Бело-голубая', color: 0xaabfff, radius: 1800, scoopable: true, weight: 3 },
-  { id: 'A', name: 'Белая', color: 0xcad7ff, radius: 1500, scoopable: true, weight: 6 },
-  { id: 'F', name: 'Жёлто-белая', color: 0xf8f7ff, radius: 1300, scoopable: true, weight: 12 },
-  { id: 'G', name: 'Жёлтый карлик', color: 0xfff4ea, radius: 1100, scoopable: true, weight: 20 },
-  { id: 'K', name: 'Оранжевый карлик', color: 0xffd2a1, radius: 900, scoopable: true, weight: 24 },
-  { id: 'M', name: 'Красный карлик', color: 0xffcc6f, radius: 700, scoopable: true, weight: 26 },
+  { id: 'O', name: 'Голубой гигант', color: 0x8ea6ff, radius: 2400, scoopable: true, weight: 1 },
+  { id: 'B', name: 'Бело-голубая', color: 0xa9c4ff, radius: 1800, scoopable: true, weight: 3 },
+  { id: 'A', name: 'Белая', color: 0xd6e2ff, radius: 1500, scoopable: true, weight: 6 },
+  { id: 'F', name: 'Жёлто-белая', color: 0xfff6e8, radius: 1300, scoopable: true, weight: 12 },
+  { id: 'G', name: 'Жёлтый карлик', color: 0xffe27a, radius: 1100, scoopable: true, weight: 20 },
+  { id: 'K', name: 'Оранжевый карлик', color: 0xffa94d, radius: 900, scoopable: true, weight: 24 },
+  { id: 'M', name: 'Красный карлик', color: 0xff6a4d, radius: 700, scoopable: true, weight: 26 },
   // Не звёзды главной последовательности: топливо не зачерпнуть, это ловушка маршрута.
   { id: 'T', name: 'Коричневый карлик', color: 0x8b4a3a, radius: 400, scoopable: false, weight: 6 },
   { id: 'N', name: 'Нейтронная звезда', color: 0xd8f0ff, radius: 60, scoopable: false, weight: 2 },
