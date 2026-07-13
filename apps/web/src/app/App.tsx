@@ -600,10 +600,8 @@ const KEY_GROUPS: { title: Key; rows: [Key, Key][] }[] = [
       ['key.target', 'key.target.what'],
       ['key.autofight', 'key.autofight.what'],
       ['key.missile', 'key.missile.what'],
-      ['key.ecm', 'key.ecm.what'],
-      ['key.bomb', 'key.bomb.what'],
-      ['key.cloak', 'key.cloak.what'],
-      ['key.drone', 'key.drone.what'],
+      // Аукс-устройства (ПРО/бомба/маскировка) и дрон из справки убраны: они опциональны
+      // и контекстны (есть, только если куплены и стоят в аукс-слоте), а дрон стал капсулой.
     ],
   },
   {

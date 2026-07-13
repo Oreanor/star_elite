@@ -167,5 +167,7 @@ export const SHIPYARD: readonly HullOffer[] = [
   { chassis: ATHENA, loadout: athenaLoadout, cost: ATHENA.cost },
   { chassis: SIDEWINDER, loadout: aresLoadout, cost: SIDEWINDER.cost },
   { chassis: LARGE_FREIGHTER, loadout: freighterLoadout, cost: LARGE_FREIGHTER.cost },
-  { chassis: DRONE, loadout: calliopeLoadout, cost: DRONE.cost },
+  // «Каллиопа» (DRONE) БОЛЬШЕ НЕ продаётся как корпус: она стала спасательной капсулой —
+  // покупается как ОБОРУДОВАНИЕ (аукс) и разворачивается при гибели борта. Боевой рой-дрон
+  // живёт на том же шасси отдельно (`combat/drones.ts`), к верфи отношения не имеет.
 ]

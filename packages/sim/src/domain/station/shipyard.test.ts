@@ -24,15 +24,15 @@ describe('верфь корпусов', () => {
 
   it('сменил корпус — обвес переехал, рама заправлена; только у причала', () => {
     const world = createWorld()
-    // Ставим лёгкую сборку (всё класса 1, с приводом): она заведомо влезет в любой корпус,
+    // Ставим лёгкую сборку истребителя (с приводом): она заведомо влезет в грузовик,
     // и «успешную» смену не сорвёт грузоподъёмность — это проверяет отдельный тест.
-    world.player.loadout = SHIPYARD.find((o) => o.chassis.id === 'drone')!.loadout()
+    world.player.loadout = SHIPYARD.find((o) => o.chassis.id === 'sidewinder')!.loadout()
     const freighter = SHIPYARD.find((o) => o.chassis.id === 'freighter')!
 
     // В пустоте корпус не сменить: верфь есть только у станции.
     world.docked = false
     expect(swapHull(world, freighter.chassis, 0)).toBe('not-docked')
-    expect(world.player.loadout.chassis.id).toBe('drone')
+    expect(world.player.loadout.chassis.id).toBe('sidewinder')
 
     world.docked = true
     world.player.hull = 1
@@ -82,13 +82,15 @@ describe('верфь корпусов', () => {
     // Забиваем трюм под завязку рудой: места на вытесненные модули не останется.
     addCommodity(world.player.hold, COMMODITIES.MINERALS, 100_000)
 
-    const drone = SHIPYARD.find((o) => o.chassis.id === 'drone')!
+    // Мелкий корпус (у «Ареса» слотов меньше, чем у «Авроры»): часть обвеса вытесняется
+    // в трюм, а он забит рудой — переносу негде осесть.
+    const small = SHIPYARD.find((o) => o.chassis.id === 'sidewinder')!
     const before = world.player.loadout.chassis.id
-    const result = swapHull(world, drone.chassis, 0)
+    const result = swapHull(world, small.chassis, 0)
     if (result === 'no-room') {
       expect(world.player.loadout.chassis.id).toBe(before) // мир не тронут
     } else {
-      // Дрон вместил всё — тогда хотя бы обвес не потерялся (переехал в слоты/трюм).
+      // Всё вместилось — тогда хотя бы обвес не потерялся (переехал в слоты/трюм).
       expect(result).toBeNull()
     }
   })
