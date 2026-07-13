@@ -101,7 +101,10 @@ interface PushOpts {
 export function pushWarning(code: WarnCode, now: number, opts: PushOpts = {}): void {
   const repeat = opts.repeat ?? REPEAT
   const last = lastFired.get(code) ?? -Infinity
-  if (now - last < repeat) return
+  // Кулдаун применяем ТОЛЬКО при ходе времени вперёд. Если время скакнуло назад
+  // (гибель → «начать заново»: `world.time` сброшен), старый штамп не должен глушить
+  // новые вести — иначе после перезапуска предупреждения молчали бы, пока время нагонит.
+  if (now >= last && now - last < repeat) return
   lastFired.set(code, now)
   const def = DEFS[code]
   active.set(code, {
@@ -117,7 +120,9 @@ export function pushWarning(code: WarnCode, now: number, opts: PushOpts = {}): v
 export function activeWarning(now: number): Plate | null {
   let best: Plate | null = null
   for (const [code, plate] of active) {
-    if (now - plate.born > WARN_LIFE) {
+    // Просрочено ИЛИ время ушло НАЗАД (перезапуск мира после гибели): плашка из прошлой
+    // жизни родилась в будущем относительно нового времени — выметаем, иначе висит вечно.
+    if (now - plate.born > WARN_LIFE || now < plate.born) {
       active.delete(code)
       continue
     }
