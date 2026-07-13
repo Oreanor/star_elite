@@ -67,12 +67,18 @@ const vertex = /* glsl */ `
 #include <logdepthbuf_pars_vertex>
 
 varying vec3 vDir;
+varying vec3 vNormalV; // нормаль в осях камеры — для лимбового свечения у края диска
+varying vec3 vViewV;   // направление на камеру
 
 void main() {
   // Направление из центра в СВЯЗАННЫХ осях: по нему берём равнопромежуточную UV,
   // а вращение и «кипение» добавляем в шейдере — геометрия не крутится (физика чиста).
   vDir = normalize(position);
   vec4 mv = modelViewMatrix * vec4(position, 1.0);
+  // Для сферы направление из центра И есть нормаль. У края диска нормаль смотрит вбок
+  // от камеры — там и зажигаем лимб, чтобы переход диск→космос был не резким срезом.
+  vNormalV = normalize(normalMatrix * position);
+  vViewV = normalize(-mv.xyz);
   gl_Position = projectionMatrix * mv;
   #include <logdepthbuf_vertex>
 }
@@ -86,6 +92,8 @@ uniform sampler2D uMap;
 uniform float uTime;
 
 varying vec3 vDir;
+varying vec3 vNormalV;
+varying vec3 vViewV;
 
 const float INV_TAU = 0.15915494; // 1/(2π)
 const float INV_PI = 0.31830989;  // 1/π
@@ -111,7 +119,15 @@ void main() {
 
   // Карта уже цветная по классу — не тинтуем, отдаём как есть. Свечение звезды
   // не зависит от света сцены: это сам источник, поэтому материал неосвещённый.
-  gl_FragColor = vec4(texture2D(uMap, vec2(u, v)).rgb, 1.0);
+  vec3 col = texture2D(uMap, vec2(u, v)).rgb;
+
+  // Лимбовое свечение: у края диска нормаль почти перпендикулярна взгляду (facing→0),
+  // там плотнее и ярче — диск не срезается резко, а сливается с узкой короной.
+  float facing = clamp(dot(normalize(vNormalV), normalize(vViewV)), 0.0, 1.0);
+  float limb = pow(1.0 - facing, 2.5);
+  col *= 1.0 + limb * 1.3;
+
+  gl_FragColor = vec4(col, 1.0);
 }
 `
 
