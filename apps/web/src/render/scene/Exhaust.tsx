@@ -113,8 +113,18 @@ function Flames({ cone }: { cone: Cone }) {
      * `grow` — масштаб борта (миелофон): и смещение сопел, и размер конуса растут вместе
      * с корпусом, иначе у гигантского корабля факел остаётся точкой у центра и не виден.
      */
-    const emit = (pos: Vector3, quat: Quaternion, nozzles: readonly Nozzle[], length: number, grow = 1) => {
+    // `fade` (0..1) сжимает КОНУС, но НЕ смещение сопла: струя втягивается в дюзу и гаснет,
+    // оставаясь на месте. Так факел не «отваливается» разом на подходе к HIDE_SCALE.
+    const emit = (
+      pos: Vector3,
+      quat: Quaternion,
+      nozzles: readonly Nozzle[],
+      length: number,
+      grow = 1,
+      fade = 1,
+    ) => {
       shipAxes(quat, _fwd, _right, _up)
+      const width = fade * grow
 
       for (const nozzle of nozzles) {
         if (count >= MAX_FLAMES) return
@@ -129,10 +139,11 @@ function Flames({ cone }: { cone: Cone }) {
 
         _dummy.quaternion.copy(quat)
         // Конус построен вдоль +Z, то есть уже назад по корпусу. Растим его длиной.
+        // Размеры домножены на fade — на гашении конус сходит в точку у самого сопла.
         _dummy.scale.set(
-          nozzle.radius * cone.widthScale * grow,
-          nozzle.radius * cone.widthScale * grow,
-          nozzle.radius * length * cone.lengthScale * grow,
+          nozzle.radius * cone.widthScale * width,
+          nozzle.radius * cone.widthScale * width,
+          nozzle.radius * length * cone.lengthScale * width,
         )
         _dummy.updateMatrix()
         mesh.setMatrixAt(count, _dummy.matrix)
@@ -143,10 +154,12 @@ function Flames({ cone }: { cone: Cone }) {
     const emitShip = (ship: ShipEntity) => {
       // Под полем дюзы не горят: факел выдал бы невидимку вернее корпуса. И на планетном
       // масштабе (миелофон) струи пропадают — факел размером с систему бессмыслен.
-      if (!ship.alive || ship.cloaked || ship.state.scale > EXHAUST.HIDE_SCALE) {
+      if (!ship.alive || ship.cloaked || ship.state.scale >= EXHAUST.HIDE_SCALE) {
         surges.delete(ship.id)
         return
       }
+      // Плавное гашение к HIDE_SCALE: конус сходит в ноль у сопла, а не отваливается рывком.
+      const fade = clamp((EXHAUST.HIDE_SCALE - ship.state.scale) / (EXHAUST.HIDE_SCALE - EXHAUST.FADE_START), 0, 1)
       const throttle = throttleOf(ship)
       const surge = updateSurge(surges, ship, throttle, step)
       if (throttle < 0.02 && surge < 0.02) return
@@ -159,7 +172,7 @@ function Flames({ cone }: { cone: Cone }) {
       // Масштаб факела зажат тем же потолком, что меш корабля и камера (GIANT_RENDER_CAP):
       // без этого выше потолка меш замирает, а факел растёт дальше — и сопла «отрываются»
       // назад от замёрзшего корпуса. С зажимом струя остаётся приклеена к дюзам.
-      emit(ship.state.pos, ship.state.quat, nozzlesFor(ship), length, Math.min(ship.state.scale, GIANT_RENDER_CAP))
+      emit(ship.state.pos, ship.state.quat, nozzlesFor(ship), length, Math.min(ship.state.scale, GIANT_RENDER_CAP), fade)
     }
 
     // Корабль игрока канул в кольцо — гасим и его факел вместе с корпусом.
