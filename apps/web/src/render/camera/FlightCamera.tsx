@@ -5,6 +5,7 @@ import { CRUISE, clamp } from '@elite/sim'
 import { manoeuvreHoldsCamera } from '../../app/control/playerController'
 import { useSession } from '../../app/GameContext'
 import { jumpFx, jumpShake } from '../../app/control/jumpFx'
+import { undocking, undockProgress } from '../../app/control/undockFx'
 import { bombShake } from '../bombFeel'
 import { CAMERA, GIANT_RENDER_CAP, RENDER } from '../config'
 
@@ -95,6 +96,35 @@ export function FlightCamera() {
 
     const player = session.world.player
     const state = player.state
+
+    /**
+     * ВЫЛЕТ СО СТАНЦИИ: камера ведёт кино. Стартует ВПЕРЕДИ носа и смотрит наружу —
+     * корабль позади неё, вне кадра. За 2 с смещение по скрипту едет от `UNDOCK_AHEAD`
+     * к обычному `CHASE_OFFSET`, ускоряясь к финалу: камера откатывается за корму, а
+     * корабль на «вжууух» обгоняет её и влетает в полный кадр ровно по оси. Позу
+     * ставим жёстко (без пружины): после стыковки прежняя поза случайна, а обгон обязан
+     * идти ровно по оси. На выходе (k→1) поза равна погонной — обычная пружина
+     * подхватывает без рывка, а `camSwing`/`camTwist` уже выставлены по носу.
+     */
+    if (undocking()) {
+      const k = undockProgress() ** 3 // медленно → быстро: обгон случается к финалу
+      _noseFwd.copy(_refFwd).applyQuaternion(state.quat)
+      camSwing.setFromUnitVectors(_refFwd, _noseFwd)
+      camTwist.identity()
+
+      const off = CAMERA.CHASE_OFFSET
+      const ah = CAMERA.UNDOCK_AHEAD
+      _offset
+        .set(ah[0] + (off[0] - ah[0]) * k, ah[1] + (off[1] - ah[1]) * k, ah[2] + (off[2] - ah[2]) * k)
+        .applyQuaternion(state.quat)
+      _target.copy(state.pos).add(_offset)
+
+      _desiredQuat.copy(camSwing).multiply(camTwist).multiply(_pitchDown)
+      camera.position.copy(_target)
+      camera.quaternion.copy(_desiredQuat)
+      previousFactor.current = player.cruise.factor
+      return
+    }
 
     /**
      * ОТПРАВЛЕНИЕ В ПРЫЖОК: камера НАБЛЮДАЕТ, а не преследует. Она встаёт за точкой

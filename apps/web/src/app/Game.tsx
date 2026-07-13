@@ -23,6 +23,7 @@ import { Sky } from '../render/scene/Sky'
 import { Starfield } from '../render/scene/Starfield'
 import { WingMissiles } from '../render/scene/WingMissiles'
 import { JumpDirector, JumpHold, JumpRing } from '../render/scene/JumpFx'
+import { UndockDirector } from '../render/scene/UndockFx'
 import { attachInput } from '../platform/input/input'
 import { Hud } from '../ui/hud/Hud'
 import { JumpVeil } from './JumpVeil'
@@ -38,6 +39,8 @@ function Scene() {
       <Simulation />
       {/* Сразу после шага мира: держит корабль на зарядке прыжка, до отрисовки и камеры. */}
       <JumpHold />
+      {/* Крутит время сцены вылета — до камеры и HUD, чтобы те читали свежий прогресс. */}
+      <UndockDirector />
 
       <Sky />
       <Lighting />

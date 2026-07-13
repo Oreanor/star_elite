@@ -31,6 +31,8 @@ import {
 import { bombFlash, bombRing } from '../../render/bombFeel'
 import { currentGameDate } from '../clock'
 import { GALAXY_LAYER, HUD_SCALE } from '../../render/config'
+import { undocking } from '../../app/control/undockFx'
+import { drawUndockTunnel } from './drawUndock'
 import { galaxyRadar } from '../../render/scene/galaxyRadar'
 import { HUD_COLORS, bar, circle, corners, dot, ellipse, line, text } from './draw'
 import { t, type Key } from '../i18n'
@@ -118,6 +120,9 @@ export function drawHud(frame: HudFrame): void {
 
   // Последним: круг бомбы бьёт поверх всего, включая прицел.
   drawBombBurst(frame)
+
+  // А тоннель вылета — ещё выше: он гасит весь HUD чёрным, оставляя лишь прорезь на космос.
+  if (undocking()) drawUndockTunnel(ctx, width, height)
 }
 
 /** Ракета ближе этого по времени — тревога. Дальше пилоту не о чем волноваться, с. */

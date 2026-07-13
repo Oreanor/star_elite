@@ -17,6 +17,7 @@ import {
 } from '@elite/sim'
 import { consumePress, input, isHeld } from '../../platform/input/input'
 import { chargeThrottle, jumpFx } from './jumpFx'
+import { undocking } from './undockFx'
 
 /**
  * Игрок. Реализует тот же `Controller`, что и бот: заполняет ShipControls.
@@ -270,6 +271,24 @@ export function createPlayerController(intent: PlayerIntent): Controller {
         const c = ship.controls
         c.throttle = chargeThrottle()
         c.boost = boostMult(ship.loadout)
+        c.pitch = 0
+        c.yaw = 0
+        c.roll = 0
+        c.rudder = 0
+        c.strafe = 0
+        c.strafeUp = 0
+        c.retro = 0
+        c.flightAssist = true
+        return
+      }
+
+      // Вылет со станции — тоже кино: корабль рвёт строго вперёд по оси на полном газу
+      // («вжууух»), ввод не читаем. Так он не уводит с оси, пока камера его обгоняет, и
+      // на выходе из тоннеля уже разогнан. Крутить и рулить пилот начнёт, когда сцена
+      // кончится (undocking() погаснет сам через 2 с).
+      if (undocking()) {
+        const c = ship.controls
+        c.throttle = 1
         c.pitch = 0
         c.yaw = 0
         c.roll = 0

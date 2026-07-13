@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { applyPilotProfile, interlocutor, jumpBlock, pendingHail, serializePlayer, stationInterlocutor, undock, type PilotProfile, type PlayerSave, type World } from '@elite/sim'
 import { GameProvider, useSession } from './GameContext'
 import { jumping, startDepart } from './control/jumpFx'
+import { startUndock } from './control/undockFx'
 import { negotiate, negotiatorAvailable } from './control/negotiator'
 import { Game } from './Game'
 import { Paused, GameOver } from './TitleScreen'
@@ -406,8 +407,10 @@ function Shell({ onRestart }: { onRestart: () => void }) {
     setTab('galaxy')
   }, [session])
   // У причала кнопка шапки отчаливает: отойдя от кольца, корабль оживает захватом.
+  // Вместе с доменным отчаливанием запускаем кино вылета — тоннель и обгон камеры.
   const undockAndResume = useCallback(() => {
     undock(session.world)
+    startUndock()
     void requestLock()
   }, [session])
   // Создание пилота завершено: накладываем профиль на борт игрока и пишем стартовый
