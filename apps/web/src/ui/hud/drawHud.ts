@@ -196,6 +196,12 @@ function dockState(world: World, station: BodyEntity, autodock: boolean): DockSt
 function drawDocking(frame: HudFrame): void {
   const { ctx, world, width, height, autodock } = frame
 
+  // В масштабе (миелофон) стыковка невозможна — гигант не влезет в причал (`canDockAt`
+  // требует scale<=1). Значит и подсказку не показываем: у неё к тому же путалась дистанция
+  // (камера у потолка отвода стоит в ~100 км позади огромного корпуса, а причал мерит от
+  // корпуса — числа расходились). Сожмись до обычного размера — тогда и появится.
+  if (world.player.state.scale > 1) return
+
   const station = findStation(world)
   if (!station) return
 
@@ -483,7 +489,10 @@ function drawBodyMarkers({ ctx, camera, world, width, height }: HudFrame): void 
     // Цель навигации — точка потолще: цвет на звёздном фоне различим плохо, а
     // разница в размере читается даже боковым зрением.
     dot(ctx, x, y, m.nav ? 2.5 * S : 1.5 * S, m.color)
-    if (m.nav) navReticle(ctx, x, y, m.color)
+    // Рамка-прицел вокруг цели — только в обычном полёте. В масштабе (миелофон) система
+    // уже далеко и не для точной навигации: жирная рамка поверх тел лишь мельтешит, точки
+    // достаточно. Порог общий с запретом стыковки — «я гигант» здесь значит одно и то же.
+    if (m.nav && world.player.state.scale <= 1) navReticle(ctx, x, y, m.color)
 
     // Ориентир и активная цель подпись не уступают: планету видно всегда, а
     // выбранную станцию (пусть у другой планеты) — потому что это цель. Вторичный
