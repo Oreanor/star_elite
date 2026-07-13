@@ -2,7 +2,9 @@ export type { Chassis, Hardpoint, HardpointKind, Slot } from './chassis'
 export {
   boostMult,
   deriveShipSpec,
+  NO_HULL_UPGRADES,
   type HullSpec,
+  type HullUpgrades,
   type PowerSpec,
   type ShipSpec,
   type WeaponMount,

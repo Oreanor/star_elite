@@ -4,8 +4,10 @@ import { addItem, usedCapacityOf } from '../cargo/hold'
 import {
   createLoadout,
   deriveShipSpec,
+  NO_HULL_UPGRADES,
   slotCategoryOf,
   type Chassis,
+  type HullUpgrades,
   type Loadout,
   type ShipModule,
   type WeaponModule,
@@ -68,14 +70,23 @@ export function hullCondition(ship: ShipEntity): number {
 }
 
 /**
- * За сколько верфь ЗДЕСЬ примет старый корпус в зачёт при покупке нового. Цена-с-поломкой
- * (цена рамы × доля уцелевшего HP) урезается классом мастерской: плохой сервис недоплачивает
- * (SHOP.TRADE_IN_BY_CLASS: класс 1 — половина, 2 — три четверти, 3 — по полной). Вложенное
- * в апгрейды рамы не возвращают — берём каталожную цену шасси, не с учётом уровня.
+ * Стоимость рамы С УЧЁТОМ прокачек: каталожная цена шасси плюс надбавка за каждую усиленную
+ * ось (на `HULL_STAT_VALUE_FRACTION`). Прокачал — рама объективно лучше и стоит дороже, и это
+ * видно в зачёте/продаже. Меньше, чем стоил апгрейд: часть вложенного всё же теряется.
+ */
+export function hullValue(chassis: Chassis, up: HullUpgrades): number {
+  const upgraded = (up.hull ? 1 : 0) + (up.cargo ? 1 : 0) + (up.aux ? 1 : 0)
+  return Math.round(chassis.cost * (1 + upgraded * SHOP.HULL_STAT_VALUE_FRACTION))
+}
+
+/**
+ * За сколько верфь ЗДЕСЬ примет старый корпус в зачёт при покупке нового. Стоимость рамы с
+ * прокачками (`hullValue`) × доля уцелевшего HP, урезанная классом мастерской: плохой сервис
+ * недоплачивает (SHOP.TRADE_IN_BY_CLASS: класс 1 — половина, 2 — три четверти, 3 — по полной).
  */
 export function hullTradeIn(world: World, ship: ShipEntity): number {
   const master = masterClass(localSettlement(world))
-  const withFault = ship.loadout.chassis.cost * hullCondition(ship)
+  const withFault = hullValue(ship.loadout.chassis, ship.hullUp) * hullCondition(ship)
   return Math.round(withFault * SHOP.TRADE_IN_BY_CLASS[master])
 }
 
@@ -150,8 +161,8 @@ export function swapHull(world: World, chassis: Chassis, cost: number): HullErro
 
   world.credits -= cost
   player.loadout = loadout
-  // Новый корпус — заводского уровня: апгрейд копится на КОНКРЕТНОЙ раме, не переезжает.
-  player.hullLevel = 0
+  // Новый корпус — заводской: прокачки копятся на КОНКРЕТНОЙ раме и не переезжают.
+  player.hullUp = { ...NO_HULL_UPGRADES }
   refreshSpec(player) // пересчитает и вместимость трюма — под неё и кладём overflow
   for (const module of overflow) addItem(player.hold, { kind: 'module', module })
   player.hull = player.spec.hull.hull

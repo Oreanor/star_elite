@@ -6,7 +6,7 @@ import type { Rng } from '../../core/math'
 import type { CargoHold } from '../cargo'
 import type { CargoItem } from '../cargo/items'
 import type { ShipControls, ShipState } from '../flight/types'
-import type { Loadout, MissileModule, ShipSpec } from '../loadout'
+import type { HullUpgrades, Loadout, MissileModule, ShipSpec } from '../loadout'
 import type { AIState } from '../ai/types'
 import type { CruiseState } from '../cruise/drive'
 import type { IdSource } from './ids'
@@ -46,11 +46,11 @@ export interface ShipEntity {
   /** Выведено из loadout + массы груза. Пересобирается на СОБЫТИЕ, не каждый кадр. */
   spec: ShipSpec
   /**
-   * Уровень апгрейда КОРПУСА: 0 — заводской, растёт без предела. Каждый уровень множит
-   * базовые HP / грузоподъёмность / аукс-ёмкость на 1.1^level (см. `deriveShipSpec`).
-   * Сбрасывается в 0 при смене корпуса — качаешь именно эту раму. Хранится в сейве игрока.
+   * Разовые прокачки СОБСТВЕННЫХ х-к рамы (HP / грузоподъёмность / аукс) — каждую можно
+   * усилить один раз на +25% (см. `deriveShipSpec`/`HullUpgrades`). Сбрасываются при смене
+   * корпуса: качаешь именно эту раму. Хранятся в сейве игрока. У ботов — по достатку.
    */
-  hullLevel: number
+  hullUp: HullUpgrades
 
   state: ShipState
   controls: ShipControls

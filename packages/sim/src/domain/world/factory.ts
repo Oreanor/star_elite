@@ -8,7 +8,7 @@ import { createAIState } from '../ai/types'
 import { cargoMass, createHold } from '../cargo/hold'
 import { createCruiseState } from '../cruise/drive'
 import { createControls, createShipState } from '../flight/types'
-import { deriveShipSpec, isDrone, isMissile, type Loadout, type WeaponModule } from '../loadout'
+import { deriveShipSpec, isDrone, isMissile, NO_HULL_UPGRADES, type Loadout, type WeaponModule } from '../loadout'
 import type {
   AsteroidEntity,
   BodyEntity,
@@ -46,8 +46,9 @@ export function makeShip(
   rng?: Rng,
 ): ShipEntity {
   const hold = createHold(0)
-  // Свежий корабль — корпус заводского уровня (0). Апгрейд копится только у игрока в полёте.
-  const spec = deriveShipSpec(loadout, cargoMass(hold), 0)
+  // Свежий корабль — рама заводская (ни одна ось не усилена). Прокачки копятся позже:
+  // у игрока — на верфи, у ботов их проставляют по достатку при спавне.
+  const spec = deriveShipSpec(loadout, cargoMass(hold), NO_HULL_UPGRADES)
   hold.capacity = spec.cargoCapacity
 
   const guns: GunState[] = spec.mounts.map((mount) => ({
@@ -72,7 +73,7 @@ export function makeShip(
     pilotName,
     loadout,
     spec,
-    hullLevel: 0,
+    hullUp: { ...NO_HULL_UPGRADES },
     state: createShipState(pos, quat),
     controls: createControls(),
     hull: spec.hull.hull,
@@ -107,7 +108,7 @@ export function makeShip(
 
 /** Пересобрать характеристики после смены модулей или груза. Вызывать на СОБЫТИЕ. */
 export function refreshSpec(e: ShipEntity): void {
-  const spec = deriveShipSpec(e.loadout, cargoMass(e.hold), e.hullLevel)
+  const spec = deriveShipSpec(e.loadout, cargoMass(e.hold), e.hullUp)
   e.spec = spec
   e.hold.capacity = spec.cargoCapacity
 

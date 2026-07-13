@@ -2,7 +2,7 @@ import { findChassis } from '../../config/chassis'
 import { findModule } from '../../config/modules'
 import { addItem, createHold } from '../cargo/hold'
 import { COMMODITIES, type Commodity } from '../cargo/items'
-import { createLoadout, isWeapon, type Loadout, type ShipModule, type WeaponModule } from '../loadout'
+import { createLoadout, isWeapon, NO_HULL_UPGRADES, type HullUpgrades, type Loadout, type ShipModule, type WeaponModule } from '../loadout'
 import { refreshSpec } from '../world/factory'
 import type { Acquaintance } from '../world/acquaintance'
 import type { Persona } from '../world/persona'
@@ -58,8 +58,8 @@ export interface PlayerSave {
   /** Личный реестр знакомств: с кем виделся и отношение. Чистые данные. */
   acquaintances: Acquaintance[]
   loadout: SavedLoadout
-  /** Уровень апгрейда корпуса. Необязателен: старые сейвы — заводской корпус (0). */
-  hullLevel?: number
+  /** Разовые прокачки собственных х-к рамы. Необязательно: старые сейвы — заводская рама. */
+  hullUp?: HullUpgrades
   hold: SavedStack[]
   hull: number
   shield: number
@@ -147,7 +147,7 @@ export function serializePlayer(world: World): PlayerSave {
     persona: { ...p.persona },
     acquaintances: world.acquaintances.map((a) => ({ ...a })),
     loadout: serializeLoadout(p.loadout),
-    hullLevel: p.hullLevel,
+    hullUp: { ...p.hullUp },
     hold,
     hull: p.hull,
     shield: p.shield,
@@ -181,8 +181,8 @@ export function applyPlayerSave(world: World, save: PlayerSave): void {
   p.pilotName = save.name
   p.persona = { ...save.persona }
   p.loadout = rehydrateLoadout(save.loadout)
-  // Уровень корпуса — ДО refreshSpec: от него зависят HP/трюм/аукс сборки.
-  p.hullLevel = save.hullLevel ?? 0
+  // Прокачки рамы — ДО refreshSpec: от них зависят HP/трюм/аукс сборки.
+  p.hullUp = { ...NO_HULL_UPGRADES, ...save.hullUp }
 
   // Свежий трюм: вместимость проставит первый refreshSpec из грузовых контейнеров,
   // затем наполняем — addItem считает свободное место по уже верной вместимости.

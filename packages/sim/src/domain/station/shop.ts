@@ -718,40 +718,42 @@ export function upgradeModule(
   return null
 }
 
-// ─── Апгрейд КОРПУСА ──────────────────────────────────────────────────────────
+// ─── Прокачка СОБСТВЕННЫХ х-к КОРПУСА ─────────────────────────────────────────
 //
-// В отличие от модуля (один раз), корпус качается БЕЗ ПРЕДЕЛА, уровнями: каждый
-// растит три базовые х-ки рамы (HP / грузоподъёмность / аукс-ёмкость) на +10%, а
-// цена уровня растёт геометрически — «до упаду», но всё дороже. Число уровня живёт
-// на сущности (`hullLevel`), характеристики выводит `deriveShipSpec` из него.
+// Три оси рамы — HP / грузоподъёмность / аукс-ёмкость — каждую можно усилить ОДИН раз
+// на +25% (как модуль: разово, без уровней). Что усилено, живёт на сущности (`hullUp`);
+// х-ки выводит `deriveShipSpec`. Усиленная ось поднимает и СТОИМОСТЬ рамы при зачёте.
 
-export type HullUpgradeError = 'no-money'
+/** Ось собственной прокачки рамы. Совпадает с ключами `HullUpgrades`. */
+export type HullStat = 'hull' | 'cargo' | 'aux'
+export const HULL_STATS: readonly HullStat[] = ['hull', 'cargo', 'aux']
 
-/** Цена СЛЕДУЮЩЕГО уровня: доля цены рамы × рост^текущий-уровень. Растёт с каждым разом. */
-export function hullUpgradeCost(ship: ShipEntity): number {
-  return Math.ceil(SHOP.HULL_COST_FRACTION * ship.loadout.chassis.cost * SHOP.HULL_COST_GROWTH ** ship.hullLevel)
+export type HullUpgradeError = 'no-money' | 'already'
+
+/** Цена прокачки одной оси рамы — доля цены корпуса. Одна на все оси: рама одна. */
+export function hullStatUpgradeCost(ship: ShipEntity): number {
+  return Math.ceil(SHOP.HULL_STAT_COST_FRACTION * ship.loadout.chassis.cost)
 }
 
-/** Проверка без побочных эффектов: ею UI гасит кнопку, ею же `upgradeHull` решает. */
-export function canUpgradeHull(world: World, ship: ShipEntity): HullUpgradeError | null {
-  return world.credits < hullUpgradeCost(ship) ? 'no-money' : null
+/** Проверка без побочных эффектов: уже усилена — 'already', не хватает денег — 'no-money'. */
+export function canUpgradeHullStat(world: World, ship: ShipEntity, stat: HullStat): HullUpgradeError | null {
+  if (ship.hullUp[stat]) return 'already'
+  return world.credits < hullStatUpgradeCost(ship) ? 'no-money' : null
 }
 
 /**
- * Улучшить КОРПУС на уровень: `hullLevel += 1` множит базовые HP/грузоподъёмность/аукс
- * на 1.1 (см. `deriveShipSpec`). Прирост потолка HP и аукс-заряда отдаём СРАЗУ — усиленная
- * рама уже на борту, а не «оплачена, но пуста». Предела нет; цена растёт (`hullUpgradeCost`).
+ * Усилить одну ось рамы на +25% — РАЗОВО (второй раз → 'already'). Прирост потолка HP и
+ * аукс-заряда отдаём СРАЗУ: усиленная рама уже на борту, а не «оплачена, но пуста».
  */
-export function upgradeHull(world: World, ship: ShipEntity): HullUpgradeError | null {
-  const error = canUpgradeHull(world, ship)
+export function upgradeHullStat(world: World, ship: ShipEntity, stat: HullStat): HullUpgradeError | null {
+  const error = canUpgradeHullStat(world, ship, stat)
   if (error) return error
 
-  world.credits -= hullUpgradeCost(ship)
+  world.credits -= hullStatUpgradeCost(ship)
   const beforeHull = ship.spec.hull.hull
   const beforeAux = ship.spec.power.auxCapacity
-  ship.hullLevel += 1
+  ship.hullUp[stat] = true
   refreshSpec(ship)
-  // Дельта потолка — сразу на борт: свежие тонны корпуса и аукс-заряд не в долг.
   ship.hull += ship.spec.hull.hull - beforeHull
   ship.auxEnergy += ship.spec.power.auxCapacity - beforeAux
   return null

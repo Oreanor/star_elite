@@ -8,10 +8,11 @@ import {
   buy,
   canBuy,
   canUpgrade,
-  canUpgradeHull,
+  canUpgradeHullStat,
   deriveShipSpec,
   hullPurchase,
-  hullUpgradeCost,
+  hullStatUpgradeCost,
+  HULL_STATS,
   fitFromHold,
   fitOntoChassis,
   freeCapacity,
@@ -38,11 +39,12 @@ import {
   unfitModule,
   upgradeCashCost,
   upgradedStatValue,
-  upgradeHull,
+  upgradeHullStat,
   upgradeModule,
   type CargoItem,
   type Chassis,
   type HullPurchase,
+  type HullStat,
   type ModuleKind,
   type ShipModule,
   type ShipSpec,
@@ -128,12 +130,12 @@ export function ShipScreen({
     setBuyingHull(false)
   }
 
-  // Апгрейд СВОЕГО корпуса: без предела, цена растёт с уровнем. Кнопка — под статами,
-  // только когда смотришь свой корабль (owned) у причала. Свежие HP/аукс даёт домен.
-  const hullCost = hullUpgradeCost(player)
-  const canBuyHull = canUpgradeHull(world, player) === null
-  const doUpgradeHull = () => {
-    if (upgradeHull(world, player) === null) refresh()
+  // Апгрейд СВОЕГО корпуса — по осям: HP, грузоподъёмность, аукс. Каждую можно усилить
+  // РОВНО раз на +25%; дальше кнопка гаснет. Цена одна на ось (доля цены рамы). Кнопки —
+  // под статами, только у своего борта (owned) у причала. Дельту в потолок даёт домен.
+  const hullStatCost = hullStatUpgradeCost(player)
+  const doUpgradeStat = (stat: HullStat) => {
+    if (upgradeHullStat(world, player, stat) === null) refresh()
   }
 
   // Escape закрывает экран — как на карте галактики. Клавишу I гасит App.
@@ -222,25 +224,34 @@ export function ShipScreen({
             baseline={docked && !owned ? player.spec : null}
           />
 
-          {/* Апгрейд корпуса — только у своего борта на верфи: качает HP/трюм/аукс на +10%
-              за уровень, без предела, цена прогрессивная. Гаснет, когда не хватает денег. */}
+          {/* Апгрейд корпуса — только у своего борта на верфи: три оси (HP / грузоподъёмность /
+              аукс), каждую усиливаем РОВНО раз на +25%. Усиленная ось помечена галкой, кнопка
+              гаснет; прочие гаснут лишь без денег. Свежий потолок по оси даёт домен. */}
           {docked && owned && (
             <div className="space-y-1">
-              <div className="flex items-center justify-between text-xs tracking-[0.15em]" style={{ color: DIM }}>
-                <span>{t('ship.hullLevel', { level: String(player.hullLevel) })}</span>
-                <span>{t('ship.hullUpgradeHint')}</span>
+              <div className="text-xs tracking-[0.15em]" style={{ color: DIM }}>
+                {t('ship.hullUpgradeHint')}
               </div>
-              <button
-                type="button"
-                disabled={!canBuyHull}
-                onClick={doUpgradeHull}
-                className={`w-full border px-4 py-2 text-sm tracking-[0.2em] transition-colors ${
-                  canBuyHull ? 'cursor-pointer hover:bg-[#7fd6ff] hover:text-black' : 'cursor-not-allowed opacity-40'
-                }`}
-                style={{ borderColor: ACCENT, color: ACCENT }}
-              >
-                {t('ship.hullUpgrade', { price: credits(hullCost) })}
-              </button>
+              {HULL_STATS.map((stat) => {
+                const done = player.hullUp[stat]
+                const err = canUpgradeHullStat(world, player, stat)
+                const active = err === null
+                return (
+                  <button
+                    key={stat}
+                    type="button"
+                    disabled={!active}
+                    onClick={() => doUpgradeStat(stat)}
+                    className={`flex w-full items-center justify-between border px-4 py-2 text-sm tracking-[0.15em] transition-colors ${
+                      active ? 'cursor-pointer hover:bg-[#7fd6ff] hover:text-black' : 'cursor-not-allowed opacity-40'
+                    }`}
+                    style={{ borderColor: done ? DIM : ACCENT, color: done ? DIM : ACCENT }}
+                  >
+                    <span>{done ? `${statLabel(stat)} ✓` : t('ship.hullStat', { stat: statLabel(stat) })}</span>
+                    <span>{done ? '+25%' : credits(hullStatCost)}</span>
+                  </button>
+                )
+              })}
             </div>
           )}
         </div>
@@ -982,20 +993,29 @@ interface StatRow {
 /** У какой характеристики «больше — лучше». По умолчанию да; масса — исключение: лёгкий вёртче. */
 const HIGHER_BETTER: Partial<Record<StatId, boolean>> = { mass: false }
 
-function statRows(spec: ShipSpec): StatRow[] {
+/** Характеристики двумя группами: сперва собственные оси рамы (их и качают на верфи),
+ *  потом те, что определяет оборудование. Порядок — как просил пилот: своё вперёд. */
+function statRows(spec: ShipSpec): { own: StatRow[]; gear: StatRow[] } {
   const tuning = spec.tuning
-  return [
-    { id: 'hull', value: spec.hull.hull },
-    { id: 'shield', value: spec.hull.shield },
-    { id: 'mass', value: spec.mass },
-    { id: 'speed', value: tuning.MAX_SPEED },
-    // Манёвренность — одним числом: среднее угловых ускорений по трём осям. Три
-    // строки тангаж/рыскание/крен пилоту ни к чему, «тяжесть» носа читается и так.
-    { id: 'maneuver', value: (tuning.PITCH_ACCEL + tuning.YAW_ACCEL + tuning.ROLL_ACCEL) / 3 },
-    { id: 'jump', value: spec.jumpRange },
-    { id: 'cargo', value: spec.cargoCapacity },
-    { id: 'energy', value: spec.power.capacity },
-  ]
+  return {
+    // Собственные х-ки корпуса — ровно те оси, что усиливаются на верфи.
+    own: [
+      { id: 'hull', value: spec.hull.hull },
+      { id: 'cargo', value: spec.cargoCapacity },
+      { id: 'aux', value: spec.power.auxCapacity },
+    ],
+    // Задаются обвесом: щит, движки, привод, реактор и суммарная масса корабля.
+    gear: [
+      { id: 'shield', value: spec.hull.shield },
+      { id: 'speed', value: tuning.MAX_SPEED },
+      // Манёвренность — одним числом: среднее угловых ускорений по трём осям. Три
+      // строки тангаж/рыскание/крен пилоту ни к чему, «тяжесть» носа читается и так.
+      { id: 'maneuver', value: (tuning.PITCH_ACCEL + tuning.YAW_ACCEL + tuning.ROLL_ACCEL) / 3 },
+      { id: 'jump', value: spec.jumpRange },
+      { id: 'energy', value: spec.power.capacity },
+      { id: 'mass', value: spec.mass },
+    ],
+  }
 }
 
 /** Стрелка сравнения с текущим кораблём: белая вверх — лучше, синяя вниз — хуже. */
@@ -1008,6 +1028,7 @@ function CompareArrow({ id, value, base }: { id: StatId; value: number; base: nu
 function Stats({ spec, name, baseline }: { spec: ShipSpec; name: string; baseline?: ShipSpec | null }) {
   const rows = statRows(spec)
   const base = baseline ? statRows(baseline) : null
+  const baseAll = base ? [...base.own, ...base.gear] : null
 
   const columns: Column<StatRow>[] = [
     { key: 'name', header: '', cell: (r) => <span style={{ color: DIM }}>{statLabel(r.id)}</span> },
@@ -1016,7 +1037,7 @@ function Stats({ spec, name, baseline }: { spec: ShipSpec; name: string; baselin
       header: '',
       align: 'right',
       cell: (r) => {
-        const b = base?.find((x) => x.id === r.id)
+        const b = baseAll?.find((x) => x.id === r.id)
         return (
           <span className="inline-flex items-center justify-end gap-1.5">
             {formatStat(r.id, r.value)}
@@ -1029,7 +1050,10 @@ function Stats({ spec, name, baseline }: { spec: ShipSpec; name: string; baselin
 
   return (
     <Panel title={name}>
-      <Table columns={columns} rows={rows} rowKey={(r) => r.id} />
+      <Table columns={columns} rows={rows.own} rowKey={(r) => r.id} />
+      {/* Маленький разделитель: выше — своё, ниже — от оборудования. */}
+      <div className="my-1.5 border-t" style={{ borderColor: DIM, opacity: 0.4 }} />
+      <Table columns={columns} rows={rows.gear} rowKey={(r) => r.id} />
     </Panel>
   )
 }

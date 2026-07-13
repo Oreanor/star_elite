@@ -191,6 +191,7 @@ export const RU = {
   'stat.roll': 'КРЕН',
   'stat.maneuver': 'МАНЁВРЕННОСТЬ',
   'stat.energy': 'ЭНЕРГИЯ',
+  'stat.aux': 'АУКС',
   // Показывается как «кл. 2»: короткая форма перед числом класса.
   'stat.class': 'кл.',
 
@@ -421,9 +422,8 @@ export const RU = {
   'ship.hullBuy.toPay': 'К ОПЛАТЕ',
   'ship.hullBuy.youGet': 'ВЕРФЬ ДОПЛАТИТ',
   'ship.hullBuy.noFit': 'В новый корпус не влезет {tons} т — сперва продайте лишнее',
-  'ship.hullLevel': 'Корпус · ур. {level}',
-  'ship.hullUpgrade': 'УКРЕПИТЬ · {price}',
-  'ship.hullUpgradeHint': '+10% прочность · грузовой отсек · доп-энергия',
+  'ship.hullStat': 'УКРЕПИТЬ · {stat}',
+  'ship.hullUpgradeHint': 'Улучшить раму: +25% на ось, разово',
   'hud.boostPlate': 'ФОРСАЖ',
   'hud.scalePlate': 'ПРОСТРАНСТВЕННАЯ РЕКАЛИБРОВКА',
   'hud.growPlate': 'Всё чудесатее и чудесатее!',

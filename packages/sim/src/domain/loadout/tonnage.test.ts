@@ -54,13 +54,17 @@ describe('грузоподъёмность корпуса (тоннаж)', () =>
     expect(deriveShipSpec(l).power.auxCapacity).toBe(AURORA_MK3.auxCapacity)
   })
 
-  it('уровень корпуса множит базовые HP / трюм / аукс (три оси разом)', () => {
+  it('прокачка оси рамы усиливает ТОЛЬКО её: HP / трюм / аукс независимы', () => {
     const l = createLoadout(AURORA_MK3, [ENGINE_STANDARD, RCS_STANDARD], [])
-    const s0 = deriveShipSpec(l, 0, 0)
-    const s1 = deriveShipSpec(l, 0, 1)
-    // Один шаг апгрейда поднял все три базовые х-ки — это свойство модели, не число.
-    expect(s1.hull.hull).toBeGreaterThan(s0.hull.hull)
-    expect(s1.cargoCapacity).toBeGreaterThan(s0.cargoCapacity)
-    expect(s1.power.auxCapacity).toBe(Math.round(AURORA_MK3.auxCapacity * 1.1))
+    const base = deriveShipSpec(l)
+    // Усилили только аукс — растёт аукс, HP и трюм не трогаются.
+    const aux = deriveShipSpec(l, 0, { hull: false, cargo: false, aux: true })
+    expect(aux.power.auxCapacity).toBeGreaterThan(base.power.auxCapacity)
+    expect(aux.hull.hull).toBe(base.hull.hull)
+    expect(aux.cargoCapacity).toBe(base.cargoCapacity)
+    // Усилили только HP — растёт HP, аукс и трюм на месте.
+    const hp = deriveShipSpec(l, 0, { hull: true, cargo: false, aux: false })
+    expect(hp.hull.hull).toBeGreaterThan(base.hull.hull)
+    expect(hp.power.auxCapacity).toBe(base.power.auxCapacity)
   })
 })

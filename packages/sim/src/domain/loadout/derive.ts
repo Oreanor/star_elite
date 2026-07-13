@@ -79,20 +79,33 @@ const DEAD_THRUSTERS = {
   angDamp: 1,
 }
 
-/** Множитель базовых х-к корпуса от уровня апгрейда: `(1+HULL_STEP)^level`. Уровень 0 → 1. */
-export function hullUpgradeMult(level: number): number {
-  return (1 + SHOP.HULL_STEP) ** level
+/**
+ * Разовые прокачки СОБСТВЕННЫХ х-к рамы. Каждую из трёх осей — HP, грузоподъёмность,
+ * аукс-ёмкость — можно усилить ОДИН раз на +25% (см. `SHOP.HULL_STAT_STEP`). Не уровень
+ * без предела, а три независимых тумблера: рама либо усилена по оси, либо нет.
+ */
+export interface HullUpgrades {
+  hull: boolean
+  cargo: boolean
+  aux: boolean
+}
+
+/** Заводская рама — ни одна ось не усилена. */
+export const NO_HULL_UPGRADES: HullUpgrades = { hull: false, cargo: false, aux: false }
+
+/** Множитель оси: усилена → +HULL_STAT_STEP (+25%), иначе 1. */
+function statMult(on: boolean): number {
+  return on ? 1 + SHOP.HULL_STAT_STEP : 1
 }
 
 /**
  * @param cargoMass Масса груза в трюме, т. Меняется в полёте — пересобирай спецификацию
  *                  на событие загрузки/выгрузки, а не каждый кадр.
- * @param hullLevel Уровень апгрейда корпуса (0 — заводской). Множит базовые HP,
- *                  грузоподъёмность и аукс-ёмкость на `1.1^level` — три оси разом.
+ * @param up Разовые прокачки собственных х-к рамы (HP / грузоподъёмность / аукс). Каждая
+ *           усиленная ось множит СВОЮ базовую х-ку на +25%; армор и обвес не трогают.
  */
-export function deriveShipSpec(loadout: Loadout, cargoMass = 0, hullLevel = 0): ShipSpec {
+export function deriveShipSpec(loadout: Loadout, cargoMass = 0, up: HullUpgrades = NO_HULL_UPGRADES): ShipSpec {
   const { chassis } = loadout
-  const hullMult = hullUpgradeMult(hullLevel)
   const engine = findEngine(loadout) ?? DEAD_ENGINE
   const rcs = findThrusters(loadout) ?? DEAD_THRUSTERS
   const shield = findShield(loadout)
@@ -124,8 +137,8 @@ export function deriveShipSpec(loadout: Loadout, cargoMass = 0, hullLevel = 0): 
     ASSIST_SPEED_DAMP: chassis.assistSpeedDamp,
   }
 
-  // Апгрейд корпуса растит СОБСТВЕННУю прочность рамы; броня — своя ось, её не трогаем.
-  let hullPoints = Math.round(chassis.baseHull * hullMult)
+  // Прокачка HP растит СОБСТВЕННУю прочность рамы; броня — своя ось, её не трогаем.
+  let hullPoints = Math.round(chassis.baseHull * statMult(up.hull))
   for (const a of findArmour(loadout)) hullPoints += a.hull
 
   const hull: HullSpec = {
@@ -145,8 +158,8 @@ export function deriveShipSpec(loadout: Loadout, cargoMass = 0, hullLevel = 0): 
   const power: PowerSpec = {
     capacity: engine.energy,
     regen: engine.energyRegen,
-    // Ёмкость доп-отсека — свойство корпуса (была глобальной), апгрейд рамы её растит.
-    auxCapacity: Math.round(chassis.auxCapacity * hullMult),
+    // Ёмкость доп-отсека — свойство корпуса; своя разовая прокачка её растит.
+    auxCapacity: Math.round(chassis.auxCapacity * statMult(up.aux)),
     auxRegen: AUX_POWER.REGEN,
   }
 
@@ -154,7 +167,7 @@ export function deriveShipSpec(loadout: Loadout, cargoMass = 0, hullLevel = 0): 
   // массой (без пустой массы корпуса); контейнеры добавляют вместимость (их `capacity` ≈
   // 10× массы); остаток — сколько тонн товара влезет. Пустеет до нуля, но не уходит в минус.
   const equipmentMass = mass - cargoMass - chassis.baseMass // = dryMass − baseMass = обвес
-  let cargoCapacity = chassis.cargoCapacity * hullMult - equipmentMass
+  let cargoCapacity = chassis.cargoCapacity * statMult(up.cargo) - equipmentMass
   for (const rack of findCargoRacks(loadout)) cargoCapacity += rack.capacity
   // Трюм считается целыми тоннами (товар — целые единицы): округляем ВНИЗ, не в минус.
   cargoCapacity = Math.max(0, Math.floor(cargoCapacity))

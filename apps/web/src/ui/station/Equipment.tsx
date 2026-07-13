@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import {
   buy,
   canBuy,
@@ -243,11 +244,11 @@ export function displayName(module: ShipModule): string {
 }
 
 /**
- * Две дороги улучшения ОДНОЙ характеристики модуля (см. домен `upgradeModule`):
- * копией из трюма (+50%, копия расходуется) или деньгами (+25%). Достигнут потолок —
- * обе гаснут, показываем «МАКСИМУМ». Мутирует домен, `onChange` перерисовывает
- * экран корабля, и обновлённая характеристика видна тут же — ради этого верфь и
- * держит модули со статами на одной вкладке.
+ * Улучшение ОДНОЙ характеристики модуля — РАЗОВОЕ (домен даёт всего один уровень).
+ * Две дороги (см. `upgradeModule`): деньгами (+25%) или копией из трюма (+50%, копия
+ * расходуется). Не плодим по кнопке на каждую — шеврон переключает вариант, единственная
+ * кнопка его применяет. Достигнут потолок — показываем «МАКСИМУМ». Мутирует домен,
+ * `onChange` перерисовывает экран, и новая характеристика видна тут же.
  *
  * Передаём ИМЕННО установленный экземпляр (`loadout.internals[i]`/`weapons[i]`):
  * домен сверяет модуль по ссылке.
@@ -261,8 +262,11 @@ export function UpgradeControls({
   module: ShipModule
   onChange: () => void
 }) {
+  // Выбранный путь: false — деньгами (+25%), true — копией (+50%). Шеврон их листает.
+  const [useCopy, setUseCopy] = useState(false)
   const copyError = canUpgrade(world, world.player, module, true)
   const cashError = canUpgrade(world, world.player, module, false)
+  // 'maxed' одинаков для обоих путей (уже прокачан либо аукс) — прокачивать нечего.
   if (copyError === 'maxed') {
     return (
       <p className="text-xs tracking-widest" style={{ color: DIM }}>
@@ -270,25 +274,26 @@ export function UpgradeControls({
       </p>
     )
   }
+  const error = useCopy ? copyError : cashError
+  const label = useCopy
+    ? t('station.upgradeCopy')
+    : `${t('station.upgradeCash')} · ${credits(upgradeCashCost(module))}`
   return (
-    <div className="flex flex-wrap gap-2">
-      <Button
-        small
-        disabled={copyError !== null}
-        onClick={() => {
-          if (upgradeModule(world, world.player, module, true) === null) onChange()
-        }}
-      >
-        {t('station.upgradeCopy')}
+    <div className="flex items-stretch gap-1.5">
+      <Button small onClick={() => setUseCopy((c) => !c)}>
+        ‹
       </Button>
       <Button
         small
-        disabled={cashError !== null}
+        disabled={error !== null}
         onClick={() => {
-          if (upgradeModule(world, world.player, module, false) === null) onChange()
+          if (upgradeModule(world, world.player, module, useCopy) === null) onChange()
         }}
       >
-        {t('station.upgradeCash')} · {credits(upgradeCashCost(module))}
+        {label}
+      </Button>
+      <Button small onClick={() => setUseCopy((c) => !c)}>
+        ›
       </Button>
     </div>
   )
