@@ -562,7 +562,8 @@ function scaleToBase(m: ShipModule, base: ShipModule, k: number): void {
   if (isShield(m) && isShield(base)) { m.capacity = base.capacity * k; m.regen = base.regen * k; return }
   if (isArmour(m) && isArmour(base)) { m.hull = base.hull * k; return }
   if (isLaser(m) && isLaser(base)) { m.damage = base.damage * k; return }
-  if (isMissile(m) && isMissile(base)) { m.damage = base.damage * k; return }
+  // Ракета — расходник: её не чинят, но пусковую УЛУЧШАЮТ бо́льшим боезапасом (не уроном).
+  if (isMissile(m) && isMissile(base)) { m.ammo = Math.round(base.ammo * k); return }
   if (isDrone(m) && isDrone(base)) { m.ammo = Math.round(base.ammo * k); return }
   if (isCargo(m) && isCargo(base)) { m.capacity = Math.round(base.capacity * k); return }
   if (isHyperdrive(m) && isHyperdrive(base)) { m.jumpRange = base.jumpRange * k; return }

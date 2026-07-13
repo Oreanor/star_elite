@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { SHIELD_STANDARD } from '../../config/modules'
 import { addItem } from '../cargo/hold'
-import { isShield, type ShieldModule } from '../loadout'
+import { isMissile, isShield, type MissileModule, type ShieldModule } from '../loadout'
 import { createWorld } from '../world'
 import { canUpgrade, upgradeLevel, upgradeModule } from './shop'
 
@@ -66,5 +66,21 @@ describe('прокачка модуля', () => {
     expect(canUpgrade(world, world.player, playerShield(world), false)).toBe('maxed')
     expect(canUpgrade(world, world.player, playerShield(world), true)).toBe('maxed')
     expect(upgradeModule(world, world.player, playerShield(world), false)).toBe('maxed')
+  })
+
+  // Ракета — расходник: её не чинят, но пусковую УЛУЧШАЮТ бо́льшим боезапасом, не уроном.
+  it('прокачка ракетной пусковой растит боезапас, а не урон', () => {
+    const world = createWorld()
+    const missile = world.player.loadout.weapons.find((w): w is MissileModule => w != null && isMissile(w))
+    if (!missile) throw new Error('у стартовой Авроры есть ракетные пилоны')
+    const ammoBefore = missile.ammo
+    const damageBefore = missile.damage
+    world.credits = 10_000_000
+
+    expect(upgradeModule(world, world.player, missile, false)).toBeNull()
+
+    const upgraded = world.player.loadout.weapons.find((w): w is MissileModule => w != null && isMissile(w))!
+    expect(upgraded.ammo).toBeGreaterThan(ammoBefore) // заряда стало больше
+    expect(upgraded.damage).toBe(damageBefore) // урон не тронут
   })
 })
