@@ -374,7 +374,9 @@ function SlotGrid({
  *  «установить взамен?». Пустой список действий — просто сообщение с «ОК» (нет денег). */
 interface Confirm {
   message: string
-  actions: { label: string; run: () => void }[]
+  // `stay` — оставить модалку слота ОТКРЫТОЙ после действия (покупка/установка): деталь
+  // встаёт в слот, и пилот тут же жмёт «улучшить», не открывая слот заново.
+  actions: { label: string; run: () => void; stay?: boolean }[]
 }
 
 /**
@@ -415,7 +417,8 @@ function SlotModal({
   const askFit = (holdIndex: number, m: ShipModule) =>
     setConfirm({
       message: t('ship.confirm.fit', { name: displayName(m) }),
-      actions: [{ label: t('station.fit'), run: () => fitFromHold(player, holdIndex) }],
+      // Установка не закрывает слот: деталь встала — можно сразу улучшить.
+      actions: [{ label: t('station.fit'), run: () => fitFromHold(player, holdIndex), stay: true }],
     })
 
   // Клик по варианту из МАГАЗИНА — спросить, купить и поставить; нет денег — так и сказать.
@@ -427,7 +430,8 @@ function SlotModal({
     }
     setConfirm({
       message: t('ship.confirm.buy', { name: displayName(m), price: credits(priceOf(m)) }),
-      actions: [{ label: t('station.buy'), run: () => buy(world, player, m, at) }],
+      // Покупка не закрывает слот: деталь встала взамен — можно тут же жать «улучшить».
+      actions: [{ label: t('station.buy'), run: () => buy(world, player, m, at), stay: true }],
     })
   }
 
@@ -538,7 +542,20 @@ function SlotModal({
           </>
         ) : null}
 
-        {confirm && <ConfirmBox confirm={confirm} onRun={commit} onCancel={() => setConfirm(null)} />}
+        {confirm && (
+          <ConfirmBox
+            confirm={confirm}
+            onRun={(a) => {
+              a.run()
+              onChange()
+              setConfirm(null)
+              // `stay` (покупка/установка) — слот остаётся открытым: деталь встала, статы
+              // догнали (refresh), и «улучшить» уже активно. Прочее закрывает, как и было.
+              if (!a.stay) onClose()
+            }}
+            onCancel={() => setConfirm(null)}
+          />
+        )}
       </div>
     </div>
   )
@@ -644,7 +661,7 @@ function ConfirmBox({
   onCancel,
 }: {
   confirm: Confirm
-  onRun: (run: () => void) => void
+  onRun: (action: Confirm['actions'][number]) => void
   onCancel: () => void
 }) {
   return (
@@ -657,7 +674,7 @@ function ConfirmBox({
         <p className="text-sm">{confirm.message}</p>
         <div className="mt-5 flex flex-wrap justify-end gap-2">
           {confirm.actions.map((a) => (
-            <Button key={a.label} small onClick={() => onRun(a.run)}>
+            <Button key={a.label} small onClick={() => onRun(a)}>
               {a.label}
             </Button>
           ))}
