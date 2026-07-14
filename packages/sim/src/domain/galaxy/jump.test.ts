@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { HYPERDRIVE_DEEP } from '../../config/modules'
 import { CORE_INDEX, GALAXY } from '../../config/galaxy'
 import { WORLD } from '../../config/world'
+import { TIME } from '../../config/time'
 import { isHyperdrive } from '../loadout'
 import { COMMODITIES, addCommodity } from '../cargo'
 import { refreshSpec, createWorld, type World } from '../world'
@@ -110,16 +111,15 @@ describe('прыжок', () => {
   })
 
   /**
-   * Выход из прыжка НЕ внутри тела. Точку выхода считают по орбитам в ноль времени,
-   * но `world.time` между прыжками не сбрасывается, и `stepOrbits` уводит планету к
-   * её нынешнему месту — за долгую игру она встаёт ровно на точку выхода. Касание
-   * тверди мгновенно смертельно, оттого «иногда после гипера корабль сразу потерян».
+   * Выход из прыжка НЕ внутри тела. Точку выхода и `stepOrbits` считают по одному
+   * `calendarTime`; за долгую игру планета уходит далеко — корабль не должен
+   * материализоваться внутри неё. Касание тверди мгновенно смертельно.
    */
   it('корабль не выныривает внутри тела, как бы далеко ни ушли орбиты', () => {
     const world = createWorld()
     const target = neighbourWithin(world, world.player.spec.jumpRange)
-    // Уводим орбиты далеко: имитируем долгую игру до прыжка.
-    world.time = 5e7
+    // Уводим орбиты далеко: имитируем долгую игру до прыжка (~5e7 с игрового календаря).
+    world.calendarTime = 5e7 / TIME.SCALE
 
     expect(jump(world, target)).toBe(true)
 

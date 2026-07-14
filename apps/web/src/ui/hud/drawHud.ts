@@ -194,7 +194,7 @@ function drawFps({ ctx, width, fps }: HudFrame): void {
 
 /**
  * Игровая дата в левом верхнем углу — симметрично счётчику кадров справа. Тускло:
- * это фон мира, а не прибор для наводки. Время ведёт клиент (`ui/clock`), не домен.
+ * HUD, станция и журналы — общий календарь (`app/net/worldClock`), не `world.time`.
  */
 function drawDate({ ctx }: HudFrame): void {
   text(ctx, currentGameDate(), 6 * S, 5 * S, HUD_COLORS.DIM, 'left')
@@ -428,7 +428,7 @@ function collectMarkers(world: World): Marker[] {
       nav: body.id === world.navTargetId,
       // Станция и спутник вторичны — их подпись уступает планете, к которой они
       // липнут. Звезда и планета — ориентиры, подписаны всегда.
-      primary: body.kind === 'star' || body.kind === 'planet',
+      primary: body.kind === 'star' || body.kind === 'planet' || body.kind === 'blackhole',
     })
   }
   // Киты — тоже ориентиры: их МАРКУ пилот должен прочесть, это событие в системе.
@@ -706,7 +706,7 @@ function drawRadar({ ctx, camera, world, width, height }: HudFrame): void {
     const nav = body.id === world.navTargetId
     const shape = body.kind === 'station' ? 'diamond' : 'round'
     // Звезда — крупнее прочих: она центр системы и ориентир, а не рядовая метка.
-    const base = body.kind === 'star' ? 5 : 3
+    const base = body.kind === 'star' || body.kind === 'blackhole' ? 5 : 3
     plot(body.pos, bodyColor(body), Math.round((nav ? base + 1 : base) * S), nav, shape)
   }
 
@@ -750,6 +750,7 @@ const ROCK_RANGE = 4_000
 /** Что это. Звезда жёлтая, причал белый, планета — фосфор консоли. */
 function bodyColor(body: BodyEntity): string {
   if (body.kind === 'star') return HUD_COLORS.STAR
+  if (body.kind === 'blackhole') return '#5a2868'
   if (body.kind === 'station') return HUD_COLORS.STATION
   return HUD_COLORS.PRIMARY
 }
@@ -1024,8 +1025,11 @@ function gatherWarnings(frame: HudFrame): Plate | null {
   if (player.cruise.block === 'mass-lock') pushWarning('massLock', now)
   if (scooping(player)) pushWarning('refuel', now)
 
+  // При отчаливании это выход на орбиту, а не приглашение немедленно стыковаться назад.
+  if (undocking()) {
+    pushWarning('orbitExit', now, { repeat: 0 })
   // Стыковка — только в обычном размере: гигант (миелофон) в причал не влезет.
-  if (player.state.scale <= 1) {
+  } else if (player.state.scale <= 1) {
     const station = findStation(world)
     if (station) {
       const range = stationRange(player, station)
@@ -1068,7 +1072,13 @@ function gatherWarnings(frame: HudFrame): Plate | null {
   // очередь `pushWarning` (та живёт WARN_LIFE и не погасла бы сразу). Реальные предупреждения
   // важнее — если есть живая плашка из очереди, показываем её, а форсаж уступает.
   const boostPlate: Plate | null = player.cruise.engaged
-    ? { color: HUD_COLORS.PRIMARY, hz: 2, rank: 0, label: t('hud.boostPlate'), born: now }
+    ? { color: HUD_COLORS.PRIMARY, hz: 0, rank: 0, label: t('hud.boostPlate'), born: now }
+    : null
+  const autofightPlate: Plate | null = autofightActive(world)
+    ? { color: HUD_COLORS.PRIMARY, hz: 0, rank: 0, label: t('hud.autofightPlate'), born: now }
+    : null
+  const autopilotPlate: Plate | null = frame.flyto
+    ? { color: HUD_COLORS.PRIMARY, hz: 0, rank: 0, label: t('hud.autopilotPlate'), born: now }
     : null
   // Масштабирование миелофоном (клавиша роста) — ЖЁЛТОЕ состояние. Тот же принцип, что
   // у форсажа: пока держишь `grow`, мигает; отпустил — гаснет. Обычно сухое «РЕКАЛИБРОВКА»,
@@ -1086,7 +1096,7 @@ function gatherWarnings(frame: HudFrame): Plate | null {
   const scalePlate: Plate | null =
     growSign !== 0 ? { color: HUD_COLORS.WARN, hz: 1.5, rank: 0, label: t(_scaleLabelKey), born: now } : null
   // Реальные предупреждения важнее; из состояний масштаб (нарратив) впереди форсажа.
-  return activeWarning(now) ?? scalePlate ?? boostPlate
+  return activeWarning(now) ?? autofightPlate ?? autopilotPlate ?? scalePlate ?? boostPlate
 }
 
 function paintWarningPlate(frame: HudFrame, plate: Plate): void {
@@ -1195,24 +1205,10 @@ function drawBombBurst({ ctx, world, width, height }: HudFrame): void {
 }
 
 /**
- * Постоянные РЕЖИМЫ у нижней кромки: автобой и маскировка.
- *
- * Это не транзиентные вести (перегрев, вызов, ракета — те ушли в плашки-`gatherWarnings`),
- * а тумблеры, которые обязаны висеть, ПОКА включены: пилот должен в любой момент видеть,
- * что рулит автопилот или что гашетка мертва под полем. Мигать им незачем — они не
- * просят действия сию секунду, а сообщают текущее состояние.
+ * Постоянные режимы у нижней кромки, для которых нет верхней плашки.
+ * Автобой и автопилот-к-цели — голубые пуши в `gatherWarnings`.
  */
-function drawAlerts({ ctx, world, width, height, flyto }: HudFrame): void {
-  // Выше верхней кромки локатора (он теперь по центру внизу, ~height−106): иначе
-  // строки легли бы прямо на эллипс радара.
-  if (autofightActive(world)) {
-    text(ctx, t('hud.autofight'), width / 2, height - 120 * S, HUD_COLORS.TARGET, 'center')
-  }
-  // Автопилот-к-цели ведёт корабль сам — говорим об этом, как и про автобой.
-  if (flyto) {
-    text(ctx, t('hud.autopilot'), width / 2, height - 120 * S, HUD_COLORS.NAV, 'center')
-  }
-
+function drawAlerts({ ctx, world, width, height }: HudFrame): void {
   // Под полем не стреляют, и пилот обязан знать, почему у него мёртвый гашетка.
   if (world.player.cloaked) {
     text(ctx, t('hud.cloak'), width / 2, height - 132 * S, HUD_COLORS.NAV, 'center')

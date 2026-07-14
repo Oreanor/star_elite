@@ -70,6 +70,12 @@ const STANCE_WORD: Record<Relationship, string> = {
   hostile: 'ВРАЖДЕБНЫЙ',
 }
 
+const STANCE_COLOR: Record<Relationship, string> = {
+  friendly: UI.PRIMARY,
+  neutral: UI.PRIMARY,
+  hostile: UI.DANGER,
+}
+
 export function Dialogue({
   onClose,
   negotiate,
@@ -240,7 +246,7 @@ export function Dialogue({
               <div className="text-xs tracking-widest" style={{ color: UI.DIM }}>
                 {chassisName(other.loadout.chassis.name).toUpperCase()}
               </div>
-              <div className="mt-1 text-xs tracking-widest" style={{ color: UI.PRIMARY }}>
+              <div className="mt-1 text-xs tracking-widest" style={{ color: STANCE_COLOR[stance] }}>
                 {STANCE_WORD[stance]}
               </div>
             </div>

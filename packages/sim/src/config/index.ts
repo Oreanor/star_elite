@@ -20,7 +20,7 @@ export {
 export { CHARACTER } from './character'
 export { AI, GRIEVANCE, MORALE, WARP } from './ai'
 export { CRUISE } from './cruise'
-export { TIME } from './time'
+export { TIME, calendarMs, calendarSec, orbitSec } from './time'
 export { DYSON, type DysonSpec } from './dyson'
 export { HYPERDRIVE, STAR_HEAT } from './heat'
 export { DIALOGUE } from './dialogue'

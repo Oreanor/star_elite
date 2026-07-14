@@ -4,11 +4,12 @@ import { isCruising } from '../cruise/drive'
 import { enterSystem } from '../world/factory'
 import { STARTER_SYSTEM, type SystemDef } from '../world/system'
 import type { World } from '../world/entities'
-import { arrivalPoint, scatterArrival, type Arrival } from './arrival'
+import { arrivalPointAt, scatterArrival, type Arrival } from './arrival'
 import { systemDefOf } from './bridge'
 import { driftContacts } from './contacts'
 import { syncLiveContactsFromShips } from '../world/plan'
 import { spawnResidentContacts } from '../world/traffic'
+import { patchSharedStart } from './sharedStart'
 import { generateSystem } from './generate'
 import { distanceLy, placeSystem } from './shape'
 
@@ -36,7 +37,7 @@ export type JumpBlock = 'no-drive' | 'out-of-range' | 'out-of-charge' | 'same-sy
  */
 export function systemDefFor(index: number, galaxySeed: number, seatOverride?: number): SystemDef {
   if (index === WORLD.HOME_INDEX && galaxySeed === GALAXY.SEED) return STARTER_SYSTEM
-  return systemDefOf(generateSystem(index, galaxySeed), galaxySeed, seatOverride)
+  return patchSharedStart(systemDefOf(generateSystem(index, galaxySeed), galaxySeed, seatOverride), index, galaxySeed)
 }
 
 /** Расстояние до системы, световых лет. Диск не заворачивается — метрика прямая. */
@@ -114,7 +115,7 @@ export function jump(world: World, index: number, arrival: Arrival | null = null
   const seatOverride = arrival?.kind === 'body' ? arrival.planet : undefined
   const def = systemDefFor(destIndex, world.galaxySeed, seatOverride)
   const drive = world.player.spec.jumpRange
-  const start = scatterArrival(def, arrivalPoint(def, arrival), drive > 0 ? spent / drive : 0, world.rng)
+  const start = scatterArrival(def, arrivalPointAt(def, arrival, world.calendarTime), drive > 0 ? spent / drive : 0, world.rng)
   syncLiveContactsFromShips(world)
   enterSystem(world, def, destIndex, start)
   world.player.jumpCharge = Math.max(0, world.player.jumpCharge - spent)

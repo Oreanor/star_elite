@@ -31,6 +31,26 @@ export interface MoonDef {
   tilt: number
 }
 
+/** Вторая звезда двойной системы (из генератора). */
+export interface StarCompanionDef {
+  kind?: 'star'
+  radius: number
+  color: number
+  separation: number
+}
+
+/** Чёрная дыра — спутник барицентра вместо звезды B. */
+export interface BlackHoleCompanionDef {
+  kind: 'blackhole'
+  name: string
+  /** Шварцшild / гравитация, м — компактнее звезды. */
+  radius: number
+  /** Масштаб короны, диска и линзы — как у звезды B до замены. */
+  visualRadius: number
+  separation: number
+  diskAxis?: readonly [number, number, number]
+}
+
 export interface SystemDef {
   name: string
   /** Одно число задаёт всю расстановку: пояс, патрули, разброс. */
@@ -38,12 +58,10 @@ export interface SystemDef {
   playerStart: readonly [number, number, number]
   star: { pos: readonly [number, number, number]; radius: number; color: number }
   /**
-   * Спутник двойной звезды, или `null` у одиночной. Позиции нет: обе звезды
-   * обращаются вокруг барицентра (истинного нуля системы), и место каждой даёт
-   * время, а не запись. `separation` — расстояние между центрами, м; из него и
-   * из масс (обе выводятся из радиусов) считается период.
+   * Спутник двойной: вторая звезда или чёрная дыра (барицентр, `separation`, орбита).
+   * Позиции нет — место даёт время, как у звёзд пары.
    */
-  companion: { radius: number; color: number; separation: number } | null
+  companion: StarCompanionDef | BlackHoleCompanionDef | null
   /** Сфера Дайсона вокруг светила, или `null`. Только декорация: облик и цела ли. */
   dyson: DysonSpec | null
   planets: readonly {

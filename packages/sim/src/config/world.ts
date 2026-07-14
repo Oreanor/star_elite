@@ -18,6 +18,11 @@ export const WORLD = {
    * На карте он занимает вот эту ячейку — прыгнуть домой можно, как в любую другую.
    */
   HOME_INDEX: 1250,
+  /**
+   * Онлайн-спавн при GALAXY.SEED: «Люрилар», двойная. Не дом (1250) и не ядро (0).
+   * @see SHARED_START_INDEX в domain/galaxy/sharedStart.ts
+   */
+  SHARED_START_INDEX: 1,
   /** Тяга при спавне, доля. Висеть в пустоте — плохое первое впечатление. */
   START_THROTTLE: 0.45,
 } as const

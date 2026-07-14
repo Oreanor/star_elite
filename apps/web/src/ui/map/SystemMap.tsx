@@ -50,6 +50,7 @@ const BODY = UI.PRIMARY
 const SHIP = UI.SALVAGE
 const STAR = '#ffe6a8'
 const STATION = '#ffffff'
+const BLACK_HOLE = '#5a2868'
 /** Знакомый на радаре: свой тон, чтобы не спутать с планетой и с игроком. */
 const CONTACT = '#b98bff'
 /** Живой игрок: розовый — та же семантика, что на локаторе и карте галактики. */
@@ -58,7 +59,9 @@ const PLAYER = UI.PLAYER
 const colourOf = (kind: MarkerKind): string =>
   kind === 'star'
     ? STAR
-    : kind === 'station'
+    : kind === 'blackhole'
+      ? BLACK_HOLE
+      : kind === 'station'
       ? STATION
       : kind === 'ship'
         ? SHIP
@@ -458,6 +461,11 @@ function Hologram({
                 <>
                   <circle r={16} fill={STAR} fillOpacity={0.15} />
                   <circle r={active ? 8 : 6.5} fill={STAR} />
+                </>
+              ) : m.kind === 'blackhole' ? (
+                <>
+                  <circle r={14} fill={BLACK_HOLE} fillOpacity={0.2} />
+                  <circle r={active ? 7 : 5.5} fill={BLACK_HOLE} />
                 </>
               ) : m.kind === 'ship' ? (
                 // Игрок — не точка, а нос: треугольник заметен среди кружков планет.

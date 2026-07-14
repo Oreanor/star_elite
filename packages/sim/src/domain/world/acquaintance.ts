@@ -31,7 +31,7 @@ export type Relationship = 'friendly' | 'neutral' | 'hostile'
  * денег, при следующем разговоре встречает как чужого.
  *
  * Структурой, не фразой: домен языка не знает, слова собирает ui (`facts`) при показе.
- * `at` — момент мира (`world.time`), из него ui выводит и порядок, и календарную дату.
+ * `at` — момент общего календаря (`world.calendarTime`), из него ui выводит порядок и дату.
  */
 export type AcquaintanceEvent =
   | { kind: 'met'; at: number } // свиделись впервые
@@ -117,6 +117,11 @@ export interface Acquaintance {
  * тот же разговор запись не плодит. В этот миг у пилота появляется имя, и оно тут же
  * ложится на локатор. Событие, не шаг физики: `rng`/`ids` двигать здесь можно.
  */
+/** Метка времени для журнала: общий календарь, не локальная симуляция. */
+function journalTime(world: World): number {
+  return world.calendarTime
+}
+
 export function rememberPilot(world: World, ship: ShipEntity): void {
   if (ship.acquaintanceId != null) return
 
@@ -136,7 +141,7 @@ export function rememberPilot(world: World, ship: ShipEntity): void {
     meetings: 1,
     relationship: 'neutral',
     // Первая запись журнала — сам факт знакомства: с этого момента вам есть что помнить.
-    history: [{ kind: 'met', at: world.time }],
+    history: [{ kind: 'met', at: journalTime(world) }],
     alive: true,
     credits: 4_000 + Math.floor(world.rng() * 10_000),
     savedLoadout: serializeLoadout(ship.loadout),
@@ -182,7 +187,7 @@ export const NOTE_MAX_CHARS = 280
  * бота (сделка, приказ, просьба, факт…) идут через шину `applyCommand`, а она — сюда;
  * отдельных `remember*` на каждый вид нет, событие описывается данными `{kind, …}`.
  *
- * Момент штампуем сами (`world.time`), чтобы `at` не забыли на месте вызова. С безымянным
+ * Момент штампуем сами (`calendarTime`), чтобы `at` не забыли на месте вызова. С безымянным
  * прохожим память не заводится — записи у него нет, событие молча гаснет (как и
  * `rememberPilot` пропускает чужого).
  */
@@ -190,7 +195,7 @@ export function recordEvent(world: World, ship: ShipEntity, event: WithoutAt<Acq
   const record = world.acquaintances.find((a) => a.id === ship.acquaintanceId)
   if (!record) return
   // Спред восстанавливает конкретный член объединения; TS этого не выводит — приводим.
-  record.history.push({ ...event, at: world.time } as AcquaintanceEvent)
+  record.history.push({ ...event, at: journalTime(world) } as AcquaintanceEvent)
 }
 
 /** Знакомый и его живой борт, если он сейчас здесь. Для вкладки «Люди» и меток карт. */

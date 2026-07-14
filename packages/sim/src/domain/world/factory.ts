@@ -1,5 +1,6 @@
 import { Euler, Quaternion, Vector3 } from 'three'
 import { GRAVITY, MOON } from '../../config/bodies'
+import { orbitSec } from '../../config/time'
 import { pirateLeaderLoadout, pirateLoadout, playerStartLoadout } from '../../config/loadouts'
 import { ARRIVAL, GALAXY, HUMAN_SPECIES } from '../../config/galaxy'
 import { ASTEROID, TRAFFIC, WORLD } from '../../config/world'
@@ -22,9 +23,17 @@ import { createIdSource, type IdSource } from './ids'
 import { DEFAULT_PERSONA, makePersona, type PilotProfile } from './persona'
 import { makePilotName } from './names'
 import { maybeShiftOrigin } from './origin'
-import { stepOrbits } from './orbits'
-import type { SystemDef } from './system'
+import {
+  keplerRate,
+  orbitFromOffset,
+  planetMass,
+  starMass,
+  stepOrbits,
+  stepOrbitsOnBodies,
+} from './orbits'
+import type { SystemDef, StarCompanionDef, BlackHoleCompanionDef } from './system'
 import { STARTER_SYSTEM } from './system'
+import { stationSeat } from '../galaxy/arrival'
 
 /**
  * Сборка мира из описания системы. Всё, что делает место местом, приходит
@@ -211,18 +220,8 @@ function spinAxis(tilt: number): Vector3 {
   return new Vector3(Math.sin(tilt), Math.cos(tilt), 0).normalize()
 }
 
-/**
- * Угловая скорость кругового обращения, рад/с: ω = √(GM/r³).
- *
- * Масса планеты выводится из радиуса и плотности — назначать период вручную
- * нельзя. «Пусть оборот за десять минут» даёт луне сотни километров в секунду:
- * она проносится мимо корабля быстрее ракеты и сшибает его на ровном месте.
- * У настоящей Луны выходит месяц, и это следствие массы Земли, а не решения.
- */
-function orbitRate(planetRadius: number, gas: boolean, orbitRadius: number): number {
-  const density = gas ? GRAVITY.GAS_DENSITY : GRAVITY.ROCK_DENSITY
-  const mass = density * (4 / 3) * Math.PI * planetRadius ** 3
-  return Math.sqrt((GRAVITY.G * mass) / orbitRadius ** 3)
+function moonOrbitRate(planetRadius: number, gas: boolean, orbitRadius: number): number {
+  return keplerRate(planetMass(planetRadius, gas), orbitRadius)
 }
 
 function makeMoonBodies(ids: IdSource, planet: BodyEntity, def: SystemDef['planets'][number]): BodyEntity[] {
@@ -245,23 +244,15 @@ function makeMoonBodies(ids: IdSource, planet: BodyEntity, def: SystemDef['plane
       parentId: planet.id,
       radius: moon.orbit,
       phase: moon.phase,
-      rate: orbitRate(planet.radius, gas, moon.orbit),
+      rate: moonOrbitRate(planet.radius, gas, moon.orbit),
       tilt: moon.tilt,
     },
   }))
 }
 
-/** Масса звезды из радиуса: ρ·(4/3)πR³. Как у планеты, только плотность звёздная. */
-function starMass(radius: number): number {
-  return GRAVITY.STAR_DENSITY * (4 / 3) * Math.PI * radius ** 3
-}
-
 /**
  * Орбита одной звезды двойной вокруг барицентра.
- *
- * Радиус обратен массе: лёгкая звезда описывает большой круг, тяжёлая — малый,
- * центр масс между ними неподвижен. Обе идут с одной угловой скоростью
- * ω = √(G·(M₁+M₂)/d³) — иначе они разъехались бы, а не кружили парой.
+ * ω = √(G·(M₁+M₂)/d³); радиус обратен массе.
  */
 function binaryOrbit(selfMass: number, otherMass: number, separation: number, phase: number): OrbitDef {
   const total = selfMass + otherMass
@@ -275,10 +266,22 @@ function binaryOrbit(selfMass: number, otherMass: number, separation: number, ph
   }
 }
 
+function isBlackHoleCompanion(comp: StarCompanionDef | BlackHoleCompanionDef): comp is BlackHoleCompanionDef {
+  return comp.kind === 'blackhole'
+}
+
+function companionMass(comp: StarCompanionDef | BlackHoleCompanionDef): number {
+  if (isBlackHoleCompanion(comp)) {
+    const r = comp.visualRadius
+    return GRAVITY.STAR_DENSITY * (4 / 3) * Math.PI * r ** 3 * 2
+  }
+  return starMass(comp.radius)
+}
+
 function makeBodies(ids: IdSource, def: SystemDef): BodyEntity[] {
   const comp = def.companion
   const m1 = starMass(def.star.radius)
-  const m2 = comp ? starMass(comp.radius) : 0
+  const m2 = comp ? companionMass(comp) : 0
 
   const primary: BodyEntity = {
     id: ids.next(),
@@ -298,30 +301,58 @@ function makeBodies(ids: IdSource, def: SystemDef): BodyEntity[] {
   const bodies: BodyEntity[] = [primary]
 
   if (comp) {
-    bodies.push({
-      id: ids.next(),
-      // Имя со звёздочкой B — так метят спутник двойной в каталогах (Сириус B).
-      kind: 'star',
-      name: `${def.name} B`,
-      pos: new Vector3(...def.star.pos),
-      radius: comp.radius,
-      color: comp.color,
-      surface: null,
-      population: 0,
-      settlement: null,
-      spin: 0,
-      spinAxis: new Vector3(0, 1, 0),
-      // Спутник на противоположной стороне барицентра: фаза π.
-      orbit: binaryOrbit(m2, m1, comp.separation, Math.PI),
-    })
+    if (isBlackHoleCompanion(comp)) {
+      const ax = new Vector3(...(comp.diskAxis ?? [0, 1, 0])).normalize()
+      bodies.push({
+        id: ids.next(),
+        kind: 'blackhole',
+        name: comp.name,
+        pos: new Vector3(...def.star.pos),
+        radius: comp.radius,
+        visualRadius: comp.visualRadius,
+        color: 0x050508,
+        surface: null,
+        population: 0,
+        settlement: null,
+        spin: 0,
+        spinAxis: ax,
+        orbit: binaryOrbit(m2, m1, comp.separation, Math.PI),
+      })
+    } else {
+      bodies.push({
+        id: ids.next(),
+        // Имя со звёздочкой B — так метят спутник двойной в каталогах (Сириус B).
+        kind: 'star',
+        name: `${def.name} B`,
+        pos: new Vector3(...def.star.pos),
+        radius: comp.radius,
+        color: comp.color,
+        surface: null,
+        population: 0,
+        settlement: null,
+        spin: 0,
+        spinAxis: new Vector3(0, 1, 0),
+        // Спутник на противоположной стороне барицентра: фаза π.
+        orbit: binaryOrbit(m2, m1, comp.separation, Math.PI),
+      })
+    }
   }
 
+  const starPos = new Vector3(...def.star.pos)
+  const barycentre = new Vector3(0, 0, 0)
+  const barycentricPlanets = comp !== null
+  const heliocentricMass = barycentricPlanets ? m1 + m2 : m1
+
   for (const p of def.planets) {
+    const planetPos = new Vector3(...p.pos)
+    const parentId = barycentricPlanets ? null : primary.id
+    const parentPos = barycentricPlanets ? barycentre : starPos
+    const orbitRadius = planetPos.distanceTo(parentPos)
     const planet: BodyEntity = {
       id: ids.next(),
       kind: 'planet',
       name: p.name,
-      pos: new Vector3(...p.pos),
+      pos: planetPos.clone(),
       radius: p.radius,
       color: p.color,
       surface: p.type,
@@ -329,28 +360,47 @@ function makeBodies(ids: IdSource, def: SystemDef): BodyEntity[] {
       settlement: p.settlement ?? null,
       spin: p.spin,
       spinAxis: spinAxis(p.tilt),
-      orbit: null,
+      orbit: orbitFromOffset(parentId, parentPos, planetPos, keplerRate(heliocentricMass, orbitRadius)),
     }
     bodies.push(planet, ...makeMoonBodies(ids, planet, p))
   }
 
   if (def.station) {
+    const hostIdx = stationSeat(def)
+    const planets = bodies.filter((b) => b.kind === 'planet')
+    const host = hostIdx >= 0 ? planets[hostIdx] : null
+    const stationPos = new Vector3(...def.station.pos)
+    const stationOrbit = host
+      ? orbitFromOffset(
+          host.id,
+          host.pos,
+          stationPos,
+          moonOrbitRate(host.radius, host.surface === 'Газовый гигант', stationPos.distanceTo(host.pos)),
+        )
+      : null
+
     bodies.push({
       id: ids.next(),
       kind: 'station',
       name: def.station.name,
-      pos: new Vector3(...def.station.pos),
+      pos: stationPos.clone(),
       radius: def.station.radius,
       color: 0x9fb3c8,
       surface: null,
       population: 0,
       settlement: null,
-      // Кориолис вращается вокруг продольной оси — так было в оригинале.
       spin: 0.08,
       spinAxis: new Vector3(0, 0, 1),
-      orbit: null,
+      orbit: stationOrbit,
     })
   }
+  return bodies
+}
+
+/** Тела системы на общий момент календаря — для выхода из прыжка и сети. */
+export function layoutSystemBodies(def: SystemDef, calendarTime: number, ids: IdSource = createIdSource()): BodyEntity[] {
+  const bodies = makeBodies(ids, def)
+  stepOrbitsOnBodies(bodies, new Vector3(0, 0, 0), orbitSec(calendarTime))
   return bodies
 }
 
@@ -466,7 +516,7 @@ export function enterSystem(
 
   world.ships = makePatrols(rng, world.ids, def)
   world.bodies = makeBodies(world.ids, def)
-  // Спутник родится в центре своей планеты: место ему даёт время, а не фабрика.
+  // Спутники, планеты и станция — на орбитах к `calendarTime` (общие часы сервера).
   stepOrbits(world)
   world.asteroids = makeAsteroids(rng, world.ids, def)
 
@@ -498,10 +548,8 @@ export function enterSystem(
   player.state.pos.set(...start)
   player.state.vel.set(0, 0, 0)
   player.state.angVel.set(0, 0, 0)
-  // Не дать вынырнуть ВНУТРИ тела. Точку выхода считают по орбитам системы в
-  // ноль времени (`def`), но `stepOrbits` уже подвинул тела к `world.time`, а он
-  // между прыжками не сбрасывается — за долгую игру планета успевает отойти на
-  // пол-орбиты и встать ровно там, куда целил выход. Касание тверди мгновенно
+  // Не дать вынырнуть ВНУТРИ тела. Точку выхода считали по `calendarTime`; тела
+  // уже стоят на орбитах к этому же моменту — касание тверди мгновенно смертельно.
   // смертельно (`stepBodyCollisions`), отсюда «иногда после гипера корабль потерян».
   clearOfBodies(world)
   aimAt(player, world.bodies.find((b) => b.id === world.navTargetId)?.pos ?? null)
@@ -541,7 +589,10 @@ export function createWorld(def: SystemDef = STARTER_SYSTEM, profile?: PilotProf
   // Есть выбор из создания персонажа — накладываем его; нет (тесты, быстрый старт) —
   // землянин по умолчанию: протагонист не должен родиться случайным инопланетянином.
   if (profile) applyPilotProfile(player, profile)
-  else player.persona.species = HUMAN_SPECIES
+  else {
+    player.persona.species = HUMAN_SPECIES
+    player.persona.profession = 'traveler'
+  }
 
   const ships = makePatrols(rng, ids, def)
 
@@ -550,6 +601,7 @@ export function createWorld(def: SystemDef = STARTER_SYSTEM, profile?: PilotProf
 
   const world: World = {
     time: 0,
+    calendarTime: 0,
     player,
     ships,
     asteroids: makeAsteroids(rng, ids, def),

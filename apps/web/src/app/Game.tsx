@@ -11,6 +11,7 @@ import { Titans } from '../render/scene/Titans'
 import { Platforms } from '../render/scene/Platforms'
 import { DockingCorridor } from '../render/scene/DockingCorridor'
 import { Dyson } from '../render/scene/Dyson'
+import { BlackHole } from '../render/scene/BlackHole'
 import { Dust } from '../render/scene/Dust'
 import { CargoPods, Explosions, ExplosionChunks, Missiles, StationShields, TractorBeam, Tracers, WarpFlashes } from '../render/scene/Effects'
 import { WarpArrivalPortals } from '../render/scene/WarpArrivalPortals'
@@ -50,6 +51,7 @@ function Scene() {
       <Dust />
 
       <Bodies />
+      <BlackHole />
       <Dyson />
       <AsteroidField />
       <Titans />

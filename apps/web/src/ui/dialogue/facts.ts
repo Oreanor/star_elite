@@ -425,7 +425,7 @@ function cargoList(ship: ShipEntity): { id: string; name: string; units: number 
  * как их и читает системный промпт. Хронологически, старое сверху; берём хвост — длинную
  * летопись free-модель в промпте не удержит, а помнят обычно последнее и памятное.
  *
- * Дату выводим из `at` (`world.time`) тем же календарём, что HUD: EPOCH + сжатие `SCALE`.
+ * Дату выводим из `at` (общий `calendarTime`) тем же календарём, что HUD.
  */
 const HISTORY_SHOWN = 8
 

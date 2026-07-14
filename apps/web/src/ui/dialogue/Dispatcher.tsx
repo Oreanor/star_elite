@@ -26,6 +26,7 @@ const KIND_LABEL: Record<BriefingBody['kind'], string> = {
   planet: 'планета',
   moon: 'луна',
   station: 'станция',
+  blackhole: 'чёрная дыра',
 }
 
 /** Стабильное лицо диспетчера от имени станции: у одной станции — постоянное (0..35 = 6×6). */

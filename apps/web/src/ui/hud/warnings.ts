@@ -34,6 +34,7 @@ export type WarnCode =
   | 'noTarget'
   | 'dockReady'
   | 'dockCorridor'
+  | 'orbitExit'
   | 'hail'
   | 'refuel'
   | 'bonVoyage'
@@ -69,6 +70,7 @@ const DEFS: Record<WarnCode, Def> = {
   hail: { color: UI.PRIMARY, hz: 1.5, rank: 44, key: 'hud.hail' },
   dockReady: { color: UI.PRIMARY, hz: 2, rank: 40, key: 'hud.dockReady' },
   dockCorridor: { color: UI.PRIMARY, hz: 0, rank: 35, key: 'hud.dockCorridor' },
+  orbitExit: { color: UI.PRIMARY, hz: 0, rank: 43, key: 'hud.orbitExit' },
   refuel: { color: UI.PRIMARY, hz: 1.5, rank: 20, key: 'hud.refuel' },
   // Напутствие при вылете: голубое, ровно горит (не мигает). Приоритет невысок — реальная
   // угроза на отходе (если вдруг) должна перебить добрые пожелания.

@@ -7,6 +7,7 @@ import {
   flyToController,
   cycleLock,
   findCloak,
+  findMielophone,
   hasBomb,
   hasEcm,
   isLaser,
@@ -19,6 +20,7 @@ import { syncControllers, useSession, type Session } from '../../app/GameContext
 import { coastController } from '../../app/control/playerController'
 import { persistSave } from '../../app/save/saveStore'
 import { clearPresses, consumePress, input, isHeld, releaseLock } from '../../platform/input/input'
+import { gameTimeSec } from '../../app/net/worldClock'
 import { pushWarning } from '../../ui/hud/warnings'
 
 /**
@@ -61,6 +63,7 @@ export function Simulation() {
 
   useFrame((_, dt) => {
     const { world, controllers, intent } = session
+    world.calendarTime = gameTimeSec()
 
     /**
      * Кадр начинается с «мир стоит». Любой ранний выход ниже — гибель, док, карта,
@@ -133,7 +136,7 @@ export function Simulation() {
     }
     if (consumePress('KeyE')) {
       if (hasEcm(world.player.loadout)) intent.ecm = true
-      else pushWarning('noAux', world.time)
+      else if (!findMielophone(world.player.loadout)) pushWarning('noAux', world.time)
     }
     if (consumePress('KeyB')) {
       if (hasBomb(world.player.loadout)) intent.bomb = true

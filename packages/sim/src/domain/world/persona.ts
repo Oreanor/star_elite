@@ -105,6 +105,7 @@ export const DEFAULT_PERSONA: Persona = {
   agility: 3,
   accuracy: 3,
   species: HUMAN_SPECIES,
+  profession: 'traveler',
 }
 
 /** Черта 1..5 из RNG. */

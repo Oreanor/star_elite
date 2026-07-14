@@ -134,7 +134,7 @@ export function Console({
                 ? `${properName(station.name)}${planet ? ` (${properName(planet.name)})` : ''}`
                 : `${t('station.system')}: ${properName(world.systemName).toUpperCase()}`}
             </h1>
-            {/* Дата мира — под заголовком: снимок на момент захода. Время ведёт клиент (`ui/clock`). */}
+            {/* Дата мира — общий календарь для всех игроков (`worldClock`). */}
             <p className="mt-1 text-sm tracking-widest" style={{ color: DIM }}>
               {currentGameDate()}
             </p>

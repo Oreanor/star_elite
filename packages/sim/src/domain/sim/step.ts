@@ -41,6 +41,7 @@ import { isPhased, updateCruise } from '../cruise/drive'
 import { hasBomb, hasEcm } from '../loadout'
 import { MIELOPHONE } from '../../config/mielophone'
 import { effectiveRadius, stepScale } from '../scale/scale'
+import { stepGravity } from '../flight/gravity'
 import { stepShip } from '../flight/model'
 import { stepDocking } from '../station/docking'
 import type { ShipEntity, World } from '../world/entities'
@@ -151,6 +152,8 @@ function stepPhysics(world: World, dt: number): void {
     if (!ship.alive) continue
     // Кинематический борт не интегрируем: его позу ставит внешний источник.
     if (ship.kinematic) continue
+    if (ship.warpEmerging || ship.warpDeparting) continue
+    stepGravity(ship, world, dt)
     stepShip(ship.state, ship.controls, ship.spec.tuning, dt)
     // Миелофон: рост/усадка масштаба от сигнала. До столкновений — они считаются по
     // свежему размеру этого шага.

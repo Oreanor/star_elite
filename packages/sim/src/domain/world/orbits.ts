@@ -1,35 +1,78 @@
 import { Vector3 } from 'three'
-import type { OrbitDef, World } from './entities'
+import { GRAVITY } from '../../config/bodies'
+import { orbitSec } from '../../config/time'
+import { clamp } from '../../core/math'
+import type { BodyEntity, OrbitDef, World } from './entities'
 
 /**
- * Обращение спутников.
+ * Орбиты тел: угол = phase + rate·t, позиция считается заново каждый шаг.
  *
- * Положение НЕ накапливается по кадрам: угол — это `phase + rate·time`, и точка
- * считается из него заново каждый шаг. Накопление зависело бы от частоты шага,
- * не пережило бы паузу и разошлось бы на двух машинах — а луна обязана висеть
- * там же и у сервера. Заодно это бесплатно чинит плавающее начало координат:
- * спутник считается ОТ ПЛАНЕТЫ, а её мир двигает сам.
+ * Часы — игровой календарь: `orbitSec(world.calendarTime)` (× `TIME.SCALE`).
+ * `world.calendarTime` — общие «реальные» секунды с якоря; орбиты идут в темпе HUD.
+ * Не `world.time`: тот замирает в доке и локален физике. Два клиента и вход в
+ * систему через год игры обязаны увидеть одну и ту же расстановку.
  *
- * Планеты вокруг звезды не обращаются, и это осознанно: год у настоящей планеты
- * длится годы, а перелёт занимает минуты. Двигать её на угловую секунду за партию
- * значило бы платить за то, чего никто не увидит.
- *
- * Звёзды двойной — обращаются: их период выводится из массы и выходит в дни, так
- * же незаметный за партию. Но пару можно ОБЛЕТЕТЬ, увидев два солнца с разных
- * сторон, и ради этого движение честное, а не назначенное.
+ * Планеты, луны, станции и звёзды двойной — ω = √(GM/r³), периоды не назначаются.
  */
 
 const _radial = /* @__PURE__ */ new Vector3()
 const _out = /* @__PURE__ */ new Vector3()
 const _bary = /* @__PURE__ */ new Vector3()
+const _offset = /* @__PURE__ */ new Vector3()
+
+/** Момент для орбит: секунды игрового календаря (HUD и сутки × SCALE). */
+export function orbitTime(world: World): number {
+  return orbitSec(world.calendarTime)
+}
+
+/** ω вокруг точки массы M на радиусе r, рад/с. */
+export function keplerRate(centralMass: number, orbitRadius: number): number {
+  return Math.sqrt((GRAVITY.G * centralMass) / orbitRadius ** 3)
+}
+
+/** Масса звезды из радиуса. */
+export function starMass(radius: number): number {
+  return GRAVITY.STAR_DENSITY * (4 / 3) * Math.PI * radius ** 3
+}
+
+/** Масса планеты из радиуса и типа. */
+export function planetMass(radius: number, gas: boolean): number {
+  const density = gas ? GRAVITY.GAS_DENSITY : GRAVITY.ROCK_DENSITY
+  return density * (4 / 3) * Math.PI * radius ** 3
+}
 
 /**
- * Точка на наклонной круговой орбите вокруг `parentPos`. Наклон берётся вокруг
- * оси X: орбита при нулевом наклоне лежит в плоскости XZ — там же, где эклиптика.
- *
- * Родитель приходит ПОЗИЦИЕЙ, а не телом: у барицентра двойной звезды тела нет,
- * есть только точка. Это заодно и делает всё правильным при плавающем начале —
- * позицию родителя двигает мир, а орбита лишь добавляется к ней.
+ * Орбита по смещению родителя и ребёнка в t = 0.
+ * Обратная задача к `orbitPoint`: phase и tilt восстанавливаются из начальной позиции.
+ */
+export function orbitFromOffset(
+  parentId: number | null,
+  parentPos: Vector3,
+  childPos: Vector3,
+  rate: number,
+): OrbitDef {
+  _offset.copy(childPos).sub(parentPos)
+  const radius = _offset.length()
+  if (radius < 1e-3) {
+    return { parentId, radius: 0, phase: 0, rate, tilt: 0 }
+  }
+
+  const phase = Math.atan2(_offset.z, _offset.x)
+  const sinP = Math.sin(phase)
+  const cosP = Math.cos(phase)
+  let tilt = 0
+  if (Math.abs(sinP) > 1e-4) {
+    tilt = Math.asin(clamp(_offset.y / (radius * sinP), -1, 1))
+  } else if (Math.abs(cosP) > 1e-4) {
+    tilt = Math.asin(clamp(_offset.y / (radius * cosP), -1, 1))
+  }
+
+  return { parentId, radius, phase, rate, tilt }
+}
+
+/**
+ * Точка на наклонной круговой орбите вокруг `parentPos`.
+ * Родитель — позиция, не тело: барицентр двойной звезды тоже точка.
  */
 export function orbitPoint(orbit: OrbitDef, parentPos: Vector3, time: number, out: Vector3): Vector3 {
   const angle = orbit.phase + orbit.rate * time
@@ -42,27 +85,45 @@ export function orbitPoint(orbit: OrbitDef, parentPos: Vector3, time: number, ou
   return out.copy(parentPos).add(_out)
 }
 
-/**
- * Позиция барицентра системы в ЛОКАЛЬНЫХ координатах. Барицентр стоит в истинном
- * нуле мира; локальная = истинная − originOffset = −originOffset. Так двойная
- * звезда остаётся на месте относительно планет, куда бы ни уехало начало отсчёта.
- */
-function barycentre(world: World): Vector3 {
-  return _bary.set(0, 0, 0).sub(world.originOffset)
+function barycentre(originOffset: Vector3): Vector3 {
+  return _bary.set(0, 0, 0).sub(originOffset)
 }
 
-/** Расставить спутники и звёзды двойной по их орбитам на момент `world.time`. */
-export function stepOrbits(world: World): void {
-  for (const body of world.bodies) {
-    const orbit = body.orbit
-    if (!orbit) continue
+function parentPosFor(body: BodyEntity, bodies: BodyEntity[], originOffset: Vector3): Vector3 | null {
+  const orbit = body.orbit
+  if (!orbit) return null
+  if (orbit.parentId === null) return barycentre(originOffset)
+  return bodies.find((b) => b.id === orbit.parentId)?.pos ?? null
+}
 
-    if (orbit.parentId === null) {
-      orbitPoint(orbit, barycentre(world), world.time, body.pos)
-      continue
+/** Расставить все орбиты на момент `time`. Порядок: барицентр → звезда → планета. */
+export function stepOrbitsOnBodies(bodies: BodyEntity[], originOffset: Vector3, time: number): void {
+  const passes: Array<(b: BodyEntity) => boolean> = [
+    (b) => b.orbit!.parentId === null,
+    (b) => {
+      if (b.orbit!.parentId === null) return false
+      const parent = bodies.find((p) => p.id === b.orbit!.parentId)
+      return parent?.kind === 'star'
+    },
+    (b) => {
+      if (b.orbit!.parentId === null) return false
+      const parent = bodies.find((p) => p.id === b.orbit!.parentId)
+      return parent?.kind === 'planet'
+    },
+  ]
+
+  for (const match of passes) {
+    for (const body of bodies) {
+      const orbit = body.orbit
+      if (!orbit || !match(body)) continue
+      const parentPos = parentPosFor(body, bodies, originOffset)
+      if (!parentPos) continue
+      orbitPoint(orbit, parentPos, time, body.pos)
     }
-    const parent = world.bodies.find((b) => b.id === orbit.parentId)
-    // Родителя могло не оказаться только в кривых данных: молча оставляем на месте.
-    if (parent) orbitPoint(orbit, parent.pos, world.time, body.pos)
   }
+}
+
+/** Расставить орбиты на `orbitTime(world)`. */
+export function stepOrbits(world: World, time = orbitTime(world)): void {
+  stepOrbitsOnBodies(world.bodies, world.originOffset, time)
 }

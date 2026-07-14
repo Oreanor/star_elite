@@ -51,12 +51,12 @@ export function CharacterCreation({
   world: World
   onSubmit: (profile: PilotProfile) => void
 }) {
-  useLang()
+  const lang = useLang()
   const [species, setSpecies] = useState<string>(PLAYABLE_SPECIES[0]!)
   const [face, setFace] = useState(0)
   const [name, setName] = useState(() => randomPilotName(PLAYABLE_SPECIES[0]!))
   const [profession, setProfession] = useState<Profession>('traveler')
-  const [professionInput, setProfessionInput] = useState('')
+  const [professionInput, setProfessionInput] = useState(() => professionName('traveler'))
 
   const [reaction, setReaction] = useState<Emotion>('neutral')
   useEffect(() => {
@@ -69,6 +69,16 @@ export function CharacterCreation({
   useEffect(() => {
     setName(randomPilotName(species))
   }, [species])
+
+  // Подпись «Путешественник» в поле — при смене языка обновляем, если там была профессия словом.
+  useEffect(() => {
+    setProfessionInput((prev) => {
+      const matched = professionFromInput(prev)
+      if (matched) return professionName(matched)
+      if (profession === 'traveler' && prev.trim() !== '') return professionName('traveler')
+      return prev
+    })
+  }, [lang, profession])
 
   const profile: PilotProfile = {
     name: name.trim(),

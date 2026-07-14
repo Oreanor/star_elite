@@ -10,6 +10,7 @@ export {
   type ManoeuvreKind,
 } from './aerobatics'
 export { forward, shipAxes } from './axes'
+export { bodyMass, gravityAccel, gravityReach, stepGravity } from './gravity'
 export { canEngageFlyTo, flyToArrived, flyToController } from './flyto'
 export { stepShip } from './model'
 export { bankToward, interceptPoint, steerToward } from './steering'

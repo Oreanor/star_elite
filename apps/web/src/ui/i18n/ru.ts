@@ -142,8 +142,8 @@ export const RU = {
   'hud.massLock': 'МАССОВАЯ БЛОКИРОВКА',
   'hud.cruise': 'КРЕЙСЕР ×{factor}',
   'hud.gravityBrake': 'ТОРМОЖЕНИЕ У ТЕЛА',
-  'hud.autofight': 'АВТОБОЙ · P — СНЯТЬ',
-  'hud.autopilot': 'АВТОПИЛОТ · J — СНЯТЬ',
+  'hud.autofightPlate': 'АВТОБОЙ',
+  'hud.autopilotPlate': 'АВТОПИЛОТ',
   'hud.cloak': 'МАСКИРОВКА · X — СНЯТЬ',
   'hud.missileWarn': 'РАКЕТА · {seconds} С · E — ПРО',
   'hud.hail': '◄ {name} ВЫЗЫВАЕТ · T — ОТВЕТИТЬ',
@@ -157,6 +157,7 @@ export const RU = {
   'hud.dockReady': 'ПРИЧАЛ СВОБОДЕН · L — СТЫКОВКА',
   'hud.dockTooFast': 'СБРОСЬ СКОРОСТЬ ДО {speed} М/С',
   'hud.dockHint': 'L — АВТОСТЫКОВКА · ПРИЧАЛ {range}',
+  'hud.orbitExit': 'ВЫХОД НА ОРБИТУ',
   'hud.bonVoyage': 'ДОБРОГО ПУТИ!',
   'hud.noData': 'НЕТ ДАННЫХ',
 
@@ -334,6 +335,7 @@ export const RU = {
   'locator.kind.planet': 'планета',
   'locator.kind.moon': 'луна',
   'locator.kind.station': 'станция',
+  'locator.kind.blackhole': 'чёрная дыра',
 
   // ─── Люди: реестр знакомых ───────────────────────────────────────────────────
   'people.title': 'ЛЮДИ',

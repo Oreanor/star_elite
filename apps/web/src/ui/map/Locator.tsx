@@ -47,6 +47,7 @@ function shipColor(ship: ShipEntity, world: World): string {
 
 function bodyColor(body: BodyEntity): string {
   if (body.kind === 'star') return UI.STAR
+  if (body.kind === 'blackhole') return '#5a2868'
   if (body.kind === 'station') return UI.STATION
   return UI.PRIMARY
 }
@@ -104,7 +105,7 @@ function blips(world: World): Blip[] {
       ...d,
       color: bodyColor(body),
       shape: body.kind === 'station' ? 'diamond' : 'round',
-      size: body.kind === 'star' ? 11 : 7,
+      size: body.kind === 'star' || body.kind === 'blackhole' ? 11 : 7,
       ring: body.id === world.navTargetId,
       title: properName(body.name),
       subtitle: t(`locator.kind.${body.kind}` as 'locator.kind.planet'),

@@ -1,11 +1,15 @@
 import { createRoot } from 'react-dom/client'
 import { App } from './app/App'
+import { initWorldClock } from './app/net/worldClock'
 import { preloadPortraits } from './ui/portrait'
 import { preloadTitleAssets } from './ui/preload'
 import './styles.css'
 
 const root = document.getElementById('root')
 if (!root) throw new Error('нет #root')
+
+// Общий игровой календарь: якорь в sim, онлайн — смещение Firebase Server Time.
+initWorldClock()
 
 // Прогреваем листы портретов сразу: все лица в игре — клетки этих 24 файлов,
 // нейтральные первыми. К моменту первого портрета они уже в кэше браузера.

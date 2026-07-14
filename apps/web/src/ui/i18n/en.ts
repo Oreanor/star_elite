@@ -136,8 +136,8 @@ export const EN: Record<keyof typeof RU, string> = {
   'hud.massLock': 'MASS LOCK',
   'hud.cruise': 'CRUISE ×{factor}',
   'hud.gravityBrake': 'GRAVITY BRAKE',
-  'hud.autofight': 'AUTOPILOT · P — TAKE OVER',
-  'hud.autopilot': 'AUTOPILOT · J — TAKE OVER',
+  'hud.autofightPlate': 'AUTO COMBAT',
+  'hud.autopilotPlate': 'AUTOPILOT',
   'hud.cloak': 'CLOAKED · X — DROP',
   'hud.missileWarn': 'MISSILE · {seconds} S · E — ECM',
   'hud.hail': '◄ {name} HAILS · T — ANSWER',
@@ -151,6 +151,7 @@ export const EN: Record<keyof typeof RU, string> = {
   'hud.dockReady': 'PAD CLEAR · L — DOCK',
   'hud.dockTooFast': 'SLOW DOWN TO {speed} M/S',
   'hud.dockHint': 'L — AUTODOCK · PAD {range}',
+  'hud.orbitExit': 'ENTERING ORBIT',
   'hud.bonVoyage': 'SAFE TRAVELS!',
   'hud.noData': 'NO DATA',
 
@@ -314,6 +315,7 @@ export const EN: Record<keyof typeof RU, string> = {
   'locator.kind.planet': 'planet',
   'locator.kind.moon': 'moon',
   'locator.kind.station': 'station',
+  'locator.kind.blackhole': 'black hole',
 
   // People: contacts registry.
   'people.title': 'PEOPLE',

@@ -1,5 +1,6 @@
 import { ARRIVAL } from '../../config/galaxy'
 import type { Rng } from '../../core/math'
+import { layoutSystemBodies } from '../world/factory'
 import type { SystemDef } from '../world/system'
 
 /**
@@ -81,27 +82,41 @@ function standoff(from: Point3, radius: number, star: Point3, gap: number): Poin
  * и минута пути должна остаться до него, а не до планеты, вокруг которой он висит.
  */
 export function arrivalPoint(def: SystemDef, arrival: Arrival | null): Point3 {
+  return arrivalPointAt(def, arrival, 0)
+}
+
+/**
+ * Точка выхода с учётом орбит на момент `calendarTime`.
+ * Два клиента с одними часами выходят к одним и тем же телам.
+ */
+export function arrivalPointAt(def: SystemDef, arrival: Arrival | null, calendarTime: number): Point3 {
   if (!arrival) return def.playerStart
+
+  const bodies = layoutSystemBodies(def, calendarTime)
+  const star = bodies.find((b) => b.kind === 'star')
+  if (!star) return def.playerStart
+  const starPos: Point3 = [star.pos.x, star.pos.y, star.pos.z]
 
   if (arrival.kind === 'point') {
     const bounds = arrivalBounds(def)
     if (!bounds) return def.playerStart
     const orbit = Math.min(bounds.max, Math.max(bounds.min, arrival.orbit))
     return [
-      def.star.pos[0] + orbit * Math.cos(arrival.angle),
-      def.star.pos[1],
-      def.star.pos[2] + orbit * Math.sin(arrival.angle),
+      starPos[0] + orbit * Math.cos(arrival.angle),
+      starPos[1],
+      starPos[2] + orbit * Math.sin(arrival.angle),
     ]
   }
 
-  const planet = def.planets[arrival.planet]
+  const planets = bodies.filter((b) => b.kind === 'planet')
+  const planet = planets[arrival.planet]
   if (!planet) return def.playerStart
 
-  const station = def.station
+  const station = bodies.find((b) => b.kind === 'station')
   if (station && stationSeat(def) === arrival.planet) {
-    return standoff(station.pos, station.radius, def.star.pos, ARRIVAL.STANDOFF)
+    return standoff([station.pos.x, station.pos.y, station.pos.z], station.radius, starPos, ARRIVAL.STANDOFF)
   }
-  return standoff(planet.pos, planet.radius, def.star.pos, ARRIVAL.STANDOFF)
+  return standoff([planet.pos.x, planet.pos.y, planet.pos.z], planet.radius, starPos, ARRIVAL.STANDOFF)
 }
 
 /**

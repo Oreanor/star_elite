@@ -4,6 +4,7 @@ import { GRAVITY } from '../../config/bodies'
 import { GALAXY } from '../../config/galaxy'
 import { generateGalaxy } from '../galaxy/generate'
 import { systemDefFor } from '../galaxy/jump'
+import { SHARED_START_INDEX } from '../galaxy/sharedStart'
 import { createWorld } from './index'
 import type { BodyEntity, World } from './entities'
 import { stepOrbits } from './orbits'
@@ -17,17 +18,17 @@ import { stepOrbits } from './orbits'
  * Барицентр обязан стоять неподвижно, иначе вся система уползёт вслед за парой.
  */
 
-/** Первая двойная галактики. Их около четверти — найдётся быстро. */
+/** Первая двойная с двумя звёздами (не онлайн-старт Люрилар — там BH вместо B). */
 function someBinary(): { index: number; world: World; stars: [BodyEntity, BodyEntity] } {
   const galaxy = generateGalaxy(GALAXY.SEED)
-  const sys = galaxy.find((s) => s.companion)
-  if (!sys) throw new Error('в галактике нет ни одной двойной')
-
-  const def = systemDefFor(sys.index, GALAXY.SEED)
-  const world = createWorld({ ...def, patrols: [], belt: null })
-  const stars = world.bodies.filter((b) => b.kind === 'star')
-  if (stars.length !== 2) throw new Error('у двойной не две звезды')
-  return { index: sys.index, world, stars: [stars[0]!, stars[1]!] }
+  for (const sys of galaxy) {
+    if (!sys.companion || sys.index === SHARED_START_INDEX) continue
+    const def = systemDefFor(sys.index, GALAXY.SEED)
+    const world = createWorld({ ...def, patrols: [], belt: null })
+    const stars = world.bodies.filter((b) => b.kind === 'star')
+    if (stars.length === 2) return { index: sys.index, world, stars: [stars[0]!, stars[1]!] }
+  }
+  throw new Error('в галактике нет двойной из двух звёзд')
 }
 
 const starMass = (radius: number): number => GRAVITY.STAR_DENSITY * (4 / 3) * Math.PI * radius ** 3

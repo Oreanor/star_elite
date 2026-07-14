@@ -296,6 +296,7 @@ export function Bodies() {
       {bodies.map((body) => {
         if (isDecor(body)) return null
         if (body.kind === 'star') return <Star key={body.id} body={body} />
+        if (body.kind === 'blackhole') return null
         // Крупная луна рисуется тем же компонентом, что и планета, и это не лень:
         // она и ЕСТЬ маленькая скалистая планета. Ни воздуха, ни огней у неё не
         // будет — не потому, что для луны написана отдельная ветка, а потому, что

@@ -17,6 +17,7 @@ function withAcquaintance(): { world: World; ship: ShipEntity } {
     belt: null,
     patrols: [{ count: 1, at: [0, 0, -200], spread: 0, faction: 'neutral', name: 'Кто-то' }],
   })
+  world.calendarTime = 42_000
   const ship = world.ships[0]!
   rememberPilot(world, ship) // теперь у борта есть запись — журнал есть куда писать
   return { world, ship }
@@ -33,7 +34,7 @@ describe('шина команд боту', () => {
     expect(out?.line).toContain('5000')
     const rec = world.acquaintances.find((a) => a.id === ship.acquaintanceId)!
     const deal = rec.history.find((e) => e.kind === 'deal')
-    expect(deal).toEqual({ kind: 'deal', at: world.time, toPlayer: true, credits: 5000, commodityName: null, units: 0 })
+    expect(deal).toEqual({ kind: 'deal', at: world.calendarTime, toPlayer: true, credits: 5000, commodityName: null, units: 0 })
   })
 
   it('пустая сделка миром не двигает и в журнал не пишется', () => {
@@ -55,7 +56,7 @@ describe('шина команд боту', () => {
 
     const rec = world.acquaintances.find((a) => a.id === ship.acquaintanceId)!
     const note = rec.history.find((e) => e.kind === 'note')
-    expect(note).toEqual({ kind: 'note', at: world.time, text: 'торгует рудой в системе Лейв' })
+    expect(note).toEqual({ kind: 'note', at: world.calendarTime, text: 'торгует рудой в системе Лейв' })
   })
 
   it('неизвестная команда — молча null, а не падение (старый домен, новая команда по сети)', () => {

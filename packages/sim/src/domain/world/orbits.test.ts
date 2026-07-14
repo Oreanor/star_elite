@@ -2,6 +2,7 @@ import { Vector3 } from 'three'
 import { describe, expect, it } from 'vitest'
 import { CRUISE } from '../../config/cruise'
 import { GALAXY } from '../../config/galaxy'
+import { TIME } from '../../config/time'
 import { updateCruise } from '../cruise/drive'
 import { systemDefFor } from '../galaxy/jump'
 import { createWorld, STARTER_SYSTEM } from './index'
@@ -27,9 +28,9 @@ function parentOf(world: World, moon: BodyEntity): BodyEntity {
   return parent
 }
 
-/** Сколько секунд «промотать», не двигая ничего, кроме времени. */
-function wait(world: World, seconds: number): void {
-  world.time += seconds
+/** Промотать орбитное время на `orbitSeconds` (физические ω·t), затем пересчитать. */
+function wait(world: World, orbitSeconds: number): void {
+  world.calendarTime += orbitSeconds / TIME.SCALE
   stepOrbits(world)
 }
 
@@ -59,11 +60,13 @@ describe('спутники', () => {
   it('обращаются: за четверть периода уходят с прежнего места', () => {
     const world = quiet()
     const moon = moons(world)[0]!
-    const before = moon.pos.clone()
+    const planet = parentOf(world, moon)
+    const before = moon.pos.clone().sub(planet.pos)
 
-    // Четверть оборота: угол ровно π/2 — луна обязана уйти на радиус·√2.
+    // Четверть оборота: угол ровно π/2 — луна обязана уйти на радиус·√2 от планеты.
     wait(world, Math.PI / 2 / moon.orbit!.rate)
-    expect(moon.pos.distanceTo(before)).toBeCloseTo(moon.orbit!.radius * Math.SQRT2, -4)
+    const after = moon.pos.clone().sub(planet.pos)
+    expect(before.distanceTo(after)).toBeCloseTo(moon.orbit!.radius * Math.SQRT2, -4)
   })
 
   /**

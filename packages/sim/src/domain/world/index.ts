@@ -18,7 +18,7 @@ export {
   type WarpArrivalPortal,
   type World,
 } from './entities'
-export { enterSystem, createWorld, makeShip, refreshSpec, startAtStation, applyPilotProfile } from './factory'
+export { enterSystem, createWorld, layoutSystemBodies, makeShip, refreshSpec, startAtStation, applyPilotProfile } from './factory'
 export { createIdSource, type IdSource } from './ids'
 export {
   type Persona,
