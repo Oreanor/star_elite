@@ -12,10 +12,11 @@ import type { ShipControls } from '../flight/types'
 import type { ShipEntity, World } from '../world/entities'
 import { breakWaypoint, leadPoint, patrolWaypoint } from './maneuvers'
 import { wantsToFlee } from './morale'
-import { jumpOut } from '../world/warp'
+import { beginWarpDeparture } from '../world/warp'
 import { isEngageable } from '../combat/engage'
 import { isHostileTo, selectTarget } from './targeting'
 import { stepTasks } from './tasks'
+import { advanceContactPlan, acquaintanceOf, flyContactPlan } from '../world/plan'
 import type { AIMode, AIState } from './types'
 
 /**
@@ -80,6 +81,19 @@ export const aiController: Controller = {
       return
     }
 
+    if (e.warpEmerging || e.warpDeparting) {
+      e.controls.throttle = 0
+      e.controls.pitch = 0
+      e.controls.yaw = 0
+      e.controls.roll = 0
+      e.controls.rudder = 0
+      e.controls.flightAssist = true
+      ai.wantsFire = false
+      ai.wantsMissile = false
+      ai.wantsEcm = false
+      return
+    }
+
     // Приказ «стой тут»: держит место и в бой не лезет, пока игрок отлучился.
     // В отличие от сна — это его собственная воля по приказу: гасит снос ретро-тягой,
     // чтобы «стоять» значило стоять, а не дрейфовать по инерции.
@@ -104,6 +118,15 @@ export const aiController: Controller = {
     if (ai.command === 'keepBack') {
       keepDistance(e, world)
       return
+    }
+
+    // План знакомого (док → покупка → вылет → эскорт): приоритет над поручениями.
+    if (e.acquaintanceId != null) {
+      const rec = acquaintanceOf(world, e)
+      if (rec?.plan.queue.length) {
+        if (flyContactPlan(e, world)) return
+        if (e.ai?.dock === 'berthed') advanceContactPlan(world, e)
+      }
     }
 
     // Поручение из очереди задач (сбор груза, встреча, возврат): бот уходит его исполнять.
@@ -270,7 +293,7 @@ function maybeWarpOut(e: ShipEntity, ai: AIState, world: World, rethink: boolean
     ai.wantsFire = false
     ai.wantsMissile = false
     ai.wantsEcm = false
-    if (ai.warpTimer <= 0) jumpOut(world, e)
+    if (ai.warpTimer <= 0) beginWarpDeparture(world, e)
     return true
   }
 

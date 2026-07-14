@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { makeRng } from '../../core/math'
 import { CONTACTS } from '../../config/contacts'
 import { createWorld, makeShip, STARTER_SYSTEM, type Acquaintance, type World } from '../world'
+import { emptyPlan } from '../world/contactPlan'
 import { driftContacts, contactWhereabouts } from './contacts'
 import { placeSystem, distanceLy } from './shape'
 
@@ -29,6 +30,9 @@ function withContact(at: number, over: Partial<Acquaintance> = {}): { world: Wor
     relationship: 'neutral',
     history: [{ kind: 'met', at: 0 }],
     alive: true,
+    credits: 50_000,
+    savedLoadout: null,
+    plan: emptyPlan(),
     ...over,
   }
   world.acquaintances.push(rec)

@@ -79,16 +79,14 @@ describe('класс корпуса ограничивает железо', () =
 
 /**
  * Аукс-слот делят РАЗНЫЕ виды (маскировка/ECM/бомба/…), и занятость считается по всей
- * КАТЕГОРИИ, а не по виду. Иначе примерка ошибётся: бомба «не заметит» клоак и ECM,
- * занявшие обе аукс-ячейки, и решит, что место есть. «Аврора» — два аукс-слота.
+ * КАТЕГОРИИ, а не по виду. Иначе примерка ошибётся: бомба «не заметит» клоак,
+ * занявшую аукс-ячейку, и решит, что место есть. У любого корпуса — один аукс-слот.
  */
 describe('аукс-слот: занятость по категории', () => {
-  it('заполненный аукс (клоак + ECM) не пускает третье устройство', () => {
-    const one = createLoadout(AURORA_MK3, [CLOAK_FIELD], []) // 1 из 2 аукс занят
-    expect(canInstallInternal(one, ECM_UNIT)).toBeNull() // второе устройство — влезает
-    const full = createLoadout(AURORA_MK3, [CLOAK_FIELD, ECM_UNIT], []) // оба аукс заняты
-    // Бомба — иного вида, но той же КАТЕГОРИИ: свободных ячеек нет.
-    expect(canInstallInternal(full, BOMB_UNIT)).toBe('no-free-slot')
+  it('занятый аукс не пускает второе устройство той же категории', () => {
+    const one = createLoadout(AURORA_MK3, [CLOAK_FIELD], [])
+    expect(canInstallInternal(one, ECM_UNIT)).toBe('no-free-slot')
+    expect(canInstallInternal(one, BOMB_UNIT)).toBe('no-free-slot')
   })
 })
 

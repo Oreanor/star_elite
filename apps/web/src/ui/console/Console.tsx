@@ -1,16 +1,13 @@
-import { useEffect, useReducer } from 'react'
+import { useEffect, useReducer, type ReactNode } from 'react'
 import {
   MIELOPHONE,
+  contactTravelEta,
   contactWhereabouts,
-  findChassis,
   findStation,
   generateSystem,
-  holdContact,
   livingContacts,
   localSettlement,
-  roamContact,
-  sendContactTo,
-  stepDockedBerth,
+  stepDockTraffic,
   type BodyEntity,
   type Contact,
   type ShipEntity,
@@ -61,24 +58,21 @@ export function Console({
   onTab,
   onClose,
   onTalk,
-  onLocate,
-  onRoute,
+  onLocate: _onLocate,
+  onRoute: _onRoute,
   onChat,
+  peopleRefresh = 0,
 }: {
   world: World
   docked: boolean
   tab: ConsoleTab
   onTab: (tab: ConsoleTab) => void
-  /** У причала — отчаливание, в полёте — просто закрыть консоль. */
   onClose: () => void
-  /** Открыть канал с пристыкованным пилотом (клик по плашке дока). */
   onTalk: (shipId: number) => void
-  /** Навести локатор на борт и (в полёте) закрыть консоль, чтобы стрелка вела к нему. */
-  onLocate: (shipId: number) => void
-  /** Проложить курс к системе: пометить её целью прыжка и открыть карту галактики. */
-  onRoute: (systemIndex: number) => void
-  /** Открыть чат с живым игроком (кнопка на плашке в блоке В СЕТИ). */
+  onLocate?: (shipId: number) => void
+  onRoute?: (systemIndex: number) => void
   onChat: (player: OnlinePlayer) => void
+  peopleRefresh?: number
 }) {
   useLang()
   const [, bump] = useReducer((n: number) => n + 1, 0)
@@ -89,7 +83,7 @@ export function Console({
     if (!docked) return
     const dt = 2 // с реального времени между попытками
     const id = window.setInterval(() => {
-      if (stepDockedBerth(world, dt)) bump()
+      if (stepDockTraffic(world, dt).changed) bump()
     }, dt * 1000)
     return () => window.clearInterval(id)
   }, [docked, world])
@@ -191,7 +185,7 @@ export function Console({
           {tab === 'shop' && docked && <Market world={world} onChange={bump} />}
           {tab === 'cargo' && <Hold world={world} onChange={bump} atStation={docked} />}
           {tab === 'people' && (
-            <PeopleTab world={world} docked={docked} onTalk={onTalk} onLocate={onLocate} onRoute={onRoute} onChat={onChat} onChange={bump} />
+            <PeopleTab key={peopleRefresh} world={world} docked={docked} onTalk={onTalk} onChat={onChat} />
           )}
           {/* КАРТА — три вида под одной вкладкой: ряд переключателей и выбранный вид. */}
           {isMapView(tab) && (() => {
@@ -246,11 +240,58 @@ interface Fact {
   value: string
 }
 
-/** Цвет отношения знакомого: тёплый — зелёный, враждебный — красный, ровный — тускло-голубой. */
-const STANCE_COLOR: Record<Contact['record']['relationship'], string> = {
-  friendly: '#6fe08a',
-  neutral: DIM,
-  hostile: '#ff6b6b',
+/** Единая плашка человека: портрет слева, справа имя/роль/деталь и кнопка «Связаться». */
+function PersonPlaque({
+  name,
+  roleLine,
+  detailLine,
+  portrait,
+  onTalk,
+}: {
+  name: string
+  roleLine?: string
+  detailLine?: string
+  portrait: ReactNode
+  onTalk?: () => void
+}) {
+  return (
+    <div className="flex items-center gap-3 border px-3 py-2" style={{ borderColor: DIM, minWidth: '15rem' }}>
+      {portrait}
+      <div className="min-w-0 flex-1 text-left">
+        <div className="truncate text-sm tracking-widest" style={{ color: ACCENT }}>
+          {name}
+        </div>
+        {roleLine ? (
+          <div className="truncate text-xs tracking-widest" style={{ color: DIM }}>
+            {roleLine}
+          </div>
+        ) : null}
+        {detailLine ? (
+          <div className="truncate text-xs" style={{ color: DIM }}>
+            {detailLine}
+          </div>
+        ) : null}
+        {onTalk ? (
+          <div className="mt-1">
+            <Button small onClick={onTalk}>
+              {t('people.talk')}
+            </Button>
+          </div>
+        ) : null}
+      </div>
+    </div>
+  )
+}
+
+/** Знакомые, чей борт уже в «Пристыкованы», ниже не повторяем. */
+function contactsExceptDocked(contacts: Contact[], dockedHere: ShipEntity[]): Contact[] {
+  const shipIds = new Set(dockedHere.map((s) => s.id))
+  const recordIds = new Set(dockedHere.map((s) => s.acquaintanceId).filter((id): id is number => id != null))
+  return contacts.filter((c) => {
+    if (c.ship && shipIds.has(c.ship.id)) return false
+    if (recordIds.has(c.record.id)) return false
+    return true
+  })
 }
 
 /**
@@ -264,23 +305,15 @@ function PeopleTab({
   world,
   docked,
   onTalk,
-  onLocate,
-  onRoute,
   onChat,
-  onChange,
 }: {
   world: World
   docked: boolean
   onTalk: (shipId: number) => void
-  onLocate: (shipId: number) => void
-  onRoute: (systemIndex: number) => void
   onChat: (player: OnlinePlayer) => void
-  onChange: () => void
 }) {
-  const contacts = livingContacts(world)
-  // Кто стоит у ЭТОГО причала прямо сейчас — из манифеста мира, но без себя (первый
-  // в `dockedPilots` — игрок). Только у причала: в полёте рядом никто не пристыкован.
   const dockedHere = docked ? dockedPilots(world).slice(1).filter((s) => s.alive) : []
+  const contacts = contactsExceptDocked(livingContacts(world), dockedHere)
 
   return (
     <div>
@@ -321,18 +354,9 @@ function PeopleTab({
           <p className="mt-1 text-xs tracking-widest" style={{ color: DIM }}>
             {t('people.subtitle')}
           </p>
-          <div className="mt-3 flex flex-col gap-3">
+          <div className="mt-3 flex flex-wrap gap-3">
             {contacts.map((c) => (
-              <ContactCard
-                key={c.record.id}
-                world={world}
-                contact={c}
-                docked={docked}
-                onTalk={onTalk}
-                onLocate={onLocate}
-                onRoute={onRoute}
-                onChange={onChange}
-              />
+              <ContactPlaque key={c.record.id} world={world} contact={c} onTalk={onTalk} />
             ))}
           </div>
         </div>
@@ -360,42 +384,17 @@ function OnlineList({ onChat }: { onChat: (player: OnlinePlayer) => void }) {
           const where = p.place
             ? t('people.online.dock', { place: p.place, sys: p.systemName })
             : t('people.online.sys', { sys: p.systemName })
-          // Та же плашка, что у пилотов у причала: портрет из вида+лица (пришли в presence),
-          // имя, род занятий; ниже — где он.
           return (
-            <div
+            <PersonPlaque
               key={p.uid}
-              className="flex items-center gap-3 border px-3 py-2"
-              style={{ borderColor: DIM, minWidth: '15rem' }}
-            >
-              {/* Клик по портрету = «СВЯЗАТЬСЯ»: то же действие, что кнопка ниже. */}
-              <PilotPortrait
-                species={p.species}
-                face={p.face}
-                muted={p.paused}
-                size={96}
-                onClick={() => onChat(p)}
-                title={t('people.talk')}
-              />
-              <div className="min-w-0 text-left">
-                <div className="truncate text-sm tracking-widest" style={{ color: ACCENT }}>
-                  {p.name}
-                </div>
-                <div className="truncate text-xs tracking-widest" style={{ color: DIM }}>
-                  {professionName(p.profession).toUpperCase()}
-                </div>
-                <div className="truncate text-xs" style={{ color: DIM }}>
-                  {/* Отошёл (пауза) — так и пишем: в игре его нет, локатор его не найдёт. */}
-                  {p.paused ? t('people.online.paused') : where}
-                </div>
-                <div className="mt-1">
-                  {/* Тот же глагол, что у знакомых-ботов (СВЯЗАТЬСЯ): люди и боты равноправны. */}
-                  <Button small onClick={() => onChat(p)}>
-                    {t('people.talk')}
-                  </Button>
-                </div>
-              </div>
-            </div>
+              name={p.name}
+              roleLine={professionName(p.profession).toUpperCase()}
+              detailLine={p.paused ? t('people.online.paused') : where}
+              portrait={
+                <PilotPortrait species={p.species} face={p.face} muted={p.paused} size={96} />
+              }
+              onTalk={() => onChat(p)}
+            />
           )
         })}
       </div>
@@ -403,30 +402,21 @@ function OnlineList({ onChat }: { onChat: (player: OnlinePlayer) => void }) {
   )
 }
 
-/** Одна строка реестра: портрет, имя, отношение, где он — и действия по обстоятельствам. */
-function ContactCard({
+/** Знакомый — та же плашка, что у причала; связь только если он рядом. */
+function ContactPlaque({
   world,
   contact,
-  docked,
   onTalk,
-  onLocate,
-  onRoute,
-  onChange,
 }: {
   world: World
   contact: Contact
-  docked: boolean
   onTalk: (shipId: number) => void
-  onLocate: (shipId: number) => void
-  onRoute: (systemIndex: number) => void
-  onChange: () => void
 }) {
   const { record, ship } = contact
   const where = contactWhereabouts(world, contact)
   const place = where.place ? properName(where.place) : null
   const system = properName(where.systemName)
-
-  // Где он: присутствует — «рядом · тело · Nкм»; отсутствует — «система · у тела».
+  const eta = !where.present ? contactTravelEta(record, world.galaxySeed) : null
   const locationLine = where.present
     ? [
         place ? (where.docked ? t('people.at.dock', { place }) : t('people.at.near', { place })) : t('people.at.here'),
@@ -434,94 +424,55 @@ function ContactCard({
       ]
         .filter(Boolean)
         .join(' · ')
-    : [system, place ? (where.docked ? t('people.at.dock', { place }) : t('people.at.near', { place })) : null]
+    : [
+        system,
+        place ? (where.docked ? t('people.at.dock', { place }) : t('people.at.near', { place })) : null,
+        record.boundFor != null
+          ? t('people.bound', {
+              system: properName(generateSystem(record.boundFor, world.galaxySeed).name),
+            })
+          : null,
+        eta != null ? t('people.eta', { hops: eta }) : null,
+      ]
         .filter(Boolean)
         .join(' · ')
 
-  // Куда направляется, если ему задан курс (обещал/послали) и он ещё не дома.
-  const bound = record.boundFor != null ? properName(generateSystem(record.boundFor, world.galaxySeed).name) : null
+  const roleLine = ship
+    ? (ship.persona.profession
+        ? professionName(ship.persona.profession)
+        : occupationName(ship.originKind, ship.faction)
+      ).toUpperCase()
+    : ''
+
+  const detailLine = ship ? chassisName(ship.loadout.chassis.name) : locationLine
 
   return (
-    <div
-      className="flex items-center gap-4 border px-4 py-3"
-      style={{ borderColor: DIM, background: 'rgba(127,214,255,0.03)' }}
-    >
-      {ship ? (
-        // Клик по портрету = «СВЯЗАТЬСЯ», но только когда собеседник рядом (иначе связи нет —
-        // отсутствующего сперва зовут или прокладывают курс кнопками справа).
-        <PilotPortrait
-          ship={ship}
-          world={world}
-          size={72}
-          onClick={where.present ? () => onTalk(ship.id) : undefined}
-          title={t('people.talk')}
-        />
-      ) : (
-        <PilotPortrait name={record.name} size={72} />
-      )}
-
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2">
-          <span
-            className="inline-block h-2 w-2 rounded-full"
-            style={{ background: STANCE_COLOR[record.relationship] }}
-            aria-hidden
-          />
-          <span className="truncate text-sm tracking-widest" style={{ color: ACCENT }}>
-            {record.name.toUpperCase()}
-          </span>
-        </div>
-        <div className="mt-1 truncate text-xs" style={{ color: DIM }}>
-          {chassisName(findChassis(record.chassisId)?.name ?? '')} · {locationLine}
-        </div>
-        {bound && (
-          <div className="mt-0.5 truncate text-xs" style={{ color: '#7fd6ff' }}>
-            {t('people.bound', { system: bound })}
-          </div>
-        )}
-      </div>
-
-      <div className="flex shrink-0 flex-wrap items-center justify-end gap-2" style={{ maxWidth: '20rem' }}>
-        {where.present && ship ? (
-          <>
-            <Button small onClick={() => onTalk(ship.id)}>
-              {t('people.talk')}
-            </Button>
-            {!docked && (
-              <Button small onClick={() => onLocate(ship.id)}>
-                {t('people.locate')}
-              </Button>
-            )}
-          </>
+    <PersonPlaque
+      name={record.name}
+      roleLine={roleLine}
+      detailLine={detailLine}
+      portrait={
+        ship ? (
+          <PilotPortrait ship={ship} world={world} emotion="neutral" size={96} />
         ) : (
-          <>
-            <Button
-              small
-              onClick={() => {
-                sendContactTo(record, world.systemIndex)
-                onChange()
-              }}
-            >
-              {t('people.summon')}
-            </Button>
-            <Button small onClick={() => onRoute(record.systemIndex)}>
-              {t('people.route')}
-            </Button>
-          </>
-        )}
-        {/* «Оставайся / живи как знаешь» — приколоть на месте или отпустить бродить. */}
-        <Button
-          small
-          onClick={() => {
-            if (record.roaming) holdContact(record)
-            else roamContact(record)
-            onChange()
-          }}
-        >
-          {record.roaming ? t('people.hold') : t('people.roam')}
-        </Button>
-      </div>
-    </div>
+          <PilotPortrait name={record.name} size={96} />
+        )
+      }
+      onTalk={where.present && ship ? () => onTalk(ship.id) : undefined}
+    />
+  )
+}
+
+/** Плашка пилота у причала. */
+function DockPlaque({ ship, you, onTalk }: { ship: ShipEntity; you: boolean; onTalk: (id: number) => void }) {
+  return (
+    <PersonPlaque
+      name={ship.pilotName}
+      roleLine={(you ? professionName(ship.persona.profession) : occupationName(ship.originKind, ship.faction)).toUpperCase()}
+      detailLine={chassisName(ship.loadout.chassis.name)}
+      portrait={<PilotPortrait ship={ship} emotion="neutral" size={96} />}
+      onTalk={you ? undefined : () => onTalk(ship.id)}
+    />
   )
 }
 
@@ -584,54 +535,6 @@ const FACT_COLUMNS: Column<Fact>[] = [
 function dockedPilots(world: World): ShipEntity[] {
   const here = world.ships.filter((s) => s.alive && (s.ai?.dock === 'berthed' || s.ai?.dock === 'inbound'))
   return [world.player, ...here]
-}
-
-/**
- * Плашка пилота у причала: портрет, имя и модель корпуса. Чужая плашка — кнопка:
- * клик открывает канал разговора с этим пилотом (как в космосе). Своя (ТЫ) — просто
- * карточка. Имя берём ИСТИННОЕ (`pilotName`): у причала манифест, тут все с именами,
- * даже с кем ещё не знаком в полёте.
- */
-function DockPlaque({ ship, you, onTalk }: { ship: ShipEntity; you: boolean; onTalk: (id: number) => void }) {
-  const inner = (
-    <>
-      {/* У причала пилот спокоен — портрет нейтральный. */}
-      <PilotPortrait ship={ship} emotion="neutral" size={96} />
-      <div className="min-w-0 text-left">
-        {/* Своё имя, а не «ТЫ»: в манифесте это ты по имени, как и все прочие. Свою
-            плашку и так видно — она без кнопки разговора. */}
-        <div className="truncate text-sm tracking-widest" style={{ color: ACCENT }}>
-          {ship.pilotName}
-        </div>
-        {/* Род занятий — сразу в манифесте: с кем имеешь дело, видно до разговора. У себя
-            это ВЫБРАННАЯ профессия, у прочих — тип борта (`originKind`). */}
-        <div className="truncate text-xs tracking-widest" style={{ color: DIM }}>
-          {(you ? professionName(ship.persona.profession) : occupationName(ship.originKind, ship.faction)).toUpperCase()}
-        </div>
-        <div className="truncate text-xs" style={{ color: DIM }}>
-          {chassisName(ship.loadout.chassis.name)}
-        </div>
-      </div>
-    </>
-  )
-  const box = 'flex items-center gap-3 border px-3 py-2'
-  if (you) {
-    return (
-      <div className={box} style={{ borderColor: DIM, minWidth: '15rem' }}>
-        {inner}
-      </div>
-    )
-  }
-  return (
-    <button
-      type="button"
-      onClick={() => onTalk(ship.id)}
-      className={`${box} cursor-pointer transition-colors hover:bg-[#7fd6ff]/10`}
-      style={{ borderColor: DIM, minWidth: '15rem' }}
-    >
-      {inner}
-    </button>
-  )
 }
 
 /**

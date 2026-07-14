@@ -1,46 +1,33 @@
 import { HUD_SCALE } from '../../render/config'
-import { undockProgress } from '../../app/control/undockFx'
+import {
+  MASK_START,
+  RING_COUNT,
+  RING_INTERVAL,
+  UNDOCK_TOTAL,
+  undockTime,
+} from '../../app/control/undockFx'
 import { HUD_COLORS } from './draw'
 
 /**
- * Тоннель вылета в растре HUD — чёрный кадр с растущей круглой прорезью на живой
- * космос и два голубых кольца, летящих перед ней. Всё в экранных пикселях, а не в
- * 3D: маска обязана лечь ровным кругом поверх кадра, а не искажаться перспективой.
- *
- * Прорезь режется `destination-out` — она делает пиксель ПРОЗРАЧНЫМ, и сквозь HUD-холст
- * проступает 3D-сцена под ним. Кривые «медленно → быстро» дают ощущение выброса из
- * тёмного тоннеля; кольца стартуют со сдвигом — отсюда ритм «вжуу-вжуу-вжууух».
+ * Тоннель вылета: чёрный кадр, четыре импульсных кольца каждые 0.3 с, на пятом —
+ * прорезь на космос с голубым ободом (как раньше). Без общих кривых и догонялок.
  */
 
 const S = HUD_SCALE
 const TAU = Math.PI * 2
 
 const clamp01 = (x: number): number => (x < 0 ? 0 : x > 1 ? 1 : x)
-/** Ускоряющаяся кривая: медленно у нуля, круто к единице. */
 const easeIn = (u: number, p: number): number => Math.pow(clamp01(u), p)
 
-/** Сколько кольцо проходит свой путь. Больше — медленнее (было 0.5, +50% = плавнее). */
-const RING_SPAN = 0.75
-/** Старт второго кольца позже первого — два раздельных «вжуу». */
-const RING_DELAYS = [0, 0.14] as const
-
-/** Радиус кольца как доля полного, со своим стартом. Ускоряется — отсюда «вж-ж-жух». */
-function ringFrac(p: number, delay: number): number {
-  return easeIn((p - delay) / RING_SPAN, 1.9)
-}
-
-/** Яркость кольца: резкий проблеск на старте, плавный спад по мере ухода за край. */
-function ringAlpha(p: number, delay: number): number {
-  const u = clamp01((p - delay) / RING_SPAN)
-  if (u <= 0 || u >= 1) return 0
-  return clamp01(u * 8) * Math.pow(1 - u, 1.5)
-}
+/** Маска: медленно → быстро, как было. */
+const MASK_EASE = 2.4
+/** Импульсное кольцо растёт за этот интервал после старта. */
+const PULSE_SPAN = RING_INTERVAL
 
 function ring(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: number, alpha: number): void {
   if (alpha <= 0 || r <= 0) return
   ctx.save()
   ctx.globalCompositeOperation = 'lighter'
-  // Широкий тусклый ореол под тонким ярким ядром — кольцо «светится», а не просто линия.
   ctx.globalAlpha = alpha * 0.5
   ctx.strokeStyle = HUD_COLORS.PRIMARY
   ctx.lineWidth = 4 * S
@@ -57,37 +44,49 @@ function ring(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: number, 
 }
 
 export function drawUndockTunnel(ctx: CanvasRenderingContext2D, width: number, height: number): void {
-  const p = undockProgress()
-  if (p <= 0) return
+  const t = undockTime()
+  if (t <= 0) return
 
   const cx = width / 2
   const cy = height / 2
   const diag = Math.hypot(width, height)
-  // Полный радиус с запасом за углы (половина диагонали ≈ 0.5·diag): к финалу космос
-  // виден целиком, без чёрных углов.
   const full = diag * 0.6
+  const reach = diag * 0.78
 
-  // ── Маска-тоннель: чёрный кадр, в центре растущая прозрачная прорезь ─────────────
-  const hole = easeIn(p, 2.4) * full
+  // ── Маска: до 1.2 с — сплошной чёрный; с 1.2 с — прорезь на космос ─────────────
+  let hole = 0
+  if (t >= MASK_START) {
+    const maskAge = t - MASK_START
+    const maskDur = UNDOCK_TOTAL - MASK_START
+    hole = easeIn(maskAge / maskDur, MASK_EASE) * full
+  }
+
   ctx.save()
   ctx.globalCompositeOperation = 'source-over'
   ctx.fillStyle = '#000'
   ctx.fillRect(0, 0, width, height)
-  ctx.globalCompositeOperation = 'destination-out'
-  ctx.beginPath()
-  ctx.arc(cx, cy, hole, 0, TAU)
-  ctx.fill()
+  if (hole > 0) {
+    ctx.globalCompositeOperation = 'destination-out'
+    ctx.beginPath()
+    ctx.arc(cx, cy, hole, 0, TAU)
+    ctx.fill()
+  }
   ctx.restore()
 
-  // Обрамление самой прорези: голубое кольцо по её растущему краю — стенка тоннеля светится.
-  ring(ctx, cx, cy, hole, 0.85 * clamp01(p * 8))
-
-  // ── Кольца ПОВЕРХ маски, впереди прорези («с запасом» за край экрана) ────────────
-  const reach = diag * 0.78
-  for (const delay of RING_DELAYS) {
-    ring(ctx, cx, cy, ringFrac(p, delay) * reach, ringAlpha(p, delay))
+  // ── Кольца 1–4: каждые 0.3 с новый импульс ───────────────────────────────────
+  for (let i = 0; i < RING_COUNT - 1; i++) {
+    const start = i * RING_INTERVAL
+    if (t < start) continue
+    const u = clamp01((t - start) / PULSE_SPAN)
+    const alpha = clamp01(u * 10) * Math.pow(1 - u, 1.4)
+    ring(ctx, cx, cy, easeIn(u, MASK_EASE) * reach, alpha)
   }
 
-  // Напутствие «ДОБРОГО ПУТИ!» — не рисуем тут своим текстом: короткие вести идут единым
-  // каналом плашек (`pushWarning('bonVoyage')` при отчаливании), голубым. См. warnings.ts.
+  // ── Кольцо 5: обод прорези (маска на космосе) ──────────────────────────────────
+  if (t >= MASK_START && hole > 0) {
+    const maskAge = t - MASK_START
+    const maskDur = UNDOCK_TOTAL - MASK_START
+    const edgeAlpha = 0.85 * clamp01((maskAge / maskDur) * 8)
+    ring(ctx, cx, cy, hole, edgeAlpha)
+  }
 }

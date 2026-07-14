@@ -16,6 +16,8 @@ function stationImage(techLevel: number): string {
   return `/stations/station${idx}.webp`
 }
 
+export { stationImage }
+
 /** CSS-`background` экрана: снимок станции у причала, тёмное стекло — в полёте. */
 export function screenBackground(world: World, docked: boolean): string {
   return docked

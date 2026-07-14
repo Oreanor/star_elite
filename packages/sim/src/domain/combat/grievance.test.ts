@@ -9,14 +9,6 @@ import type { ShipEntity } from '../world/entities'
 import { DIALOGUE } from '../../config/dialogue'
 import { defuseGrievance, hasGrievance, pendingHail, registerPlayerHit, stepGrievances } from './grievance'
 
-/**
- * Обида. Проверяем не числа, а ПРАВИЛА: случайное попадание не делает врага мгновенно
- * (сначала претензия и вызов по связи), непрерывный чирк лучом не считается очередью
- * попаданий, упорная пальба переводит во враги честно, извинение разряжает без смены
- * отношения, а забытая претензия гаснет сама. Перебалансировка вправе двигать пороги —
- * эти инварианты она ломать не должна.
- */
-
 function neutral(world: World): ShipEntity {
   const s = makeShip(world.ids, 'neutral', 'Торговец', traderLoadout(), new Vector3(0, 0, -600), new Quaternion())
   s.ai = createAIState(s.state.pos, world.rng)
@@ -28,7 +20,6 @@ function emptyWorld(): World {
   return createWorld({ ...STARTER_SYSTEM, belt: null, patrols: [] })
 }
 
-/** Отдельные попадания «с паузой»: время двигаем больше дебаунса, чтобы каждое засчиталось. */
 function pokeApart(world: World, victim: ShipEntity, times: number): void {
   for (let i = 0; i < times; i++) {
     world.time += GRIEVANCE.HIT_DEBOUNCE + 0.1
@@ -37,12 +28,25 @@ function pokeApart(world: World, victim: ShipEntity, times: number): void {
 }
 
 describe('обида', () => {
-  it('одно попадание не делает врагом, но поднимает претензию и вызов по связи', () => {
+  it('первые два попадания прощаются — без претензии и без враждебности', () => {
     const world = emptyWorld()
     const t = neutral(world)
-
     world.time = 10
-    registerPlayerHit(world, t)
+
+    pokeApart(world, t, GRIEVANCE.FORGIVE_HITS)
+
+    expect(t.faction).toBe('neutral')
+    expect(t.ai!.grievance).toBe(0)
+    expect(t.ai!.strikeCount).toBe(GRIEVANCE.FORGIVE_HITS)
+    expect(hasGrievance(t)).toBe(false)
+  })
+
+  it('третье попадание поднимает претензию и вызов по связи', () => {
+    const world = emptyWorld()
+    const t = neutral(world)
+    world.time = 10
+
+    pokeApart(world, t, GRIEVANCE.FORGIVE_HITS + 1)
 
     expect(t.faction).toBe('neutral')
     expect(t.ai!.grievance).toBe(1)
@@ -53,117 +57,133 @@ describe('обида', () => {
     const world = emptyWorld()
     const t = neutral(world)
 
-    // Дробим на кадры в пределах дебаунса: держим луч на борту полсекунды.
     for (let i = 0; i < 20; i++) {
       world.time = 10 + i * 0.02
       registerPlayerHit(world, t)
     }
 
-    expect(t.ai!.grievance).toBe(1)
+    expect(t.ai!.strikeCount).toBe(1)
+    expect(t.ai!.grievance).toBe(0)
     expect(t.faction).toBe('neutral')
   })
 
-  it('упорная пальба (порог попаданий подряд) переводит во враги честно', () => {
+  it('упорная пальба после прощения переводит во враги', () => {
     const world = emptyWorld()
     const t = neutral(world)
     world.time = 10
 
-    pokeApart(world, t, GRIEVANCE.HOSTILE_HITS)
+    pokeApart(world, t, GRIEVANCE.FORGIVE_HITS + GRIEVANCE.HOSTILE_HITS)
 
     expect(t.faction).toBe('hostile')
-    // Стал честным врагом — претензии больше нет, к разговору-примирению не зовём.
     expect(hasGrievance(t)).toBe(false)
   })
 
-  it('на попадание меньше порога враждебности ещё нет', () => {
+  it('извинение разряжает претензию и счёт попаданий', () => {
     const world = emptyWorld()
     const t = neutral(world)
     world.time = 10
-
-    pokeApart(world, t, GRIEVANCE.HOSTILE_HITS - 1)
-
-    expect(t.faction).toBe('neutral')
-    expect(hasGrievance(t)).toBe(true)
-  })
-
-  it('извинение разряжает претензию, но отношения не меняет', () => {
-    const world = emptyWorld()
-    const t = neutral(world)
-    world.time = 10
-    pokeApart(world, t, GRIEVANCE.HOSTILE_HITS - 1)
+    pokeApart(world, t, GRIEVANCE.FORGIVE_HITS + 1)
 
     expect(defuseGrievance(t)).toBe(true)
     expect(t.ai!.grievance).toBe(0)
+    expect(t.ai!.strikeCount).toBe(0)
     expect(t.faction).toBe('neutral')
-    expect(hasGrievance(t)).toBe(false)
-    // Разряжать нечего — второй раз вернёт false.
-    expect(defuseGrievance(t)).toBe(false)
   })
 
-  it('забытая претензия гаснет сама через cooldown', () => {
+  it('забытая серия гаснет сама через cooldown', () => {
     const world = emptyWorld()
     const t = neutral(world)
     world.time = 10
-    registerPlayerHit(world, t)
-    expect(t.ai!.grievance).toBe(1)
+    pokeApart(world, t, 1)
 
     world.time = 10 + GRIEVANCE.COOLDOWN + 1
     stepGrievances(world)
 
+    expect(t.ai!.strikeCount).toBe(0)
+    expect(t.faction).toBe('neutral')
+  })
+
+  it('stepGrievances переводит в бой по таймеру', () => {
+    const world = emptyWorld()
+    const t = neutral(world)
+    const ai = t.ai!
+    ai.grievance = 1
+    ai.grievanceSince = 100
+    ai.grievanceAt = 100
+    ai.strikeCount = 3
+    world.time = 100 + GRIEVANCE.RETALIATE_TIME
+    stepGrievances(world)
+    expect(t.faction).toBe('hostile')
+  })
+
+  it('без извинения через несколько секунд после претензии — ответный огонь', () => {
+    const world = emptyWorld()
+    const t = neutral(world)
+    world.time = 10
+    pokeApart(world, t, GRIEVANCE.FORGIVE_HITS + 1)
+    expect(t.ai!.grievance).toBe(1)
+
+    world.time = t.ai!.grievanceAt + GRIEVANCE.RETALIATE_TIME
+    stepGrievances(world)
+
+    expect(t.faction).toBe('hostile')
+    expect(t.ai!.targetId).toBe(world.player.id)
+  })
+
+  it('извинение до таймера ответного огня не переводит во враги', () => {
+    const world = emptyWorld()
+    const t = neutral(world)
+    world.time = 10
+    pokeApart(world, t, GRIEVANCE.FORGIVE_HITS + 1)
+
+    world.time = 10 + GRIEVANCE.RETALIATE_TIME - 1
+    expect(defuseGrievance(t)).toBe(true)
+    stepGrievances(world)
+
+    expect(t.faction).toBe('neutral')
+  })
+
+  it('счёт рвётся паузой: после cooldown серия начинается заново', () => {
+    const world = emptyWorld()
+    const t = neutral(world)
+    world.time = 10
+    pokeApart(world, t, GRIEVANCE.FORGIVE_HITS + GRIEVANCE.HOSTILE_HITS - 1)
+
+    world.time += GRIEVANCE.COOLDOWN + 5
+    registerPlayerHit(world, t)
+
+    expect(t.ai!.strikeCount).toBe(1)
     expect(t.ai!.grievance).toBe(0)
     expect(t.faction).toBe('neutral')
   })
 
-  it('счёт «подряд» рвётся паузой: попадание после cooldown начинает заново', () => {
-    const world = emptyWorld()
-    const t = neutral(world)
-    world.time = 10
-    pokeApart(world, t, GRIEVANCE.HOSTILE_HITS - 1)
-    const before = t.ai!.grievance
-
-    // Долгая пауза — и снова попадание: это уже новый повод, не продолжение старого.
-    world.time += GRIEVANCE.COOLDOWN + 5
-    registerPlayerHit(world, t)
-
-    expect(t.ai!.grievance).toBe(1)
-    expect(before).toBeGreaterThan(1)
-    expect(t.faction).toBe('neutral')
-  })
-
-  it('по уже-врагу претензий нет: по врагу стреляют без обид', () => {
+  it('по уже-врагу претензий нет', () => {
     const world = emptyWorld()
     const t = neutral(world)
     t.faction = 'hostile'
     world.time = 10
 
-    pokeApart(world, t, GRIEVANCE.HOSTILE_HITS + 2)
+    pokeApart(world, t, GRIEVANCE.FORGIVE_HITS + GRIEVANCE.HOSTILE_HITS + 2)
 
     expect(t.ai!.grievance).toBe(0)
     expect(hasGrievance(t)).toBe(false)
   })
 
-  it('входящий вызов — ближайший обиженный в пределах слышимости, и только он', () => {
+  it('входящий вызов — ближайший обиженный в пределах слышимости', () => {
     const world = emptyWorld()
     world.player.state.pos.set(0, 0, 0)
     world.time = 10
 
-    // Обиженный близко (в разговорной дальности) — он и вызывает.
     const near = neutral(world)
     near.state.pos.set(0, 0, -300)
-    registerPlayerHit(world, near)
+    pokeApart(world, near, GRIEVANCE.FORGIVE_HITS + 1)
     expect(pendingHail(world)?.id).toBe(near.id)
 
-    // Обиженный, но за пределом слышимости — не вызывает.
     near.state.pos.set(0, 0, -(DIALOGUE.RANGE + 100))
-    expect(pendingHail(world)).toBeNull()
-
-    // Необиженный рядом — тоже молчит: вызывать не с чего.
-    near.state.pos.set(0, 0, -300)
-    defuseGrievance(near)
     expect(pendingHail(world)).toBeNull()
   })
 
-  it('борт без ИИ не роняет расчёт и не копит обиду', () => {
+  it('борт без ИИ не копит обиду', () => {
     const world = emptyWorld()
     const s = makeShip(world.ids, 'neutral', 'Пустой', traderLoadout(), new Vector3(), new Quaternion())
     s.ai = null

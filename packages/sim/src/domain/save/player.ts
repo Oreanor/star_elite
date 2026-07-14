@@ -5,6 +5,7 @@ import { COMMODITIES, type Commodity } from '../cargo/items'
 import { createLoadout, isWeapon, NO_HULL_UPGRADES, type HullUpgrades, type Loadout, type ShipModule, type WeaponModule } from '../loadout'
 import { refreshSpec } from '../world/factory'
 import type { Acquaintance } from '../world/acquaintance'
+import { emptyPlan } from '../world/contactPlan'
 import type { Persona } from '../world/persona'
 import type { World } from '../world/entities'
 
@@ -93,7 +94,7 @@ function rehydrateModule(saved: SavedModule): ShipModule | null {
   return saved.upgrade !== undefined ? { ...base, upgrade: saved.upgrade } : base
 }
 
-function serializeLoadout(l: Loadout): SavedLoadout {
+export function serializeLoadout(l: Loadout): SavedLoadout {
   return {
     chassis: l.chassis.id,
     internals: l.internals.map(serializeModule),
@@ -101,7 +102,7 @@ function serializeLoadout(l: Loadout): SavedLoadout {
   }
 }
 
-function rehydrateLoadout(saved: SavedLoadout): Loadout {
+export function rehydrateLoadout(saved: SavedLoadout): Loadout {
   const chassis = findChassis(saved.chassis)
   // Корпус — не мелочь, которую можно пропустить: без него сборки нет. Битый сейв
   // (корпус вырезали из игры) честнее оборвать, чем молча подставить чужой корабль.
@@ -146,7 +147,11 @@ export function serializePlayer(world: World): PlayerSave {
     // Плоские данные — мелкий клон, чтобы сейв не держал ссылку на живой мир.
     persona: { ...p.persona },
     // Журнал знакомства клонируем отдельно: без этого сейв держал бы ссылку на живой массив.
-    acquaintances: world.acquaintances.map((a) => ({ ...a, history: [...a.history] })),
+    acquaintances: world.acquaintances.map((a) => ({
+      ...a,
+      history: [...a.history],
+      plan: { ...a.plan, queue: [...a.plan.queue] },
+    })),
     loadout: serializeLoadout(p.loadout),
     hullUp: { ...p.hullUp },
     hold,
@@ -175,7 +180,13 @@ export function applyPlayerSave(world: World, save: PlayerSave): void {
   world.credits = save.credits
   world.score = save.score
   // Старые сейвы журнала не знали — подставляем пустой, иначе чтение `history` падало бы.
-  world.acquaintances = save.acquaintances.map((a) => ({ ...a, history: a.history ? [...a.history] : [] }))
+  world.acquaintances = save.acquaintances.map((a) => ({
+    ...a,
+    history: a.history ? [...a.history] : [],
+    credits: a.credits ?? 5_000,
+    savedLoadout: a.savedLoadout ?? null,
+    plan: a.plan ?? emptyPlan(),
+  }))
 
   const p = world.player
   // Имя игрока открыто — это он сам. Ставим и отображаемое, и истинное.

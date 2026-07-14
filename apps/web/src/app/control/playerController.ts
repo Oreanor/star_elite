@@ -285,7 +285,7 @@ export function createPlayerController(intent: PlayerIntent): Controller {
       // Вылет со станции — тоже кино: корабль рвёт строго вперёд по оси на полном газу
       // («вжууух»), ввод не читаем. Так он не уводит с оси, пока камера его обгоняет, и
       // на выходе из тоннеля уже разогнан. Крутить и рулить пилот начнёт, когда сцена
-      // кончится (undocking() погаснет сам через 2 с).
+      // кончится (undocking() погаснет сам через ~3 с).
       if (undocking()) {
         const c = ship.controls
         c.throttle = 1
@@ -297,6 +297,9 @@ export function createPlayerController(intent: PlayerIntent): Controller {
         c.strafeUp = 0
         c.retro = 0
         c.flightAssist = true
+        // Рукоять газа держим на полном ходе, иначе после кино сцены снова 0.45.
+        intent.throttle = 1
+        intent.surge = 0
         return
       }
 

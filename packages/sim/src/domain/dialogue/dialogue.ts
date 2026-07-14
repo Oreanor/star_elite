@@ -140,7 +140,7 @@ const COMBAT_TOPICS: Topic[] = ['surrender', 'mercy', 'plunder']
  * речь игрока (повелительно), а не инфинитивы: ты капитан, а не пункт меню.
  *
  * В доке станции боевые реакции отпадают: ты под охраной, вокруг закон — грабить,
- * грозить и молить о пощаде тут не о чем. Остаётся мирный разговор (найм, оклик).
+ * грозить и молить о пощаде тут не о чем. Остаётся мирный разговор (найм).
  */
 export function linesFor(world: World, other: ShipEntity): Line[] {
   const player = world.player
@@ -159,8 +159,10 @@ export function linesFor(world: World, other: ShipEntity): Line[] {
     }
 
     const fee = escortFee(world, other)
-    return [
-      {
+    const lines: Line[] = []
+    // Уже в эскорте — кнопку найма не показываем и не предлагаем модели.
+    if (other.ai?.escortOf !== player.id) {
+      lines.push({
         topic: 'escort',
         say: fee != null ? `НАНИМАЙСЯ КО МНЕ · ${fee} КР` : 'НАНИМАЙСЯ КО МНЕ',
         blocked:
@@ -168,13 +170,11 @@ export function linesFor(world: World, other: ShipEntity): Line[] {
             ? 'НЕ ПОЙДЁТ С ТОБОЙ — СНАЧАЛА ПОМИРИСЬ'
             : world.credits < fee
               ? 'НЕ ХВАТАЕТ КРЕДИТОВ'
-              : other.ai?.escortOf === player.id
-                ? 'ОН УЖЕ ИДЁТ С ТОБОЙ'
-                : null,
-      },
-      { topic: 'plunder', say: 'СБРОСЬ ГРУЗ И ОРУЖИЕ', blocked: null },
-      { topic: 'greet', say: 'ОКЛИКНИ ЕГО', blocked: null },
-    ]
+              : null,
+      })
+    }
+    lines.push({ topic: 'plunder', say: 'СБРОСЬ ГРУЗ И ОРУЖИЕ', blocked: null })
+    return lines
   })()
 
   return world.docked ? all.filter((l) => !COMBAT_TOPICS.includes(l.topic)) : all

@@ -298,3 +298,8 @@ canvas {
   0%   { background-position: 150% 0; opacity: 1; }
   100% { background-position: -70% 0; opacity: 1; }
 }
+
+@keyframes title-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}

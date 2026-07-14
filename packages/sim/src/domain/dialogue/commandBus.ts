@@ -1,8 +1,12 @@
 import { applyOrder, commandableByPlayer, type AIOrder } from '../ai/commands'
+import { assignApproach, assignCollectRun, clearTasks } from '../ai/tasks'
 import { NOTE_MAX_CHARS, recordEvent } from '../world/acquaintance'
+import type { RawPlanStep } from '../world/contactPlan'
+import { applyContactPlan } from '../world/plan'
 import type { ShipEntity, World } from '../world/entities'
-import { applySocial, say, type Social, type Topic } from './dialogue'
-import { applyTransfer, type Transfer, type TransferResult } from './transfer'
+import { applyOutcome, applySocial, linesFor, say, type Social } from './dialogue'
+import { coerceOrder, coerceTopic, coerceTransfer } from './payload'
+import { applyTransfer, type TransferResult } from './transfer'
 
 /**
  * КОМАНДА боту — единица «что игрок велел / о чём договорились» в диалоге: {действие, груз}.
@@ -38,9 +42,48 @@ function asObject(p: unknown): Record<string, unknown> | null {
   return typeof p === 'object' && p !== null ? (p as Record<string, unknown>) : null
 }
 
-const ORDERS: readonly AIOrder[] = ['attack', 'engageAll', 'hold', 'standDown', 'keepBack', 'resume']
-const TOPICS: readonly Topic[] = ['surrender', 'mercy', 'escort', 'plunder', 'greet']
+/** Радиус сбора груза по поручению, м — совпадает с кнопкой в диалоге. */
+const TASK_COLLECT_RADIUS = 4000
 
+/** Поручение эскорту в очередь задач (сбор, подлёт к цели, сброс). */
+function taskCommand(world: World, ship: ShipEntity, payload: unknown): CommandOutcome | null {
+  const o = asObject(payload)
+  const kind = o?.kind
+  if (!commandableByPlayer(ship, world.player.id)) return null
+
+  if (kind === 'collect-cargo') {
+    if (!o) return null
+    const radius = typeof o.radius === 'number' && o.radius > 0 ? o.radius : TASK_COLLECT_RADIUS
+    if (!assignCollectRun(ship, ship.state.pos, radius)) return null
+    return { line: null, spoken: 'ПРИНЯЛ. СОБИРАЮ И ИДУ К ТЕБЕ.' }
+  }
+  if (kind === 'approach-nav') {
+    const navId = world.navTargetId
+    if (navId == null) return null
+    const body = world.bodies.find((b) => b.id === navId)
+    if (!body) return null
+    if (!assignApproach(ship, body.pos, body.radius)) return null
+    return { line: null, spoken: 'ИДУ ТУДА.' }
+  }
+  if (kind === 'clear-tasks') {
+    clearTasks(ship)
+    return { line: null, spoken: 'ОТСТАВИЛ.' }
+  }
+  return null
+}
+
+function isTaskPlanStep(step: RawPlanStep): boolean {
+  return step.step === 'collect' || step.step === 'approach-nav' || step.step === 'clear-tasks'
+}
+
+function taskPayloadFromPlanStep(step: RawPlanStep): Record<string, unknown> | null {
+  if (step.step === 'collect') {
+    return { kind: 'collect-cargo', radius: step.radius }
+  }
+  if (step.step === 'approach-nav') return { kind: 'approach-nav' }
+  if (step.step === 'clear-tasks') return { kind: 'clear-tasks' }
+  return null
+}
 /** Подтверждение приказа строкой в ленте. Текст — игровой контент, живёт с исполнением. */
 const ORDER_DONE: Record<AIOrder, string> = {
   attack: 'Приказ: атаковать цель.',
@@ -49,18 +92,6 @@ const ORDER_DONE: Record<AIOrder, string> = {
   standDown: 'Приказ: отбой, прекратить огонь.',
   keepBack: 'Приказ: держаться в хвосте.',
   resume: 'Приказ: действовать как обычно.',
-}
-
-function coerceTransfer(p: unknown): Transfer | null {
-  const o = asObject(p)
-  if (!o) return null
-  const direction = o.direction === 'toThem' || o.direction === 'toYou' ? o.direction : null
-  if (!direction) return null
-  const units = typeof o.units === 'number' && o.units > 0 ? Math.floor(o.units) : 0
-  const credits = typeof o.credits === 'number' && o.credits > 0 ? Math.floor(o.credits) : 0
-  const commodityId = typeof o.commodityId === 'string' ? o.commodityId : null
-  if (!(commodityId && units > 0) && credits <= 0) return null // пустая сделка — не сделка
-  return { direction, commodityId, units, credits }
 }
 
 /** Итог сделки строкой для ленты. null — ничего не перешло (обещал, да нечем). */
@@ -77,11 +108,23 @@ function transferLine(r: TransferResult): string | null {
 
 // ─── Реализации команд ──────────────────────────────────────────────────────────
 
-/** Просьба к боту (`Topic`): `say` катит кость, МУТИРУЕТ мир и даёт реплику + исход. */
+/** Просьба к боту (`Topic`): кнопка — `say` с костью; LLM — `applyOutcome` без кости. */
 function askCommand(world: World, ship: ShipEntity, payload: unknown): CommandOutcome | null {
   const o = asObject(payload)
-  const topic = o && TOPICS.includes(o.topic as Topic) ? (o.topic as Topic) : null
+  const topic = o ? coerceTopic(o.topic) : null
   if (!topic) return null
+
+  if (o?.llm === true) {
+    const line = linesFor(world, ship).find((l) => l.topic === topic)
+    if (!line || line.blocked !== null) {
+      return { line: null, agreed: false, spoken: line?.blocked ?? '…' }
+    }
+    const agreed = applyOutcome(world, ship, topic)
+    if (topic !== 'greet') recordEvent(world, ship, { kind: 'asked', topic, agreed })
+    const spoken = !agreed && topic === 'escort' ? 'ПОКАЖИ ДЕНЬГИ.' : undefined
+    return { line: null, agreed, spoken }
+  }
+
   const reply = say(world, ship, topic)
   // Болтовню (`greet`) в журнал не пишем — это не просьба, летопись бы захламилась.
   if (topic !== 'greet') recordEvent(world, ship, { kind: 'asked', topic, agreed: reply.agreed })
@@ -91,13 +134,13 @@ function askCommand(world: World, ship: ShipEntity, payload: unknown): CommandOu
 /** Приказ послушания СВОЕМУ эскорту. Чужому не прикажешь — домен стережёт, не UI. */
 function orderCommand(world: World, ship: ShipEntity, payload: unknown): CommandOutcome | null {
   const o = asObject(payload)
-  const order = o && ORDERS.includes(o.order as AIOrder) ? (o.order as AIOrder) : null
+  const order = o ? coerceOrder(o.order) : null
   if (!order) return null
   if (!commandableByPlayer(ship, world.player.id)) return null
   const target = o && typeof o.target === 'number' ? o.target : null
   if (!applyOrder(ship, order, target)) return null
   recordEvent(world, ship, { kind: 'order', order })
-  return { line: ORDER_DONE[order] }
+  return { line: ORDER_DONE[order], spoken: 'ЕСТЬ, КОМАНДИР.' }
 }
 
 /** Соц-тон реплики игрока: нахамил/польстил. Следствие для отношений считает домен. */
@@ -136,14 +179,69 @@ function noteCommand(world: World, ship: ShipEntity, payload: unknown): CommandO
   return { line: null }
 }
 
+/**
+ * Выучить мету переводчика: «их слово/оборот» → что делать по шагам.
+ * Пишется в журнал тихо (без строки в ленте), чтобы при следующей встрече помнить смысл.
+ */
+function learnCommand(world: World, ship: ShipEntity, payload: unknown): CommandOutcome | null {
+  const o = asObject(payload)
+  const raw = o && typeof o.text === 'string' ? o.text : typeof payload === 'string' ? payload : null
+  const body = raw ? raw.trim().slice(0, NOTE_MAX_CHARS - 5) : ''
+  if (!body) return null
+  recordEvent(world, ship, { kind: 'note', text: `МЕТА: ${body}` })
+  return { line: null }
+}
+
+/** Макро-план: купить, вылететь, прикрывать — компилируется и исполняется доменом. */
+function planCommand(world: World, ship: ShipEntity, payload: unknown): CommandOutcome | null {
+  const o = asObject(payload)
+  const steps = o && Array.isArray(o.steps) ? (o.steps as RawPlanStep[]) : []
+  if (steps.length === 0) return null
+
+  const taskSteps = steps.filter(isTaskPlanStep)
+  const planSteps = steps.filter((s) => !isTaskPlanStep(s))
+  const spoken: string[] = []
+  const system: string[] = []
+
+  for (const ts of taskSteps) {
+    const taskPayload = taskPayloadFromPlanStep(ts)
+    if (!taskPayload) return { line: 'Не могу выполнить поручение.' }
+    const out = taskCommand(world, ship, taskPayload)
+    if (!out) return { line: 'Не могу выполнить поручение.' }
+    if (out.spoken) spoken.push(out.spoken)
+  }
+
+  if (planSteps.length > 0) {
+    const result = applyContactPlan(world, ship, planSteps)
+    if (!result.accepted && taskSteps.length === 0) {
+      return { line: 'Не могу выполнить: нет условий или непонятный модуль.' }
+    }
+    if (result.accepted) {
+      recordEvent(world, ship, { kind: 'note', text: 'принял поручение из разговора' })
+      if (result.lines.length) system.push(...result.lines)
+      else system.push('Принято.')
+    }
+  } else if (taskSteps.length > 0) {
+    recordEvent(world, ship, { kind: 'note', text: 'принял поручение из разговора' })
+  }
+
+  return {
+    line: system.length ? system.join(' · ') : null,
+    spoken: spoken.length ? spoken.join(' ') : undefined,
+  }
+}
+
 // ─── Шина ────────────────────────────────────────────────────────────────────────
 
 const HANDLERS: Record<string, CommandHandler> = {
   ask: askCommand,
   order: orderCommand,
+  task: taskCommand,
   social: socialCommand,
   transfer: transferCommand,
   note: noteCommand,
+  learn: learnCommand,
+  plan: planCommand,
 }
 
 /**

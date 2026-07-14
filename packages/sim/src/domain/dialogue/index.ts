@@ -1,6 +1,7 @@
 export {
   applyOutcome,
   applySocial,
+  escortFee,
   interlocutor,
   linesFor,
   moodTo,
@@ -20,3 +21,19 @@ export {
   type CommandHandler,
   type CommandOutcome,
 } from './commandBus'
+export {
+  AI_ORDERS,
+  DIALOGUE_TOPICS,
+  LOOKUP_DIGESTS,
+  coerceLookup,
+  coerceOrder,
+  coercePlanSteps,
+  coerceClarify,
+  coerceLearn,
+  coerceTopic,
+  coerceTransfer,
+  sanitizeEscortTransfer,
+  type LookupDigest,
+} from './payload'
+export { extractModelJson, parseModelReply, type ParsedModelReply } from './modelReply'
+export { dialogueEffects, type DialogueEffects } from './turn'

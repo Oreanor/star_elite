@@ -1,7 +1,7 @@
 import { useFrame } from '@react-three/fiber'
 import { useMemo, useRef } from 'react'
 import { InstancedMesh, Mesh, Object3D } from 'three'
-import { isDroneShip, isVisible } from '@elite/sim'
+import { isDroneShip, isVisible, warpDepartHidden, warpEmergeHidden } from '@elite/sim'
 import { useSession } from '../../app/GameContext'
 import { shipHidden } from '../../app/control/jumpFx'
 import { GIANT_RENDER_CAP } from '../config'
@@ -107,7 +107,7 @@ export function EnemyShips() {
       // Замаскированный чужой не рисуется вовсе: правило видимости — из домена.
       // Беспилотник и грузовик — свои меши: корпус у них другой. Кинематический борт
       // (удалённый игрок) рисует свой компонент `RemotePlayers` — здесь его пропускаем.
-      if (isDroneShip(ship) || isFreighter(ship) || ship.kinematic || !isVisible(ship) || count >= MAX_ENEMIES) continue
+      if (isDroneShip(ship) || isFreighter(ship) || ship.kinematic || !isVisible(ship) || warpEmergeHidden(session.world, ship) || warpDepartHidden(session.world, ship) || count >= MAX_ENEMIES) continue
 
       _dummy.position.copy(ship.state.pos)
       _dummy.quaternion.copy(ship.state.quat)
@@ -150,7 +150,7 @@ export function FreighterShips() {
 
     let count = 0
     for (const ship of session.world.ships) {
-      if (!isFreighter(ship) || !isVisible(ship) || count >= MAX_FREIGHTERS) continue
+      if (!isFreighter(ship) || !isVisible(ship) || warpEmergeHidden(session.world, ship) || warpDepartHidden(session.world, ship) || count >= MAX_FREIGHTERS) continue
 
       _dummy.position.copy(ship.state.pos)
       _dummy.quaternion.copy(ship.state.quat)

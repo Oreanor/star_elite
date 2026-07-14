@@ -7,6 +7,7 @@ import { createWorld, STARTER_SYSTEM, type World } from '../world'
 import { refreshSpec } from '../world/factory'
 import type { Acquaintance } from '../world/acquaintance'
 import { applyPlayerSave, serializePlayer } from './player'
+import { emptyPlan } from '../world/contactPlan'
 
 /**
  * Инвариант фазы 0.1: round-trip. Сериализовали живого игрока и наложили сейв на
@@ -65,6 +66,9 @@ function playedWorld(): World {
       { kind: 'note', at: 20, text: 'обещал придержать для меня редкую руду' },
     ],
     alive: true,
+    credits: 12_000,
+    savedLoadout: null,
+    plan: emptyPlan(),
   }
   w.acquaintances.push(met)
 

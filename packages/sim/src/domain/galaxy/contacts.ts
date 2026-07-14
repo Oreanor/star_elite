@@ -2,6 +2,7 @@ import { CONTACTS } from '../../config/contacts'
 import { CORE_INDEX, GALAXY } from '../../config/galaxy'
 import type { BodyEntity, ShipEntity, World } from '../world/entities'
 import { markContactLost, type Acquaintance, type Contact } from '../world/acquaintance'
+import { stepContactPlanOffScreen } from '../world/plan'
 import { generateSystem } from './generate'
 import { capitalOf } from './types'
 import { distanceLy, placeSystem, type Spot3 } from './shape'
@@ -100,6 +101,8 @@ export function driftContacts(world: World): void {
 
     if (c.boundFor != null) stepToward(c, c.boundFor, grid())
     else if (c.roaming && rng() < CONTACTS.WANDER_CHANCE) wander(c, rng(), grid())
+
+    stepContactPlanOffScreen(world, c)
   }
 }
 

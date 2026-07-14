@@ -14,6 +14,8 @@ export {
   type TitanEntity,
   type Tracer,
   type WarpFlash,
+  type WarpPortal,
+  type WarpArrivalPortal,
   type World,
 } from './entities'
 export { enterSystem, createWorld, makeShip, refreshSpec, startAtStation, applyPilotProfile } from './factory'
@@ -49,12 +51,36 @@ export {
   roamContact,
   markContactLost,
 } from './acquaintance'
+export type { ContactPlan, PlanStep, PlanPosture, RawPlanStep } from './contactPlan'
+export { emptyPlan, EMPTY_PLAN } from './contactPlan'
+export {
+  acquaintanceOf,
+  advanceContactPlan,
+  applyContactPlan,
+  applyPosture,
+  compileRawPlan,
+  rehydrateContactShip,
+  resolveModuleId,
+  syncLiveContactsFromShips,
+  stepContactPlanOffScreen,
+  contactEtaHops,
+  contactTravelEta,
+} from './plan'
+export { makePilotName } from './names'
 export { maybeShiftOrigin } from './origin'
 export { spawnRemotePlayer, despawnRemotePlayer, type RemotePlayerInit } from './remote'
 export { pickFreeSpawn, isFreeSpawn } from './spawn'
 export { cycleTarget, cycleLock, findBody, findShip, hostilesOf, incomingMissile, nearestPod, targetableStationsOf } from './queries'
-export { stepTraffic, spawnResidentContacts, stepDockedBerth } from './traffic'
-export { spawnTitan, stepTitans, titanCount } from './titans'
+export {
+  jumpOut,
+  spawnWarpFlash,
+  beginWarpArrival,
+  beginWarpDeparture,
+  stepWarpEmergence,
+  warpEmergeHidden,
+  warpDepartHidden,
+} from './warp'
+export { stepTraffic, spawnResidentContacts, stepDockedBerth, stepDockTraffic } from './traffic'
+export { spawnTitan, spawnTrafficTitan, stepTitans, titanCount, placeShowcaseTitans } from './titans'
 export { spawnPlatform, stepPlatforms } from './platforms'
-export { jumpOut, spawnWarpFlash } from './warp'
 export { STARTER_SYSTEM, type PatrolDef, type SystemDef } from './system'

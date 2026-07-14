@@ -2,7 +2,6 @@ import { Vector3, type Camera, type PerspectiveCamera } from 'three'
 import {
   AUTODOCK,
   CRUISE,
-  DOCKING,
   GUNNERY,
   MIELOPHONE,
   STAR_HEAT,
@@ -11,7 +10,6 @@ import {
   findStation,
   autofightActive,
   auxFraction,
-  bombReady,
   clamp,
   incomingMissile,
   itemName,
@@ -31,7 +29,7 @@ import {
 import { bombFlash, bombRing } from '../../render/bombFeel'
 import { currentGameDate } from '../clock'
 import { GALAXY_LAYER, HUD_SCALE } from '../../render/config'
-import { undocking } from '../../app/control/undockFx'
+import { undocking, consumePendingBonVoyage } from '../../app/control/undockFx'
 import { drawUndockTunnel } from './drawUndock'
 import { galaxyRadar } from '../../render/scene/galaxyRadar'
 import { HUD_COLORS, bar, circle, corners, dot, ellipse, line, text } from './draw'
@@ -115,14 +113,16 @@ export function drawHud(frame: HudFrame): void {
   // отметки системы там глючат (тела далеко, камера в сотне км позади корпуса).
   drawRadar(frame)
   drawReadouts(frame)
-  drawWarnings(frame)
+  const warningPlate = gatherWarnings(frame)
   drawAlerts(frame)
 
   // Последним: круг бомбы бьёт поверх всего, включая прицел.
   drawBombBurst(frame)
 
-  // А тоннель вылета — ещё выше: он гасит весь HUD чёрным, оставляя лишь прорезь на космос.
+  // Тоннель вылета гасит HUD чёрным — плашку «доброго пути» рисуем ПОСЛЕ него,
+  // иначе голубой пуш не виден над кольцами.
   if (undocking()) drawUndockTunnel(ctx, width, height)
+  if (warningPlate) paintWarningPlate(frame, warningPlate)
 }
 
 /** Ракета ближе этого по времени — тревога. Дальше пилоту не о чем волноваться, с. */
@@ -200,13 +200,11 @@ function drawDate({ ctx }: HudFrame): void {
   text(ctx, currentGameDate(), 6 * S, 5 * S, HUD_COLORS.DIM, 'left')
 }
 
-type DockState = 'engaged' | 'ready' | 'too-fast' | 'approach'
+type DockState = 'engaged' | 'ready' | 'approach'
 
 function dockState(world: World, station: BodyEntity, autodock: boolean): DockState {
   if (autodock) return 'engaged'
   if (canDockAt(world.player, station)) return 'ready'
-  // Причал рядом, а скорость больше разрешённой — это не стыковка, а таран.
-  if (stationRange(world.player, station) < DOCKING.RANGE) return 'too-fast'
   return 'approach'
 }
 
@@ -935,15 +933,15 @@ function drawReadouts({ ctx, world, height }: HudFrame): void {
 
   const rows: [string, number, string][] = [
     // Тяга — первой строкой, сразу под цифрами скорости: главный орган хода на виду.
-    // Задний ход той же шкалой, но жёлтым и по модулю: реверс — не «ноль тяги».
-    [t('hud.throttle'), Math.abs(player.controls.throttle), player.controls.throttle < 0 ? HUD_COLORS.WARN : HUD_COLORS.PRIMARY],
+    // Жёлтая шкала; задний ход — тот же цвет, по модулю.
+    [t('hud.throttle'), Math.abs(player.controls.throttle), HUD_COLORS.WARN],
     [t('hud.shield'), shield, HUD_COLORS.PRIMARY],
     [t('hud.hull'), hull, hull < 0.3 ? HUD_COLORS.DANGER : HUD_COLORS.PRIMARY],
     // Главной батареи (БАТ) на HUD больше нет: её ничто не расходовало (полёт/форсаж/оружие
     // энергию не тратят) — декоративная шкала убрана. Осталась аукс-батарея, которую тратят реально.
-    // Батарея ДОП-ОТСЕКА (аукс): общий запас бомбы, ПРО и маскировки. Полная светится
-    // целью — бомба готова; на нуле красная — ни импульса, ни поля. Оттого счётчик один.
-    [t('hud.aux'), aux, bombReady(player) ? HUD_COLORS.TARGET : aux < 0.15 ? HUD_COLORS.DANGER : HUD_COLORS.PRIMARY],
+    // Батарея ДОП-ОТСЕКА (аукс): общий запас бомбы, ПРО и маскировки. Голубая шкала;
+    // на нуле красная — ни импульса, ни поля.
+    [t('hud.aux'), aux, aux < 0.15 ? HUD_COLORS.DANGER : HUD_COLORS.PRIMARY],
     // Нагрев СТВОЛА от стрельбы — отдельно от нагрева корпуса звездой.
     [t('hud.laser'), laser, laser > 0.7 ? HUD_COLORS.DANGER : HUD_COLORS.WARN],
     // Температура КОРПУСА от близкой звезды. За порогом течёт щит, потом обшивка.
@@ -1008,10 +1006,13 @@ function bracketRect(
  * важная живая плашка по центру-верху: уголковая рамка, полупрозрачный фон в её цвет
  * (~22%) и мигающая надпись. Старые разрозненные строки-предупреждения этим и заменены.
  */
-function drawWarnings(frame: HudFrame): void {
-  const { ctx, world, width, autodock } = frame
+/** Собирает живую плашку-предупреждение; рисование — отдельно (`paintWarningPlate`). */
+function gatherWarnings(frame: HudFrame): Plate | null {
+  const { world, autodock } = frame
   const player = world.player
   const now = world.time
+
+  if (consumePendingBonVoyage()) pushWarning('bonVoyage', now)
 
   // ── Читаемые из мира состояния ──────────────────────────────────────────────
   const temp = player.hullHeat
@@ -1030,8 +1031,7 @@ function drawWarnings(frame: HudFrame): void {
       const range = stationRange(player, station)
       if (range <= AUTODOCK.ENGAGE_RANGE) {
         const st = dockState(world, station, autodock)
-        if (st === 'too-fast') pushWarning('dockFast', now, { label: t('hud.dockTooFast', { speed: DOCKING.MAX_SPEED }) })
-        else if (st === 'ready') pushWarning('dockReady', now)
+        if (st === 'ready') pushWarning('dockReady', now)
         else if (st === 'engaged') pushWarning('dockCorridor', now, { label: t('hud.dockCorridor', { range: formatDistance(range) }) })
       }
     }
@@ -1086,8 +1086,12 @@ function drawWarnings(frame: HudFrame): void {
   const scalePlate: Plate | null =
     growSign !== 0 ? { color: HUD_COLORS.WARN, hz: 1.5, rank: 0, label: t(_scaleLabelKey), born: now } : null
   // Реальные предупреждения важнее; из состояний масштаб (нарратив) впереди форсажа.
-  const plate = activeWarning(now) ?? scalePlate ?? boostPlate
-  if (!plate) return
+  return activeWarning(now) ?? scalePlate ?? boostPlate
+}
+
+function paintWarningPlate(frame: HudFrame, plate: Plate): void {
+  const { ctx, world, width } = frame
+  const now = world.time
 
   const baseFont = ctx.font
   const pad = 44 * S
@@ -1193,7 +1197,7 @@ function drawBombBurst({ ctx, world, width, height }: HudFrame): void {
 /**
  * Постоянные РЕЖИМЫ у нижней кромки: автобой и маскировка.
  *
- * Это не транзиентные вести (перегрев, вызов, ракета — те ушли в плашки-`drawWarnings`),
+ * Это не транзиентные вести (перегрев, вызов, ракета — те ушли в плашки-`gatherWarnings`),
  * а тумблеры, которые обязаны висеть, ПОКА включены: пилот должен в любой момент видеть,
  * что рулит автопилот или что гашетка мертва под полем. Мигать им незачем — они не
  * просят действия сию секунду, а сообщают текущее состояние.

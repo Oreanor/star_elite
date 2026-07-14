@@ -109,6 +109,10 @@ export interface AIState {
   grievance: number
   /** `world.time` последнего засчитанного попадания. Для дебаунса и угасания претензии. */
   grievanceAt: number
+  /** Когда началась текущая претензия — для таймера ответного огня. */
+  grievanceSince: number
+  /** Засчитанные попадания игрока в текущей серии (включая прощённые). */
+  strikeCount: number
 }
 
 /**
@@ -155,5 +159,7 @@ export function createAIState(home: Vector3, rng: Rng): AIState {
     warpTimer: -1,
     grievance: 0,
     grievanceAt: -1e9,
+    grievanceSince: -1e9,
+    strikeCount: 0,
   }
 }

@@ -3,7 +3,6 @@ import { applyPilotProfile, interlocutor, jumpBlock, pendingHail, serializePlaye
 import { GameProvider, useSession } from './GameContext'
 import { jumping, startDepart } from './control/jumpFx'
 import { startUndock } from './control/undockFx'
-import { pushWarning } from '../ui/hud/warnings'
 import { negotiate, negotiatorAvailable } from './control/negotiator'
 import { Game } from './Game'
 import { Paused, GameOver } from './TitleScreen'
@@ -162,6 +161,8 @@ function Shell({ onRestart }: { onRestart: () => void }) {
   const [tab, setTab] = useState<ConsoleTab | null>(null)
   /** Открыт ли канал связи. Отдельный оверлей: ни вкладок, ни причала у него нет. */
   const [talking, setTalking] = useState(false)
+  /** Сбрасывает вкладку «Люди» после разговора — знакомство и фильтр дублей. */
+  const [peopleRefresh, setPeopleRefresh] = useState(0)
   /** Открыта ли связь с ДИСПЕТЧЕРОМ станции. Свой оверлей, как разговор с бортом. */
   const [dispatching, setDispatching] = useState(false)
   /** Живой игрок, с кем СЕЙЧАС открыт чат. Ровно один за раз — как разговор по T. */
@@ -327,6 +328,7 @@ function Shell({ onRestart }: { onRestart: () => void }) {
   }, [])
   const closeTalk = useCallback(() => {
     setTalking(false)
+    setPeopleRefresh((n) => n + 1)
     // Пока говорил с ботом, позвал живой игрок — сразу поднимаем его окно (курсор так и
     // отпущен). Иначе у причала возвращаемся в консоль, в полёте — забираем захват.
     const next = waitingRef.current
@@ -412,8 +414,6 @@ function Shell({ onRestart }: { onRestart: () => void }) {
   const undockAndResume = useCallback(() => {
     undock(session.world)
     startUndock()
-    // Короткое напутствие — единым каналом плашек, голубым (сообщение/состояние).
-    pushWarning('bonVoyage', session.world.time)
     void requestLock()
   }, [session])
   // Создание пилота завершено: накладываем профиль на борт игрока и пишем стартовый
@@ -545,10 +545,11 @@ function Shell({ onRestart }: { onRestart: () => void }) {
           onLocate={locateShip}
           onRoute={routeTo}
           onChat={hail}
+          peopleRefresh={peopleRefresh}
         />
       ) : !created ? (
         // Новичок сначала лепит пилота — экран стоит вместо титульного меню, до старта.
-        <CharacterCreation onSubmit={createPilot} />
+        <CharacterCreation world={session.world} onSubmit={createPilot} />
       ) : (
         !locked && (
           <Paused

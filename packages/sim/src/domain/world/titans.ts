@@ -1,7 +1,7 @@
 import { Quaternion, Vector3 } from 'three'
 import { TITAN } from '../../config/titans'
 import { signed } from '../../core/math'
-import type { TitanEntity, World } from './entities'
+import type { BodyEntity, TitanEntity, World } from './entities'
 
 /**
  * Киты — корабли поколений.
@@ -13,6 +13,7 @@ import type { TitanEntity, World } from './entities'
 
 const _dir = new Vector3()
 const _side = new Vector3()
+const _anchor = new Vector3()
 
 /** Единичный вектор в случайную сторону. */
 function randomDir(world: World, out: Vector3): Vector3 {
@@ -25,35 +26,30 @@ function randomDir(world: World, out: Vector3): Vector3 {
 /** Сколько китов сейчас в системе. */
 export const titanCount = (world: World): number => world.titans.length
 
-/**
- * Родить кита. Либо он висит у станции, либо ПРОПЛЫВАЕТ мимо игрока: появляется
- * сбоку и идёт поперёк взгляда, чтобы его прошло видно целиком, а не «на камеру».
- */
-export function spawnTitan(world: World): TitanEntity {
-  const variant = Math.floor(world.rng() * TITAN.VARIANTS)
+function hangDistance(world: World): number {
+  const t = TITAN.STATION_HANG_MIN + world.rng() * (TITAN.STATION_HANG_MAX - TITAN.STATION_HANG_MIN)
+  return TITAN.RADIUS * t
+}
+
+function trafficAnchor(world: World): BodyEntity | null {
   const station = world.bodies.find((b) => b.kind === 'station')
-
-  const pos = new Vector3()
-  const vel = new Vector3()
-
-  if (station && world.rng() < TITAN.STATION_SHARE) {
-    // Висит поодаль от причала: город на рейде. Дрейф почти нулевой.
-    randomDir(world, _dir)
-    pos.copy(station.pos).addScaledVector(_dir, TITAN.RADIUS * 4)
-  } else {
-    // Появляется сбоку от игрока и идёт ПОПЕРЁК его взгляда — так проплывает в кадре.
-    randomDir(world, _dir)
-    pos.copy(world.player.state.pos).addScaledVector(_dir, TITAN.SPAWN_RANGE)
-    // Направление хода перпендикулярно линии «игрок → кит»: мимо, а не на игрока.
-    randomDir(world, _side)
-    _side.addScaledVector(_dir, -_side.dot(_dir)).normalize()
-    vel.copy(_side).multiplyScalar(TITAN.DRIFT_SPEED)
+  if (station) return station
+  let best: BodyEntity | null = null
+  for (const body of world.bodies) {
+    if (body.population <= 0) continue
+    if (!best || body.population > best.population) best = body
   }
+  return best
+}
 
-  // Нос вдоль дрейфа; у висящего — произвольно, но детерминированно от направления.
-  const facing = vel.lengthSq() > 1e-6 ? _side.copy(vel).normalize() : randomDir(world, _side)
+function pushTitan(
+  world: World,
+  variant: number,
+  pos: Vector3,
+  vel: Vector3,
+  facing: Vector3,
+): TitanEntity {
   const quat = new Quaternion().setFromUnitVectors(new Vector3(0, 0, -1), facing)
-
   const titan: TitanEntity = {
     id: world.ids.next(),
     kind: 'titan',
@@ -67,6 +63,41 @@ export function spawnTitan(world: World): TitanEntity {
   }
   world.titans.push(titan)
   return titan
+}
+
+/**
+ * Кит из трафика: не стыкуется, а висит недалеко от причала (или у самого людного
+ * тела, если станции нет). Стоит на месте — город на рейде, а не транзит.
+ */
+export function spawnTrafficTitan(world: World): TitanEntity {
+  const variant = Math.floor(world.rng() * TITAN.VARIANTS)
+  const anchorBody = trafficAnchor(world)
+  _anchor.copy(anchorBody?.pos ?? world.player.state.pos)
+
+  randomDir(world, _dir)
+  const pos = _anchor.clone().addScaledVector(_dir, hangDistance(world))
+  // Носом к якорю — «смотрит» на станцию, не на игрока.
+  const facing = _side.copy(_anchor).sub(pos).normalize()
+  return pushTitan(world, variant, pos, new Vector3(), facing)
+}
+
+/**
+ * Родить кита в транзите: появляется сбоку от игрока и проплывает поперёк взгляда.
+ * Для тестов и редких сценариев без причала.
+ */
+export function spawnTitan(world: World): TitanEntity {
+  const variant = Math.floor(world.rng() * TITAN.VARIANTS)
+  const pos = new Vector3()
+  const vel = new Vector3()
+
+  randomDir(world, _dir)
+  pos.copy(world.player.state.pos).addScaledVector(_dir, TITAN.SPAWN_RANGE)
+  randomDir(world, _side)
+  _side.addScaledVector(_dir, -_side.dot(_dir)).normalize()
+  vel.copy(_side).multiplyScalar(TITAN.DRIFT_SPEED)
+
+  const facing = _side.copy(vel).normalize()
+  return pushTitan(world, variant, pos, vel, facing)
 }
 
 /**
@@ -87,20 +118,8 @@ export function placeShowcaseTitans(world: World): void {
   for (let variant = 0; variant < TITAN.VARIANTS; variant++) {
     const { dir, dist } = layout[variant % layout.length]!
     const pos = origin.clone().addScaledVector(_dir.copy(dir).normalize(), dist)
-    // Носом к точке старта: игрок сразу видит их «лицо», а не корму.
     const facing = _side.copy(origin).sub(pos).normalize()
-    const quat = new Quaternion().setFromUnitVectors(new Vector3(0, 0, -1), facing)
-    world.titans.push({
-      id: world.ids.next(),
-      kind: 'titan',
-      variant,
-      name: TITAN.MARKS[variant] ?? 'Корабль поколений',
-      pos,
-      vel: new Vector3(),
-      quat,
-      spin: TITAN.SPIN,
-      radius: TITAN.RADIUS,
-    })
+    pushTitan(world, variant, pos, new Vector3(), facing)
   }
 }
 

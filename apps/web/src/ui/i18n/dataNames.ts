@@ -246,10 +246,12 @@ export function shipTypeName(name: string): string {
 const OCCUPATION_RU: Record<string, string> = {
   trader: 'Торговец', convoy: 'Торговец', pirate: 'Пират', gang: 'Пират',
   raider: 'Налётчик', police: 'Патрульный', freighter: 'Дальнобойщик', platform: 'Пират',
+  traveler: 'Путешественник', explorer: 'Учёный', businessman: 'Бизнесмен', military: 'Военный',
 }
 const OCCUPATION_EN: Record<string, string> = {
   trader: 'Trader', convoy: 'Trader', pirate: 'Pirate', gang: 'Pirate',
   raider: 'Raider', police: 'Patrol officer', freighter: 'Hauler', platform: 'Pirate',
+  traveler: 'Traveler', explorer: 'Scientist', businessman: 'Businessman', military: 'Serviceman',
 }
 const OCCUPATION_FACTION_RU: Record<string, string> = {
   hostile: 'Пират', police: 'Патрульный', neutral: 'Гражданский', player: 'Пилот',
@@ -271,11 +273,11 @@ export function occupationName(originKind: string | null, faction: string): stri
  * сейв без выбора) — нейтральный «вольный делец».
  */
 const PROFESSION_RU: Record<string, string> = {
-  traveler: 'Путешественник', explorer: 'Исследователь', businessman: 'Бизнесмен',
+  traveler: 'Путешественник', explorer: 'Учёный', businessman: 'Бизнесмен',
   military: 'Военный', pirate: 'Пират',
 }
 const PROFESSION_EN: Record<string, string> = {
-  traveler: 'Traveler', explorer: 'Explorer', businessman: 'Businessman',
+  traveler: 'Traveler', explorer: 'Scientist', businessman: 'Businessman',
   military: 'Serviceman', pirate: 'Pirate',
 }
 export function professionName(profession: string | undefined): string {

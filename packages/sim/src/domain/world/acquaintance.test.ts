@@ -28,6 +28,8 @@ describe('память знакомств', () => {
     expect(ship.acquaintanceId).toBe(rec.id)
     expect(rec.meetings).toBe(1)
     expect(rec.systemIndex).toBe(world.systemIndex)
+    expect(rec.credits).toBeGreaterThan(0)
+    expect(rec.plan.queue).toEqual([])
     // Был «Торговец» — стал человек с именем, и это имя теперь на борту.
     expect(ship.name).not.toBe(before)
     expect(ship.name).toBe(rec.name)

@@ -1,4 +1,8 @@
 import type { Persona } from './persona'
+import type { SavedLoadout } from '../save/player'
+import { serializeLoadout } from '../save/player'
+import type { ContactPlan } from './contactPlan'
+import { emptyPlan } from './contactPlan'
 import type { ShipEntity, World } from './entities'
 
 /**
@@ -100,6 +104,12 @@ export interface Acquaintance {
    * запись держим ради истории и чтобы не «воскресить» его повторной встречей.
    */
   alive: boolean
+  /** Собственные кредиты контакта (покупки на станции). */
+  credits: number
+  /** Сборка и оснащение — переживает прыжки и респавн борта. */
+  savedLoadout: SavedLoadout | null
+  /** Исполняемый план: очередь шагов и долгоживущая поза. */
+  plan: ContactPlan
 }
 
 /**
@@ -128,6 +138,9 @@ export function rememberPilot(world: World, ship: ShipEntity): void {
     // Первая запись журнала — сам факт знакомства: с этого момента вам есть что помнить.
     history: [{ kind: 'met', at: world.time }],
     alive: true,
+    credits: 4_000 + Math.floor(world.rng() * 10_000),
+    savedLoadout: serializeLoadout(ship.loadout),
+    plan: emptyPlan(),
   }
   world.acquaintances.push(record)
   ship.acquaintanceId = record.id

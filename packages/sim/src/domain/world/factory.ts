@@ -23,7 +23,6 @@ import { DEFAULT_PERSONA, makePersona, type PilotProfile } from './persona'
 import { makePilotName } from './names'
 import { maybeShiftOrigin } from './origin'
 import { stepOrbits } from './orbits'
-import { placeShowcaseTitans } from './titans'
 import type { SystemDef } from './system'
 import { STARTER_SYSTEM } from './system'
 
@@ -103,6 +102,8 @@ export function makeShip(
     acquaintanceId: null,
     originKind: null,
     warpedOut: false,
+    warpEmerging: false,
+    warpDeparting: false,
   }
 }
 
@@ -477,6 +478,7 @@ export function enterSystem(
   world.explosions = []
   world.shockwaves = []
   world.warps = []
+  world.warpPortals = []
   world.lockedTargetId = null
   world.navTargetId = world.bodies.find((b) => b.kind === 'station')?.id ?? null
   // Прибыли — выбранная для прыжка система достигнута, метку и точку выхода снимаем.
@@ -508,8 +510,6 @@ export function enterSystem(
   world.originShift.set(0, 0, 0)
 
   maybeShiftOrigin(world)
-  // Вернулся домой — киты-экспонаты снова на местах: дома их выставляют напоказ.
-  if (systemIndex === WORLD.HOME_INDEX && world.galaxySeed === GALAXY.SEED) placeShowcaseTitans(world)
 }
 
 /**
@@ -565,6 +565,7 @@ export function createWorld(def: SystemDef = STARTER_SYSTEM, profile?: PilotProf
     explosions: [],
     shockwaves: [],
     warps: [],
+    warpPortals: [],
     docked: false,
     dockArmed: true,
     dockOccupantId: null,
@@ -601,8 +602,5 @@ export function createWorld(def: SystemDef = STARTER_SYSTEM, profile?: PilotProf
   maybeShiftOrigin(world)
   // Спутники родились в центрах своих планет: место им даёт время, а не фабрика.
   stepOrbits(world)
-  // В стартовой системе выставляем напоказ по одному киту каждого облика — их
-  // можно облететь и рассмотреть, не дожидаясь редкой случайной встречи.
-  placeShowcaseTitans(world)
   return world
 }

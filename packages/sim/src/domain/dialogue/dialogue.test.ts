@@ -60,7 +60,7 @@ describe('разговор', () => {
     expect(linesFor(pirate.world, pirate.other).map((l) => l.topic)).toEqual(['surrender', 'mercy'])
 
     const trader = withShip('neutral')
-    expect(linesFor(trader.world, trader.other).map((l) => l.topic)).toEqual(['escort', 'plunder', 'greet'])
+    expect(linesFor(trader.world, trader.other).map((l) => l.topic)).toEqual(['escort', 'plunder'])
   })
 
   /**
@@ -72,7 +72,7 @@ describe('разговор', () => {
   it('на станции нет боевых реакций — только мирный разговор', () => {
     const trader = withShip('neutral')
     trader.world.docked = true
-    expect(linesFor(trader.world, trader.other).map((l) => l.topic)).toEqual(['escort', 'greet'])
+    expect(linesFor(trader.world, trader.other).map((l) => l.topic)).toEqual(['escort'])
 
     const pirate = withShip('hostile')
     pirate.world.docked = true
@@ -205,6 +205,13 @@ describe('разговор', () => {
     expect(other.spec.tuning).toEqual(world.ships[0]!.spec.tuning)
   })
 
+  it('уже нанятый эскорт не предлагает найм снова', () => {
+    const { world, other } = withShip('neutral')
+    other.ai ??= createAIState(other.state.pos, world.rng)
+    other.ai.escortOf = world.player.id
+    expect(linesFor(world, other).some((l) => l.topic === 'escort')).toBe(false)
+  })
+
   /**
    * Свободный чат: согласие принял характер собеседника (через модель), не кость.
    * `applyOutcome` меняет мир ровно как кнопка, но без броска — и всё равно
@@ -274,20 +281,6 @@ describe('разговор', () => {
       expect(moodTo(t.world, t.other)).toBe('warm')
       rec.relationship = 'hostile'
       expect(moodTo(t.world, t.other)).toBe('hostile')
-    })
-
-    /**
-     * Суть жалобы: послал грабителя — а на «привет» желает чистого неба. Теперь тон
-     * приветствия следует за настроением, а не живёт сам по себе.
-     */
-    it('приветствие меняет тон по настроению, а не желает всем доброго пути', () => {
-      const { world, other } = withShip('neutral')
-      expect(say(world, other, 'greet')).toEqual({ text: 'ЧИСТОГО НЕБА, ПИЛОТ.', agreed: true })
-
-      // Пригрозили — стал насторожен, и «привет» уже не радушный.
-      other.ai = createAIState(other.state.pos, world.rng)
-      other.ai.grievance = 1
-      expect(say(world, other, 'greet').agreed).toBe(false)
     })
 
     /**

@@ -7,6 +7,7 @@ import type { World } from '../world/entities'
 import { arrivalPoint, scatterArrival, type Arrival } from './arrival'
 import { systemDefOf } from './bridge'
 import { driftContacts } from './contacts'
+import { syncLiveContactsFromShips } from '../world/plan'
 import { spawnResidentContacts } from '../world/traffic'
 import { generateSystem } from './generate'
 import { distanceLy, placeSystem } from './shape'
@@ -114,6 +115,7 @@ export function jump(world: World, index: number, arrival: Arrival | null = null
   const def = systemDefFor(destIndex, world.galaxySeed, seatOverride)
   const drive = world.player.spec.jumpRange
   const start = scatterArrival(def, arrivalPoint(def, arrival), drive > 0 ? spent / drive : 0, world.rng)
+  syncLiveContactsFromShips(world)
   enterSystem(world, def, destIndex, start)
   world.player.jumpCharge = Math.max(0, world.player.jumpCharge - spent)
 

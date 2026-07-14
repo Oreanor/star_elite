@@ -3,22 +3,23 @@ import { freighterLoadout, pirateLeaderLoadout, pirateLoadout, traderLoadout } f
 import { NPC_DOCK } from '../../config/station'
 import { TITAN } from '../../config/titans'
 import { PLATFORM } from '../../config/platform'
+import { ARRIVAL } from '../../config/galaxy'
+import { CONTACTS } from '../../config/contacts'
 import { TRAFFIC } from '../../config/world'
 import { signed, type Rng } from '../../core/math'
 import type { Loadout } from '../loadout'
 import { createAIState } from '../ai/types'
 import { residentAcquaintances } from './acquaintance'
+import { rehydrateContactShip } from './plan'
 import { spawnPlatform } from './platforms'
-import { spawnWarpFlash } from './warp'
+import { beginWarpArrival } from './warp'
 import { addCommodity } from '../cargo/hold'
 import { COMMODITIES } from '../cargo/items'
 import { isDroneShip } from '../combat/drones'
 import { makeShip, refreshSpec } from './factory'
-import { spawnTitan, titanCount } from './titans'
+import { pickTrafficVariant } from './trafficVariants'
+import { spawnTrafficTitan, titanCount } from './titans'
 import type { BodyEntity, Faction, ShipEntity, World } from './entities'
-
-/** Направление ворот причала: завсегдатаи заходят на стыковку с этой стороны. */
-const _gateDir = new Vector3(NPC_DOCK.GATE[0], NPC_DOCK.GATE[1], NPC_DOCK.GATE[2]).normalize()
 
 /**
  * Встречи в космосе.
@@ -88,6 +89,15 @@ export const ENCOUNTERS: readonly EncounterKind[] = [
     escort: { count: 3, loadout: pirateLeaderLoadout, faction: 'police' },
   },
 ]
+
+/** Мирные типы, что могут встать в очередь к причалу — те же, что летают в трафике. */
+const DOCKABLE_KINDS: readonly EncounterKind[] = ENCOUNTERS.filter(
+  (k) => k.faction === 'neutral' && (k.id === 'trader' || k.id === 'convoy'),
+)
+
+function canDockAtStation(kind: EncounterKind): boolean {
+  return DOCKABLE_KINDS.includes(kind)
+}
 
 const _scratch = new Vector3()
 const _offset = new Vector3()
@@ -197,10 +207,12 @@ function spawnOne(world: World, kind: EncounterKind, pos: Vector3, home: Vector3
     _offset.copy(home).sub(pos).normalize(),
   )
 
-  const ship = makeShip(world.ids, kind.faction, kind.name, kind.loadout(), pos.clone(), quat, world.rng)
+  const variant = pickTrafficVariant(kind.id, world.rng)
+  const ship = makeShip(world.ids, kind.faction, kind.name, variant.loadout, pos.clone(), quat, world.rng)
   // Помним, каким типом рождён: по нему воссоздадим борт, если игрок с ним заговорит
   // и однажды встретит снова.
   ship.originKind = kind.id
+  ship.persona = { ...ship.persona, profession: variant.profession }
   // Дом — не место рождения, а НАЗНАЧЕНИЕ: патрульный круг бота вьётся вокруг дома,
   // значит корабль сперва долетит до цели, а уже там начнёт кружить.
   ship.ai = createAIState(home, world.rng)
@@ -244,6 +256,63 @@ function spawnEscort(world: World, escort: NonNullable<EncounterKind['escort']>,
   return born
 }
 
+/** Разброс в касательной плоскости к оси `axis` (единичной), до `max` м. */
+function tangentScatter(world: World, axis: Vector3, max: number, out: Vector3): void {
+  const magnitude = Math.sqrt(world.rng()) * max
+  if (magnitude < 1) {
+    out.set(0, 0, 0)
+    return
+  }
+  const ux = axis.x
+  const uy = axis.y
+  const uz = axis.z
+  const ref = Math.abs(uy) < 0.9 ? { x: 0, y: 1, z: 0 } : { x: 1, y: 0, z: 0 }
+  let t1x = uy * ref.z - uz * ref.y
+  let t1y = uz * ref.x - ux * ref.z
+  let t1z = ux * ref.y - uy * ref.x
+  const t1len = Math.hypot(t1x, t1y, t1z) || 1
+  t1x /= t1len
+  t1y /= t1len
+  t1z /= t1len
+  const t2x = uy * t1z - uz * t1y
+  const t2y = uz * t1x - ux * t1z
+  const t2z = ux * t1y - uy * t1x
+  const angle = world.rng() * Math.PI * 2
+  const a = Math.cos(angle) * magnitude
+  const b = Math.sin(angle) * magnitude
+  out.set(t1x * a + t2x * b, t1y * a + t2y * b, t1z * a + t2z * b)
+}
+
+/**
+ * Где появляется знакомый при входе в систему: либо выход из гиперпрыжка у причала
+ * (как игрок), либо подлёт своим ходом с кромки радара. В обоих случаях — не из
+ * пустоты у ворот и не в центре станции.
+ */
+function acquaintanceSpawnSite(
+  world: World,
+  station: BodyEntity | undefined,
+  outPos: Vector3,
+): 'hyper' | 'cruise' {
+  if (station && world.rng() < CONTACTS.RESIDENT_HYPER_SHARE) {
+    const star = world.bodies.find((b) => b.kind === 'star')
+    _scratch.copy(station.pos)
+    if (star) _scratch.sub(star.pos)
+    if (_scratch.lengthSq() < 1e-6) _scratch.set(1, 0, 0)
+    _scratch.normalize()
+    outPos.copy(station.pos).addScaledVector(_scratch, station.radius + ARRIVAL.STANDOFF)
+    tangentScatter(world, _scratch, ARRIVAL.SPREAD_MAX, _offset)
+    outPos.add(_offset)
+    return 'hyper'
+  }
+
+  randomDirection(world, _scratch)
+  const distance = TRAFFIC.SPAWN_MIN + world.rng() * (TRAFFIC.SPAWN_MAX - TRAFFIC.SPAWN_MIN)
+  outPos.copy(world.player.state.pos).addScaledVector(_scratch, distance)
+  randomDirection(world, _offset).multiplyScalar(world.rng() * TRAFFIC.GROUP_SPREAD * 0.5)
+  outPos.add(_offset)
+  return 'cruise'
+}
+
 /**
  * Выставить на радар всех знакомых, чьё место — эта система. Не «встреча» и не бросок
  * кости: со знакомыми случайных встреч нет, их положение известно всегда с точностью до
@@ -252,21 +321,25 @@ function spawnEscort(world: World, escort: NonNullable<EncounterKind['escort']>,
  * один раз при входе в систему (после `enterSystem`), не из ритма трафика.
  *
  * Борт воссоздаётся тем же типом встречи, что когда-то его родил, но с прежним именем,
- * характером, фракцией и памятью. Ставим у обитаемого мира (столица/станция) — там его
- * и «место жительства», и туда же указывает `contactWhereabouts` для отсутствующих.
+ * характером, фракцией и памятью. Приходит либо из гиперпрыжка у причала (вспышка
+ * перехода), либо подлетает с кромки радара — как обычный трафик, только это тот же
+ * знакомый, а не случайный прохожий.
  */
 export function spawnResidentContacts(world: World): ShipEntity[] {
   const residents = residentAcquaintances(world)
   if (residents.length === 0) return []
 
+  const station = world.bodies.find((b) => b.kind === 'station')
   const anchor = residentAnchor(world)
   const born: ShipEntity[] = []
   for (const rec of residents) {
     const kind = ENCOUNTERS.find((k) => k.id === rec.kindId) ?? ENCOUNTERS[0]!
-    // Рассадка вокруг якоря, детерминированно от `world.rng` (свежий после enterSystem).
-    randomDirection(world, _scratch)
-    const pos = _site.copy(anchor).addScaledVector(_scratch, TRAFFIC.SPAWN_MIN * (0.6 + world.rng() * 0.8))
-    const ship = spawnOne(world, kind, pos, anchor)
+    acquaintanceSpawnSite(world, station, _site)
+    _scratch.copy(_site)
+    const ship = spawnOne(world, kind, _scratch, _offset.copy(anchor))
+    _offset.copy(anchor).sub(_scratch)
+    if (_offset.lengthSq() < 1e-6) randomDirection(world, _offset)
+    beginWarpArrival(world, ship, _scratch, _offset)
 
     // Тот же пилот, не новый: имя открыто (знакомы), характер и фракция — из записи.
     ship.name = rec.name
@@ -274,9 +347,13 @@ export function spawnResidentContacts(world: World): ShipEntity[] {
     ship.persona = rec.persona
     ship.faction = rec.faction
     ship.acquaintanceId = rec.id
+    if (station && rec.faction === 'neutral' && canDockAtStation(kind) && ship.ai) {
+      ship.ai.dock = 'inbound'
+    }
     // Снова свиделись: ты вернулся в его систему и застал его на радаре. Отсюда бот
     // при разговоре знает, что вы не впервые (`metBefore`), а не встречает как чужого.
     rec.meetings += 1
+    rehydrateContactShip(world, rec, ship)
     born.push(ship)
   }
   return born
@@ -294,26 +371,43 @@ function residentAnchor(world: World): Vector3 {
 /** Одна встреча: от одиночки до стаи. Возвращает всех, кому нужен пилот. */
 function spawnEncounter(world: World): ShipEntity[] {
   const born = bornEncounter(world)
-  // Приход в систему видно со стороны: на месте появления — вспышка перехода.
-  // Одна на группу, в её центре: звено выходит из прыжка вместе, а не поштучно.
   const lead = born[0]
-  if (lead) spawnWarpFlash(world, lead.state.pos, true)
+  if (lead) {
+    _offset.copy(lead.ai!.home).sub(lead.state.pos)
+    beginWarpArrival(world, lead, lead.state.pos, _offset)
+  }
   return born
+}
+
+/** Кромка локатора: 6–9 км от игрока, без «рождения у ворот». */
+function spawnFromRadarEdge(world: World, outPos: Vector3, outHome: Vector3, flyThrough: boolean): void {
+  randomDirection(world, _scratch)
+  const distance = TRAFFIC.SPAWN_MIN + world.rng() * (TRAFFIC.SPAWN_MAX - TRAFFIC.SPAWN_MIN)
+  outPos.copy(world.player.state.pos).addScaledVector(_scratch, distance)
+  if (flyThrough) outHome.copy(world.player.state.pos).addScaledVector(_scratch, -TRAFFIC.DESTINATION_RANGE)
+  else outHome.copy(world.player.state.pos)
 }
 
 function bornEncounter(world: World): ShipEntity[] {
   const kind = weightedPick(world.rng, ENCOUNTERS, remoteness(world))
   const count = kind.min + Math.floor(world.rng() * (kind.max - kind.min + 1))
+  const station = world.bodies.find((b) => b.kind === 'station')
+  const canDock = station != null && canDockAtStation(kind)
 
   const centre = new Vector3()
-  const home = new Vector3()
-  spawnSite(world, kind, centre, home)
+  const transitHome = new Vector3()
+  if (kind.faction === 'hostile') spawnSite(world, kind, centre, transitHome)
+  else spawnFromRadarEdge(world, centre, transitHome, !kind.approach)
 
   const born: ShipEntity[] = []
   for (let i = 0; i < count; i++) {
     if (trafficCount(world) >= TRAFFIC.MAX) break
     randomDirection(world, _offset).multiplyScalar(world.rng() * TRAFFIC.GROUP_SPREAD)
-    born.push(spawnOne(world, kind, _scratch.copy(centre).add(_offset), home))
+    const dock = canDock && world.rng() < TRAFFIC.DOCK_SHARE
+    const home = dock ? station!.pos : transitHome
+    const ship = spawnOne(world, kind, _scratch.copy(centre).add(_offset), home)
+    if (dock && ship.ai) ship.ai.dock = 'inbound'
+    born.push(ship)
   }
 
   // Груз и прикрытие — после того, как туша родилась: эскорт строится вокруг неё,
@@ -325,13 +419,6 @@ function bornEncounter(world: World): ShipEntity[] {
     if (kind.escort) born.push(...spawnEscort(world, kind.escort, patron))
   }
 
-  // Часть мирных караванов идёт СТЫКОВАТЬСЯ, а не мимо: они выстраиваются в очередь
-  // к причалу и швартуются по одному. Гигант-грузовик к причалу не лезет — только
-  // лёгкие торговцы. Отмечаем весь борт: караван из троих и покажет очередь наглядно.
-  const station = world.bodies.find((b) => b.kind === 'station')
-  if (station && (kind.id === 'trader' || kind.id === 'convoy') && world.rng() < TRAFFIC.DOCK_SHARE) {
-    for (const ship of born) if (ship.ai) ship.ai.dock = 'inbound'
-  }
   return born
 }
 
@@ -346,48 +433,46 @@ function stationRegulars(world: World): number {
   ).length
 }
 
-/** Родить одного завсегдатая: торговец заходит на стыковку со стороны ворот. Trader — ENCOUNTERS[0]. */
-function spawnStationRegular(world: World, station: BodyEntity): ShipEntity {
-  // Заход со стороны ворот, с небольшим разбросом, чтобы пара не сыпалась из точки.
-  _scratch.copy(_gateDir).addScaledVector(randomDirection(world, _offset), 0.35).normalize()
-  const pos = _site.copy(station.pos).addScaledVector(_scratch, station.radius + TRAFFIC.STATION_APPROACH)
-  const ship = spawnOne(world, ENCOUNTERS[0]!, pos, _offset.copy(station.pos))
-  if (ship.ai) ship.ai.dock = 'inbound'
-  return ship
-}
-
 /**
- * Поддержать жизнь у причала, пока игрок рядом со станцией: держим у неё несколько
- * заходящих на стыковку. Новоприбывший тут же считается `inbound`, поэтому за кадр
- * добавляем не больше одного — перебора нет, а число само доберёт норму и удержит её
- * по мере того, как отстоявшиеся уходят. Возвращает родившихся: им нужен пилот.
+ * Поддержать жизнь у причала, пока игрок рядом: не хватает заходящих — приводим
+ * ещё одного с кромки радара, как обычный трафик. Хочет стыковаться — `inbound`,
+ * нет — просто пролетает мимо и в счёт не идёт.
  */
-function stepStationLife(world: World): ShipEntity[] {
+function stepStationApproach(world: World): ShipEntity[] {
   const station = world.bodies.find((b) => b.kind === 'station')
   if (!station) return []
   if (station.pos.distanceTo(world.player.state.pos) > TRAFFIC.STATION_LIFE_RANGE) return []
   if (stationRegulars(world) >= TRAFFIC.STATION_REGULARS) return []
   if (trafficCount(world) >= TRAFFIC.MAX) return []
-  return [spawnStationRegular(world, station)]
+
+  const kind = weightedPick(world.rng, DOCKABLE_KINDS, remoteness(world))
+  if (world.rng() >= TRAFFIC.DOCK_SHARE) return []
+
+  const centre = new Vector3()
+  const transitHome = new Vector3()
+  spawnFromRadarEdge(world, centre, transitHome, true)
+  randomDirection(world, _offset).multiplyScalar(world.rng() * TRAFFIC.GROUP_SPREAD)
+  _scratch.copy(centre).add(_offset)
+  const ship = spawnOne(world, kind, _scratch, _site.copy(station.pos))
+  if (ship.ai) ship.ai.dock = 'inbound'
+  _offset.copy(station.pos).sub(_scratch)
+  beginWarpArrival(world, ship, _scratch, _offset)
+  return [ship]
 }
 
 /**
  * Жизнь причала, пока игрок ПРИСТЫКОВАН и мир стоит. Обычный шаг в доке заморожен
- * (`stepWorld` выходит сразу), поэтому смену лиц у причала ведём отдельно и по СЕКУНДАМ
- * реального времени (`dt`): у стоящих тикает стоянка, отстоявшийся отходит (`dock='done'` —
- * когда отчалишь, улетит сам), а на освободившееся место иногда швартуется новый
- * завсегдатай — сразу в `berthed`, ведь его подхода из дока всё равно не видно.
+ * (`stepWorld` выходит сразу), поэтому у уже стоящих тикает стоянка по СЕКУНДАМ
+ * реального времени (`dt`): отстоявшийся отходит (`dock='done'` — когда отчалишь,
+ * улетит сам). Новых у причала не подменяем: inbound швартуется только когда мир
+ * снова идёт и `flyDock` доводит борт до ворот.
  *
  * Детерминированно от `world.rng`. Возвращает true, если состав причала изменился —
- * приложению это сигнал перерисовать плашки. Контроллер новичку слой приложения раздаст
- * сам, когда мир оживёт (`syncControllers`): стоящему у причала он пока не нужен.
+ * приложению это сигнал перерисовать плашки.
  */
 export function stepDockedBerth(world: World, dt: number): boolean {
-  const station = world.bodies.find((b) => b.kind === 'station')
-  if (!station) return false
   let changed = false
 
-  // Стоянка тикает и в доке — вручную по dt, ведь world.time стоит. Отстоявшийся отходит.
   for (const s of world.ships) {
     if (!s.alive || !s.ai || s.ai.dock !== 'berthed' || s.faction !== 'neutral' || isDroneShip(s)) continue
     s.ai.dockTimer -= dt
@@ -399,21 +484,18 @@ export function stepDockedBerth(world: World, dt: number): boolean {
     }
   }
 
-  // Новый гость — не чаще раза в DOCKED_BERTH_PERIOD секунд и только если причал не полон.
-  const berthed = world.ships.filter(
-    (s) => s.alive && s.ai?.dock === 'berthed' && s.faction === 'neutral' && !isDroneShip(s),
-  ).length
-  if (berthed < TRAFFIC.STATION_REGULARS && trafficCount(world) < TRAFFIC.MAX && world.rng() < dt / TRAFFIC.DOCKED_BERTH_PERIOD) {
-    const ship = spawnStationRegular(world, station)
-    if (ship.ai) {
-      // Сразу у причала: подхода не видно, стоянку даём с разбросом, чтобы уходили вразнобой.
-      ship.ai.dock = 'berthed'
-      ship.ai.dockTimer = NPC_DOCK.DWELL * (0.6 + world.rng() * 0.9)
-    }
-    ship.clearance = true
-    changed = true
-  }
   return changed
+}
+
+/**
+ * Трафик у причала, пока игрок в доке: обычный приток с кромки радара (как в космосе)
+ * и таймер стоянки у уже стоящих. Inbound остаётся на подлёте — увидишь его, когда
+ * отчалишь.
+ */
+export function stepDockTraffic(world: World, dt: number): { changed: boolean; born: ShipEntity[] } {
+  const born = stepTraffic(world, dt)
+  const changed = stepDockedBerth(world, dt) || born.length > 0
+  return { changed, born }
 }
 
 /**
@@ -475,7 +557,7 @@ function despawnDistant(world: World): void {
     if (s.ai?.dormant) return true
     // Стыкующегося у причала не бросаем: он привязан к станции, как захваченная цель.
     // Иначе улетевший к причалу игрок вернулся бы к пустому причалу с зависшей очередью.
-    if (s.ai?.dock === 'berthed' || s.id === world.dockOccupantId) return true
+    if (s.ai?.dock === 'berthed' || s.ai?.dock === 'inbound' || s.id === world.dockOccupantId) return true
     return s.state.pos.distanceToSquared(world.player.state.pos) <= limitSq
   })
 
@@ -520,7 +602,7 @@ export function stepTraffic(world: World, dt: number): ShipEntity[] {
 
   // Жизнь у причала — вне ритма встреч и вне первой задержки: станция обязана
   // выглядеть живой сразу, а не через полминуты. Родившихся копим и вернём вместе.
-  const born = stepStationLife(world)
+  const born = stepStationApproach(world)
 
   world.trafficTimer -= dt
   if (world.trafficTimer > 0) return born
@@ -532,11 +614,10 @@ export function stepTraffic(world: World, dt: number): ShipEntity[] {
   // он пустее: маршруты сходятся у планет, и встречи вместе с ними.
   if (world.rng() >= TRAFFIC.CHANCE * crowding(world)) return born
 
-  // Раз в несколько встреч вместо кораблей приходит КИТ — город поколений. Он
-  // живёт своим списком и пилота не требует, поэтому возвращаем накопленное. Кит
-  // редок и одинок: за его потолком встреча становится обычной.
+  // Раз в ~20 успешных попыток вместо кораблей приходит кит поколений. Стоит
+  // у причала — не стыкуется, просто висит поодаль.
   if (world.rng() < TITAN.ENCOUNTER_SHARE && titanCount(world) < TITAN.MAX) {
-    spawnTitan(world)
+    spawnTrafficTitan(world)
     return born
   }
 

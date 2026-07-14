@@ -4,6 +4,7 @@ import { TitleStars } from './TitleStars'
 import { requestLock } from '../platform/input/input'
 import { setLang, t, useLang, type Key, type Lang } from '../ui/i18n'
 import { Tabs } from '../ui/station/chrome'
+import { preloadTitleAssets, titleAssetsReady } from '../ui/preload'
 
 /**
  * Титульный экран: заставка, пауза, настройки и экран гибели. Отдельно от App —
@@ -102,7 +103,7 @@ function MenuButton({
       // Тёмная плотная заливка: на СВЕТЛОМ фоне (белая/голубая звезда за меню) прежние
       // 38% тонули, и светлый текст сливался с белым. 82% тёмного тёмно-синего держит
       // контраст на любом фоне. Наведение по-прежнему заливает кнопку целиком.
-      className="w-56 cursor-pointer border border-[#7fd6ff] bg-[#0a1a2f]/[0.82] px-8 py-3 text-base
+      className="min-w-56 w-max cursor-pointer whitespace-nowrap border border-[#7fd6ff] bg-[#0a1a2f]/[0.82] px-8 py-3 text-base
                  backdrop-blur-md tracking-[0.3em] text-[#7fd6ff] transition-colors
                  hover:bg-[#7fd6ff] hover:text-black
                  disabled:cursor-wait disabled:border-[#3f7391] disabled:bg-[#0a1a2f]/[0.7]
@@ -542,6 +543,26 @@ export function Paused({
 }) {
   useLang() // подписка: смена языка перерисует меню
   const session = useSession()
+  // Титул не показываем, пока PNG заставки не в кэше — иначе фон и корабль «прогружаются на глазах».
+  const [gfxReady, setGfxReady] = useState(() => titleAssetsReady())
+  const [gfxProgress, setGfxProgress] = useState(() =>
+    titleAssetsReady() ? 1 : 0,
+  )
+  useEffect(() => {
+    if (gfxReady) return
+    let alive = true
+    preloadTitleAssets((done, total) => {
+      if (alive && total > 0) setGfxProgress(done / total)
+    }).then(() => {
+      if (alive) {
+        setGfxProgress(1)
+        setGfxReady(true)
+      }
+    })
+    return () => {
+      alive = false
+    }
+  }, [gfxReady])
   // Авто-старт новичка начинается сразу «занятым»: индикатор вместо меню, без кадра-мигания.
   const [waiting, setWaiting] = useState(!!auto)
   // «Вжух»: срыв корабля. Взводится, только когда сцена ПОСТРОЕНА — до этого корабль лишь
@@ -661,12 +682,31 @@ export function Paused({
   useEffect(() => void (auto && launch()), [])
 
   return (
-    <div
-      // Форма курсора задаётся ЯВНО, а не наследуется: под оверлеем лежит канвас
-      // с прицелом, и до первого движения мыши браузер продолжает рисовать его.
-      className="absolute inset-0 cursor-default overflow-hidden bg-black bg-cover bg-center font-mono text-[#7fd6ff]"
-      style={{ backgroundImage: 'url(/bg.png)' }}
-    >
+    <div className="absolute inset-0 cursor-default overflow-hidden bg-black font-mono text-[#7fd6ff]">
+      {!gfxReady ? (
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-4">
+          <span className="text-sm tracking-[0.3em]">{t('menu.loadingGfx')}</span>
+          <div
+            className="h-0.5 w-48 overflow-hidden rounded-full bg-[#0a1a2f]"
+            role="progressbar"
+            aria-valuenow={Math.round(gfxProgress * 100)}
+            aria-valuemin={0}
+            aria-valuemax={100}
+          >
+            <div
+              className="h-full bg-[#7fd6ff] transition-[width] duration-150 ease-out"
+              style={{ width: `${Math.round(gfxProgress * 100)}%` }}
+            />
+          </div>
+        </div>
+      ) : (
+        <div
+          className="absolute inset-0 cursor-default overflow-hidden bg-black bg-cover bg-center"
+          style={{
+            backgroundImage: 'url(/bg.png)',
+            animation: 'title-fade-in 0.35s ease-out both',
+          }}
+        >
       {/* Затемнение ради читаемости фосфорного текста поверх звёзд bg.png.
           Слабее прежнего: bg.png сам тёмный, топить его в черноте незачем. */}
       <div className="absolute inset-0 bg-black/45" />
@@ -808,6 +848,8 @@ export function Paused({
               )}
             </MenuPanel>
           </div>
+        </div>
+      )}
         </div>
       )}
     </div>

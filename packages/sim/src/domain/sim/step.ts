@@ -47,6 +47,7 @@ import type { ShipEntity, World } from '../world/entities'
 import { stepOrbits } from '../world/orbits'
 import { maybeShiftOrigin } from '../world/origin'
 import { markContactLost } from '../world/acquaintance'
+import { stepWarpEmergence } from '../world/warp'
 import { stepTraffic } from '../world/traffic'
 import { stepTitans } from '../world/titans'
 import { stepPlatforms } from '../world/platforms'
@@ -92,6 +93,8 @@ export function stepWorld(world: World, frameDt: number, controllers: Controller
   // Накопитель ограничен сверху: свёрнутая вкладка не должна телепортировать мир.
   let remaining = Math.min(frameDt, PHYSICS.MAX_FRAME_DT)
 
+  stepWarpEmergence(world, Math.min(frameDt, PHYSICS.MAX_FRAME_DT))
+
   while (remaining > 0) {
     const dt = Math.min(PHYSICS.FIXED_DT, remaining)
     remaining -= dt
@@ -136,6 +139,7 @@ function stepControllers(world: World, controllers: ControllerMap, dt: number): 
     if (!ship.alive) continue
     // Кинематический борт рулится извне — свой контроллер и крейсер ему не задаём.
     if (ship.kinematic) continue
+    if (ship.warpEmerging || ship.warpDeparting) continue
     const controller = controllerFor(controllers, ship)
     controller.update(ship, world, dt)
     updateCruise(ship, world, controller.wantsCruise?.(ship, world) ?? false, dt)

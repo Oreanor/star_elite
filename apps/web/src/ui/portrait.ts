@@ -96,6 +96,11 @@ export function markOutcomeEmotion(shipId: number, emotion: Emotion, time: numbe
   outcomeEmotion.set(shipId, { emotion, at: time })
 }
 
+/** Сброс транзиентной эмоции (закрыли разговор — не тащим гримасу в HUD). */
+export function clearOutcomeEmotion(shipId: number): void {
+  outcomeEmotion.delete(shipId)
+}
+
 /**
  * Эмоция из состояния борта — детерминированно, без RNG. Порядок = приоритет:
  * боль (только что попали) → исход разговора (сдался — грусть, сделка — радость) →

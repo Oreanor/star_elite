@@ -11,8 +11,12 @@ import {
   generateGalaxy,
   itemName,
   localSettlement,
+  escortFee,
+  masterClass,
   moodTo,
   shipWhereabouts,
+  stationStock,
+  stanceTo,
   type Mood,
   type Persona,
   type Relationship,
@@ -22,7 +26,7 @@ import {
   type Topic,
   type World,
 } from '@elite/sim'
-import { chassisName, economyName, governmentName, professionName, properName, speciesName } from '../i18n/dataNames'
+import { chassisName, economyName, governmentName, moduleName, professionName, properName, speciesName } from '../i18n/dataNames'
 import { formatGameDate } from '../i18n/date'
 
 /**
@@ -132,12 +136,16 @@ export interface NegotiationContext {
    * торгуется, а ИСПОЛНЯЕТ приказы послушания — и распознавать надо их, а не уговоры.
    */
   theyObeyYou: boolean
-  /** Текущее отношение собеседника к игроку — итог прошлых бесед, если были. */
+  /** Текущее отношение собеседника к игроку — итог фракции, обиды и прошлых бесед. */
   stance: Relationship
+  /** Открытая претензия (0 — нет). Мирный с обидой насторожен, даже если в журнале нейтрал. */
+  grievanceLevel: number
+  /** Сейчас враг по фракции — в бою или на разбое, не «просто недоволен». */
+  combatEnemy: boolean
   /**
    * Настроение собеседника ПРЯМО СЕЙЧАС (его считает домен, `moodTo`): в этом тоне
-   * модель и обязана говорить. Отношением рулит движок, а не настроение модели —
-   * потому тон приходит готовым, а не выбирается ею.
+   * модель обязана говорить. Пересчитывается перед каждой репликой — после извинений,
+   * оскорблений, сделок и кнопок в том же разговоре расклад может измениться.
    */
   mood: Mood
   /** Что механически можно у него попросить прямо сейчас (незаблокированное). */
@@ -152,6 +160,71 @@ export interface NegotiationContext {
    * сверху. Бот обязан это помнить: без журнала он «забывал» только что данные деньги.
    */
   history: string[]
+  /** Деньги и услуги — цифры из домена, чтобы не путать «кто кому платит». */
+  economy: EconomySnapshot
+  /** Станция системы: что можно у причала и кто сейчас у дока. */
+  station: StationSnapshot
+  /** Справочники с полным текстом в промпте (не больше MAX_ACTIVE_DIGESTS). */
+  activeDigests: readonly ContextDigest[]
+  /** Выпали из памяти разговора — снова lookup или переспрос. */
+  forgottenDigests: readonly ContextDigest[]
+  /** Подгружены суфлёром или lookup только на эту реплику. */
+  freshDigests: readonly ContextDigest[]
+}
+
+/** Справочники, которые не тащим в каждый запрос — пилот «листает» их по просьбе. */
+export type ContextDigest = 'market' | 'neighbours' | 'history' | 'worlds'
+
+/** Сколько справочников держим в «памяти» одного разговора — старейший выпадает. */
+export const MAX_ACTIVE_DIGESTS = 3
+
+/** Память справочников на сеанс связи: активные (полные блоки) и забытые (только заглушки). */
+export interface DigestMemory {
+  active: ContextDigest[]
+  forgotten: ContextDigest[]
+}
+
+export function createDigestMemory(): DigestMemory {
+  return { active: [], forgotten: [] }
+}
+
+/** Открыть или освежить справочник; при переполнении самый давний забывается. */
+export function rememberDigest(mem: DigestMemory, digest: ContextDigest): void {
+  const i = mem.active.indexOf(digest)
+  if (i >= 0) mem.active.splice(i, 1)
+  const fi = mem.forgotten.indexOf(digest)
+  if (fi >= 0) mem.forgotten.splice(fi, 1)
+  mem.active.push(digest)
+  while (mem.active.length > MAX_ACTIVE_DIGESTS) {
+    const dropped = mem.active.shift()!
+    if (!mem.forgotten.includes(dropped)) mem.forgotten.push(dropped)
+  }
+}
+
+/** Снимок для торга: кошелёк командира и твои цены на услуги. */
+export interface EconomySnapshot {
+  commanderCredits: number
+  /** Цена сопровождения, кр, или null — не наймёшься (враждебность/настороженность). */
+  escortFee: number | null
+  escortHired: boolean
+  canAffordEscort: boolean
+}
+
+/** Что есть на станции и кто у причала — чтобы бот не обещал установку модулей в полёте. */
+export interface StationSnapshot {
+  present: boolean
+  stationName: string | null
+  /** Командир пришвартован — многие сделки с его кораблём только тогда. */
+  commanderDocked: boolean
+  /** Ты (NPC) у причала. */
+  npcDocked: boolean
+  techLevel: number
+  /** Класс мастерской ремонта (1–3). */
+  repairMasterClass: number
+  /** Максимальный класс оснастки в продаже (1–4). */
+  maxModuleClass: number
+  /** Примеры модулей в витрине сейчас. */
+  shopModuleSamples: string[]
 }
 
 /** Местная цена товара: пилот знает цифры и может их назвать, не выдумывая. */
@@ -193,8 +266,109 @@ export interface NegotiatorReply {
   commands: Command[]
   /** Собеседник кладёт трубку: договорено, надоело или психанул. */
   hangup: boolean
-  /** Откуда реплика: живая модель или локальный запас на случай обрыва связи. */
-  source: 'model' | 'fallback'
+  /** Откуда реплика: живая модель, локальный запас или обрыв от перегрузки канала. */
+  source: 'model' | 'fallback' | 'overload'
+  /** Модель просит подгрузить справочник — клиент догрузит и переспросит. */
+  lookup?: ContextDigest | null
+  /**
+   * Переводчик/чужие понятия: бот не уверен в поручении и просит расклад по шагам.
+   * Команды при этом пустые — домен ничего не исполняет.
+   */
+  clarify?: boolean
+}
+
+export function digestActive(mem: Pick<DigestMemory, 'active'>, digest: ContextDigest): boolean {
+  return mem.active.includes(digest)
+}
+
+export function digestLoaded(ctx: NegotiationContext, digest: ContextDigest): boolean {
+  return ctx.activeDigests.includes(digest)
+}
+
+/**
+ * СУФЛЁР: по реплике командира угадываем, какие справочники нужны для ответа.
+ * Клиент тихо подмешивает их в промпт ДО вызова модели — без «ща гляну» в ленте.
+ */
+export function sufflerDigestsFor(text: string): ContextDigest[] {
+  const t = text.toLowerCase()
+  const out = new Set<ContextDigest>()
+
+  if (
+    /лазер|оруж|модул|установ|оснаст|щит|привод|купи|купить|buy|laser|outfit|hardpoint|ствол/.test(
+      t,
+    )
+  ) {
+    out.add('market')
+  }
+  if (
+    /цен|торг|куп|прод|товар|груз|контраб|кредит|сколько сто|прайс|котиров|выгодн|сбыть|закуп|руда|металл|прибыл/.test(
+      t,
+    )
+  ) {
+    out.add('market')
+  }
+  if (
+    /сосед|систем[аыу]|свет\.?\s*лет|куда лет|маршрут|переход|прыж|галакт|скач|дальше|ближайш|соседн/.test(
+      t,
+    )
+  ) {
+    out.add('neighbours')
+  }
+  if (
+    /помн|раньше|прошл|договор|обещ|журнал|вспомн|между нами|ты мне|я тебе|давали|передавал|должен|задолж|в прошлый/.test(
+      t,
+    )
+  ) {
+    out.add('history')
+  }
+  if (/планет|лун|мир[аеу]?|колон|населен|обитаем|поверхност|какой там|что за мир|расой|правлен|экономик/.test(t)) {
+    out.add('worlds')
+  }
+  // «Куда сходить за …» — и маршрут, и цены.
+  if (/куда сход|где дешев|где дорог|где взять|где продать/.test(t)) {
+    out.add('market')
+    out.add('neighbours')
+  }
+
+  return [...out]
+}
+
+const DIGEST_LABEL: Record<ContextDigest, string> = {
+  market: 'местные цены',
+  neighbours: 'соседние системы',
+  history: 'журнал встреч',
+  worlds: 'планеты системы',
+}
+
+/** Подсказка промпту: какие блоки подмешал суфлёр на эту реплику. */
+export function sufflerHint(
+  fresh: readonly ContextDigest[],
+  labels: Record<ContextDigest, string> = DIGEST_LABEL,
+): string {
+  if (fresh.length === 0) return ''
+  return fresh.map((d) => labels[d]).join(', ')
+}
+
+/** Список справочников словами — для подсказок промпту. */
+export function digestSummary(
+  digests: readonly ContextDigest[],
+  labels: Record<ContextDigest, string> = DIGEST_LABEL,
+  empty = 'ничего',
+): string {
+  if (digests.length === 0) return empty
+  return digests.map((d) => labels[d]).join(', ')
+}
+
+/** @deprecated — то же, что digestSummary */
+export function loadedDigestSummary(loaded: readonly ContextDigest[]): string {
+  return digestSummary(loaded)
+}
+
+export { DIGEST_LABEL }
+
+/** @deprecated имя сохранено — то же, что sufflerDigestsFor */
+export function detectDigests(text: string): ContextDigest[] {
+  return sufflerDigestsFor(text)
 }
 
 const pct = (num: number, den: number): number => (den > 0 ? Math.round((num / den) * 100) : 0)
@@ -214,6 +388,7 @@ function holdSummary(ship: ShipEntity): string {
 const OCCUPATION_SELF: Record<string, string> = {
   trader: 'торговец', convoy: 'торговец', pirate: 'пират', gang: 'пират',
   raider: 'налётчик', police: 'патрульный', freighter: 'дальнобойщик', platform: 'пират',
+  traveler: 'путешественник', explorer: 'учёный', businessman: 'бизнесмен', military: 'военный',
 }
 function occupationSelf(other: ShipEntity): string {
   return (other.originKind && OCCUPATION_SELF[other.originKind]) || 'вольный пилот'
@@ -290,7 +465,9 @@ function eventPhrase(ev: AcquaintanceEvent): string {
     case 'social':
       return ev.tone === 'insult' ? 'ты нахамил ему' : 'ты ему польстил'
     case 'note':
-      return `ты просил запомнить: ${ev.text}`
+      return ev.text.startsWith('МЕТА:')
+        ? `выучил смысл: ${ev.text.slice(5).trim()}`
+        : `ты просил запомнить: ${ev.text}`
   }
 }
 
@@ -399,6 +576,29 @@ function homeOf(world: World, other: ShipEntity): string {
  * Куда он сейчас держит путь — по роли и делам. У нанятого — за нанимателем; у патрульного
  * «при исполнении» — по службе; у причала — стоит там; иначе мирный, скорее всего, к станции.
  */
+/** Верхний класс оснастки по тех-уровню станции — как в `stationStock`. */
+function maxModuleClassForTech(tech: number): number {
+  if (tech >= 12) return 4
+  if (tech >= 9) return 3
+  if (tech >= 5) return 2
+  return 1
+}
+
+function buildStationSnapshot(world: World, npcDocked: boolean): StationSnapshot {
+  const stationBody = world.bodies.find((b) => b.kind === 'station')
+  const set = localSettlement(world)
+  return {
+    present: stationBody != null,
+    stationName: stationBody ? properName(stationBody.name) : null,
+    commanderDocked: world.docked,
+    npcDocked,
+    techLevel: set.techLevel,
+    repairMasterClass: masterClass(set),
+    maxModuleClass: maxModuleClassForTech(set.techLevel),
+    shopModuleSamples: stationStock(world).slice(0, 6).map((m) => moduleName(m)),
+  }
+}
+
 function headingOf(world: World, other: ShipEntity, docked: boolean): string {
   if (other.ai?.escortOf === world.player.id) return 'следуешь за своим нанимателем'
   if (occupationSelf(other) === 'патрульный') {
@@ -412,7 +612,14 @@ function headingOf(world: World, other: ShipEntity, docked: boolean): string {
  * Собрать контекст переговоров из мира. `allowedIntents` считает домен
  * (`linesFor` минус заблокированное) и передаёт вызывающий: правило одно.
  */
-export function buildContext(world: World, other: ShipEntity, allowedIntents: Topic[]): NegotiationContext {
+export function buildContext(
+  world: World,
+  other: ShipEntity,
+  allowedIntents: Topic[],
+  memory: DigestMemory = createDigestMemory(),
+  freshDigests: readonly ContextDigest[] = [],
+): NegotiationContext {
+  const { active, forgotten } = memory
   const set = localSettlement(world)
   const planets = world.bodies.filter((b) => b.kind === 'planet')
   const moons = world.bodies.filter((b) => b.kind === 'moon')
@@ -446,6 +653,8 @@ export function buildContext(world: World, other: ShipEntity, allowedIntents: To
     .slice(0, 8)
 
   const record = world.acquaintances.find((a) => a.id === other.acquaintanceId)
+  const fee = escortFee(world, other)
+  const escortHired = other.ai?.escortOf === player.id
 
   // Где он сам: бот должен уметь ответить, где находится, — у планеты, в доке станции.
   const at = shipWhereabouts(world, other)
@@ -468,18 +677,18 @@ export function buildContext(world: World, other: ShipEntity, allowedIntents: To
       stations: stations.length,
       bodyNames: [...planets, ...stations].slice(0, 6).map((b) => properName(b.name)),
       danger,
-      // Обитаемые миры — каждый со своим поселением: в одной системе аграрная
-      // колония и промышленная столица читаются по-разному, и бот это знает.
-      worlds: world.bodies
-        .filter((b) => b.settlement)
-        .map((b) => ({
-          name: properName(b.name),
-          type: b.surface ?? '—',
-          economy: economyName(b.settlement!.economy),
-          government: governmentName(b.settlement!.government),
-          species: speciesName(b.settlement!.species),
-          populationM: Math.round(b.settlement!.population),
-        })),
+      worlds: active.includes('worlds')
+        ? world.bodies
+            .filter((b) => b.settlement)
+            .map((b) => ({
+              name: properName(b.name),
+              type: b.surface ?? '—',
+              economy: economyName(b.settlement!.economy),
+              government: governmentName(b.settlement!.government),
+              species: speciesName(b.settlement!.species),
+              populationM: Math.round(b.settlement!.population),
+            }))
+        : [],
     },
     them: party(other, roleOf(other, world.player.id)),
     // Игрок — только наблюдаемое (имя/род занятий/вид/борт). Характер, груз, деньги
@@ -498,15 +707,27 @@ export function buildContext(world: World, other: ShipEntity, allowedIntents: To
     heading: headingOf(world, other, at.docked),
     distanceM: Math.round(other.state.pos.distanceTo(world.player.state.pos)),
     nearby,
-    localMarket: localMarket(world),
-    neighbours: neighbours(world),
+    localMarket: active.includes('market') ? localMarket(world) : [],
+    neighbours: active.includes('neighbours') ? neighbours(world) : [],
     theyObeyYou: commandableByPlayer(other, world.player.id),
-    stance: record?.relationship ?? 'neutral',
+    stance: stanceTo(world, other),
+    grievanceLevel: other.ai?.grievance ?? 0,
+    combatEnemy: other.faction === 'hostile',
     mood: moodTo(world, other),
     allowedIntents,
     // Узнаёт, если виделись РАНЬШЕ (встреча не первая) ИЛИ в журнале уже есть что-то
     // сверх самого знакомства (сделка, просьба, факт) — тогда встреча памятная.
     metBefore: (record?.meetings ?? 0) > 1 || (record?.history.length ?? 0) > 1,
     history: record ? historyLines(record.history) : [],
+    economy: {
+      commanderCredits: world.credits,
+      escortFee: fee,
+      escortHired,
+      canAffordEscort: fee != null && world.credits >= fee,
+    },
+    station: buildStationSnapshot(world, at.docked),
+    activeDigests: [...active],
+    forgottenDigests: [...forgotten],
+    freshDigests: [...freshDigests],
   }
 }

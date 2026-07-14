@@ -1,37 +1,33 @@
-import { useEffect, useReducer, useRef, useState } from 'react'
+import { useCallback, useEffect, useReducer, useRef, useState } from 'react'
 import {
-  applyCommand,
-  assignApproach,
-  assignCollectRun,
-  clearTasks,
-  commandableByPlayer,
-  defuseGrievance,
-  hasGrievance,
-  hasTask,
+  dialogueEffects,
+  escortFee,
   interlocutor,
   linesFor,
   rememberPilot,
   stanceTo,
-  type AIOrder,
+  type Command,
   type Relationship,
   type Topic,
 } from '@elite/sim'
 import { useSession } from '../../app/GameContext'
 import { Button, PilotPortrait } from '../station/chrome'
 import { GLASS_PANEL, screenBackground } from '../station/backdrop'
-import { markOutcomeEmotion, type Emotion } from '../portrait'
+import { clearOutcomeEmotion, markOutcomeEmotion, type Emotion } from '../portrait'
 import { UI } from '../theme'
 import { chassisName, occupationName } from '../i18n/dataNames'
-import { buildContext, type ChatTurn, type NegotiatorReply } from './facts'
+import { t, useLang } from '../i18n'
+import { buildContext, createDigestMemory, rememberDigest, sufflerDigestsFor, type ChatTurn, type ContextDigest, type DigestMemory, type NegotiatorReply } from './facts'
+import { DIALOGUE_REACTION_MS, dialogueBaseline, dialogueReaction } from './dialogueFace'
+
+/** Суфлёр: тихая подгрузка справочников в промпт — без паузы в ленте. */
 
 /**
- * Разговор с захваченным кораблём: свободная болтовня через модель ПЛЮС кнопки
- * механик снизу — они и быстрый путь, и запас, если связь не настроена.
+ * Разговор с захваченным кораблём: свободная болтовня через модель плюс «НАНЯТЬ»
+ * в эскорт, если связь не настроена или нужен быстрый путь.
  *
- * Правил тут нет и РЕШЕНИЙ тоже: и кнопки, и свободный чат считает домен (`say`).
- * Модель лишь ловит триггер (какое действие озвучил игрок) и красит слова; согласие,
- * отношение и исход — за движком, ровно как по кнопке. Оттого не бывает «послал, а
- * следом доброго пути желает»: один движок судит оба пути.
+ * Правил тут нет и РЕШЕНИЙ тоже: и кнопка, и свободный чат считает домен (`say`).
+ * Модель ловит триггер и красит слова; согласие, отношение и исход — за движком.
  *
  * Канал не закрывается сам. Обрывают его двое: игрок (T / «положить трубку») или
  * собеседник (`hangup` — договорено, надоело или психанул). Тогда — панель обрыва.
@@ -51,17 +47,21 @@ function outcomeFace(topic: Topic, agreed: boolean): Emotion | null {
   return null
 }
 
-/** Радиус сбора груза по поручению, м: бот подбирает контейнеры в этой зоне вокруг себя. */
-const TASK_COLLECT_RADIUS = 4000
-
-/** Кнопки приказов СВОЕМУ эскорту без цели — работают и без связи (по ним же зовём домен). */
-const ORDER_BUTTONS: { order: AIOrder; say: string }[] = [
-  { order: 'engageAll', say: 'ОГОНЬ ПО ВСЕМ' },
-  { order: 'hold', say: 'ЖДИ ТУТ' },
-  { order: 'keepBack', say: 'ДЕРЖИСЬ В ХВОСТЕ' },
-  { order: 'standDown', say: 'ОТБОЙ, НЕ СТРЕЛЯЙ' },
-  { order: 'resume', say: 'ВОЛЬНО' },
-]
+/** Применить команды и положить реплики в ленту (кнопка и LLM — один контур). */
+function applyTurnToChat(
+  push: (turn: ChatTurn) => void,
+  world: ReturnType<typeof useSession>['world'],
+  other: NonNullable<ReturnType<typeof interlocutor>>,
+  youText: string,
+  commands: Command[],
+  replyText = '',
+): ReturnType<typeof dialogueEffects> {
+  push({ who: 'you', text: youText })
+  const fx = dialogueEffects(world, other, commands, replyText)
+  push({ who: 'them', text: fx.them })
+  for (const line of fx.system) push({ who: 'system', text: line })
+  return fx
+}
 
 /** Отношение борта к игроку — одним словом в шапке. Три состояния, как `stanceTo`. */
 const STANCE_WORD: Record<Relationship, string> = {
@@ -79,6 +79,7 @@ export function Dialogue({
   negotiate: (ctx: ReturnType<typeof buildContext>, history: ChatTurn[], text: string) => Promise<NegotiatorReply>
   chatAvailable: boolean
 }) {
+  useLang()
   const session = useSession()
   const world = session.world
   const other = interlocutor(world)
@@ -92,6 +93,44 @@ export function Dialogue({
   const [ended, setEnded] = useState<string | null>(null)
 
   const scroller = useRef<HTMLDivElement>(null)
+  /** Справочники в памяти разговора — старые выпадают, когда открывают новые. */
+  const digestMemory = useRef<DigestMemory>(createDigestMemory())
+  /** Лицо в шапке — своё, не `pilotEmotion`: претензия и пауза мира не должны залипать. */
+  const [faceEmo, setFaceEmo] = useState<Emotion>('neutral')
+  const faceDecay = useRef<number | null>(null)
+
+  const resetFace = useCallback(() => {
+    if (!other) return
+    setFaceEmo(dialogueBaseline(world, other))
+  }, [world, other])
+
+  const reactFace = useCallback((commands: Command[], fx: ReturnType<typeof dialogueEffects>) => {
+    const hit = dialogueReaction(commands, fx)
+    if (!hit) return
+    setFaceEmo(hit)
+    if (faceDecay.current !== null) window.clearTimeout(faceDecay.current)
+    faceDecay.current = window.setTimeout(resetFace, DIALOGUE_REACTION_MS)
+  }, [resetFace])
+
+  useEffect(() => {
+    if (other) setFaceEmo(dialogueBaseline(world, other))
+  }, [world, other])
+
+  useEffect(() => {
+    if (!other) return
+    const id = other.id
+    return () => {
+      if (faceDecay.current !== null) window.clearTimeout(faceDecay.current)
+      clearOutcomeEmotion(id)
+    }
+  }, [other?.id])
+
+  /** Журнал меняется по ходу связи — держим history в активной памяти, пока не вытеснит более свежее. */
+  const pinMutatingDigests = (mem: DigestMemory) => {
+    if (!other) return
+    const rec = world.acquaintances.find((a) => a.id === other.acquaintanceId)
+    if (rec && rec.history.length > 0) rememberDigest(mem, 'history')
+  }
   useEffect(() => {
     scroller.current?.scrollTo({ top: scroller.current.scrollHeight })
   }, [turns, busy, ended])
@@ -103,121 +142,76 @@ export function Dialogue({
 
   const lines = linesFor(world, other)
   const stance = stanceTo(world, other)
-  // Он затаил претензию за твои попадания и вызвал по связи — можно разрядить словом.
-  const owed = hasGrievance(other)
-  // Это твой нанятый эскорт — ему отдают приказы послушания, а не торгуются.
-  const obeys = commandableByPlayer(other, world.player.id)
+  const hireLine = lines.find((l) => l.topic === 'escort')
+  const hireFee = escortFee(world, other)
+  const playerName = world.player.pilotName.toUpperCase()
+  const otherName = other.pilotName.toUpperCase()
   const push = (turn: ChatTurn) => setTurns((t) => [...t, turn])
 
-  // ─ Приказ эскорту кнопкой: домен исполняет напрямую (послушание, не уговоры).
-  const order = (o: AIOrder) => {
-    if (ended) return
-    // Приказ идёт через ту же шину, что и распознанный из речи: домен исполнит и вернёт
-    // строку-подтверждение. Не подчинён/не удалось — шина даст null, кнопка промолчит.
-    const out = applyCommand(world, other, { action: 'order', payload: { order: o, target: null } })
-    if (!out) return
-    push({ who: 'you', text: (out.line ?? '').replace('Приказ: ', '').toUpperCase() })
-    push({ who: 'them', text: 'ЕСТЬ, КОМАНДИР.' })
-    bump()
-  }
-
-  // ─ Поручение эскорту: не приказ послушания (бой), а ЗАДАЧА в очередь. Сбор груза —
-  // канонический пример: бот летит по локатору, собирает контейнеры вокруг себя и
-  // возвращается. Тот же движок очереди (`tasks.ts`), что покрыт тестами, — здесь его дверь.
-  const collect = () => {
-    if (ended) return
-    assignCollectRun(other, other.state.pos, TASK_COLLECT_RADIUS)
-    push({ who: 'you', text: 'СОБЕРИ ГРУЗ ВОКРУГ И ВЕРНИСЬ.' })
-    push({ who: 'them', text: 'ПРИНЯЛ. СОБИРАЮ И ИДУ К ТЕБЕ.' })
-    bump()
-  }
-  const dropTask = () => {
-    if (ended) return
-    clearTasks(other)
-    push({ who: 'you', text: 'БРОСЬ ПОРУЧЕНИЕ.' })
-    push({ who: 'them', text: 'ОТСТАВИЛ.' })
-    bump()
-  }
-  // Цель навигации игрока (тело на карте/радаре) — куда послать эскорт «встань у неё».
-  const navBody = world.navTargetId != null ? world.bodies.find((b) => b.id === world.navTargetId) ?? null : null
-  const goToTarget = () => {
-    if (ended || !navBody) return
-    assignApproach(other, navBody.pos, navBody.radius)
-    push({ who: 'you', text: `ЛЕТИ К ЦЕЛИ: ${navBody.name.toUpperCase()}.` })
-    push({ who: 'them', text: 'ИДУ ТУДА.' })
-    bump()
-  }
-
-  // ─ Разрядить претензию: объяснился, что задел случайно. Отношение не трогаем —
-  // извинение возвращает к тому, что было, а не роднит. Домен стережёт (`defuseGrievance`).
-  const appease = () => {
-    if (ended || !defuseGrievance(other)) return
-    push({ who: 'you', text: 'ЭТО ВЫШЛО СЛУЧАЙНО. Я НЕ ЦЕЛИЛСЯ В ТЕБЯ.' })
-    push({ who: 'them', text: 'ЛАДНО. НО СМОТРИ, КУДА СТРЕЛЯЕШЬ.' })
-    rememberPilot(world, other)
-    bump()
-  }
-
-  // ─ Кнопка механики: домен кидает кость и меняет мир, лента показывает обмен.
+  // ─ Кнопка «нанять»: домен кидает кость и меняет мир, лента показывает обмен.
   const speak = (topic: Topic) => {
     if (ended) return
     const line = lines.find((l) => l.topic === topic)
     if (!line || line.blocked) return
-    push({ who: 'you', text: line.say })
-    // Заговорил — значит теперь знаком: имя открывается, и мир его запоминает. ДО команды:
-    // её журнал ложится на уже существующую запись.
     rememberPilot(world, other)
-    // Та же шина, что и в свободном чате. Без модели бот произносит канонную реплику домена.
-    const out = applyCommand(world, other, { action: 'ask', payload: { topic } })
-    push({ who: 'them', text: out?.spoken ?? '…' })
-    // Исход красит лицо: сдался — грусть, сделка — радость (портрет подхватит).
-    const emo = outcomeFace(topic, out?.agreed ?? false)
+    const cmd: Command = { action: 'ask', payload: { topic } }
+    const fx = applyTurnToChat(push, world, other, line.say, [cmd])
+    reactFace([cmd], fx)
+    const emo = outcomeFace(topic, fx.askOutcome?.agreed ?? false)
     if (emo) markOutcomeEmotion(other.id, emo, world.time)
     bump()
   }
 
   // ─ Свободная реплика: модель ловит ТРИГГЕР и красит слова, а исход считает ДОМЕН.
+  const deliverReply = (reply: NegotiatorReply) => {
+    rememberPilot(world, other)
+    const fx = dialogueEffects(world, other, reply.commands, reply.text)
+    push({ who: 'them', text: fx.them })
+    for (const line of fx.system) push({ who: 'system', text: line })
+    reactFace(reply.commands, fx)
+    if (fx.askOutcome) {
+      const emo = outcomeFace(fx.askOutcome.topic, fx.askOutcome.agreed)
+      if (emo) markOutcomeEmotion(other.id, emo, world.time)
+    }
+    if (reply.hangup) {
+      digestMemory.current = createDigestMemory()
+      setEnded(
+        reply.source === 'overload'
+          ? 'Связь перегрузилась — канал закрыт. Договорённости и факты из журнала сохранятся до следующей встречи.'
+          : 'Собеседник отключился.',
+      )
+    }
+    bump()
+  }
+
   const send = async () => {
     const text = input.trim()
     if (!text || busy || ended) return
     setInput('')
-    const history = turns
     push({ who: 'you', text })
     setBusy(true)
 
+    const mem = digestMemory.current
+    pinMutatingDigests(mem)
+    const fresh = sufflerDigestsFor(text).filter((d) => !mem.active.includes(d))
+    for (const digest of fresh) rememberDigest(mem, digest)
+
     const allowed = linesFor(world, other).filter((l) => !l.blocked).map((l) => l.topic)
-    const ctx = buildContext(world, other, allowed)
-    const reply = await negotiate(ctx, history, text)
+    let ctx = buildContext(world, other, allowed, mem, fresh)
+    let reply = await negotiate(ctx, [...turns, { who: 'you', text }], text)
 
-    // Разговор состоялся — запоминаем пилота ДО команд: их журнал ложится на запись.
-    rememberPilot(world, other)
-
-    // Модель разложила речь на команды {action, payload}; ИСПОЛНЯЕТ их домен — все через
-    // одну шину. Соц-тон, приказ, просьба, сделка, «запомни» — здесь единый цикл, а не
-    // ветка на каждый случай. Собираем исходы: подтверждения в ленту и итог просьбы.
-    const outcomes = reply.commands.map((cmd) => ({ cmd, out: applyCommand(world, other, cmd) }))
-    const askEntry = outcomes.find((o) => o.cmd.action === 'ask') ?? null
-
-    // Что бот ПРОИЗНОСИТ: на согласии — живые слова модели (разнообразие); на отказе
-    // просьбы — КАНОННУЮ реплику домена (`spoken`), чтобы «послал → чистого неба» не
-    // случилось. Нет просьбы — просто слова модели.
-    const refused = askEntry?.out?.agreed === false
-    push({ who: 'them', text: refused ? (askEntry!.out!.spoken ?? reply.text) : reply.text })
-
-    // Системные подтверждения (сделка, приказ) — следом за репликой, в порядке команд.
-    for (const { out } of outcomes) if (out?.line) push({ who: 'system', text: out.line })
-
-    // Исход просьбы красит портрет: сдался — грусть, сделка — радость.
-    if (askEntry?.out) {
-      const topic = (askEntry.cmd.payload as { topic: Topic }).topic
-      const emo = outcomeFace(topic, askEntry.out.agreed ?? false)
-      if (emo) markOutcomeEmotion(other.id, emo, world.time)
+    // Редкий запасной путь: модель запросила блок, который суфлёр не поймал — догружаем без паузы.
+    if (reply.lookup && !reply.hangup) {
+      const digest = reply.lookup
+      const retryFresh = mem.active.includes(digest) ? [] : ([digest] as ContextDigest[])
+      if (retryFresh.length) rememberDigest(mem, digest)
+      ctx = buildContext(world, other, allowed, mem, retryFresh)
+      reply = await negotiate(ctx, [...turns, { who: 'you', text }], text)
     }
 
-    bump()
+    deliverReply(reply)
+    pinMutatingDigests(mem)
     setBusy(false)
-    // Психанул или договорил — кладём трубку ПОСЛЕ его последней реплики.
-    if (reply.hangup) setEnded('Собеседник отключился.')
   }
 
   return (
@@ -234,27 +228,45 @@ export function Dialogue({
         className="flex h-[38rem] max-h-[85vh] w-[40rem] flex-col rounded-2xl border px-8 py-6 backdrop-blur-md"
         style={{ ...GLASS_PANEL, color: UI.PRIMARY }}
       >
-        {/* Слева — портрет собеседника, справа имя и статус. */}
-        <div className="mb-4 flex items-center gap-4">
-          <PilotPortrait ship={other} world={world} size={108} />
-          <div className="min-w-0">
-            {/* Порядок как на паспорте: сперва КТО он (имя, должность, корабль), и только
-                ПОТОМ как он к тебе (отношение). Имя — `pilotName`, а не роль «Торговец»:
-                в разговоре обращаешься к человеку; оно есть всегда, до знакомства. */}
-            <div className="text-lg tracking-[0.3em]">{other.pilotName.toUpperCase()}</div>
-            {/* Должность и корабль — что видно снаружи, как на плашке у причала. */}
-            <div className="text-xs tracking-widest" style={{ color: UI.DIM }}>
-              {occupationName(other.originKind, other.faction).toUpperCase()}
-            </div>
-            <div className="text-xs tracking-widest" style={{ color: UI.DIM }}>
-              {chassisName(other.loadout.chassis.name).toUpperCase()}
-            </div>
-            {/* Отношение — последним: одно из трёх честных слов, чтобы не звать пирата
-                в напарники вслепую. Отделяем сверху, это уже не «паспорт», а расклад. */}
-            <div className="mt-1 text-xs tracking-widest" style={{ color: UI.PRIMARY }}>
-              {STANCE_WORD[stance]}
+        {/* Шапка: портрет и паспорт слева; «нанять» и «положить трубку» — столбиком справа. */}
+        <div className="mb-4 flex items-start justify-between gap-4">
+          <div className="flex min-w-0 items-center gap-4">
+            <PilotPortrait ship={other} world={world} emotion={faceEmo} size={108} />
+            <div className="min-w-0">
+              <div className="text-lg tracking-[0.3em]">{other.pilotName.toUpperCase()}</div>
+              <div className="text-xs tracking-widest" style={{ color: UI.DIM }}>
+                {occupationName(other.originKind, other.faction).toUpperCase()}
+              </div>
+              <div className="text-xs tracking-widest" style={{ color: UI.DIM }}>
+                {chassisName(other.loadout.chassis.name).toUpperCase()}
+              </div>
+              <div className="mt-1 text-xs tracking-widest" style={{ color: UI.PRIMARY }}>
+                {STANCE_WORD[stance]}
+              </div>
             </div>
           </div>
+
+          {!ended && (
+            <div className="flex shrink-0 flex-col items-end gap-2">
+              {hireLine && (
+                <Button
+                  small
+                  onClick={() => speak(hireLine.topic)}
+                  disabled={hireLine.blocked !== null || busy}
+                >
+                  {hireFee != null ? t('dialogue.hire', { fee: hireFee }) : t('dialogue.hirePlain')}
+                </Button>
+              )}
+              <Button small onClick={onClose}>
+                {t('dialogue.end')}
+              </Button>
+              {hireLine?.blocked && (
+                <span className="max-w-[11rem] text-right text-[0.65rem] leading-snug tracking-widest" style={{ color: UI.DIM }}>
+                  {hireLine.blocked}
+                </span>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Лента разговора: и болтовня, и обмен по кнопкам ложатся сюда. */}
@@ -267,7 +279,7 @@ export function Dialogue({
                 <div key={i}>
                   {t.who === 'you' ? (
                     <span>
-                      <span style={{ color: UI.DIM }}>ТЫ:&nbsp;</span>
+                      <span style={{ color: UI.DIM }}>{playerName}:&nbsp;</span>
                       {t.text}
                     </span>
                   ) : t.who === 'system' ? (
@@ -275,7 +287,10 @@ export function Dialogue({
                       · {t.text} ·
                     </span>
                   ) : (
-                    <span style={{ color: UI.PRIMARY }}>— {t.text}</span>
+                    <span>
+                      <span style={{ color: UI.PRIMARY }}>{otherName}:&nbsp;</span>
+                      {t.text}
+                    </span>
                   )}
                 </div>
               ))}
@@ -295,95 +310,25 @@ export function Dialogue({
             </Button>
           </div>
         ) : (
-          <>
-            {/* Свободный ввод — только если связь настроена. Нет — одни кнопки. */}
-            {chatAvailable && (
-              <div className="mb-3 flex gap-2">
-                <input
-                  autoFocus
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') send()
-                  }}
-                  disabled={busy}
-                  placeholder="Сказать что-нибудь…"
-                  className="flex-1 border bg-transparent px-3 py-2 text-sm outline-none disabled:opacity-50"
-                  style={{ borderColor: UI.DIM, color: UI.PRIMARY }}
-                />
-                <Button small onClick={send} disabled={busy || !input.trim()}>
-                  СКАЗАТЬ
-                </Button>
-              </div>
-            )}
-
-            {/* Разрядка — только пока претензия открыта: он вызвал, ты объясняешься.
-                Стоит над механиками и выделена: это ответ на входящий вызов. */}
-            {owed && (
-              <div className="mb-2">
-                <Button small onClick={appease}>
-                  ЭТО ВЫШЛО СЛУЧАЙНО — РАЗРЯДИТЬ
-                </Button>
-              </div>
-            )}
-
-            {/* Приказы эскорту — когда собеседник тебе подчинён. Работают без связи:
-                кнопка зовёт тот же домен, что и распознанный из речи приказ. */}
-            {obeys && (
-              <div className="mb-3">
-                <div className="mb-1 text-xs tracking-widest" style={{ color: UI.DIM }}>
-                  ПРИКАЗ ЭСКОРТУ
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {ORDER_BUTTONS.map((b) => (
-                    <Button key={b.order} small onClick={() => order(b.order)}>
-                      {b.say}
-                    </Button>
-                  ))}
-                </div>
-
-                {/* Поручения (задачи в очередь) — отдельно от боевых приказов: бот уходит
-                    делать дело сам. Пока один — сбор груза; движок очереди тянет и цепочки. */}
-                <div className="mt-2 flex flex-wrap gap-2">
-                  <Button small onClick={collect}>
-                    СОБЕРИ ГРУЗ
-                  </Button>
-                  {navBody && (
-                    <Button small onClick={goToTarget}>
-                      ЛЕТИ К ЦЕЛИ
-                    </Button>
-                  )}
-                  {hasTask(other) && (
-                    <Button small onClick={dropTask}>
-                      БРОСЬ ПОРУЧЕНИЕ
-                    </Button>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* Кнопки механик — всегда: и быстрый путь, и запас без связи. */}
-            <div className="flex flex-col items-stretch gap-2">
-              {lines.map((line) => (
-                <div key={line.topic} className="flex flex-col">
-                  <Button small onClick={() => speak(line.topic)} disabled={line.blocked !== null || busy}>
-                    {line.say}
-                  </Button>
-                  {line.blocked && (
-                    <span className="mt-1 text-[0.65rem] tracking-widest" style={{ color: UI.DIM }}>
-                      {line.blocked}
-                    </span>
-                  )}
-                </div>
-              ))}
+          chatAvailable && (
+            <div className="flex gap-2 border-t pt-4" style={{ borderColor: UI.DIM }}>
+              <input
+                autoFocus
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') send()
+                }}
+                disabled={busy}
+                placeholder={t('chat.placeholder')}
+                className="flex-1 border bg-transparent px-3 py-2 text-sm outline-none disabled:opacity-50"
+                style={{ borderColor: UI.DIM, color: UI.PRIMARY }}
+              />
+              <Button small onClick={send} disabled={busy || !input.trim()}>
+                {t('chat.send')}
+              </Button>
             </div>
-
-            <div className="mt-5 text-center text-xs tracking-widest" style={{ color: UI.DIM }}>
-              <button type="button" className="cursor-pointer hover:underline" onClick={onClose}>
-                T — ПОЛОЖИТЬ ТРУБКУ
-              </button>
-            </div>
-          </>
+          )
         )}
       </div>
     </div>

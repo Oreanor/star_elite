@@ -31,6 +31,7 @@ export const RU = {
   'menu.lost': 'КОРАБЛЬ ПОТЕРЯН',
   'menu.score': 'ОЧКОВ: {score}',
   'menu.restart': 'НАЧАТЬ ЗАНОВО',
+  'menu.loadingGfx': 'ЗАГРУЗКА ГРАФИКИ…',
 
   // ─── Вход в сеть ───────────────────────────────────────────────────────────
   'auth.login': 'ВХОД',
@@ -52,8 +53,8 @@ export const RU = {
   'create.name.placeholder': 'Как тебя звать…',
   'create.species': 'ВИД',
   'create.profession': 'РОД ЗАНЯТИЙ',
-  'create.portrait': 'ЛИЦО',
-  'create.launch': 'В ПОЛЁТ',
+  'create.start': 'СТАРТ',
+  'create.startAt': 'Старт: {station} · {system}',
 
   // ─── Клавиши ──────────────────────────────────────────────────────────────
   'key.mouse': 'Мышь',
@@ -346,6 +347,7 @@ export const RU = {
   'people.at.here': 'в этой системе',
   'people.km': '{n} км',
   'people.bound': 'летит в {system}',
+  'people.eta': '~{hops} прыжков',
   'people.talk': 'СВЯЗАТЬСЯ',
   'people.locate': 'НАВЕСТИ',
   'people.summon': 'ПОЗВАТЬ К СЕБЕ',
@@ -362,6 +364,9 @@ export const RU = {
   'chat.placeholder': 'Сказать что-нибудь…',
   'chat.send': 'СКАЗАТЬ',
   'chat.close': 'T — ПОЛОЖИТЬ ТРУБКУ',
+  'dialogue.hire': 'НАНЯТЬ ЗА {fee} КР',
+  'dialogue.hirePlain': 'НАНЯТЬ',
+  'dialogue.end': 'ПОЛОЖИТЬ ТРУБКУ',
   'chat.incoming': 'ВХОДЯЩИЙ ВЫЗОВ',
   'chat.incoming.hint': 'заверши текущий разговор, чтобы ответить',
   // Весть на HUD, когда знакомый пропал (погиб вне поля зрения или на глазах).
