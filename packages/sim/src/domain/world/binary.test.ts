@@ -4,7 +4,6 @@ import { GRAVITY } from '../../config/bodies'
 import { GALAXY } from '../../config/galaxy'
 import { generateGalaxy } from '../galaxy/generate'
 import { systemDefFor } from '../galaxy/jump'
-import { SHARED_START_INDEX } from '../galaxy/sharedStart'
 import { createWorld } from './index'
 import type { BodyEntity, World } from './entities'
 import { stepOrbits } from './orbits'
@@ -18,11 +17,11 @@ import { stepOrbits } from './orbits'
  * Барицентр обязан стоять неподвижно, иначе вся система уползёт вслед за парой.
  */
 
-/** Первая двойная с двумя звёздами (не онлайн-старт Люрилар — там BH вместо B). */
+/** Первая двойная с двумя звёздами. */
 function someBinary(): { index: number; world: World; stars: [BodyEntity, BodyEntity] } {
   const galaxy = generateGalaxy(GALAXY.SEED)
   for (const sys of galaxy) {
-    if (!sys.companion || sys.index === SHARED_START_INDEX) continue
+    if (!sys.companion) continue
     const def = systemDefFor(sys.index, GALAXY.SEED)
     const world = createWorld({ ...def, patrols: [], belt: null })
     const stars = world.bodies.filter((b) => b.kind === 'star')

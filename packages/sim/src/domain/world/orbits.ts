@@ -1,14 +1,13 @@
 import { Vector3 } from 'three'
 import { GRAVITY } from '../../config/bodies'
 import { orbitSec } from '../../config/time'
-import { clamp } from '../../core/math'
 import type { BodyEntity, OrbitDef, World } from './entities'
 
 /**
  * Орбиты тел: угол = phase + rate·t, позиция считается заново каждый шаг.
  *
- * Часы — игровой календарь: `orbitSec(world.calendarTime)` (× `TIME.SCALE`).
- * `world.calendarTime` — общие «реальные» секунды с якоря; орбиты идут в темпе HUD.
+ * Часы — общие физические секунды: `orbitSec(world.calendarTime)`.
+ * Дата HUD ускорена отдельно; кеплеровское движение не умножается на `TIME.SCALE`.
  * Не `world.time`: тот замирает в доке и локален физике. Два клиента и вход в
  * систему через год игры обязаны увидеть одну и ту же расстановку.
  *
@@ -19,8 +18,12 @@ const _radial = /* @__PURE__ */ new Vector3()
 const _out = /* @__PURE__ */ new Vector3()
 const _bary = /* @__PURE__ */ new Vector3()
 const _offset = /* @__PURE__ */ new Vector3()
+const _stationBefore = /* @__PURE__ */ new Vector3()
+const _stationShift = /* @__PURE__ */ new Vector3()
+const _playerReferenceBefore = /* @__PURE__ */ new Vector3()
+const _playerReferenceShift = /* @__PURE__ */ new Vector3()
 
-/** Момент для орбит: секунды игрового календаря (HUD и сутки × SCALE). */
+/** Момент для орбит: общие физические секунды с серверного якоря. */
 export function orbitTime(world: World): number {
   return orbitSec(world.calendarTime)
 }
@@ -57,15 +60,13 @@ export function orbitFromOffset(
     return { parentId, radius: 0, phase: 0, rate, tilt: 0 }
   }
 
-  const phase = Math.atan2(_offset.z, _offset.x)
-  const sinP = Math.sin(phase)
-  const cosP = Math.cos(phase)
-  let tilt = 0
-  if (Math.abs(sinP) > 1e-4) {
-    tilt = Math.asin(clamp(_offset.y / (radius * sinP), -1, 1))
-  } else if (Math.abs(cosP) > 1e-4) {
-    tilt = Math.asin(clamp(_offset.y / (radius * cosP), -1, 1))
-  }
+  // `orbitPoint` строит (R cos φ, R sin φ sin tilt, R sin φ cos tilt).
+  // Поэтому фазу надо восстанавливать по длине проекции YZ, а наклон — внутри
+  // самой этой плоскости. atan2(z, x) терял компонент Y и уже при t=0 сдвигал
+  // наклонные планеты на тысячи километров.
+  const yz = Math.hypot(_offset.y, _offset.z)
+  const phase = Math.atan2(yz, _offset.x)
+  const tilt = yz > 1e-9 ? Math.atan2(_offset.y, _offset.z) : 0
 
   return { parentId, radius, phase, rate, tilt }
 }
@@ -110,6 +111,11 @@ export function stepOrbitsOnBodies(bodies: BodyEntity[], originOffset: Vector3, 
       const parent = bodies.find((p) => p.id === b.orbit!.parentId)
       return parent?.kind === 'planet'
     },
+    (b) => {
+      if (b.orbit!.parentId === null) return false
+      const parent = bodies.find((p) => p.id === b.orbit!.parentId)
+      return parent?.kind === 'station'
+    },
   ]
 
   for (const match of passes) {
@@ -125,5 +131,48 @@ export function stepOrbitsOnBodies(bodies: BodyEntity[], originOffset: Vector3, 
 
 /** Расставить орбиты на `orbitTime(world)`. */
 export function stepOrbits(world: World, time = orbitTime(world)): void {
+  // Игрок наследует движение ближайшего тела. У станции это станция, у поверхности
+  // планеты — планета: после взлёта ни одна из них не убегает со своей орбитальной
+  // скоростью, которая в локальном полёте была бы недостижима.
+  const station = world.bodies.find((body) => body.kind === 'station')
+  if (station) _stationBefore.copy(station.pos)
+  const boundBody = world.player.landedOn
+    ? world.bodies.find((body) => body.id === world.player.landedOn!.bodyId)
+    : null
+  let playerReference = boundBody ?? null
+  if (!playerReference) {
+    let bestSurface = Infinity
+    for (const body of world.bodies) {
+      const surface = body.pos.distanceTo(world.player.state.pos) - body.radius
+      if (surface < bestSurface) {
+        bestSurface = surface
+        playerReference = body
+      }
+    }
+  }
+  if (playerReference) _playerReferenceBefore.copy(playerReference.pos)
+
   stepOrbitsOnBodies(world.bodies, world.originOffset, time)
+
+  if (playerReference) {
+    _playerReferenceShift.copy(playerReference.pos).sub(_playerReferenceBefore)
+    world.player.state.pos.add(_playerReferenceShift)
+  }
+
+  // Остальная динамическая окрестность по-прежнему рождена у станции и живёт
+  // в её поступательной системе отсчёта.
+  if (station) {
+    _stationShift.copy(station.pos).sub(_stationBefore)
+    if (_stationShift.lengthSq() < 1e-12) return
+    for (const ship of world.ships) ship.state.pos.add(_stationShift)
+    for (const asteroid of world.asteroids) asteroid.pos.add(_stationShift)
+    for (const pod of world.pods) pod.pos.add(_stationShift)
+    for (const missile of world.missiles) missile.pos.add(_stationShift)
+    for (const titan of world.titans) titan.pos.add(_stationShift)
+    for (const tracer of world.tracers) {
+      tracer.from.add(_stationShift)
+      tracer.to.add(_stationShift)
+    }
+    for (const explosion of world.explosions) explosion.pos.add(_stationShift)
+  }
 }

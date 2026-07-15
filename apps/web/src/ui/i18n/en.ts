@@ -69,7 +69,7 @@ export const EN: Record<keyof typeof RU, string> = {
   'key.reversal.what': 'reversal turn',
   'key.retro': 'Ctrl',
   'key.retro.what': 'retro thrust',
-  'key.cruise': 'Shift',
+  'key.cruise': 'Z',
   'key.cruise.what': 'interplanetary cruise',
   'key.fire': 'LMB / Space',
   'key.fire.what': 'lasers',

@@ -10,21 +10,24 @@ import type { SystemDef } from '../world/system'
  */
 export const SHARED_START_INDEX = 1 as const
 
-/** Вторая компонента пары — чёрная дыра вместо звезды B (только shared start). */
+/**
+ * Штатную двойную не трогаем. Для визуальной отладки добавляем отдельную
+ * «Глотку» в 10 000 км от станции и привязываем её к движению станции.
+ */
 export function patchSharedStart(def: SystemDef, index: number, galaxySeed: number): SystemDef {
   if (index !== SHARED_START_INDEX || galaxySeed !== GALAXY.SEED) return def
-  const comp = def.companion
-  if (!comp || comp.kind === 'blackhole') return def
+  if (def.blackHoles?.some((hole) => hole.name === 'Глотка')) return def
 
   return {
     ...def,
-    companion: {
-      kind: 'blackhole',
-      name: 'Глотка',
-      radius: def.star.radius * 0.06,
-      visualRadius: comp.radius,
-      separation: comp.separation,
-      diskAxis: [0.12, 1, 0.07],
-    },
+    blackHoles: [
+      ...(def.blackHoles ?? []),
+      {
+        name: 'Глотка',
+        radius: 300_000,
+        stationOffset: [10_000_000, 0, 0],
+        diskAxis: [0.12, 1, 0.07],
+      },
+    ],
   }
 }

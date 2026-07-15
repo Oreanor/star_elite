@@ -7,9 +7,8 @@ import type { BodyEntity, ShipEntity, World } from '../world/entities'
 /**
  * Притяжение крупных тел: a = GM/r² внутри зоны, ноль снаружи.
  *
- * Граница зоны — не «1.2 км крейсера» и не «20 км с потолка», а физика:
- * на высоте (1/√f − 1)·R ускорение падает до f·g₀ (см. GRAVITY.EDGE_FRACTION).
- * У звезды R в сто раз больше — и зона в сто раз шире.
+ * Граница зоны задана общей долей радиуса. У звезды R в сто раз больше —
+ * и зона в сто раз шире; крейсер начинает выход чуть раньше этой границы.
  */
 
 const _delta = /* @__PURE__ */ new Vector3()
@@ -25,12 +24,12 @@ function gravityHorizon(body: BodyEntity): number {
   return body.radius
 }
 
-/** Высота над поверхностью, на которой g = EDGE_FRACTION × g у коры, м. */
+/** Высота внешней границы притяжения над поверхностью, м. */
 export function gravityReach(body: BodyEntity): number {
   if (body.kind === 'station') return 0
   // Одна понятная зона для звёзд, дыр, планет и лун. Девять радиусов превращали
   // систему в сплошную гравитационную яму ещё до визуального сближения с телом.
-  return gravityMassRadius(body) * 1.5
+  return gravityMassRadius(body) * GRAVITY.REACH_RADII
 }
 
 /** Масса тела из радиуса и плотности — та же формула, что у орбит лун. */

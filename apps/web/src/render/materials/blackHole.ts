@@ -23,7 +23,7 @@ export const BLACK_HOLE_DEFAULTS = {
   diskInner: 3,
   diskOuter: 10.5,
   coronaIntensity: 0.2,
-  diskIntensity: 1.65,
+  diskIntensity: 1.1,
   rotationSpeed: 0.28,
   quality: 64,
 } as const
@@ -84,10 +84,31 @@ void diskBasis(vec3 nIn, out vec3 n, out vec3 tangent, out vec3 bitangent) {
   bitangent = cross(n, tangent);
 }
 
+float hash31(vec3 p) {
+  p = fract(p * 0.1031);
+  p += dot(p, p.yzx + 33.33);
+  return fract((p.x + p.y) * p.z);
+}
+
+float smoothNoise(vec3 p) {
+  vec3 cell = floor(p);
+  vec3 f = fract(p);
+  f = f * f * (3.0 - 2.0 * f);
+  return mix(
+    mix(mix(hash31(cell), hash31(cell + vec3(1.0, 0.0, 0.0)), f.x),
+        mix(hash31(cell + vec3(0.0, 1.0, 0.0)), hash31(cell + vec3(1.0, 1.0, 0.0)), f.x), f.y),
+    mix(mix(hash31(cell + vec3(0.0, 0.0, 1.0)), hash31(cell + vec3(1.0, 0.0, 1.0)), f.x),
+        mix(hash31(cell + vec3(0.0, 1.0, 1.0)), hash31(cell + vec3(1.0, 1.0, 1.0)), f.x), f.y),
+    f.z
+  );
+}
+
 vec3 diskColor(vec3 hit, vec3 n, vec3 tangent, vec3 bitangent, vec3 rd, float radial) {
   float angle = atan(dot(hit, bitangent), dot(hit, tangent));
-  float bands = sin(angle * 18.0 + radial / uRs * 9.0 - uTime * uRotationSpeed * 8.0);
-  bands = 0.62 + 0.38 * bands;
+  float phase = radial / uRs * 2.5 + angle * 2.0 - uTime * uRotationSpeed * 1.8;
+  float attenuation = 1.0 / (1.0 + fwidth(phase) * 2.0);
+  float bands = 0.9 + 0.1 * sin(phase) * attenuation;
+  bands *= 0.92 + 0.08 * smoothNoise(hit / uRs * 0.4 + vec3(0.0, 0.0, uTime * 0.04));
   float t = clamp((radial - uDiskInner) / max(uDiskOuter - uDiskInner, 0.001), 0.0, 1.0);
   vec3 hot = vec3(1.0, 0.96, 0.72);
   vec3 cool = vec3(1.0, 0.20, 0.015);
@@ -129,6 +150,16 @@ void main() {
     if (i > 0 && r >= uInfluence) break;
 
     float stepSize = clamp((r - uRs) * 0.16, 0.025 * uRs, 0.75 * uRs);
+    float planeDistance = abs(dot(p, n));
+    vec3 projected = p - n * dot(p, n);
+    float projectedRadius = length(projected);
+    if (
+      planeDistance < 0.8 * uRs &&
+      projectedRadius > uDiskInner - 0.5 * uRs &&
+      projectedRadius < uDiskOuter + 0.5 * uRs
+    ) {
+      stepSize = min(stepSize, 0.08 * uRs);
+    }
 
     // Фотонное кольцо — узкое, бело-золотое, а не объёмный красный шар.
     float photon = exp(-pow((r - 2.75 * uRs) / (0.16 * uRs), 2.0));
@@ -149,9 +180,10 @@ void main() {
       vec3 onPlane = hit - n * dot(hit, n);
       float radial = length(onPlane);
       if (radial >= uDiskInner && radial <= uDiskOuter) {
-        float innerEdge = smoothstep(uDiskInner, uDiskInner + 0.18 * uRs, radial);
-        float outerEdge = 1.0 - smoothstep(uDiskOuter - 0.7 * uRs, uDiskOuter, radial);
-        float opacity = innerEdge * outerEdge * 0.96;
+        float aa = max(fwidth(radial) * 2.0, 0.08 * uRs);
+        float innerEdge = smoothstep(uDiskInner, uDiskInner + aa, radial);
+        float outerEdge = 1.0 - smoothstep(uDiskOuter - aa, uDiskOuter, radial);
+        float opacity = innerEdge * outerEdge * 0.82;
         vec3 color = diskColor(onPlane, n, tangent, bitangent, rd, radial);
         disk += color * opacity * (1.0 - diskAlpha);
         diskAlpha += opacity * (1.0 - diskAlpha);

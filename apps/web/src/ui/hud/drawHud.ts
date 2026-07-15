@@ -1023,6 +1023,7 @@ function gatherWarnings(frame: HudFrame): Plate | null {
   if (player.hull / player.spec.hull.hull < 0.25) pushWarning('hullCritical', now)
   if (peakHeat(player) >= 1) pushWarning('laserHot', now)
   if (player.cruise.block === 'mass-lock') pushWarning('massLock', now)
+  else if (player.cruise.block === 'proximity') pushWarning('gravityBrake', now)
   if (scooping(player)) pushWarning('refuel', now)
 
   // При отчаливании это выход на орбиту, а не приглашение немедленно стыковаться назад.
@@ -1066,7 +1067,7 @@ function gatherWarnings(frame: HudFrame): Plate | null {
   }
 
   // ── Показываем самую важную живую плашку ────────────────────────────────────
-  // Форсаж (крейсерский разгон на Shift) — не транзиентная весть, а СОСТОЯНИЕ: мигает,
+  // Крейсерский разгон (удержание Z) — не транзиентная весть, а СОСТОЯНИЕ: мигает,
   // пока держишь, и гаснет в тот же миг, как отпустил (флаг `cruise.engaged`, не тающий
   // `factor`). Оттого рисуем её отдельным «синтетическим» плашко-состоянием, а не через
   // очередь `pushWarning` (та живёт WARN_LIFE и не погасла бы сразу). Реальные предупреждения

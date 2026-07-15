@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { TIME, calendarMs, calendarSec } from './time'
+import { TIME, calendarMs, calendarSec, orbitSec } from './time'
 
 describe('calendar time', () => {
   it('на якоре календарь на нуле эпохи', () => {
@@ -11,5 +11,9 @@ describe('calendar time', () => {
     const oneRealSecLater = TIME.ANCHOR_REAL_MS + 1000
     expect(calendarSec(oneRealSecLater)).toBe(1)
     expect(calendarMs(oneRealSecLater)).toBe(TIME.EPOCH_MS + 1000 * TIME.SCALE)
+  })
+
+  it('физические орбиты не ускоряются вместе с датой', () => {
+    expect(orbitSec(12_345)).toBe(12_345)
   })
 })

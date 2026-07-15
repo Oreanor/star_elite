@@ -40,7 +40,10 @@ export function calendarSec(realMs: number): number {
   return (calendarMs(realMs) - TIME.EPOCH_MS) / (1000 * TIME.SCALE)
 }
 
-/** Секунды игрового календаря для орбит и неба: `calendarTime × SCALE`. */
+/**
+ * Физические секунды орбит. Дата ускорена ×SCALE только при отображении:
+ * умножать ещё и кеплеровское движение нельзя — планеты становятся недостижимыми.
+ */
 export function orbitSec(calendarTime: number): number {
-  return calendarTime * TIME.SCALE
+  return calendarTime
 }

@@ -42,6 +42,7 @@ import { hasBomb, hasEcm } from '../loadout'
 import { MIELOPHONE } from '../../config/mielophone'
 import { effectiveRadius, stepScale } from '../scale/scale'
 import { stepGravity } from '../flight/gravity'
+import { landShip, stepLanding } from '../flight/landing'
 import { stepShip } from '../flight/model'
 import { stepDocking } from '../station/docking'
 import type { ShipEntity, World } from '../world/entities'
@@ -153,11 +154,13 @@ function stepPhysics(world: World, dt: number): void {
     // Кинематический борт не интегрируем: его позу ставит внешний источник.
     if (ship.kinematic) continue
     if (ship.warpEmerging || ship.warpDeparting) continue
-    stepGravity(ship, world, dt)
-    stepShip(ship.state, ship.controls, ship.spec.tuning, dt)
-    // Миелофон: рост/усадка масштаба от сигнала. До столкновений — они считаются по
-    // свежему размеру этого шага.
-    stepScale(ship, dt)
+    if (!stepLanding(ship, world)) {
+      stepGravity(ship, world, dt)
+      stepShip(ship.state, ship.controls, ship.spec.tuning, dt)
+      // Миелофон: рост/усадка масштаба от сигнала. До столкновений — они считаются по
+      // свежему размеру этого шага.
+      stepScale(ship, dt)
+    }
     // Нагрев звездой ДО регенерации щита: если корона течёт, `applyDamage`
     // пометит попадание, и щит в этом же шаге восстанавливаться не станет.
     stepStarHeat(ship, world, dt)
@@ -318,16 +321,11 @@ function stepShipCollisions(world: World): void {
 
 /** Точка контакта корабля с полем станции — для вспышки. Горячий путь, без аллокаций. */
 const _shieldContact = /* @__PURE__ */ new Vector3()
-/** Планета для отскока гиганта считается неподвижной: её орбитальный ход мал против тарана. */
-const _bodyStill = /* @__PURE__ */ new Vector3()
-
 /**
  * Столкновение с крупным телом.
  *
- * Планета и звезда не «наносят урон» — они кончают полёт. Считать отскок от
- * шара в шесть тысяч километров, у которого корабль вязнет на скорости в двести
- * метров в секунду, значит моделировать вход в атмосферу, посадку и прочность
- * корпуса. Ничего этого нет, и притворяться незачем: удар о твердь смертелен.
+ * Планета и луна принимают корабль на поверхность при любом касании. Звезда
+ * сжигает без отскока, а чёрная дыра не имеет твёрдой сферы вообще.
  *
  * Станция — другое дело: врезаться в неё НЕЛЬЗЯ. У поверхности стоит защитное поле,
  * и корабль без допуска отпружинивает от него назад, теряя ход (голубая вспышка, без
@@ -340,11 +338,26 @@ function stepBodyCollisions(world: World): void {
     if (!ship.alive) continue
     // Кинематический борт не толкаем и не убиваем о тела: его положение внешнее.
     if (ship.kinematic) continue
-    // Вне фазы: на крейсерском ходу шаг физики длиннее радиуса планеты, и
-    // столкновение всё равно не сработало бы. От тел крейсер уводит масс-лок.
-    if (isPhased(ship)) continue
-
     for (const body of world.bodies) {
+      // Горизонт не является твёрдой оболочкой: гравитация действует, но пройти
+      // через геометрический центр ничто не запрещает.
+      if (body.kind === 'blackhole') continue
+
+      // Звезда остаётся смертельной после автоматического выхода из крейсера. Обычно
+      // перегрев убивает раньше, но касание поверхности гарантированно завершает полёт.
+      if (body.kind === 'star') {
+        const reach = body.radius + effectiveRadius(ship)
+        if (body.pos.distanceToSquared(ship.state.pos) > reach * reach) continue
+        ship.hullHeat = 1
+        ship.shield = 0
+        applyDamage(ship, ship.hull, world.time)
+        continue
+      }
+
+      // На полном крейсере корабль вне обычного взаимодействия: посадка начинается
+      // лишь после отпускания Z (крейсер) и выхода из фазы.
+      if (isPhased(ship)) continue
+
       if (body.kind === 'station') {
         // Допуск — билет сквозь поле: корабль идёт коридором на стыковку, поле молчит.
         if (ship.clearance) continue
@@ -368,19 +381,7 @@ function stepBodyCollisions(world: World): void {
       const reach = body.radius + effectiveRadius(ship)
       if (body.pos.distanceToSquared(ship.state.pos) > reach * reach) continue
 
-      // Гигант (миелофон) о планету НЕ гибнет — он УПИРАЕТСЯ в атмосферу, как в поле
-      // станции: твёрдый отскок без урона. Масса тела берётся по объёму (radius³), поэтому
-      // планета не шелохнётся, а гиганта отпружинивает наружу. Урон при scale>1 не наносится
-      // (см. resolveShipVsSphere). Отсюда правило: сожмёшься обратно, застряв в теле, —
-      // снова станешь смертным и погибнешь. Расти и уходить в размер надо в пустоте.
-      if (ship.state.scale > 1) {
-        resolveShipVsSphere(ship, body.pos, _bodyStill, body.radius, body.radius ** 3, world.time)
-        continue
-      }
-
-      // Щит от планеты не спасает: он держит лучи и обломки, а не кору.
-      ship.shield = 0
-      applyDamage(ship, ship.hull, world.time)
+      if (landShip(ship, body)) break
     }
   }
 }

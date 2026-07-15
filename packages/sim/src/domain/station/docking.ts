@@ -2,6 +2,7 @@ import { Vector3 } from 'three'
 import { DOCKING } from '../../config/station'
 import type { BodyEntity, ShipEntity, World } from '../world/entities'
 import { startAtStation } from '../world/factory'
+import { stepOrbits } from '../world/orbits'
 
 /**
  * Стыковка. Домен знает только состояние «пристыкован» и условия входа-выхода;
@@ -58,6 +59,7 @@ export function dock(world: World): boolean {
   if (!station || world.docked || !world.dockArmed || !canDockAt(world.player, station)) return false
 
   world.docked = true
+  world.player.landedOn = null
   world.player.state.vel.set(0, 0, 0)
   world.player.state.angVel.set(0, 0, 0)
   world.player.controls.throttle = 0
@@ -97,14 +99,24 @@ export function stepDocking(world: World): void {
 /** Выпускает корабль наружу, носом от станции: иначе первый же кадр — столкновение. */
 export function undock(world: World): void {
   if (!world.docked) return
+
+  // Пока меню дока открыто, физика стоит, но календарь продолжает идти. Сначала
+  // запоминаем именно свой причал, затем ставим всю систему на свежий момент.
+  const station = findStation(world)
+  if (!station) return
+  stepOrbits(world)
+
   world.docked = false
   world.dockArmed = false
 
-  const station = findStation(world)
   const player = world.player
-  if (!station) return
 
-  _toStation.copy(player.state.pos).sub(station.pos)
+  const host = station.orbit?.parentId == null
+    ? null
+    : world.bodies.find((body) => body.id === station.orbit!.parentId)
+  // Выходим наружу от планеты-хозяина. Старое положение игрока использовать
+  // нельзя: после обновления календарной орбиты оно может быть в миллионах км.
+  _toStation.copy(station.pos).sub(host?.pos ?? player.state.pos)
   if (_toStation.lengthSq() < 1e-6) _toStation.set(0, 0, 1)
   _toStation.normalize()
 

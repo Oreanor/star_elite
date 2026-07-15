@@ -1,5 +1,5 @@
 import { CRUISE } from '../../config/cruise'
-import { clamp } from '../../core/math'
+import { GRAVITY } from '../../config/bodies'
 import { isHostileTo } from '../ai/targeting'
 import type { ShipEntity, World } from '../world/entities'
 
@@ -12,9 +12,8 @@ import type { ShipEntity, World } from '../world/entities'
  *  1. МАССОВАЯ БЛОКИРОВКА. Чужой корабль рядом не даёт разогнаться.
  *     Иначе любой бой кончается мгновенным побегом, и боя нет.
  *
- *  2. ТОРМОЖЕНИЕ У ТЕЛ. Вблизи планеты множитель режется автоматически.
- *     На полном ходу шаг физики — семьдесят тысяч километров: столкновение
- *     просто не сработает, ты пролетишь планету насквозь.
+ *  2. ВЫХОД У ЗВЕЗДЫ. Незадолго до зоны притяжения привод начинает обычный
+ *     экспоненциальный спад к ×1. Планеты, луны и чёрные дыры его не тормозят.
  *
  *  3. ВНЕ ФАЗЫ. Разогнавшись, корабль не стреляет и не сталкивается.
  *     Лазер, выпущенный на двадцати девяти световых, не догонит собственный ствол.
@@ -63,24 +62,22 @@ function massLocked(ship: ShipEntity, world: World): boolean {
   return false
 }
 
-/**
- * Предельный множитель рядом с телами: высота над поверхностью, делённая
- * на зону торможения этого вида тел. У самой планеты — единица, в пустоте — полный ход.
- *
- * Решает БЛИЖАЙШЕЕ тело, а не самое большое: высота уже содержит радиус в себе,
- * и звезде в 696 000 км не нужны поблажки, чтобы удержать корабль у своей короны.
- * Побеждает не наименьшая высота, а наименьший ПОТОЛОК: у луны зона вчетверо
- * меньше, и она уступает планете даже тогда, когда висит ближе.
- */
-function proximityCap(ship: ShipEntity, world: World): number {
-  let cap: number = CRUISE.MAX_FACTOR
-
+/** Пора ли начать выход, чтобы погасить текущую скорость до зоны притяжения звезды. */
+function starRequiresExit(ship: ShipEntity, world: World, alreadyBraking: boolean): boolean {
   for (const body of world.bodies) {
-    const altitude = Math.max(0, body.pos.distanceTo(ship.state.pos) - body.radius)
-    const allowed = altitude / CRUISE.BRAKE_ZONE[body.kind]
-    if (allowed < cap) cap = allowed
+    if (body.kind !== 'star') continue
+    const altitude = body.pos.distanceTo(ship.state.pos) - body.radius
+    const gravityEdge = body.radius * GRAVITY.REACH_RADII
+    const minimumBuffer = body.radius * CRUISE.STAR_EXIT_BUFFER_RADII
+    // При уже начатом выходе держим решение до полной расчётной зоны максимального
+    // хода: уменьшающийся каждый шаг тормозной путь не должен включить привод обратно.
+    const speed = alreadyBraking
+      ? ship.spec.tuning.MAX_SPEED * CRUISE.MAX_FACTOR
+      : ship.state.vel.length()
+    const brakingDistance = speed / CRUISE.DECAY_RATE
+    if (altitude <= gravityEdge + minimumBuffer + brakingDistance) return true
   }
-  return clamp(cap, 1, CRUISE.MAX_FACTOR)
+  return false
 }
 
 /**
@@ -98,11 +95,10 @@ export function updateCruise(ship: ShipEntity, world: World, want: boolean, dt: 
   if (want && ship.alive) {
     if (massLocked(ship, world)) {
       block = 'mass-lock'
+    } else if (starRequiresExit(ship, world, cruise.block === 'proximity')) {
+      block = 'proximity'
     } else {
-      const cap = proximityCap(ship, world)
-      target = cap
-      // Упёрлись в потолок близости, а не в потолок привода — сообщаем игроку.
-      if (cap < CRUISE.MAX_FACTOR - 1e-6) block = 'proximity'
+      target = CRUISE.MAX_FACTOR
     }
   }
 

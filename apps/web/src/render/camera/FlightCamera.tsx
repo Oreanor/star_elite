@@ -122,6 +122,9 @@ export function FlightCamera() {
       _desiredQuat.copy(camSwing).multiply(camTwist).multiply(_pitchDown)
       camera.position.copy(_target)
       camera.quaternion.copy(_desiredQuat)
+      // HUD проецирует маркеры в этом же useFrame-цикле, до WebGL-рендера.
+      // Без свежей матрицы он видел позу камеры прошлого кадра и все метки мерцали.
+      camera.updateMatrixWorld(true)
       previousFactor.current = player.cruise.factor
       return
     }
@@ -152,6 +155,7 @@ export function FlightCamera() {
         camera.position.add(_jumpShake.applyQuaternion(camera.quaternion))
       }
 
+      camera.updateMatrixWorld(true)
       previousFactor.current = player.cruise.factor
       return
     }
@@ -189,6 +193,7 @@ export function FlightCamera() {
         })
       camera.position.copy(state.pos).add(f.offset)
       camera.quaternion.copy(f.quat)
+      camera.updateMatrixWorld(true)
       // Множитель крейсера в бочке не читаем — чтобы на выходе тряска не дёрнулась
       // от накопившейся «скорости роста», которой на деле не было.
       previousFactor.current = player.cruise.factor
@@ -321,6 +326,7 @@ export function FlightCamera() {
       camera.fov = running ? camera.fov + (wantFov - camera.fov) * (1 - Math.exp(-6 * dt)) : wantFov
       camera.updateProjectionMatrix()
     }
+    camera.updateMatrixWorld(true)
   })
 
   return null

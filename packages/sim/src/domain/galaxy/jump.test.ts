@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest'
 import { HYPERDRIVE_DEEP } from '../../config/modules'
 import { CORE_INDEX, GALAXY } from '../../config/galaxy'
 import { WORLD } from '../../config/world'
-import { TIME } from '../../config/time'
 import { isHyperdrive } from '../loadout'
 import { COMMODITIES, addCommodity } from '../cargo'
 import { refreshSpec, createWorld, type World } from '../world'
@@ -118,8 +117,8 @@ describe('прыжок', () => {
   it('корабль не выныривает внутри тела, как бы далеко ни ушли орбиты', () => {
     const world = createWorld()
     const target = neighbourWithin(world, world.player.spec.jumpRange)
-    // Уводим орбиты далеко: имитируем долгую игру до прыжка (~5e7 с игрового календаря).
-    world.calendarTime = 5e7 / TIME.SCALE
+    // Уводим орбиты далеко: имитируем долгую игру до прыжка (~5e7 физических секунд).
+    world.calendarTime = 5e7
 
     expect(jump(world, target)).toBe(true)
 

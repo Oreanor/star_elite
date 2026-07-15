@@ -51,6 +51,14 @@ export interface BlackHoleCompanionDef {
   diskAxis?: readonly [number, number, number]
 }
 
+/** Отдельная тестовая чёрная дыра, привязанная смещением к станции. */
+export interface BlackHoleDef {
+  name: string
+  radius: number
+  stationOffset: readonly [number, number, number]
+  diskAxis?: readonly [number, number, number]
+}
+
 export interface SystemDef {
   name: string
   /** Одно число задаёт всю расстановку: пояс, патрули, разброс. */
@@ -62,6 +70,8 @@ export interface SystemDef {
    * Позиции нет — место даёт время, как у звёзд пары.
    */
   companion: StarCompanionDef | BlackHoleCompanionDef | null
+  /** Отдельные чёрные дыры; не заменяют звёзды и не участвуют в барицентре пары. */
+  blackHoles?: readonly BlackHoleDef[]
   /** Сфера Дайсона вокруг светила, или `null`. Только декорация: облик и цела ли. */
   dyson: DysonSpec | null
   planets: readonly {

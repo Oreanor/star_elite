@@ -121,17 +121,18 @@ describe('притяжение к телам', () => {
     expect(g).toBeLessThan(1e-6)
   })
 
-  it('без тяги корабль падает на планету и гибнет', () => {
+  it('без тяги корабль падает на планету и садится', () => {
     const world = quiet()
     const planet = bodyOf(world, 'planet')
     hover(world, planet, 600)
 
     for (let i = 0; i < 1500; i++) {
       stepWorld(world, PHYSICS.FIXED_DT, NO_CONTROLLERS)
-      if (!world.player.alive) break
+      if (world.player.landedOn) break
     }
 
-    expect(world.player.alive).toBe(false)
+    expect(world.player.alive).toBe(true)
+    expect(world.player.landedOn?.bodyId).toBe(planet.id)
   })
 
   it('на крейсерском ходу вне фазы гравитация не действует', () => {

@@ -73,7 +73,7 @@ export const RU = {
   'key.reversal.what': 'разворот через петлю',
   'key.retro': 'Ctrl',
   'key.retro.what': 'ретро-тяга',
-  'key.cruise': 'Shift',
+  'key.cruise': 'Z',
   'key.cruise.what': 'крейсерский ход',
   'key.fire': 'ЛКМ / Space',
   'key.fire.what': 'лазер',

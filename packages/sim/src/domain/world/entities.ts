@@ -15,6 +15,12 @@ import type { Acquaintance } from './acquaintance'
 import type { Settlement } from '../galaxy/types'
 
 export type Faction = 'player' | 'hostile' | 'neutral' | 'police'
+/** Привязка корабля к поверхности планеты или луны. */
+export interface SurfaceBinding {
+  bodyId: number
+  /** Радиальная нормаль точки посадки в мировых осях. */
+  normal: Vector3
+}
 
 /** Состояние одного ствола. Живёт рядом с mount'ом, но меняется в бою. */
 export interface GunState {
@@ -95,6 +101,8 @@ export interface ShipEntity {
   guns: GunState[]
   /** Крейсерский ход: множитель и причина, по которой он не включается. */
   cruise: CruiseState
+  /** На какой поверхности стоит корабль; null — свободный полёт. */
+  landedOn: SurfaceBinding | null
 
   alive: boolean
   /** Взрыв уже показан — чтобы не повторять каждый кадр. */
@@ -239,7 +247,7 @@ export interface BoltEntity {
 /**
  * Обращение спутника вокруг своей планеты.
  *
- * Положение НЕ накапливается по кадрам: оно считается из `orbitSec(calendarTime)` как
+ * Положение НЕ накапливается по кадрам: оно считается из общих физических секунд как
  * `phase + rate·t`. Накопление зависит от частоты шага, не переживает паузу и
  * расходится на двух машинах — а луна обязана висеть там же и у сервера.
  */

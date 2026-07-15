@@ -48,7 +48,6 @@ function Scene() {
       <Lighting />
       <Starfield />
       <GalaxyLayer />
-      <Dust />
 
       <Bodies />
       <BlackHole />
@@ -82,6 +81,8 @@ function Scene() {
       <JumpRing />
 
       <FlightCamera />
+      {/* Пыль центрируется по уже рассчитанной камере, иначе её куб остаётся у корабля. */}
+      <Dust />
       <Hud />
 
       {/* Последним: композер рисует кадр целиком, отключая автоотрисовку R3F. */}

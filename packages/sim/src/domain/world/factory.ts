@@ -101,6 +101,7 @@ export function makeShip(
     hold,
     guns,
     cruise: createCruiseState(),
+    landedOn: null,
     alive: true,
     wreckAt: null,
     ai: null,
@@ -365,6 +366,7 @@ function makeBodies(ids: IdSource, def: SystemDef): BodyEntity[] {
     bodies.push(planet, ...makeMoonBodies(ids, planet, p))
   }
 
+  let station: BodyEntity | null = null
   if (def.station) {
     const hostIdx = stationSeat(def)
     const planets = bodies.filter((b) => b.kind === 'planet')
@@ -379,7 +381,7 @@ function makeBodies(ids: IdSource, def: SystemDef): BodyEntity[] {
         )
       : null
 
-    bodies.push({
+    station = {
       id: ids.next(),
       kind: 'station',
       name: def.station.name,
@@ -392,6 +394,30 @@ function makeBodies(ids: IdSource, def: SystemDef): BodyEntity[] {
       spin: 0.08,
       spinAxis: new Vector3(0, 0, 1),
       orbit: stationOrbit,
+    }
+    bodies.push(station)
+  }
+
+  for (const hole of def.blackHoles ?? []) {
+    const offset = new Vector3(...hole.stationOffset)
+    const pos = station
+      ? station.pos.clone().add(offset)
+      : new Vector3(...def.star.pos).add(offset)
+    const ax = new Vector3(...(hole.diskAxis ?? [0, 1, 0])).normalize()
+    bodies.push({
+      id: ids.next(),
+      kind: 'blackhole',
+      name: hole.name,
+      pos,
+      radius: hole.radius,
+      color: 0x050508,
+      surface: null,
+      population: 0,
+      settlement: null,
+      spin: 0,
+      spinAxis: ax,
+      // Нулевая скорость означает постоянное смещение от движущейся станции.
+      orbit: station ? orbitFromOffset(station.id, station.pos, pos, 0) : null,
     })
   }
   return bodies
@@ -545,6 +571,7 @@ export function enterSystem(
   // отсчёта считалось от прежней системы, и переносить его сюда бессмысленно.
   const player = world.player
   player.ai = null
+  player.landedOn = null
   player.state.pos.set(...start)
   player.state.vel.set(0, 0, 0)
   player.state.angVel.set(0, 0, 0)

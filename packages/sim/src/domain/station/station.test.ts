@@ -7,6 +7,7 @@ import { COMMODITIES } from '../cargo/items'
 import { applyDamage } from '../combat'
 import { stepWorld, type Controller, type ControllerMap } from '../sim'
 import { createWorld, STARTER_SYSTEM, type World } from '../world'
+import { stepOrbits } from '../world/orbits'
 import { autodockController, canEngageAutodock } from './autopilot'
 import { canDockAt, dock, findStation, stationRange, undock } from './docking'
 import { buy, buyCommodity, canBuyCommodity, commodityBuyPrice, commoditySellPrice, masterClass, repair, repairChance, repairCost, sellItem } from './shop'
@@ -103,6 +104,39 @@ describe('стыковка', () => {
     // Скорость направлена ОТ станции: иначе первый же кадр — столкновение.
     const outward = world.player.state.pos.clone().sub(station.pos).normalize()
     expect(world.player.state.vel.dot(outward)).toBeGreaterThan(0)
+  })
+
+  it('после долгой стоянки выпускает у текущей позиции станции, а не в старой точке', () => {
+    const world = quiet()
+    const station = findStation(world)!
+    atDock(world)
+    dock(world)
+
+    world.calendarTime += 12_345
+    undock(world)
+    // Повторная раскладка на тот же момент ничего не должна менять. Без обновления
+    // внутри undock станция прыгнет сюда только сейчас, оставив корабль далеко.
+    stepOrbits(world)
+
+    expect(stationRange(world.player, station)).toBeCloseTo(DOCKING.RELEASE_GAP, 0)
+  })
+
+  it('станция не убегает после вылета на ускоренной календарной орбите', () => {
+    const world = quiet()
+    const station = findStation(world)!
+    atDock(world)
+    dock(world)
+    undock(world)
+    world.player.state.vel.set(0, 0, 0)
+    world.player.controls.throttle = 0
+    world.player.controls.flightAssist = false
+
+    for (let i = 0; i < 5 * 60; i++) {
+      world.calendarTime += 1 / 60
+      stepWorld(world, 1 / 60, new Map())
+    }
+
+    expect(stationRange(world.player, station)).toBeLessThan(1_000)
   })
 
   /**

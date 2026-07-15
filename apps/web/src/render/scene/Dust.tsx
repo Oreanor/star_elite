@@ -15,7 +15,7 @@ import { dustMaterial } from '../materials/materials'
  * и читается как точка; на крейсерском ходу вытягивается в штрих.
  * Отдельного «режима гипердрайва» для этого не нужно.
  *
- * Частицы неподвижны в мире, но ОБОРАЧИВАЮТСЯ вокруг игрока: улетевшая назад
+ * Частицы неподвижны в мире, но ОБОРАЧИВАЮТСЯ вокруг камеры: улетевшая назад
  * появляется впереди. Поэтому их всегда ровно DUST.COUNT.
  *
  * Хранятся они не в метрах, а в ДОЛЯХ куба, −0.5..0.5 от его центра.
@@ -27,19 +27,17 @@ import { dustMaterial } from '../materials/materials'
  * через десять километров пути. В долях куба такого не бывает: разброс равномерен
  * при любом размере, а рост куба лишь чуть разносит частицы — этого не видно.
  *
- * Смещение считается по ИСТИННОЙ позиции (`pos + originOffset`). Плавающее начало
- * координат телепортирует игрока на четыре километра разом, и разность локальных
- * позиций приняла бы этот скачок за полёт: вся пыль обернулась бы в одном кадре.
+ * Темп проноса считается только по ЛОКАЛЬНОЙ скорости корабля. Орбитальный перенос
+ * системы отсчёта и движение камеры не являются полётом сквозь пыль.
  */
 
-const _true = new Vector3()
 const _delta = new Vector3()
 
 export function Dust() {
   const session = useSession()
   const ref = useRef<LineSegments>(null)
 
-  const { geometry, offsets, previous } = useMemo(() => {
+  const { geometry, offsets } = useMemo(() => {
     const rng = makeRng(0x9dc51)
     const offsets = new Float32Array(DUST.COUNT * 3)
     for (let i = 0; i < DUST.COUNT * 3; i++) offsets[i] = rng() - 0.5
@@ -48,10 +46,10 @@ export function Dust() {
     const positions = new Float32Array(DUST.COUNT * 6)
     const g = new BufferGeometry()
     g.setAttribute('position', new BufferAttribute(positions, 3))
-    return { geometry: g, offsets, previous: { at: new Vector3(), known: false } }
+    return { geometry: g, offsets }
   }, [])
 
-  useFrame((_, dt) => {
+  useFrame(({ camera }, dt) => {
     const mesh = ref.current
     if (!mesh) return
 
@@ -65,7 +63,10 @@ export function Dust() {
     mesh.visible = !dead
     if (dead) return
 
-    const origin = player.state.pos
+    // Это визуальное поле обязано окружать ГЛАЗ, а не центр корабля. Камера имеет
+    // упреждение по скорости и кинематографическую траекторию при отчаливании;
+    // привязанный к кораблю куб оставался позади, и пилот буквально влетал в него.
+    const origin = camera.position
     const velocity = player.state.vel
 
     const speed = velocity.length()
@@ -83,14 +84,9 @@ export function Dust() {
     // (базовый куб) — нет: иначе на большом кубе иголки стоят, а не несутся.
     const { box, tail, rate } = dustExtents(speed, dt, player.state.scale)
 
-    // Сколько прошёл корабль в НАСТОЯЩИХ координатах, в долях куба.
-    _true.copy(origin).add(world.originOffset)
-    if (!previous.known) {
-      previous.at.copy(_true)
-      previous.known = true
-    }
-    _delta.copy(_true).sub(previous.at).divideScalar(rate)
-    previous.at.copy(_true)
+    // Орбиты двигают локальную систему на километры в секунду, но пилот у станции
+    // относительно пыли не летит. Двигаем узор только фактической скоростью борта.
+    _delta.copy(velocity).multiplyScalar(dt / rate)
 
     const attribute = mesh.geometry.getAttribute('position') as BufferAttribute
     const array = attribute.array as Float32Array

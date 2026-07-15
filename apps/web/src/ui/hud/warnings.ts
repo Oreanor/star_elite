@@ -25,6 +25,7 @@ export type WarnCode =
   | 'hullHot'
   | 'lowEnergy'
   | 'massLock'
+  | 'gravityBrake'
   | 'dockFast'
   | 'playerLeft'
   | 'noRockets'
@@ -66,6 +67,7 @@ const DEFS: Record<WarnCode, Def> = {
   hullHot: { color: UI.WARN, hz: 2, rank: 60, key: 'hud.hullHot' },
   lowEnergy: { color: UI.WARN, hz: 2, rank: 55, key: 'hud.lowEnergy' },
   massLock: { color: UI.WARN, hz: 2, rank: 50, key: 'hud.massLock' },
+  gravityBrake: { color: UI.WARN, hz: 2, rank: 49, key: 'hud.gravityBrake' },
   playerLeft: { color: UI.WARN, hz: 0, rank: 45, key: 'hud.playerLeft' },
   hail: { color: UI.PRIMARY, hz: 1.5, rank: 44, key: 'hud.hail' },
   dockReady: { color: UI.PRIMARY, hz: 2, rank: 40, key: 'hud.dockReady' },

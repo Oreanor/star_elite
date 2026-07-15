@@ -261,6 +261,8 @@ export const coastController: Controller = {
 export function createPlayerController(intent: PlayerIntent): Controller {
   /** Сколько каждая тап-клавиша зажата без отрыва, с. Обнуляется при отпускании. */
   const heldFor = new Map<string, number>()
+  /** Нужен для однократного сброса рукояти в момент касания поверхности. */
+  let landedBodyId: number | null = null
 
   return {
     update(ship: ShipEntity, world: World, dt: number): void {
@@ -302,6 +304,15 @@ export function createPlayerController(intent: PlayerIntent): Controller {
         intent.surge = 0
         return
       }
+
+      const currentLanding = ship.landedOn?.bodyId ?? null
+      if (currentLanding !== null && currentLanding !== landedBodyId) {
+        // Посадка принимает корабль при любой скорости. Старое положение рукояти
+        // не должно тут же поднять его обратно: сначала ноль, следующая W — взлёт.
+        intent.throttle = 0
+        intent.surge = 0
+      }
+      landedBodyId = currentLanding
 
       if (pollAutofight(world, intent)) {
         // Тот же пилот, что и у пиратов. Никаких привилегий: он ведёт корабль
@@ -406,15 +417,9 @@ export function createPlayerController(intent: PlayerIntent): Controller {
       c.boost = input.throttleUp ? boostMult(ship.loadout) : 1
       c.retro = isHeld('ControlLeft') || isHeld('ControlRight') ? 1 : 0
 
-      // Крейсерский ход — УДЕРЖАНИЕ Shift: держишь — множитель растёт экспонентой без
-      // предела (до потолка у тел), отпустил — сам стекает к единице. Домен уже так и
-      // работает (растёт при wantsCruise, спадает без него) — клиенту осталось лишь
-      // отдавать факт нажатия, а не тумблер.
-      // ОСТОРОЖНО: долгое удержание Shift будит Windows Sticky/Filter Keys (правый Shift
-      // >8 с), и ОС может перехватить ввод — отключить это из браузера нельзя. Зажим
-      // выбран осознанно по просьбе пилота; всплывёт залипание — перевесим буст на другую
-      // клавишу удержания.
-      intent.cruise = isHeld('ShiftLeft') || isHeld('ShiftRight')
+      // Крейсерский ход — удержание Z. Раньше был Shift: Windows Sticky/Filter Keys
+      // пикает и перехватывает ввод при частом/долгом удержании модификатора.
+      intent.cruise = isHeld('KeyZ')
       // Тормоз гасит и крейсер: жмёшь ретро (Ctrl) — выходишь из разгона, множитель
       // стекает к единице. Ретро побеждает шифт того же кадра — тормоз важнее.
       if (c.retro) intent.cruise = false

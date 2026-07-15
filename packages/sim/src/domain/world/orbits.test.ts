@@ -1,8 +1,6 @@
 import { Vector3 } from 'three'
 import { describe, expect, it } from 'vitest'
-import { CRUISE } from '../../config/cruise'
 import { GALAXY } from '../../config/galaxy'
-import { TIME } from '../../config/time'
 import { updateCruise } from '../cruise/drive'
 import { systemDefFor } from '../galaxy/jump'
 import { createWorld, STARTER_SYSTEM } from './index'
@@ -12,8 +10,8 @@ import { stepOrbits } from './orbits'
 /**
  * Спутники.
  *
- * Луна — не украшение: это тело с корой, о которую разбиваются, и с зоной
- * торможения крейсера. Поэтому её положение обязано быть таким же настоящим,
+ * Луна — не украшение: это тело с гравитацией и доступной поверхностью.
+ * Поэтому её положение обязано быть таким же настоящим,
  * как у планеты, и таким же воспроизводимым — иначе сервер и клиент разойдутся
  * в том, где она висит.
  */
@@ -30,7 +28,7 @@ function parentOf(world: World, moon: BodyEntity): BodyEntity {
 
 /** Промотать орбитное время на `orbitSeconds` (физические ω·t), затем пересчитать. */
 function wait(world: World, orbitSeconds: number): void {
-  world.calendarTime += orbitSeconds / TIME.SCALE
+  world.calendarTime += orbitSeconds
   stepOrbits(world)
 }
 
@@ -142,28 +140,14 @@ describe('спутники', () => {
     expect(worlds).toBeGreaterThan(0)
   })
 
-  /**
-   * Луна тормозит крейсер вчетверо слабее планеты — у неё своя зона торможения.
-   * Это не поблажка, а следствие: подлетать к камню в 1700 км с осторожностью,
-   * положенной звезде в 700 000, незачем. Числа не важны, важно отношение.
-   */
-  it('у луны зона торможения меньше планетной', () => {
-    expect(CRUISE.BRAKE_ZONE.moon).toBeLessThan(CRUISE.BRAKE_ZONE.planet)
-  })
-
-  /**
-   * И следствие из этого: вплотную к луне крейсер всё равно гаснет. Иначе
-   * «ослабили лимит» означало бы «сквозь луну можно пролететь на сверхсвете».
-   */
-  it('у поверхности луны крейсер не включается', () => {
+  /** Луна притягивает и принимает посадку, но крейсер сама не тормозит. */
+  it('у поверхности луны крейсер продолжает разгон', () => {
     const world = quiet()
     const moon = moons(world)[0]!
-    const altitude = CRUISE.BRAKE_ZONE.moon / 2
-
-    world.player.state.pos.copy(moon.pos).add(new Vector3(moon.radius + altitude, 0, 0))
+    world.player.state.pos.copy(moon.pos).add(new Vector3(moon.radius + 100, 0, 0))
     for (let i = 0; i < 600; i++) updateCruise(world.player, world, true, 1 / 120)
 
-    expect(world.player.cruise.factor).toBe(1)
-    expect(world.player.cruise.block).toBe('proximity')
+    expect(world.player.cruise.factor).toBeGreaterThan(100)
+    expect(world.player.cruise.block).toBeNull()
   })
 })

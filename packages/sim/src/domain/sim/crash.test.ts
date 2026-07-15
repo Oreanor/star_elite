@@ -1,16 +1,16 @@
+import { Vector3 } from 'three'
 import { describe, expect, it } from 'vitest'
 import { PHYSICS } from '../../config/physics'
 import { DOCKING } from '../../config/station'
+import { shipAxes } from '../flight/axes'
 import { createWorld, STARTER_SYSTEM, type BodyEntity, type World } from '../world'
 import { stepWorld } from './step'
 
 /**
- * Удар о твердь.
+ * Контакт с крупным телом.
  *
- * Планета не «наносит урон» — она кончает полёт: щита от коры не бывает.
- * Станция бьёт по корпусу, но не убивает: об неё ЗАДЕВАЮТ. Порог у неё ровно
- * тот же, по которому она принимает швартовку, и второго правила тут быть не
- * может — иначе однажды окажется, что стыковаться можно только тараня.
+ * Планета и луна принимают посадку, звезда сжигает, чёрная дыра проходима.
+ * У станции остаётся защитное поле: оно не относится к гравитации поверхности.
  */
 
 const NO_CONTROLLERS = new Map()
@@ -43,25 +43,28 @@ function ram(world: World, body: BodyEntity, speed: number): void {
 }
 
 describe('удар о крупное тело', () => {
-  it('корабль, дошедший до поверхности планеты, гибнет', () => {
+  it('любая скорость касания планеты заканчивается посадкой без гибели', () => {
     const world = quiet()
-    ram(world, bodyOf(world, 'planet'), 40)
+    const planet = bodyOf(world, 'planet')
+    ram(world, planet, 4_000)
 
     oneStep(world)
 
-    expect(world.player.alive).toBe(false)
+    expect(world.player.alive).toBe(true)
+    expect(world.player.landedOn?.bodyId).toBe(planet.id)
+    expect(world.player.state.vel.length()).toBe(0)
   })
 
-  /** Щит держит лучи и обломки, а не кору: полный щит от планеты не спасает. */
-  it('полный щит не спасает от планеты', () => {
+  it('посадка не тратит щит или корпус', () => {
     const world = quiet()
     const player = world.player
     player.shield = player.spec.hull.shield
-    ram(world, bodyOf(world, 'planet'), 5)
+    const before = player.shield + player.hull
+    ram(world, bodyOf(world, 'planet'), 500)
 
     oneStep(world)
 
-    expect(player.alive).toBe(false)
+    expect(player.shield + player.hull).toBe(before)
   })
 
   /**
@@ -113,55 +116,75 @@ describe('удар о крупное тело', () => {
     expect(world.player.alive).toBe(true)
   })
 
-  /**
-   * Миелофон: выросший борт о планету НЕ гибнет — упирается в атмосферу твёрдым отскоком.
-   * Иначе увеличиться рядом с планетой было бы невозможно: распухший радиус мгновенно
-   * задевает кору и убивает. Гигант неуязвим к столкновениям, пока в масштабе.
-   */
-  it('гигант (миелофон) упирается в планету, а не гибнет', () => {
-    const world = quiet()
-    const player = world.player
-    player.state.scale = 40
-    ram(world, bodyOf(world, 'planet'), 40)
-
-    oneStep(world)
-
-    expect(player.alive).toBe(true)
-  })
-
-  /**
-   * Твёрдость гиганта: он не проваливается в тело. После шага центр — не глубже, чем
-   * сумма радиусов (эффективный радиус корабля + радиус планеты): раздвижка выталкивает.
-   */
-  it('гигант не проваливается внутрь планеты — остаётся твёрдым', () => {
+  it('выросший миелофоном корабль тоже садится, а не отскакивает', () => {
     const world = quiet()
     const player = world.player
     player.state.scale = 40
     const planet = bodyOf(world, 'planet')
-    // Ставим глубоко внутри досягаемости, носом внутрь.
-    player.state.pos.copy(planet.pos)
-    player.state.pos.x += planet.radius
-    player.state.vel.set(-40, 0, 0)
-    player.controls.throttle = 0
+    ram(world, planet, 40)
 
     oneStep(world)
 
-    const reach = planet.radius + player.spec.hull.radius * player.state.scale
-    expect(player.state.pos.distanceTo(planet.pos)).toBeGreaterThanOrEqual(reach - 1)
+    expect(player.alive).toBe(true)
+    expect(player.landedOn?.bodyId).toBe(planet.id)
   })
 
-  /**
-   * Правило «сожмись в пустоте»: вернувшись к обычному размеру ВНУТРИ тела, снова
-   * становишься смертным и гибнешь. Расти и уходить из масштаба надо вдали от планет.
-   */
-  it('сжавшийся обратно внутри планеты — гибнет как обычный корабль', () => {
+  it('посаженный корпус лежит в плоскости, перпендикулярной радиусу', () => {
     const world = quiet()
     const player = world.player
-    player.state.scale = 1
-    ram(world, bodyOf(world, 'planet'), 40)
+    const planet = bodyOf(world, 'planet')
+    ram(world, planet, 40)
+
+    oneStep(world)
+
+    const normal = player.state.pos.clone().sub(planet.pos).normalize()
+    const forward = new Vector3()
+    const right = new Vector3()
+    const up = new Vector3()
+    shipAxes(player.state.quat, forward, right, up)
+    expect(up.dot(normal)).toBeCloseTo(1, 6)
+    expect(Math.abs(forward.dot(normal))).toBeLessThan(1e-6)
+  })
+
+  it('новая тяга немедленно отрывает корабль от поверхности', () => {
+    const world = quiet()
+    const player = world.player
+    const planet = bodyOf(world, 'planet')
+    ram(world, planet, 40)
+    oneStep(world)
+
+    player.controls.throttle = 0.2
+    oneStep(world)
+
+    expect(player.landedOn).toBeNull()
+    expect(player.state.vel.dot(player.state.pos.clone().sub(planet.pos).normalize())).toBeGreaterThan(0)
+  })
+
+  it('касание звезды сжигает без отскока', () => {
+    const world = quiet()
+    const player = world.player
+    const star = bodyOf(world, 'star')
+    ram(world, star, 40)
 
     oneStep(world)
 
     expect(player.alive).toBe(false)
+    expect(player.hullHeat).toBe(1)
+    expect(player.state.vel.x).toBeLessThanOrEqual(0)
+  })
+
+  it('чёрная дыра не имеет твёрдой сферы и пропускает центр', () => {
+    const world = quiet()
+    const player = world.player
+    const hole = bodyOf(world, 'star')
+    hole.kind = 'blackhole'
+    player.state.pos.copy(hole.pos)
+    player.state.vel.set(0, 0, 0)
+    player.controls.throttle = 0
+
+    oneStep(world)
+
+    expect(player.alive).toBe(true)
+    expect(player.landedOn).toBeNull()
   })
 })

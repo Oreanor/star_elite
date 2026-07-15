@@ -11,6 +11,7 @@ export {
   type PlatformEntity,
   type RemoteHit,
   type ShipEntity,
+  type SurfaceBinding,
   type TitanEntity,
   type Tracer,
   type WarpFlash,

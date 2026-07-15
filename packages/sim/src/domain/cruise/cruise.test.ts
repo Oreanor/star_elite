@@ -1,5 +1,6 @@
 import { Vector3 } from 'three'
 import { describe, expect, it } from 'vitest'
+import { GRAVITY } from '../../config/bodies'
 import { CRUISE } from '../../config/cruise'
 import { createWorld, STARTER_SYSTEM } from '../world'
 import type { World } from '../world/entities'
@@ -21,8 +22,7 @@ function spool(world: World, want: boolean, seconds: number): void {
 /**
  * Уносит игрока в межпланетную пустоту, где полный ход разрешён.
  *
- * Две а.е. «вверх» от плоскости системы: до звезды и до обеих планет отсюда
- * дальше, чем `MAX_FACTOR · BRAKE_ZONE`, поэтому ни одно тело не режет потолок.
+ * Две а.е. «вверх» от плоскости системы: звёздный потолок здесь уже полный.
  */
 function toDeepSpace(world: World): void {
   world.player.state.pos.set(0, 2 * AU, 0)
@@ -113,38 +113,37 @@ describe('массовая блокировка', () => {
   })
 })
 
-describe('торможение у тел', () => {
-  it('у самой планеты множитель падает до единицы', () => {
+describe('ограничение у звезды', () => {
+  it('планета не тормозит включённый крейсер', () => {
     const world = emptySystem()
     const planet = world.bodies.find((b) => b.kind === 'planet')!
-    // На высоте, много меньшей зоны торможения.
     world.player.state.pos.copy(planet.pos).add(new Vector3(0, 0, planet.radius + 200))
 
     spool(world, true, 10)
-    expect(world.player.cruise.factor).toBeLessThan(1.5)
-    expect(world.player.cruise.block).toBe('proximity')
+    expect(world.player.cruise.factor).toBeGreaterThan(1000)
+    expect(world.player.cruise.block).toBeNull()
   })
 
-  it('множитель растёт с высотой над телом', () => {
+  it('станция не тормозит включённый крейсер', () => {
     const world = emptySystem()
-    const planet = world.bodies.find((b) => b.kind === 'planet')!
+    spool(world, true, 10)
 
-    const factorAt = (altitude: number) => {
-      const w = emptySystem()
-      const p = w.bodies.find((b) => b.kind === 'planet')!
-      w.player.state.pos.copy(p.pos).add(new Vector3(0, 0, p.radius + altitude))
-      spool(w, true, 25)
-      return w.player.cruise.factor
-    }
-
-    expect(factorAt(planet.radius * 4)).toBeGreaterThan(factorAt(planet.radius * 0.5))
+    expect(world.player.cruise.factor).toBeGreaterThan(1000)
+    expect(world.player.cruise.block).toBeNull()
   })
 
-  /**
-   * Регрессия. Зону торможения нельзя задавать как «столько-то радиусов тела»:
-   * звезда тормозила бы по всей системе, и до неё нельзя было бы долететь.
-   * Потолок задаёт ВЫСОТА над поверхностью, а она уже содержит радиус в себе.
-   */
+  it('чёрная дыра не тормозит включённый крейсер', () => {
+    const world = emptySystem()
+    const hole = world.bodies.find((body) => body.kind === 'star')!
+    hole.kind = 'blackhole'
+    world.player.state.pos.copy(hole.pos).add(new Vector3(hole.radius + 100, 0, 0))
+
+    spool(world, true, 10)
+
+    expect(world.player.cruise.factor).toBeGreaterThan(1000)
+    expect(world.player.cruise.block).toBeNull()
+  })
+
   it('звезда не тормозит игрока с другого конца системы', () => {
     const world = emptySystem()
     const star = world.bodies.find((b) => b.kind === 'star')!
@@ -155,22 +154,50 @@ describe('торможение у тел', () => {
     expect(world.player.cruise.factor).toBeGreaterThan(CRUISE.MAX_FACTOR * 0.9)
   })
 
-  /**
-   * Обратная сторона той же монеты: у причала разогнаться нельзя. Станция мала,
-   * но высота над ней ничтожна, а потолок считается от высоты, а не от размера.
-   *
-   * Проверяется НЕ равенство единице: потолок у причала равен «высота / BRAKE_ZONE»,
-   * и правка зоны торможения делает его то 0.4, то 1.3 — от этого не должно
-   * зависеть ничего. Важно ровно одно: у створа корабль остаётся В ФАЗЕ, то есть
-   * сталкивается со станцией и может по ней стрелять. Ползком — можно, прыжком — нет.
-   */
-  it('у станции крейсер не выводит корабль из фазы, как бы ни жал игрок', () => {
+  it('перед границей притяжения звезды привод начинает выход к единице', () => {
     const world = emptySystem()
+    const star = world.bodies.find((b) => b.kind === 'star')!
+    const gravityEdge = star.radius * GRAVITY.REACH_RADII
+    const buffer = star.radius * CRUISE.STAR_EXIT_BUFFER_RADII
+    world.player.state.pos.copy(star.pos).add(new Vector3(star.radius + gravityEdge + buffer - 1, 0, 0))
+
     spool(world, true, 10)
 
-    expect(world.player.cruise.factor).toBeLessThan(CRUISE.PHASE_THRESHOLD)
+    expect(world.player.cruise.factor).toBe(1)
     expect(isPhased(world.player)).toBe(false)
     expect(world.player.cruise.block).toBe('proximity')
+  })
+
+  it('с полного хода успевает выйти из крейсера до начала притяжения', () => {
+    const world = emptySystem()
+    const ship = world.player
+    const star = world.bodies.find((body) => body.kind === 'star')!
+    const gravityEdge = star.radius * GRAVITY.REACH_RADII
+    const buffer = star.radius * CRUISE.STAR_EXIT_BUFFER_RADII
+    const fullSpeed = ship.spec.tuning.MAX_SPEED * CRUISE.MAX_FACTOR
+    const brakingDistance = fullSpeed / CRUISE.DECAY_RATE
+    ship.state.pos.copy(star.pos).add(new Vector3(
+      star.radius + gravityEdge + buffer + brakingDistance - 100,
+      0,
+      0,
+    ))
+    ship.state.vel.set(-fullSpeed, 0, 0)
+    ship.cruise.factor = CRUISE.MAX_FACTOR
+
+    const dt = 1 / 120
+    for (let i = 0; i < 20 / dt; i++) {
+      updateCruise(ship, world, true, dt)
+      const speed = Math.min(-ship.state.vel.x, ship.spec.tuning.MAX_SPEED * ship.cruise.factor)
+      ship.state.vel.x = -speed
+      ship.state.pos.addScaledVector(ship.state.vel, dt)
+      const altitude = ship.state.pos.distanceTo(star.pos) - star.radius
+      if (altitude <= gravityEdge) break
+    }
+
+    const altitude = ship.state.pos.distanceTo(star.pos) - star.radius
+    expect(ship.cruise.factor).toBe(1)
+    expect(altitude).toBeGreaterThan(gravityEdge)
+    expect(altitude - gravityEdge).toBeLessThan(buffer * 2)
   })
 })
 

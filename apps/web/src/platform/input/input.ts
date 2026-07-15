@@ -50,7 +50,32 @@ const SENSITIVITY = 420
 const held = new Set<string>()
 const pressedThisFrame = new Set<string>()
 
+/** Истина с ОС: keyup теряется при pointer lock / Alt+Tab, Set «залипает». */
+let modShift = false
+let modCtrl = false
+
+function syncModifiers(e: KeyboardEvent | MouseEvent): void {
+  modShift = e.getModifierState('Shift')
+  modCtrl = e.getModifierState('Control')
+  if (modShift) {
+    held.add('ShiftLeft')
+    held.add('ShiftRight')
+  } else {
+    held.delete('ShiftLeft')
+    held.delete('ShiftRight')
+  }
+  if (modCtrl) {
+    held.add('ControlLeft')
+    held.add('ControlRight')
+  } else {
+    held.delete('ControlLeft')
+    held.delete('ControlRight')
+  }
+}
+
 export function isHeld(code: string): boolean {
+  if (code === 'ShiftLeft' || code === 'ShiftRight') return modShift
+  if (code === 'ControlLeft' || code === 'ControlRight') return modCtrl
   return held.has(code)
 }
 
@@ -183,6 +208,7 @@ export function attachInput(canvas: HTMLCanvasElement): () => void {
 
     if (!held.has(e.code)) pressedThisFrame.add(e.code)
     held.add(e.code)
+    syncModifiers(e)
 
     /**
      * В игре (курсор захвачен) клавиатура принадлежит игре ЦЕЛИКОМ — гасим штатное
@@ -200,9 +226,13 @@ export function attachInput(canvas: HTMLCanvasElement): () => void {
      */
     if (input.pointerLocked || PREVENT_DEFAULT.has(e.code)) e.preventDefault()
   }
-  const onKeyUp = (e: KeyboardEvent) => held.delete(e.code)
+  const onKeyUp = (e: KeyboardEvent) => {
+    held.delete(e.code)
+    syncModifiers(e)
+  }
 
   const onMouseMove = (e: MouseEvent) => {
+    syncModifiers(e)
     if (!input.pointerLocked) return
     input.stickX += e.movementX / SENSITIVITY
     input.stickY -= e.movementY / SENSITIVITY
@@ -242,6 +272,8 @@ export function attachInput(canvas: HTMLCanvasElement): () => void {
   const release = () => {
     held.clear()
     pressedThisFrame.clear()
+    modShift = false
+    modCtrl = false
     input.firing = false
     // Иначе временный газ «залипнет» на паузе, как залипала бы тяга с клавиши.
     input.throttleUp = false
@@ -308,8 +340,8 @@ export function attachInput(canvas: HTMLCanvasElement): () => void {
 
   window.addEventListener('beforeunload', onUnload)
   document.addEventListener('pointerlockerror', onLockError)
-  window.addEventListener('keydown', onKeyDown)
-  window.addEventListener('keyup', onKeyUp)
+  window.addEventListener('keydown', onKeyDown, true)
+  window.addEventListener('keyup', onKeyUp, true)
   window.addEventListener('blur', onBlur)
   window.addEventListener('focus', onRegainFocus)
   window.addEventListener('pagehide', onBlur)
@@ -327,8 +359,8 @@ export function attachInput(canvas: HTMLCanvasElement): () => void {
     releaseLock()
     window.removeEventListener('beforeunload', onUnload)
     document.removeEventListener('pointerlockerror', onLockError)
-    window.removeEventListener('keydown', onKeyDown)
-    window.removeEventListener('keyup', onKeyUp)
+    window.removeEventListener('keydown', onKeyDown, true)
+    window.removeEventListener('keyup', onKeyUp, true)
     window.removeEventListener('blur', onBlur)
     window.removeEventListener('focus', onRegainFocus)
     window.removeEventListener('pagehide', onBlur)
