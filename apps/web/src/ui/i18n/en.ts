@@ -20,9 +20,17 @@ export const EN: Record<keyof typeof RU, string> = {
   'menu.yes': 'YES',
   'menu.no': 'NO',
   'menu.keys': 'CONTROLS',
+  'menu.howto': 'HOW TO PLAY',
   'menu.settings': 'SETTINGS',
   'menu.back': 'BACK',
   'menu.language': 'LANGUAGE',
+  'menu.lang.ru': 'Русский',
+  'menu.lang.en': 'English',
+  'menu.lang.pt': 'Português',
+  'menu.lang.fr': 'Français',
+  'menu.lang.de': 'Deutsch',
+  'menu.lang.es': 'Español',
+  'menu.lang.it': 'Italiano',
   'menu.assist': 'FLIGHT COMPUTER',
   'menu.assist.hint': 'Off means Newtonian flight: no drag, all inertia.',
   'menu.on': 'ON',
@@ -58,7 +66,7 @@ export const EN: Record<keyof typeof RU, string> = {
   'key.throttle': 'W / S',
   'key.throttle.what': 'throttle (holds position)',
   'key.rmb': 'RMB',
-  'key.rmb.what': 'afterburner while held',
+  'key.rmb.what': 'thrust boost while held',
   'key.roll': 'A / D',
   'key.roll.what': 'roll',
   'key.barrel': 'AA',
@@ -69,12 +77,14 @@ export const EN: Record<keyof typeof RU, string> = {
   'key.reversal.what': 'reversal turn',
   'key.retro': 'Ctrl',
   'key.retro.what': 'retro thrust',
-  'key.cruise': 'Z',
-  'key.cruise.what': 'interplanetary cruise',
-  'key.fire': 'LMB / Space',
+  'key.cruise': 'Space',
+  'key.cruise.what': 'afterburner / cruise',
+  'key.fire': 'LMB',
   'key.fire.what': 'lasers',
   'key.target': 'Tab',
-  'key.target.what': 'lock target',
+  'key.target.what': 'lock: ship / wreck',
+  'key.nav': 'Shift+Tab',
+  'key.nav.what': 'nav target: body, station',
   'key.autofight': 'P',
   'key.autofight.what': 'autofight target',
   'key.ship': 'I',
@@ -87,14 +97,10 @@ export const EN: Record<keyof typeof RU, string> = {
   'key.talk.what': 'hail target',
   'key.missile': 'R',
   'key.missile.what': 'missile at target',
-  'key.ecm': 'E',
-  'key.ecm.what': 'ECM: kill a missile',
-  'key.bomb': 'B',
-  'key.bomb.what': 'energy bomb, area',
-  'key.cloak': 'X',
-  'key.cloak.what': 'cloak (no firing)',
-  'key.drone': 'Q',
-  'key.drone.what': 'launch a drone',
+  'key.aux': 'E',
+  'key.aux.what': 'use fitted aux device',
+  'key.camera': '← → ↑ ↓',
+  'key.camera.what': 'orbit / zoom view · V resets',
   'key.tractor': 'C',
   'key.tractor.what': 'tractor beam: pull cargo',
   'key.dock': 'L',
@@ -104,9 +110,44 @@ export const EN: Record<keyof typeof RU, string> = {
   'key.pause': 'Esc',
   'key.pause.what': 'pause and cursor',
 
+  'keys.group.guide': 'HOW TO PLAY',
   'keys.group.flight': 'FLIGHT',
   'keys.group.combat': 'COMBAT',
   'keys.group.ship': 'SHIP & WORLD',
+
+  // ─── "How to play": not a key table, but vignettes of what you can do ─────────
+  'guide.intro':
+    "You're a pilot in a living galaxy of thousands of star systems: honest physics, arcade " +
+    'controls, no rigid story. Here are a few snapshots of what you can get up to.',
+  'guide.flight':
+    'You leave the dock, push the throttle and swing the nose with the mouse — inertia carries ' +
+    'the ship sideways until you turn into it and kill the drift; the HUD marker shows where ' +
+    "you're really heading. A far planet is half an hour at combat speed, so you engage cruise " +
+    'and run supersonic, easing off near a star before its pull drags you into the heat.',
+  'guide.combat':
+    'A pirate hangs by the asteroid belt. You lock him with Tab, hold him in the sights and open ' +
+    'up with the laser; no time to fuss — hit autofight and finish with a missile. His shield ' +
+    'bursts and his hull throws sparks of damage — but a station is off-limits: a force field ' +
+    'guards it, you hail it, you never shoot it.',
+  'guide.salvage':
+    'The downed pirate leaves a cloud of canisters. You aim the tractor beam, reel them in — and ' +
+    'his own cannon drops into your hold, one you never had to buy.',
+  'guide.nav':
+    'Need a station — Shift+Tab cycles bodies and docks by distance, you mark the one you want, ' +
+    'hand it to the autopilot and it brings you in and berths you. Bored of the system — open the ' +
+    'galaxy map, pick a star and hyperjump to the neighbours.',
+  'guide.station':
+    'At the dock you offload ore bought cheap on a farming world, and spend the take on a heavier ' +
+    'shield — if your hull can carry it. You patch the punctured plating too, and upgrade the laser ' +
+    'once with a spare of the same module from your hold.',
+  'guide.people':
+    'You open a channel to a passing freighter — the translator relays his speech with amusing ' +
+    'glitches. Talk long enough and he remembers you (check the acquaintance journal later), maybe ' +
+    'even flies escort. Fire on a civilian or run contraband and word spreads — people start to eye you.',
+  'guide.growth':
+    'You switch on the mielophone and the ship grows until the system below shrinks to a dot and the ' +
+    "galaxy's whole star field emerges around you; you cycle the stars and jump to any. And somewhere " +
+    'wait rare tools that command the stars themselves.',
 
   'hud.shield': 'SHLD',
   'hud.hull': 'HULL',
@@ -128,6 +169,7 @@ export const EN: Record<keyof typeof RU, string> = {
   'hud.noJump': 'NO HYPERDRIVE FITTED',
   'hud.noAux': 'NO DEVICE FITTED',
   'hud.noTarget': 'NO TARGET LOCKED',
+  'hud.landPrompt': 'L — AUTOLAND · ALT {alt}',
   'hud.refuel': 'SCOOPING',
   'hud.throttle': 'THRT',
   'hud.rockets': 'MSL',
@@ -138,7 +180,7 @@ export const EN: Record<keyof typeof RU, string> = {
   'hud.gravityBrake': 'GRAVITY BRAKE',
   'hud.autofightPlate': 'AUTO COMBAT',
   'hud.autopilotPlate': 'AUTOPILOT',
-  'hud.cloak': 'CLOAKED · X — DROP',
+  'hud.cloak': 'CLOAKED',
   'hud.missileWarn': 'MISSILE · {seconds} S · E — ECM',
   'hud.hail': '◄ {name} HAILS · T — ANSWER',
 
@@ -149,7 +191,6 @@ export const EN: Record<keyof typeof RU, string> = {
 
   'hud.dockCorridor': 'DOCKING · {range} · L — CANCEL',
   'hud.dockReady': 'PAD CLEAR · L — DOCK',
-  'hud.dockTooFast': 'SLOW DOWN TO {speed} M/S',
   'hud.dockHint': 'L — AUTODOCK · PAD {range}',
   'hud.orbitExit': 'ENTERING ORBIT',
   'hud.bonVoyage': 'SAFE TRAVELS!',
@@ -349,6 +390,32 @@ export const EN: Record<keyof typeof RU, string> = {
   'dialogue.hire': 'HIRE FOR {fee} CR',
   'dialogue.hirePlain': 'HIRE',
   'dialogue.end': 'HANG UP',
+  'dialogue.closeChannel': 'CLOSE CHANNEL',
+  'dialogue.overload': 'Link overloaded — channel closed. Deals and journal facts carry over until you meet again.',
+  'dialogue.hangup': 'They hung up.',
+  'dialogue.stance.friendly': 'FRIENDLY',
+  'dialogue.stance.neutral': 'NEUTRAL',
+  'dialogue.stance.hostile': 'HOSTILE',
+
+  'dispatcher.off': 'OVER',
+  'dispatcher.lost': 'Link lost.',
+  'dispatcher.title': 'DISPATCHER · {station}',
+  'dispatcher.section.locale': 'LOCAL',
+  'dispatcher.section.system': 'SYSTEM',
+  'dispatcher.gov': 'Government',
+  'dispatcher.economy': 'Economy',
+  'dispatcher.tech': 'Tech level',
+  'dispatcher.population': 'Population',
+  'dispatcher.dock': 'At the berth',
+  'dispatcher.dockFree': 'clear',
+  'dispatcher.nearest': 'Nearest inhabited world — {name}, {distance} km. Head there.',
+  'dispatcher.inhabited': ' · inhabited',
+  'dispatcher.greet.brave': 'Dispatcher here. Talk straight, pilot — no stalling.',
+  'dispatcher.greet.cowardly': 'Uh… dispatcher listening. No foolishness, okay?',
+  'dispatcher.greet.greedy': 'Dispatcher. What do you need? Time is money — hurry up.',
+  'dispatcher.greet.honorable': 'Dispatch, good ship. How can I help?',
+  'dispatcher.greet.hotheaded': 'Finally! Dispatcher on the line. Spit it out — what’s stuck?',
+  'dispatcher.greet.calculating': 'Dispatcher. Listening carefully — keep it to the point.',
   'chat.incoming': 'INCOMING CALL',
   'chat.incoming.hint': 'end your current call to answer',
   'hud.contactLost': '{name} LOST FROM RADAR — PRESUMED DEAD',
@@ -432,6 +499,8 @@ export const EN: Record<keyof typeof RU, string> = {
   'unit.au': 'AU',
   'unit.pc': 'pc',
   'unit.kg': 'kg',
+
+  'map.close': 'M — CLOSE',
 
   'map.you': 'YOU',
   'map.count.stars': 'stars',

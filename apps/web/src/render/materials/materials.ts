@@ -429,6 +429,39 @@ export function dustMaterial(): LineBasicMaterial {
   return dust
 }
 
+let dustLaser: LineBasicMaterial | null = null
+
+/**
+ * Тот же отрезок, но АДДИТИВНЫЙ и яркий: на глубоком крейсерском ходу (десятки млн ×)
+ * пыль загорается лазерными линиями. Цвет и непрозрачность правит кадр по накалу.
+ * Отдельный материал, чтобы не переключать blending на общем каждый кадр (рекомпиляция).
+ */
+export function dustLaserMaterial(): LineBasicMaterial {
+  dustLaser ??= new LineBasicMaterial({
+    color: 0xbfe6ff,
+    transparent: true,
+    opacity: 0.9,
+    blending: AdditiveBlending,
+    depthWrite: false,
+    fog: false,
+  })
+  return dustLaser
+}
+
+let crossRays: MeshBasicMaterial | null = null
+
+/** Лучи из концов креста: аддитивные, глубину не пишут — свет складывается с фоном. */
+export function crossRayMaterial(): MeshBasicMaterial {
+  crossRays ??= new MeshBasicMaterial({
+    vertexColors: true,
+    transparent: true,
+    blending: AdditiveBlending,
+    depthWrite: false,
+    fog: false,
+  })
+  return crossRays
+}
+
 let stars: PointsMaterial | null = null
 
 export function starfieldMaterial(size: number): PointsMaterial {

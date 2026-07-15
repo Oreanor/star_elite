@@ -5,7 +5,7 @@ import { makeRng } from '@elite/sim'
 import { useSession } from '../../app/GameContext'
 import { DUST } from '../config'
 import { dustExtents, wrapUnit } from './dustMath'
-import { dustMaterial } from '../materials/materials'
+import { dustLaserMaterial, dustMaterial } from '../materials/materials'
 
 /**
  * Ближняя пыль — единственный источник ощущения скорости в пустоте:
@@ -84,6 +84,21 @@ export function Dust() {
     // (базовый куб) — нет: иначе на большом кубе иголки стоят, а не несутся.
     const { box, tail, rate } = dustExtents(speed, dt, player.state.scale)
 
+    // ЛАЗЕРНЫЙ ход: на глубоком крейсере (десятки млн ×) пыль загорается. Накал растёт
+    // от GLOW_START к GLOW_FULL — на нём аддитивный яркий материал и штрихи длиннее, мимо
+    // несутся светящиеся линии. Ниже порога — обычный тусклый материал. Материал МЕНЯЕМ
+    // ссылкой (оба скомпилированы), а не переключаем blending на одном — иначе рекомпиляция.
+    const glow = Math.max(0, Math.min(1, (player.cruise.factor - DUST.GLOW_START) / (DUST.GLOW_FULL - DUST.GLOW_START)))
+    if (glow > 0) {
+      const laser = dustLaserMaterial()
+      laser.opacity = 0.4 + 0.5 * glow
+      mesh.material = laser
+    } else {
+      mesh.material = dustMaterial()
+    }
+    // Штрих удлиняем по накалу: линия тянется в лазерный след, а не в короткую искру.
+    const tailGlow = tail * (1 + glow * DUST.GLOW_STREAK_BOOST)
+
     // Орбиты двигают локальную систему на километры в секунду, но пилот у станции
     // относительно пыли не летит. Двигаем узор только фактической скоростью борта.
     _delta.copy(velocity).multiplyScalar(dt / rate)
@@ -111,9 +126,9 @@ export function Dust() {
       array[o + 1] = y
       array[o + 2] = z
       // Хвост тянется ПРОТИВ вектора скорости — как след на длинной выдержке.
-      array[o + 3] = x - velocity.x * tail
-      array[o + 4] = y - velocity.y * tail
-      array[o + 5] = z - velocity.z * tail
+      array[o + 3] = x - velocity.x * tailGlow
+      array[o + 4] = y - velocity.y * tailGlow
+      array[o + 5] = z - velocity.z * tailGlow
     }
 
     attribute.needsUpdate = true

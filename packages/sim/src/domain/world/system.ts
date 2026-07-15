@@ -64,7 +64,7 @@ export interface SystemDef {
   /** Одно число задаёт всю расстановку: пояс, патрули, разброс. */
   seed: number
   playerStart: readonly [number, number, number]
-  star: { pos: readonly [number, number, number]; radius: number; color: number }
+  star: { pos: readonly [number, number, number]; radius: number; color: number; calm?: boolean }
   /**
    * Спутник двойной: вторая звезда или чёрная дыра (барицентр, `separation`, орбита).
    * Позиции нет — место даёт время, как у звёзд пары.
@@ -94,9 +94,24 @@ export interface SystemDef {
     /** Спутники. Их период выводится из массы планеты, поэтому здесь его нет. */
     moons: readonly MoonDef[]
   }[]
-  station: { name: string; pos: readonly [number, number, number]; radius: number } | null
+  station: StationDef | null
+  /**
+   * Дополнительные станции сверх основной (`station`). Основная — та, к которой выходят и
+   * которую ведёт трафик; эти просто стоят телами в мире (док по близости всё равно работает).
+   * Список, а не одно поле, — чтобы у системы могло быть несколько причалов особой формы.
+   */
+  extraStations?: readonly StationDef[]
   belt: { center: readonly [number, number, number]; radius: number; count: number } | null
   patrols: readonly PatrolDef[]
+}
+
+/** Причал: положение, размер и облик. Стиль выбирает геометрию в рендере. */
+export interface StationDef {
+  name: string
+  pos: readonly [number, number, number]
+  radius: number
+  /** Облик: тор-кориолис (умолч.), «солнечный веер» или «крест». */
+  style?: 'coriolis' | 'solar' | 'cross'
 }
 
 /** Астрономическая единица, м. Среднее расстояние от Земли до Солнца. */

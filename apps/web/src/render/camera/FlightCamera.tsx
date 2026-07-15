@@ -6,6 +6,7 @@ import { manoeuvreHoldsCamera } from '../../app/control/playerController'
 import { useSession } from '../../app/GameContext'
 import { jumpFx, jumpShake } from '../../app/control/jumpFx'
 import { undocking, undockProgress } from '../../app/control/undockFx'
+import { cameraView } from '../../app/control/cameraView'
 import { bombShake } from '../bombFeel'
 import { CAMERA, GIANT_RENDER_CAP, RENDER } from '../config'
 
@@ -20,6 +21,8 @@ import { CAMERA, GIANT_RENDER_CAP, RENDER } from '../config'
 
 const _target = new Vector3()
 const _offset = new Vector3()
+/** Скорость для упреждения, обрезанная базовым MAX_SPEED: см. врезку у addScaledVector. */
+const _lead = new Vector3()
 const _rel = new Vector3()
 const _twist = new Quaternion()
 const _desiredQuat = new Quaternion()
@@ -27,6 +30,9 @@ const _shake = new Vector3()
 const _bombShake = new Vector3()
 const _jumpShake = new Vector3()
 const _camRot = new Quaternion()
+/** Пользовательский облёт: поворот всей связки камеры вокруг вертикали корабля. */
+const _orbit = new Quaternion()
+const _up = new Vector3()
 
 /** Направление носа и взгляда камеры — для инкрементального доворота курса. */
 const _noseFwd = new Vector3()
@@ -234,13 +240,21 @@ export function FlightCamera() {
     // корпус мерцает в лог-буфере, а на экране он и так во весь кадр. Тот же зажим у меша
     // корабля — тогда он остаётся постоянного размера, просто мир перестаёт уменьшаться.
     _offset.multiplyScalar(Math.min(state.scale, GIANT_RENDER_CAP))
-    // У пружины позиционного слежения ошибка равна примерно v/k. При постоянном
-    // падении в g это десятки метров: корабль уплывал к краю кадра. Упреждение
-    // на 1/k компенсирует транспортную скорость, не меняя инерцию камеры в манёвре.
-    _target
-      .copy(state.pos)
-      .add(_offset)
-      .addScaledVector(state.vel, CAMERA.VELOCITY_LEAD)
+
+    // Пользовательский ракурс (стрелки): наезд множителем дистанции и облёт вокруг ЦЕНТРА
+    // корабля. Облёт — жёсткий поворот всей связки камеры (и смещения, и взгляда ниже)
+    // вокруг вертикали корабля через его центр: корабль остаётся в центре кадра, меняется
+    // только угол обзора. `_orbit` переиспользуется ниже для доворота ориентации.
+    const view = cameraView()
+    _offset.multiplyScalar(view.distance)
+    _up.set(0, 1, 0).applyQuaternion(state.quat)
+    _orbit.setFromAxisAngle(_up, view.azimuth)
+    _offset.applyQuaternion(_orbit)
+
+    // Цель слежения — точка за кормой. Упреждение и пружину добавим НИЖЕ, после обновления
+    // ориентации: камера «плавает» за кораблём, как шарик на нитке, а не приколочена к нему.
+    const chaseAlpha = 1 - Math.exp(-CAMERA.CHASE_STIFFNESS * dt)
+    _target.copy(state.pos).add(_offset)
 
     /**
      * КУРС С ТАНГАЖОМ (swing) камера доворачивает к носу МИНИМАЛЬНЫМ поворотом
@@ -258,9 +272,8 @@ export function FlightCamera() {
     _noseFwd.set(0, 0, -1).applyQuaternion(state.quat)
 
     if (held) {
-      // Камера стоит и ждёт. Ориентацию не трогаем совсем — только позицию,
-      // которая уже посчитана от этой самой ориентации.
-      camera.position.lerp(_target, 1 - Math.exp(-CAMERA.CHASE_STIFFNESS * dt))
+      // В фигуре ориентацию не трогаем — камера смотрит замороженным курсом, корабль
+      // крутится в центре кадра.
     } else if (running) {
       // Доворот курса на кратчайший поворот от «куда смотрит камера» к носу, долей dt.
       _camFwd.set(0, 0, -1).applyQuaternion(camSwing)
@@ -270,16 +283,41 @@ export function FlightCamera() {
         .normalize()
       residualTwist(state.quat, camSwing, _twist)
       camTwist.slerp(_twist, 1 - Math.exp(-CAMERA.ROLL_STIFFNESS * dt))
-      camera.position.lerp(_target, 1 - Math.exp(-CAMERA.CHASE_STIFFNESS * dt))
     } else {
-      // Стоящий мир: камера строго за носом, крен — по кораблю, без пружины.
+      // Стоящий мир: камера строго за носом, крен — по кораблю.
       camSwing.setFromUnitVectors(_refFwd, _noseFwd)
       residualTwist(state.quat, camSwing, _twist)
       camTwist.copy(_twist)
+    }
+
+    // Позиция: на ЖИВОМ мире — упреждение по скорости + мягкая ПРУЖИНА к цели. Оттого
+    // камера плавает за кораблём и заметно отстаёт в манёврах — это желаемое ощущение.
+    //
+    // Упреждение — КОНСТАНТА (`VELOCITY_LEAD`), намеренно ЧУТЬ МЕНЬШЕ точного v·dt/a: оно
+    // гасит транспортное запаздывание пружины не до нуля, а с запасом, поэтому камера всегда
+    // держится СЛЕГКА позади — корабль ни в разгоне, ни на крейсере не выскакивает ВПЕРЁД
+    // из кадра. Точное dt/a садилось ровно на корму и на первом же скачке скорости
+    // (включении крейсера) перелетало вперёд — корабль пропадал.
+    // На СТОЯЩЕМ мире — жёстко и без упреждения: иначе оно сместило бы неподвижную камеру.
+    if (running) {
+      // Упреждение считаем по скорости, ОБРЕЗАННОЙ базовым MAX_SPEED. Иначе на крейсере
+      // (vel = MAX_SPEED × factor, до ×90) член vel·LEAD выносит цель на километры ВПЕРЁД
+      // корабля — камера обгоняет, а корабль отстаёт назад. Раньше упреждения не было вовсе
+      // и на сильном разгоне корабль уходил ВПЕРЁД из кадра — так и надо. Обрезка оставляет
+      // упреждение для обычного манёвра, но на крейсере оно исчезающе мало против пройденного
+      // пути, и корабль снова убегает вперёд, как прежде.
+      const cap = player.spec.tuning.MAX_SPEED
+      _lead.copy(state.vel)
+      if (_lead.lengthSq() > cap * cap) _lead.setLength(cap)
+      _target.addScaledVector(_lead, CAMERA.VELOCITY_LEAD)
+      camera.position.lerp(_target, chaseAlpha)
+    } else {
       camera.position.copy(_target)
     }
 
-    _desiredQuat.copy(camSwing).multiply(camTwist).multiply(_pitchDown)
+    // Тот же облёт — на взгляд: связка (позиция + ориентация) поворачивается вокруг
+    // корабля как жёсткое тело, поэтому корабль не уплывает из центра при облёте.
+    _desiredQuat.copy(camSwing).multiply(camTwist).multiply(_pitchDown).premultiply(_orbit)
     camera.quaternion.copy(_desiredQuat)
 
     // ── Крейсер: поле зрения и тряска ────────────────────────────────────────

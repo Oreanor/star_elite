@@ -1,4 +1,6 @@
 import { Vector3 } from 'three'
+import { type World } from '@elite/sim'
+import { GALAXY_LAYER } from '../config'
 
 /**
  * Мост между галактическим СЛОЕМ (render) и ЛОКАТОРОМ (ui/hud): слой знает, где сейчас
@@ -40,4 +42,42 @@ const state: GalaxyRadarState = {
 
 export function galaxyRadar(): GalaxyRadarState {
   return state
+}
+
+const _point = /* @__PURE__ */ new Vector3()
+
+/**
+ * Перебор ЗВЁЗД ГАЛАКТИКИ носом — тот же жест, что Tab по кораблям в системе (`cycleLock`),
+ * но на галактическом масштабе. Кандидаты — ровно те звёзды, что ГОРЯТ на локаторе (в сфере
+ * видимости слоя), кроме своей. Сортируем по углу от носа и на каждый вызов берём следующую
+ * по кругу. Пишем в `world.jumpTargetIndex` — тот же «выбор звезды», что метит карта галактики
+ * и куда прыгает H: Tab, локатор и карта смотрят на одну звезду. Индекс в буфере слоя равен
+ * индексу системы в `generateGalaxy`, поэтому годится как `jumpTargetIndex` напрямую.
+ */
+export function cycleGalaxyStar(world: World): void {
+  if (!state.active || !state.positions) return
+  const player = world.player
+  const range2 = GALAXY_LAYER.SPHERE_RADIUS_M * GALAXY_LAYER.SPHERE_RADIUS_M
+  const pos = state.positions
+
+  const cands: { index: number; dist: number }[] = []
+  for (let i = 0; i < state.count; i++) {
+    if (i === state.originIndex) continue // своя звезда не выбирается — она точка отсчёта
+    const b = i * 3
+    _point.set(
+      state.anchor.x + pos[b]! * state.layerScale - player.state.pos.x,
+      state.anchor.y + pos[b + 1]! * state.layerScale - player.state.pos.y,
+      state.anchor.z + pos[b + 2]! * state.layerScale - player.state.pos.z,
+    )
+    const d2 = _point.lengthSq()
+    if (d2 > range2) continue // вне сферы видимости — на локаторе её нет
+    cands.push({ index: i, dist: d2 })
+  }
+  if (cands.length === 0) return
+
+  // В ПОРЯДКЕ УДАЛЕНИЯ: ближайшая звезда — первая, дальше по кругу к дальним. Так листание
+  // предсказуемо (ближе → дальше), а не скачет по углу к носу. Текущая есть — берём следующую.
+  cands.sort((a, b) => a.dist - b.dist)
+  const cur = cands.findIndex((c) => c.index === world.jumpTargetIndex)
+  world.jumpTargetIndex = cands[(cur + 1) % cands.length]!.index
 }

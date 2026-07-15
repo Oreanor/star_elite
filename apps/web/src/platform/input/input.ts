@@ -94,6 +94,17 @@ export function centerStick(): void {
 }
 
 /**
+ * Пока идёт кино вылета (у корабля своя анимация тряски и улёта) мышь ПОЛНОСТЬЮ молчит:
+ * движение не копится в ручку вообще. Иначе накопленный за ~3 с рывок выплёскивался в
+ * корабль на выходе из сцены и дёргал его с оси. Ставит/снимает жизненный цикл вылета.
+ */
+let stickSuspended = false
+export function setStickSuspended(value: boolean): void {
+  stickSuspended = value
+  if (value) centerStick()
+}
+
+/**
  * Сколько ждать между настоящими обращениями к браузеру, мс.
  *
  * После выхода из захвата Chrome держит защитный откат около секунды — это
@@ -233,6 +244,8 @@ export function attachInput(canvas: HTMLCanvasElement): () => void {
 
   const onMouseMove = (e: MouseEvent) => {
     syncModifiers(e)
+    // Кино вылета: мышь не рулит кораблём вовсе — движение не копим (см. setStickSuspended).
+    if (stickSuspended) return
     if (!input.pointerLocked) return
     input.stickX += e.movementX / SENSITIVITY
     input.stickY -= e.movementY / SENSITIVITY

@@ -2,6 +2,7 @@ import {
   CORE_INDEX,
   FAUNA_SPECIES,
   GALAXY,
+  LUCIFER,
   GOVERNMENTS,
   HUMAN_SPECIES,
   PLANET_TYPES,
@@ -30,6 +31,15 @@ const BLACK_HOLE: Star = (() => {
   if (!c) throw new Error('в каталоге светил нет чёрной дыры')
   return { class: c.id, className: c.name, color: c.color, radius: c.radius, scoopable: false }
 })()
+
+/** Люцифер: ярчайшая звезда, хардкод. Класс F — ради webp-карты, всё прочее своё. */
+const LUCIFER_STAR: Star = {
+  class: LUCIFER.CLASS,
+  className: 'Люцифер',
+  color: LUCIFER.COLOR,
+  radius: LUCIFER.RADIUS,
+  scoopable: true,
+}
 
 /**
  * Статический генератор галактики: одно зерно → всегда одни и те же 2500 систем.
@@ -305,6 +315,14 @@ export function generateSystem(index: number, seed: number = GALAXY.SEED): StarS
     return { index, name: 'Ядро', x, y, z, star: BLACK_HOLE, companion: null, dyson: null, planets: [], security: SECURITY_LEVELS[0] }
   }
 
+  // Люцифер стоит НЕ на своём клеточном месте, а в пустоте над диском (LUCIFER.POS):
+  // хардкодная ярчайшая звезда, к которой уходят прыжком отовсюду. Планет и спутника нет —
+  // одинокое светило в бездне. Позиция задаётся руками, оттого `placeSystem` здесь игнорим.
+  if (index === LUCIFER.INDEX) {
+    // x/y/z уже из placeSystem, а он для Люцифера возвращает LUCIFER.POS — координаты сходятся.
+    return { index, name: 'Люцифер', x, y, z, star: LUCIFER_STAR, companion: null, dyson: null, planets: [], security: SECURITY_LEVELS[0] }
+  }
+
   // Родная система задана руками — но только в СВОЕЙ галактике. В любой другой
   // под этим индексом стоит обычная звезда: Тиррион существует в одном экземпляре.
   if (index === WORLD.HOME_INDEX && seed === GALAXY.SEED) return homeSystem(index, x, y, z)
@@ -375,7 +393,9 @@ export function generateGalaxy(seed: number = GALAXY.SEED): StarSystem[] {
   // переименовать их разведение коллизий не вправе. Иначе случайный сосед с тем
   // же именем, стоящий по индексу раньше, вытеснил бы родную систему из её имени.
   // Чёрная дыра есть у каждой галактики, Тиррион — только у родной.
-  const fixed = new Set(seed === GALAXY.SEED ? [CORE_INDEX, WORLD.HOME_INDEX] : [CORE_INDEX])
+  const fixed = new Set(
+    seed === GALAXY.SEED ? [CORE_INDEX, LUCIFER.INDEX, WORLD.HOME_INDEX] : [CORE_INDEX, LUCIFER.INDEX],
+  )
   for (const i of fixed) taken.add(generateSystem(i, seed).name)
 
   for (let i = 0; i < count; i++) {
@@ -393,5 +413,8 @@ export function generateGalaxy(seed: number = GALAXY.SEED): StarSystem[] {
 
     systems.push(name === system.name ? system : { ...system, name })
   }
+  // Люцифер — 2501-й, дописан в ХВОСТ: он не в цикле (i < COUNT его минует), но существует
+  // в массиве, оттого виден на карте и локаторе. Индекс в массиве совпадает с LUCIFER.INDEX.
+  systems.push(generateSystem(LUCIFER.INDEX, seed))
   return systems
 }

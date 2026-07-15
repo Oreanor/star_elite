@@ -11,7 +11,7 @@ import {
   type World,
 } from '@elite/sim'
 import { PORTRAIT_GRID, portraitStyle, type Emotion } from '../portrait'
-import { professionName, speciesName } from '../i18n/dataNames'
+import { professionName, properName, speciesName } from '../i18n/dataNames'
 import { GLASS_PANEL, screenBackground } from '../station/backdrop'
 import { ACCENT, Button, DIM } from '../station/chrome'
 import { t, useLang } from '../i18n'
@@ -109,6 +109,12 @@ export function CharacterCreation({
       >
         <div className="flex flex-col gap-6">
           <h1 className="text-center text-xl tracking-[0.4em]">{t('create.title')}</h1>
+          <p className="text-center text-xs tracking-widest" style={{ color: DIM }}>
+            {t('create.startAt', {
+              station: properName(world.bodies.find((b) => b.kind === 'station')?.name ?? '—'),
+              system: properName(world.systemName),
+            })}
+          </p>
 
           <Field label={t('create.species')}>
             {PLAYABLE_SPECIES.map((s) => (

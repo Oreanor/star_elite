@@ -1,5 +1,5 @@
 import { MOON } from '../../config/bodies'
-import { PLANET_COLORS, SCALE } from '../../config/galaxy'
+import { LUCIFER, PLANET_COLORS, SCALE } from '../../config/galaxy'
 import { makeRng } from '../../core/math'
 import type { PatrolDef, SystemDef } from '../world/system'
 import { capitalOf, type Planet, type StarSystem } from './types'
@@ -105,6 +105,35 @@ function moonsOf(planet: Planet, radius: number): SystemDef['planets'][number]['
  */
 export function systemDefOf(system: StarSystem, galaxySeed: number, seatOverride?: number): SystemDef {
   const rng = makeRng(galaxySeed ^ (system.index + 1))
+
+  // ЛЮЦИФЕР — одинокая звезда-гигант в пустоте: планет и пояса нет. Прибытие масштабируем ОТ
+  // РАДИУСА: выходим на 2.4×R от центра — чуть выше зоны жара (SAFE_RATIO=1.2 над поверхностью
+  // = 2.2×R) и вне притяжения, но звезда во всё небо. По оси к светилу выстроена процессия:
+  // причал-ВЕЕР (солнечная станция, док), за ним КРЕСТ («бог в центре вселенной», с ботом
+  // Словом), и дальше пылает сам Люцифер. Нос в −Z. Честная физика, без «приручения» жара.
+  if (system.index === LUCIFER.INDEX) {
+    const r = system.star.radius * SCALE.STAR_RADIUS
+    // Причалы стоят ВДЕСЯТЕРО дальше от звезды, чем прежде (24×R вместо 2.4×R): гигант
+    // больше не нависает над станциями, а горит в глубине кадра ровным диском. Игрок
+    // выходит рядом с причалами (нос в −Z, к звезде), а не в жерло короны.
+    const dist = r * 24
+    return {
+      name: system.name,
+      seed: Math.floor(rng() * 2 ** 31),
+      playerStart: [0, 0, dist],
+      // calm: у Люцифера спокойная корона — без бьющих наружу протуберанцев-«лучей».
+      star: { pos: [0, 0, 0], radius: r, color: system.star.color, calm: true },
+      companion: null,
+      dyson: null,
+      planets: [],
+      // Основной причал — «солнечный веер», вдесятеро крупнее кориолиса (radius 400 → 4000).
+      station: { name: 'Причал «Веер»', pos: [0, 0, dist - 16_000], radius: 4_000, style: 'solar' },
+      // Крест-храм чуть глубже к звезде: божественный монумент с лучами из концов. На нём — Слово.
+      extraStations: [{ name: 'Крест «Вечность»', pos: [0, 0, dist - 40_000], radius: 6_000, style: 'cross' }],
+      belt: null,
+      patrols: [],
+    }
+  }
 
   const planets = system.planets.map((p, i) => {
     const radius = p.radius * SCALE.PLANET_RADIUS

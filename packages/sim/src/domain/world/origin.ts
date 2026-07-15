@@ -15,22 +15,23 @@ import type { World } from './entities'
 const _shift = new Vector3()
 
 /**
- * Сдвигает мир, если игрок ушёл далеко от нуля, и записывает сдвиг в
- * `world.originShift` — ноль, если не двигали.
+ * Сдвигает мир, если игрок ушёл далеко от нуля, и ПРИБАВЛЯЕТ свой сдвиг к
+ * `world.originShift` (общий канал поправки камеры за кадр; см. `stepWorld`).
  *
- * Записываем, а не возвращаем: `_shift` переиспользуется, и отдавать его наружу
+ * Прибавляем, а не возвращаем: `_shift` переиспользуется, и отдавать его наружу
  * нельзя. А знать о сдвиге обязана камера — она живёт в мировых координатах и
  * без поправки «отстаёт» на четыре километра: пружина преследования тащит её
  * обратно к кораблю через полсекунды, и это выглядит как рывок кадра назад.
  */
 export function maybeShiftOrigin(world: World): void {
   const pos = world.player.state.pos
-  world.originShift.set(0, 0, 0)
+  // Не обнуляем `originShift` здесь: его сбрасывает `stepWorld` в начале кадра, а до нас
+  // в него уже мог накопиться орбитальный сдвиг из `stepOrbits`. Мы лишь ПРИБАВЛЯЕМ свой.
   if (pos.lengthSq() < PHYSICS.FLOATING_ORIGIN_RADIUS ** 2) return
 
   _shift.copy(pos).negate()
   world.originOffset.sub(_shift)
-  world.originShift.copy(_shift)
+  world.originShift.add(_shift)
 
   pos.set(0, 0, 0)
 

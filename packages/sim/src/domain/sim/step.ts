@@ -42,7 +42,7 @@ import { hasBomb, hasEcm } from '../loadout'
 import { MIELOPHONE } from '../../config/mielophone'
 import { effectiveRadius, stepScale } from '../scale/scale'
 import { stepGravity } from '../flight/gravity'
-import { landShip, stepLanding } from '../flight/landing'
+import { landShip, stepAutoland, stepLanding } from '../flight/landing'
 import { stepShip } from '../flight/model'
 import { stepDocking } from '../station/docking'
 import type { ShipEntity, World } from '../world/entities'
@@ -91,6 +91,13 @@ export function stepWorld(world: World, frameDt: number, controllers: Controller
     world.originShift.set(0, 0, 0)
     return
   }
+
+  // `originShift` — суммарный сдвиг игрока за кадр, который камера обязана повторить
+  // (она в мировых координатах). Копится из ДВУХ источников, оба двигают игрока НЕ его
+  // скоростью: орбитальное наследование в `stepOrbits` (система отсчёта станции, десятки
+  // км/с) и перецентровка плавающего начала в `maybeShiftOrigin`. Обнуляем в начале кадра,
+  // дальше оба только прибавляют.
+  world.originShift.set(0, 0, 0)
 
   // Накопитель ограничен сверху: свёрнутая вкладка не должна телепортировать мир.
   let remaining = Math.min(frameDt, PHYSICS.MAX_FRAME_DT)
@@ -154,7 +161,9 @@ function stepPhysics(world: World, dt: number): void {
     // Кинематический борт не интегрируем: его позу ставит внешний источник.
     if (ship.kinematic) continue
     if (ship.warpEmerging || ship.warpDeparting) continue
-    if (!stepLanding(ship, world)) {
+    if (stepAutoland(ship, world, dt)) {
+      // Непрерываемая автопосадка ведёт корабль вниз сама: ни гравитации, ни интегратора.
+    } else if (!stepLanding(ship, world)) {
       stepGravity(ship, world, dt)
       stepShip(ship.state, ship.controls, ship.spec.tuning, dt)
       // Миелофон: рост/усадка масштаба от сигнала. До столкновений — они считаются по
@@ -381,7 +390,16 @@ function stepBodyCollisions(world: World): void {
       const reach = body.radius + effectiveRadius(ship)
       if (body.pos.distanceToSquared(ship.state.pos) > reach * reach) continue
 
-      if (landShip(ship, body)) break
+      // Контакт с поверхностью. УПРАВЛЯЕМО (идёт автопосадка на это тело или уже сидим
+      // на нём) — ложимся мягко. НЕУПРАВЛЯЕМО (не успел нажать L в окне высот) —
+      // разбиваемся: планета больше не «мягкий батут», у неё твёрдая поверхность.
+      if (ship.autoland === body.id || ship.landedOn?.bodyId === body.id) {
+        landShip(ship, body)
+      } else {
+        ship.shield = 0
+        applyDamage(ship, ship.hull, world.time)
+      }
+      break
     }
   }
 }
@@ -479,5 +497,9 @@ function cleanup(world: World): void {
   // Захваченная цель могла погибнуть — снимаем захват, а не показываем рамку в пустоте.
   if (world.lockedTargetId !== null && !world.ships.some((s) => s.id === world.lockedTargetId && s.alive)) {
     world.lockedTargetId = null
+  }
+  // Захваченный обломок мог быть подобран или истечь (expirePods выше) — тоже снимаем.
+  if (world.lockedPodId !== null && !world.pods.some((p) => p.id === world.lockedPodId && p.alive)) {
+    world.lockedPodId = null
   }
 }

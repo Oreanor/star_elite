@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { createWorld, STARTER_SYSTEM } from '../world'
-import { cycleLock, targetableStationsOf } from '../world/queries'
+import { cycleCelestial, targetableStationsOf } from '../world/queries'
 import { dispatcherBriefing, dispatcherPersona, stationInterlocutor } from './dispatcher'
 import { localSettlement } from './shop'
 
@@ -31,16 +31,23 @@ describe('диспетчер станции', () => {
     if (brief.nearestPopulated) expect(brief.nearestPopulated.populated).toBe(true)
   })
 
-  it('захват станции — отдельный класс: ставит lockedStationId, гасит lockedTargetId', () => {
+  it('небесный круг берёт станцию на связь (lockedStationId), контакт-захват независим', () => {
     const w = world()
     const station = targetableStationsOf(w)[0]!
 
-    // Был захвачен борт; Tab по станции (кораблей в системе нет) переносит захват в свой класс.
+    // Контакт-захват борта существует сам по себе — небесный круг (Shift+Tab) НЕ должен его сбить.
     w.lockedTargetId = 42
-    cycleLock(w)
 
-    expect(w.lockedStationId).toBe(station.id)
-    expect(w.lockedTargetId).toBeNull()
+    // Листаем небесные тела по удалению, пока круг не встанет на станцию.
+    let guard = 0
+    do {
+      cycleCelestial(w)
+      guard += 1
+    } while (w.navTargetId !== station.id && guard < 50)
+
+    expect(w.navTargetId).toBe(station.id) // станция — точка навигации
+    expect(w.lockedStationId).toBe(station.id) // и взята на связь (T → диспетчер)
+    expect(w.lockedTargetId).toBe(42) // борт-контакт не тронут: круги независимы
     expect(stationInterlocutor(w)?.id).toBe(station.id)
   })
 })

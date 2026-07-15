@@ -128,6 +128,15 @@ export interface PlayerIntent {
    * прибавка стекает обратно в ноль, и корабль возвращается на выставленный ход.
    */
   surge: number
+  /**
+   * Одно удержание S тормозит только ДО НУЛЯ, дальше в реверс не проваливается:
+   * если газ был положительным в момент нажатия, эта клавиша уткнётся в ноль.
+   * Хочешь назад — отпусти и нажми снова: новое нажатие уже стартует с нуля и
+   * уводит в минус. Флаг ловит фронт нажатия, чтобы решить, упирать ли в ноль.
+   */
+  sFloorZero: boolean
+  /** Было ли S подтверждённо зажато в прошлом кадре — для фронта нажатия. */
+  sWasHeld: boolean
   flightAssist: boolean
 
   /**
@@ -165,6 +174,8 @@ export function createIntent(): PlayerIntent {
     tractor: false,
     throttle: 0.45,
     surge: 0,
+    sFloorZero: false,
+    sWasHeld: false,
     flightAssist: assistDefault(),
     growDir: 1,
     growWasHeld: false,
@@ -302,6 +313,8 @@ export function createPlayerController(intent: PlayerIntent): Controller {
         // Рукоять газа держим на полном ходе, иначе после кино сцены снова 0.45.
         intent.throttle = 1
         intent.surge = 0
+        // Мышь на всё кино вылета ВЫКЛЮЧЕНА в самом источнике (setStickSuspended в
+        // undockFx): движение не копится в стик вообще, дёргать корабль на выходе нечем.
         return
       }
 
@@ -351,20 +364,36 @@ export function createPlayerController(intent: PlayerIntent): Controller {
        * корабль уносился прочь на форсажном режиме, которого пилот не просил.
        */
       if (!manoeuvring(intent)) {
+        // W гонит рукоять вверх СКВОЗЬ ноль и дальше — из реверса в полный ход одним
+        // движением, без ступеньки на нуле.
         if (confirmedHold('KeyW')) intent.throttle += THROTTLE_RATE * dt
-        if (confirmedHold('KeyS')) intent.throttle -= THROTTLE_RATE * dt
+
+        // S тормозит, но одно удержание не проваливается сразу в реверс: если газ был
+        // положительным в момент нажатия, клавиша упирается в ноль. Хочешь назад —
+        // отпусти и нажми снова; новое нажатие стартует с нуля и уводит в минус.
+        const sHeld = confirmedHold('KeyS')
+        if (sHeld && !intent.sWasHeld) intent.sFloorZero = intent.throttle > 1e-4
+        if (sHeld) {
+          intent.throttle -= THROTTLE_RATE * dt
+          if (intent.sFloorZero) intent.throttle = Math.max(intent.throttle, 0)
+        }
+        intent.sWasHeld = sHeld
+
         intent.throttle = clamp(intent.throttle, -REVERSE_FRAC, 1)
       }
 
       /**
-       * ПКМ — ФОРСАЖ, пока держишь. Он делает две вещи разом: гонит газ до отказа
-       * поверх рукояти (surge) и включает наддув двигателя (boost ниже). Отпустил —
-       * прибавка стекает обратно, и корабль возвращается на выставленный W/S ход.
+       * ПКМ — НАДДУВ ТЯГИ, пока держишь: гонит газ до отказа поверх рукояти (surge) и
+       * включает наддув двигателя (boost ниже). Резкий отрыв от объекта: даже из реверса
+       * ПКМ считает наддув ОТ НУЛЯ — минусовую рукоять сбрасывает в ноль и гонит тягу
+       * вверх от него. Отпустил — прибавка стекает в НОЛЬ, а не обратно в минус: корабль
+       * остаётся стоять, а не возвращается к заднему ходу.
        *
        * Прибавка ограничена сверху свободным ходом до единицы: копить её впустую
        * незачем, иначе после отпускания она полсекунды стекала бы с невидимого
        * запаса, а тяга всё это время стояла бы на максимуме.
        */
+      if (input.throttleUp && intent.throttle < 0) intent.throttle = 0
       const headroom = 1 - intent.throttle
       const surgeDelta = input.throttleUp ? THROTTLE_RATE * dt : -THROTTLE_RATE * dt
       intent.surge = clamp(intent.surge + surgeDelta, 0, headroom)
@@ -411,15 +440,16 @@ export function createPlayerController(intent: PlayerIntent): Controller {
        */
       c.flightAssist = intent.flightAssist || manoeuvring(intent)
 
-      // Форсаж на ПКМ, пока держишь: наддув двигателя вместе с газом до отказа
+      // Наддув тяги на ПКМ, пока держишь: наддув двигателя вместе с газом до отказа
       // выше. Сила наддува — свойство установленного двигателя, а не константа
-      // игры: поставил военный — форсаж стал мощнее, и это посчитано, а не назначено.
+      // игры: поставил военный — наддув стал мощнее, и это посчитано, а не назначено.
       c.boost = input.throttleUp ? boostMult(ship.loadout) : 1
       c.retro = isHeld('ControlLeft') || isHeld('ControlRight') ? 1 : 0
 
-      // Крейсерский ход — удержание Z. Раньше был Shift: Windows Sticky/Filter Keys
-      // пикает и перехватывает ввод при частом/долгом удержании модификатора.
-      intent.cruise = isHeld('KeyZ')
+      // Крейсерский ход (то, что игрок зовёт «форсаж») — удержание ПРОБЕЛА. Огонь ушёл
+      // на ЛКМ, чтобы разгон и стрельба не делили клавишу. Раньше был Z, ещё раньше
+      // Shift — его перехватывали залипающие клавиши Windows.
+      intent.cruise = isHeld('Space')
       // Тормоз гасит и крейсер: жмёшь ретро (Ctrl) — выходишь из разгона, множитель
       // стекает к единице. Ретро побеждает шифт того же кадра — тормоз важнее.
       if (c.retro) intent.cruise = false
@@ -442,7 +472,8 @@ export function createPlayerController(intent: PlayerIntent): Controller {
     // странно: игрок отдал управление целиком, а не наполовину.
     wantsFire(ship: ShipEntity, world: World): boolean {
       if (autofightActive(world)) return aiController.wantsFire(ship, world)
-      return input.firing || isHeld('Space')
+      // Огонь — ЛКМ. Пробел отдан форсажу, поэтому клавиатурного дубля гашетки больше нет.
+      return input.firing
     },
 
     wantsMissile(ship: ShipEntity, world: World): boolean {

@@ -4,6 +4,7 @@ import { PHYSICS } from '../../config/physics'
 import { effectiveRadius } from '../scale/scale'
 import { stepWorld } from '../sim/step'
 import { createWorld, STARTER_SYSTEM, type BodyEntity, type World } from '../world'
+import { armAutoland } from './landing'
 
 const NO_CONTROLLERS = new Map()
 
@@ -17,21 +18,21 @@ function moonOf(world: World): BodyEntity {
   return moon
 }
 
-function touch(world: World, body: BodyEntity): void {
+/** Заводит корабль в окно автопосадки над телом и крутит шаги, пока он не сядет. */
+function landOn(world: World, body: BodyEntity): void {
   const player = world.player
-  player.state.pos.copy(body.pos).add(new Vector3(body.radius + effectiveRadius(player) - 1, 0, 0))
-  player.state.vel.set(-1000, 0, 0)
+  player.state.pos.copy(body.pos).add(new Vector3(body.radius + effectiveRadius(player) + 60, 0, 0))
+  player.state.vel.set(0, 0, 0)
   player.controls.throttle = 0
-  player.controls.flightAssist = false
+  if (!armAutoland(world)) throw new Error('автопосадка не в окне высот')
+  for (let i = 0; i < 3000 && !player.landedOn; i++) stepWorld(world, PHYSICS.FIXED_DT, NO_CONTROLLERS)
 }
 
 describe('посадка на поверхность', () => {
-  it('луна принимает корабль так же, как планета', () => {
+  it('автопосадка на луну сажает так же, как на планету', () => {
     const world = quiet()
     const moon = moonOf(world)
-    touch(world, moon)
-
-    stepWorld(world, PHYSICS.FIXED_DT, NO_CONTROLLERS)
+    landOn(world, moon)
 
     expect(world.player.alive).toBe(true)
     expect(world.player.landedOn?.bodyId).toBe(moon.id)
@@ -40,8 +41,7 @@ describe('посадка на поверхность', () => {
   it('посаженный корабль следует за луной на её реальной орбите', () => {
     const world = quiet()
     const moon = moonOf(world)
-    touch(world, moon)
-    stepWorld(world, PHYSICS.FIXED_DT, NO_CONTROLLERS)
+    landOn(world, moon)
     const parent = world.bodies.find((body) => body.id === moon.orbit?.parentId)!
     const before = moon.pos.clone().sub(parent.pos)
 
@@ -58,8 +58,7 @@ describe('посадка на поверхность', () => {
   it('после взлёта ближайшее тело не убегает с орбитальной скоростью', () => {
     const world = quiet()
     const moon = moonOf(world)
-    touch(world, moon)
-    stepWorld(world, PHYSICS.FIXED_DT, NO_CONTROLLERS)
+    landOn(world, moon)
 
     world.player.controls.throttle = 0.2
     stepWorld(world, PHYSICS.FIXED_DT, NO_CONTROLLERS)

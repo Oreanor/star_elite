@@ -199,6 +199,245 @@ export function stationGeometry(variant = 0): BufferGeometry {
   return (stationCache[variant] ??= buildGeometry(station(def)))
 }
 
+// ─── Станция «Солнечный веер»: восьмигранная бочка + 8 лучей-панелей ──────────
+// Другой силуэт, не тор: восьмигранный барабан по центру, от него 8 длинных плоских
+// солнечных панелей веером. Детализация на уровне кориолиса (гранёно, покраска по
+// вершинам). Ось барабана и вращения — Z, панели лежат в XY: крутится пропеллером,
+// а с оси (откуда и прибываешь) виден весь веер — как на референсе.
+
+/** Восьмигранный барабан в три пояса: тёмный низ, светящаяся полоса окон, гранёный купол. */
+function solarDrum(): Triangle[] {
+  const out: Triangle[] = []
+  const sides = 8
+  const R = 0.34
+  const rCap = 0.2
+  const zBot = -0.16
+  const zA = -0.02 // верх нижнего пояса
+  const zB = 0.08 // верх полосы окон = основание купола
+  const zCap = 0.22
+  const oct = (radius: number, z: number): Vec3[] =>
+    Array.from({ length: sides }, (_, i) => {
+      const a = (i / sides) * Math.PI * 2 + Math.PI / sides
+      return [Math.cos(a) * radius, Math.sin(a) * radius, z] as Vec3
+    })
+  const bot = oct(R, zBot)
+  const a = oct(R, zA)
+  const b = oct(R, zB)
+  const cap = oct(rCap, zCap)
+  const apex: Vec3 = [0, 0, zCap + 0.03]
+  const floor: Vec3 = [0, 0, zBot - 0.03]
+
+  for (let i = 0; i < sides; i++) {
+    const j = (i + 1) % sides
+    out.push(...quad(bot[i]!, bot[j]!, a[j]!, a[i]!, i % 2 ? STATION : STATION_DARK)) // нижний пояс
+    out.push(...quad(a[i]!, a[j]!, b[j]!, b[i]!, i % 2 === 0 ? STATION_LIT : STATION_TRIM)) // окна
+    out.push(...quad(b[i]!, b[j]!, cap[j]!, cap[i]!, STATION_TRIM)) // купол
+    out.push(tri(apex, cap[i]!, cap[j]!, STATION)) // крышка купола
+    out.push(tri(floor, bot[j]!, bot[i]!, STATION_DARK)) // дно
+  }
+  return out
+}
+
+/** Один луч-панель: плоская солнечная панель + рама + законцовка + ферма-спина снизу. */
+function solarArm(angle: number): Triangle[] {
+  const out: Triangle[] = []
+  const c = Math.cos(angle)
+  const s = Math.sin(angle)
+  const at = (r: number, across: number, z: number): Vec3 => [c * r - s * across, s * r + c * across, z]
+  const r0 = 0.3
+  const r1 = 1.0
+  const hw = 0.1 // полуширина панели
+  const ht = 0.012 // полутолщина
+
+  const panel: Vec3[] = [
+    at(r0, -hw, -ht), at(r0, hw, -ht), at(r0, hw, ht), at(r0, -hw, ht),
+    at(r1, -hw, -ht), at(r1, hw, -ht), at(r1, hw, ht), at(r1, -hw, ht),
+  ]
+  const p = (i: number): Vec3 => panel[i]!
+  out.push(
+    ...quad(p(3), p(2), p(6), p(7), STATION_DARK), // лицо панели (ячейки)
+    ...quad(p(0), p(1), p(5), p(4), STATION_DARK), // тыл панели
+    ...quad(p(0), p(1), p(2), p(3), STATION_TRIM), // рама у корня
+    ...quad(p(4), p(5), p(6), p(7), STATION_TRIM), // рама у конца
+    ...quad(p(0), p(4), p(7), p(3), STATION_TRIM), // рама-ребро
+    ...quad(p(1), p(5), p(6), p(2), STATION_TRIM), // рама-ребро
+  )
+
+  // Законцовка — светлый брусок на конце (как на референсе).
+  const cw = hw * 1.15
+  const cz = ht * 2.4
+  const end: Vec3[] = [
+    at(r1, -cw, -cz), at(r1, cw, -cz), at(r1, cw, cz), at(r1, -cw, cz),
+    at(r1 + 0.06, -cw, -cz), at(r1 + 0.06, cw, -cz), at(r1 + 0.06, cw, cz), at(r1 + 0.06, -cw, cz),
+  ]
+  const e = (i: number): Vec3 => end[i]!
+  out.push(
+    ...quad(e(4), e(5), e(6), e(7), STATION), // торец
+    ...quad(e(3), e(2), e(6), e(7), STATION), // верх
+    ...quad(e(0), e(1), e(5), e(4), STATION), // низ
+    ...quad(e(0), e(4), e(7), e(3), STATION_TRIM),
+    ...quad(e(1), e(5), e(6), e(2), STATION_TRIM),
+  )
+
+  // Ферма-спина под панелью: тонкий брус вдоль радиуса — структура, как в референсе.
+  const tw = 0.02
+  const spine: Vec3[] = [
+    at(r0, -tw, -ht), at(r0, tw, -ht), at(r0, tw, -ht - 0.05), at(r0, -tw, -ht - 0.05),
+    at(r1, -tw, -ht), at(r1, tw, -ht), at(r1, tw, -ht - 0.05), at(r1, -tw, -ht - 0.05),
+  ]
+  const u = (i: number): Vec3 => spine[i]!
+  out.push(
+    ...quad(u(0), u(4), u(7), u(3), STATION_DARK),
+    ...quad(u(1), u(5), u(6), u(2), STATION_DARK),
+    ...quad(u(3), u(7), u(6), u(2), STATION_TRIM),
+  )
+  return out
+}
+
+let solarCache: BufferGeometry | null = null
+
+/** Станция «Солнечный веер»: восьмигранная бочка и 8 лучей-панелей. Кэш — один раз. */
+export function solarStationGeometry(): BufferGeometry {
+  if (!solarCache) {
+    const tris = [...solarDrum()]
+    for (let i = 0; i < 8; i++) tris.push(...solarArm((i / 8) * Math.PI * 2))
+    solarCache = buildGeometry(tris)
+  }
+  return solarCache
+}
+
+// ─── Станция «Крест»: трёхмерный крест из балок ──────────────────────────────
+// Высокий вертикальный шпиль (ось Z, длиннее книзу) и горизонтальные балки крестом
+// в XY. Гранёные боксы, покраска по вершинам — детализация как у прочих станций.
+
+/** Прямоугольный брус из центра и полуразмеров. DoubleSide, поэтому обход не важен. */
+function box(cx: number, cy: number, cz: number, hx: number, hy: number, hz: number, face: number, trim: number): Triangle[] {
+  const x0 = cx - hx, x1 = cx + hx, y0 = cy - hy, y1 = cy + hy, z0 = cz - hz, z1 = cz + hz
+  const v: Vec3[] = [
+    [x0, y0, z0], [x1, y0, z0], [x1, y1, z0], [x0, y1, z0],
+    [x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1],
+  ]
+  const g = (i: number): Vec3 => v[i]!
+  return [
+    ...quad(g(4), g(5), g(6), g(7), face), // +z
+    ...quad(g(0), g(1), g(2), g(3), face), // −z
+    ...quad(g(0), g(1), g(5), g(4), trim), // −y
+    ...quad(g(3), g(2), g(6), g(7), trim), // +y
+    ...quad(g(0), g(4), g(7), g(3), face), // −x
+    ...quad(g(1), g(5), g(6), g(2), face), // +x
+  ]
+}
+
+/**
+ * Цвет луча: гаснет к концу (t→1) и к нулю по яркости `mul`; `white` уводит от золота к белу.
+ * Аддитив — чёрный ничего не прибавляет, поэтому таящий к 0 конец растворяется в пустоте.
+ */
+function beamHex(t: number, mul: number, white: number): number {
+  const f = Math.max(0, 1 - t) * mul
+  const r = Math.min(255, Math.round(0xff * f))
+  const g = Math.min(255, Math.round((0xf0 + (0xff - 0xf0) * white) * f))
+  const b = Math.min(255, Math.round((0xc8 + (0xff - 0xc8) * white) * f))
+  return (r << 16) | (g << 8) | b
+}
+
+/** Одна плоская лента-слой шафта (две перпендикулярные грани), сужается к концу. */
+function shaftLayer(tip: Vec3, a: Vec3, b: Vec3, dir: Vec3, len: number, hw: number, mul: number, white: number): Triangle[] {
+  const out: Triangle[] = []
+  const at = (t: number, ax: Vec3, w: number): Vec3 => [
+    tip[0] + dir[0] * len * t + ax[0] * w,
+    tip[1] + dir[1] * len * t + ax[1] * w,
+    tip[2] + dir[2] * len * t + ax[2] * w,
+  ]
+  const SEG = 6
+  for (let s = 0; s < SEG; s++) {
+    const t0 = s / SEG
+    const t1 = (s + 1) / SEG
+    const w0 = hw * (1 - t0)
+    const w1 = hw * (1 - t1)
+    const col = beamHex((t0 + t1) / 2, mul, white)
+    for (const ax of [a, b]) {
+      out.push(...quad(at(t0, ax, -w0), at(t0, ax, w0), at(t1, ax, w1), at(t1, ax, -w1), col))
+    }
+  }
+  return out
+}
+
+/**
+ * ЛУЧ СВЕТА из конца креста — не сплошной кол, а свечение. Плоский цвет на аддитивной ленте
+ * даёт равномерно яркую полосу с жёсткими краями (та самая «свая»); поэтому шафт собран из
+ * ВЛОЖЕННЫХ слоёв: тонкий добела раскалённый КЕРН, пошире тусклее ТЕЛО и широкий еле заметный
+ * ОРЕОЛ. Аддитивно они складываются в горячую нить с мягко тающими к бокам флангами — луч
+ * света, а не брус. Все три сужаются к концу и гаснут к нулю: кончик растворяется.
+ */
+function crossRay(tip: Vec3, dir: Vec3, len: number, hw: number): Triangle[] {
+  const d = dir
+  // Две оси, перпендикулярные лучу (крест-сечение шафта — виден с любого угла).
+  const ref: Vec3 = Math.abs(d[2]) > 0.9 ? [1, 0, 0] : [0, 0, 1]
+  const cross3 = (u: Vec3, v: Vec3): Vec3 => [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]]
+  const nrm = (v: Vec3): Vec3 => {
+    const m = Math.hypot(v[0], v[1], v[2]) || 1
+    return [v[0] / m, v[1] / m, v[2] / m]
+  }
+  const a = nrm(cross3(d, ref))
+  const b = nrm(cross3(d, a))
+  return [
+    ...shaftLayer(tip, a, b, d, len, hw, 0.3, 0.0), // ореол: широкий, тусклое золото
+    ...shaftLayer(tip, a, b, d, len, hw * 0.42, 0.55, 0.2), // тело: уже, ярче
+    ...shaftLayer(tip, a, b, d, len, hw * 0.14, 1.0, 0.8), // керн: тонкий, добела горячий
+  ]
+}
+
+let raysCache: BufferGeometry | null = null
+
+/** Лучи из шести концов креста наружу. Аддитивный материал (crossRayMaterial) их зажигает. */
+export function crossRaysGeometry(): BufferGeometry {
+  if (!raysCache) {
+    const z = 0.28 // высота перекладины (см. crossStationGeometry)
+    const L = 1.8
+    const HW = 0.05
+    const tris: Triangle[] = [
+      ...crossRay([0, 0, 0.7], [0, 0, 1], L, HW), // шпиль вверх
+      ...crossRay([0, 0, -1.0], [0, 0, -1], L, HW), // трунк вниз
+      ...crossRay([0.72, 0, z], [1, 0, 0], L, HW), // +X
+      ...crossRay([-0.72, 0, z], [-1, 0, 0], L, HW), // −X
+      ...crossRay([0, 0.5, z], [0, 1, 0], L * 0.8, HW), // +Y
+      ...crossRay([0, -0.5, z], [0, -1, 0], L * 0.8, HW), // −Y
+    ]
+    raysCache = buildGeometry(tris)
+  }
+  return raysCache
+}
+
+let crossCache: BufferGeometry | null = null
+
+/**
+ * Станция-крест (по обложке «Samael — Eternal»): вертикальный шпиль и горизонтальная
+ * перекладина крестом, плюс короткая балка по третьей оси — чтобы крест был ОБЪЁМНЫМ,
+ * а не плоским. Пересечение чуть выше центра: снизу трунк длиннее, сверху — шпиль.
+ */
+export function crossStationGeometry(): BufferGeometry {
+  if (!crossCache) {
+    const cross = 0.28 // высота пересечения по Z (чуть выше центра)
+    const tris: Triangle[] = [
+      // Вертикальный шпиль: от низа (−1.0) до верха (+0.7), тонкий, чуть шире у пересечения.
+      ...box(0, 0, -0.15, 0.075, 0.075, 0.85, STATION, STATION_TRIM),
+      ...box(0, 0, 0.5, 0.05, 0.05, 0.2, STATION_TRIM, STATION), // шпиль сверху уже
+      // Утолщение-узел на пересечении.
+      ...box(0, 0, cross, 0.11, 0.11, 0.11, STATION_DARK, STATION_TRIM),
+      // Горизонтальная перекладина вдоль X.
+      ...box(0, 0, cross, 0.72, 0.07, 0.06, STATION, STATION_TRIM),
+      // Короткая перекладина вдоль Y — делает крест трёхмерным.
+      ...box(0, 0, cross, 0.07, 0.5, 0.055, STATION, STATION_TRIM),
+      // Светящиеся окна-иллюминаторы на концах перекладины и у основания шпиля.
+      ...box(0.7, 0, cross, 0.03, 0.05, 0.045, STATION_LIT, STATION_LIT),
+      ...box(-0.7, 0, cross, 0.03, 0.05, 0.045, STATION_LIT, STATION_LIT),
+      ...box(0, 0, -0.9, 0.06, 0.06, 0.04, STATION_LIT, STATION_LIT),
+    ]
+    crossCache = buildGeometry(tris)
+  }
+  return crossCache
+}
+
 // ─── Грузовой контейнер ──────────────────────────────────────────────────────
 
 let podCache: BufferGeometry | null = null

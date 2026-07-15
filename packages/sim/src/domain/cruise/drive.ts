@@ -1,7 +1,12 @@
+import { Vector3 } from 'three'
 import { CRUISE } from '../../config/cruise'
 import { GRAVITY } from '../../config/bodies'
 import { isHostileTo } from '../ai/targeting'
+import { forward } from '../flight/axes'
 import type { ShipEntity, World } from '../world/entities'
+
+const _fwd = /* @__PURE__ */ new Vector3()
+const _out = /* @__PURE__ */ new Vector3()
 
 /**
  * Крейсерский привод.
@@ -66,6 +71,12 @@ function massLocked(ship: ShipEntity, world: World): boolean {
 function starRequiresExit(ship: ShipEntity, world: World, alreadyBraking: boolean): boolean {
   for (const body of world.bodies) {
     if (body.kind !== 'star') continue
+    // Уходишь ОТ звезды — нос смотрит наружу — крейсер НЕ тормозим. Спад нужен, чтобы не
+    // влететь В звезду и не проскочить зону притяжения, а не чтобы запереть у светила
+    // корабль, который и так перегревается и пытается сбежать. Ловим только заход внутрь.
+    forward(ship.state.quat, _fwd)
+    _out.copy(ship.state.pos).sub(body.pos)
+    if (_fwd.dot(_out) > 0) continue
     const altitude = body.pos.distanceTo(ship.state.pos) - body.radius
     const gravityEdge = body.radius * GRAVITY.REACH_RADII
     const minimumBuffer = body.radius * CRUISE.STAR_EXIT_BUFFER_RADII

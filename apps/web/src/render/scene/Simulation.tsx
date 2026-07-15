@@ -1,11 +1,13 @@
 import { useFrame, useThree } from '@react-three/fiber'
 import {
+  armAutoland,
   autodockController,
   canEngageAutodock,
   canEngageFlyTo,
   flyToArrived,
   flyToController,
-  cycleLock,
+  cycleContact,
+  cycleCelestial,
   findCloak,
   findMielophone,
   hasBomb,
@@ -15,13 +17,24 @@ import {
   serializePlayer,
   stepWorld,
   type Controller,
+  type World,
 } from '@elite/sim'
+import { cycleGalaxyStar, galaxyRadar } from './galaxyRadar'
 import { syncControllers, useSession, type Session } from '../../app/GameContext'
 import { coastController } from '../../app/control/playerController'
+import { stepCameraView } from '../../app/control/cameraView'
 import { persistSave } from '../../app/save/saveStore'
 import { clearPresses, consumePress, input, isHeld, releaseLock } from '../../platform/input/input'
 import { gameTimeSec } from '../../app/net/worldClock'
 import { pushWarning } from '../../ui/hud/warnings'
+
+/** Миелофон «есть у игрока», если он в аукс-слоте ИЛИ лежит в трюме: дев-выдача кладёт
+ *  его в ТРЮМ, а не в слот, поэтому проверка только по слоту давала ложное «прибор не
+ *  установлен», пока держишь E для роста. */
+function ownsMielophone(player: World['player']): boolean {
+  if (findMielophone(player.loadout)) return true
+  return player.hold.items.some((it) => it.kind === 'module' && it.module.kind === 'mielophone')
+}
 
 /**
  * Ведущий кадра. Монтируется ПЕРВЫМ в сцене: R3F вызывает useFrame в порядке
@@ -134,31 +147,46 @@ export function Simulation() {
       if (missileAmmo(world.player) > 0) intent.missile = true
       else pushWarning('noRockets', world.time)
     }
+    // Аукс-слот ОДИН — значит и клавиша одна: E активирует то, что в нём стоит.
+    // Раньше bomb/cloak/ecm висели на B/X/E порознь, и две из трёх всегда били в
+    // пустоту («прибор не установлен»). Миелофон на E работает УДЕРЖАНИЕМ (см.
+    // playerController), тап-действия у него нет — поэтому если он экипирован ИЛИ лежит
+    // в трюме (дев-выдача), молчим, а не выдаём ложное «не установлен».
     if (consumePress('KeyE')) {
-      if (hasEcm(world.player.loadout)) intent.ecm = true
-      else if (!findMielophone(world.player.loadout)) pushWarning('noAux', world.time)
-    }
-    if (consumePress('KeyB')) {
-      if (hasBomb(world.player.loadout)) intent.bomb = true
-      else pushWarning('noAux', world.time)
-    }
-    if (consumePress('KeyX')) {
-      if (findCloak(world.player.loadout)) intent.cloak = true
-      else pushWarning('noAux', world.time)
+      const l = world.player.loadout
+      if (hasBomb(l)) intent.bomb = true
+      else if (findCloak(l)) intent.cloak = true
+      else if (hasEcm(l)) intent.ecm = true
+      else if (!ownsMielophone(world.player)) pushWarning('noAux', world.time)
     }
     if (consumePress('KeyQ')) intent.drone = true
 
     // Жмёшь гашетку без единого лазера на борту — то же напоминание (ракеты/дрон — своя
     // клавиша). Держание, а не тап: плашка сама не частит, её гасит кулдаун очереди.
-    if ((input.firing || isHeld('Space')) && !world.player.spec.mounts.some((m) => isLaser(m.weapon))) {
+    if (input.firing && !world.player.spec.mounts.some((m) => isLaser(m.weapon))) {
       pushWarning('noLaser', world.time)
     }
-    // Tab перебирает борта И станции как один круг, но кладёт выбор в своё поле
-    // (`lockedTargetId` / `lockedStationId`): станцию не бьют, с ней связываются (T).
-    if (consumePress('Tab')) cycleLock(world)
+    // ДВА КРУГА листания, оба ПО УДАЛЕНИЮ (ближний первым):
+    //  • Tab — КОНТАКТЫ: живые борта (персонажи) и обломки-контейнеры (останки) → захват.
+    //  • Shift+Tab — НЕБЕСНЫЕ: звёзды, планеты, спутники, станции → нав-цель (станция ещё и
+    //    на связь). Круги независимы: контакт и точка навигации не сбивают друг друга.
+    // Когда галактика ПРОЯВИЛАСЬ (слой активен), листаются ЗВЁЗДЫ галактики (jumpTargetIndex) —
+    // это единственное, что там перечислимо, поэтому берём их на любой Tab, с шифтом и без.
+    if (consumePress('Tab')) {
+      if (galaxyRadar().active) cycleGalaxyStar(world)
+      else if (isHeld('ShiftLeft') || isHeld('ShiftRight')) cycleCelestial(world)
+      else cycleContact(world)
+    }
+
+    // Пользовательский ракурс: облёт (←/→) и наезд (↑/↓), V — сброс. Чистая камера,
+    // мир не трогает. Здесь, до clearPresses, чтобы тап V сработал.
+    stepCameraView(dt)
 
     if (consumePress('KeyL')) {
+      // Приоритет — автопосадка: если висим в окне высот над телом, L сажает (доменный
+      // флаг, непрерываемо, режим не меняем). Иначе прежняя логика автостыковки к станции.
       if (session.mode === 'autodock') setPilot(session, 'manual')
+      else if (armAutoland(world)) { /* автопосадка пошла — ведёт домен, штурвал вернётся сам */ }
       else if (canEngageAutodock(world)) setPilot(session, 'autodock')
     }
 

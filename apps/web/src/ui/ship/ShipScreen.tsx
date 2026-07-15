@@ -12,12 +12,14 @@ import {
   deriveShipSpec,
   hullPurchase,
   hullStatUpgradeCost,
+  hullDamage,
   HULL_STATS,
   fitFromHold,
   fitOntoChassis,
   freeCapacity,
   isEssential,
   minTechForClass,
+  missingRounds,
   moduleFault,
   moduleResaleValue,
   moduleStat,
@@ -170,6 +172,8 @@ export function ShipScreen({
         </div>
       )}
 
+      {docked && <StationService world={world} onChange={refresh} />}
+
       {/* Слева паспорт (чертёж + характеристики), справа — оснастка ПЛИТКОЙ, а не в
           три колонки таблиц. Столбца «класс» больше нет: класс жил лишь в имени
           модуля, отдельной осью пилоту он ни к чему. */}
@@ -188,11 +192,16 @@ export function ShipScreen({
           {/* Имя корпуса в обрамлении стрелок — ими и листаем каталог. В полёте стрелок
               нет (корпус не сменить), просто имя своего корабля по центру. */}
           {docked ? (
-            <div className="flex items-center gap-2">
-              <ArrowButton dir="left" onClick={() => cycle(-1)} />
-              <span className="flex-1 text-center text-sm tracking-[0.2em]">{chassisName(offer.chassis.name)}</span>
-              <ArrowButton dir="right" onClick={() => cycle(1)} />
-            </div>
+            <>
+              <div className="flex items-center gap-2">
+                <ArrowButton dir="left" onClick={() => cycle(-1)} />
+                <span className="flex-1 text-center text-sm tracking-[0.2em]">{chassisName(offer.chassis.name)}</span>
+                <ArrowButton dir="right" onClick={() => cycle(1)} />
+              </div>
+              <p className="text-center text-xs tracking-widest" style={{ color: DIM }}>
+                {t('ship.hulls.hint')}
+              </p>
+            </>
           ) : (
             <div className="text-center text-sm tracking-[0.2em]">{chassisName(player.loadout.chassis.name)}</div>
           )}
@@ -868,6 +877,69 @@ function ConfirmBox({
  * грузовой отсек, а внизу — доплата. Если перенесённое не влезает в новую раму по массе —
  * сделку не даём и говорим, сколько тонн лишку: сперва продай.
  */
+function StationService({ world, onChange }: { world: World; onChange: () => void }) {
+  useLang()
+  const [note, setNote] = useState<string | null>(null)
+  const player = world.player
+  const hullMax = player.spec.hull.hull
+  const hullCur = Math.round(player.hull)
+  const dmg = hullDamage(player)
+  const quote = repairQuote(world, player)
+  const missing = missingRounds(player)
+  const missilesCost = rearmCost(player)
+
+  const hullLine =
+    dmg <= 0
+      ? t('station.service.hullOk', { cur: hullCur, max: hullMax })
+      : t('station.service.hullDmg', { cur: hullCur, max: hullMax, cost: quote.price })
+
+  const missileLine =
+    missing <= 0
+      ? t('station.service.rearmOk')
+      : t('station.service.rearmNeed', { n: missing, cost: missilesCost })
+
+  const doHullRepair = () => {
+    const out = repair(world, player)
+    if (out === 'nothing') return
+    setNote(t(('ship.repair.' + out) as Key))
+    onChange()
+  }
+
+  const doRearm = () => {
+    if (missing <= 0) return
+    if (rearm(world, player)) {
+      setNote(t('ship.repair.rearmed'))
+      onChange()
+    } else {
+      setNote(t('ship.repair.no-money'))
+    }
+  }
+
+  return (
+    <Panel title={t('station.service.title')}>
+      <p className="text-sm" style={{ color: DIM }}>
+        {hullLine}
+      </p>
+      <p className="mt-1 text-sm" style={{ color: DIM }}>
+        {missileLine}
+      </p>
+      <div className="mt-3 flex flex-wrap gap-2">
+        <Button small disabled={dmg <= 0 || quote.chance <= 0 || world.credits < quote.price} onClick={doHullRepair}>
+          {dmg <= 0 ? t('station.service.hullWhole') : t('station.service.repair')}
+        </Button>
+        <Button small disabled={missing <= 0 || world.credits < missilesCost} onClick={doRearm}>
+          {missing <= 0 ? t('station.service.armed') : t('station.service.rearm')}
+        </Button>
+      </div>
+      {note && (
+        <p className="mt-2 text-xs tracking-widest" style={{ color: ACCENT }}>
+          {note}
+        </p>
+      )}
+    </Panel>
+  )
+}
+
 function HullBuyModal({
   world,
   chassis,

@@ -1,32 +1,22 @@
-import { dispatcherBriefing, dispatcherPersona, stationInterlocutor, type BriefingBody, type World } from '@elite/sim'
+import { dispatcherBriefing, dispatcherPersona, stationInterlocutor, type World } from '@elite/sim'
 import { ACCENT, Button, DIM, PilotPortrait } from '../station/chrome'
 import { economyName, governmentName, properName, speciesName } from '../i18n/dataNames'
+import { t, useLang, type Key } from '../i18n'
 
 /**
  * Связь с ДИСПЕТЧЕРОМ станции. В отличие от разговора с бортом (`Dialogue`), здесь не торг и
  * не механика, а СПРАВКА: диспетчер всезнающ по своей системе (факты из домена —
  * `dispatcherBriefing`), но говорит своим тоном (персона от станции). Мир под окном стоит
  * (курсор отпущен), поэтому данные не «плывут» за время разговора.
- *
- * Строки русские напрямую, как в `Dialogue`: канал связи в этой игре не мультиязычный.
  */
 
-/** Приветствие по нраву: ЗНАНИЕ у всех полное, разнится лишь тон. */
-const GREETING: Record<string, string> = {
-  brave: 'Диспетчер на связи. Говори прямо, пилот — не тяни.',
-  cowardly: 'Э-э… диспетчер слушает. Только без глупостей, ладно?',
-  greedy: 'Диспетчер. Чего надо? Время — деньги, так что живее.',
-  honorable: 'Диспетчерская, добрый борт. Чем могу помочь?',
-  hotheaded: 'Ну наконец-то! Диспетчер на связи. Выкладывай, чего застрял.',
-  calculating: 'Диспетчер. Слушаю внимательно — по делу, будь добр.',
-}
-
-const KIND_LABEL: Record<BriefingBody['kind'], string> = {
-  star: 'звезда',
-  planet: 'планета',
-  moon: 'луна',
-  station: 'станция',
-  blackhole: 'чёрная дыра',
+const GREETING_KEY: Record<string, Key> = {
+  brave: 'dispatcher.greet.brave',
+  cowardly: 'dispatcher.greet.cowardly',
+  greedy: 'dispatcher.greet.greedy',
+  honorable: 'dispatcher.greet.honorable',
+  hotheaded: 'dispatcher.greet.hotheaded',
+  calculating: 'dispatcher.greet.calculating',
 }
 
 /** Стабильное лицо диспетчера от имени станции: у одной станции — постоянное (0..35 = 6×6). */
@@ -77,16 +67,16 @@ function Row({ k, v }: { k: string; v: string }) {
 }
 
 export function Dispatcher({ world, onClose }: { world: World; onClose: () => void }) {
+  useLang()
   const station = stationInterlocutor(world)
   if (!station) {
-    // Захват станции пропал (прыжок/смена цели) — показываем обрыв, а не пустоту.
     return (
       <Frame>
         <p className="text-sm" style={{ color: DIM }}>
-          Связь прервана.
+          {t('dispatcher.lost')}
         </p>
         <div className="mt-4">
-          <Button onClick={onClose}>ОТБОЙ</Button>
+          <Button onClick={onClose}>{t('dispatcher.off')}</Button>
         </div>
       </Frame>
     )
@@ -95,6 +85,7 @@ export function Dispatcher({ world, onClose }: { world: World; onClose: () => vo
   const persona = dispatcherPersona(world, station)
   const brief = dispatcherBriefing(world)
   const s = brief.settlement
+  const greetKey: Key = GREETING_KEY[persona.disposition] ?? 'dispatcher.greet.honorable'
 
   return (
     <Frame>
@@ -102,30 +93,35 @@ export function Dispatcher({ world, onClose }: { world: World; onClose: () => vo
         <PilotPortrait species={persona.species} face={faceOf(station.name)} size={96} />
         <div className="min-w-0">
           <div className="text-lg tracking-[0.25em]" style={{ color: ACCENT }}>
-            ДИСПЕТЧЕР · {properName(station.name).toUpperCase()}
+            {t('dispatcher.title', { station: properName(station.name).toUpperCase() })}
           </div>
           <div className="text-xs tracking-widest" style={{ color: DIM }}>
             {speciesName(persona.species).toUpperCase()}
           </div>
           <p className="mt-2 text-sm" style={{ color: '#cfe8ff' }}>
-            {GREETING[persona.disposition] ?? GREETING.honorable}
+            {t(greetKey)}
           </p>
         </div>
       </div>
 
-      <Section title="ОКРУГА">
-        <Row k="Строй" v={governmentName(s.government)} />
-        <Row k="Экономика" v={economyName(s.economy)} />
-        <Row k="Тех-уровень" v={String(s.techLevel)} />
-        <Row k="Население" v={`${Math.round(s.population * 10) / 10} млн`} />
-        <Row k="У причала" v={brief.dockOccupant ?? 'свободно'} />
+      <Section title={t('dispatcher.section.locale')}>
+        <Row k={t('dispatcher.gov')} v={governmentName(s.government)} />
+        <Row k={t('dispatcher.economy')} v={economyName(s.economy)} />
+        <Row k={t('dispatcher.tech')} v={String(s.techLevel)} />
+        <Row
+          k={t('dispatcher.population')}
+          v={t('station.popUnit', { n: Math.round(s.population * 10) / 10 })}
+        />
+        <Row k={t('dispatcher.dock')} v={brief.dockOccupant ?? t('dispatcher.dockFree')} />
       </Section>
 
-      <Section title="СИСТЕМА">
+      <Section title={t('dispatcher.section.system')}>
         {brief.nearestPopulated && (
           <p className="mb-2 text-sm" style={{ color: '#9fdcff' }}>
-            Ближайший обитаемый мир — {properName(brief.nearestPopulated.name)}, {brief.nearestPopulated.distanceKm} км.
-            Туда и держи.
+            {t('dispatcher.nearest', {
+              name: properName(brief.nearestPopulated.name),
+              distance: brief.nearestPopulated.distanceKm,
+            })}
           </p>
         )}
         <div className="flex flex-col gap-1 text-sm">
@@ -134,18 +130,20 @@ export function Dispatcher({ world, onClose }: { world: World; onClose: () => vo
               <span style={{ color: b.populated ? ACCENT : DIM }}>
                 {properName(b.name)}{' '}
                 <span style={{ color: DIM }}>
-                  · {KIND_LABEL[b.kind]}
-                  {b.populated ? ' · обитаема' : ''}
+                  · {t(`locator.kind.${b.kind}` as Key)}
+                  {b.populated ? t('dispatcher.inhabited') : ''}
                 </span>
               </span>
-              <span style={{ color: DIM }}>{b.distanceKm} км</span>
+              <span style={{ color: DIM }}>
+                {b.distanceKm} {t('unit.km')}
+              </span>
             </div>
           ))}
         </div>
       </Section>
 
       <div className="mt-5">
-        <Button onClick={onClose}>ОТБОЙ</Button>
+        <Button onClick={onClose}>{t('dispatcher.off')}</Button>
       </div>
     </Frame>
   )

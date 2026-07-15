@@ -1,4 +1,4 @@
-import { CORE_INDEX, GALAXY } from '../../config/galaxy'
+import { CORE_INDEX, GALAXY, LUCIFER } from '../../config/galaxy'
 import { WORLD } from '../../config/world'
 import { isCruising } from '../cruise/drive'
 import { enterSystem } from '../world/factory'
@@ -60,6 +60,10 @@ export function jumpBlock(world: World, index: number): JumpBlock | null {
   const drive = world.player.spec.jumpRange
   if (drive <= 0) return 'no-drive'
 
+  // Люцифер — маяк в бездне: к нему уходят ОТОВСЮДУ, дальность и заряд его не держат
+  // (лор: бог отодвинул его далеко, но дорога к нему открыта всегда). Привод всё же нужен.
+  if (index === LUCIFER.INDEX) return null
+
   const distance = jumpDistance(world, index)
   // Дальше предела МОДЕЛИ — не долетишь и с полным баком: нужен привод помощнее.
   if (distance > drive) return 'out-of-range'
@@ -100,7 +104,8 @@ export function jump(world: World, index: number, arrival: Arrival | null = null
   if (jumpBlock(world, index) !== null) return false
   // Дальность считаем ДО перехода: `enterSystem` сменит `systemIndex`, и отсчёт
   // сорвётся. Заряд тратится ровно на пройденный путь — сфера сжимается на него.
-  const spent = jumpDistance(world, index)
+  // Люцифер заряд НЕ жрёт: он вне обычной сети дальностей (достижим отовсюду).
+  const spent = index === LUCIFER.INDEX ? 0 : jumpDistance(world, index)
 
   // Прыжок В ЯДРО — не перелёт внутри галактики, а проход сквозь чёрную дыру в
   // СЛЕДУЮЩУЮ. Достаточно сменить зерно галактики: все 2500 систем, их имена,

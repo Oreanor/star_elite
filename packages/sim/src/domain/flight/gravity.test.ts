@@ -121,18 +121,20 @@ describe('притяжение к телам', () => {
     expect(g).toBeLessThan(1e-6)
   })
 
-  it('без тяги корабль падает на планету и садится', () => {
+  it('без тяги корабль падает на планету и разбивается о твёрдую поверхность', () => {
     const world = quiet()
     const planet = bodyOf(world, 'planet')
     hover(world, planet, 600)
 
     for (let i = 0; i < 1500; i++) {
       stepWorld(world, PHYSICS.FIXED_DT, NO_CONTROLLERS)
-      if (world.player.landedOn) break
+      if (!world.player.alive) break
     }
 
-    expect(world.player.alive).toBe(true)
-    expect(world.player.landedOn?.bodyId).toBe(planet.id)
+    // Гравитация притягивает, но поверхность ТВЁРДАЯ: не включил автопосадку (L) — гибель,
+    // а не мягкое приземление. Сесть можно только управляемо, из окна высот.
+    expect(world.player.alive).toBe(false)
+    expect(world.player.landedOn).toBeNull()
   })
 
   it('на крейсерском ходу вне фазы гравитация не действует', () => {

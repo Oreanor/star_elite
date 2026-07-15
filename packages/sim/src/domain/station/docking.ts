@@ -39,6 +39,15 @@ export function stationRange(ship: ShipEntity, station: BodyEntity): number {
 }
 
 /**
+ * Порог стыковки (и взвода) от кольца, м. Растёт с радиусом станции: у станции-гиганта
+ * фиксированные 220 м попали бы ВНУТРЬ защитного поля (1.15·R), и оно отбивало бы корабль,
+ * не дав дотянуться. Держим зону на 0.3·R — снаружи поля (но не тоньше DOCKING.RANGE).
+ */
+export function dockThreshold(station: BodyEntity): number {
+  return Math.max(DOCKING.RANGE, station.radius * DOCKING.RANGE_FACTOR)
+}
+
+/**
  * Можно ли стыковаться прямо сейчас. Скорость важна не меньше дистанции:
  * влететь в причал на двухстах метрах в секунду — это не стыковка, а таран.
  *
@@ -49,7 +58,7 @@ export function canDockAt(ship: ShipEntity, station: BodyEntity): boolean {
   return (
     ship.alive &&
     ship.state.scale <= 1 &&
-    stationRange(ship, station) < DOCKING.RANGE &&
+    stationRange(ship, station) < dockThreshold(station) &&
     ship.state.vel.length() < DOCKING.MAX_SPEED
   )
 }
@@ -93,7 +102,7 @@ export function stepDocking(world: World): void {
   const station = findStation(world)
   if (!station) return
 
-  if (!world.dockArmed && stationRange(world.player, station) >= DOCKING.RANGE) world.dockArmed = true
+  if (!world.dockArmed && stationRange(world.player, station) >= dockThreshold(station)) world.dockArmed = true
 }
 
 /** Выпускает корабль наружу, носом от станции: иначе первый же кадр — столкновение. */

@@ -11,7 +11,7 @@ describe('онлайн-старт Люрилар', () => {
     expect(SHARED_START_INDEX).toBe(WORLD.SHARED_START_INDEX)
   })
 
-  it('сохраняет звезду B, а «Глотку» держит в 10 000 км от станции', () => {
+  it('сохраняет звезду B, а «Глотку» держит в 25 000 км от станции', () => {
     const def = systemDefFor(SHARED_START_INDEX, GALAXY.SEED)
     expect(def.name).toBe('Люрилар')
     expect(def.companion).not.toBeNull()
@@ -28,7 +28,7 @@ describe('онлайн-старт Люрилар', () => {
     for (const calendarTime of [0, 60, 3_600, 86_400]) {
       world.calendarTime = calendarTime
       stepOrbits(world)
-      expect(station!.pos.distanceTo(bh!.pos)).toBeCloseTo(10_000_000, 1)
+      expect(station!.pos.distanceTo(bh!.pos)).toBeCloseTo(25_000_000, 1)
       expect(stars[0]!.pos.distanceTo(stars[1]!.pos)).toBeCloseTo(def.companion!.separation, 1)
     }
   })

@@ -10,8 +10,11 @@ import {
   findStation,
   autofightActive,
   auxFraction,
+  canAutoland,
   clamp,
+  generateGalaxy,
   incomingMissile,
+  nearestLandable,
   itemName,
   missileAmmo,
   nearestPod,
@@ -60,6 +63,7 @@ const _right = new Vector3()
 const _up = new Vector3()
 const _point = new Vector3()
 const _velocityDir = new Vector3()
+const _gtar = new Vector3()
 
 const S = HUD_SCALE
 
@@ -114,7 +118,6 @@ export function drawHud(frame: HudFrame): void {
   drawRadar(frame)
   drawReadouts(frame)
   const warningPlate = gatherWarnings(frame)
-  drawAlerts(frame)
 
   // Последним: круг бомбы бьёт поверх всего, включая прицел.
   drawBombBurst(frame)
@@ -146,12 +149,22 @@ function drawPods(frame: HudFrame): void {
   for (const pod of world.pods) {
     if (!pod.alive) continue
 
+    const locked = pod.id === world.lockedPodId
     const p = projectPoint(pod.pos, camera, width, height)
-    if (p.behind || p.distance > POD_MARK_RANGE || !isOnScreen(p.x, p.y, width, height, 10 * S)) continue
+    // Захваченный обломок отмечаем ВСЕГДА (как захваченный борт), даже вне дальности меток и
+    // за кадром — иначе выбранная Tab'ом цель терялась бы. Прочие — только вблизи.
+    if (p.behind || (!locked && (p.distance > POD_MARK_RANGE || !isOnScreen(p.x, p.y, width, height, 10 * S)))) continue
 
     const ready = scoopReadiness(player, pod) === null
-    // Рамка мелкая намеренно: контейнер — не цель, и путать его с кораблём нельзя.
-    corners(ctx, p.x, p.y, 9 * S, ready ? HUD_COLORS.PRIMARY : HUD_COLORS.WARN)
+    const color = ready ? HUD_COLORS.PRIMARY : HUD_COLORS.WARN
+    if (locked && !isOnScreen(p.x, p.y, width, height, 10 * S)) {
+      offscreenArrow(frame, pod.pos, color, true)
+      continue
+    }
+    // Рамка мелкая намеренно: контейнер — не цель, и путать его с кораблём нельзя. Захваченный —
+    // крупнее и с дистанцией: видно, ЧТО именно выбрано листанием.
+    corners(ctx, p.x, p.y, (locked ? 14 : 9) * S, color, locked ? 2 : 1)
+    if (locked) text(ctx, formatDistance(p.distance), p.x, p.y + (locked ? 18 : 12) * S, color, 'center')
   }
 
   const pod = nearestPod(world, POD_MARK_RANGE)
@@ -531,7 +544,20 @@ function drawTargetPortrait({ ctx, world, width, height }: HudFrame): void {
  * Радар: вид сверху, нос — вверх. Показывает и корабли, и тела, поэтому шкала
  * логарифмическая: иначе планета в 400 км сплющит всё остальное к центру.
  */
-function drawRadar({ ctx, camera, world, width, height }: HudFrame): void {
+// Имя выбранной звезды галактики по индексу. `generateGalaxy` детерминирован, но 2500
+// систем в кадре считать нельзя — кэшируем результат по зерну (меняется редко, на прыжке).
+let _galSeed: number | null = null
+let _galSys: ReturnType<typeof generateGalaxy> = []
+function galaxyStarName(seed: number, index: number): string | null {
+  if (seed !== _galSeed) {
+    _galSys = generateGalaxy(seed)
+    _galSeed = seed
+  }
+  return _galSys[index]?.name ?? null
+}
+
+function drawRadar(frame: HudFrame): void {
+  const { ctx, camera, world, width, height } = frame
   const radiusX = 47 * 1.5 * S // ширина эллипса локатора (прежняя, ~70): читается на скорости
   const radiusY = 47 * 0.75 * S // высота на 25% МЕНЬШЕ прежней (47→35): локатор стал площе
   const cx = width - radiusX - 12 * S // снова в правом нижнем углу: по центру он мешал
@@ -543,17 +569,12 @@ function drawRadar({ ctx, camera, world, width, height }: HudFrame): void {
   line(ctx, cx, cy - 3 * S, cx, cy + 3 * S, HUD_COLORS.DIM, FRAME_W)
   line(ctx, cx - 3 * S, cy, cx + 3 * S, cy, HUD_COLORS.DIM, FRAME_W)
 
-  // За масштабом (миелофон) система осталась далеко, зато проявилась ГАЛАКТИКА — и локатор
-  // переключается на неё: показывает звёзды в СФЕРЕ ВИДИМОСТИ слоя (те же, что горят в
-  // мире), чтобы найти, куда лететь. Пока галактика ещё не проявилась (борт вырос, но слой
-  // спит/прозрачен) — честно «НЕТ ДАННЫХ».
-  if (world.player.state.scale >= MIELOPHONE.PHASE_START) {
-    const gr = galaxyRadar()
-    if (!gr.active || !gr.positions || !gr.colors) {
-      text(ctx, t('hud.noData'), cx, cy - 4 * S, HUD_COLORS.DIM, 'center')
-      return
-    }
-
+  // Локатор переключается на ГАЛАКТИКУ, только когда слой ПРОЯВИЛСЯ (gr.active) — тогда в
+  // сфере видимости есть звёзды. Раньше переключали по одному масштабу (PHASE_START=1000),
+  // но слой спит до WAKE_SCALE=5e8 — между ними зиял мёртвый «НЕТ ДАННЫХ» на десятки тысяч ×.
+  // Пока галактика не проснулась, показываем СИСТЕМУ: её тела ещё на своих местах и видны.
+  const gr = galaxyRadar()
+  if (gr.active && gr.positions && gr.colors) {
     // Лучи поля зрения — как в системном режиме: по ним целишься носом на звезду.
     const gfov = (camera as PerspectiveCamera).fov
     const gHalf = Math.atan(Math.tan((gfov * Math.PI) / 360) * (width / height))
@@ -605,6 +626,38 @@ function drawRadar({ ctx, camera, world, width, height }: HudFrame): void {
       if (!p) continue
       const color = `rgb(${Math.round(col[b]! * 255)},${Math.round(col[b + 1]! * 255)},${Math.round(col[b + 2]! * 255)})`
       dot(ctx, p.px, p.my, Math.max(1, 1.5 * S), color)
+    }
+
+    // ВЫБРАННАЯ звезда (Tab / карта галактики → jumpTargetIndex): кольцо и подпись цветом
+    // цели (NAV), ВСЕГДА (force) — даже вне сферы, чтобы знать курс на невидимую пока звезду.
+    const tgt = world.jumpTargetIndex
+    if (tgt != null && tgt !== gr.originIndex && tgt >= 0 && tgt < gr.count) {
+      const tp = projStar(tgt * 3, true)
+      if (tp) {
+        dot(ctx, tp.px, tp.my, Math.max(1, 1.5 * S), HUD_COLORS.NAV)
+        circle(ctx, tp.px, tp.my, 3.5 * S, HUD_COLORS.NAV)
+        const name = galaxyStarName(world.galaxySeed, tgt)
+        if (name) text(ctx, properName(name), tp.px + 5 * S, tp.my - 3 * S, HUD_COLORS.NAV, 'left')
+      }
+
+      // Прицельная РЕТИКУЛА выбранной звезды ПРЯМО В КАДРЕ (не на локаторе): звезда реально
+      // горит шаром в 3D, поэтому метим её ТАМ, где она видна, — наводишь нос на скобки, как
+      // на захваченный борт. Локатор (вид сверху) для наведения неточен: высоту он свернул в
+      // короткую «палку», оттого метка «плавала то выше, то ниже». За кадром — стрелка курса.
+      const b = tgt * 3
+      _gtar.set(
+        gr.anchor.x + pos[b]! * gr.layerScale,
+        gr.anchor.y + pos[b + 1]! * gr.layerScale,
+        gr.anchor.z + pos[b + 2]! * gr.layerScale,
+      )
+      const sp = projectPoint(_gtar, camera, width, height)
+      if (!sp.behind && isOnScreen(sp.x, sp.y, width, height, 20 * S)) {
+        corners(ctx, sp.x, sp.y, 16 * S, HUD_COLORS.NAV, 2)
+        const name = galaxyStarName(world.galaxySeed, tgt)
+        if (name) text(ctx, properName(name), sp.x, sp.y + 16 * S, HUD_COLORS.NAV, 'center')
+      } else {
+        offscreenArrow(frame, _gtar, HUD_COLORS.NAV, true)
+      }
     }
 
     // СВОЯ звезда (текущая система) — ВСЕГДА, кольцом и подписью, даже вне сферы: это
@@ -822,9 +875,14 @@ let _scaleLabelKey: Key = 'hud.scalePlate'
 const ALICE_CHANCE = 0.2
 
 /**
- * Крупная величина: цифра большим кеглем, единица вдвое мельче справа, тренд-стрелка
- * рядом. `unitSuffix` рисуется на базовой линии низа цифры, чтобы не «висеть» вверху.
- * @returns правый край нарисованного (для соседних блоков).
+ * Крупная величина «приборного» вида: число ВЫТЯНУТОЙ цифрой (техно-look — вертикальный
+ * растяг моноширинного кегля, горизонтально ужато под ~половину гауджа), единица мельче
+ * ПОД числом, а необязательный множитель (крейсер) — мельче СВЕРХУ. Тренд-стрелка справа.
+ *
+ * Вытягивание — трансформом канваса, а не сменой шрифта: грузить TTF в пиксельный HUD
+ * незачем (он всё равно пикселизуется), а `scale(condense, stretch)` даёт ту же вытянутую
+ * футуристичную цифру из уже готовой Consolas. Место под множитель резервируем всегда,
+ * чтобы цифра не прыгала, когда крейсер включают-выключают.
  */
 function bigValue(
   ctx: CanvasRenderingContext2D,
@@ -835,34 +893,46 @@ function bigValue(
   color: string,
   trend: number,
   maxWidth: number,
+  above: string | null = null,
 ): void {
-  const gap = 3 * S
-  const arrow = 12 * S // отступ до тренд-стрелки плюс её ширина
-  // База мельче прежней (было 18) и ужимается ещё, если число+единица+стрелка не влезают
-  // в свою половину: «1.2млн м/с ▲» иначе наползало бы на соседний столбец.
-  let big = 15 * S
-  let small = big * 0.5
-  ctx.font = hudFont(big)
-  let numW = ctx.measureText(value).width
-  ctx.font = hudFont(small)
-  let unitW = ctx.measureText(unit).width
-  const total = numW + gap + unitW + arrow
-  if (total > maxWidth) {
-    const k = maxWidth / total
-    big *= k
-    small *= k
-    ctx.font = hudFont(big)
-    numW = ctx.measureText(value).width
-    ctx.font = hudFont(small)
-    unitW = ctx.measureText(unit).width
+  const entryFont = ctx.font
+  const aboveH = 11 * S // зарезервированная полоса под множитель — всегда, есть он или нет
+
+  // Множитель — мелким сверху, тем же тёплым цветом предупреждения, что и раньше.
+  if (above) {
+    ctx.font = hudFont(11 * S)
+    text(ctx, above, x, top, HUD_COLORS.WARN)
   }
-  const baseFont = ctx.font
-  ctx.font = hudFont(big)
-  text(ctx, value, x, top, color)
-  ctx.font = hudFont(small)
-  text(ctx, unit, x + numW + gap, top + big - small, color)
-  ctx.font = baseFont
-  trendArrow(ctx, x + numW + gap + unitW + 8 * S, top + big / 2, trend, color)
+  const numTop = top + aboveH + 1 * S
+
+  // Большое ВЫТЯНУТОЕ число. Кегль задаёт высоту, `STRETCH_Y` тянет по вертикали,
+  // `condense` ужимает по горизонтали ровно настолько, чтобы вписать в ~94% половины.
+  // Кегль крупный (≈вдвое против прежнего) — значения держим в 3–4 разряда (см. *Parts),
+  // иначе `condense` ужал бы цифру в нитку.
+  const BASE = 28 * S
+  const STRETCH_Y = 1.3
+  ctx.font = hudFont(BASE)
+  const natW = ctx.measureText(value).width
+  const condense = Math.min(0.9, (maxWidth * 0.94) / Math.max(1, natW))
+  ctx.save()
+  ctx.fillStyle = color
+  ctx.textAlign = 'left'
+  ctx.textBaseline = 'top'
+  ctx.translate(Math.round(x), Math.round(numTop))
+  ctx.scale(condense, STRETCH_Y)
+  ctx.font = hudFont(BASE)
+  ctx.fillText(value, 0, 0)
+  ctx.restore()
+  const numW = condense * natW
+  const numH = BASE * STRETCH_Y
+
+  // Единица измерения — мельче и ПОД числом, не сбоку.
+  ctx.font = hudFont(11 * S)
+  text(ctx, unit, x, numTop + numH + 1 * S, color)
+
+  // Тренд-стрелка — справа от числа, на его середине.
+  trendArrow(ctx, x + numW + 6 * S, numTop + numH / 2, trend, color)
+  ctx.font = entryFont
 }
 
 function drawReadouts({ ctx, world, height }: HudFrame): void {
@@ -874,10 +944,11 @@ function drawReadouts({ ctx, world, height }: HudFrame): void {
   const halfWidth = columnWidth / 2
   const barHeight = 5 * S
   const step = 11 * S
-  const baseFont = ctx.font
 
   // ── Скорость и масштаб — САМЫМИ ПЕРВЫМИ, крупной цифрой ──────────────────────
-  const speedTop = height - 150 * S
+  // Подняли выше: кегль стал ~вдвое крупнее, и блок (множитель сверху → число → единица
+  // снизу) иначе наползал бы на шкалы состояния ниже.
+  const speedTop = height - 185 * S
   shipAxes(player.state.quat, _fwd, _right, _up)
   const vel = player.state.vel
   const speedMag = vel.length()
@@ -889,20 +960,16 @@ function drawReadouts({ ctx, world, height }: HudFrame): void {
   const speedTrend = dv > speedEps ? 1 : dv < -speedEps ? -1 : 0
   _prevSpeed = speedMag
 
+  // Множитель крейсера — СВЕРХУ скорости (мелким). Скорость уже сверхсветовая (vel уже
+  // умножен на factor); ×N лишь говорит, насколько разогнан ход. Показываем, только когда
+  // крейсер реально включён, иначе «×1» висело бы всегда.
+  const factor = player.cruise.factor
+  const mult = factor > CRUISE.IDLE_EPSILON ? `×${formatScale(factor)}` : null
+
   // Назад — с минусом (U+2212): реверс это не «ноль хода», а движение против носа.
   const sp = speedParts(speedMag)
   const reversing = vel.dot(_fwd) < -1
-  bigValue(ctx, x, speedTop, reversing ? `−${sp.value}` : sp.value, sp.unit, HUD_COLORS.PRIMARY, speedTrend, halfWidth)
-
-  // Множитель крейсера — СРЕДНИМ кеглем под скоростью. Скорость уже сверхсветовая
-  // (vel уже умножен на factor); ×N лишь говорит, насколько разогнан ход. Показываем,
-  // только когда крейсер реально включён, иначе «×1» висело бы всегда.
-  const factor = player.cruise.factor
-  if (factor > CRUISE.IDLE_EPSILON) {
-    ctx.font = hudFont(13 * S)
-    text(ctx, `×${formatScale(factor)}`, x, speedTop + 18 * S + 2 * S, HUD_COLORS.WARN)
-    ctx.font = baseFont
-  }
+  bigValue(ctx, x, speedTop, reversing ? `−${sp.value}` : sp.value, sp.unit, HUD_COLORS.PRIMARY, speedTrend, halfWidth, mult)
 
   // Масштаб (миелофон) — справа, жёлтым, так же крупно. Появляется, только когда
   // прибор установлен: без него о масштабе речи нет.
@@ -1038,7 +1105,19 @@ function gatherWarnings(frame: HudFrame): Plate | null {
         const st = dockState(world, station, autodock)
         if (st === 'ready') pushWarning('dockReady', now)
         else if (st === 'engaged') pushWarning('dockCorridor', now, { label: t('hud.dockCorridor', { range: formatDistance(range) }) })
+        // Скорость подхода больше не отдельное предупреждение: автостыковка сама гасит
+        // подлёт, так что «сбрось скорость до N» ушло — остаётся обычная подсказка.
+        else pushWarning('dockHint', now, { label: t('hud.dockHint', { range: formatDistance(range) }), repeat: 0 })
       }
+    }
+  }
+
+  // Автопосадка: в окне высот над планетой/луной — жёлтый пуш с текущей высотой. Само
+  // `canAutoland` держит окно (не садимся, не сидим, высота в [PROMPT_LO, PROMPT_HI]).
+  if (canAutoland(world)) {
+    const near = nearestLandable(world, player)
+    if (near) {
+      pushWarning('landPrompt', now, { label: t('hud.landPrompt', { alt: formatDistance(near.altitude) }) })
     }
   }
 
@@ -1096,8 +1175,14 @@ function gatherWarnings(frame: HudFrame): Plate | null {
   }
   const scalePlate: Plate | null =
     growSign !== 0 ? { color: HUD_COLORS.WARN, hz: 1.5, rank: 0, label: t(_scaleLabelKey), born: now } : null
-  // Реальные предупреждения важнее; из состояний масштаб (нарратив) впереди форсажа.
-  return activeWarning(now) ?? autofightPlate ?? autopilotPlate ?? scalePlate ?? boostPlate
+  // Маскировка — тоже СОСТОЯНИЕ (пока `cloaked`), а не транзиентная весть: мигающая плашка
+  // вверху, как у форсажа и рекалибровки, а не сухая строка у нижней кромки. Голубая (NAV).
+  const cloakPlate: Plate | null = player.cloaked
+    ? { color: HUD_COLORS.NAV, hz: 1.2, rank: 0, label: t('hud.cloak'), born: now }
+    : null
+  // Реальные предупреждения важнее; из состояний масштаб и маскировка (важные режимы)
+  // впереди форсажа.
+  return activeWarning(now) ?? autofightPlate ?? autopilotPlate ?? cloakPlate ?? scalePlate ?? boostPlate
 }
 
 function paintWarningPlate(frame: HudFrame, plate: Plate): void {
@@ -1122,9 +1207,10 @@ function paintWarningPlate(frame: HudFrame, plate: Plate): void {
   ctx.font = baseFont
   const bh = 30 * S
   // Вверху по центру, с тем же отступом от кромки, что у даты и счётчика кадров (~8px):
-  // не вплотную к краю, но и не в глубине кадра, где перекрыло бы прицел.
+  // не вплотную к краю, но и не в глубине кадра, где перекрыло бы прицел. Плюс 20 px
+  // вниз по просьбе: плашки-пуши сидят чуть ниже верхней кромки.
   const cx = width / 2
-  const cy = 8 * S + bh / 2
+  const cy = 8 * S + bh / 2 + 20 * S
 
   // Полупрозрачный фон в цвет рамки: плашку видно, но мир под ней всё ещё читается.
   ctx.save()
@@ -1205,13 +1291,3 @@ function drawBombBurst({ ctx, world, width, height }: HudFrame): void {
   ctx.restore()
 }
 
-/**
- * Постоянные режимы у нижней кромки, для которых нет верхней плашки.
- * Автобой и автопилот-к-цели — голубые пуши в `gatherWarnings`.
- */
-function drawAlerts({ ctx, world, width, height }: HudFrame): void {
-  // Под полем не стреляют, и пилот обязан знать, почему у него мёртвый гашетка.
-  if (world.player.cloaked) {
-    text(ctx, t('hud.cloak'), width / 2, height - 132 * S, HUD_COLORS.NAV, 'center')
-  }
-}

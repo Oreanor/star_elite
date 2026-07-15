@@ -16,7 +16,7 @@ import { GLASS_PANEL, screenBackground } from '../station/backdrop'
 import { clearOutcomeEmotion, markOutcomeEmotion, type Emotion } from '../portrait'
 import { UI } from '../theme'
 import { chassisName, occupationName } from '../i18n/dataNames'
-import { t, useLang } from '../i18n'
+import { t, useLang, type Key } from '../i18n'
 import { buildContext, createDigestMemory, rememberDigest, sufflerDigestsFor, type ChatTurn, type ContextDigest, type DigestMemory, type NegotiatorReply } from './facts'
 import { DIALOGUE_REACTION_MS, dialogueBaseline, dialogueReaction } from './dialogueFace'
 
@@ -64,10 +64,10 @@ function applyTurnToChat(
 }
 
 /** Отношение борта к игроку — одним словом в шапке. Три состояния, как `stanceTo`. */
-const STANCE_WORD: Record<Relationship, string> = {
-  friendly: 'ДРУЖЕЛЮБНЫЙ',
-  neutral: 'НЕЙТРАЛЬНЫЙ',
-  hostile: 'ВРАЖДЕБНЫЙ',
+const STANCE_KEY: Record<Relationship, Key> = {
+  friendly: 'dialogue.stance.friendly',
+  neutral: 'dialogue.stance.neutral',
+  hostile: 'dialogue.stance.hostile',
 }
 
 const STANCE_COLOR: Record<Relationship, string> = {
@@ -99,6 +99,7 @@ export function Dialogue({
   const [ended, setEnded] = useState<string | null>(null)
 
   const scroller = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
   /** Справочники в памяти разговора — старые выпадают, когда открывают новые. */
   const digestMemory = useRef<DigestMemory>(createDigestMemory())
   /** Лицо в шапке — своё, не `pilotEmotion`: претензия и пауза мира не должны залипать. */
@@ -181,11 +182,7 @@ export function Dialogue({
     }
     if (reply.hangup) {
       digestMemory.current = createDigestMemory()
-      setEnded(
-        reply.source === 'overload'
-          ? 'Связь перегрузилась — канал закрыт. Договорённости и факты из журнала сохранятся до следующей встречи.'
-          : 'Собеседник отключился.',
-      )
+      setEnded(reply.source === 'overload' ? t('dialogue.overload') : t('dialogue.hangup'))
     }
     bump()
   }
@@ -218,6 +215,9 @@ export function Dialogue({
     deliverReply(reply)
     pinMutatingDigests(mem)
     setBusy(false)
+    // Поле было disabled на время ответа — фокус слетел. Возвращаем его, чтобы можно
+    // было печатать следующую реплику не целясь мышью. Ждём снятия disabled (снимет busy).
+    requestAnimationFrame(() => inputRef.current?.focus())
   }
 
   return (
@@ -247,7 +247,7 @@ export function Dialogue({
                 {chassisName(other.loadout.chassis.name).toUpperCase()}
               </div>
               <div className="mt-1 text-xs tracking-widest" style={{ color: STANCE_COLOR[stance] }}>
-                {STANCE_WORD[stance]}
+                {t(STANCE_KEY[stance])}
               </div>
             </div>
           </div>
@@ -278,7 +278,7 @@ export function Dialogue({
         {/* Лента разговора: и болтовня, и обмен по кнопкам ложатся сюда. */}
         <div ref={scroller} className="mb-4 min-h-[8rem] flex-1 overflow-y-auto pr-1 text-sm leading-relaxed">
           {turns.length === 0 && !busy ? (
-            <span style={{ color: UI.DIM }}>Канал открыт. Он слушает.</span>
+            <span style={{ color: UI.DIM }}>{t('chat.empty')}</span>
           ) : (
             <div className="flex flex-col gap-2">
               {turns.map((t, i) => (
@@ -312,13 +312,14 @@ export function Dialogue({
               {ended}
             </div>
             <Button small onClick={onClose}>
-              ЗАКРЫТЬ КАНАЛ
+              {t('dialogue.closeChannel')}
             </Button>
           </div>
         ) : (
           chatAvailable && (
             <div className="flex gap-2 border-t pt-4" style={{ borderColor: UI.DIM }}>
               <input
+                ref={inputRef}
                 autoFocus
                 value={input}
                 onChange={(e) => setInput(e.target.value)}

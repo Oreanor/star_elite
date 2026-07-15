@@ -6,7 +6,7 @@ import { startUndock } from './control/undockFx'
 import { negotiate, negotiatorAvailable } from './control/negotiator'
 import { Game } from './Game'
 import { Paused, GameOver } from './TitleScreen'
-import { clearServerSave, loadServerSave, onAuthChange } from './net/account'
+import { clearServerSave, loadServerSave, onAuthChange, signOut } from './net/account'
 import { online } from './net/firebase'
 import { clearPresence, publishPresence, selfPresence } from './net/presence'
 import { clearSave, persistSave } from './save/saveStore'
@@ -564,6 +564,13 @@ function Shell({ onRestart }: { onRestart: () => void }) {
               setLaunching(false)
             }}
             onNewGame={newGame}
+            onSignOut={
+              online
+                ? () => {
+                    void signOut().then(onRestart).catch((e) => console.warn('Выход не удался:', e))
+                  }
+                : undefined
+            }
           />
         )
       )}

@@ -1,14 +1,15 @@
 import { useFrame } from '@react-three/fiber'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Mesh, Quaternion, Sprite, Vector3, type Texture } from 'three'
+import { Matrix4, Mesh, Quaternion, Vector3, type Texture } from 'three'
 import { clamp, type BodyEntity, type PlanetType } from '@elite/sim'
 import { useSession } from '../../app/GameContext'
 import { ATMOSPHERE, ATMOSPHERE_COLOR, BODY_FADE, BODY_SEGMENTS, CITY_LIGHTS, CORONA, GIANT_RENDER_CAP, MOON_DECOR } from '../config'
 import { atmosphereGeometry, planetGeometry, starGeometry, type PlanetLook } from '../geometry/bodies'
-import { coronaTexture } from '../geometry/corona'
-import { stationGeometry } from '../geometry/props'
+import { coronaGeometry } from '../geometry/corona'
+import { crossRaysGeometry, crossStationGeometry, solarStationGeometry, stationGeometry } from '../geometry/props'
+import { createDivineCrossMaterial } from '../materials/divineCross'
 import {
-  coronaMaterial,
+  crossRayMaterial,
   planetMaterial,
   planetTexturedMaterial,
   starMaterial,
@@ -16,6 +17,7 @@ import {
 } from '../materials/materials'
 import { createAtmosphereMaterial } from '../materials/atmosphere'
 import { createCityLightsMaterial } from '../materials/cityLights'
+import { createCoronaMaterial } from '../materials/starCorona'
 import { createStarSurfaceMaterial, loadStarSurface } from '../materials/starSurface'
 import { loadPlanetTexture, pickVariant } from '../sky/planets'
 import { MoonSwarm } from './Moons'
@@ -52,6 +54,9 @@ function lookFor(body: BodyEntity): PlanetLook {
 
 const _spinQuat = new Quaternion()
 const _tiltQuat = new Quaternion()
+/** Разворот короны-билборда к камере со СТАБИЛЬНЫМ верхом (чтобы узор не крутило креном). */
+const _billboard = new Matrix4()
+const _worldUp = /* @__PURE__ */ new Vector3(0, 1, 0)
 
 /** Ось симметрии геометрии в покое: у сферы это полюс, у кориолиса — продольная. */
 const REST_POLE = new Vector3(0, 1, 0)
@@ -203,11 +208,16 @@ function Planet({ body }: { body: BodyEntity }) {
  */
 function Star({ body }: { body: BodyEntity }) {
   const ref = useRef<Mesh>(null)
-  const glowRef = useRef<Sprite>(null)
+  const glowRef = useRef<Mesh>(null)
   const session = useSession()
 
-  const texture = useMemo(coronaTexture, [])
-  const material = useMemo(() => coronaMaterial(texture, body.color), [texture, body.color])
+  // Корона — свой процедурный материал на звезду (цвет от класса, `uTime` двигает сцена).
+  // Живёт в видеопамяти, поэтому при смене системы освобождаем явно (ниже), как поверхность.
+  const material = useMemo(
+    () => createCoronaMaterial(body.color, body.calmCorona ?? false),
+    [body.color, body.calmCorona],
+  )
+  useEffect(() => () => material.dispose(), [material])
   const glowSize = body.radius * CORONA.SCALE
 
   // Карта поверхности класса. Грузится лениво по цвету звезды; пока её нет (или у
@@ -228,7 +238,7 @@ function Star({ body }: { body: BodyEntity }) {
     surfaceMaterial?.dispose()
   }, [surface, surfaceMaterial])
 
-  useFrame((_, dt) => {
+  useFrame((state, dt) => {
     // Светило тоже съёживается за потолком: на галактическом масштабе оно становится
     // одной из точек галактики, а не висит огромным диском поверх звёздного поля.
     const shrink = worldShrink(session.world.player.state.scale)
@@ -238,10 +248,28 @@ function Star({ body }: { body: BodyEntity }) {
     }
     if (glowRef.current) {
       glowRef.current.position.copy(body.pos)
+      // Плоскость короны РАЗВОРАЧИВАЕМ лицом к камере вручную — это billboard: у свечения
+      // нет поверхности, оно всегда смотрит на зрителя. Но НЕ копируем кватернион камеры
+      // целиком (тогда её крен катал бы узор короны каруселью): строим разворот к камере
+      // со СТАБИЛЬНЫМ мировым верхом. lookAt(camera, star, up) даёт ось Z = star→camera —
+      // ровно нормаль плоскости к зрителю, а верх остаётся мировым: протуберанцы не крутит.
+      _billboard.lookAt(state.camera.position, body.pos, _worldUp)
+      glowRef.current.quaternion.setFromRotationMatrix(_billboard)
       glowRef.current.scale.set(glowSize * shrink, glowSize * shrink, 1)
+
+      // КРОМКА КОРОНЫ ЗАВИСИТ ОТ ДИСТАНЦИИ. Билборд плоский, а силуэт ШАРА растёт с
+      // приближением быстрее плоского (экранный радиус = asin(R/d), не R/d). Со статической
+      // кромкой вблизи шар «раздувается» и наползает на корону. Экранный силуэт ложится на
+      // билборд как долю 2/(SCALE·√(1−(R/d)²)) — вдали это наши 2/SCALE, вблизи кромка
+      // раздвигается ровно вслед за шаром. Зажата, чтобы у самой поверхности не схлопнуться.
+      const camDist = state.camera.position.distanceTo(body.pos)
+      const rOverD = Math.min(0.985, (body.radius * shrink) / Math.max(camDist, 1e-3))
+      const edge = (2 * 0.975) / (CORONA.SCALE * Math.sqrt(1 - rOverD * rOverD))
+      material.uniforms.uDiskFrac!.value = Math.min(edge, 0.96)
     }
-    // Плазма кипит и вращается в шейдере — двигаем только время. Реальное (не мировое):
+    // Плазма кипит и вращается в шейдерах — двигаем только время. Реальное (не мировое):
     // это косметика, шаг симуляции ей не нужен, а под паузой звезда пусть живёт.
+    material.uniforms.uTime!.value += dt
     if (surfaceMaterial) surfaceMaterial.uniforms.uTime!.value += dt
   })
 
@@ -254,9 +282,16 @@ function Star({ body }: { body: BodyEntity }) {
         scale={body.radius}
         frustumCulled={false}
       />
-      {/* Спрайт стоит в центре звезды, поэтому диск сам закрывает середину ореола:
-          остаётся кольцо вокруг него — ровно то, чем корона и является. */}
-      <sprite ref={glowRef} material={material} scale={[glowSize, glowSize, 1]} renderOrder={2} frustumCulled={false} />
+      {/* Плоскость-билборд в центре звезды: диск сам закрывает середину ореола, остаётся
+          кольцо вокруг него — ровно то, чем корона и является. Разворот к камере — в useFrame. */}
+      <mesh
+        ref={glowRef}
+        geometry={coronaGeometry()}
+        material={material}
+        scale={[glowSize, glowSize, 1]}
+        renderOrder={2}
+        frustumCulled={false}
+      />
     </>
   )
 }
@@ -274,7 +309,36 @@ function Station({ body }: { body: BodyEntity }) {
     }
   })
 
-  return <mesh ref={ref} geometry={stationGeometry()} material={stationMaterial()} scale={body.radius} />
+  // Облик станции — по ярлыку из домена (данные, не ветвление в симуляции).
+  const geometry = body.stationStyle === 'solar' ? solarStationGeometry() : stationGeometry()
+
+  return <mesh ref={ref} geometry={geometry} material={stationMaterial()} scale={body.radius} />
+}
+
+/**
+ * Крест-храм. Тело креста рисуется божественным шейдером (силуэт «плывёт» как в кривом
+ * зеркале, кромки раскаляются добела-в-золото), а из шести концов бьют аддитивные лучи.
+ * `uTime` двигает варп и свечение; вращение и место — как у станции.
+ */
+function CrossStation({ body }: { body: BodyEntity }) {
+  const ref = useRef<Mesh>(null)
+  const session = useSession()
+  const material = useMemo(() => createDivineCrossMaterial(), [])
+  useEffect(() => () => material.dispose(), [material])
+
+  useFrame((_, dt) => {
+    if (!ref.current) return
+    place(ref.current, body, session.world.time, REST_BARREL)
+    ref.current.scale.setScalar(body.radius * worldShrink(session.world.player.state.scale))
+    material.uniforms.uTime!.value += dt
+  })
+
+  return (
+    <mesh ref={ref} geometry={crossStationGeometry()} material={material} scale={body.radius}>
+      {/* Лучи — отдельная аддитивная сетка внутри той же матрицы креста: крутятся с ним. */}
+      <mesh geometry={crossRaysGeometry()} material={crossRayMaterial()} renderOrder={2} />
+    </mesh>
+  )
 }
 
 /**
@@ -302,6 +366,8 @@ export function Bodies() {
         // будет — не потому, что для луны написана отдельная ветка, а потому, что
         // у голой скалы нет цвета атмосферы, а у ноля жителей — городов.
         if (body.kind === 'planet' || body.kind === 'moon') return <Planet key={body.id} body={body} />
+        // Крест-храм — свой компонент (живой шейдер + лучи); прочие станции — общий Station.
+        if (body.stationStyle === 'cross') return <CrossStation key={body.id} body={body} />
         return <Station key={body.id} body={body} />
       })}
       <MoonSwarm moons={swarm} />

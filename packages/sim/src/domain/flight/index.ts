@@ -12,6 +12,7 @@ export {
 export { forward, shipAxes } from './axes'
 export { bodyMass, gravityAccel, gravityReach, stepGravity } from './gravity'
 export { canEngageFlyTo, flyToArrived, flyToController } from './flyto'
+export { armAutoland, canAutoland, nearestLandable, surfaceAltitude } from './landing'
 export { stepShip } from './model'
 export { bankToward, interceptPoint, steerToward } from './steering'
 export {

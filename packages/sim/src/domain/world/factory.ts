@@ -102,6 +102,7 @@ export function makeShip(
     guns,
     cruise: createCruiseState(),
     landedOn: null,
+    autoland: null,
     alive: true,
     wreckAt: null,
     ai: null,
@@ -291,6 +292,7 @@ function makeBodies(ids: IdSource, def: SystemDef): BodyEntity[] {
     pos: new Vector3(...def.star.pos),
     radius: def.star.radius,
     color: def.star.color,
+    calmCorona: def.star.calm,
     surface: null,
     population: 0,
     settlement: null,
@@ -394,8 +396,29 @@ function makeBodies(ids: IdSource, def: SystemDef): BodyEntity[] {
       spin: 0.08,
       spinAxis: new Vector3(0, 0, 1),
       orbit: stationOrbit,
+      stationStyle: def.station.style,
     }
     bodies.push(station)
+  }
+
+  // Дополнительные станции: стоят телами на месте (орбиты нет), свой облик. Основной трафик
+  // их не ведёт, но док по близости работает — как у любой станции.
+  for (const extra of def.extraStations ?? []) {
+    bodies.push({
+      id: ids.next(),
+      kind: 'station',
+      name: extra.name,
+      pos: new Vector3(...extra.pos),
+      radius: extra.radius,
+      color: 0x9fb3c8,
+      surface: null,
+      population: 0,
+      settlement: null,
+      spin: 0.08,
+      spinAxis: new Vector3(0, 0, 1),
+      orbit: null,
+      stationStyle: extra.style,
+    })
   }
 
   for (const hole of def.blackHoles ?? []) {
@@ -572,6 +595,7 @@ export function enterSystem(
   const player = world.player
   player.ai = null
   player.landedOn = null
+  player.autoland = null
   player.state.pos.set(...start)
   player.state.vel.set(0, 0, 0)
   player.state.angVel.set(0, 0, 0)
@@ -650,6 +674,7 @@ export function createWorld(def: SystemDef = STARTER_SYSTEM, profile?: PilotProf
     dockOccupantId: null,
     lockedTargetId: null,
     lockedStationId: null,
+    lockedPodId: null,
     navTargetId: station?.id ?? null,
     jumpTargetIndex: null,
     jumpArrivalPlanet: null,

@@ -1,5 +1,6 @@
 import { Vector3 } from 'three'
 import { AUTOPILOT } from '../../config/station'
+import { CRUISE } from '../../config/cruise'
 import { clamp } from '../../core/math'
 import type { Controller } from '../sim/controller'
 import type { ShipEntity, World } from '../world/entities'
@@ -16,10 +17,22 @@ import { steerToward } from './steering'
  * не зная физики, и не может ни разогнаться сверх паспорта, ни развернуться быстрее
  * маневровых. Состояния нет — всё читается из мира каждый шаг, включиться и выключиться
  * можно в любой момент.
+ *
+ * Два уточнения делают его пригодным для НАСТОЯЩИХ расстояний системы:
+ *  — на дальнем ПРЯМОМ перегоне он просит ФОРСАЖ (`wantsCruise`), иначе до планеты в
+ *    полумиллиарде метров он ползёт боевыми 220 м/с десятки минут;
+ *  — курс ОГИБАЕТ тела на пути (`aimAround`), а не идёт носом сквозь звезду или планету.
  */
 
 const _toTarget = new Vector3()
 const _steer = { pitch: 0, yaw: 0 }
+const _dir = new Vector3()
+const _toBody = new Vector3()
+const _closest = new Vector3()
+const _lateral = new Vector3()
+const _perp = new Vector3()
+const _nose = new Vector3()
+const _aim = new Vector3()
 
 /** Куда ведём: позиция захваченного борта (живого) или станции. null — вести некуда. */
 function targetPos(world: World): Vector3 | null {
@@ -28,6 +41,51 @@ function targetPos(world: World): Vector3 | null {
   const station = findBody(world, world.lockedStationId)
   if (station) return station.pos
   return null
+}
+
+/**
+ * Точка прицеливания в обход тел. Идём вдоль луча к цели; если тело подходит к лучу ближе
+ * зазора (радиус×AVOID_CLEARANCE + габарит борта) ДО цели — уводим аим вбок за его сферу,
+ * и курс огибает тело. Берём БЛИЖАЙШЕЕ перекрывающее; пересчёт каждый кадр сам доворачивает
+ * по мере облёта, а как тело останется позади — аим возвращается на цель.
+ *
+ * Возвращает `true`, если путь перекрыт (аим уведён): по нему `wantsCruise` глушит форсаж —
+ * сверхсвет в обход планеты недопустим.
+ */
+function aimAround(ship: ShipEntity, world: World, dest: Vector3, out: Vector3): boolean {
+  out.copy(dest)
+  const pos = ship.state.pos
+  _dir.copy(dest).sub(pos)
+  const dist = _dir.length()
+  if (dist < 1) return false
+  _dir.multiplyScalar(1 / dist) // единичный курс на цель
+
+  let nearest = Infinity
+  let blocked = false
+  for (const body of world.bodies) {
+    if (body.id === world.lockedStationId) continue // это и есть цель, не препятствие
+    _toBody.copy(body.pos).sub(pos)
+    const along = _toBody.dot(_dir)
+    if (along <= 0 || along >= dist) continue // тело позади борта или дальше цели
+    _closest.copy(pos).addScaledVector(_dir, along) // ближайшая к телу точка луча
+    _lateral.copy(_closest).sub(body.pos)
+    const lat = _lateral.length()
+    const clearance = body.radius * AUTOPILOT.AVOID_CLEARANCE + ship.spec.hull.radius
+    if (lat >= clearance || along >= nearest) continue
+    nearest = along
+    blocked = true
+    if (lat < 1) {
+      // Луч идёт сквозь центр тела — бокового направления нет, берём любой перпендикуляр курсу.
+      _perp.set(0, 1, 0)
+      if (Math.abs(_dir.y) > 0.9) _perp.set(1, 0, 0)
+      _lateral.copy(_perp).addScaledVector(_dir, -_perp.dot(_dir)).normalize()
+    } else {
+      _lateral.multiplyScalar(1 / lat)
+    }
+    // Аим — точка сбоку от тела, вынесенная ЗА зазор: курс идёт мимо, а не сквозь.
+    out.copy(body.pos).addScaledVector(_lateral, clearance + AUTOPILOT.AVOID_MARGIN)
+  }
+  return blocked
 }
 
 export const flyToController: Controller = {
@@ -50,9 +108,11 @@ export const flyToController: Controller = {
     _toTarget.copy(dest).sub(ship.state.pos)
     const distance = _toTarget.length()
 
-    // Нос — на цель. Упреждение не берём: автопилот доставляет к точке, а не бьёт по ней;
-    // подравняться под ход цели можно и вручную, забрав штурвал по прибытии.
-    steerToward(ship.state, dest, 2.2, _steer)
+    // Нос — на ТОЧКУ ОБХОДА (она же цель, когда путь свободен). Упреждение не берём:
+    // автопилот доставляет к точке, а не бьёт по ней; подравняться под ход цели можно
+    // и вручную, забрав штурвал по прибытии.
+    aimAround(ship, world, dest, _aim)
+    steerToward(ship.state, _aim, 2.2, _steer)
     c.pitch = _steer.pitch
     c.yaw = _steer.yaw
 
@@ -85,6 +145,32 @@ export const flyToController: Controller = {
   wantsFire(): boolean {
     // На автопилоте не стреляют — это поведение автопилота, а не запрет игроку.
     return false
+  },
+
+  /**
+   * Форсаж на автоследовании — только на дальнем ПРЯМОМ перегоне и под тройной охраной:
+   * есть место затормозить, нос наведён, путь чист. `updateCruise` добавит свои запреты
+   * (массовая блокировка врагом, выход у звезды) — этот метод лишь ПРОСИТ разгон.
+   */
+  wantsCruise(ship: ShipEntity, world: World): boolean {
+    const dest = targetPos(world)
+    if (!dest) return false
+    _toTarget.copy(dest).sub(ship.state.pos)
+    const distance = _toTarget.length()
+
+    // Хватает ли места погасить крейсерский ход до цели (тормозной путь ≈ v/DECAY_RATE).
+    const cruiseSpeed = ship.spec.tuning.MAX_SPEED * CRUISE.MAX_FACTOR
+    const brakeDist = cruiseSpeed / CRUISE.DECAY_RATE
+    if (distance <= brakeDist * AUTOPILOT.CRUISE_BRAKE_MARGIN) return false
+
+    // Нос уже на цели — иначе сверхсвет уносит боком. Нос корабля смотрит в −Z.
+    _nose.set(0, 0, -1).applyQuaternion(ship.state.quat)
+    _dir.copy(_toTarget).multiplyScalar(1 / Math.max(distance, 1))
+    if (_nose.dot(_dir) < AUTOPILOT.CRUISE_ALIGN) return false
+
+    // Прямой путь свободен от тел — крейсер не рулит в обход планеты.
+    if (aimAround(ship, world, dest, _aim)) return false
+    return true
   },
 }
 

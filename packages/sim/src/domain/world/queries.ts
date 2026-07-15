@@ -75,42 +75,56 @@ export function targetableStationsOf(world: World): BodyEntity[] {
 }
 
 /**
- * Tab по РАЗДЕЛЬНЫМ классам. Перебирает борта И станции как один круг по углу к прицелу
- * (Tab берёт того, на кого смотришь), но выбранное кладёт в СВОЁ поле: `lockedTargetId`
- * (борт) ИЛИ `lockedStationId` (станция), второе гасит. Классы держим врозь ради будущих
- * настроек листания; захвачено всегда что-то одно. Станцию нельзя бить — её берут, чтобы
- * связаться. Мутирует мир (как и прежняя однострочная установка `lockedTargetId`).
+ * Tab — КОНТАКТЫ: живые видимые борта (персонажи) и обломки-контейнеры (останки кораблей).
+ * Один круг ПО УДАЛЕНИЮ (ближний — первым, дальше по кругу к дальним). Выбор кладём в своё
+ * поле: борт → `lockedTargetId`, контейнер → `lockedPodId` (второе гасит). Небесные тела и
+ * станции сюда НЕ входят — их листает Shift+Tab (`cycleCelestial`): контакт и точка навигации
+ * независимы, и захват одного не сбивает выбор другого. Мутирует мир, как и прежний захват.
  */
-export function cycleLock(world: World): void {
-  const cands: { id: number; station: boolean; pos: Vector3 }[] = [
-    ...targetablesOf(world).map((s) => ({ id: s.id, station: false, pos: s.state.pos })),
-    ...targetableStationsOf(world).map((b) => ({ id: b.id, station: true, pos: b.pos })),
+export function cycleContact(world: World): void {
+  const from = world.player.state.pos
+  const cands: { id: number; pod: boolean; d2: number }[] = [
+    ...targetablesOf(world).map((s) => ({ id: s.id, pod: false, d2: s.state.pos.distanceToSquared(from) })),
+    ...world.pods.filter((p) => p.alive).map((p) => ({ id: p.id, pod: true, d2: p.pos.distanceToSquared(from) })),
   ]
   if (cands.length === 0) {
     world.lockedTargetId = null
+    world.lockedPodId = null
+    return
+  }
+  cands.sort((a, b) => a.d2 - b.d2)
+  // Текущий контакт — борт или контейнер; оба id уникальны в общем счётчике.
+  const current = world.lockedPodId ?? world.lockedTargetId
+  const index = current === null ? -1 : cands.findIndex((c) => c.id === current)
+  const next = cands[(index + 1) % cands.length]!
+  world.lockedTargetId = next.pod ? null : next.id
+  world.lockedPodId = next.pod ? next.id : null
+}
+
+/** Небесные тела, которые берутся точкой навигации: звёзды, планеты, спутники, станции. */
+const NAV_KINDS = new Set<BodyEntity['kind']>(['star', 'planet', 'moon', 'station'])
+
+/**
+ * Shift+Tab — НЕБЕСНЫЕ: звёзды, планеты, спутники, станции. Один круг ПО УДАЛЕНИЮ. Выбор —
+ * в `navTargetId` (та же нав-цель, что метит карта системы, — одна метка на всех). Станцию
+ * заодно берём НА СВЯЗЬ (`lockedStationId`, для T-диспетчера), прочее её гасит. Контакт-захват
+ * (Tab) не трогаем: борт и точка навигации живут независимо. Мутирует мир.
+ */
+export function cycleCelestial(world: World): void {
+  const from = world.player.state.pos
+  const cands = world.bodies
+    .filter((b) => NAV_KINDS.has(b.kind))
+    .map((b) => ({ b, d2: b.pos.distanceToSquared(from) }))
+    .sort((a, z) => a.d2 - z.d2)
+  if (cands.length === 0) {
+    world.navTargetId = null
     world.lockedStationId = null
     return
   }
-
-  shipAxes(world.player.state.quat, _fwd, _right, _up)
-  const scored = cands
-    .map((c) => {
-      _toTarget.copy(c.pos).sub(world.player.state.pos)
-      const distance = _toTarget.length()
-      _toTarget.divideScalar(Math.max(distance, 1e-6))
-      // Угол к оси прицела важнее дистанции: сначала те, кто перед носом.
-      return { c, angle: Math.acos(Math.max(-1, Math.min(1, _fwd.dot(_toTarget)))), distance }
-    })
-    .sort((a, b) => a.angle - b.angle || a.distance - b.distance)
-
-  // Текущий захват — что бы ни было выбрано (борт или станция), оба id уникальны.
-  const currentId = world.lockedStationId ?? world.lockedTargetId
-  const index = currentId === null ? -1 : scored.findIndex((s) => s.c.id === currentId)
-  const next = scored[(index + 1) % scored.length]?.c ?? scored[0]?.c
-  if (!next) return
-
-  world.lockedTargetId = next.station ? null : next.id
-  world.lockedStationId = next.station ? next.id : null
+  const index = world.navTargetId === null ? -1 : cands.findIndex((c) => c.b.id === world.navTargetId)
+  const next = cands[(index + 1) % cands.length]!.b
+  world.navTargetId = next.id
+  world.lockedStationId = next.kind === 'station' ? next.id : null
 }
 
 /** Ближайший контейнер в радиусе захвата — HUD подсказывает, что можно подобрать. */

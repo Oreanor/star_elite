@@ -616,8 +616,11 @@ function makeEn(): NegotiatorLocale {
   return locale
 }
 
-const LOCALES: Record<Lang, NegotiatorLocale> = { ru: makeRu(), en: makeEn() }
+// Промпт негоциатора — большой диегетический текст; локализован пока только для ru/en.
+// Прочие языки UI (pt/fr/de/es/it) берут АНГЛИЙСКИЙ каркас промпта: сам скелет инструкций
+// модели не обязан быть на языке игрока. Полноценные негоциаторские локали — отдельная работа.
+const LOCALES: Partial<Record<Lang, NegotiatorLocale>> = { ru: makeRu(), en: makeEn() }
 
 export function negotiatorLocale(lang: Lang): NegotiatorLocale {
-  return LOCALES[lang]
+  return LOCALES[lang] ?? LOCALES.en!
 }

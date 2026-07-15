@@ -157,6 +157,11 @@ export function stepOrbits(world: World, time = orbitTime(world)): void {
   if (playerReference) {
     _playerReferenceShift.copy(playerReference.pos).sub(_playerReferenceBefore)
     world.player.state.pos.add(_playerReferenceShift)
+    // Игрок сдвинут НЕ своей скоростью, а орбитой опорного тела (десятки км/с у станции).
+    // Камера живёт в мировых координатах и об этом сдвиге не знает — без поправки она
+    // отстаёт на километры за кадр, и корабль уходит за кромку. Пишем сдвиг в тот же
+    // канал `originShift`, которым камера догоняет перецентровку начала координат.
+    world.originShift.add(_playerReferenceShift)
   }
 
   // Остальная динамическая окрестность по-прежнему рождена у станции и живёт

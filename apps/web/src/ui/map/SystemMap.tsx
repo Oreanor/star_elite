@@ -345,7 +345,7 @@ export function SystemMap({
             className="mt-auto w-full cursor-pointer rounded border py-2 text-sm tracking-[0.3em] transition-colors hover:bg-white/10"
             style={{ borderColor: BODY }}
           >
-            M — ЗАКРЫТЬ
+            {t('map.close')}
           </button>
         )}
       </div>

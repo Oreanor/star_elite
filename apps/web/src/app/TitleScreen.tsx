@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useSession } from './GameContext'
 import { TitleStars } from './TitleStars'
-import { requestLock } from '../platform/input/input'
+import { requestLock, setStickSuspended } from '../platform/input/input'
 import { setLang, t, useLang, type Key, type Lang } from '../ui/i18n'
 import { Tabs } from '../ui/station/chrome'
 import { preloadTitleAssets, titleAssetsReady } from '../ui/preload'
@@ -38,10 +38,12 @@ const KEY_GROUPS: { title: Key; rows: [Key, Key][] }[] = [
     rows: [
       ['key.fire', 'key.fire.what'],
       ['key.target', 'key.target.what'],
+      ['key.nav', 'key.nav.what'],
       ['key.autofight', 'key.autofight.what'],
       ['key.missile', 'key.missile.what'],
-      // Аукс-устройства (ПРО/бомба/маскировка) и дрон из справки убраны: они опциональны
-      // и контекстны (есть, только если куплены и стоят в аукс-слоте), а дрон стал капсулой.
+      // Аукс-слот ОДИН, и клавиша одна — E: жмётся то, что в нём стоит (ПРО/бомба/маскировка/
+      // миелофон). Дрон (Q) — капсула, в справку не выносим.
+      ['key.aux', 'key.aux.what'],
     ],
   },
   {
@@ -54,6 +56,7 @@ const KEY_GROUPS: { title: Key; rows: [Key, Key][] }[] = [
       ['key.system', 'key.system.what'],
       ['key.galaxy', 'key.galaxy.what'],
       ['key.talk', 'key.talk.what'],
+      ['key.camera', 'key.camera.what'],
       ['key.pause', 'key.pause.what'],
     ],
   },
@@ -145,8 +148,24 @@ const LOCK_GIVE_UP_MS = 8000
 const TREMBLE_LEAD_MS = 90
 /** Сколько держим «вжух» до перехода в игру, мс: корабль успевает улететь, небо пустеет. */
 const LAUNCH_HOLD_MS = 1000
-/** Какой экран паузы раскрыт: главный, таблица клавиш или настройки. */
-type PauseScreen = 'main' | 'keys' | 'settings'
+/** Какой экран паузы раскрыт: главный, «как играть», таблица клавиш или настройки. */
+type PauseScreen = 'main' | 'guide' | 'keys' | 'settings'
+
+/**
+ * «Как играть» — не таблица клавиш, а картинки-примеры того, чем можно заняться (полёт, бой,
+ * добыча, навигация, торговля, люди, рост). Живёт рядом с клавишами, отдельным экраном:
+ * прозе нужна своя высота с прокруткой, а не строка-в-строке под ключами.
+ */
+const GUIDE_PARAS: Key[] = [
+  'guide.intro',
+  'guide.flight',
+  'guide.combat',
+  'guide.salvage',
+  'guide.nav',
+  'guide.station',
+  'guide.people',
+  'guide.growth',
+]
 
 /** Перезапуск CSS-анимации на том же элементе: сброс + форс reflow + назначение снова. */
 function restartAnimation(el: HTMLElement | null, animation: string): void {
@@ -368,19 +387,31 @@ function TitleShip({ trembling, launched }: { trembling: boolean; launched: bool
   useEffect(() => {
     const el = shakeRef.current
     if (!trembling || launched || !el) return
-    const N = 320
-    const CYCLES = 62 // всего колебаний за проход → частота = CYCLES / duration ≈ 12 Гц
-    const DURATION = 5000
+    // Тряска — это ИНДИКАТОР загрузки, а сцена может строиться долго. Поэтому она не
+    // кончается через пять секунд, а идёт БЕСКОНЕЧНО (iterations: Infinity), пока не придёт
+    // готовность — тогда `launched` отменит её (cleanup ниже) и корабль сорвётся как обычно.
+    // Амплитуда плавно ВЫХОДИТ НА ПЛАТО за ~RAMP и дальше держится: тряска не затухает,
+    // сколько бы ни грузило. Число периодов на проходе ЦЕЛОЕ, поэтому смещение на стыке
+    // петли ≈ ноль — повтор незаметен (а если загрузка всё же перевалит за проход, амплитуда
+    // мягко перезайдёт с малой — это лучше, чем замереть).
+    const DURATION = 24000
+    const FREQ = 12 // Гц
+    const CYCLES = Math.round((FREQ * DURATION) / 1000) // целое число периодов → бесшовная петля
+    const N = CYCLES * 5 // ~5 сэмплов на период — синусоида гладкая
+    const MAX_AMP = 6 // px, предел амплитуды
+    const RAMP = 5000 // мс до выхода амплитуды на плато
     const frames: Keyframe[] = []
     for (let i = 0; i <= N; i++) {
       const t = i / N
-      const amp = 0.7 + t * 4.3 // СПЕРВА мелко (0.7 px), к концу крупно (5 px)
+      const ms = t * DURATION
+      // Экспоненциальный подход к максимуму: мелко в начале, к ~RAMP выходит на MAX и держит.
+      const amp = 0.7 + (MAX_AMP - 0.7) * (1 - Math.exp((-3 * ms) / RAMP))
       const ph = t * CYCLES * 2 * Math.PI
       const x = Math.sin(ph) * amp
       const y = Math.sin(ph * 0.8 + 1.1) * amp * 0.12
       frames.push({ transform: `translate(${x.toFixed(2)}px, ${y.toFixed(2)}px)` })
     }
-    const anim = el.animate(frames, { duration: DURATION, fill: 'forwards' })
+    const anim = el.animate(frames, { duration: DURATION, iterations: Infinity })
     return () => anim.cancel()
   }, [trembling, launched])
 
@@ -394,6 +425,20 @@ function TitleShip({ trembling, launched }: { trembling: boolean; launched: bool
   // Разные слои едут с РАЗНОЙ силой (глубина), оттого при сползании корабля свет «перетекает»
   // по нему — иллюзия наклона и смены освещения. Блики замаскированы силуэтом (см. разметку).
   useEffect(() => {
+    // На интро (тремор → срыв → улёт) параллакс ОТКЛЮЧЁН и корабль возвращён в центр:
+    // иначе курсор, уведённый вбок, смещал корабль ещё до старта, и он срывался из
+    // смещённой точки — улетал левее/правее или уходил не туда. На интро он обязан
+    // стоять по центру и уйти строго вниз, что бы ни делала мышь.
+    if (trembling || launched) {
+      const el = ref.current
+      if (el) el.style.transform = 'translate(0px, 0px)'
+      const sh = shineRef.current
+      if (sh) {
+        sh.style.setProperty('--sx', '0%')
+        sh.style.setProperty('--sy', '0%')
+      }
+      return
+    }
     const AMPLITUDE = 10 // px вертикаль
     const AMPLITUDE_X = 20 // px вбок — вдвое больше вертикали: корабль СМЕЩАЕТСЯ, а не только кренится
     const SKEW = 4 // градусов на самом краю экрана — «небольшой» крен
@@ -411,7 +456,7 @@ function TitleShip({ trembling, launched }: { trembling: boolean; launched: bool
     }
     window.addEventListener('pointermove', onMove)
     return () => window.removeEventListener('pointermove', onMove)
-  }, [])
+  }, [trembling, launched])
 
   return (
     <div className="pointer-events-none absolute inset-x-0 top-[calc(55%+50px)] mx-auto w-full max-w-[43.2rem] -translate-y-1/2 px-8">
@@ -526,6 +571,7 @@ export function Paused({
   onBoot,
   onDock,
   onNewGame,
+  onSignOut,
 }: {
   resuming: boolean
   /** Новичок: сразу играем флориш взлёта и садимся на станцию, без меню и без захвата. */
@@ -540,6 +586,8 @@ export function Paused({
   /** Финал авто-старта: посадить новичка на станцию (вместо запроса захвата курсора). */
   onDock?: () => void
   onNewGame: () => void
+  /** Онлайн: выход из аккаунта (Firebase). */
+  onSignOut?: () => void
 }) {
   useLang() // подписка: смена языка перерисует меню
   const session = useSession()
@@ -643,6 +691,11 @@ export function Paused({
       }, 0)
       return
     }
+    // С МОМЕНТА нажатия START и на ВСЁ интро (дрожь → срыв → улёт → вылет со станции)
+    // мышь молчит: захват курсора берётся уже здесь (poll ниже), и без этого движение
+    // мыши копилось бы в ручку и уводило корабль — а он обязан улететь строго прямо.
+    // Вернётся мышь пилоту сама, когда кончится кино вылета (advanceUndock).
+    setStickSuspended(true)
     // Титул: пока строится сцена, корабль дрожит; станции не даём накрыть его панелью
     // (flourishRef). «Вжух» и переход — по сигналу готовности (`ready`), не по таймеру.
     flourishRef.current = true
@@ -664,7 +717,13 @@ export function Paused({
         // Куда переходим — по фактическому состоянию мира: пристыкован (новичок ИЛИ сейв у
         // причала) → станция; в полёте → дожимаем захват. Так «продолжить» тоже улетает.
         if (session.world.docked) onDock?.()
-        else poll(performance.now() + LOCK_GIVE_UP_MS)
+        else {
+          // В полёт входим БЕЗ кино вылета (оно бывает только от причала), значит вернуть
+          // мышь некому — делаем это здесь, иначе после «Продолжить» из космоса корабль
+          // остался бы без управления. У причала мышь вернёт advanceUndock при отчаливании.
+          setStickSuspended(false)
+          poll(performance.now() + LOCK_GIVE_UP_MS)
+        }
       }
       if (onFade) onFade(swap)
       else swap()
@@ -774,10 +833,13 @@ export function Paused({
             {/* «Продолжить» — только когда есть куда возвращаться: сейв (не новая игра) или
                 пауза. Ведёт в игру тем же захватом курсора, что и раньше «Старт». */}
             {(resuming || !session.isNewGame) && (
-              <MenuButton onClick={take}>{t('menu.continue')}</MenuButton>
+              <MenuButton onClick={take}>{t(resuming ? 'menu.resume' : 'menu.continue')}</MenuButton>
             )}
             <MenuButton onClick={() => { setConfirmNew(false); setScreen('keys') }}>
               {t('menu.keys')}
+            </MenuButton>
+            <MenuButton onClick={() => { setConfirmNew(false); setScreen('guide') }}>
+              {t('menu.howto')}
             </MenuButton>
             <MenuButton onClick={() => { setConfirmNew(false); setScreen('settings') }}>
               {t('menu.settings')}
@@ -803,6 +865,9 @@ export function Paused({
           <div onClick={(e) => e.stopPropagation()}>
             <MenuPanel fit>
               <p className="max-w-sm text-center text-sm leading-relaxed tracking-widest text-[#7fd6ff]">
+                {t('menu.newGameConfirm')}
+              </p>
+              <p className="max-w-sm text-center text-xs leading-relaxed tracking-widest text-[#3f7391]">
                 {t('menu.newGameWarn')}
               </p>
               <div className="flex gap-4">
@@ -814,16 +879,28 @@ export function Paused({
         </div>
       )}
 
-      {/* Панель клавиш/настроек — оверлей ПОВЕРХ меню: всплыла, прочитал, закрыл и вернулся.
+      {/* Панель клавиш/как-играть/настроек — оверлей ПОВЕРХ меню: всплыла, прочитал, закрыл.
           Клик мимо неё (по затемнению) или «назад» возвращает к кнопкам старта. */}
-      {(screen === 'keys' || screen === 'settings') && (
+      {(screen === 'keys' || screen === 'guide' || screen === 'settings') && (
         <div
           className="absolute inset-0 z-20 flex items-center justify-center bg-black/50 px-8"
           onClick={() => setScreen('main')}
         >
           <div onClick={(e) => e.stopPropagation()}>
             <MenuPanel>
-              {screen === 'keys' ? (
+              {screen === 'guide' ? (
+                <>
+                  <p className="text-sm tracking-[0.3em] text-[#7fd6ff]">{t('menu.howto')}</p>
+                  {/* Проза с ПРОКРУТКОЙ в своей высоте: примеры длиннее таблицы, а вкладки/кнопка
+                      «назад» должны стоять на месте. Мягкий голубой, межстрочный простор — читается. */}
+                  <div className="h-[17rem] w-full max-w-md space-y-3 overflow-y-auto pr-2 text-left text-sm leading-relaxed text-[#9fc6dc]">
+                    {GUIDE_PARAS.map((k) => (
+                      <p key={k}>{t(k)}</p>
+                    ))}
+                  </div>
+                  <MenuButton onClick={() => setScreen('main')}>{t('menu.back')}</MenuButton>
+                </>
+              ) : screen === 'keys' ? (
                 <>
                   <Tabs
                     tabs={KEY_GROUPS.map((g) => t(g.title))}
@@ -844,7 +921,7 @@ export function Paused({
                   <MenuButton onClick={() => setScreen('main')}>{t('menu.back')}</MenuButton>
                 </>
               ) : (
-                <Settings session={session} onBack={() => setScreen('main')} />
+                <Settings session={session} onBack={() => setScreen('main')} onSignOut={onSignOut} />
               )}
             </MenuPanel>
           </div>
@@ -866,7 +943,15 @@ const ASSIST_STORAGE_KEY = 'elite.assist'
  * компьютер — поле `intent`, общее для всей сессии; его выбор запоминается в
  * localStorage и подхватывается при следующем старте (см. createIntent).
  */
-function Settings({ session, onBack }: { session: ReturnType<typeof useSession>; onBack: () => void }) {
+function Settings({
+  session,
+  onBack,
+  onSignOut,
+}: {
+  session: ReturnType<typeof useSession>
+  onBack: () => void
+  onSignOut?: () => void
+}) {
   const lang = useLang()
   const [assist, setAssist] = useState(session.intent.flightAssist)
 
@@ -883,14 +968,25 @@ function Settings({ session, onBack }: { session: ReturnType<typeof useSession>;
     <>
       <div className="flex w-full max-w-md flex-col gap-8">
         <Choice label={t('menu.language')}>
-          <Toggle active={lang === 'ru'} onClick={() => pickLang('ru')}>Русский</Toggle>
-          <Toggle active={lang === 'en'} onClick={() => pickLang('en')}>English</Toggle>
+          {/* Семь языков не влезут в один ряд узкой панели — пусть переносятся. */}
+          <div className="flex flex-wrap justify-end gap-2">
+            <Toggle active={lang === 'ru'} onClick={() => pickLang('ru')}>{t('menu.lang.ru')}</Toggle>
+            <Toggle active={lang === 'en'} onClick={() => pickLang('en')}>{t('menu.lang.en')}</Toggle>
+            <Toggle active={lang === 'pt'} onClick={() => pickLang('pt')}>{t('menu.lang.pt')}</Toggle>
+            <Toggle active={lang === 'fr'} onClick={() => pickLang('fr')}>{t('menu.lang.fr')}</Toggle>
+            <Toggle active={lang === 'de'} onClick={() => pickLang('de')}>{t('menu.lang.de')}</Toggle>
+            <Toggle active={lang === 'es'} onClick={() => pickLang('es')}>{t('menu.lang.es')}</Toggle>
+            <Toggle active={lang === 'it'} onClick={() => pickLang('it')}>{t('menu.lang.it')}</Toggle>
+          </div>
         </Choice>
 
         <Choice label={t('menu.assist')} hint={t('menu.assist.hint')}>
           <Toggle active={assist} onClick={() => toggleAssist(true)}>{t('menu.on')}</Toggle>
           <Toggle active={!assist} onClick={() => toggleAssist(false)}>{t('menu.off')}</Toggle>
         </Choice>
+        {onSignOut && (
+          <MenuButton onClick={onSignOut}>{t('auth.signout')}</MenuButton>
+        )}
       </div>
       <MenuButton onClick={onBack}>{t('menu.back')}</MenuButton>
     </>

@@ -3,14 +3,16 @@ import { describe, expect, it } from 'vitest'
 import { PHYSICS } from '../../config/physics'
 import { DOCKING } from '../../config/station'
 import { shipAxes } from '../flight/axes'
+import { armAutoland } from '../flight/landing'
 import { createWorld, STARTER_SYSTEM, type BodyEntity, type World } from '../world'
 import { stepWorld } from './step'
 
 /**
  * Контакт с крупным телом.
  *
- * Планета и луна принимают посадку, звезда сжигает, чёрная дыра проходима.
- * У станции остаётся защитное поле: оно не относится к гравитации поверхности.
+ * У планеты и луны ТВЁРДАЯ поверхность: неуправляемое касание разбивает корабль,
+ * сесть можно только автопосадкой (L в окне высот). Звезда сжигает, чёрная дыра
+ * проходима. У станции защитное поле — оно не относится к гравитации поверхности.
  */
 
 const NO_CONTROLLERS = new Map()
@@ -42,28 +44,46 @@ function ram(world: World, body: BodyEntity, speed: number): void {
   player.controls.throttle = 0
 }
 
+/** Ставит корабль в неподвижное зависание на заданной высоте над телом (в окне автопосадки). */
+function hover(world: World, body: BodyEntity, altitude: number): void {
+  const player = world.player
+  player.state.pos.copy(body.pos)
+  player.state.pos.x += body.radius + player.spec.hull.radius * player.state.scale + altitude
+  player.state.vel.set(0, 0, 0)
+  player.controls.throttle = 0
+}
+
+/** Заводит непрерываемую автопосадку с 60 м и крутит шаги, пока корабль не сядет. */
+function landViaAutoland(world: World, body: BodyEntity): void {
+  hover(world, body, 60)
+  if (!armAutoland(world)) throw new Error('автопосадка не завелась — корабль не в окне высот')
+  for (let i = 0; i < 3000 && !world.player.landedOn; i++) oneStep(world)
+}
+
 describe('удар о крупное тело', () => {
-  it('любая скорость касания планеты заканчивается посадкой без гибели', () => {
+  it('неуправляемое касание планеты разбивает корабль — поверхность твёрдая', () => {
     const world = quiet()
     const planet = bodyOf(world, 'planet')
     ram(world, planet, 4_000)
 
     oneStep(world)
 
-    expect(world.player.alive).toBe(true)
-    expect(world.player.landedOn?.bodyId).toBe(planet.id)
-    expect(world.player.state.vel.length()).toBe(0)
+    // Не включил автопосадку (L) в окне высот — планета больше не «мягкий батут».
+    expect(world.player.alive).toBe(false)
+    expect(world.player.landedOn).toBeNull()
   })
 
-  it('посадка не тратит щит или корпус', () => {
+  it('автопосадка сажает без урона щиту и корпусу', () => {
     const world = quiet()
     const player = world.player
     player.shield = player.spec.hull.shield
     const before = player.shield + player.hull
-    ram(world, bodyOf(world, 'planet'), 500)
+    const planet = bodyOf(world, 'planet')
 
-    oneStep(world)
+    landViaAutoland(world, planet)
 
+    expect(player.alive).toBe(true)
+    expect(player.landedOn?.bodyId).toBe(planet.id)
     expect(player.shield + player.hull).toBe(before)
   })
 
@@ -116,7 +136,7 @@ describe('удар о крупное тело', () => {
     expect(world.player.alive).toBe(true)
   })
 
-  it('выросший миелофоном корабль тоже садится, а не отскакивает', () => {
+  it('выросший миелофоном корабль НЕ проваливается — касание считается по раздутому габариту', () => {
     const world = quiet()
     const player = world.player
     player.state.scale = 40
@@ -125,17 +145,17 @@ describe('удар о крупное тело', () => {
 
     oneStep(world)
 
-    expect(player.alive).toBe(true)
-    expect(player.landedOn?.bodyId).toBe(planet.id)
+    // Столкновение считается по effectiveRadius (радиус×масштаб): гигант не сквозит сквозь
+    // планету — неуправляемое касание его разбивает, как и обычный корабль.
+    expect(player.alive).toBe(false)
   })
 
-  it('посаженный корпус лежит в плоскости, перпендикулярной радиусу', () => {
+  it('автопосаженный корпус лежит в плоскости, перпендикулярной радиусу', () => {
     const world = quiet()
     const player = world.player
     const planet = bodyOf(world, 'planet')
-    ram(world, planet, 40)
 
-    oneStep(world)
+    landViaAutoland(world, planet)
 
     const normal = player.state.pos.clone().sub(planet.pos).normalize()
     const forward = new Vector3()
@@ -146,12 +166,11 @@ describe('удар о крупное тело', () => {
     expect(Math.abs(forward.dot(normal))).toBeLessThan(1e-6)
   })
 
-  it('новая тяга немедленно отрывает корабль от поверхности', () => {
+  it('новая тяга немедленно отрывает севший корабль от поверхности', () => {
     const world = quiet()
     const player = world.player
     const planet = bodyOf(world, 'planet')
-    ram(world, planet, 40)
-    oneStep(world)
+    landViaAutoland(world, planet)
 
     player.controls.throttle = 0.2
     oneStep(world)

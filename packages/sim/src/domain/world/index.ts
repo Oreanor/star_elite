@@ -71,7 +71,7 @@ export { makePilotName } from './names'
 export { maybeShiftOrigin } from './origin'
 export { spawnRemotePlayer, despawnRemotePlayer, type RemotePlayerInit } from './remote'
 export { pickFreeSpawn, isFreeSpawn } from './spawn'
-export { cycleTarget, cycleLock, findBody, findShip, hostilesOf, incomingMissile, nearestPod, targetableStationsOf } from './queries'
+export { cycleTarget, cycleContact, cycleCelestial, findBody, findShip, hostilesOf, incomingMissile, nearestPod, targetableStationsOf } from './queries'
 export {
   jumpOut,
   spawnWarpFlash,

@@ -1,4 +1,9 @@
+import { DE } from './de'
 import { EN } from './en'
+import { ES } from './es'
+import { FR } from './fr'
+import { IT } from './it'
+import { PT } from './pt'
 import { RU } from './ru'
 
 /**
@@ -15,22 +20,27 @@ import { RU } from './ru'
  * в симуляцию, которой однажды стоять на сервере без всякого экрана.
  */
 
-export type Lang = 'ru' | 'en'
+export type Lang = 'ru' | 'en' | 'pt' | 'fr' | 'de' | 'es' | 'it'
 
 export type Dict = typeof RU
 /** Ключ перевода. Проверяется типом: опечатка в ключе — ошибка сборки, а не пустая строка. */
 export type Key = keyof Dict
 
-const DICTS: Record<Lang, Dict> = { ru: RU, en: EN }
+// Каждый словарь типизирован `Record<keyof typeof RU, string>` — компилятор ЗАСТАВЛЯЕТ его
+// нести ВСЕ ключи RU: пропуск перевода в любом языке — ошибка сборки, а не пустая строка в бою.
+const DICTS: Record<Lang, Dict> = { ru: RU, en: EN, pt: PT, fr: FR, de: DE, es: ES, it: IT }
+
+const LANGS: readonly Lang[] = ['ru', 'en', 'pt', 'fr', 'de', 'es', 'it']
 
 const STORAGE_KEY = 'elite.lang'
 
 function initial(): Lang {
   const saved = localStorage.getItem(STORAGE_KEY)
-  if (saved === 'ru' || saved === 'en') return saved
-  // Русский — язык оригинала. Гадать по `navigator.language` не станем: игра
-  // писалась по-русски, и её тексты по-русски точнее.
-  return navigator.language.startsWith('ru') ? 'ru' : 'en'
+  if (saved && (LANGS as readonly string[]).includes(saved)) return saved as Lang
+  // Подбираем по языку браузера (`pt-BR` → `pt`); чего не знаем — английский. Русский особо
+  // не выделяем в угадывании: тексты у всех языков полные, пусть решает локаль системы.
+  const code = navigator.language.slice(0, 2).toLowerCase()
+  return (LANGS as readonly string[]).includes(code) ? (code as Lang) : 'en'
 }
 
 let lang: Lang = initial()

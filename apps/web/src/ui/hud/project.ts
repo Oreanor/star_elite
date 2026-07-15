@@ -85,15 +85,17 @@ export function scaleParts(scale: number): { value: string; unit: string } {
 
 /**
  * Множитель миелофона за пару десятков секунд доходит до сотен миллиардов — девять цифр
- * в строке HUD не читаются (а в неё влезает ~40 символов). Сжимаем в разряды:
- * 1299 · 12.5к · 199тыс · 1.22млн · 1.56млрд. Суффиксы русские намеренно — как и сама
- * подпись МАСШТАБ рядом; локали HUD тут пока нет.
+ * в строке HUD не читаются. Крупный кегль скорости/масштаба требует ещё короче: держим
+ * 3–4 разряда, без дробей: 1299 · 31k · 250k · 12M · 2G.
+ *
+ * Суффиксы — приставки СИ (k/M/G), а не «к/млн/млрд»: это не слова, а универсальные символы
+ * (как «км»), одинаковые во всех семи языках интерфейса. Так множитель не приходится держать
+ * отдельным переводом в каждой локали, а немецкому/французскому игроку не мигает кириллица.
  */
 export function formatScale(scale: number): string {
   if (scale < 100) return scale.toFixed(1)
   if (scale < 1e4) return Math.round(scale).toString()
-  if (scale < 1e5) return `${(scale / 1e3).toFixed(1)}к`
-  if (scale < 1e6) return `${Math.round(scale / 1e3)}тыс`
-  if (scale < 1e9) return `${(scale / 1e6).toFixed(2)}млн`
-  return `${(scale / 1e9).toFixed(2)}млрд`
+  if (scale < 1e6) return `${Math.round(scale / 1e3)}k`
+  if (scale < 1e9) return `${Math.round(scale / 1e6)}M`
+  return `${Math.round(scale / 1e9)}G`
 }

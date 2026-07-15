@@ -2,6 +2,7 @@ import {
   CORE_INDEX,
   GALAXY,
   GALAXY_SHAPES,
+  LUCIFER,
   SHAPE,
   type GalaxyShapeId,
 } from '../../config/galaxy'
@@ -195,6 +196,8 @@ export interface Spot3 {
 export function placeSystem(index: number, seed: number = GALAXY.SEED): Spot3 {
   // Чёрная дыра сидит ровно в центре. Это не звезда, ей не нужен бросок кости.
   if (index === CORE_INDEX) return { x: 0, y: 0, z: 0 }
+  // Люцифер висит в пустоте над диском, руками — не по броску (см. LUCIFER.POS).
+  if (index === LUCIFER.INDEX) return { x: LUCIFER.POS[0], y: LUCIFER.POS[1], z: LUCIFER.POS[2] }
 
   // Поток бросков СВОЙ, не общий с `generateSystem`. Общий связал бы место звезды
   // с её классом: рукава расцветились бы по спектру, и это было бы видно.

@@ -27,9 +27,12 @@ describe('генерация галактики', () => {
     expect({ ...galaxy[7]!, name: '' }).toEqual({ ...solo, name: '' })
   })
 
-  it('строит ровно COUNT систем с уникальными именами', () => {
+  it('строит COUNT процедурных систем плюс Люцифер, все имена уникальны', () => {
     const galaxy = generateGalaxy()
-    expect(galaxy).toHaveLength(GALAXY.COUNT)
+    // COUNT систем из зерна ПЛЮС Люцифер, дописанный в хвост (2501-й, см. LUCIFER.INDEX):
+    // он хардкод поверх генерации, а не одна из COUNT — оттого длина на единицу больше.
+    expect(galaxy).toHaveLength(GALAXY.COUNT + 1)
+    expect(galaxy[GALAXY.COUNT]?.name).toBe('Люцифер')
     expect(new Set(galaxy.map((s) => s.name)).size).toBe(galaxy.length)
   })
 })

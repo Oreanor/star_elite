@@ -26,13 +26,14 @@ export type WarnCode =
   | 'lowEnergy'
   | 'massLock'
   | 'gravityBrake'
-  | 'dockFast'
+  | 'dockHint'
   | 'playerLeft'
   | 'noRockets'
   | 'noLaser'
   | 'noJump'
   | 'noAux'
   | 'noTarget'
+  | 'landPrompt'
   | 'dockReady'
   | 'dockCorridor'
   | 'orbitExit'
@@ -62,7 +63,10 @@ const DEFS: Record<WarnCode, Def> = {
   noJump: { color: UI.WARN, hz: 0, rank: 84, key: 'hud.noJump' },
   noAux: { color: UI.WARN, hz: 0, rank: 84, key: 'hud.noAux' },
   noTarget: { color: UI.WARN, hz: 0, rank: 84, key: 'hud.noTarget' },
-  dockFast: { color: UI.WARN, hz: 2.5, rank: 70, key: 'hud.dockTooFast' },
+  // Окно автопосадки: жёлтое и МИГАЕТ (действие по времени — успеть нажать), приоритет
+  // выше прочих жёлтых «нельзя»: пропустишь — разобьёшься. Реальная угроза жизни перебьёт.
+  landPrompt: { color: UI.WARN, hz: 2, rank: 86, key: 'hud.landPrompt' },
+  dockHint: { color: UI.PRIMARY, hz: 0, rank: 38, key: 'hud.dockHint' },
   contactLost: { color: UI.DANGER, hz: 0, rank: 68, key: 'hud.contactLost' },
   hullHot: { color: UI.WARN, hz: 2, rank: 60, key: 'hud.hullHot' },
   lowEnergy: { color: UI.WARN, hz: 2, rank: 55, key: 'hud.lowEnergy' },

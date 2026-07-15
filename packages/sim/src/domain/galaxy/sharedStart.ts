@@ -25,7 +25,8 @@ export function patchSharedStart(def: SystemDef, index: number, galaxySeed: numb
       {
         name: 'Глотка',
         radius: 300_000,
-        stationOffset: [10_000_000, 0, 0],
+        // 25 000 км от станции (метры). Дальше прежнего — чтобы не давила на подлёте.
+        stationOffset: [25_000_000, 0, 0],
         diskAxis: [0.12, 1, 0.07],
       },
     ],

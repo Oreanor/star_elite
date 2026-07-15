@@ -14,13 +14,15 @@
  * поэтому состояние — простое: активна ли сцена и сколько её идёт.
  */
 
+import { setStickSuspended } from '../../platform/input/input'
+
 /** Вся сцена, с. За это время маска раскрывается, кольца уходят, корабль влетает в кадр. */
 export const UNDOCK_TOTAL = 3.0
 
-/** Пять колец: каждые 0.3 с; пятое = раскрытие маски на космос. */
+/** Кольца каждые 0.3 с; последнее совпадает с раскрытием маски на космос. */
 export const RING_INTERVAL = 0.3
-export const RING_COUNT = 5
-/** Секунда, когда стартует прорезь (после четырёх импульсных колец). */
+export const RING_COUNT = 4
+/** Секунда, когда стартует прорезь — ровно со стартом последнего кольца. */
 export const MASK_START = RING_INTERVAL * (RING_COUNT - 1)
 
 interface UndockFx {
@@ -47,6 +49,8 @@ export function undocking(): boolean {
 export function startUndock(): void {
   fx.active = true
   fx.t = 0
+  // Мышь молчит на всё кино: у корабля своя анимация тряски и улёта, рулить нечем.
+  setStickSuspended(true)
 }
 
 /** Крутит время (директор). Большой `dt` (свёрнутая вкладка) зажат — сцена не телепортируется. */
@@ -58,6 +62,8 @@ export function advanceUndock(dt: number): void {
   if (fx.t >= UNDOCK_TOTAL) {
     fx.active = false
     fx.t = 0
+    // Сцена кончилась — возвращаем мышь пилоту (стик уже в нуле, рывка на выходе нет).
+    setStickSuspended(false)
   }
 }
 

@@ -1,7 +1,7 @@
 import { useFrame } from '@react-three/fiber'
 import { useMemo, useRef } from 'react'
 import { AdditiveBlending, InstancedMesh, MeshBasicMaterial, Object3D, Quaternion, Vector3 } from 'three'
-import { clamp, shipAxes, type ShipEntity } from '@elite/sim'
+import { clamp, CRUISE, shipAxes, type ShipEntity } from '@elite/sim'
 import { useSession } from '../../app/GameContext'
 import { shipHidden } from '../../app/control/jumpFx'
 import { EXHAUST, GIANT_RENDER_CAP } from '../config'
@@ -166,8 +166,18 @@ function Flames({ cone }: { cone: Cone }) {
 
       // Мерцание сдвинуто по фазе на корабль: иначе звено пульсирует в унисон.
       const flicker = 1 - EXHAUST.FLICKER + EXHAUST.FLICKER * Math.sin(time * EXHAUST.FLICKER_FREQ + ship.id)
+      // Полоса-струя растёт прогрессивно с ИСТИННЫМ множителем крейсера (не зажатым, как
+      // базовая длина): на сильном разгоне из маршевых дюз тянутся длинные следы. Всю сумму
+      // зажимаем потолком MAX_LENGTH — за границу видимости полоса не лезет.
+      const cruiseFrac = clamp((ship.controls.cruise - 1) / (CRUISE.MAX_FACTOR - 1), 0, 1)
       const length =
-        (EXHAUST.IDLE_LENGTH + throttle * EXHAUST.THROTTLE_LENGTH + surge * EXHAUST.SURGE_LENGTH) * flicker
+        Math.min(
+          EXHAUST.IDLE_LENGTH +
+            throttle * EXHAUST.THROTTLE_LENGTH +
+            surge * EXHAUST.SURGE_LENGTH +
+            cruiseFrac * EXHAUST.CRUISE_STREAK,
+          EXHAUST.MAX_LENGTH,
+        ) * flicker
 
       // Масштаб факела зажат тем же потолком, что меш корабля и камера (GIANT_RENDER_CAP):
       // без этого выше потолка меш замирает, а факел растёт дальше — и сопла «отрываются»
