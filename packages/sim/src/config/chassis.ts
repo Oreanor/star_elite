@@ -116,7 +116,9 @@ const ATLAS_HARDPOINTS: Chassis['hardpoints'] = [
 ]
 export const ATLAS: Chassis = {
   id: 'atlas', name: 'Атлас', class: 3, baseMass: 42, baseHull: 620, cargoCapacity: 220, auxCapacity: 160,
-  radius: 20, inertiaFactor: 2.4, assistLateralDamp: 0.7, assistSpeedDamp: 0.35,
+  // Габарит ковчега, м. Ходит В ПАРЕ с масштабом его меша (`GLB_HULLS` в `ships.ts`, сейчас 120):
+  // этим радиусом ловят попадания, и разъедься они — лучи пойдут сквозь видимый борт, не задев.
+  radius: 100, inertiaFactor: 2.4, assistLateralDamp: 0.7, assistSpeedDamp: 0.35,
   hardpoints: ATLAS_HARDPOINTS,
   slots: [
     { kind: 'engine', maxClass: 3 },

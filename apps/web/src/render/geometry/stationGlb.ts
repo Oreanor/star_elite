@@ -64,15 +64,30 @@ function prepareStation(scene: Object3D): LoadedStation | null {
   return { geometry: g, material }
 }
 
-// Грузим все облики при импорте модуля. Пока не доехал — вызывающий падает на заглушку.
-// В памяти оттого живут ВСЕ пять, хотя в системе причал всегда один (бюджет видеопамяти и
-// почему карты ужаты до 1024² — в шапке `GLB_HULLS` в `ships.ts`).
+/**
+ * Грузим ПО ТРЕБОВАНИЮ — тот облик, что спросили, и только его.
+ *
+ * Прежде тянули все пять при импорте модуля, хотя причал в системе всегда ОДИН: четыре модели
+ * жили в памяти просто так. При картах 2048² это по 90 МБ на облик — 360 МБ за то, чего в кадре
+ * нет и не будет. Ленивость и есть тот запас, на который станциям вернули 2048: разглядывают их
+ * в упор, и разрешение им нужнее, чем истребителю.
+ *
+ * Прыгнул в систему с другим причалом — модель приедет тогда же. Ждать никому не приходится:
+ * пока её нет, `Bodies.tsx` держит процедурную заглушку и подменяет её по идентичности, как и
+ * раньше при первой загрузке.
+ */
 const cache = new Map<number, LoadedStation>()
-for (let i = 0; i < STATION_URLS.length; i++) {
-  const url = STATION_URLS[i]!
+const loading = new Set<number>()
+
+function requestStation(index: number): void {
+  if (cache.has(index) || loading.has(index)) return
+  const url = STATION_URLS[index]
+  if (!url) return
+  loading.add(index)
   new GLTFLoader().load(url, (gltf) => {
     const loaded = prepareStation(gltf.scene)
-    if (loaded) cache.set(i, loaded)
+    if (loaded) cache.set(index, loaded)
+    loading.delete(index)
   })
 }
 
@@ -94,12 +109,25 @@ export function crossGlbGeometry(): BufferGeometry | null {
   return crossCache?.geometry ?? null
 }
 
-/** Геометрия облика станции по индексу (по модулю числа обликов). null — ещё грузится. */
+const wrap = (index: number): number =>
+  ((index % STATION_MODEL_COUNT) + STATION_MODEL_COUNT) % STATION_MODEL_COUNT
+
+/**
+ * Геометрия облика станции по индексу (по модулю числа обликов). null — ещё грузится.
+ *
+ * СПРОСИТЬ — ЗНАЧИТ ЗАКАЗАТЬ: первый вопрос про облик и запускает его загрузку. Зовут это
+ * из кадра, поэтому повторный заказ отсекается (`loading`), а не шлёт запрос по 60 раз в
+ * секунду.
+ */
 export function stationGlbGeometry(index: number): BufferGeometry | null {
-  return cache.get(((index % STATION_MODEL_COUNT) + STATION_MODEL_COUNT) % STATION_MODEL_COUNT)?.geometry ?? null
+  const i = wrap(index)
+  requestStation(i)
+  return cache.get(i)?.geometry ?? null
 }
 
-/** Материал облика станции по индексу. null — ещё грузится. */
+/** Материал облика станции по индексу. null — ещё грузится (заказ уже сделан). */
 export function stationGlbMaterial(index: number): Material | null {
-  return cache.get(((index % STATION_MODEL_COUNT) + STATION_MODEL_COUNT) % STATION_MODEL_COUNT)?.material ?? null
+  const i = wrap(index)
+  requestStation(i)
+  return cache.get(i)?.material ?? null
 }
