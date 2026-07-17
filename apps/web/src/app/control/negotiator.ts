@@ -1,4 +1,4 @@
-import { extractModelJson, parseModelReply, type Persona, type Topic } from '@elite/sim'
+import { extractModelJson, parseModelReply, type DialogueRole, type Persona, type Topic } from '@elite/sim'
 import type { ChatTurn, ContextDigest, NegotiationContext, NegotiatorReply } from '../../ui/dialogue/facts'
 import { currentLang } from '../../ui/i18n/i18n'
 import { negotiatorLocale } from './negotiatorLocale'
@@ -177,14 +177,20 @@ async function callModel(ref: ModelRef, messages: OutboundMessages): Promise<str
 const RETRY_BACKOFF_MS = 700
 const delay = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms))
 
-function raceAll(refs: ModelRef[], messages: OutboundMessages, allowed: Topic[]): Promise<NegotiatorReply | null> {
+function raceAll(
+  refs: ModelRef[],
+  messages: OutboundMessages,
+  allowed: Topic[],
+  role: DialogueRole,
+  escortFee: number | null,
+): Promise<NegotiatorReply | null> {
   return new Promise((resolve) => {
     let pending = refs.length
     let done = false
     for (const ref of refs) {
       void callModel(ref, messages).then((raw) => {
         if (done) return
-        const reply = raw ? toReply(parseModelReply(extractModelJson(raw), allowed)) : null
+        const reply = raw ? toReply(parseModelReply(extractModelJson(raw), allowed, role, escortFee)) : null
         if (reply) {
           done = true
           resolve(reply)
@@ -206,9 +212,12 @@ export async function negotiate(
   const { messages, chars } = buildMessages(ctx, history, userText)
   if (chars >= PROMPT_HARD_CHARS) return channelOverloadGoodbye(ctx)
 
+  // Роль решает НАБОР экшнов и промпт: бог правит вселенную, смертный — торгуется и воюет.
+  const role: DialogueRole = ctx.divine ? 'god' : 'bot'
+
   for (let attempt = 0; attempt < 2; attempt++) {
     for (const tier of TIERS) {
-      const reply = await raceAll(tier, messages, ctx.allowedIntents)
+      const reply = await raceAll(tier, messages, ctx.allowedIntents, role, ctx.economy.escortFee ?? null)
       if (reply) {
         if (reply.hangup && chars >= PROMPT_SOFT_CHARS) return { ...reply, source: 'overload' }
         return reply

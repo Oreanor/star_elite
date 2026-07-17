@@ -19,8 +19,6 @@ import { t, useLang } from '../i18n'
 /** Сколько всего лиц на листе вида: сетка 6×6 = 36. */
 const FACES = PORTRAIT_GRID * PORTRAIT_GRID
 
-const OTHER_PROFESSIONS = PROFESSIONS.filter((p) => p !== 'traveler')
-
 /** Вложенное поле ввода — не кнопка: тёмная «канавка» внутри стекла. */
 const INPUT_FIELD = {
   borderColor: 'rgba(124,196,255,0.22)',
@@ -29,19 +27,28 @@ const INPUT_FIELD = {
   boxShadow: 'inset 0 2px 10px rgba(0,0,0,0.42)',
 } as const
 
+/**
+ * Селект той же «канавки», но со СВОИМ шевроном: нативную стрелку убираем (`appearance:none`)
+ * и рисуем свою фоновым SVG. Нативная жмётся в самый край — своя отодвинута от него на 0.9rem.
+ * Цвет шеврона — акцент (#7fd6ff), совпадает с текстом поля.
+ */
+const SELECT_FIELD = {
+  borderColor: 'rgba(124,196,255,0.22)',
+  backgroundColor: 'rgba(0,6,14,0.58)',
+  color: ACCENT,
+  boxShadow: 'inset 0 2px 10px rgba(0,0,0,0.42)',
+  appearance: 'none',
+  WebkitAppearance: 'none',
+  MozAppearance: 'none',
+  backgroundImage:
+    "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8' fill='none'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%237fd6ff' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E\")",
+  backgroundRepeat: 'no-repeat',
+  backgroundPosition: 'right 0.9rem center',
+} as const
+
 function randomPilotName(species: string): string {
   const rng = makeRng((Date.now() ^ Math.floor(Math.random() * 1e9)) >>> 0)
   return makePilotName(rng, species)
-}
-
-/** Сопоставить ввод с известной профессией (RU/EN), иначе null. */
-function professionFromInput(text: string): Profession | null {
-  const q = text.trim().toLowerCase()
-  if (!q) return null
-  for (const p of PROFESSIONS) {
-    if (professionName(p).toLowerCase() === q) return p
-  }
-  return null
 }
 
 export function CharacterCreation({
@@ -51,12 +58,11 @@ export function CharacterCreation({
   world: World
   onSubmit: (profile: PilotProfile) => void
 }) {
-  const lang = useLang()
+  useLang() // подписка на язык: имена профессий в селекте меняются при переключении
   const [species, setSpecies] = useState<string>(PLAYABLE_SPECIES[0]!)
   const [face, setFace] = useState(0)
   const [name, setName] = useState(() => randomPilotName(PLAYABLE_SPECIES[0]!))
   const [profession, setProfession] = useState<Profession>('traveler')
-  const [professionInput, setProfessionInput] = useState(() => professionName('traveler'))
 
   const [reaction, setReaction] = useState<Emotion>('neutral')
   useEffect(() => {
@@ -70,16 +76,6 @@ export function CharacterCreation({
     setName(randomPilotName(species))
   }, [species])
 
-  // Подпись «Путешественник» в поле — при смене языка обновляем, если там была профессия словом.
-  useEffect(() => {
-    setProfessionInput((prev) => {
-      const matched = professionFromInput(prev)
-      if (matched) return professionName(matched)
-      if (profession === 'traveler' && prev.trim() !== '') return professionName('traveler')
-      return prev
-    })
-  }, [lang, profession])
-
   const profile: PilotProfile = {
     name: name.trim(),
     persona: { ...DEFAULT_PERSONA, species, portrait: face, profession },
@@ -91,12 +87,6 @@ export function CharacterCreation({
     setName(randomPilotName(species))
   }
 
-  const pickProfession = (p: Profession) => {
-    setProfession(p)
-    setProfessionInput('')
-  }
-
-  const professionTyped = professionInput.trim().length > 0
 
   return (
     <div
@@ -152,29 +142,19 @@ export function CharacterCreation({
             <span className="text-xs tracking-[0.3em]" style={{ color: DIM }}>
               {t('create.profession')}
             </span>
-            <input
-              value={professionInput}
-              onChange={(e) => {
-                const text = e.target.value
-                setProfessionInput(text)
-                const matched = professionFromInput(text)
-                if (matched) setProfession(matched)
-              }}
-              onFocus={(e) => e.currentTarget.select()}
+            {/* Профессия — один селект из пяти (включая Путешественника). */}
+            <select
+              value={profession}
+              onChange={(e) => setProfession(e.target.value as Profession)}
               className="w-full max-w-md border px-3 py-2.5 text-center text-sm tracking-widest outline-none transition-colors focus:border-[#7fd6ff]"
-              style={INPUT_FIELD}
-            />
-            <div className="flex flex-nowrap justify-center gap-2">
-              {OTHER_PROFESSIONS.map((p) => (
-                <Choice
-                  key={p}
-                  active={!professionTyped && profession === p}
-                  onClick={() => pickProfession(p)}
-                >
+              style={SELECT_FIELD}
+            >
+              {PROFESSIONS.map((p) => (
+                <option key={p} value={p} style={{ background: '#04101d', color: ACCENT }}>
                   {professionName(p)}
-                </Choice>
+                </option>
               ))}
-            </div>
+            </select>
           </div>
 
           <div className="flex justify-center">

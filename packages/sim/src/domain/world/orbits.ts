@@ -169,15 +169,32 @@ export function stepOrbits(world: World, time = orbitTime(world)): void {
   if (station) {
     _stationShift.copy(station.pos).sub(_stationBefore)
     if (_stationShift.lengthSq() < 1e-12) return
+    /**
+     * Список ручной — и это ВТОРАЯ такая ловушка после `maybeShiftOrigin`. Забудешь сюда новый
+     * список — его объекты останутся в старых координатах, пока причал уходит по орбите вокруг
+     * звезды. Время в игре сжато, поэтому «отстал» означает не метры, а АСТРОНОМИЧЕСКУЮ ЕДИНИЦУ:
+     * ровно так статуи, поставленные в двадцати километрах от причала, оказывались в 500
+     * световых секундах. Всё, что живёт в окрестности станции, обязано ехать вместе с ней.
+     */
     for (const ship of world.ships) ship.state.pos.add(_stationShift)
     for (const asteroid of world.asteroids) asteroid.pos.add(_stationShift)
     for (const pod of world.pods) pod.pos.add(_stationShift)
     for (const missile of world.missiles) missile.pos.add(_stationShift)
+    for (const bolt of world.bolts) bolt.pos.add(_stationShift)
     for (const titan of world.titans) titan.pos.add(_stationShift)
+    // Статуи стоят У ПРИЧАЛА — без этой строки они и отставали на пол-системы.
+    for (const monolith of world.monoliths) monolith.pos.add(_stationShift)
+    for (const platform of world.platforms) platform.pos.add(_stationShift)
     for (const tracer of world.tracers) {
       tracer.from.add(_stationShift)
       tracer.to.add(_stationShift)
     }
     for (const explosion of world.explosions) explosion.pos.add(_stationShift)
+    for (const warp of world.warps) warp.pos.add(_stationShift)
+    for (const portal of world.warpPortals) portal.pos.add(_stationShift)
+    for (const flash of world.shieldFlashes) {
+      flash.pos.add(_stationShift)
+      flash.center.add(_stationShift)
+    }
   }
 }

@@ -21,7 +21,9 @@ import type {
 } from './entities'
 import { createIdSource, type IdSource } from './ids'
 import { DEFAULT_PERSONA, makePersona, type PilotProfile } from './persona'
+import { SLOVO_KIND, SLOVO_NAME, SLOVO_PERSONA } from './slovo'
 import { makePilotName } from './names'
+import { placeMonoliths } from './monoliths'
 import { maybeShiftOrigin } from './origin'
 import {
   keplerRate,
@@ -33,6 +35,7 @@ import {
 } from './orbits'
 import type { SystemDef, StarCompanionDef, BlackHoleCompanionDef } from './system'
 import { STARTER_SYSTEM } from './system'
+import { emptyDelta } from '../galaxy/delta'
 import { stationSeat } from '../galaxy/arrival'
 
 /**
@@ -62,6 +65,7 @@ export function makeShip(
   const guns: GunState[] = spec.mounts.map((mount) => ({
     cooldown: 0,
     heat: 0,
+    overheatUntil: 0,
     // Боезапас есть у всего, что СХОДИТ с подвески: и у ракеты, и у контейнера
     // БПЛА. Спрашивать «ракета ли это» значило бы оставить контейнер пустым.
     ammo: hasAmmo(mount.weapon) ? mount.weapon.ammo : 0,
@@ -118,6 +122,61 @@ export function makeShip(
   }
 }
 
+const _slovoQuat = /* @__PURE__ */ new Quaternion()
+
+/**
+ * Посадить бога Слово НА КАЖДУЮ станцию системы — он вездесущ.
+ *
+ * Раньше он сидел только на «кресте» (Люцифер). Теперь он есть у любого причала: с ним можно
+ * поговорить где угодно, и это не размножение бога, а одно существо во многих местах — все
+ * экземпляры цепляются к ОДНОЙ записи знакомства, то есть журнал и отношение у него общие.
+ *
+ * Борт КИНЕМАТИЧЕСКИЙ: не летает и не считается физикой/рендером/столкновениями — сидит в
+ * станции, всегда в списке пристыкованных. Неуязвим (`clearance` + kinematic), без ИИ.
+ * Разговор открывают из списка пристыкованных/знакомых — как с любым бортом.
+ *
+ * Идемпотентно ПО СТАНЦИИ: повторный вызов не плодит двойников у того же причала.
+ */
+export function spawnSlovo(world: World): void {
+  const stations = world.bodies.filter((b) => b.kind === 'station')
+  if (stations.length === 0) return
+
+  // Уже знакомы? Все экземпляры цепляем к СУЩЕСТВУЮЩЕЙ записи — не плодим двойника и не даём
+  // `spawnResidentContacts` воскресить его через несуществующий ENCOUNTERS['god'].
+  const known = world.acquaintances.find((a) => a.kindId === SLOVO_KIND)
+
+  for (const station of stations) {
+    // Бог у ЭТОГО причала уже сидит — второго не заводим.
+    if (world.ships.some((s) => s.divine && s.state.pos.distanceToSquared(station.pos) < 1)) continue
+
+    const ship = makeShip(world.ids, 'neutral', SLOVO_NAME, playerStartLoadout(), station.pos.clone(), _slovoQuat.identity())
+    ship.pilotName = SLOVO_NAME
+    ship.persona = { ...SLOVO_PERSONA }
+    ship.originKind = SLOVO_KIND
+    ship.divine = true
+    ship.clearance = true
+    ship.kinematic = true
+    ship.ai = null
+    if (known) ship.acquaintanceId = known.id
+    world.ships.push(ship)
+  }
+
+  /**
+   * Перецепляем к записи ВСЕХ богов, а не только что рождённых.
+   *
+   * Порядок входа в игру таков: `enterSystem` (тут садится бог) → и только ПОТОМ накладывается
+   * сейв с журналом знакомств. В момент посадки список знакомых ещё пуст, `known` не найден, и
+   * борт остаётся без `acquaintanceId` — а значит без памяти и без отношения: разозлил бога,
+   * перезашёл, а он снова нейтрален. Гнев жил в записи, просто бог к ней не был привязан.
+   * Поэтому вызов ПОВТОРЯЮТ после загрузки сейва, и здесь связь чинится задним числом.
+   */
+  if (known) {
+    for (const s of world.ships) if (s.divine) s.acquaintanceId = known.id
+    // Бог сейчас в этой системе — отмечаем в записи, чтобы карты и вкладка ЛЮДИ знали, где он.
+    known.systemIndex = world.systemIndex
+  }
+}
+
 /** Пересобрать характеристики после смены модулей или груза. Вызывать на СОБЫТИЕ. */
 export function refreshSpec(e: ShipEntity): void {
   const spec = deriveShipSpec(e.loadout, cargoMass(e.hold), e.hullUp)
@@ -138,6 +197,7 @@ export function refreshSpec(e: ShipEntity): void {
     return {
       cooldown: 0,
       heat: prev?.heat ?? 0,
+      overheatUntil: prev?.overheatUntil ?? 0,
       ammo: hasAmmo(mount.weapon) ? (prev?.ammo ?? mount.weapon.ammo) : 0,
     }
   })
@@ -292,7 +352,6 @@ function makeBodies(ids: IdSource, def: SystemDef): BodyEntity[] {
     pos: new Vector3(...def.star.pos),
     radius: def.star.radius,
     color: def.star.color,
-    calmCorona: def.star.calm,
     surface: null,
     population: 0,
     settlement: null,
@@ -397,6 +456,7 @@ function makeBodies(ids: IdSource, def: SystemDef): BodyEntity[] {
       spinAxis: new Vector3(0, 0, 1),
       orbit: stationOrbit,
       stationStyle: def.station.style,
+      stationModel: def.station.model,
     }
     bodies.push(station)
   }
@@ -414,7 +474,8 @@ function makeBodies(ids: IdSource, def: SystemDef): BodyEntity[] {
       surface: null,
       population: 0,
       settlement: null,
-      spin: 0.08,
+      // Крест НЕ вращается — это монумент-храм, а не крутящийся тор. Прочие extra — как обычно.
+      spin: extra.style === 'cross' ? 0 : 0.08,
       spinAxis: new Vector3(0, 0, 1),
       orbit: null,
       stationStyle: extra.style,
@@ -527,22 +588,24 @@ const _out = /* @__PURE__ */ new Vector3()
  * отшвырнёт на тысячу километров от планеты. Поэтому переставляем в самом конце,
  * когда расталкивание уже отработало, и заново центрируем плавающее начало координат.
  */
-export function startAtStation(world: World, gap = 2_500): void {
-  const station = world.bodies.find((b) => b.kind === 'station')
-  if (!station) return
+export function startAtStation(world: World, gap = 2_500, station?: BodyEntity): void {
+  // По умолчанию — первый причал системы; можно указать конкретный (напр., старт у нужной
+  // из нескольких станций). Игрока кладём вплотную к нему, поэтому он же станет ближайшим.
+  const target = station ?? world.bodies.find((b) => b.kind === 'station')
+  if (!target) return
   const star = world.bodies.find((b) => b.kind === 'star')
 
   // Наружу от звезды, на дальнюю от неё сторону причала: планета уходит за спину
   // станции и не встаёт чёрным диском поперёк кадра — тот же резон, что у standoff.
-  _out.copy(station.pos).sub(star ? star.pos : _out.set(0, 0, 0))
+  _out.copy(target.pos).sub(star ? star.pos : _out.set(0, 0, 0))
   if (_out.lengthSq() < 1e-6) _out.set(1, 0, 0)
   _out.normalize()
 
   const player = world.player
-  player.state.pos.copy(station.pos).addScaledVector(_out, station.radius + gap)
+  player.state.pos.copy(target.pos).addScaledVector(_out, target.radius + gap)
   player.state.vel.set(0, 0, 0)
   player.state.angVel.set(0, 0, 0)
-  aimAt(player, station.pos)
+  aimAt(player, target.pos)
   player.controls.throttle = WORLD.START_THROTTLE
   // Игрок переехал на тысячу километров — начало координат следует за ним.
   maybeShiftOrigin(world)
@@ -559,6 +622,7 @@ export function enterSystem(
 
   world.rng = rng
   world.systemName = def.name
+  world.desolate = def.desolate ?? false
   world.dyson = def.dyson
   world.systemIndex = systemIndex
   world.epoch += 1
@@ -568,6 +632,8 @@ export function enterSystem(
   // Спутники, планеты и станция — на орбитах к `calendarTime` (общие часы сервера).
   stepOrbits(world)
   world.asteroids = makeAsteroids(rng, world.ids, def)
+  // Бог на Кресте: до чистки списков, чтобы `spawnResidentContacts` уже застал его живым бортом.
+  spawnSlovo(world)
 
   world.pods = []
   world.missiles = []
@@ -578,6 +644,15 @@ export function enterSystem(
   world.shockwaves = []
   world.warps = []
   world.warpPortals = []
+  /**
+   * Статуи ставим ПОСЛЕ чистки списков, а не до неё: сам `placeMonoliths` начинает с
+   * `monoliths = []` и заполняет заново. Стоя выше, он честно расставлял их — и тут же терял,
+   * потому что общая чистка обнуляла список в том же кадре. Статуй не было вовсе.
+   *
+   * Тела к этому мигу уже на своих орбитах (`stepOrbits` выше), поэтому веер считается от
+   * НАСТОЯЩЕГО места станции, а не от точки, где её нарисовала фабрика.
+   */
+  placeMonoliths(world)
   world.lockedTargetId = null
   world.navTargetId = world.bodies.find((b) => b.kind === 'station')?.id ?? null
   // Прибыли — выбранная для прыжка система достигнута, метку и точку выхода снимаем.
@@ -660,11 +735,13 @@ export function createWorld(def: SystemDef = STARTER_SYSTEM, profile?: PilotProf
     missiles: [],
     bolts: [],
     titans: [],
+    monoliths: [],
     platforms: [],
     bodies,
     tracers: [],
     remoteHits: [],
     shieldFlashes: [],
+    muzzleFlashes: [],
     explosions: [],
     shockwaves: [],
     warps: [],
@@ -684,8 +761,11 @@ export function createWorld(def: SystemDef = STARTER_SYSTEM, profile?: PilotProf
     rng,
     ids,
     systemName: def.name,
+    desolate: def.desolate ?? false,
     dyson: def.dyson,
     galaxySeed: GALAXY.SEED,
+    galaxyDelta: emptyDelta(),
+    galaxyEpoch: 0,
     systemIndex: WORLD.HOME_INDEX,
     epoch: 0,
     acquaintances: [],
@@ -706,5 +786,8 @@ export function createWorld(def: SystemDef = STARTER_SYSTEM, profile?: PilotProf
   maybeShiftOrigin(world)
   // Спутники родились в центрах своих планет: место им даёт время, а не фабрика.
   stepOrbits(world)
+  // Если старт в системе с Крестом (Люцифер) — бог уже сидит на нём с первого кадра.
+  spawnSlovo(world)
+  placeMonoliths(world)
   return world
 }

@@ -329,14 +329,15 @@ function box(cx: number, cy: number, cz: number, hx: number, hy: number, hz: num
 }
 
 /**
- * Цвет луча: гаснет к концу (t→1) и к нулю по яркости `mul`; `white` уводит от золота к белу.
+ * Цвет луча: гаснет к концу (t→1) и к нулю по яркости `mul`; `white` уводит к белу.
+ * ГОЛУБОЙ: синий во всю, зелёный средний, красный низкий — холодное плотное свечение.
  * Аддитив — чёрный ничего не прибавляет, поэтому таящий к 0 конец растворяется в пустоте.
  */
 function beamHex(t: number, mul: number, white: number): number {
   const f = Math.max(0, 1 - t) * mul
-  const r = Math.min(255, Math.round(0xff * f))
-  const g = Math.min(255, Math.round((0xf0 + (0xff - 0xf0) * white) * f))
-  const b = Math.min(255, Math.round((0xc8 + (0xff - 0xc8) * white) * f))
+  const r = Math.min(255, Math.round((0x28 + (0xff - 0x28) * white) * f))
+  const g = Math.min(255, Math.round((0xa8 + (0xff - 0xa8) * white) * f))
+  const b = Math.min(255, Math.round(0xff * f))
   return (r << 16) | (g << 8) | b
 }
 
@@ -380,28 +381,29 @@ function crossRay(tip: Vec3, dir: Vec3, len: number, hw: number): Triangle[] {
   }
   const a = nrm(cross3(d, ref))
   const b = nrm(cross3(d, a))
+  // ПЛОТНО, не рассеянно: узкий ореол и яркие тело/керн — тугой голубой пучок, не облако.
   return [
-    ...shaftLayer(tip, a, b, d, len, hw, 0.3, 0.0), // ореол: широкий, тусклое золото
-    ...shaftLayer(tip, a, b, d, len, hw * 0.42, 0.55, 0.2), // тело: уже, ярче
-    ...shaftLayer(tip, a, b, d, len, hw * 0.14, 1.0, 0.8), // керн: тонкий, добела горячий
+    ...shaftLayer(tip, a, b, d, len, hw * 0.6, 0.5, 0.0), // ореол: узкий, поярче
+    ...shaftLayer(tip, a, b, d, len, hw * 0.3, 0.85, 0.25), // тело: плотное, насыщенное
+    ...shaftLayer(tip, a, b, d, len, hw * 0.11, 1.0, 0.85), // керн: тонкий, добела-голубой
   ]
 }
 
 let raysCache: BufferGeometry | null = null
 
-/** Лучи из шести концов креста наружу. Аддитивный материал (crossRayMaterial) их зажигает. */
+/** Лучи из ШЕСТИ концов креста наружу, симметрично по осям. Аддитивный crossRayMaterial их зажигает. */
 export function crossRaysGeometry(): BufferGeometry {
   if (!raysCache) {
-    const z = 0.28 // высота перекладины (см. crossStationGeometry)
-    const L = 1.8
-    const HW = 0.05
+    const end = 0.9 // конец балки (= L в crossStationGeometry): луч стартует ровно из иллюминатора
+    const L = 3.4 // длина луча — уходит ДАЛЕКО от станции
+    const HW = 0.1 // потолще — жирный пучок из каждого конца
     const tris: Triangle[] = [
-      ...crossRay([0, 0, 0.7], [0, 0, 1], L, HW), // шпиль вверх
-      ...crossRay([0, 0, -1.0], [0, 0, -1], L, HW), // трунк вниз
-      ...crossRay([0.72, 0, z], [1, 0, 0], L, HW), // +X
-      ...crossRay([-0.72, 0, z], [-1, 0, 0], L, HW), // −X
-      ...crossRay([0, 0.5, z], [0, 1, 0], L * 0.8, HW), // +Y
-      ...crossRay([0, -0.5, z], [0, -1, 0], L * 0.8, HW), // −Y
+      ...crossRay([0, 0, end], [0, 0, 1], L, HW),
+      ...crossRay([0, 0, -end], [0, 0, -1], L, HW),
+      ...crossRay([end, 0, 0], [1, 0, 0], L, HW),
+      ...crossRay([-end, 0, 0], [-1, 0, 0], L, HW),
+      ...crossRay([0, end, 0], [0, 1, 0], L, HW),
+      ...crossRay([0, -end, 0], [0, -1, 0], L, HW),
     ]
     raysCache = buildGeometry(tris)
   }
@@ -411,27 +413,30 @@ export function crossRaysGeometry(): BufferGeometry {
 let crossCache: BufferGeometry | null = null
 
 /**
- * Станция-крест (по обложке «Samael — Eternal»): вертикальный шпиль и горизонтальная
- * перекладина крестом, плюс короткая балка по третьей оси — чтобы крест был ОБЪЁМНЫМ,
- * а не плоским. Пересечение чуть выше центра: снизу трунк длиннее, сверху — шпиль.
+ * Станция-крест «Вечность»: ТРЁХМЕРНЫЙ крест — три ОДИНАКОВЫЕ балки вдоль X, Y и Z,
+ * пересечённые в центре под прямым углом. Не плоский четырёхлопастный крест, а объёмная
+ * звезда-ось: шесть равных концов, симметрия по всем трём осям. Узел на пересечении —
+ * утолщённый куб, на каждом конце — светящийся иллюминатор.
  */
 export function crossStationGeometry(): BufferGeometry {
   if (!crossCache) {
-    const cross = 0.28 // высота пересечения по Z (чуть выше центра)
+    const L = 0.9 // полудлина балки от центра до конца
+    const hw = 0.08 // полутолщина балки (квадратное сечение)
+    const lit = 0.05 // полуразмер иллюминатора на конце
     const tris: Triangle[] = [
-      // Вертикальный шпиль: от низа (−1.0) до верха (+0.7), тонкий, чуть шире у пересечения.
-      ...box(0, 0, -0.15, 0.075, 0.075, 0.85, STATION, STATION_TRIM),
-      ...box(0, 0, 0.5, 0.05, 0.05, 0.2, STATION_TRIM, STATION), // шпиль сверху уже
-      // Утолщение-узел на пересечении.
-      ...box(0, 0, cross, 0.11, 0.11, 0.11, STATION_DARK, STATION_TRIM),
-      // Горизонтальная перекладина вдоль X.
-      ...box(0, 0, cross, 0.72, 0.07, 0.06, STATION, STATION_TRIM),
-      // Короткая перекладина вдоль Y — делает крест трёхмерным.
-      ...box(0, 0, cross, 0.07, 0.5, 0.055, STATION, STATION_TRIM),
-      // Светящиеся окна-иллюминаторы на концах перекладины и у основания шпиля.
-      ...box(0.7, 0, cross, 0.03, 0.05, 0.045, STATION_LIT, STATION_LIT),
-      ...box(-0.7, 0, cross, 0.03, 0.05, 0.045, STATION_LIT, STATION_LIT),
-      ...box(0, 0, -0.9, 0.06, 0.06, 0.04, STATION_LIT, STATION_LIT),
+      // Три взаимно перпендикулярные балки одной длины и сечения — крест по осям X/Y/Z.
+      ...box(0, 0, 0, L, hw, hw, STATION, STATION_TRIM),
+      ...box(0, 0, 0, hw, L, hw, STATION, STATION_TRIM),
+      ...box(0, 0, 0, hw, hw, L, STATION, STATION_TRIM),
+      // Центральный КУБ, в который воткнуты все три балки — заметный узел на пересечении.
+      ...box(0, 0, 0, 0.18, 0.18, 0.18, STATION_DARK, STATION_TRIM),
+      // Светящийся иллюминатор на каждом из шести концов.
+      ...box(L, 0, 0, 0.03, lit, lit, STATION_LIT, STATION_LIT),
+      ...box(-L, 0, 0, 0.03, lit, lit, STATION_LIT, STATION_LIT),
+      ...box(0, L, 0, lit, 0.03, lit, STATION_LIT, STATION_LIT),
+      ...box(0, -L, 0, lit, 0.03, lit, STATION_LIT, STATION_LIT),
+      ...box(0, 0, L, lit, lit, 0.03, STATION_LIT, STATION_LIT),
+      ...box(0, 0, -L, lit, lit, 0.03, STATION_LIT, STATION_LIT),
     ]
     crossCache = buildGeometry(tris)
   }

@@ -184,7 +184,7 @@ function stepWeapons(world: World, controllers: ControllerMap, dt: number): void
     // Кинематический борт не стреляет и не «остывает» локально: его залпы и
     // состояние приходят извне. Оружие по нему всё равно работает — он цель, не стрелок.
     if (ship.kinematic) continue
-    coolGuns(ship, dt)
+    coolGuns(ship, world.time, dt)
     regenEnergy(ship, dt)
     // Батарея доп-отсека (аукс) копится своим пулом — для бомбы, ПРО и маскировки.
     regenAux(ship, dt)
@@ -448,7 +448,8 @@ function cleanup(world: World): void {
   // а не раз в шаг физики: от герцовки он зависеть не должен.
   expireDrones(world)
 
-  world.tracers = world.tracers.filter((t) => now - t.born < GUNNERY.TRACER_LIFE)
+  world.tracers = world.tracers.filter((t) => now - t.born < t.life)
+  world.muzzleFlashes = world.muzzleFlashes.filter((f) => now - f.born < GUNNERY.MUZZLE_FLASH_LIFE)
   world.explosions = world.explosions.filter((e) => now - e.born < DEBRIS.EXPLOSION_LIFE)
   world.shockwaves = world.shockwaves.filter((w) => now - w.born < BOMB.WAVE_LIFE)
   world.warps = world.warps.filter((w) => now - w.born < WARP.FLASH_LIFE)

@@ -1,10 +1,13 @@
 import { Vector3 } from 'three'
+import { GUNNERY, TRACER_LIFE_SCALE } from '../../config/weapons'
 import type { World } from '../world/entities'
 
 /** Чисто визуальные эффекты. Симуляция от них не зависит — их можно не слать по сети. */
 
 export function spawnTracer(world: World, from: Vector3, to: Vector3, hostile: boolean, weapon: string): void {
-  world.tracers.push({ from: from.clone(), to: to.clone(), born: world.time, hostile, weapon })
+  // Жизнь трассы = базовая × множитель ствола: тяжёлый «Столб» тянет импульс длиннее.
+  const life = GUNNERY.TRACER_LIFE * (TRACER_LIFE_SCALE[weapon] ?? 1)
+  world.tracers.push({ from: from.clone(), to: to.clone(), born: world.time, hostile, weapon, life })
 }
 
 /** Взрыв наследует скорость того, что взорвалось: осколки не висят в пустоте. */

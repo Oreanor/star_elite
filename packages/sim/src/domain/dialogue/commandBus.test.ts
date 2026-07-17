@@ -59,6 +59,35 @@ describe('шина команд боту', () => {
     expect(note).toEqual({ kind: 'note', at: world.calendarTime, text: 'торгует рудой в системе Лейв' })
   })
 
+  it('stance меняет отношение в записи знакомого, а «hostile» делает мирного врагом', () => {
+    const { world, ship } = withAcquaintance()
+    const rec = world.acquaintances.find((a) => a.id === ship.acquaintanceId)!
+    expect(rec.relationship).not.toBe('friendly')
+
+    applyCommand(world, ship, { action: 'stance', payload: { stance: 'friendly' } })
+    expect(rec.relationship).toBe('friendly')
+
+    // Озлобился: мирный борт по фракции становится враждебным (это уже дело боя, не слов).
+    applyCommand(world, ship, { action: 'stance', payload: { stance: 'hostile' } })
+    expect(rec.relationship).toBe('hostile')
+    expect(ship.faction).toBe('hostile')
+  })
+
+  it('mapEdit — только богу: смертный карту не правит, бог правит (дельта + epoch)', () => {
+    const { world, ship } = withAcquaintance()
+    // Смертный карту мироздания не трогает — молча null, дельта пуста.
+    expect(applyCommand(world, ship, { action: 'mapEdit', payload: { op: 'recolor', color: 0xff0000 } })).toBeNull()
+    expect(world.galaxyDelta.edits.length).toBe(0)
+
+    // Бог правит: правка ложится в дельту, galaxyEpoch растёт (читатели карты пересоберут).
+    ship.divine = true
+    const epochBefore = world.galaxyEpoch
+    const out = applyCommand(world, ship, { action: 'mapEdit', payload: { op: 'recolor', index: 7, color: 0x00ff00 } })
+    expect(out?.line).toBeTruthy()
+    expect(world.galaxyDelta.edits).toContainEqual({ op: 'recolor', index: 7, color: 0x00ff00 })
+    expect(world.galaxyEpoch).toBe(epochBefore + 1)
+  })
+
   it('неизвестная команда — молча null, а не падение (старый домен, новая команда по сети)', () => {
     const { world, ship } = withAcquaintance()
     expect(applyCommand(world, ship, { action: 'нет-такой', payload: {} })).toBeNull()
@@ -146,6 +175,69 @@ describe('шина команд боту', () => {
     const rec = world.acquaintances.find((a) => a.id === ship.acquaintanceId)!
     expect(rec.plan.posture).toBe('cover')
     expect(rec.plan.patronId).toBe(world.player.id)
+  })
+
+  it('demand/tip/mark ложатся в журнал знакомого с понятными пометками', () => {
+    const { world, ship } = withAcquaintance()
+    applyCommand(world, ship, { action: 'demand', payload: { text: 'сбрось груз' } })
+    applyCommand(world, ship, { action: 'tip', payload: { text: 'в Лейве дёшев металл' } })
+    applyCommand(world, ship, { action: 'mark', payload: { text: 'станция Орбис' } })
+    const rec = world.acquaintances.find((a) => a.id === ship.acquaintanceId)!
+    const texts = rec.history.filter((e) => e.kind === 'note').map((e) => (e as { text: string }).text)
+    expect(texts).toContain('ТРЕБОВАНИЕ: сбрось груз')
+    expect(texts).toContain('СОВЕТ: в Лейве дёшев металл')
+    expect(texts).toContain('МЕТКА: станция Орбис')
+  })
+
+  it('flee уводит бота в отрыв, гасит огонь и метит бегство в журнал', () => {
+    const { world, ship } = withAcquaintance()
+    if (!ship.ai) throw new Error('no ai')
+    ship.ai.mode = 'attack'
+    ship.ai.targetId = world.player.id
+    ship.ai.wantsFire = true
+
+    applyCommand(world, ship, { action: 'flee', payload: {} })
+
+    expect(ship.ai.mode).toBe('evade')
+    expect(ship.ai.targetId).toBeNull()
+    expect(ship.ai.wantsFire).toBe(false)
+    // С приводом — заряжает прыжок-побег; без него просто уходит (тогда таймер не тронут).
+    if (ship.spec.jumpRange > 0) expect(ship.ai.warpTimer).toBeGreaterThanOrEqual(0)
+    const rec = world.acquaintances.find((a) => a.id === ship.acquaintanceId)!
+    expect(rec.history.some((e) => e.kind === 'note' && (e as { text: string }).text === 'бежал из боя')).toBe(true)
+  })
+
+  it('surrender НЕВРЕДИМОГО врага — молча null: без эксплойта «сдача даром» (сначала сбей щит)', () => {
+    const { world, ship } = withAcquaintance()
+    ship.faction = 'hostile' // враг, но полного здоровья — тема surrender заблокирована
+    expect(applyCommand(world, ship, { action: 'surrender', payload: {} })).toBeNull()
+    expect(ship.faction).toBe('hostile') // остался врагом, даром не уболтали
+  })
+
+  it('surrender проигрывающего врага исполняется: он становится мирным', () => {
+    const { world, ship } = withAcquaintance()
+    ship.faction = 'hostile'
+    ship.hull = ship.spec.hull.hull * 0.5 // щит сбит, корпус побит — сдача разблокирована
+
+    const out = applyCommand(world, ship, { action: 'surrender', payload: {} })
+
+    expect(out?.line).toContain('сдал')
+    expect(ship.faction).toBe('neutral')
+  })
+
+  it('meet заводит знакомство с ещё безымянным бортом и даёт строку о нём', () => {
+    const world = createWorld({
+      ...STARTER_SYSTEM,
+      belt: null,
+      patrols: [{ count: 1, at: [0, 0, -200], spread: 0, faction: 'neutral', name: 'Кто-то' }],
+    })
+    const ship = world.ships[0]!
+    expect(ship.acquaintanceId).toBeNull()
+
+    const out = applyCommand(world, ship, { action: 'meet', payload: {} })
+
+    expect(ship.acquaintanceId).not.toBeNull()
+    expect(out?.line).toContain('Знакомство')
   })
 
   it('реестр открыт: новую команду добавляют регистрацией, не правкой шины', () => {

@@ -8,6 +8,10 @@ import {
   createWorld,
   enterSystem,
   findModule,
+  fitFromHold,
+  placeShowcaseFleet,
+  spawnResidentContacts,
+  spawnSlovo,
   startDocked,
   jump,
   systemDefFor,
@@ -119,27 +123,71 @@ function createSession(initialSave?: PlayerSave | null): Session {
   // что дали снаружи: онлайн уже загрузил серверный сейв (null = новичок без прогресса).
   const save = initialSave !== undefined ? initialSave : loadSave()
   const world = createWorld()
-  // Повторный вход — в СВОЮ сохранённую систему своим сидом. Новичок: в сети — ОБЩАЯ
-  // точка сбора (чтоб встречаться), офлайн — случайная. Систему строим по (сид, индекс).
-  const index = save ? save.systemIndex : online ? sharedStartIndex() : randomStartIndex()
+  // DEV/ВРЕМЕННО: новичок стартует у ЛЮЦИФЕРА — на Кресте «Вечность», где сидит Слово (показать
+  // локацию). Люцифер дописан в хвост генератора, поэтому его индекс = GALAXY.COUNT. Вернувшийся
+  // по сейву входит как обычно, в свою систему. Выключается снятием флага.
+  const LUCIFER_START = false
+  // Повторный вход — в СВОЮ сохранённую систему своим сидом. Новичок: у Люцифера (пока),
+  // иначе в сети — ОБЩАЯ точка сбора, офлайн — случайная. Систему строим по (сид, индекс).
+  const index = save
+    ? save.systemIndex
+    : LUCIFER_START
+      ? GALAXY.COUNT
+      : online
+        ? sharedStartIndex()
+        : randomStartIndex()
   const seed = save ? save.galaxySeed : world.galaxySeed
   enterSystem(world, systemDefFor(index, seed), index)
   // Пилота накладываем ПОСЛЕ enterSystem: тот пересобирает окружение, но борт игрока
   // не трогает — значит восстановленные корабль/кошелёк/личность не затрутся.
   if (save) applyPlayerSave(world, save)
-  // DEV: держим миелофон под рукой — и у новичка, и у вернувшегося (по сейву он мог
-  // потеряться). Кладём в трюм, только если его нет НИ в трюме, ни в слоте: без дублей.
-  // Временно, для отладки фичи; в релизе артефакт добывается, а не выдаётся на старте.
-  const hasMielo =
-    world.player.hold.items.some((it) => it.kind === 'module' && it.module.kind === 'mielophone') ||
-    world.player.loadout.internals.some((m) => m.kind === 'mielophone')
-  if (!hasMielo) {
-    const mielophone = findModule('mielophone_1')
-    if (mielophone) addItem(world.player.hold, { kind: 'module', module: mielophone })
+  // DEV: миелофон стоит СРАЗУ — впаян в аукс-слот, а не валяется в трюме. И у новичка, и
+  // у вернувшегося (по сейву мог потеряться). Аукс-слот один: маскировка при этом вытесняется
+  // в трюм (игрок вернёт её на верфи). Временно, для отладки; в релизе — артефакт добывается.
+  const hasMieloInstalled = world.player.loadout.internals.some((m) => m.kind === 'mielophone')
+  if (!hasMieloInstalled) {
+    let idx = world.player.hold.items.findIndex((it) => it.kind === 'module' && it.module.kind === 'mielophone')
+    if (idx < 0) {
+      const mielophone = findModule('mielophone_1')
+      if (mielophone) {
+        addItem(world.player.hold, { kind: 'module', module: mielophone })
+        idx = world.player.hold.items.length - 1
+      }
+    }
+    if (idx >= 0) fitFromHold(world.player, idx)
   }
   // Начинаем ПРИСТЫКОВАННЫМИ у причала — и новичок, и вернувшийся: станция и точка
-  // возврата, и безопасный старт. Не в открытом космосе за тысячу километров.
-  startDocked(world)
+  // возврата, и безопасный старт. Не в открытом космосе за тысячу километров. У Люцифера
+  // (DEV) причаливаем именно к КРЕСТУ, а не к «Вееру»: среди двух станций берём крест.
+  const berth = !save && LUCIFER_START
+    ? world.bodies.find((b) => b.kind === 'station' && b.stationStyle === 'cross')
+    : undefined
+  startDocked(world, berth)
+
+  /**
+   * ЗНАКОМЫЕ живут в системе с первого кадра — как и после прыжка.
+   *
+   * Раньше их воскрешал ТОЛЬКО `jump`, а на входе в игру не звал никто: журнал знакомств
+   * приезжает из сейва (`applyPlayerSave`) уже ПОСЛЕ `enterSystem`, и жители системы не
+   * заводились вовсе. Оттого встреченный борт выглядел знакомым (тот же сид — то же имя и
+   * лицо), но памяти о тебе не имел: это был ДРУГОЙ корабль, свежий трафик без записи.
+   * Зовём после `startDocked` — игрок уже у причала, и знакомые заходят от него, а не от
+   * точки выхода из гипера. Контроллеры им раздаст сборка ниже: она идёт по `world.ships`.
+   */
+  spawnResidentContacts(world)
+
+  /**
+   * И БОГА перецепляем к его записи — по той же причине. Он садится внутри `enterSystem`, когда
+   * журнал знакомств ещё не приехал из сейва, и остаётся без `acquaintanceId`: без памяти и без
+   * отношения. Разозлил бога, перезашёл — а он снова нейтрален. Повторный вызов идемпотентен
+   * (двойников не плодит) и лишь чинит связь задним числом.
+   */
+  spawnSlovo(world)
+
+  // DEV/ВРЕМЕННО: смотровой парад у станции — пара десятков мелких бортов строем и
+  // несколько «Атласов», чтобы облететь и рассмотреть модели. Снять флаг перед релизом.
+  const SHOWCASE_FLEET = false
+  if (SHOWCASE_FLEET) placeShowcaseFleet(world)
 
   const intent = createIntent()
   const pilot = createPlayerController(intent)

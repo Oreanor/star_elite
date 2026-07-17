@@ -8,8 +8,8 @@ import { sendHit, subscribeHits } from '../../app/net/hits'
 import { clearPose, publishPose, selfPose, subscribePoses } from '../../app/net/pose'
 import { PoseInterp } from '../../app/net/remotePlayers'
 import { GIANT_RENDER_CAP } from '../config'
-import { auroraGeometry } from '../geometry/ships'
-import { hullMaterial } from '../materials/materials'
+import { chassisGeometry } from '../geometry/ships'
+import { hullMaterialFor } from '../materials/materials'
 
 /**
  * Чужие игроки в мире. Связывает два канала: МЕДЛЕННЫЙ presence (кто в моей системе,
@@ -24,6 +24,10 @@ import { hullMaterial } from '../materials/materials'
 const MAX_REMOTE = 16
 /** Свою позу шлём ~15 раз в секунду: чаще — лишний трафик, реже — рвано у соседей. */
 const PUBLISH_HZ = 15
+/** Сколько борт должен прожить в мире, чтобы весть о его уходе была не фантомом старта, мс. */
+const PRESENCE_MIN_MS = 4000
+/** Корпус чужого игрока: по сети шасси не передаётся, потому все — на стартовом корпусе. */
+const REMOTE_CHASSIS = 'aurora_one'
 
 const _dummy = new Object3D()
 const _pos = new Vector3()
@@ -35,11 +39,18 @@ export function RemotePlayers() {
   const peers = useOnlinePlayers()
   const ref = useRef<InstancedMesh>(null)
 
-  const geometry = useMemo(auroraGeometry, [])
-  const material = useMemo(hullMaterial, [])
+  // Чужой борт рисуем ДЕФОЛТНЫМ корпусом: по сети идут только позы, шасси соседа мы не знаем.
+  // Раньше тут стояла процедурная «Аврора Мк III» — корпус, снятый из игры: сосед выглядел
+  // кораблём, которого больше нет. Геометрия GLB грузится асинхронно, потому подменяем её в
+  // кадре по ИДЕНТИЧНОСТИ объекта (как у ботов), а не на маунте.
+  const geometry = useMemo(() => chassisGeometry(REMOTE_CHASSIS), [])
+  const material = useMemo(() => hullMaterialFor(REMOTE_CHASSIS), [])
   const interp = useMemo(() => new PoseInterp(), [])
   /** uid → id корабля в world.ships. Наш реестр материализованных чужих. */
   const idByUid = useRef(new Map<string, number>())
+  /** uid → когда борт заведён (performance.now). Мелькнувший на старте устаревшим снапшотом
+   *  живёт доли секунды — по этому порогу не шлём о нём весть «вышел». */
+  const spawnedAt = useRef(new Map<string, number>())
   /** Свежий список онлайна для кадрового колбэка — без устаревшего замыкания. */
   const peersRef = useRef(peers)
   peersRef.current = peers
@@ -122,11 +133,18 @@ export function RemotePlayers() {
         despawnRemotePlayer(world, id)
         registry.delete(uid)
         interp.drop(uid)
+        const born = spawnedAt.current.get(uid)
+        spawnedAt.current.delete(uid)
         // Был в мире и растворился. Если presence ещё числит его В ПОЛЁТЕ (place == null) —
         // это не штатный уход и не стыковка, а обрыв (перезагрузка/зависание): шлём весть
         // «похоже, вышел». Пристыковавшийся (place != null) гаснет тихо — он у причала.
+        //
+        // НО не о том, кто лишь МЕЛЬКНУЛ: на старте presence отдаёт последний снапшот позы
+        // давно ушедшего — борт заводится и через кадр протухает. Такой «вышел» — фантом
+        // прошлой сессии, а не сосед при тебе. Шлём весть только о прожившем в мире PRESENCE_MIN.
+        const lived = born != null && now - born >= PRESENCE_MIN_MS
         const peer = peersRef.current.find((q) => q.uid === uid)
-        if (peer && peer.place == null) world.notices.push({ kind: 'player-left', name: peer.name, at: world.time })
+        if (lived && peer && peer.place == null) world.notices.push({ kind: 'player-left', name: peer.name, at: world.time })
       }
     }
 
@@ -143,6 +161,7 @@ export function RemotePlayers() {
         quat: _spawnQuat.identity(),
       })
       registry.set(uid, ship.id)
+      spawnedAt.current.set(uid, now)
     }
 
     // 5) Интерполяция: абсолютную позу канала переводим в локальный кадр (−originOffset).
@@ -178,6 +197,12 @@ export function RemotePlayers() {
     }
     mesh.count = count
     mesh.instanceMatrix.needsUpdate = true
+
+    // GLB доехал — меняем заглушку на настоящий корпус (сверка по идентичности объекта).
+    const geom = chassisGeometry(REMOTE_CHASSIS)
+    if (mesh.geometry !== geom) mesh.geometry = geom
+    const mat = hullMaterialFor(REMOTE_CHASSIS)
+    if (mesh.material !== mat) mesh.material = mat
   })
 
   return <instancedMesh ref={ref} args={[geometry, material, MAX_REMOTE]} frustumCulled={false} />

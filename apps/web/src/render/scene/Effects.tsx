@@ -12,12 +12,13 @@ import {
   PlaneGeometry,
   Vector3,
 } from 'three'
-import { findModule } from '@elite/sim'
+import { findModule, GUNNERY } from '@elite/sim'
 import { useSession } from '../../app/GameContext'
-import { EXPLOSION, LASER, LASER_CLASS_GLOW, LASER_CLASS_WIDTH, LASER_GLOW_FALLBACK, SHIELD_FLASH, WARP_FLASH } from '../config'
+import { EXPLOSION, LASER, LASER_BEAM_SCALE, LASER_CLASS_GLOW, LASER_CLASS_WIDTH, LASER_GLOW_FALLBACK, MUZZLE, SHIELD_FLASH, WARP_FLASH } from '../config'
 import {
   explosionMaterial,
   missileMaterial,
+  muzzleFlashMaterial,
   podMaterial,
   shieldFlashMaterial,
   tracerMaterial,
@@ -39,6 +40,8 @@ const MAX_TRACERS = 192
 const MAX_EXPLOSIONS = 48
 const MAX_PODS = 48
 const MAX_MISSILES = 24
+// Дульных вспышек в кадре немного: у игрока три ствола, у ботов один-два, живут 0.05 с.
+const MAX_MUZZLE = 48
 
 /**
  * Двенадцать направлений разлёта осколков — вершины икосаэдра (золотое сечение). Фиксированный
@@ -61,6 +64,9 @@ const _nose = new Vector3()
 const _muzzle = new Vector3()
 const _warpTint = /* @__PURE__ */ new Color()
 const _shieldTint = /* @__PURE__ */ new Color()
+const _muzzleTint = /* @__PURE__ */ new Color()
+const _white = /* @__PURE__ */ new Color(0xffffff)
+const _muzzlePos = /* @__PURE__ */ new Vector3()
 
 const _dir = new Vector3()
 const _mid = new Vector3()
@@ -105,7 +111,9 @@ function TracerBatch({
       _dummy.position.copy(_mid)
       _dummy.quaternion.setFromUnitVectors(_zAxis, _dir.divideScalar(length))
       // Цилиндр развёрнут вдоль Z и имеет единичную длину: масштаб задаёт и то, и другое.
-      _dummy.scale.set(radius, radius, length)
+      // Толщину домножаем на `beamScale` ствола: тяжёлый «Столб» бьёт втрое толще при том же классе.
+      const r = radius * beamScaleOf(tracer.weapon)
+      _dummy.scale.set(r, r, length)
       _dummy.updateMatrix()
       mesh.setMatrixAt(count, _dummy.matrix)
       count++
@@ -133,6 +141,9 @@ const classOf = (weapon: string): 1 | 2 | 3 => {
   return (cls >= 3 ? 3 : cls) as 1 | 2 | 3
 }
 
+/** Множитель толщины луча по id ствола (тяжёлый «Столб» — втрое; обычные — 1). Только визуал. */
+const beamScaleOf = (weapon: string): number => LASER_BEAM_SCALE[weapon] ?? 1
+
 /** Три класса лазеров: у каждого свой цвет ореола и своя толщина луча. */
 const LASER_CLASSES = [1, 2, 3] as const
 
@@ -158,6 +169,77 @@ export function Tracers() {
       })}
     </>
   )
+}
+
+/**
+ * Дульные вспышки — «шаровые молнии»: яркий КРУГЛЫЙ шар у среза ствола в миг выстрела,
+ * прикрывает торец дула. Не икосаэдр (тот гранился шестиугольником), а камеро-ориентированный
+ * КВАД с горячим радиальным градиентом — шар круглый с любого угла. Домен кладёт в
+ * `world.muzzleFlashes` СТРЕЛКА и связанное смещение (не мировую точку), поэтому шар держится
+ * у дула, пока корабль едет: worldPos = pos + quat·offset (та же формула, что `offsetToWorld`).
+ * Один InstancedMesh, ноль аллокаций в кадре.
+ */
+export function MuzzleFlashes() {
+  const session = useSession()
+  const ref = useRef<InstancedMesh>(null)
+
+  const geometry = useMemo(() => new PlaneGeometry(1, 1), [])
+  const material = useMemo(muzzleFlashMaterial, [])
+  const colors = useMemo(() => new InstancedBufferAttribute(new Float32Array(MAX_MUZZLE * 3), 3), [])
+
+  useEffect(() => {
+    const mesh = ref.current
+    if (mesh) mesh.instanceColor = colors
+  }, [colors])
+
+  useFrame((state) => {
+    const mesh = ref.current
+    if (!mesh) return
+
+    const world = session.world
+    const now = world.time
+    // Квад разворачиваем плоскостью К КАМЕРЕ — тогда круглый градиент всегда виден анфас.
+    const faceCam = state.camera.quaternion
+    let count = 0
+
+    for (const flash of world.muzzleFlashes) {
+      if (count >= MAX_MUZZLE) break
+      const age = (now - flash.born) / GUNNERY.MUZZLE_FLASH_LIFE
+      if (age < 0 || age > 1) continue
+
+      // Корабль-стрелок ещё жив? Держим шар у его текущего дула; погиб — вспышке негде быть.
+      const ship = world.player.id === flash.shooterId
+        ? world.player
+        : world.ships.find((s) => s.id === flash.shooterId)
+      if (!ship) continue
+
+      const [ox, oy, oz] = flash.offset
+      _muzzlePos.set(ox, oy, oz).applyQuaternion(ship.state.quat).add(ship.state.pos)
+
+      const cls = classOf(flash.weapon)
+      const width = (LASER_CLASS_WIDTH[cls] ?? 1) * beamScaleOf(flash.weapon)
+      // Добела с лёгким тоном класса; вспыхивает и гаснет (аддитив над космосом → в ноль).
+      // Кривая «удар»: мгновенный пик, спад ∝ (1−age)^1.5 — резкая молния, а не ровное тление.
+      _muzzleTint.set(LASER_CLASS_GLOW[cls] ?? LASER_GLOW_FALLBACK).lerp(_white, MUZZLE.WHITEN)
+      const fade = (1 - age) * Math.sqrt(1 - age)
+      _muzzleTint.multiplyScalar(fade * MUZZLE.BRIGHTNESS)
+
+      _dummy.position.copy(_muzzlePos)
+      _dummy.quaternion.copy(faceCam)
+      // Шар слегка РАЗДУВАЕТСЯ по мере угасания — хлопок света, а не сжимающаяся точка.
+      _dummy.scale.setScalar(MUZZLE.RADIUS * width * (0.75 + 0.5 * age))
+      _dummy.updateMatrix()
+      mesh.setMatrixAt(count, _dummy.matrix)
+      mesh.setColorAt(count, _muzzleTint)
+      count++
+    }
+
+    mesh.count = count
+    mesh.instanceMatrix.needsUpdate = true
+    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true
+  })
+
+  return <instancedMesh ref={ref} args={[geometry, material, MAX_MUZZLE]} frustumCulled={false} />
 }
 
 /** Тон взрыва по возрасту: горячий бело-жёлтый → глубокий оранжевый → к чёрному (гаснет). */

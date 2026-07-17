@@ -34,7 +34,9 @@ export function hostilesOf(world: World): ShipEntity[] {
  * игрок; автобой сам стережёт, чтобы не открыть огонь по не-врагу. Маскировку не берём.
  */
 export function targetablesOf(world: World): ShipEntity[] {
-  return world.ships.filter((s) => s.alive && isVisible(s))
+  // Бог Слово — НЕ борт в космосе: он бот ВНУТРИ станции, только для разговора. Его нельзя
+  // захватить и навести; в пространстве его нет вовсе (радар/метки/рамки — тоже мимо, см. HUD).
+  return world.ships.filter((s) => s.alive && isVisible(s) && !s.divine)
 }
 
 const _fwd = new Vector3()
@@ -101,31 +103,70 @@ export function cycleContact(world: World): void {
   world.lockedPodId = next.pod ? next.id : null
 }
 
-/** Небесные тела, которые берутся точкой навигации: звёзды, планеты, спутники, станции. */
-const NAV_KINDS = new Set<BodyEntity['kind']>(['star', 'planet', 'moon', 'station'])
+/** Небесные тела — точки навигации: звёзды, планеты, спутники, станции, ЧЁРНЫЕ ДЫРЫ.
+ *  Дыру HUD рисует крупным ориентиром (primary) и метит нав-целью — значит Shift+Tab обязан
+ *  её брать, иначе видимое тело нельзя выбрать. Титаны-киты сюда не входят: они не `BodyEntity`. */
+const NAV_KINDS = new Set<BodyEntity['kind']>(['star', 'planet', 'moon', 'station', 'blackhole'])
 
 /**
- * Shift+Tab — НЕБЕСНЫЕ: звёзды, планеты, спутники, станции. Один круг ПО УДАЛЕНИЮ. Выбор —
+ * Shift+Tab — НЕБЕСНЫЕ: звёзды, планеты, спутники, станции, чёрные дыры. Один круг ПО УДАЛЕНИЮ. Выбор —
  * в `navTargetId` (та же нав-цель, что метит карта системы, — одна метка на всех). Станцию
  * заодно берём НА СВЯЗЬ (`lockedStationId`, для T-диспетчера), прочее её гасит. Контакт-захват
  * (Tab) не трогаем: борт и точка навигации живут независимо. Мутирует мир.
  */
 export function cycleCelestial(world: World): void {
   const from = world.player.state.pos
-  const cands = world.bodies
-    .filter((b) => NAV_KINDS.has(b.kind))
-    .map((b) => ({ b, d2: b.pos.distanceToSquared(from) }))
-    .sort((a, z) => a.d2 - z.d2)
+  // Статуи листаются наравне с телами: они такие же ориентиры, только не небесные. Без этого
+  // их было не найти — стоят себе километровые, а выбрать нечем.
+  const cands: { id: number; pos: Vector3; station: boolean; d2: number }[] = [
+    ...world.bodies
+      .filter((b) => NAV_KINDS.has(b.kind))
+      .map((b) => ({ id: b.id, pos: b.pos, station: b.kind === 'station', d2: b.pos.distanceToSquared(from) })),
+    ...world.monoliths.map((m) => ({ id: m.id, pos: m.pos, station: false, d2: m.pos.distanceToSquared(from) })),
+  ]
+  cands.sort((a, z) => a.d2 - z.d2)
   if (cands.length === 0) {
     world.navTargetId = null
     world.lockedStationId = null
     return
   }
-  const index = world.navTargetId === null ? -1 : cands.findIndex((c) => c.b.id === world.navTargetId)
-  const next = cands[(index + 1) % cands.length]!.b
+  const index = world.navTargetId === null ? -1 : cands.findIndex((c) => c.id === world.navTargetId)
+  const next = cands[(index + 1) % cands.length]!
   world.navTargetId = next.id
-  world.lockedStationId = next.kind === 'station' ? next.id : null
+  world.lockedStationId = next.station ? next.id : null
 }
+
+/**
+ * НАВ-ЦЕЛЬ одним видом: небесное тело ИЛИ монолит-статуя.
+ *
+ * Монолиты живут своим списком (они не `BodyEntity` — ни орбит, ни гравитации, ни столкновений),
+ * но выбирать их надо тем же Shift+Tab и метить теми же приборами. Чтобы не плодить второе поле
+ * и не учить каждое место о втором списке, `navTargetId` остаётся ОДНИМ полем, а разрешение
+ * «id → что это» живёт здесь. Всем потребителям нужно ровно это: где оно, какого размера и как
+ * зовётся.
+ */
+export interface NavTarget {
+  id: number
+  pos: Vector3
+  radius: number
+  name: string
+  /** Небесное тело или статуя — HUD по этому решает, чем метить и как подписать. */
+  kind: BodyEntity['kind'] | 'monolith'
+}
+
+/** Что сейчас нав-цель: тело или монолит. `null` — не выбрано или пропало. */
+export function navTarget(world: World): NavTarget | null {
+  const id = world.navTargetId
+  if (id === null) return null
+  const body = world.bodies.find((b) => b.id === id)
+  if (body) return { id, pos: body.pos, radius: body.radius, name: body.name, kind: body.kind }
+  const monolith = world.monoliths.find((m) => m.id === id)
+  if (monolith) return { id, pos: monolith.pos, radius: monolith.radius, name: MONOLITH_NAMES[monolith.variant] ?? 'Монолит', kind: 'monolith' }
+  return null
+}
+
+/** Имена статуй по облику. Данные, не ветвление: новая статуя — строка здесь. */
+export const MONOLITH_NAMES: readonly string[] = ['Страж', 'Плакальщица', 'Безымянный']
 
 /** Ближайший контейнер в радиусе захвата — HUD подсказывает, что можно подобрать. */
 export function nearestPod(world: World, radius: number) {

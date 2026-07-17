@@ -8,6 +8,7 @@ import {
   commodityStock,
   distanceLy,
   freeCapacity,
+  applyDelta,
   generateGalaxy,
   itemName,
   localSettlement,
@@ -109,6 +110,8 @@ export interface NegotiationContext {
   world: WorldSnapshot
   /** Собеседник (он сам — знает о себе всё). */
   them: PartySnapshot
+  /** Собеседник — БОГ Слово: особый промпт (говорит как божество, не торговец/наёмник). */
+  divine: boolean
   /**
    * Игрок ГЛАЗАМИ собеседника — только наблюдаемое: имя, род занятий, вид, борт.
    * Ни характера, ни статов, ни груза, ни денег, ни планов: скрытое собеседник
@@ -173,7 +176,7 @@ export interface NegotiationContext {
 }
 
 /** Справочники, которые не тащим в каждый запрос — пилот «листает» их по просьбе. */
-export type ContextDigest = 'market' | 'neighbours' | 'history' | 'worlds'
+export type ContextDigest = 'market' | 'neighbours' | 'history' | 'worlds' | 'guide'
 
 /** Сколько справочников держим в «памяти» одного разговора — старейший выпадает. */
 export const MAX_ACTIVE_DIGESTS = 3
@@ -275,6 +278,8 @@ export interface NegotiatorReply {
    * Команды при этом пустые — домен ничего не исполняет.
    */
   clarify?: boolean
+  /** Выражение лица, которое бог Слово ВЫЗВАЛ этой репликой (одно из 8). null — не задано. */
+  emotion?: string | null
 }
 
 export function digestActive(mem: Pick<DigestMemory, 'active'>, digest: ContextDigest): boolean {
@@ -338,6 +343,7 @@ const DIGEST_LABEL: Record<ContextDigest, string> = {
   neighbours: 'соседние системы',
   history: 'журнал встреч',
   worlds: 'планеты системы',
+  guide: 'устройство мира',
 }
 
 /** Подсказка промпту: какие блоки подмешал суфлёр на эту реплику. */
@@ -389,6 +395,7 @@ const OCCUPATION_SELF: Record<string, string> = {
   trader: 'торговец', convoy: 'торговец', pirate: 'пират', gang: 'пират',
   raider: 'налётчик', police: 'патрульный', freighter: 'дальнобойщик', platform: 'пират',
   traveler: 'путешественник', explorer: 'учёный', businessman: 'бизнесмен', military: 'военный',
+  god: 'бог',
 }
 function occupationSelf(other: ShipEntity): string {
   return (other.originKind && OCCUPATION_SELF[other.originKind]) || 'вольный пилот'
@@ -503,9 +510,14 @@ const NEIGHBOUR_COUNT = 4
  * Галактику генерим лениво и КЭШИРУЕМ по зерну. 2500 систем строятся за миллисекунды,
  * но дёргать это на каждую реплику незачем — разговор редкое событие, кэш живёт сессию.
  */
-let galaxyCache: { seed: number; systems: StarSystem[] } | null = null
-function galaxyFor(seed: number): StarSystem[] {
-  if (!galaxyCache || galaxyCache.seed !== seed) galaxyCache = { seed, systems: generateGalaxy(seed) }
+let galaxyCache: { seed: number; epoch: number; systems: StarSystem[] } | null = null
+function galaxyFor(world: World): StarSystem[] {
+  const seed = world.galaxySeed
+  const epoch = world.galaxyEpoch
+  if (!galaxyCache || galaxyCache.seed !== seed || galaxyCache.epoch !== epoch) {
+    // База из зерна + правки бога (дельта): диалог о соседях учитывает перекроенную карту.
+    galaxyCache = { seed, epoch, systems: applyDelta(generateGalaxy(seed), world.galaxyDelta) }
+  }
   return galaxyCache.systems
 }
 
@@ -526,13 +538,18 @@ function localMarket(world: World): MarketQuote[] {
  * пока ты в этой системе, а `capitalOf` на 2500 систем считать на каждую реплику ни к
  * чему. Прыгнул в другую систему — пересчитается. Живёт сессию, как и кэш галактики.
  */
-let neighbourCache: { seed: number; index: number; list: NeighbourWorld[] } | null = null
+let neighbourCache: { seed: number; index: number; epoch: number; list: NeighbourWorld[] } | null = null
 function neighbours(world: World): NeighbourWorld[] {
-  if (neighbourCache && neighbourCache.seed === world.galaxySeed && neighbourCache.index === world.systemIndex) {
+  if (
+    neighbourCache &&
+    neighbourCache.seed === world.galaxySeed &&
+    neighbourCache.index === world.systemIndex &&
+    neighbourCache.epoch === world.galaxyEpoch // правки бога сдвигают соседей — пересчитать
+  ) {
     return neighbourCache.list
   }
   const list = computeNeighbours(world)
-  neighbourCache = { seed: world.galaxySeed, index: world.systemIndex, list }
+  neighbourCache = { seed: world.galaxySeed, index: world.systemIndex, epoch: world.galaxyEpoch, list }
   return list
 }
 
@@ -542,7 +559,7 @@ function neighbours(world: World): NeighbourWorld[] {
  * тут дорога — в промышленной system X дешевле»). Числа честные.
  */
 function computeNeighbours(world: World): NeighbourWorld[] {
-  const systems = galaxyFor(world.galaxySeed)
+  const systems = galaxyFor(world)
   const here = systems[world.systemIndex]
   if (!here) return []
   return systems
@@ -599,7 +616,36 @@ function buildStationSnapshot(world: World, npcDocked: boolean): StationSnapshot
   }
 }
 
+/**
+ * Что борт ИСПОЛНЯЕТ прямо сейчас, если ему дали поручение. Это не догадка, а факт из очереди
+ * задач (`ai.tasks[0]`) — то самое, что домен и правда делает. Без этого бот не знал о собственном
+ * приказе и на «подлети ко мне» отыгрывал словами («ну, я подлетела!»), никуда не летя.
+ */
+function taskHeading(world: World, other: ShipEntity): string | null {
+  const task = other.ai?.tasks[0]
+  if (!task) return null
+  switch (task.kind) {
+    case 'rendezvous':
+      return 'ИДЁШЬ К КОМАНДИРУ — он просил подлететь, ты уже в пути'
+    case 'approach-body': {
+      const body = world.bodies.find((b) => b.id === task.bodyId)
+      return body ? `идёшь к «${body.name}» — командир просил туда` : 'идёшь к указанной цели'
+    }
+    case 'goto':
+      return 'идёшь в назначенную точку'
+    case 'collect-cargo':
+      return 'собираешь груз по поручению командира'
+    case 'return-to-escort':
+      return 'возвращаешься к командиру'
+    case 'hold':
+      return 'держишь позицию и ждёшь'
+  }
+}
+
 function headingOf(world: World, other: ShipEntity, docked: boolean): string {
+  // ПОРУЧЕНИЕ важнее роли: раз командир дал приказ — это и есть то, чем ты занят.
+  const task = taskHeading(world, other)
+  if (task) return task
   if (other.ai?.escortOf === world.player.id) return 'следуешь за своим нанимателем'
   if (occupationSelf(other) === 'патрульный') {
     return docked ? 'несёшь службу у причала' : 'на службе — патрулируешь систему, идёшь по служебному делу'
@@ -691,6 +737,7 @@ export function buildContext(
         : [],
     },
     them: party(other, roleOf(other, world.player.id)),
+    divine: other.divine === true,
     // Игрок — только наблюдаемое (имя/род занятий/вид/борт). Характер, груз, деньги
     // и планы собеседнику не отдаём: узнает, лишь если игрок сам скажет.
     you: {

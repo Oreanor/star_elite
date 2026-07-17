@@ -145,6 +145,10 @@ const COMBAT_TOPICS: Topic[] = ['surrender', 'mercy', 'plunder']
 export function linesFor(world: World, other: ShipEntity): Line[] {
   const player = world.player
 
+  // Бог Слово вне торга и приказов: ни найма, ни грабежа, ни мольбы — только СВОБОДНАЯ БЕСЕДА.
+  // Кнопок-интентов у него нет; он не наёмник и не мишень, он просто говорит.
+  if (other.divine) return []
+
   const all: Line[] = (() => {
     if (other.faction === 'hostile') {
       return [

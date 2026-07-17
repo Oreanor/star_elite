@@ -13,7 +13,7 @@ import {
 import { useSession } from '../../app/GameContext'
 import { Button, PilotPortrait } from '../station/chrome'
 import { GLASS_PANEL, screenBackground } from '../station/backdrop'
-import { clearOutcomeEmotion, markOutcomeEmotion, type Emotion } from '../portrait'
+import { clearOutcomeEmotion, markOutcomeEmotion, type DivineEmotion, type Emotion } from '../portrait'
 import { UI } from '../theme'
 import { chassisName, occupationName } from '../i18n/dataNames'
 import { t, useLang, type Key } from '../i18n'
@@ -104,11 +104,14 @@ export function Dialogue({
   const digestMemory = useRef<DigestMemory>(createDigestMemory())
   /** Лицо в шапке — своё, не `pilotEmotion`: претензия и пауза мира не должны залипать. */
   const [faceEmo, setFaceEmo] = useState<Emotion>('neutral')
+  /** Мимика бога Слова, ВЫЗВАННАЯ им самим (поле `emotion` в ответе). null — по настроению. */
+  const [divineFace, setDivineFace] = useState<DivineEmotion | null>(null)
   const faceDecay = useRef<number | null>(null)
 
   const resetFace = useCallback(() => {
     if (!other) return
     setFaceEmo(dialogueBaseline(world, other))
+    setDivineFace(null)
   }, [world, other])
 
   const reactFace = useCallback((commands: Command[], fx: ReturnType<typeof dialogueEffects>) => {
@@ -176,6 +179,21 @@ export function Dialogue({
     push({ who: 'them', text: fx.them })
     for (const line of fx.system) push({ who: 'system', text: line })
     reactFace(reply.commands, fx)
+    // Собеседник сам ВЫЗВАЛ выражение лица (поле emotion): у бога — восемь ликов (divineFace),
+    // у смертного — шесть (faceEmo). Строка уже провалидирована парсером по роли (`coerceEmotion`).
+    //
+    // Лицо ДЕРЖИТСЯ до следующей реплики, а не гаснет по таймеру в расположение. Раньше оно
+    // падало обратно в baseline, и дружелюбный лыбился всегда, что бы ты ни сказал — мимика
+    // не следовала за разговором и выглядела застывшей. Расположение — это лишь СТАРТ беседы;
+    // дальше лицо ведёт сам разговор. Декей реакции снимаем: ответ её перебил.
+    if (reply.emotion) {
+      if (other.divine) setDivineFace(reply.emotion as DivineEmotion)
+      else setFaceEmo(reply.emotion as Emotion)
+      if (faceDecay.current !== null) {
+        window.clearTimeout(faceDecay.current)
+        faceDecay.current = null
+      }
+    }
     if (fx.askOutcome) {
       const emo = outcomeFace(fx.askOutcome.topic, fx.askOutcome.agreed)
       if (emo) markOutcomeEmotion(other.id, emo, world.time)
@@ -237,7 +255,7 @@ export function Dialogue({
         {/* Шапка: портрет и паспорт слева; «нанять» и «положить трубку» — столбиком справа. */}
         <div className="mb-4 flex items-start justify-between gap-4">
           <div className="flex min-w-0 items-center gap-4">
-            <PilotPortrait ship={other} world={world} emotion={faceEmo} size={108} />
+            <PilotPortrait ship={other} world={world} emotion={faceEmo} divineEmotion={other.divine ? divineFace ?? undefined : undefined} size={108} />
             <div className="min-w-0">
               <div className="text-lg tracking-[0.3em]">{other.pilotName.toUpperCase()}</div>
               <div className="text-xs tracking-widest" style={{ color: UI.DIM }}>

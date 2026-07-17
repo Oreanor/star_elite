@@ -2,7 +2,7 @@ import { Fragment, useEffect, useState } from 'react'
 import type { ShipEntity, World } from '@elite/sim'
 import { UI } from '../theme'
 import { GLASS_PANEL } from './backdrop'
-import { loadSheet, pilotEmotion, portraitIndex, portraitSheet, portraitStyle, type Emotion } from '../portrait'
+import { DUDE_SHEET, dudeStyle, emotionToDivine, loadSheet, pilotEmotion, portraitIndex, portraitSheet, portraitStyle, type DivineEmotion, type Emotion } from '../portrait'
 import { StaticNoise } from '../StaticNoise'
 
 /**
@@ -127,6 +127,7 @@ export function PilotPortrait({
   ship,
   world,
   emotion,
+  divineEmotion,
   name,
   species,
   face,
@@ -138,6 +139,8 @@ export function PilotPortrait({
   ship?: ShipEntity
   world?: World
   emotion?: Emotion
+  /** Эмоция БОГА (Слово): его аватар и мимика вне расовой сетки. Игнорируется у обычных бортов. */
+  divineEmotion?: DivineEmotion
   name?: string
   /** Вид и лицо напрямую (без борта) — для удалённых игроков из presence. */
   species?: string
@@ -152,17 +155,24 @@ export function PilotPortrait({
 }) {
   const label = (ship?.name ?? name ?? '?').trim()
   const initial = label.charAt(0).toUpperCase() || '?'
-  const emo: Emotion | null = ship ? emotion ?? (world ? pilotEmotion(ship, world) : 'neutral') : null
-  const crop = ship && emo
-    ? portraitStyle(ship.persona.species, portraitIndex(ship), emo)
-    : species !== undefined && face !== undefined
-      ? portraitStyle(species, face, 'neutral')
-      : null
-  const sheetUrl = ship && emo
-    ? portraitSheet(ship.persona.species, emo)
-    : species !== undefined
-      ? portraitSheet(species, 'neutral')
-      : null
+  // СЛОВО (divine) несёт СВОЙ аватар (dude.jpg, 8 эмоций в ряд) — он показывается ВЕЗДЕ, где
+  // рисуется его лицо (диалог, контакты), а не только в разговоре. Мимику задаёт `divineEmotion`.
+  const divine = ship?.divine === true
+  const emo: Emotion | null = ship && !divine ? emotion ?? (world ? pilotEmotion(ship, world) : 'neutral') : null
+  const crop = divine
+    ? dudeStyle(divineEmotion ?? emotionToDivine(emotion ?? (world ? pilotEmotion(ship!, world) : 'neutral')))
+    : ship && emo
+      ? portraitStyle(ship.persona.species, portraitIndex(ship), emo)
+      : species !== undefined && face !== undefined
+        ? portraitStyle(species, face, 'neutral')
+        : null
+  const sheetUrl = divine
+    ? DUDE_SHEET
+    : ship && emo
+      ? portraitSheet(ship.persona.species, emo)
+      : species !== undefined
+        ? portraitSheet(species, 'neutral')
+        : null
   const loading = useSheetLoading(sheetUrl)
   const interactive = onClick !== undefined
   return (

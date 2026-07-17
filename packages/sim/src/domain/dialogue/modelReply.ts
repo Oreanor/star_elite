@@ -1,16 +1,20 @@
+import { buildCommands, type DialogueRole } from './actions'
 import type { Command } from './commandBus'
 import type { Topic } from './dialogue'
-import {
-  coerceLookup,
-  coerceOrder,
-  coercePlanSteps,
-  coerceClarify,
-  coerceLearn,
-  coerceTopic,
-  coerceTransfer,
-  sanitizeEscortTransfer,
-  type LookupDigest,
-} from './payload'
+import { coerceClarify, coerceLookup, type LookupDigest } from './payload'
+
+/**
+ * Восемь выражений лица бога Слова (лист `dude.jpg`) и шесть — обычного пилота (портреты видов).
+ * Строки, а не UI-тип: домен красок не знает, он лишь ПРОВЕРЯЕТ, что модель назвала допустимое
+ * для роли, а рисует UI. Набор зависит от роли: у бога свой лист эмоций, у смертного — свой.
+ */
+export const DIVINE_EMOTIONS = [
+  'neutral', 'smile', 'laugh', 'tired', 'confusion', 'surprise', 'frown', 'angry',
+] as const
+export const BOT_EMOTIONS = ['neutral', 'joy', 'pain', 'anger', 'fear', 'sadness'] as const
+
+const DIVINE_EMOTION_SET: ReadonlySet<string> = new Set(DIVINE_EMOTIONS)
+const BOT_EMOTION_SET: ReadonlySet<string> = new Set(BOT_EMOTIONS)
 
 /** Ответ модели после разбора JSON — без метаданных сети (source, overload). */
 export interface ParsedModelReply {
@@ -20,6 +24,15 @@ export interface ParsedModelReply {
   lookup: LookupDigest | null
   /** Поручение непонятно через переводчик — только переспрос, без команд. */
   clarify?: boolean
+  /** Выражение лица, которое модель ВЫЗВАЛА этой репликой. null — не задано. */
+  emotion?: string | null
+}
+
+/** Проверить выражение лица против набора роли: у бога 8 эмоций, у смертного — 6. */
+function coerceEmotion(v: unknown, role: DialogueRole): string | null {
+  if (typeof v !== 'string') return null
+  const set = role === 'god' ? DIVINE_EMOTION_SET : BOT_EMOTION_SET
+  return set.has(v) ? v : null
 }
 
 /** Вытащить JSON из ответа модели, даже если она обернула его в текст или ```. */
@@ -36,53 +49,30 @@ export function extractModelJson(raw: string): unknown {
 }
 
 /**
- * Плоские поля JSON модели → команды шины. Whitelist'ы — в `payload.ts`;
- * исход и отношение считает домен при `applyCommand`.
+ * Плоский JSON модели → реплика с командами. Команды собирает ПУЛ экшнов по НАБОРУ РОЛИ
+ * (`buildCommands`), а не лестница `if`: какие способности у роли — сказано в `actions.ts`.
+ * Envelope реплики (текст, эмоция, hangup, lookup, clarify) — общий для всех ролей и живёт здесь.
  */
-export function parseModelReply(parsed: unknown, allowedTopics: readonly Topic[]): ParsedModelReply | null {
+export function parseModelReply(
+  parsed: unknown,
+  allowedTopics: readonly Topic[],
+  role: DialogueRole = 'bot',
+  /** Гонорар найма, если обсуждается: по нему отличают эхо платы от осознанного платежа. */
+  escortFee: number | null = null,
+): ParsedModelReply | null {
   if (typeof parsed !== 'object' || parsed === null) return null
   const o = parsed as Record<string, unknown>
   const text = typeof o.reply === 'string' ? o.reply.trim() : ''
   if (!text) return null
 
-  const clarify = coerceClarify(o.clarify)
-  const commands: Command[] = []
+  const emotion = coerceEmotion(o.emotion, role)
+  const lookup = coerceLookup(o.lookup)
 
-  if (clarify) {
-    return { text, commands, hangup: false, lookup: coerceLookup(o.lookup), clarify: true }
+  // Переводчик не понял поручение — только переспрос, никаких команд не собираем.
+  if (coerceClarify(o.clarify)) {
+    return { text, commands: [], hangup: false, lookup, clarify: true, emotion }
   }
 
-  const intent = coerceTopic(o.intent)
-  if (intent && allowedTopics.includes(intent)) {
-    commands.push({ action: 'ask', payload: { topic: intent, llm: true } })
-  }
-
-  if (o.social === 'insult' || o.social === 'flatter') {
-    commands.push({ action: 'social', payload: { tone: o.social } })
-  }
-
-  const order = coerceOrder(o.command)
-  if (order) {
-    const target = typeof o.commandTarget === 'number' ? o.commandTarget : null
-    commands.push({ action: 'order', payload: { order, target } })
-  }
-
-  const transfer = sanitizeEscortTransfer(coerceTransfer(o.transfer), intent)
-  if (transfer) commands.push({ action: 'transfer', payload: transfer })
-
-  const remember = typeof o.remember === 'string' && o.remember.trim() ? o.remember.trim() : null
-  if (remember) commands.push({ action: 'note', payload: { text: remember } })
-
-  const learn = coerceLearn(o.learn)
-  if (learn) commands.push({ action: 'learn', payload: { text: learn } })
-
-  const planSteps = coercePlanSteps(o.plan)
-  if (planSteps.length > 0) commands.push({ action: 'plan', payload: { steps: planSteps } })
-
-  return {
-    text,
-    commands,
-    hangup: o.hangup === true,
-    lookup: coerceLookup(o.lookup),
-  }
+  const commands = buildCommands(o, role, { allowedTopics, escortFee })
+  return { text, commands, hangup: o.hangup === true, lookup, emotion }
 }

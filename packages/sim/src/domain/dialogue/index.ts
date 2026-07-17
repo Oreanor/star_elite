@@ -25,15 +25,31 @@ export {
   AI_ORDERS,
   DIALOGUE_TOPICS,
   LOOKUP_DIGESTS,
+  STANCE_VALUES,
   coerceLookup,
   coerceOrder,
   coercePlanSteps,
   coerceClarify,
   coerceLearn,
+  coerceStance,
   coerceTopic,
   coerceTransfer,
   sanitizeEscortTransfer,
   type LookupDigest,
 } from './payload'
-export { extractModelJson, parseModelReply, type ParsedModelReply } from './modelReply'
+export {
+  ACTIONS,
+  actionsForRole,
+  buildCommands,
+  type ActionContext,
+  type DialogueAction,
+  type DialogueRole,
+} from './actions'
+export {
+  extractModelJson,
+  parseModelReply,
+  BOT_EMOTIONS,
+  DIVINE_EMOTIONS,
+  type ParsedModelReply,
+} from './modelReply'
 export { dialogueEffects, type DialogueEffects } from './turn'

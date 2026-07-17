@@ -47,13 +47,14 @@ import {
   type Chassis,
   type HullPurchase,
   type HullStat,
+  type Loadout,
   type ModuleKind,
   type ShipModule,
   type ShipSpec,
   type World,
 } from '@elite/sim'
 import { chassisGeometry } from '../../render/geometry/ships'
-import { hullMaterial } from '../../render/materials/materials'
+import { hullMaterialFor } from '../../render/materials/materials'
 import { t, useLang, type Key } from '../i18n'
 import { UI } from '../theme'
 import { ACCENT, Button, Column, DIM, Modal, Panel, Table } from '../station/chrome'
@@ -107,8 +108,6 @@ export function ShipScreen({
   // Открытый слот: по клику на плитку над всем встаёт стеклянная модалка с вариантами
   // и действиями. Ищем по ключу заново каждый рендер — операция могла сдвинуть слоты.
   const [openKey, setOpenKey] = useState<string | null>(null)
-  const slots = buildSlots(world)
-  const openSlot = slots.find((s) => s.key === openKey) ?? null
 
   // ── Витрина корпусов прямо здесь: отдельной «ВЕРФИ» больше нет. Стрелками листаем
   // каталог, под моделью — имя и кнопка «купить». В ПОЛЁТЕ стрелок нет: корпус там
@@ -124,12 +123,21 @@ export function ShipScreen({
   // стрелками, и проверка грузоподъёмности для кнопки покупки.
   const fit = useMemo(() => fitOntoChassis(player.loadout, offer.chassis), [player.loadout, offer])
   const previewSpec = useMemo(() => deriveShipSpec(fit.loadout), [fit])
+
+  // Сетка слотов — по ПОКАЗЫВАЕМОМУ корпусу: свой борт интерактивен (клик открывает
+  // мастерскую), а листая ЧУЖОЙ корпус на верфи, видим ЕГО раскладку слотов (сколько чего
+  // и что пусто) по примерке — но только на просмотр, оснащать чужой корабль нельзя.
+  const shownLoadout = docked && !owned ? fit.loadout : player.loadout
+  const slots = buildSlots(shownLoadout)
+  const slotsInteractive = docked && owned
+  const openSlot = slotsInteractive ? slots.find((s) => s.key === openKey) ?? null : null
   // Покупка корпуса идёт через модалку подтверждения: там зачёт старого, доплата и
   // предупреждение о перегрузе. Пролистнул каталог — модалку гасим.
   const [buyingHull, setBuyingHull] = useState(false)
   const cycle = (d: number) => {
     setBrowseIdx((i) => (i + d + SHIPYARD.length) % SHIPYARD.length)
     setBuyingHull(false)
+    setOpenKey(null) // открытый слот своего борта не должен «переехать» на чужой корпус
   }
 
   // Апгрейд СВОЕГО корпуса — по осям: HP, грузоподъёмность, аукс. Каждую можно усилить
@@ -265,7 +273,7 @@ export function ShipScreen({
           )}
         </div>
 
-        <SlotGrid slots={slots} onOpen={setOpenKey} docked={docked} />
+        <SlotGrid slots={slots} onOpen={setOpenKey} interactive={slotsInteractive} />
       </div>
 
       {/* Модалка — ТОЛЬКО у причала: там она мастерская (варианты + действия). В полёте
@@ -320,8 +328,7 @@ interface SlotView {
  * другие»), поэтому все схлопнуты в одну плитку с суммарным боезапасом.
  * Действия верфи над ней идут по первому пилону — остальные того же вида.
  */
-function buildSlots(world: World): SlotView[] {
-  const loadout = world.player.loadout
+function buildSlots(loadout: Loadout): SlotView[] {
   const rows: SlotView[] = []
 
   // Внутренние слоты заданы корпусом (chassis.slots). Раздаём установленные модули
@@ -410,11 +417,12 @@ function groupCards(slots: readonly SlotView[]): CategoryCard[] {
 function SlotGrid({
   slots,
   onOpen,
-  docked,
+  interactive,
 }: {
   slots: readonly SlotView[]
   onOpen: (key: string) => void
-  docked: boolean
+  /** Клик открывает мастерскую только у СВОЕГО борта на верфи. Чужой корпус — на просмотр. */
+  interactive: boolean
 }) {
   const cards = groupCards(slots)
   return (
@@ -445,9 +453,9 @@ function SlotGrid({
                 <button
                   key={s.key}
                   type="button"
-                  onClick={docked ? () => onOpen(s.key) : undefined}
+                  onClick={interactive ? () => onOpen(s.key) : undefined}
                   className={`flex items-baseline justify-between gap-2 border px-2 py-1 text-left transition-colors ${
-                    docked ? 'cursor-pointer hover:border-[#7fd6ff] hover:bg-[#7fd6ff]/10' : 'cursor-default'
+                    interactive ? 'cursor-pointer hover:border-[#7fd6ff] hover:bg-[#7fd6ff]/10' : 'cursor-default'
                   }`}
                   style={{ borderColor: 'rgba(127,214,255,0.12)' }}
                 >
@@ -1214,7 +1222,7 @@ function Blueprint({ chassisId }: { chassisId: string }) {
         <directionalLight position={[-4, 6, 8]} intensity={1.9} color={0xfff2dd} />
         <directionalLight position={[6, 3, -6]} intensity={0.55} color={0xa8c4e6} />
         <hemisphereLight args={[0x4a6480, 0x141a22, 0.5]} />
-        <SpinningShip geometry={geometry} centre={centre} drag={drag} />
+        <SpinningShip geometry={geometry} centre={centre} drag={drag} chassisId={chassisId} />
       </Canvas>
     </div>
   )
@@ -1229,10 +1237,12 @@ function SpinningShip({
   geometry,
   centre,
   drag,
+  chassisId,
 }: {
   geometry: BufferGeometry
   centre: Vector3
   drag: React.RefObject<DragState>
+  chassisId: string
 }) {
   const ref = useRef<Group>(null)
   useFrame((_, dt) => {
@@ -1251,7 +1261,7 @@ function SpinningShip({
   })
   return (
     <group ref={ref}>
-      <mesh geometry={geometry} material={hullMaterial()} position={[-centre.x, -centre.y, -centre.z]} />
+      <mesh geometry={geometry} material={hullMaterialFor(chassisId)} position={[-centre.x, -centre.y, -centre.z]} />
     </group>
   )
 }

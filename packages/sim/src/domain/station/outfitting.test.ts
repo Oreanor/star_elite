@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { AURORA_MK3, SIDEWINDER } from '../../config/chassis'
+import { AURORA_ONE, HERMES } from '../../config/chassis'
 import {
   BOMB_UNIT,
   CARGO_LARGE,
@@ -59,11 +59,11 @@ describe('перестановка железа из трюма', () => {
 /**
  * Класс гейтит КОРПУС, а не отдельный слот: железо выше класса рамы не встаёт,
  * какой бы слот под него ни был. Груз — бесклассовый и лезет всегда. «Арес»
- * (SIDEWINDER) класса 2 — на нём это и проверяем.
+ * (HERMES) класса 2 — на нём это и проверяем.
  */
 describe('класс корпуса ограничивает железо', () => {
   it('модуль класса выше корпуса — отказ, свой класс и ниже — встаёт', () => {
-    const bare = createLoadout(SIDEWINDER, [], []) // класс корпуса 2
+    const bare = createLoadout(HERMES, [], []) // класс корпуса 2
     // SHIELD_STANDARD класса 2 — ровно по корпусу, слот щита есть.
     expect(canInstallInternal(bare, SHIELD_STANDARD)).toBeNull()
     // SHIELD_HEAVY класса 3 — выше класса «Ареса», не по корпусу.
@@ -71,7 +71,7 @@ describe('класс корпуса ограничивает железо', () =
   })
 
   it('груз бесклассовый — крупный контейнер лезет и в корпус низкого класса', () => {
-    const bare = createLoadout(SIDEWINDER, [], [])
+    const bare = createLoadout(HERMES, [], [])
     // CARGO_LARGE вместимости 50 т — «класс 1», значит любой корпус его тянет.
     expect(canInstallInternal(bare, CARGO_LARGE)).toBeNull()
   })
@@ -84,7 +84,7 @@ describe('класс корпуса ограничивает железо', () =
  */
 describe('аукс-слот: занятость по категории', () => {
   it('занятый аукс не пускает второе устройство той же категории', () => {
-    const one = createLoadout(AURORA_MK3, [CLOAK_FIELD], [])
+    const one = createLoadout(AURORA_ONE, [CLOAK_FIELD], [])
     expect(canInstallInternal(one, ECM_UNIT)).toBe('no-free-slot')
     expect(canInstallInternal(one, BOMB_UNIT)).toBe('no-free-slot')
   })
@@ -96,10 +96,10 @@ describe('аукс-слот: занятость по категории', () => 
  */
 describe('способности требуют аукс-модуль', () => {
   it('без ECM/бомбы — способности нет; с модулем — есть', () => {
-    const bare = createLoadout(AURORA_MK3, [], [])
+    const bare = createLoadout(AURORA_ONE, [], [])
     expect(hasEcm(bare)).toBe(false)
     expect(hasBomb(bare)).toBe(false)
-    const armed = createLoadout(AURORA_MK3, [ECM_UNIT, BOMB_UNIT], [])
+    const armed = createLoadout(AURORA_ONE, [ECM_UNIT, BOMB_UNIT], [])
     expect(hasEcm(armed)).toBe(true)
     expect(hasBomb(armed)).toBe(true)
   })

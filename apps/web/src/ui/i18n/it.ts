@@ -161,10 +161,10 @@ export const IT: Record<keyof typeof RU, string> = {
   'hud.laser': 'LASER',
   'hud.temp': 'TEMP',
   'hud.jump': 'IPER',
-  'hud.overheat': 'SURRISCALDA — STELLA',
-  'hud.hullHot': 'SCAFO SI SCALDA',
+  'hud.overheat': 'SURRISCALDAMENTO CRITICO',
+  'hud.hullHot': 'SURRISCALDAMENTO',
   'hud.hullCritical': 'SCAFO CRITICO',
-  'hud.laserHot': 'LASER SURRISCALDATO',
+  'hud.laserHot': 'LASER · RAFFREDDAMENTO',
   'hud.lowEnergy': 'POCA ENERGIA',
   'hud.noRockets': 'NIENTE MISSILI',
   'hud.noLaser': 'NESSUNA ARMA MONTATA',
@@ -359,6 +359,8 @@ export const IT: Record<keyof typeof RU, string> = {
   'locator.kind.moon': 'luna',
   'locator.kind.station': 'stazione',
   'locator.kind.blackhole': 'buco nero',
+  'locator.kind.monolith': 'monolite',
+  'locator.kind.pod': 'container',
 
   // Gente: registro dei contatti.
   'people.title': 'GENTE',

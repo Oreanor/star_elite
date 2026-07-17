@@ -84,8 +84,8 @@ export function dock(world: World): boolean {
  * и стыкуем общим путём `dock()` — игрок открывает глаза уже в доке станции, а не в
  * километре в открытом космосе. Для старта новой сессии: и точка возврата, и безопасно.
  */
-export function startDocked(world: World): void {
-  startAtStation(world, DOCKING.RELEASE_GAP)
+export function startDocked(world: World, station?: BodyEntity): void {
+  startAtStation(world, DOCKING.RELEASE_GAP, station)
   dock(world)
 }
 

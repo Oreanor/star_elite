@@ -135,6 +135,45 @@ export function portraitStyle(species: string, index: number, emotion: Emotion):
   }
 }
 
+/**
+ * СЛОВО — особый бог, и аватар у него СВОЙ, вне сетки рас: один и тот же космонавт (похожий
+ * на Большого Лебовски) в ВОСЬМИ эмоциях, выложенных В ОДИН РЯД на листе `dude.jpg`. Порядок
+ * кадров слева направо задан ТЗ. Своя восьмёрка эмоций (не 6 расовых): бог мимике богаче.
+ */
+export type DivineEmotion =
+  | 'neutral' | 'smile' | 'laugh' | 'tired' | 'confusion' | 'surprise' | 'frown' | 'angry'
+
+/**
+ * Расовая эмоция (6) → божественная (8). Слово реагирует лицом на ход разговора тем же
+ * baseline'ом, что и обычные пилоты (радость от сделки, злость от хамства). Полную восьмёрку
+ * (смех, непонимание, удивление порознь) даст отдельное поле `emotion` из ответа модели.
+ */
+const EMOTION_TO_DIVINE: Record<Emotion, DivineEmotion> = {
+  neutral: 'neutral', joy: 'smile', pain: 'tired', anger: 'angry', fear: 'surprise', sadness: 'frown',
+}
+export function emotionToDivine(e: Emotion): DivineEmotion {
+  return EMOTION_TO_DIVINE[e]
+}
+
+/** Лист бога: 8 кадров в ряд, `public/dude.jpg`. */
+export const DUDE_SHEET = '/dude.jpg'
+const DUDE_COLS = 8
+const DUDE_ORDER: readonly DivineEmotion[] = [
+  'neutral', 'smile', 'laugh', 'tired', 'confusion', 'surprise', 'frown', 'angry',
+]
+
+/** CSS-крой кадра бога: лист 800%×100%, сдвиг по столбцу. Неизвестная эмоция → нейтраль (кадр 0). */
+export function dudeStyle(emotion: DivineEmotion): CSSProperties {
+  const col = Math.max(0, DUDE_ORDER.indexOf(emotion))
+  return {
+    backgroundImage: `url(${DUDE_SHEET})`,
+    backgroundSize: `${DUDE_COLS * 100}% 100%`,
+    backgroundPosition: `${(col / (DUDE_COLS - 1)) * 100}% 0%`,
+    backgroundRepeat: 'no-repeat',
+    imageRendering: 'pixelated',
+  }
+}
+
 /** Кэш листов для HUD-канваса: один `Image` на URL, грузится лениво. */
 const sheetCache = new Map<string, HTMLImageElement>()
 

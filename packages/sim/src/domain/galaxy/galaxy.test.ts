@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { CORE_INDEX, GALAXY } from '../../config/galaxy'
+import { CORE_INDEX, GALAXY, HOME_SHAPE, SHAPE } from '../../config/galaxy'
 import { generateGalaxy, generateSystem } from './generate'
 import { distanceLy, galaxyShape, placeSystem } from './shape'
 import { capitalOf, isInhabited, settledPlanets, stationsOf, systemLife } from './types'
@@ -159,5 +159,42 @@ describe('инварианты системы', () => {
     for (const s of galaxy.slice(0, 50)) {
       expect(placeSystem(s.index)).toEqual({ x: s.x, y: s.y, z: s.z })
     }
+  })
+
+  /**
+   * ДОМАШНЯЯ галактика — спираль, и это решение, а не бросок. По зерну выпадала «с перемычкой»
+   * (её вес в таблице самый большой), а у той рукава растут с концов бара и между ядром и баром
+   * зияет пустота. Правка весов не должна молча вернуть перемычку игроку под ноги.
+   */
+  it('домашняя галактика — спиральная, а не что выпадет', () => {
+    expect(galaxyShape().id).toBe('spiral')
+    // Но лотерея жива для ПРОЧИХ зёрен: override — только на домашнем (куст форму бросает сам).
+    expect(HOME_SHAPE).toBe('spiral')
+  })
+
+  /**
+   * РУКАВ ОТХОДИТ ПО КАСАТЕЛЬНОЙ, а не спицей. Это и отличает логарифмическую спираль от
+   * архимедовой, которая тут была: у той угол растёт линейно по радиусу, `r·dθ` у основания
+   * исчезающе мал против радиального шага — и ветвь тыкалась из ядра наружу радиально.
+   *
+   * Проверяем СВОЙСТВО, а не координаты: наклон рукава к касательной ОДИН И ТОТ ЖЕ на любом
+   * радиусе (это определение лог-спирали) и лежит в диапазоне настоящих спиралей. Переживёт
+   * любую перекрутку `SPIRAL_SWEEP` — сломается только возврат к архимедовой.
+   */
+  it('рукав логарифмический: наклон к касательной постоянен и реалистичен', () => {
+    const inner = 0.04 // основание рукава, как в `spiral()`
+    const sweep = SHAPE.SPIRAL_SWEEP
+    // θ(r) = sweep·ln(r/inner)/ln(1/inner) ⇒ наклон = atan( dr / (r·dθ) ) = atan(ln(1/inner)/sweep)
+    const pitchAt = (r: number): number => {
+      const dTheta = sweep / (r * Math.log(1 / inner)) // dθ/dr
+      return Math.atan(1 / (r * dTheta)) // угол между рукавом и касательной
+    }
+    const pitches = [0.05, 0.2, 0.5, 0.9].map(pitchAt)
+    // Постоянен: разброс по радиусу — численный ноль.
+    for (const p of pitches) expect(p).toBeCloseTo(pitches[0]!, 9)
+    // И реалистичен: у настоящих спиралей 10–25°. Архимедова дала бы у основания почти 90°.
+    const deg = (pitches[0]! * 180) / Math.PI
+    expect(deg).toBeGreaterThan(10)
+    expect(deg).toBeLessThan(25)
   })
 })

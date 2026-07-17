@@ -64,7 +64,7 @@ export interface SystemDef {
   /** Одно число задаёт всю расстановку: пояс, патрули, разброс. */
   seed: number
   playerStart: readonly [number, number, number]
-  star: { pos: readonly [number, number, number]; radius: number; color: number; calm?: boolean }
+  star: { pos: readonly [number, number, number]; radius: number; color: number }
   /**
    * Спутник двойной: вторая звезда или чёрная дыра (барицентр, `separation`, орбита).
    * Позиции нет — место даёт время, как у звёзд пары.
@@ -103,6 +103,11 @@ export interface SystemDef {
   extraStations?: readonly StationDef[]
   belt: { center: readonly [number, number, number]; radius: number; count: number } | null
   patrols: readonly PatrolDef[]
+  /**
+   * Пустынная система: НИКАКОГО трафика — ни встреч, ни завсегдатаев у причала, ни китов и
+   * гнёзд. Люцифер таков: он в бездне, вне маршрутов, там только бог. Данные, не хардкод.
+   */
+  desolate?: boolean
 }
 
 /** Причал: положение, размер и облик. Стиль выбирает геометрию в рендере. */
@@ -112,6 +117,8 @@ export interface StationDef {
   radius: number
   /** Облик: тор-кориолис (умолч.), «солнечный веер» или «крест». */
   style?: 'coriolis' | 'solar' | 'cross'
+  /** Индекс GLB-облика станции (0..N−1), детерминированный по сиду системы. «Крест» не берёт. */
+  model?: number
 }
 
 /** Астрономическая единица, м. Среднее расстояние от Земли до Солнца. */

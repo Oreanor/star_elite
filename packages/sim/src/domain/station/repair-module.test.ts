@@ -53,7 +53,9 @@ describe('поломка детали и её ремонт', () => {
   it('исход ремонта держит инвариант: успех — в норму и платно, провал — хуже и даром', () => {
     const world = createWorld()
     world.credits = 10_000_000
-    const wi = world.player.loadout.weapons.findIndex((w) => w != null && isLaser(w))
+    // Инвариант «успех платен» осмыслен лишь для детали С ЦЕНОЙ: ремонт даровой пушки и сам
+    // бесплатен. Берём первый ПЛАТНЫЙ лазер — в стартовой сборке первый по счёту может быть даровым.
+    const wi = world.player.loadout.weapons.findIndex((w) => w != null && isLaser(w) && w.cost > 0)
     const stockId = world.player.loadout.weapons[wi]!.id
     const base = findModule(stockId)!
     if (base.kind !== 'laser') throw new Error('сток лазера обязан быть лазером')

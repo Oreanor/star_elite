@@ -41,8 +41,6 @@ uniform float uTime;
 uniform vec3 uColor;
 /** Доля радиуса плоскости, занятая ДИСКОМ звезды: за ним короны не видно, там она начинается. */
 uniform float uDiskFrac;
-/** 1 — спокойная корона: гасим стримеры/протуберанцы, остаётся ровный ореол (звезда-гигант). */
-uniform float uCalm;
 
 varying vec2 vUv;
 
@@ -105,13 +103,11 @@ void main() {
   // корона и выходила гладким кольцом без протуберанцев. Порог + степень оставляют
   // отдельные ЯЗЫКИ (яркие пики), а между ними — провалы. Это и есть искажение.
   float streamers = pow(smoothstep(0.32, 0.85, s), 1.5);
-  // Спокойная корона: гасим языки-стримеры до нуля. Тогда reach падает к базе, воротник и
-  // белёсость выравниваются по кругу — остаётся ровный ореол без бьющих наружу «лучей».
-  streamers *= (1.0 - uCalm);
 
   // Докуда добивает жила под этим углом. Слабая база (языков нет — почти нет короны),
-  // сильный ход от стримеров: там где язык — достаёт заметно дальше от лимба.
-  float reach = 0.14 + 0.70 * streamers;
+  // сильный ход от стримеров: там где язык — достаёт заметно дальше от лимба. Ход поднят
+  // (0.70 → 1.05): протуберанцы вытягиваются в полтора раза дальше от лимба.
+  float reach = 0.14 + 1.05 * streamers;
   float tongue = pow(smoothstep(reach, 0.0, rr), 1.3);
 
   // ВОРОТНИК у самого лимба прячет гранёную кромку шара — но сам МОДУЛИРОВАН углом:
@@ -140,16 +136,14 @@ void main() {
 
 /**
  * Материал короны одной звезды. Свой на звезду: `uColor` от класса, `uTime` двигает сцена.
- * `calm` — ровный ореол без протуберанцев (для гиганта Люцифера, чтобы языки не выросли в спицы).
  */
-export function createCoronaMaterial(color: number, calm = false): ShaderMaterial {
+export function createCoronaMaterial(color: number): ShaderMaterial {
   return new ShaderMaterial({
     vertexShader: vertex,
     fragmentShader: fragment,
     uniforms: {
       uTime: { value: 0 },
       uColor: { value: new Color(color) },
-      uCalm: { value: calm ? 1 : 0 },
       // ГДЕ на билборде кромка шара. Плоскость короны — PlaneGeometry(1,1), масштаб glowSize=
       // radius·SCALE, значит её ПОЛУразмер = 0.5·SCALE·radius, а шар радиуса radius занимает
       // r = radius/(0.5·SCALE·radius) = 2/SCALE билборда. Прежние 0.9/SCALE сажали корону

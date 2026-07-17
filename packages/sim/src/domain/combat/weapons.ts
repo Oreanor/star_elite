@@ -53,13 +53,17 @@ export function fireLasers(world: World, e: ShipEntity, hostile: boolean): boole
   e.spec.mounts.forEach((mount, i) => {
     if (!isLaser(mount.weapon)) return
     const gun = e.guns[i]
-    if (!gun || gun.cooldown > 0 || gun.heat >= 1) return
+    // Перегрет? Ствол молчит: либо докалился до предела, либо ещё в окне отключки охлаждения.
+    if (!gun || gun.cooldown > 0 || gun.heat >= 1 || gun.overheatUntil > world.time) return
 
     const laser = mount.weapon
     // Перезаряд и нагрев — на УСТАНОВКУ, раз за залп, а не на каждое дуло: два ствола
     // одного оружия греются как один. Иначе многодульный лазер стрелял бы вдвое реже.
+    // Тепло набирается с глобальным множителем HEAT_RATE (вчетверо медленнее паспортного).
     gun.cooldown = laser.cooldown
-    gun.heat = Math.min(1, gun.heat + laser.heatPerShot)
+    gun.heat = Math.min(1, gun.heat + laser.heatPerShot * GUNNERY.HEAT_RATE)
+    // Достиг предела — ПЕРЕГРЕВ: глохнет на фиксированные секунды (за них остынет наполовину).
+    if (gun.heat >= 1) gun.overheatUntil = world.time + GUNNERY.LASER_OVERHEAT_LOCK
     fired = true
 
     // Дула установки. Нет списка — одно дуло в `offset`. Общая мощность делится поровну:
@@ -76,6 +80,9 @@ export function fireLasers(world: World, e: ShipEntity, hostile: boolean): boole
       // Нацелен в точку сведения: болт наследует направление ствола, но не скорость носителя.
       _dir.copy(_convergence).sub(_muzzle).normalize()
       spawnBolt(world, e, laser, _muzzle, _dir, hostile, perNozzle)
+      // Дульная вспышка у среза: шарик прикрывает торец ствола. Храним стрелка и связанное
+      // смещение (не мировую точку) — рендер держит шарик у дула, пока корабль едет.
+      world.muzzleFlashes.push({ shooterId: e.id, offset: nozzle, weapon: laser.id, born: world.time })
     }
   })
 
@@ -165,15 +172,27 @@ export function fireMissile(world: World, e: ShipEntity, targetId: number | null
 }
 
 /** Остывание и перезарядка. Зовётся каждый шаг для каждого корабля. */
-export function coolGuns(e: ShipEntity, dt: number): void {
+export function coolGuns(e: ShipEntity, now: number, dt: number): void {
+  // Пока ствол в отключке перегрева — остывает к ПОЛОВИНЕ ровно за время отключки
+  // (не своим heatCool, иначе к разблокировке он был бы уже холодным или ещё горячим).
+  const lockRate = (1 - GUNNERY.LASER_OVERHEAT_HALF) / GUNNERY.LASER_OVERHEAT_LOCK
   e.spec.mounts.forEach((mount, i) => {
     const gun = e.guns[i]
     if (!gun) return
     gun.cooldown = Math.max(0, gun.cooldown - dt)
     if (isLaser(mount.weapon)) {
-      gun.heat = Math.max(0, gun.heat - mount.weapon.heatCool * dt)
+      if (gun.overheatUntil > now) {
+        gun.heat = Math.max(GUNNERY.LASER_OVERHEAT_HALF, gun.heat - lockRate * dt)
+      } else {
+        gun.heat = Math.max(0, gun.heat - mount.weapon.heatCool * dt)
+      }
     }
   })
+}
+
+/** Есть ли ствол в отключке перегрева прямо сейчас — HUD мигает «ОХЛАЖДЕНИЕ». */
+export function laserOverheated(e: ShipEntity, now: number): boolean {
+  return e.guns.some((g) => g.overheatUntil > now)
 }
 
 /** Максимальный перегрев среди стволов — то, что показывает HUD. */

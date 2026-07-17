@@ -6,7 +6,7 @@ import { manoeuvreHoldsCamera } from '../../app/control/playerController'
 import { useSession } from '../../app/GameContext'
 import { jumpFx, jumpShake } from '../../app/control/jumpFx'
 import { undocking, undockProgress } from '../../app/control/undockFx'
-import { cameraView } from '../../app/control/cameraView'
+import { cameraView, consumeViewReset } from '../../app/control/cameraView'
 import { bombShake } from '../bombFeel'
 import { CAMERA, GIANT_RENDER_CAP, RENDER } from '../config'
 
@@ -30,8 +30,9 @@ const _shake = new Vector3()
 const _bombShake = new Vector3()
 const _jumpShake = new Vector3()
 const _camRot = new Quaternion()
-/** Пользовательский облёт: поворот всей связки камеры вокруг вертикали корабля. */
+/** Пользовательский облёт: рыскание всей связки камеры вокруг СОБСТВЕННОЙ вертикали борта. */
 const _orbit = new Quaternion()
+/** Ось облёта — вертикаль связанных осей борта (курс+крен). Мировой «верх» тут ни при чём. */
 const _up = new Vector3()
 
 /** Направление носа и взгляда камеры — для инкрементального доворота курса. */
@@ -104,6 +105,14 @@ export function FlightCamera() {
     const state = player.state
 
     /**
+     * Отъезд под РАЗМЕР корпуса: базовое смещение выверено под истребитель (радиус ≈ SIZE_REF),
+     * крупный борт («Атлас») иначе оказался бы внутри кадра. Множитель ≥ 1 — мелкий корабль
+     * камеру НЕ придвигает ближе базовой дистанции, только крупный отодвигает. Радиус — доменная
+     * величина корпуса (не визуальный масштаб меша), но пропорция та же и как прокси годится.
+     */
+    const sizeFactor = clamp(player.loadout.chassis.radius / CAMERA.SIZE_REF, 1, CAMERA.SIZE_PULLBACK_MAX)
+
+    /**
      * ВЫЛЕТ СО СТАНЦИИ: камера ведёт кино. Стартует ВПЕРЕДИ носа и смотрит наружу —
      * корабль позади неё, вне кадра. За ~3 с смещение по скрипту едет от `UNDOCK_AHEAD`
      * к обычному `CHASE_OFFSET`, ускоряясь к финалу: камера откатывается за корму, а
@@ -122,6 +131,7 @@ export function FlightCamera() {
       const ah = CAMERA.UNDOCK_AHEAD
       _offset
         .set(ah[0] + (off[0] - ah[0]) * k, ah[1] + (off[1] - ah[1]) * k, ah[2] + (off[2] - ah[2]) * k)
+        .multiplyScalar(sizeFactor)
         .applyQuaternion(state.quat)
       _target.copy(state.pos).add(_offset)
 
@@ -144,7 +154,7 @@ export function FlightCamera() {
     if (jumpFx().phase === 'depart') {
       const fx = jumpFx()
       const off = CAMERA.CHASE_OFFSET
-      _offset.set(off[0], off[1], off[2]).applyQuaternion(fx.ringQuat)
+      _offset.set(off[0], off[1], off[2]).multiplyScalar(sizeFactor).applyQuaternion(fx.ringQuat)
       _target.copy(fx.shipStart).add(_offset)
       _desiredQuat.copy(fx.ringQuat).multiply(_pitchDown)
 
@@ -207,8 +217,19 @@ export function FlightCamera() {
     }
     frozen.current = null
 
+    /**
+     * Пользовательский облёт активен (стрелки ←/→ увели азимут от нуля)? Тогда камера НЕ
+     * отыгрывает крен/кувырок корабля: она висит на выбранном ракурсе и лишь сопровождает
+     * борт. Иначе ось облёта, база смещения и крен камеры брались бы от НАКРЕНЁННОГО корабля,
+     * и при облёте камера кувыркалась вслед за креном. Ниже (ось, база, взгляд) всё берётся
+     * от КУРСА КАМЕРЫ (`camSwing`) — устойчивого к крену; разворот на 180° лишь зеркально
+     * перебросит камеру в хвост, но не опрокинет. Дефолтный ракурс (азимут 0) не затронут.
+     */
+    const view = cameraView()
+    const orbiting = Math.abs(view.azimuth) > 1e-3
+
     const offset = CAMERA.CHASE_OFFSET
-    _offset.set(offset[0], offset[1], offset[2])
+    _offset.set(offset[0], offset[1], offset[2]).multiplyScalar(sizeFactor)
     if (held) {
       /**
        * И отодвигается — ровно на петлю. Радиус петли есть v/ω, и с обычных
@@ -232,7 +253,10 @@ export function FlightCamera() {
       _camRot.copy(camSwing).multiply(camTwist)
       _offset.applyQuaternion(_camRot)
     } else {
-      _offset.applyQuaternion(state.quat)
+      // При облёте база смещения — в СВЯЗАННЫХ осях борта (сглаженных курс+крен): камера за
+      // кормой И ЕСТЬ ноль, поэтому облёт обязан идти в его осях. От мировых борт валится набок.
+      _camRot.copy(camSwing).multiply(camTwist)
+      _offset.applyQuaternion(orbiting ? _camRot : state.quat)
     }
     // Миелофон: камера отъезжает НА ТОТ ЖЕ множитель, что и размер борта. Оттого свой
     // корабль на экране всегда одного размера, а мир вокруг «уменьшается» — не «я расту».
@@ -245,15 +269,29 @@ export function FlightCamera() {
     // корабля. Облёт — жёсткий поворот всей связки камеры (и смещения, и взгляда ниже)
     // вокруг вертикали корабля через его центр: корабль остаётся в центре кадра, меняется
     // только угол обзора. `_orbit` переиспользуется ниже для доворота ориентации.
-    const view = cameraView()
     _offset.multiplyScalar(view.distance)
-    _up.set(0, 1, 0).applyQuaternion(state.quat)
+    /**
+     * Ось облёта — СОБСТВЕННАЯ вертикаль борта (сглаженные курс+крен), а не мировая.
+     *
+     * В космосе «верха» нет: мировая вертикаль тут посторонняя. Пока камера за кормой, ноль
+     * задаёт сам борт — а стоило взять мировую ось, наружу вылезал крен борта ОТНОСИТЕЛЬНО МИРА,
+     * и на облёте корабль заваливался набок. Вокруг же своей вертикали азимут — ЧИСТОЕ РЫСКАНИЕ
+     * в осях борта (тождество сопряжения: R(Q·y,α)·Q = Q·R(y,α)): крена во взгляд не вносит
+     * вовсе, кувыркать нечему. И при азимуте 0 облёт ТОЖДЕСТВЕНЕН погонному виду — оттого нет
+     * ни рывка на входе, ни разрыва на выходе.
+     */
+    _camRot.copy(camSwing).multiply(camTwist)
+    _up.set(0, 1, 0).applyQuaternion(_camRot)
     _orbit.setFromAxisAngle(_up, view.azimuth)
     _offset.applyQuaternion(_orbit)
 
+    // dt сглаживания камеры ЗАЖАТ сверху: на кадровом хитче (подгрузка GLB, GC) экспонента при
+    // большом dt подскочила бы к цели за один кадр — виден «скачок на пропущенный шаг». Обычный
+    // кадр (dt < порога) не трогается вовсе, только редкий спайк не даёт щелчка.
+    const camDt = Math.min(dt, 0.05)
     // Цель слежения — точка за кормой. Упреждение и пружину добавим НИЖЕ, после обновления
     // ориентации: камера «плавает» за кораблём, как шарик на нитке, а не приколочена к нему.
-    const chaseAlpha = 1 - Math.exp(-CAMERA.CHASE_STIFFNESS * dt)
+    const chaseAlpha = 1 - Math.exp(-CAMERA.CHASE_STIFFNESS * camDt)
     _target.copy(state.pos).add(_offset)
 
     /**
@@ -271,16 +309,30 @@ export function FlightCamera() {
      */
     _noseFwd.set(0, 0, -1).applyQuaternion(state.quat)
 
-    if (held) {
+    /**
+     * V — сброс ВСЕГО накопленного, не только азимута с зумом. Курс ставим строго за нос, а крен
+     * берём СВЕЖИЙ по борту. Иначе после облёта `camTwist` оставался подвисшим (в облёте он не
+     * обновляется), и даже после сброса корабль оказывался чуть накренён — рулить неудобно.
+     */
+    const viewReset = consumeViewReset()
+
+    if (viewReset) {
+      camSwing.setFromUnitVectors(_refFwd, _noseFwd)
+      residualTwist(state.quat, camSwing, _twist)
+      camTwist.copy(_twist)
+    } else if (held) {
       // В фигуре ориентацию не трогаем — камера смотрит замороженным курсом, корабль
       // крутится в центре кадра.
     } else if (running) {
-      // Доворот курса на кратчайший поворот от «куда смотрит камера» к носу, долей dt.
+      // Путь ОДИН и для погони, и для облёта: облёт — это тот же погонный вид, довёрнутый
+      // рыскáнием вокруг собственной вертикали борта (см. `_orbit` выше). Потому и крен здесь
+      // обновляется всегда: он часть осей борта, от которых облёт и считается. Отдельной ветки
+      // облёта больше нет — оттого при азимуте 0 виды тождественны и на входе нет рывка.
+      const rot = 1 - Math.exp(-CAMERA.CHASE_ROT_STIFFNESS * dt)
+      // Кратчайший поворот (parallel transport) — не выдумывает крен в вираже.
       _camFwd.set(0, 0, -1).applyQuaternion(camSwing)
       _deltaRot.setFromUnitVectors(_camFwd, _noseFwd)
-      camSwing
-        .premultiply(_identity.identity().slerp(_deltaRot, 1 - Math.exp(-CAMERA.CHASE_ROT_STIFFNESS * dt)))
-        .normalize()
+      camSwing.premultiply(_identity.identity().slerp(_deltaRot, rot)).normalize()
       residualTwist(state.quat, camSwing, _twist)
       camTwist.slerp(_twist, 1 - Math.exp(-CAMERA.ROLL_STIFFNESS * dt))
     } else {
@@ -315,10 +367,16 @@ export function FlightCamera() {
       camera.position.copy(_target)
     }
 
-    // Тот же облёт — на взгляд: связка (позиция + ориентация) поворачивается вокруг
-    // корабля как жёсткое тело, поэтому корабль не уплывает из центра при облёте.
+    // ОДНА формула на оба вида: курс + крен борта + постоянный наклон вниз, довёрнутые на азимут
+    // облёта. `_orbit` построен вокруг СОБСТВЕННОЙ вертикали борта, поэтому premultiply здесь —
+    // это ровно рыскание в его осях (R(Q·y,α)·Q = Q·R(y,α)), крена он не подмешивает. При азимуте
+    // 0 `_orbit` тождественен, и облёт вырождается в обычную погоню — без ветвей и без рывка.
     _desiredQuat.copy(camSwing).multiply(camTwist).multiply(_pitchDown).premultiply(_orbit)
-    camera.quaternion.copy(_desiredQuat)
+    // Слёрп, а не жёсткий copy: сглаживает СКАЧОК ориентации при входе/выходе облёта (погон↔
+    // turntable отличаются на крен борта). Стиффнес высокий — в устоявшемся ходе слежение не проседает.
+    // Сброс по V — жёстко и сразу (без слёрпа): это явная команда «вернуть как было», а не плавный
+    // доворот. Иначе накопленный крен ещё пару кадров дотягивался бы и сброс ощущался вязким.
+    camera.quaternion.slerp(_desiredQuat, running && !viewReset ? 1 - Math.exp(-CAMERA.VIEW_STIFFNESS * camDt) : 1)
 
     // ── Крейсер: поле зрения и тряска ────────────────────────────────────────
     const factor = player.cruise.factor

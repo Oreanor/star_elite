@@ -30,6 +30,7 @@ export {
   coolGuns,
   fireLasers,
   fireMissile,
+  laserOverheated,
   missileAmmo,
   muzzleWorldPos,
   peakHeat,

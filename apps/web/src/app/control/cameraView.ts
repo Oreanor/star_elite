@@ -25,14 +25,30 @@ const ZOOM_MAX = 3
 
 const view = { azimuth: 0, distance: 1 }
 
+/**
+ * Сброс запрошен, но ещё не отработан камерой. Азимут с дистанцией живут ЗДЕСЬ и гасятся
+ * сразу, а вот накопленный курс с КРЕНОМ живёт в самой камере (`camSwing`/`camTwist`) — она
+ * их и чистит, забрав этот флаг. Иначе после облёта крен оставался несвежим, и корабль
+ * оказывался чуть накренён даже после V.
+ */
+let resetPending = false
+
 export function cameraView(): { readonly azimuth: number; readonly distance: number } {
   return view
 }
 
-/** Сброс к погонному виду по умолчанию (клавиша V). */
+/** Сброс к погонному виду по умолчанию (клавиша V): ракурс здесь, состояние камеры — флагом. */
 export function resetCameraView(): void {
   view.azimuth = 0
   view.distance = 1
+  resetPending = true
+}
+
+/** Забрать запрос сброса (одноразовый). Зовёт FlightCamera, чтобы снять накопленный крен/курс. */
+export function consumeViewReset(): boolean {
+  const pending = resetPending
+  resetPending = false
+  return pending
 }
 
 /**
@@ -42,8 +58,9 @@ export function resetCameraView(): void {
 export function stepCameraView(dt: number): void {
   if (consumePress('KeyV')) resetCameraView()
 
-  if (isHeld('ArrowLeft')) view.azimuth += ORBIT_RATE * dt
-  if (isHeld('ArrowRight')) view.azimuth -= ORBIT_RATE * dt
+  // Знак согласован с turntable-облётом (взгляд = lookAt): «влево» уводит камеру ВЛЕВО.
+  if (isHeld('ArrowLeft')) view.azimuth -= ORBIT_RATE * dt
+  if (isHeld('ArrowRight')) view.azimuth += ORBIT_RATE * dt
 
   // ↑ ближе, ↓ дальше. Множим, а не прибавляем: у зума естественный шаг — доля, а не метр.
   if (isHeld('ArrowUp')) view.distance = clamp(view.distance * Math.exp(-ZOOM_RATE * dt), ZOOM_MIN, ZOOM_MAX)

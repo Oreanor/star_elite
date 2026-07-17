@@ -56,7 +56,7 @@ describe('прокачка х-к корпуса', () => {
     upgradeHullStat(world, p, 'cargo')
     expect(p.hullUp.hull).toBe(true)
 
-    const freighter = SHIPYARD.find((o) => o.chassis.id === 'freighter')!
+    const freighter = SHIPYARD.find((o) => o.chassis.id === 'atlas')!
     expect(swapHull(world, freighter.chassis, 0)).toBeNull()
     expect(p.hullUp).toEqual({ hull: false, cargo: false, aux: false }) // новая рама заводская
   })

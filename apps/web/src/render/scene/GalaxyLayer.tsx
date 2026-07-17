@@ -10,7 +10,7 @@ import {
   ShaderMaterial,
   Vector3,
 } from 'three'
-import { clamp, generateGalaxy } from '@elite/sim'
+import { applyDelta, clamp, generateGalaxy } from '@elite/sim'
 import { useSession } from '../../app/GameContext'
 import { GALAXY_LAYER } from '../config'
 import { galaxyRadar } from './galaxyRadar'
@@ -118,7 +118,8 @@ export function GalaxyLayer() {
   const geometry = useMemo(() => {
     if (!awake) return null
     const world = session.world
-    const galaxy = generateGalaxy(world.galaxySeed)
+    // База из зерна + правки бога (дельта): слой звёзд отражает перекроенную карту.
+    const galaxy = applyDelta(generateGalaxy(world.galaxySeed), world.galaxyDelta)
     const origin = galaxy[world.systemIndex] ?? galaxy[0]!
     const n = galaxy.length
     const positions = new Float32Array(n * 3)
@@ -146,9 +147,9 @@ export function GalaxyLayer() {
     // Те же буферы отдаём локатору: он рисует те же звёзды в той же системе координат.
     starData.current = { positions, colors, count: n }
     return g
-    // Пересобираем при смене системы (world.epoch): своя звезда — другая точка отсчёта.
+    // Пересобираем при смене системы (world.epoch) и при правке карты богом (galaxyEpoch).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [awake, session, session.world.epoch])
+  }, [awake, session, session.world.epoch, session.world.galaxyEpoch])
 
   // Старую геометрию (прошлая система) освобождаем: буфер на 2500×7 float живёт в GPU.
   useEffect(() => () => geometry?.dispose(), [geometry])

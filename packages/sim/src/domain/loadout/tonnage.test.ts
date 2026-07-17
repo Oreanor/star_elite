@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { AURORA_MK3 } from '../../config/chassis'
+import { AURORA_ONE } from '../../config/chassis'
 import {
   ARMOUR_STEEL_3,
   CARGO_LARGE,
@@ -22,16 +22,16 @@ import { createLoadout, deriveShipSpec } from '.'
  */
 describe('грузоподъёмность корпуса (тоннаж)', () => {
   it('оборудование съедает грузоподъёмность: тяжелее обвес — меньше трюма', () => {
-    const light = deriveShipSpec(createLoadout(AURORA_MK3, [ENGINE_STANDARD, RCS_STANDARD, SHIELD_LIGHT], [])).cargoCapacity
-    const heavy = deriveShipSpec(createLoadout(AURORA_MK3, [ENGINE_STANDARD, RCS_STANDARD, SHIELD_HEAVY], [])).cargoCapacity
+    const light = deriveShipSpec(createLoadout(AURORA_ONE, [ENGINE_STANDARD, RCS_STANDARD, SHIELD_LIGHT], [])).cargoCapacity
+    const heavy = deriveShipSpec(createLoadout(AURORA_ONE, [ENGINE_STANDARD, RCS_STANDARD, SHIELD_HEAVY], [])).cargoCapacity
     expect(heavy).toBeLessThan(light) // тяжёлый щит отнял место у трюма
     // Отнял примерно на разницу масс (±1 т округления до целых тонн) — это ВЫЧЕТ массы, не «штраф».
     expect(Math.abs((light - heavy) - (SHIELD_HEAVY.mass - SHIELD_LIGHT.mass))).toBeLessThanOrEqual(1)
   })
 
   it('контейнер даёт НЕТТО прибавку: вместимость минус собственная масса', () => {
-    const bare = deriveShipSpec(createLoadout(AURORA_MK3, [ENGINE_STANDARD, RCS_STANDARD], [])).cargoCapacity
-    const withRack = deriveShipSpec(createLoadout(AURORA_MK3, [ENGINE_STANDARD, RCS_STANDARD, CARGO_LARGE], [])).cargoCapacity
+    const bare = deriveShipSpec(createLoadout(AURORA_ONE, [ENGINE_STANDARD, RCS_STANDARD], [])).cargoCapacity
+    const withRack = deriveShipSpec(createLoadout(AURORA_ONE, [ENGINE_STANDARD, RCS_STANDARD, CARGO_LARGE], [])).cargoCapacity
     const gain = withRack - bare
     expect(gain).toBeGreaterThan(0) // расширять трюм он обязан, а не сжимать
     // Нетто = capacity − mass (~9× массы), с точностью до тонны округления.
@@ -42,7 +42,7 @@ describe('грузоподъёмность корпуса (тоннаж)', () =>
     // Набиваем корпус самым тяжёлым железом сверх бюджета (36+ т против базы 22): трюма
     // не остаётся вовсе, но отрицательной вместимости быть не может.
     const overloaded = createLoadout(
-      AURORA_MK3,
+      AURORA_ONE,
       [ENGINE_MILITARY, RCS_MILITARY, SHIELD_HEAVY, ARMOUR_STEEL_3, ARMOUR_STEEL_3, HYPERDRIVE_DEEP, CLOAK_FIELD, MIELOPHONE_DEVICE],
       [],
     )
@@ -50,12 +50,12 @@ describe('грузоподъёмность корпуса (тоннаж)', () =>
   })
 
   it('аукс-ёмкость доп-отсека берётся из корпуса', () => {
-    const l = createLoadout(AURORA_MK3, [ENGINE_STANDARD, RCS_STANDARD], [])
-    expect(deriveShipSpec(l).power.auxCapacity).toBe(AURORA_MK3.auxCapacity)
+    const l = createLoadout(AURORA_ONE, [ENGINE_STANDARD, RCS_STANDARD], [])
+    expect(deriveShipSpec(l).power.auxCapacity).toBe(AURORA_ONE.auxCapacity)
   })
 
   it('прокачка оси рамы усиливает ТОЛЬКО её: HP / трюм / аукс независимы', () => {
-    const l = createLoadout(AURORA_MK3, [ENGINE_STANDARD, RCS_STANDARD], [])
+    const l = createLoadout(AURORA_ONE, [ENGINE_STANDARD, RCS_STANDARD], [])
     const base = deriveShipSpec(l)
     // Усилили только аукс — растёт аукс, HP и трюм не трогаются.
     const aux = deriveShipSpec(l, 0, { hull: false, cargo: false, aux: true })

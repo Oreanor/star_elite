@@ -551,6 +551,27 @@ export const PULSE_LASER: LaserModule = {
   heatCool: 0.28,
 }
 
+/**
+ * Центральный «Столб» — тяжёлый импульсник: бьёт ВДВОЕ реже обычного (cooldown 0.5),
+ * зато вдвое больнее за выстрел — тот же секундный урон, но кучным «столбом света».
+ * Класс 1 (тот же синий цвет луча), стоит по центру носа. Толщина луча — чисто визуал
+ * и живёт в рендере (LASER_BEAM_SCALE по id), домену её знать незачем.
+ */
+export const PULSE_LASER_CENTRAL: LaserModule = {
+  id: 'pulse_1c',
+  name: 'Импульсный лазер 1 «Столб»',
+  kind: 'laser',
+  class: 1,
+  mass: 0.5,
+  cost: 0,
+  salvageChance: 0.4,
+  damage: 18, // 2× обычного: реже бьёт — сильнее за выстрел, DPS тот же
+  range: 2200,
+  cooldown: 0.5, // вдвое реже PULSE_LASER (0.25)
+  heatPerShot: 0.14,
+  heatCool: 0.28,
+}
+
 export const BURST_LASER: LaserModule = {
   id: 'pulse_2',
   name: 'Импульсный лазер 2',
@@ -1282,7 +1303,7 @@ export const MODULE_CATALOGUE: readonly ShipModule[] = [
   ARMOUR_PLATE, ARMOUR_STEEL_2, ARMOUR_STEEL_3,
   ARMOUR_COMPOSITE, ARMOUR_COMPOSITE_B,
   ARMOUR_CERAMET_1, ARMOUR_CERAMET_2, ARMOUR_CERAMET_3,
-  PULSE_LASER_WORN, PULSE_LASER, PULSE_LASER_FINE, BURST_LASER,
+  PULSE_LASER_WORN, PULSE_LASER, PULSE_LASER_FINE, PULSE_LASER_CENTRAL, BURST_LASER,
   BEAM_LASER_LIGHT, BEAM_LASER, BEAM_LASER_HEAVY,
   ROTARY_LASER, ROTARY_LASER_B,
   PLASMA_GUN, PLASMA_GUN_HEAVY,

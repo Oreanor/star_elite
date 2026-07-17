@@ -7,14 +7,14 @@ import { stepWorld } from '../sim'
 import { createWorld, STARTER_SYSTEM } from '../world'
 import type { ShipEntity, World } from '../world/entities'
 import { aiController } from './pilot'
-import { assignApproach, assignCollectRun, enqueueTask, hasTask, stepTasks } from './tasks'
+import { assignApproach, assignCollectRun, assignRendezvous, clearTasks, enqueueTask, hasTask, stepTasks } from './tasks'
 
 /** Мир с одним ботом-компаньоном (эскорт игрока), готовым брать поручения. */
 function withCompanion(): { world: World; bot: ShipEntity } {
   const world = createWorld({
     ...STARTER_SYSTEM,
     belt: null,
-    patrols: [{ count: 1, at: [0, 0, -600], spread: 0, faction: 'ally', name: 'Компаньон' }],
+    patrols: [{ count: 1, at: [0, 0, -600], spread: 0, faction: 'neutral', name: 'Компаньон' }],
   })
   const bot = world.ships[0]!
   bot.ai!.escortOf = world.player.id
@@ -114,23 +114,73 @@ describe('очередь задач компаньона', () => {
 
   it('подход к телу ведёт к точке ВНЕ его поверхности, не в центр', () => {
     const { world, bot } = withCompanion()
-    bot.state.pos.set(0, 0, 2000) // бот со стороны +Z от тела
-    const bodyPos = new Vector3(0, 0, 0)
-    const bodyRadius = 600
+    const body = world.bodies.find((b) => b.kind === 'station') ?? world.bodies[0]!
     const margin = 800
+    // Бот со стороны +Z от тела: подлёт обязан выйти с ЕГО стороны, а не с противоположной.
+    bot.state.pos.copy(body.pos).add(new Vector3(0, 0, body.radius + 2000))
 
-    assignApproach(bot, bodyPos, bodyRadius, margin)
+    assignApproach(bot, body.id, margin)
     const intent = stepTasks(bot, world)!
     expect(intent).not.toBeNull()
     // Целевая точка — снаружи тела: не ближе радиуса к центру (не втыкаемся в поверхность).
-    expect(intent.target.distanceTo(bodyPos)).toBeGreaterThan(bodyRadius)
+    expect(intent.target.distanceTo(body.pos)).toBeGreaterThan(body.radius)
     // И со стороны бота (по +Z), а не с противоположной.
-    expect(intent.target.z).toBeGreaterThan(0)
+    expect(intent.target.z).toBeGreaterThan(body.pos.z)
 
     // Долетел до точки — задача снялась (это «долети», а не «жди»).
     bot.state.pos.copy(intent.target)
     expect(stepTasks(bot, world)).toBeNull()
     expect(hasTask(bot)).toBe(false)
+  })
+
+  /**
+   * СТАНЦИЯ ЛЕТИТ ПО ОРБИТЕ. Поручение обязано вести её ПО ID, пересчитывая подлёт каждый шаг:
+   * с точкой-слепком бот пёр туда, где станции уже нет, и со стороны это выглядело как «летит
+   * то к ней, то от неё». Проверяем поведение (цель следует за телом), а не координаты.
+   */
+  it('подлёт ведёт ДВИЖУЩЕЕСЯ тело, а не замороженную точку', () => {
+    const { world, bot } = withCompanion()
+    const body = world.bodies.find((b) => b.kind === 'station') ?? world.bodies[0]!
+    bot.state.pos.copy(body.pos).add(new Vector3(0, 0, body.radius + 5000))
+
+    assignApproach(bot, body.id)
+    const before = stepTasks(bot, world)!.target.clone()
+
+    // Тело уехало по орбите — цель обязана уехать вместе с ним.
+    body.pos.add(new Vector3(4000, 0, 0))
+    const after = stepTasks(bot, world)!.target.clone()
+
+    expect(after.distanceTo(before)).toBeGreaterThan(1000)
+    // И всё так же снаружи тела, а не в его центре.
+    expect(after.distanceTo(body.pos)).toBeGreaterThan(body.radius)
+  })
+
+  /**
+   * «Подлети ко мне» — к ЖИВОМУ игроку, а не к нав-цели. Отдельный примитив: раньше такого
+   * приказа не было, и на просьбу бот брал `approach-nav` и улетал мимо игрока к станции.
+   */
+  it('«ко мне» ведёт живого игрока и ДЕРЖИТСЯ рядом, а не снимается по прибытии', () => {
+    const { world, bot } = withCompanion()
+    world.player.state.pos.set(0, 0, 0)
+    bot.state.pos.set(0, 0, 6000)
+
+    assignRendezvous(bot, world.player.id, 220)
+    const first = stepTasks(bot, world)!
+    expect(first.target.distanceTo(world.player.state.pos)).toBe(0)
+
+    // Игрок улетел — цель следует за ним, а не остаётся в старой точке.
+    world.player.state.pos.set(5000, 0, 0)
+    expect(stepTasks(bot, world)!.target.distanceTo(world.player.state.pos)).toBe(0)
+
+    // Долетел — поручение НЕ снимается: иначе бот уходит в свои дела, и это выглядит как
+    // «подлетел и пролетел мимо». Держится рядом, пока не отставят.
+    bot.state.pos.copy(world.player.state.pos)
+    expect(stepTasks(bot, world)).not.toBeNull()
+    expect(hasTask(bot)).toBe(true)
+
+    // «Отставить» — единственный законный выход.
+    clearTasks(bot)
+    expect(stepTasks(bot, world)).toBeNull()
   })
 
   /**

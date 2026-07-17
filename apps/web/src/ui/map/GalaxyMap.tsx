@@ -21,6 +21,7 @@ import {
   arrivalBounds,
   galaxyName,
   galaxyShape,
+  applyDelta,
   generateGalaxy,
   isInhabited,
   jumpBlock,
@@ -228,13 +229,15 @@ function Stars({
       frustumCulled={false}
       onPointerMove={(e) => {
         e.stopPropagation()
-        // Отсеянная фильтром звезда курсора не ловит: наводимся только на видимые.
-        onHover(e.index != null && visible[e.index] ? e.index : null)
+        // ВЫБИРАЕМЫ ВСЕ звёзды, даже вне зоны прыжка и отсеянные фильтром: фильтр лишь
+        // притеняет (эмфаза), а не запрещает выбор. Зона прыжка решает только, активна ли
+        // кнопка прыжка в панельке (`jumpBlock`), — но затаргетить и разглядеть можно любую.
+        onHover(e.index != null ? e.index : null)
       }}
       onPointerOut={() => onHover(null)}
       onClick={(e) => {
         e.stopPropagation()
-        if (e.index != null && visible[e.index]) onSelect(e.index)
+        if (e.index != null) onSelect(e.index)
       }}
     />
   )
@@ -676,8 +679,12 @@ export function GalaxyMap({ onClose, embedded = false }: { onClose: () => void; 
   const session = useSession()
   const world = session.world
 
-  // 2500 систем строятся за миллисекунды, но не каждый кадр: зерно задаёт всё.
-  const systems = useMemo(() => generateGalaxy(world.galaxySeed), [world.galaxySeed])
+  // 2500 систем строятся за миллисекунды, но не каждый кадр: зерно задаёт всё, а правки
+  // бога (дельта) ложатся поверх — карта их отражает, пересобираясь на смену galaxyEpoch.
+  const systems = useMemo(
+    () => applyDelta(generateGalaxy(world.galaxySeed), world.galaxyDelta),
+    [world.galaxySeed, world.galaxyEpoch, world.galaxyDelta],
+  )
   // Имя и форма выводятся из того же зерна: галактика не хранится нигде.
   const galaxy = useMemo(
     () => ({ name: galaxyName(world.galaxySeed), shape: galaxyShape(world.galaxySeed) }),

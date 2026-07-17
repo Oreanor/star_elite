@@ -121,17 +121,20 @@ export function systemDefOf(system: StarSystem, galaxySeed: number, seatOverride
       name: system.name,
       seed: Math.floor(rng() * 2 ** 31),
       playerStart: [0, 0, dist],
-      // calm: у Люцифера спокойная корона — без бьющих наружу протуберанцев-«лучей».
-      star: { pos: [0, 0, 0], radius: r, color: system.star.color, calm: true },
+      star: { pos: [0, 0, 0], radius: r, color: system.star.color },
       companion: null,
       dyson: null,
       planets: [],
       // Основной причал — «солнечный веер», вдесятеро крупнее кориолиса (radius 400 → 4000).
       station: { name: 'Причал «Веер»', pos: [0, 0, dist - 16_000], radius: 4_000, style: 'solar' },
-      // Крест-храм чуть глубже к звезде: божественный монумент с лучами из концов. На нём — Слово.
-      extraStations: [{ name: 'Крест «Вечность»', pos: [0, 0, dist - 40_000], radius: 6_000, style: 'cross' }],
+      // Крест-храм — ВДЕСЯТЕРО крупнее (radius 6000→60000): исполинский монумент с лучами из
+      // концов. Отодвинут глубже к звезде (dist−90000), чтобы 60-км крест не накрыл 4-км Веер:
+      // расстояние центров 74 км > 60+4 км суммы радиусов. На нём — Слово.
+      extraStations: [{ name: 'Крест «Вечность»', pos: [0, 0, dist - 90_000], radius: 60_000, style: 'cross' }],
       belt: null,
       patrols: [],
+      // Бездна: ни трафика, ни завсегдатаев — пусто, только Люцифер и бог на Кресте.
+      desolate: true,
     }
   }
 
@@ -178,17 +181,23 @@ export function systemDefOf(system: StarSystem, galaxySeed: number, seatOverride
   const seatStation = system.planets[seat]?.station ?? null
   const start = arrivalPoint(system, seat, planets)
   const seatPlanet = planets[seat]
+  // Сид системы фиксируем ДО станции: из него же выводим детерминированный облик причала,
+  // чтобы «где какая» не зависело от пути прибытия и совпадало у всех клиентов (общий сид).
+  const seed = Math.floor(rng() * 2 ** 31)
+  // Пять GLB-обликов станций (рендер берёт по модулю фактического числа — расхождение безопасно).
+  const stationModel = Math.floor(makeRng(seed ^ 0x53_54_4e)() * 5)
   const stationDef = seatStation && seatPlanet
     ? {
         name: seatStation.name,
         pos: [start[0], start[1], start[2] - 2_000] as [number, number, number],
         radius: 400,
+        model: stationModel,
       }
     : null
 
   return {
     name: system.name,
-    seed: Math.floor(rng() * 2 ** 31),
+    seed,
     playerStart: start,
     star: { pos: [0, 0, 0], radius: starRadius, color: system.star.color },
     companion,

@@ -4,14 +4,17 @@ import {
   Color,
   DoubleSide,
   LineBasicMaterial,
+  type Material,
   MeshBasicMaterial,
   MeshLambertMaterial,
   MeshStandardMaterial,
   PointsMaterial,
+  ShaderMaterial,
   SpriteMaterial,
   type Texture,
 } from 'three'
 import { MATERIAL, PALETTE } from '../config'
+import { glbMaterial } from '../geometry/ships'
 
 /**
  * Материалы создаются один раз на модуль. Каждый новый материал — это новая
@@ -39,14 +42,48 @@ let hull: MeshStandardMaterial | null = null
  * в лог-буфер глубины — лечится не отсечением граней, а `GIANT_RENDER_CAP`.
  */
 export function hullMaterial(): MeshStandardMaterial {
-  hull ??= new MeshStandardMaterial({
+  if (hull) return hull
+  hull = new MeshStandardMaterial({
     vertexColors: true,
     flatShading: true,
     side: DoubleSide,
     metalness: MATERIAL.HULL_METALNESS,
     roughness: MATERIAL.HULL_ROUGHNESS,
   })
+  // Перламутровый френель-кант: холодный ободок на косом угле поверх штатного PBR.
+  // Правим готовый шейдер MeshStandard, а не пишем свой: сохраняем весь свет, тени и
+  // блик от звезды, добавляя лишь один член. `normal` и `vViewPosition` живут в scope
+  // до конца main(); с flatShading `normal` — нормаль ФАСКИ, поэтому кант гранёный.
+  hull.onBeforeCompile = (shader) => {
+    shader.uniforms.uRimColor = { value: new Color(MATERIAL.HULL_RIM_COLOR) }
+    shader.uniforms.uRimStrength = { value: MATERIAL.HULL_RIM_STRENGTH }
+    shader.uniforms.uRimPower = { value: MATERIAL.HULL_RIM_POWER }
+    shader.fragmentShader = shader.fragmentShader
+      .replace(
+        'void main() {',
+        `uniform vec3 uRimColor;
+         uniform float uRimStrength;
+         uniform float uRimPower;
+         void main() {`,
+      )
+      .replace(
+        '#include <dithering_fragment>',
+        `float rimFresnel = pow(1.0 - clamp(dot(normalize(normal), normalize(vViewPosition)), 0.0, 1.0), uRimPower);
+         gl_FragColor.rgb += uRimColor * (rimFresnel * uRimStrength);
+         #include <dithering_fragment>`,
+      )
+  }
   return hull
+}
+
+/**
+ * Материал корпуса по id шасси. GLB-корпуса несут СВОЙ материал с текстурами (карты Meshy) —
+ * берём его; пока GLB не доехал, откат на штатный металл (в это время и геометрия — заглушка,
+ * см. chassisGeometry). Процедурные корпуса — штатный `hullMaterial`. Один источник — реестр
+ * GLB_HULLS в ships.ts, без ветвления по каждому id.
+ */
+export function hullMaterialFor(chassisId: string): Material {
+  return glbMaterial(chassisId) ?? hullMaterial()
 }
 
 let rock: MeshLambertMaterial | null = null
@@ -338,6 +375,55 @@ export function shieldFlashMaterial(): MeshBasicMaterial {
   return shieldFlash
 }
 
+let muzzleTex: CanvasTexture | null = null
+
+/**
+ * Текстура ДУЛЬНОЙ ВСПЫШКИ — «шаровая молния»: раскалённое добела ядро с резким пиком в
+ * центре и быстрым спадом в цветной ореол. Не низкополигональный икосаэдр (тот читался
+ * гранёным шестиугольником), а радиальный градиент на камеро-ориентированном квадрате —
+ * шарик КРУГЛЫЙ с любого угла. Ядро выжжено в единицу: вспышка обязана быть яркой.
+ */
+function muzzleFlashTexture(): CanvasTexture {
+  const size = 128
+  const canvas = document.createElement('canvas')
+  canvas.width = size
+  canvas.height = size
+  const ctx = canvas.getContext('2d')!
+  const g = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2)
+  // Плоское раскалённое ядро (до 22%), затем крутой спад — плотный яркий шар, а не мягкое пятно.
+  g.addColorStop(0, 'rgba(255,255,255,1)')
+  g.addColorStop(0.22, 'rgba(255,255,255,0.95)')
+  g.addColorStop(0.5, 'rgba(255,255,255,0.35)')
+  g.addColorStop(0.78, 'rgba(255,255,255,0.08)')
+  g.addColorStop(1, 'rgba(255,255,255,0)')
+  ctx.fillStyle = g
+  ctx.fillRect(0, 0, size, size)
+  return new CanvasTexture(canvas)
+}
+
+let muzzleFlash: MeshBasicMaterial | null = null
+
+/**
+ * Дульная вспышка. Как вспышка поля — свет, а не тело: аддитивно, без записи глубины.
+ * Базовый белый домножается инстансным цветом (тон по классу × затухание), карта — горячий
+ * радиальный градиент: круглый плотный шар с выжженным центром. Один вызов на все стволы.
+ */
+export function muzzleFlashMaterial(): MeshBasicMaterial {
+  muzzleTex ??= muzzleFlashTexture()
+  muzzleFlash ??= new MeshBasicMaterial({
+    color: 0xffffff,
+    map: muzzleTex,
+    transparent: true,
+    blending: AdditiveBlending,
+    depthWrite: false,
+    // Тест глубины ВЫКЛ: шар сидит у самого среза ствола, вплотную к обшивке — с обычным
+    // тестом корпус его перекрывал, и вспышки «не было видно вообще». Аддитив поверх всего.
+    depthTest: false,
+    fog: false,
+  })
+  return muzzleFlash
+}
+
 /**
  * Текстура-КОЛЬЦО для щита корабля: центр полый (корабль виден насквозь), ближе к краю
  * загорается ободок и мягко гаснет. В отличие от диска станции это не пятно, а окружность
@@ -446,6 +532,61 @@ export function dustLaserMaterial(): LineBasicMaterial {
     fog: false,
   })
   return dustLaser
+}
+
+let dustNeon: ShaderMaterial | null = null
+
+/**
+ * ЖИРНАЯ неоновая пыль на глубоком форсаже. Линия толщины в WebGL не имеет (см. трассеры-
+ * цилиндры), поэтому на большом накале штрих рисуется камеро-ориентированной ЛЕНТОЙ-квадом —
+ * у неё есть ширина, и мимо несутся светящиеся трубки, а не иголки.
+ *
+ * Но голый квад читается острой стеклянной щепкой: у него жёсткая кромка. Поэтому пламя
+ * РАЗМАЗАНО в шейдере, а не нарисовано геометрией: поперёк ленты (uv.x −1..1) свет гаснет
+ * гауссом до нуля к краю, вдоль (uv.y 0=голова→1=хвост) — тает к хвосту, и по длине бежит
+ * лёгкий рипл. Ядро выбелено, края держат цвет — так штрих светится трубкой, а не гранью.
+ * Аддитивно, без записи глубины: это свет, а не тело. `uOpacity`/`uTime` правит кадр.
+ */
+export function dustNeonMaterial(): ShaderMaterial {
+  dustNeon ??= new ShaderMaterial({
+    uniforms: {
+      uColor: { value: new Color(0xbfe6ff) },
+      uOpacity: { value: 0.9 },
+      uTime: { value: 0 },
+    },
+    vertexShader: /* glsl */ `
+      varying vec2 vUv;
+      void main() {
+        vUv = uv;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }
+    `,
+    fragmentShader: /* glsl */ `
+      precision mediump float;
+      uniform vec3 uColor;
+      uniform float uOpacity;
+      uniform float uTime;
+      varying vec2 vUv;
+      void main() {
+        // Поперёк ленты: гаусс от оси к краям — мягкое ядро без жёсткой кромки.
+        float across = exp(-vUv.x * vUv.x * 3.5);
+        // Вдоль: ярко у головы (там сама пылинка), плавно в ноль к хвосту.
+        float along = 1.0 - smoothstep(0.15, 1.0, vUv.y);
+        // Рипл бежит от головы к хвосту — пламя живое, а не залитая полоса.
+        float ripple = 0.78 + 0.22 * sin(vUv.y * 18.0 - uTime * 9.0);
+        float a = across * along * ripple * uOpacity;
+        // Ядро выбелено, края держат неон — объём трубки, а не плоский цвет.
+        vec3 col = mix(uColor, vec3(1.0), across * across * 0.7);
+        gl_FragColor = vec4(col, a);
+      }
+    `,
+    transparent: true,
+    blending: AdditiveBlending,
+    depthWrite: false,
+    side: DoubleSide,
+    fog: false,
+  })
+  return dustNeon
 }
 
 let crossRays: MeshBasicMaterial | null = null

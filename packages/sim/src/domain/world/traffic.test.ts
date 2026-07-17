@@ -23,7 +23,9 @@ function deepSpace(): World {
   return createWorld({ ...STARTER_SYSTEM, patrols: [], belt: null, station: null })
 }
 
-const met = (world: World): ShipEntity[] => world.ships
+/** ВСТРЕЧЕННЫЕ — то, что принёс трафик. Бог (Слово) сидит у каждого причала и встречей не
+ *  является: он вписан в мир, а не выпал костью. Иначе хелпер хватал бы его (у него `ai: null`). */
+const met = (world: World): ShipEntity[] => world.ships.filter((s) => !s.divine)
 
 /** Прогоняет `seconds` секунд трафика кадрами по 1/60, не двигая мир. */
 function run(world: World, seconds: number, dt = 1 / 60): void {

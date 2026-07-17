@@ -1,257 +1,146 @@
 import type { Chassis } from '../domain/loadout'
 
 /**
- * Каталог корпусов. Новый корабль = запись здесь + фабрика геометрии в слое рендера.
- * Симуляцию трогать не нужно.
+ * Каталог корпусов. Новый корабль = запись здесь + GLB-модель в реестре рендера (или фабрика
+ * геометрии). Симуляцию трогать не нужно. Все лётные корпуса — загруженные меши; процедурные
+ * (Мк III, Арес, Аполлон и пр.) сняты из игры. «Каллиопа» (DRONE) — не лётный, а капсула/дрон.
  */
-
-export const AURORA_MK3: Chassis = {
-  id: 'aurora_mk3',
-  name: 'Аврора Мк III',
-  class: 3,
-  baseMass: 8, // т, пустой
-  baseHull: 225,
-  cargoCapacity: 22, // истребитель-универсал: хватает на обвес да немного поторговать
-  auxCapacity: 100,
-  /** м. Аврора — корабль метров 25 в длину; сфера ~половина размаха.
-   *  Это не косметика: угловой размер цели решает, возможно ли попасть вообще. */
-  radius: 12,
-  inertiaFactor: 1.0,
-  assistLateralDamp: 1.25, // 1/с
-  assistSpeedDamp: 0.35,
-  hardpoints: [
-    // Три ЛАЗЕРНЫХ слота самолётного расклада. Дула вынесены ВПЕРЁД, в носовую треть
-    // (нос — до z=−14, кабина на −5.6): прежние z≈−1.6 сидели у корней крыльев, и лучи
-    // рождались из СЕРЕДИНЫ корпуса, будто из-под пилота. Лазер 1 — пара ближе к оси,
-    // лазер 2 — пара пошире по скуле, лазер 3 — одно ТОЛСТОЕ дуло с носового подбородка
-    // (класс до 3: мощь компенсирует одиночность). `offset` — центр установки (для вспышки).
-    { offset: [0, -0.3, -7.0], kind: 'gun', maxClass: 2, nozzles: [[-1.9, -0.3, -7.0], [1.9, -0.3, -7.0]] },
-    { offset: [0, -0.3, -6.6], kind: 'gun', maxClass: 2, nozzles: [[-2.6, -0.3, -6.6], [2.6, -0.3, -6.6]] },
-    { offset: [0, -0.15, -8.2], kind: 'gun', maxClass: 3, nozzles: [[0, -0.15, -8.2]] },
-    // Четыре пилона ПОД крыльями. Боезапас пилона задаёт сама ракета (`ammo`),
-    // и пуск идёт по одной: пустой пилон просто нечем стрелять.
-    //
-    // Подвес опущен до −1.3 м: на −0.6 верхнее перо стабилизатора выходило
-    // сквозь обшивку крыла. Пилон обязан висеть ниже плоскости, а не в ней.
-    { offset: [-5.2, -1.3, 3.6], kind: 'pylon', maxClass: 1 },
-    { offset: [5.2, -1.3, 3.6], kind: 'pylon', maxClass: 1 },
-    { offset: [-8.0, -1.2, 5.2], kind: 'pylon', maxClass: 1 },
-    { offset: [8.0, -1.2, 5.2], kind: 'pylon', maxClass: 1 },
-  ],
-  slots: [
-    { kind: 'engine', maxClass: 3 },
-    { kind: 'thrusters', maxClass: 3 },
-    { kind: 'shield', maxClass: 3 },
-    { kind: 'armour', maxClass: 2 },
-    { kind: 'armour', maxClass: 2 },
-    { kind: 'cargo', maxClass: 3 },
-    { kind: 'cargo', maxClass: 2 },
-    // Гиперпривод — внутренний модуль, как двигатель. Снял его — и корабль
-    // заперт в системе: карта галактики становится атласом, а не маршрутом.
-    { kind: 'hyperdrive', maxClass: 3 },
-    // Один универсальный аукс-слот: маскировка, ECM, бомба, скуп, миелофон — на выбор.
-    { kind: 'aux', maxClass: 3 },
-  ],
-  // Игрок стартует на ней уже в собственности (кредиты не списываются), но как ТОВАР у
-  // «Авроры» честная цена: крепкий универсал класса 3 (корпус 90, 3 орудия + 4 пилона,
-  // аукс-слот). Дороже стеклянного «Аполлона» (58k), дешевле
-  // ударной «Артемиды» (88k). Цена — ещё и база апгрейда корпуса (20% за первый уровень).
-  cost: 70000,
-}
-
-export const SIDEWINDER: Chassis = {
-  id: 'sidewinder',
-  name: 'Арес',
-  class: 2,
-  baseMass: 6,
-  baseHull: 100,
-  cargoCapacity: 16, // мелкий боец: трюма едва на обвес
-  auxCapacity: 100,
-  /** м. Мелкий истребитель: труднее попасть, но и брони нет. */
-  radius: 9,
-  // Компактный: поворачивается легче «Авроры» при той же массе.
-  inertiaFactor: 0.85,
-  assistLateralDamp: 1.1,
-  assistSpeedDamp: 0.35,
-  hardpoints: [
-    { offset: [-1.5, -0.2, -1.2], kind: 'gun', maxClass: 1 },
-    { offset: [1.5, -0.2, -1.2], kind: 'gun', maxClass: 1 },
-    // Один пилон: у главаря там ракета, у рядового пирата пусто.
-    { offset: [-3.8, -0.4, 2.6], kind: 'pylon', maxClass: 1 },
-  ],
-  slots: [
-    { kind: 'engine', maxClass: 2 },
-    { kind: 'thrusters', maxClass: 2 },
-    { kind: 'shield', maxClass: 2 },
-    { kind: 'armour', maxClass: 1 },
-    { kind: 'cargo', maxClass: 1 },
-    // Пиратам он пуст (их сборки без привода), но игрок на купленном «Аресе»
-    // должен уметь улететь из системы — поэтому слот под гиперпривод есть.
-    { kind: 'hyperdrive', maxClass: 2 },
-    // Один аукс-слот: у пиратов сюда ставится ECM (глушить ракеты), у игрока — что купит.
-    { kind: 'aux', maxClass: 2 },
-  ],
-  cost: 32000,
-}
 
 /**
- * Тяжёлый грузовик. Не боевой корабль: он возит тонны и еле ворочается.
- *
- * Неповоротливость — не штраф в цифре урона, а следствие честной физики: большая
- * масса и огромный момент инерции (inertiaFactor 5) при слабых гражданских
- * маневровых дают угловое ускачение вчетверо ниже истребителя. Он не увернётся
- * ни от кого — потому и летает под прикрытием. Живучий корпус нужен затем же:
- * пока эскорт разбирается с налётчиком, туша должна выстоять.
- *
- * Четыре грузовых слота и один защитный ствол по борту: это мишень с трюмом,
- * а не канонерка. Сбитый, он высыпает весь груз — ради него на него и нападают.
+ * «Аврора One» — стартовый корпус игрока: длинный острый нос, дельта-
+ * крыло с поднятыми законцовками, спаренные гондолы и два наклонных киля. Геометрия —
+ * НЕ процедурная, а загруженный меш (`aurora_one.glb`), поэтому корпус живёт как обычная
+ * запись каталога, а рендер сам знает по id, что грузить сетку, а не собирать из примитивов.
  */
-export const LARGE_FREIGHTER: Chassis = {
-  id: 'freighter',
-  name: 'Деметра',
-  class: 3,
-  baseMass: 90, // т, пустой — на порядок тяжелее истребителя
-  baseHull: 800,
-  cargoCapacity: 200, // летающий трюм: грузоподъёмность на порядок выше боевых корпусов
-  auxCapacity: 100,
-  /** м. Втрое длиннее «Авроры»: тушу видно издалека, и попасть по ней нетрудно. */
-  radius: 34,
-  inertiaFactor: 5.0,
-  assistLateralDamp: 0.7, // 1/с — тяжёлую баржу лётный компьютер гасит вяло
-  assistSpeedDamp: 0.3,
-  hardpoints: [
-    // Пара оборонительных стволов по бортам. Отбиться не отобьётся, но огрызается.
-    { offset: [-3.4, -0.6, -2.0], kind: 'gun', maxClass: 2 },
-    { offset: [3.4, -0.6, -2.0], kind: 'gun', maxClass: 2 },
-  ],
-  slots: [
-    { kind: 'engine', maxClass: 2 },
-    { kind: 'thrusters', maxClass: 1 }, // только гражданские: вот откуда вялый разворот
-    { kind: 'shield', maxClass: 3 },
-    { kind: 'armour', maxClass: 3 },
-    // Четыре трюма: грузовик тем и живёт. С полными контейнерами трюм за две сотни тонн.
-    { kind: 'cargo', maxClass: 3 },
-    { kind: 'cargo', maxClass: 3 },
-    { kind: 'cargo', maxClass: 3 },
-    { kind: 'cargo', maxClass: 3 },
-    { kind: 'hyperdrive', maxClass: 3 },
-    { kind: 'aux', maxClass: 2 },
-  ],
-  cost: 210000,
-}
-
-// ─── Верфные истребители: греко-римские имена, разные морфологии ──────────────
-// Геометрию каждого рендер знает по `id`; здесь — только числа и слоты. У всех есть
-// слот гиперпривода: купленный корабль обязан уметь улететь из системы.
-
-/** «Аполлон» — дельта-перехватчик: лёгкий, быстрый, вёрткий, но тонкокожий. */
-export const APOLLO: Chassis = {
-  id: 'apollo',
-  name: 'Аполлон',
-  class: 3,
-  baseMass: 7,
-  baseHull: 175,
-  cargoCapacity: 20,
-  auxCapacity: 100,
-  radius: 11,
-  inertiaFactor: 0.8,
-  assistLateralDamp: 1.2,
-  assistSpeedDamp: 0.35,
-  hardpoints: [
-    // X-винговый расклад: лазер 1 — концы НИЖНИХ крыльев, лазер 2 — концы ВЕРХНИХ,
-    // лазер 3 — одно ТОЛСТОЕ дуло из центра (класс до 3). `offset` — центр установки.
-    { offset: [0, -0.7, -1.8], kind: 'gun', maxClass: 2, nozzles: [[-2.6, -0.7, -1.8], [2.6, -0.7, -1.8]] },
-    { offset: [0, 0.7, -1.8], kind: 'gun', maxClass: 2, nozzles: [[-2.6, 0.7, -1.8], [2.6, 0.7, -1.8]] },
-    { offset: [0, 0, -2.6], kind: 'gun', maxClass: 3, nozzles: [[0, 0, -2.6]] },
-    { offset: [-5.5, -0.2, 3], kind: 'pylon', maxClass: 1 },
-    { offset: [5.5, -0.2, 3], kind: 'pylon', maxClass: 1 },
-  ],
-  slots: [
-    { kind: 'engine', maxClass: 3 },
-    { kind: 'thrusters', maxClass: 3 },
-    { kind: 'shield', maxClass: 2 },
-    { kind: 'armour', maxClass: 1 },
-    { kind: 'cargo', maxClass: 1 },
-    { kind: 'hyperdrive', maxClass: 2 },
-    { kind: 'aux', maxClass: 2 },
-  ],
-  cost: 58_000,
-}
-
-/** «Артемида» — ударный истребитель: крепче и тяжелее, два разнесённых киля. */
-export const ARTEMIS: Chassis = {
-  id: 'artemis',
-  name: 'Артемида',
-  class: 3,
-  baseMass: 9,
-  baseHull: 260,
-  cargoCapacity: 24,
-  auxCapacity: 100,
-  radius: 10,
-  inertiaFactor: 1.0,
-  assistLateralDamp: 1.1,
-  assistSpeedDamp: 0.35,
-  hardpoints: [
-    // Лазер 1 — внутренняя пара, лазер 2 — пара на разнесённых КИЛЯХ, лазер 3 — толстый центр.
-    { offset: [0, -0.1, -2.3], kind: 'gun', maxClass: 2, nozzles: [[-1.8, -0.1, -2.3], [1.8, -0.1, -2.3]] },
-    { offset: [0, -0.1, -1.9], kind: 'gun', maxClass: 2, nozzles: [[-3.4, -0.1, -1.9], [3.4, -0.1, -1.9]] },
-    { offset: [0, -0.1, -2.8], kind: 'gun', maxClass: 3, nozzles: [[0, -0.1, -2.8]] },
-    { offset: [-4.5, -0.2, 2], kind: 'pylon', maxClass: 1 },
-    { offset: [4.5, -0.2, 2], kind: 'pylon', maxClass: 1 },
-  ],
-  slots: [
-    { kind: 'engine', maxClass: 3 },
-    { kind: 'thrusters', maxClass: 2 },
-    { kind: 'shield', maxClass: 3 },
-    { kind: 'armour', maxClass: 2 },
-    { kind: 'cargo', maxClass: 2 },
-    { kind: 'hyperdrive', maxClass: 2 },
-    { kind: 'aux', maxClass: 2 },
-  ],
-  cost: 88_000,
-}
-
-/** «Афина» — «летающее крыло»: вёрткий стелс с маскировкой на борту. */
-export const ATHENA: Chassis = {
-  id: 'athena',
-  name: 'Афина',
+export const AURORA_ONE: Chassis = {
+  id: 'aurora_one',
+  name: 'Аврора One',
   class: 3,
   baseMass: 8,
-  baseHull: 200,
+  baseHull: 225,
   cargoCapacity: 22,
   auxCapacity: 100,
-  radius: 10,
-  inertiaFactor: 0.9,
+  radius: 12,
+  inertiaFactor: 1.0,
   assistLateralDamp: 1.25,
   assistSpeedDamp: 0.35,
   hardpoints: [
-    // «Летающее крыло»: лазер 1 — внутренняя пара, лазер 2 — широкая пара на концах крыла,
-    // лазер 3 — толстый центр.
-    { offset: [0, -0.1, -1.9], kind: 'gun', maxClass: 2, nozzles: [[-2, -0.1, -1.9], [2, -0.1, -1.9]] },
-    { offset: [0, -0.1, -1.6], kind: 'gun', maxClass: 2, nozzles: [[-3.8, -0.1, -1.6], [3.8, -0.1, -1.6]] },
-    { offset: [0, -0.1, -2.4], kind: 'gun', maxClass: 3, nozzles: [[0, -0.1, -2.4]] },
-    { offset: [-4.5, -0.2, 0], kind: 'pylon', maxClass: 1 },
+    // Силуэт иной, чем у Мк III: пушки садим на дельта-крыло и в острый нос. Координаты дул —
+    // в метрах модельного пространства (нос −Z, размах ±X), согласованы с масштабом меша в ships.ts.
+    { offset: [0, 0.2, -2], kind: 'gun', maxClass: 2, nozzles: [[-6.0, 0.2, -2], [6.0, 0.2, -2]] },
+    { offset: [0, 0.1, 0.5], kind: 'gun', maxClass: 3, nozzles: [[-9.5, 0.1, 0.5], [9.5, 0.1, 0.5]] },
+    { offset: [0, -0.2, -12.5], kind: 'gun', maxClass: 3, nozzles: [[0, -0.2, -12.5]] },
+    { offset: [-5.0, -0.8, 3.0], kind: 'pylon', maxClass: 1 },
+    { offset: [5.0, -0.8, 3.0], kind: 'pylon', maxClass: 1 },
   ],
   slots: [
     { kind: 'engine', maxClass: 3 },
     { kind: 'thrusters', maxClass: 3 },
-    { kind: 'shield', maxClass: 2 },
-    { kind: 'armour', maxClass: 1 },
-    { kind: 'cargo', maxClass: 1 },
-    { kind: 'hyperdrive', maxClass: 2 },
-    // «Афина» — стелс: аукс-слот с завода под маскировку (в её лоадауте — CLOAK_FIELD).
+    { kind: 'shield', maxClass: 3 },
+    { kind: 'armour', maxClass: 2 },
+    { kind: 'armour', maxClass: 2 },
+    { kind: 'cargo', maxClass: 3 },
+    { kind: 'cargo', maxClass: 2 },
+    { kind: 'hyperdrive', maxClass: 3 },
     { kind: 'aux', maxClass: 3 },
   ],
-  cost: 132_000,
+  cost: 82_000,
+}
+
+/**
+ * Истребители из внешних мешей (Meshy GLB). Геометрия — не процедура, а загруженная сетка
+ * со своими текстурами (рендер знает по id из реестра GLB_HULLS). В домене — обычные записи
+ * каталога: единая раскладка хардпоинтов (спаренная пушка + два пилона), разнятся статами.
+ * Дула — приближённо на крыле; уточним по факту силуэта.
+ */
+const FIGHTER_HARDPOINTS: Chassis['hardpoints'] = [
+  { offset: [0, 0, -2], kind: 'gun', maxClass: 2, nozzles: [[-3.0, 0, -2], [3.0, 0, -2]] },
+  { offset: [-3.2, -0.5, 2.5], kind: 'pylon', maxClass: 1 },
+  { offset: [3.2, -0.5, 2.5], kind: 'pylon', maxClass: 1 },
+]
+const FIGHTER_SLOTS: Chassis['slots'] = [
+  { kind: 'engine', maxClass: 3 },
+  { kind: 'thrusters', maxClass: 3 },
+  { kind: 'shield', maxClass: 2 },
+  { kind: 'armour', maxClass: 2 },
+  { kind: 'cargo', maxClass: 1 },
+  { kind: 'hyperdrive', maxClass: 2 },
+  { kind: 'aux', maxClass: 2 },
+]
+
+/** «Гермес» — лёгкий скороход: мало брони, но вёрткий. */
+export const HERMES: Chassis = {
+  id: 'hermes', name: 'Гермес', class: 2, baseMass: 5, baseHull: 95, cargoCapacity: 12, auxCapacity: 100,
+  radius: 8, inertiaFactor: 0.78, assistLateralDamp: 1.35, assistSpeedDamp: 0.35,
+  hardpoints: FIGHTER_HARDPOINTS, slots: FIGHTER_SLOTS, cost: 60_000,
+}
+
+/** «Персей» — сбалансированный перехватчик. */
+export const PERSEUS: Chassis = {
+  id: 'perseus', name: 'Персей', class: 2, baseMass: 6, baseHull: 120, cargoCapacity: 14, auxCapacity: 100,
+  radius: 9, inertiaFactor: 0.88, assistLateralDamp: 1.2, assistSpeedDamp: 0.35,
+  hardpoints: FIGHTER_HARDPOINTS, slots: FIGHTER_SLOTS, cost: 68_000,
+}
+
+/** «Пегас» — вёрткий, с чуть большим трюмом. */
+export const PEGASUS: Chassis = {
+  id: 'pegasus', name: 'Пегас', class: 2, baseMass: 6, baseHull: 110, cargoCapacity: 16, auxCapacity: 100,
+  radius: 9, inertiaFactor: 0.82, assistLateralDamp: 1.25, assistSpeedDamp: 0.35,
+  hardpoints: FIGHTER_HARDPOINTS, slots: FIGHTER_SLOTS, cost: 66_000,
+}
+
+/** «Орион» — тяжёлый истребитель: крепче, но вальяжнее. */
+export const ORION: Chassis = {
+  id: 'orion', name: 'Орион', class: 3, baseMass: 8, baseHull: 170, cargoCapacity: 18, auxCapacity: 100,
+  radius: 10, inertiaFactor: 0.98, assistLateralDamp: 1.1, assistSpeedDamp: 0.35,
+  hardpoints: FIGHTER_HARDPOINTS, slots: FIGHTER_SLOTS, cost: 78_000,
+}
+
+/** «Тесей» — ещё один лёгкий истребитель (GLB-меш), на общей раскладке. */
+export const THESEUS: Chassis = {
+  id: 'theseus', name: 'Тесей', class: 2, baseMass: 5, baseHull: 105, cargoCapacity: 13, auxCapacity: 100,
+  radius: 8, inertiaFactor: 0.8, assistLateralDamp: 1.3, assistSpeedDamp: 0.35,
+  hardpoints: FIGHTER_HARDPOINTS, slots: FIGHTER_SLOTS, cost: 62_000,
+}
+
+/**
+ * «Атлас» — корабль поколений: тяжёлый ковчег, не истребитель. Своя раскладка: медлительный,
+ * толстошкурый, с огромным трюмом. Дула по бортам — оборона, а не охота. Габарит крупнее
+ * прочих (в рендере scale выше), потому смещения дул разнесены шире.
+ */
+const ATLAS_HARDPOINTS: Chassis['hardpoints'] = [
+  { offset: [0, 0, -3], kind: 'gun', maxClass: 3, nozzles: [[-6.0, 0, -3], [6.0, 0, -3]] },
+  { offset: [0, 0, 0], kind: 'gun', maxClass: 3, nozzles: [[-9.0, 0, 0], [9.0, 0, 0]] },
+  { offset: [-5.0, -1.0, 5.0], kind: 'pylon', maxClass: 2 },
+  { offset: [5.0, -1.0, 5.0], kind: 'pylon', maxClass: 2 },
+]
+export const ATLAS: Chassis = {
+  id: 'atlas', name: 'Атлас', class: 3, baseMass: 42, baseHull: 620, cargoCapacity: 220, auxCapacity: 160,
+  radius: 20, inertiaFactor: 2.4, assistLateralDamp: 0.7, assistSpeedDamp: 0.35,
+  hardpoints: ATLAS_HARDPOINTS,
+  slots: [
+    { kind: 'engine', maxClass: 3 },
+    { kind: 'thrusters', maxClass: 2 }, // ковчег: маневровые слабее ходовых — тяжело крутится
+    { kind: 'shield', maxClass: 3 },
+    { kind: 'armour', maxClass: 3 },
+    { kind: 'armour', maxClass: 2 },
+    { kind: 'cargo', maxClass: 3 },
+    { kind: 'cargo', maxClass: 3 },
+    { kind: 'cargo', maxClass: 3 },
+    { kind: 'hyperdrive', maxClass: 3 },
+    { kind: 'aux', maxClass: 3 },
+  ],
+  cost: 480_000,
 }
 
 export const CHASSIS_CATALOGUE: readonly Chassis[] = [
-  AURORA_MK3,
-  SIDEWINDER,
-  LARGE_FREIGHTER,
-  APOLLO,
-  ARTEMIS,
-  ATHENA,
+  AURORA_ONE,
+  HERMES,
+  PERSEUS,
+  PEGASUS,
+  ORION,
+  THESEUS,
+  ATLAS,
 ]
 
 export function findChassis(id: string): Chassis | null {

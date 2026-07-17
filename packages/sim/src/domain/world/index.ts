@@ -13,13 +13,14 @@ export {
   type ShipEntity,
   type SurfaceBinding,
   type TitanEntity,
+  type MonolithEntity,
   type Tracer,
   type WarpFlash,
   type WarpPortal,
   type WarpArrivalPortal,
   type World,
 } from './entities'
-export { enterSystem, createWorld, layoutSystemBodies, makeShip, refreshSpec, startAtStation, applyPilotProfile } from './factory'
+export { enterSystem, createWorld, layoutSystemBodies, makeShip, refreshSpec, spawnSlovo, startAtStation, applyPilotProfile } from './factory'
 export { createIdSource, type IdSource } from './ids'
 export {
   type Persona,
@@ -71,7 +72,20 @@ export { makePilotName } from './names'
 export { maybeShiftOrigin } from './origin'
 export { spawnRemotePlayer, despawnRemotePlayer, type RemotePlayerInit } from './remote'
 export { pickFreeSpawn, isFreeSpawn } from './spawn'
-export { cycleTarget, cycleContact, cycleCelestial, findBody, findShip, hostilesOf, incomingMissile, nearestPod, targetableStationsOf } from './queries'
+export {
+  cycleTarget,
+  cycleContact,
+  cycleCelestial,
+  findBody,
+  findShip,
+  hostilesOf,
+  incomingMissile,
+  nearestPod,
+  navTarget,
+  MONOLITH_NAMES,
+  type NavTarget,
+  targetableStationsOf,
+} from './queries'
 export {
   jumpOut,
   spawnWarpFlash,
@@ -83,5 +97,7 @@ export {
 } from './warp'
 export { stepTraffic, spawnResidentContacts, stepDockedBerth, stepDockTraffic } from './traffic'
 export { spawnTitan, spawnTrafficTitan, stepTitans, titanCount, placeShowcaseTitans } from './titans'
+export { placeMonoliths } from './monoliths'
+export { placeShowcaseFleet } from './showcase'
 export { spawnPlatform, stepPlatforms } from './platforms'
 export { STARTER_SYSTEM, type PatrolDef, type SystemDef } from './system'

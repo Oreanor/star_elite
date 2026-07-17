@@ -1,144 +1,66 @@
 import type { CargoItem, Commodity, LifeLevel, ShipModule } from '@elite/sim'
 import { currentLang, t, type Key } from './i18n'
+import {
+  COMMODITY_L,
+  COMMODITY_DESC_L,
+  GALAXY_SHAPE_L,
+  MODULE_L,
+  OCCUPATION_FACTION_L,
+  OCCUPATION_L,
+  OCCUPATION_PILOT_L,
+  PLACE_L,
+  PROFESSION_FALLBACK_L,
+  PROFESSION_L,
+  SECURITY_L,
+  SHIP_TYPE_L,
+  SPECIES_L,
+  STAR_CLASS_L,
+  STATION_TYPE_L,
+} from './dataTranslations'
 
 /**
  * Перевод ДАННЫХ, а не хрома. Домен авторит имена по-русски (товары, модули, расы) —
- * это его канон и запас на случай, если ключа тут нет. Интерфейс же переводит их по
- * `id`: домену язык знать незачем, а игроку на английском не должно лезть «Двигатель».
+ * это его канон и запас на случай, если строки для языка нет. Интерфейс же переводит их
+ * по `id`: домену язык знать незачем, а игроку на английском не должно лезть «Двигатель».
  *
- * Таблицы плоские и по id: новый модуль — новая строка, не ветвление. Нет строки —
- * показываем русское имя из домена, а не пустоту: игра не ломается на пропущенном
- * переводе, он лишь виден как недоделка.
+ * Таблицы плоские и по языку (`dataTranslations.ts`, генерятся): новый модуль — новая
+ * строка, не ветвление. Нет строки — показываем русский канон из домена, а не пустоту:
+ * игра не ломается на пропущенном переводе, он лишь виден как недоделка.
  */
 
-const COMMODITY_EN: Record<string, string> = {
-  scrap: 'Scrap',
-  food: 'Food',
-  minerals: 'Ore',
-  metals: 'Metals',
-  machinery: 'Machinery',
-  electronics: 'Electronics',
-  slaves: 'Slaves',
-  luxuries: 'Luxuries',
-  narcotics: 'Narcotics',
-}
+type LangTable = Partial<Record<string, Record<string, string>>>
 
-const COMMODITY_DESC_EN: Record<string, string> = {
-  scrap: 'Crushed metal and dead electronics. Cheap everywhere, wanted by refiners.',
-  food: 'Synth rations and live cultures. Everyone hauls it, nobody pays much.',
-  minerals: 'Raw ore from asteroid belts. Feedstock for metallurgy.',
-  metals: 'Refined ingots and alloys. The bread of heavy industry.',
-  machinery: 'Tools, drives, spare parts. Dear where nothing gets built.',
-  electronics: 'Boards and chips, high value-add. Light, pricey, wanted everywhere.',
-  slaves: 'Living cargo. Outlawed in civilized worlds — hence the price.',
-  luxuries: 'Rarities for those with money to burn. Low mass, high margin.',
-  narcotics: 'Banned chemistry. Costly, compact, and smells of fines.',
+/**
+ * Показ значения по языку интерфейса. Русский — доменный канон (он и есть авторитет).
+ * Иначе таблица языка; нет строки — снова канон: перевод недоделан, но игра цела.
+ */
+function pick(table: LangTable, key: string, canon: string): string {
+  const lang = currentLang()
+  if (lang === 'ru') return canon
+  return table[lang]?.[key] ?? canon
 }
-
-const MODULE_EN: Record<string, string> = {
-  engine_1e: 'Drive 1E «Civilian»',
-  engine_2c: 'Drive 2C «Standard»',
-  engine_3a: 'Drive 3A «Military»',
-  engine_1d: 'Drive 1D «Civilian»',
-  engine_2b: 'Drive 2B «Standard»',
-  engine_2a: 'Drive 2A «Swift»',
-  engine_3b: 'Drive 3B «Swift»',
-  engine_3c: 'Drive 3C «Military»',
-  rcs_1e: 'Thrusters 1E',
-  rcs_2c: 'Thrusters 2C',
-  rcs_3a: 'Thrusters 3A «Military»',
-  rcs_1d: 'Thrusters 1D «Civilian»',
-  rcs_2b: 'Thrusters 2B «Standard»',
-  rcs_2a: 'Thrusters 2A «Vortex»',
-  rcs_3b: 'Thrusters 3B «Vortex»',
-  rcs_3c: 'Thrusters 3C «Military»',
-  shield_1e: 'Shield 1E',
-  shield_2c: 'Shield 2C',
-  shield_3a: 'Shield 3A «Bastion»',
-  shield_1d: 'Shield 1D',
-  shield_2b: 'Shield 2B',
-  shield_2a: 'Shield 2A «Mirage»',
-  shield_3b: 'Shield 3B «Mirage»',
-  shield_3c: 'Shield 3C «Bastion»',
-  armour_1: 'Armour Plating',
-  armour_2: 'Composite Armour',
-  armour_2d: 'Armour 2D «Steel»',
-  armour_3c: 'Armour 3C «Steel»',
-  armour_2b: 'Armour 2B «Composite»',
-  armour_1c: 'Armour 1C «Cermet»',
-  armour_2a: 'Armour 2A «Cermet»',
-  armour_3a: 'Armour 3A «Cermet»',
-  pulse_0: 'Pulse Laser 0 «Worn»',
-  pulse_1: 'Pulse Laser 1',
-  pulse_2: 'Pulse Laser 2',
-  beam_2: 'Beam Laser 2',
-  pulse_1a: 'Pulse Laser 1A',
-  beam_1: 'Beam Laser 1',
-  beam_3: 'Beam Laser 3 «Blade»',
-  rotary_1: 'Rotary Laser 1 «Gadfly»',
-  rotary_2: 'Rotary Laser 2 «Squall»',
-  plasma_2: 'Plasma Cannon 2 «Harpoon»',
-  plasma_3: 'Plasma Cannon 3 «Ram»',
-  missile_p: 'Missile «Hornet»',
-  missile_1: 'Missile «Seeker»',
-  missile_2: 'Missile «Hammer»',
-  missile_pe: 'Missile 1E «Sting»',
-  missile_pa: 'Missile 1A «Wasp»',
-  missile_1e: 'Missile 1E «Pack»',
-  missile_1b: 'Missile 1B «Hound»',
-  missile_2a: 'Missile 2A «Sledge»',
-  cargo_1: 'Cargo Rack 1',
-  cargo_2: 'Cargo Rack 2',
-  cargo_3: 'Cargo Rack 3',
-  cargo_1a: 'Cargo Bay 1A «Composite»',
-  cargo_2a: 'Cargo Bay 2A «Composite»',
-  cargo_3a: 'Cargo Bay 3A «Composite»',
-  cargo_2h: 'Cargo Hold 2E «Bulker»',
-  cargo_3h: 'Cargo Hold 3E «Bulker»',
-  hyper_1: 'Hyperdrive 1E «Arcane»',
-  hyper_2: 'Hyperdrive 2C «Meridian»',
-  hyper_3: 'Hyperdrive 3A «Deep»',
-  hyper_1a: 'Hyperdrive 1C «Swift»',
-  hyper_2a: 'Hyperdrive 2A «Swift»',
-  hyper_2h: 'Hyperdrive 2E «Hauler»',
-  hyper_3h: 'Hyperdrive 3E «Hauler»',
-  drone_gun: 'Drone Laser',
-  drone_bay: 'Drone Bay «Swarm»',
-  drone_bay_e: 'Drone Bay «Flight»',
-  drone_bay_a: 'Drone Bay «Legion»',
-  cloak_1: 'Cloak Field «Veil»',
-  cloak_1e: 'Cloak Field «Haze»',
-  cloak_2: 'Cloak Field «Phantom»',
-}
-
-/** Виды — именованные, переводим целиком. Четыре: земляне, гуманоиды, фелиды, синтеты. */
-const SPECIES_EN: Record<string, string> = {
-  'Земляне': 'Earthers',
-  'Гуманоиды': 'Humanoids',
-  'Фелиды': 'Felids',
-  'Синтеты': 'Synths',
-}
-
-const en = (): boolean => currentLang() === 'en'
 
 export function commodityName(c: Commodity): string {
-  return en() ? COMMODITY_EN[c.id] ?? c.name : c.name
+  return pick(COMMODITY_L, c.id, c.name)
 }
 
 /** Описание товара на языке интерфейса — откат на русский канон домена, если нет строки. */
 export function commodityDesc(c: Commodity): string {
-  return en() ? COMMODITY_DESC_EN[c.id] ?? c.description : c.description
+  return pick(COMMODITY_DESC_L, c.id, c.description)
 }
 
 export function moduleName(m: ShipModule): string {
-  return en() ? MODULE_EN[m.id] ?? m.name : m.name
+  return pick(MODULE_L, m.id, m.name)
 }
 
 /** Имя расы: сперва целиком (люди), иначе по словам — русские части через пробел. */
 export function speciesName(s: string): string {
-  if (!en()) return s
-  if (SPECIES_EN[s]) return SPECIES_EN[s]
-  return s.split(' ').map((w) => SPECIES_EN[w] ?? w).join(' ')
+  const lang = currentLang()
+  if (lang === 'ru') return s
+  const table = SPECIES_L[lang]
+  if (!table) return s
+  if (table[s]) return table[s]!
+  return s.split(' ').map((w) => table[w] ?? w).join(' ')
 }
 
 /** Имя предмета трюма на языке интерфейса — товар с количеством, модуль по id. */
@@ -148,8 +70,8 @@ export function itemDisplayName(item: CargoItem): string {
 
 /**
  * СОБСТВЕННЫЕ имена — системы, планеты, луны, станции, галактики — собраны доменом
- * из русских слогов. Переводить их нечем (это не слова, а звучание), поэтому в
- * английском они РОМАНИЗИРУЮТСЯ: «Даррион» → «Darrion». Единая транслитерация, а не
+ * из русских слогов. Переводить их нечем (это не слова, а звучание), поэтому для любого
+ * ЛАТИНСКОГО языка они РОМАНИЗИРУЮТСЯ: «Даррион» → «Darrion». Единая транслитерация, а не
  * таблица: имён бесконечно много, они генерятся из зерна.
  *
  * Общие же имена, прилипшие к собственному, — тип станции («Кориолис»), само «Ядро» —
@@ -178,64 +100,36 @@ function translit(name: string): string {
   return out
 }
 
-/** Общие слова, приросшие к собственным именам, — переводятся, а не романизируются. */
-const PLACE_EN: Record<string, string> = { 'Ядро': 'Core' }
-const STATION_TYPE_EN: Record<string, string> = {
-  'Кориолис': 'Coriolis',
-  'Орбис': 'Orbis',
-  'Аванпост': 'Outpost',
-}
-
 export function properName(name: string): string {
-  if (!en()) return name
-  const place = PLACE_EN[name]
+  const lang = currentLang()
+  if (lang === 'ru') return name
+  const place = PLACE_L[lang]?.[name]
   if (place) return place
   // Станция зовётся «Тип «Имя»»: тип переводим, имя внутри кавычек — транслитом.
   const station = /^(.+?) «(.+)»$/.exec(name)
   if (station) {
-    const type = STATION_TYPE_EN[station[1]!] ?? translit(station[1]!)
+    const type = STATION_TYPE_L[lang]?.[station[1]!] ?? translit(station[1]!)
     return `${type} «${translit(station[2]!)}»`
   }
   return translit(name)
 }
 
-// ─── Доменные перечисления: EN-таблица, откат на русский канон домена ───────────
-
-const STAR_CLASS_EN: Record<string, string> = {
-  O: 'Blue giant', B: 'Blue-white', A: 'White', F: 'Yellow-white', G: 'Yellow dwarf',
-  K: 'Orange dwarf', M: 'Red dwarf', D: 'White dwarf', T: 'Brown dwarf',
-  N: 'Neutron star', H: 'Black hole',
-}
+// ─── Доменные перечисления: таблица по языку, откат на русский канон домена ──────
 
 export function starClassName(star: { class: string; className: string }): string {
-  return en() ? STAR_CLASS_EN[star.class] ?? star.className : star.className
-}
-
-const GALAXY_SHAPE_EN: Record<string, string> = {
-  barred: 'Barred spiral', spiral: 'Spiral', elliptical: 'Elliptical',
-  irregular: 'Irregular', lenticular: 'Lenticular', ring: 'Ring',
+  return pick(STAR_CLASS_L, star.class, star.className)
 }
 
 export function galaxyShapeName(shape: { id: string; name: string }): string {
-  return en() ? GALAXY_SHAPE_EN[shape.id] ?? shape.name : shape.name
+  return pick(GALAXY_SHAPE_L, shape.id, shape.name)
 }
 
 /** Типы кораблей трафика — это слова («Пират», «Торговец»), а не собственные имена:
  *  переводятся, а не романизируются. Нет в таблице (напр. имя шасси) — откат на properName. */
-const SHIP_TYPE_EN: Record<string, string> = {
-  'Торговец': 'Trader',
-  'Караван': 'Convoy',
-  'Пират': 'Pirate',
-  'Стая': 'Pack',
-  'Налётчик': 'Raider',
-  'Патруль': 'Patrol',
-  'Грузовик': 'Freighter',
-  'Аврора': 'Aurora',
-}
-
 export function shipTypeName(name: string): string {
-  if (!en()) return name
-  return SHIP_TYPE_EN[name] ?? properName(name)
+  const lang = currentLang()
+  if (lang === 'ru') return name
+  return SHIP_TYPE_L[lang]?.[name] ?? properName(name)
 }
 
 /**
@@ -243,28 +137,12 @@ export function shipTypeName(name: string): string {
  * становится личным, а занятие остаётся. Внешне читаемое — показываем в диалоге сразу,
  * чтобы не позвать в напарники пирата вслепую. Неизвестный тип — откат по фракции.
  */
-const OCCUPATION_RU: Record<string, string> = {
-  trader: 'Торговец', convoy: 'Торговец', pirate: 'Пират', gang: 'Пират',
-  raider: 'Налётчик', police: 'Патрульный', freighter: 'Дальнобойщик', platform: 'Пират',
-  traveler: 'Путешественник', explorer: 'Учёный', businessman: 'Бизнесмен', military: 'Военный',
-}
-const OCCUPATION_EN: Record<string, string> = {
-  trader: 'Trader', convoy: 'Trader', pirate: 'Pirate', gang: 'Pirate',
-  raider: 'Raider', police: 'Patrol officer', freighter: 'Hauler', platform: 'Pirate',
-  traveler: 'Traveler', explorer: 'Scientist', businessman: 'Businessman', military: 'Serviceman',
-}
-const OCCUPATION_FACTION_RU: Record<string, string> = {
-  hostile: 'Пират', police: 'Патрульный', neutral: 'Гражданский', player: 'Пилот',
-}
-const OCCUPATION_FACTION_EN: Record<string, string> = {
-  hostile: 'Pirate', police: 'Patrol officer', neutral: 'Civilian', player: 'Pilot',
-}
-
 export function occupationName(originKind: string | null, faction: string): string {
-  const byKind = en() ? OCCUPATION_EN : OCCUPATION_RU
+  const lang = currentLang()
+  const byKind = OCCUPATION_L[lang] ?? OCCUPATION_L.ru!
   if (originKind && byKind[originKind]) return byKind[originKind]!
-  const byFaction = en() ? OCCUPATION_FACTION_EN : OCCUPATION_FACTION_RU
-  return byFaction[faction] ?? (en() ? 'Pilot' : 'Пилот')
+  const byFaction = OCCUPATION_FACTION_L[lang] ?? OCCUPATION_FACTION_L.ru!
+  return byFaction[faction] ?? OCCUPATION_PILOT_L[lang] ?? OCCUPATION_PILOT_L.ru!
 }
 
 /**
@@ -272,40 +150,44 @@ export function occupationName(originKind: string | null, faction: string): stri
  * его открыто видит собеседник и относится соответственно, за правду. Пустая (старый
  * сейв без выбора) — нейтральный «вольный делец».
  */
-const PROFESSION_RU: Record<string, string> = {
-  traveler: 'Путешественник', explorer: 'Учёный', businessman: 'Бизнесмен',
-  military: 'Военный', pirate: 'Пират',
-}
-const PROFESSION_EN: Record<string, string> = {
-  traveler: 'Traveler', explorer: 'Scientist', businessman: 'Businessman',
-  military: 'Serviceman', pirate: 'Pirate',
-}
 export function professionName(profession: string | undefined): string {
-  const by = en() ? PROFESSION_EN : PROFESSION_RU
-  return (profession && by[profession]) || (en() ? 'Free agent' : 'вольный делец')
+  const lang = currentLang()
+  const by = PROFESSION_L[lang] ?? PROFESSION_L.ru!
+  return (profession && by[profession]) || (PROFESSION_FALLBACK_L[lang] ?? PROFESSION_FALLBACK_L.ru!)
 }
 
-/** Имена корпусов — собственные (бренд): в RU как есть, в EN по таблице. */
+/**
+ * Имена корпусов — собственные (бренд греческих богов). В RU как есть, в латинских —
+ * устоявшееся латинское написание из таблицы (транслит дал бы «Avrora», а не «Aurora»);
+ * незнакомого — романизируем, чтобы не текла кириллица.
+ */
 const CHASSIS_EN: Record<string, string> = {
   'Аврора Мк III': 'Aurora Mk III',
+  'Аврора One': 'Aurora One',
   'Арес': 'Ares',
   'Деметра': 'Demeter',
   'Каллиопа': 'Calliope',
   'Аполлон': 'Apollo',
   'Артемида': 'Artemis',
   'Афина': 'Athena',
+  'Икар': 'Icarus',
+  'Каркинос': 'Karkinos',
+  'Гермес': 'Hermes',
+  'Персей': 'Perseus',
+  'Пегас': 'Pegasus',
+  'Орион': 'Orion',
+  'Тесей': 'Theseus',
+  'Атлас': 'Atlas',
 }
 
 export function chassisName(name: string): string {
-  return en() ? CHASSIS_EN[name] ?? name : name
-}
-
-const SECURITY_EN: Record<string, string> = {
-  'Нет': 'None', 'Низкая': 'Low', 'Средняя': 'Medium', 'Высокая': 'High',
+  const lang = currentLang()
+  if (lang === 'ru') return name
+  return CHASSIS_EN[name] ?? translit(name)
 }
 
 export function securityName(security: string): string {
-  return en() ? SECURITY_EN[security] ?? security : security
+  return pick(SECURITY_L, security, security)
 }
 
 /** Ступень жизни в системе — доменное перечисление, переводится по ключу UI. */

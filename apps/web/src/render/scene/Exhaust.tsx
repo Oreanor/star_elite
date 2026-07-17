@@ -216,7 +216,7 @@ function Flames({ cone }: { cone: Cone }) {
 }
 
 export function Exhaust() {
-  // Геометрии и материалы — один раз на компонент, а не на кадр.
+  // Геометрии и материалы — один раз на компонент, а не на кадр. Два конуса: факел + белый керн.
   const outer = useMemo(() => makeCone(EXHAUST.OUTER_BASE, EXHAUST.OUTER_TIP, 0.95, 1), [])
   const core = useMemo(() => makeCone(EXHAUST.CORE_BASE, EXHAUST.CORE_TIP, 0.42, 0.45), [])
 

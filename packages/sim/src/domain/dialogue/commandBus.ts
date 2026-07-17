@@ -1,11 +1,14 @@
 import { applyOrder, commandableByPlayer, type AIOrder } from '../ai/commands'
-import { assignApproach, assignCollectRun, clearTasks } from '../ai/tasks'
-import { NOTE_MAX_CHARS, recordEvent } from '../world/acquaintance'
+import { assignApproach, assignCollectRun, assignRendezvous, clearTasks } from '../ai/tasks'
+import { applyStance, NOTE_MAX_CHARS, recordEvent, rememberPilot } from '../world/acquaintance'
+import { pushEdit, type GalaxyEdit } from '../galaxy/delta'
 import type { RawPlanStep } from '../world/contactPlan'
 import { applyContactPlan } from '../world/plan'
 import type { ShipEntity, World } from '../world/entities'
+import { beginWarpDeparture } from '../world/warp'
+import { WARP } from '../../config/ai'
 import { applyOutcome, applySocial, linesFor, say, type Social } from './dialogue'
-import { coerceOrder, coerceTopic, coerceTransfer } from './payload'
+import { coerceOrder, coerceStance, coerceTopic, coerceTransfer } from './payload'
 import { applyTransfer, type TransferResult } from './transfer'
 
 /**
@@ -49,7 +52,14 @@ const TASK_COLLECT_RADIUS = 4000
 function taskCommand(world: World, ship: ShipEntity, payload: unknown): CommandOutcome | null {
   const o = asObject(payload)
   const kind = o?.kind
-  if (!commandableByPlayer(ship, world.player.id)) return null
+  /**
+   * Поручения берёт только НАНЯТЫЙ (есть уговор — `escortOf`). Но отказ обязан ЗВУЧАТЬ: раньше
+   * приказ пропадал молча, а модель уже отвечала «иду!» — и бот выглядел вруном, хотя домен
+   * просто отказал. Теперь игрок слышит причину и понимает, что надо сперва договориться.
+   */
+  if (!commandableByPlayer(ship, world.player.id)) {
+    return { line: null, spoken: 'МЫ НЕ УГОВАРИВАЛИСЬ. НАЙМИ — ТОГДА ПОЛЕЧУ.' }
+  }
 
   if (kind === 'collect-cargo') {
     if (!o) return null
@@ -60,10 +70,16 @@ function taskCommand(world: World, ship: ShipEntity, payload: unknown): CommandO
   if (kind === 'approach-nav') {
     const navId = world.navTargetId
     if (navId == null) return null
-    const body = world.bodies.find((b) => b.id === navId)
-    if (!body) return null
-    if (!assignApproach(ship, body.pos, body.radius)) return null
+    // Тело отдаём ПО ID: станция едет по орбите, и бот обязан пересчитывать подлёт на ходу.
+    if (!world.bodies.some((b) => b.id === navId)) return null
+    if (!assignApproach(ship, navId)) return null
     return { line: null, spoken: 'ИДУ ТУДА.' }
+  }
+  if (kind === 'come-to-me') {
+    // «Подлети ко мне» — к ЖИВОМУ игроку, а не к нав-цели: раньше такого приказа не было
+    // вовсе, и бот брал `approach-nav`, улетая мимо игрока к станции.
+    if (!assignRendezvous(ship, world.player.id)) return null
+    return { line: null, spoken: 'ИДУ К ТЕБЕ.' }
   }
   if (kind === 'clear-tasks') {
     clearTasks(ship)
@@ -73,7 +89,12 @@ function taskCommand(world: World, ship: ShipEntity, payload: unknown): CommandO
 }
 
 function isTaskPlanStep(step: RawPlanStep): boolean {
-  return step.step === 'collect' || step.step === 'approach-nav' || step.step === 'clear-tasks'
+  return (
+    step.step === 'collect' ||
+    step.step === 'approach-nav' ||
+    step.step === 'come' ||
+    step.step === 'clear-tasks'
+  )
 }
 
 function taskPayloadFromPlanStep(step: RawPlanStep): Record<string, unknown> | null {
@@ -81,6 +102,7 @@ function taskPayloadFromPlanStep(step: RawPlanStep): Record<string, unknown> | n
     return { kind: 'collect-cargo', radius: step.radius }
   }
   if (step.step === 'approach-nav') return { kind: 'approach-nav' }
+  if (step.step === 'come') return { kind: 'come-to-me' }
   if (step.step === 'clear-tasks') return { kind: 'clear-tasks' }
   return null
 }
@@ -141,6 +163,52 @@ function orderCommand(world: World, ship: ShipEntity, payload: unknown): Command
   if (!applyOrder(ship, order, target)) return null
   recordEvent(world, ship, { kind: 'order', order })
   return { line: ORDER_DONE[order], spoken: 'ЕСТЬ, КОМАНДИР.' }
+}
+
+/**
+ * Бот САМ переменил отношение к командиру — оттаял или озлобился по ходу беседы.
+ * Это не тон одной реплики (`social`), а сдвиг стойки: расположился, насторожился, озверел.
+ * Модель ставит его РЕДКО и в характере; домен исполняет детерминированно (`applyStance`
+ * при 'hostile' и мирной фракции — сам переведёт борт во враги и распустит эскорт).
+ * Запись в журнал нужна, чтобы при следующей встрече помнить, отчего отношение таким стало.
+ */
+function stanceCommand(world: World, ship: ShipEntity, payload: unknown): CommandOutcome | null {
+  const o = asObject(payload)
+  const stance = o ? coerceStance(o.stance) : null
+  if (!stance) return null
+  applyStance(world, ship, stance)
+  recordEvent(world, ship, { kind: 'note', text: `переменил отношение → ${stance}` })
+  return { line: null }
+}
+
+/**
+ * ПРАВКА КАРТЫ ВСЕЛЕННОЙ богом — двигать/красить/переименовать/убрать звезду. Только бог
+ * (`ship.divine`): смертный карту мироздания не трогает. Правка ложится в дельту поверх сида
+ * (база не мутирует, откат возможен), а `galaxyEpoch` растёт — читатели карты пересоберут
+ * эффективную галактику. Цель по индексу; без индекса — ТЕКУЩАЯ система (где стоит игрок).
+ */
+function mapEditCommand(world: World, ship: ShipEntity, payload: unknown): CommandOutcome | null {
+  if (!ship.divine) return null
+  const o = asObject(payload)
+  if (!o) return null
+  const index = typeof o.index === 'number' ? Math.floor(o.index) : world.systemIndex
+  if (index < 0) return null
+
+  let edit: GalaxyEdit | null = null
+  if (o.op === 'recolor' && typeof o.color === 'number') {
+    edit = { op: 'recolor', index, color: Math.floor(o.color) & 0xffffff }
+  } else if (o.op === 'rename' && typeof o.name === 'string' && o.name.trim()) {
+    edit = { op: 'rename', index, name: o.name.trim().slice(0, 40) }
+  } else if (o.op === 'move' && typeof o.x === 'number' && typeof o.y === 'number' && typeof o.z === 'number') {
+    edit = { op: 'move', index, x: o.x, y: o.y, z: o.z }
+  } else if (o.op === 'remove') {
+    edit = { op: 'remove', index }
+  }
+  if (!edit) return null
+
+  pushEdit(world.galaxyDelta, edit)
+  world.galaxyEpoch++
+  return { line: 'Воля бога переменила карту мироздания.' }
 }
 
 /** Соц-тон реплики игрока: нахамил/польстил. Следствие для отношений считает домен. */
@@ -231,6 +299,82 @@ function planCommand(world: World, ship: ShipEntity, payload: unknown): CommandO
   }
 }
 
+/** Короткий текст payload'а (demand/tip/mark), уже урезанный по `NOTE_MAX_CHARS`. */
+function payloadText(payload: unknown): string {
+  const o = asObject(payload)
+  const raw = o && typeof o.text === 'string' ? o.text : null
+  return raw ? raw.trim().slice(0, NOTE_MAX_CHARS) : ''
+}
+
+/** Грабёж: пират давит на груз/выкуп. Принуждать нечем (он и так враг) — метим угрозу в журнал. */
+function demandCommand(world: World, ship: ShipEntity, payload: unknown): CommandOutcome | null {
+  const text = payloadText(payload)
+  if (!text) return null
+  recordEvent(world, ship, { kind: 'note', text: `ТРЕБОВАНИЕ: ${text}` })
+  return { line: null }
+}
+
+/**
+ * Бот САМ сдаётся. Пускаем ТОЛЬКО когда домен и так разрешает сдачу (тема `surrender`
+ * разблокирована — щит сбит): иначе невредимого врага уболтали бы бросить бой даром.
+ * Исполняет санкционированный `applyOutcome` (сменит фракцию на мирную, вытряхнет груз).
+ */
+function surrenderCommand(world: World, ship: ShipEntity, _payload: unknown): CommandOutcome | null {
+  const line = linesFor(world, ship).find((l) => l.topic === 'surrender')
+  if (!line || line.blocked !== null) return null
+  applyOutcome(world, ship, 'surrender')
+  recordEvent(world, ship, { kind: 'note', text: 'сдался' })
+  return { line: 'Противник сдался.' }
+}
+
+/** Бот удирает: уходит в отрыв, гасит огонь и, при наличии привода, заряжает прыжок-побег. */
+function fleeCommand(world: World, ship: ShipEntity, _payload: unknown): CommandOutcome | null {
+  const ai = ship.ai
+  if (!ai) return null
+  ai.mode = 'evade'
+  ai.targetId = null
+  ai.wantsFire = false
+  ai.wantsMissile = false
+  // Заряд прыжка ставим лишь если он ещё не идёт и есть чем прыгать (иначе просто отрыв).
+  if (ship.spec.jumpRange > 0 && ai.warpTimer < 0) ai.warpTimer = WARP.CHARGE
+  recordEvent(world, ship, { kind: 'note', text: 'бежал из боя' })
+  return { line: null }
+}
+
+/** Бот уходит из системы совсем — конец встречи. С приводом уходит прыжком, иначе в отрыв. */
+function departCommand(world: World, ship: ShipEntity, _payload: unknown): CommandOutcome | null {
+  const ai = ship.ai
+  if (!ai) return null
+  if (ship.spec.jumpRange > 0) beginWarpDeparture(world, ship)
+  else ai.mode = 'evade'
+  recordEvent(world, ship, { kind: 'note', text: 'ушёл' })
+  return { line: null }
+}
+
+/** Знакомство: бот назвался — заводим запись в журнале (идемпотентно). Строку даём лишь на НОВОЕ. */
+function meetCommand(world: World, ship: ShipEntity, _payload: unknown): CommandOutcome | null {
+  const wasAcquainted = ship.acquaintanceId != null
+  rememberPilot(world, ship)
+  const newlyMet = !wasAcquainted && ship.acquaintanceId != null
+  return { line: newlyMet ? `Знакомство: ${ship.name}.` : null }
+}
+
+/** Наводка/слух от бота — в журнал знакомого. Сам текст произносит реплика модели. */
+function tipCommand(world: World, ship: ShipEntity, payload: unknown): CommandOutcome | null {
+  const text = payloadText(payload)
+  if (!text) return null
+  recordEvent(world, ship, { kind: 'note', text: `СОВЕТ: ${text}` })
+  return { line: null }
+}
+
+/** Метка места — пока словом в журнал (реальные пины карты — отдельная задача). */
+function markCommand(world: World, ship: ShipEntity, payload: unknown): CommandOutcome | null {
+  const text = payloadText(payload)
+  if (!text) return null
+  recordEvent(world, ship, { kind: 'note', text: `МЕТКА: ${text}` })
+  return { line: null }
+}
+
 // ─── Шина ────────────────────────────────────────────────────────────────────────
 
 const HANDLERS: Record<string, CommandHandler> = {
@@ -238,10 +382,19 @@ const HANDLERS: Record<string, CommandHandler> = {
   order: orderCommand,
   task: taskCommand,
   social: socialCommand,
+  stance: stanceCommand,
+  mapEdit: mapEditCommand,
   transfer: transferCommand,
   note: noteCommand,
   learn: learnCommand,
   plan: planCommand,
+  demand: demandCommand,
+  surrender: surrenderCommand,
+  flee: fleeCommand,
+  depart: departCommand,
+  meet: meetCommand,
+  tip: tipCommand,
+  mark: markCommand,
 }
 
 /**

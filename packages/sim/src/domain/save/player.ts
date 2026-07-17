@@ -9,6 +9,9 @@ import { emptyPlan } from '../world/contactPlan'
 import type { Persona } from '../world/persona'
 import type { World } from '../world/entities'
 
+/** Куда пересаживать сейв со снятого из игры корпуса — стартовый корпус игрока. */
+const FALLBACK_CHASSIS = 'aurora_one'
+
 /**
  * Сохранение игрока — ТОЛЬКО он, не мир.
  *
@@ -103,10 +106,12 @@ export function serializeLoadout(l: Loadout): SavedLoadout {
 }
 
 export function rehydrateLoadout(saved: SavedLoadout): Loadout {
-  const chassis = findChassis(saved.chassis)
-  // Корпус — не мелочь, которую можно пропустить: без него сборки нет. Битый сейв
-  // (корпус вырезали из игры) честнее оборвать, чем молча подставить чужой корабль.
-  if (!chassis) throw new Error(`saved chassis not found: ${saved.chassis}`)
+  // Корпус мог быть ВЫРЕЗАН из игры (старый сейв на снятой модели, напр. «Аврора Мк III»).
+  // Тогда пересаживаем на дефолтный стартовый корпус, сохранив всё железо: лишнее оружие
+  // не влезет в другие точки — `createLoadout` его отбросит, это ожидаемо. Обрывать загрузку
+  // из-за ретайра корпуса нельзя — иначе игрок с таким сейвом вообще не войдёт в игру.
+  const chassis = findChassis(saved.chassis) ?? findChassis(FALLBACK_CHASSIS)
+  if (!chassis) throw new Error(`saved chassis not found and no fallback: ${saved.chassis}`)
 
   const internals: ShipModule[] = []
   for (const m of saved.internals) {

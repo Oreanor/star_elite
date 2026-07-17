@@ -8,16 +8,21 @@ import {
   canDockAt,
   findBody,
   findStation,
+  navTarget,
+  MONOLITH_NAMES,
   autofightActive,
   auxFraction,
   canAutoland,
+  applyDelta,
   clamp,
+  distanceLy,
   generateGalaxy,
   incomingMissile,
   nearestLandable,
   itemName,
   missileAmmo,
   nearestPod,
+  laserOverheated,
   peakHeat,
   pendingHail,
   scooping,
@@ -27,6 +32,7 @@ import {
   stationRange,
   type BodyEntity,
   type ShipEntity,
+  type StarSystem,
   type World,
 } from '@elite/sim'
 import { bombFlash, bombRing } from '../../render/bombFeel'
@@ -108,8 +114,17 @@ export function drawHud(frame: HudFrame): void {
     drawTargets(frame)
     drawPods(frame)
     drawOffscreenArrows(frame)
-    drawTargetPortrait(frame)
+    drawTargetPanels(frame)
+  } else {
+    // В масштабе (миелофон вырос за PHASE_START) общий фон меток погашен — тела далеко и
+    // глючат. Но ВЫБРАННУЮ цель пилот терять не должен: рисуем ровно её — рамку на ней и
+    // стрелку за кадром — до самого пробуждения галактического слоя (тот берёт звёзды на себя).
+    drawTargetLock(frame)
   }
+
+  // Прикреплённая с карты звезда (jumpTargetIndex) — целью В ПОЛЁТЕ на любом масштабе, пока
+  // слой галактики спит. Сам guard внутри: проснулся слой — метит он (drawRadar), тут тихо.
+  drawPinnedStar(frame)
 
   drawGunsight(frame)
   drawFlightPathMarker(frame)
@@ -164,7 +179,7 @@ function drawPods(frame: HudFrame): void {
     // Рамка мелкая намеренно: контейнер — не цель, и путать его с кораблём нельзя. Захваченный —
     // крупнее и с дистанцией: видно, ЧТО именно выбрано листанием.
     corners(ctx, p.x, p.y, (locked ? 14 : 9) * S, color, locked ? 2 : 1)
-    if (locked) text(ctx, formatDistance(p.distance), p.x, p.y + (locked ? 18 : 12) * S, color, 'center')
+    if (locked) text(ctx, formatDistance(shipDistance(world, pod.pos)), p.x, p.y + (locked ? 18 : 12) * S, color, 'center')
   }
 
   const pod = nearestPod(world, POD_MARK_RANGE)
@@ -191,7 +206,7 @@ function drawPods(frame: HudFrame): void {
 
   const color = readiness === 'full' ? HUD_COLORS.WARN : HUD_COLORS.PRIMARY
   text(ctx, label, p.x, p.y + 12 * S, color, 'center')
-  text(ctx, formatDistance(p.distance), p.x, p.y - 18 * S, color, 'center')
+  text(ctx, formatDistance(shipDistance(world, pod.pos)), p.x, p.y - 18 * S, color, 'center')
 }
 
 /**
@@ -268,10 +283,19 @@ function isOnScreen(x: number, y: number, width: number, height: number, margin 
   return x >= -margin && x <= width + margin && y >= -margin && y <= height + margin
 }
 
+/**
+ * РЕАЛЬНАЯ дистанция от КОРАБЛЯ до точки, м. `projectPoint().distance` мерит от КАМЕРЫ, а
+ * на большом масштабе (миелофон) камера отъезжает на сотни км за корму гиганта — её дистанция
+ * враньё. Пилот меряет от СЕБЯ. На обычном масштабе камера у корпуса, разница незаметна.
+ */
+function shipDistance(world: World, pos: Vector3): number {
+  return world.player.state.pos.distanceTo(pos)
+}
+
 /** Рамки враждебных кораблей. Захваченная выделена цветом и подписана. */
 function drawTargets({ ctx, camera, world, width, height }: HudFrame): void {
   for (const ship of world.ships) {
-    if (!ship.alive) continue
+    if (!ship.alive || ship.divine) continue // бог Слово в космосе не рисуется — он бот в станции
 
     const p = projectPoint(ship.state.pos, camera, width, height)
     if (p.behind || !isOnScreen(p.x, p.y, width, height, 20 * S)) continue
@@ -290,16 +314,21 @@ function drawTargets({ ctx, camera, world, width, height }: HudFrame): void {
     corners(ctx, p.x, p.y, size, color, locked ? 2.5 : 1)
 
     // Дистанция у каждого врага, а не только у захваченного: она нужна, чтобы
-    // понять, кто рядом, а кто в километре.
-    text(ctx, formatDistance(p.distance), p.x, p.y + size / 2 + 3 * S, color, 'center')
+    // понять, кто рядом, а кто в километре. От КОРАБЛЯ, не от камеры (см. shipDistance).
+    text(ctx, formatDistance(shipDistance(world, ship.state.pos)), p.x, p.y + size / 2 + 3 * S, color, 'center')
 
-    // Знакомого подписываем ВСЕГДА и по имени — со значком ◈, чтобы среди безликих
-    // отметок он читался как «этого ты знаешь». Незнакомца называем лишь захваченного.
+    /**
+     * Подписываем КАЖДЫЙ борт, а не только захваченный. Голая рамка не говорит ничего: в кадре
+     * висят одинаковые уголки, и кто из них торговец, кто пират, а кто твой знакомый — не понять,
+     * пока не переберёшь их Tab'ом по одному.
+     *
+     * Знакомый — по ИМЕНИ и со значком ◈: среди безликих отметок он обязан читаться как «этого
+     * ты знаешь». Прочие — по типу встречи («Пират», «Торговец»): имени его ты ещё не знаешь,
+     * и выдавать чужое имя до знакомства нельзя — оно открывается разговором.
+     */
     const known = ship.acquaintanceId != null
-    if (locked || known) {
-      const label = known ? `◈ ${ship.name}` : shipTypeName(ship.name)
-      text(ctx, label, p.x, p.y + size / 2 + 13 * S, known ? HUD_COLORS.PRIMARY : color, 'center')
-    }
+    const label = known ? `◈ ${ship.name}` : shipTypeName(ship.name)
+    text(ctx, label, p.x, p.y + size / 2 + 13 * S, known ? HUD_COLORS.PRIMARY : color, 'center')
 
     if (locked) {
       const shield = ship.spec.hull.shield > 0 ? ship.shield / ship.spec.hull.shield : 0
@@ -325,7 +354,7 @@ function drawOffscreenArrows(frame: HudFrame): void {
    * не новость, а стрелка на каждого встречного превратила бы край кадра в частокол.
    */
   for (const ship of world.ships) {
-    if (!ship.alive || !isVisible(ship)) continue
+    if (!ship.alive || !isVisible(ship) || ship.divine) continue // бог Слово — не цель в космосе
     const locked = ship.id === world.lockedTargetId
     if (ship.faction !== 'hostile' && !locked) continue
     // Стрелка захваченной цели — ВСЕГДА голубая и КРУПНЕЕ прочих: за кадром её сигнал
@@ -341,8 +370,17 @@ function drawOffscreenArrows(frame: HudFrame): void {
   if (nav) offscreenArrow(frame, nav.pos, bodyColor(nav))
 }
 
-/** Рисует треугольник у края кадра, если точка за кадром. Иначе молчит. */
-function offscreenArrow({ ctx, camera, width, height }: HudFrame, pos: Vector3, color: string, emphasis = false): void {
+/**
+ * Рисует треугольник у края кадра, если точка за кадром. Иначе молчит.
+ * `label`: строка — подпись у стрелки вместо дистанции; null — без подписи; undefined — дистанция.
+ */
+function offscreenArrow(
+  { ctx, camera, world, width, height }: HudFrame,
+  pos: Vector3,
+  color: string,
+  emphasis = false,
+  label?: string | null,
+): void {
   const p = projectPoint(pos, camera, width, height)
   if (!p.behind && isOnScreen(p.x, p.y, width, height, 20 * S)) return
 
@@ -378,7 +416,104 @@ function offscreenArrow({ ctx, camera, width, height }: HudFrame, pos: Vector3, 
   ctx.closePath()
   ctx.fill()
 
-  text(ctx, formatDistance(p.distance), ax - dx * size * 2.4, ay - dy * size * 2.4 - 4 * S, color, 'center')
+  const caption = label === undefined ? formatDistance(shipDistance(world, pos)) : label
+  if (caption) text(ctx, caption, ax - dx * size * 2.4, ay - dy * size * 2.4 - 4 * S, color, 'center')
+}
+
+/**
+ * Маркеры ТЕКУЩЕЙ ЦЕЛИ в масштабе (миелофон вырос за PHASE_START, общий фон меток погашен).
+ * Пилот не должен терять выбранное, как бы крупно он ни рос и как бы далеко цель ни была:
+ * рисуем ровно выбранное — рамку на самой цели (в кадре) и стрелку курса к ней (за кадром),
+ * по мир-позиции. Захваченный борт, контейнер, нав-тело (звезда/планета/станция) — все три.
+ */
+function drawTargetLock(frame: HudFrame): void {
+  const { ctx, camera, world, width, height } = frame
+
+  // `surfaceR` — радиус тела: дистанцию к крупному телу меряем до поверхности, не до центра.
+  const mark = (pos: Vector3, color: string, label: string | null, surfaceR = 0): void => {
+    const p = projectPoint(pos, camera, width, height)
+    if (!p.behind && isOnScreen(p.x, p.y, width, height, 20 * S)) {
+      corners(ctx, p.x, p.y, 16 * S, color, 2)
+      text(ctx, formatDistance(Math.max(0, shipDistance(world, pos) - surfaceR)), p.x, p.y + 16 * S, color, 'center')
+      if (label) text(ctx, label, p.x, p.y - 20 * S, color, 'center')
+    } else {
+      offscreenArrow(frame, pos, color, true)
+    }
+  }
+
+  // Захваченный борт (бог Слово в космосе не цель).
+  const locked = world.lockedTargetId != null ? world.ships.find((s) => s.id === world.lockedTargetId) : null
+  if (locked && locked.alive && isVisible(locked) && !locked.divine) {
+    mark(locked.state.pos, HUD_COLORS.PRIMARY, locked.acquaintanceId != null ? `◈ ${locked.name}` : null)
+  }
+  // Захваченный контейнер-обломок.
+  const pod = world.lockedPodId != null ? world.pods.find((p) => p.id === world.lockedPodId) : null
+  if (pod && pod.alive) mark(pod.pos, HUD_COLORS.PRIMARY, null)
+  // Нав-тело: звезда/планета/станция — цвет тот же, что на локаторе; до поверхности у крупных.
+  const nav = findBody(world, world.navTargetId)
+  if (nav) {
+    const surfaceR = nav.kind === 'planet' || nav.kind === 'moon' || nav.kind === 'star' ? nav.radius : 0
+    mark(nav.pos, bodyColor(nav), properName(nav.name), surfaceR)
+  }
+}
+
+/**
+ * Галактику для HUD строим лениво и КЭШИРУЕМ по зерну — как в `facts.ts`: 2500 систем один
+ * раз на сессию, а не на кадр. Нужны лишь координаты выбранной звезды и своей системы.
+ */
+let hudGalaxy: { seed: number; epoch: number; systems: StarSystem[] } | null = null
+function hudGalaxyFor(world: World): StarSystem[] {
+  const seed = world.galaxySeed
+  const epoch = world.galaxyEpoch
+  if (!hudGalaxy || hudGalaxy.seed !== seed || hudGalaxy.epoch !== epoch) {
+    // База из зерна + правки бога: прикреплённая звезда учитывает перекроенную карту.
+    hudGalaxy = { seed, epoch, systems: applyDelta(generateGalaxy(seed), world.galaxyDelta) }
+  }
+  return hudGalaxy.systems
+}
+
+const _pinDir = /* @__PURE__ */ new Vector3()
+
+/**
+ * Маркер ПРИКРЕПЛЁННОЙ звезды — выбранной на карте галактики (`jumpTargetIndex`) — В ПОЛЁТЕ.
+ *
+ * Пока галактический слой спит, сама звезда не нарисована (и не должна быть) — но НАПРАВЛЕНИЕ
+ * на неё задано геометрией галактики и вычислимо на ЛЮБОМ масштабе. Отображение осей — ровно
+ * как у слоя: ly(x,y) → мир(x,z), толщина по Y. Значит рамку на её направлении и стрелку курса
+ * можно нарисовать всегда: цель, выбранная на карте, светится в кадре, как бы далеко ни была.
+ *
+ * Когда слой ПРОСНУЛСЯ (`gr.active`), звезду ведёт он сам (`drawRadar`) — здесь молчим, не двоим.
+ */
+function drawPinnedStar(frame: HudFrame): void {
+  const { ctx, camera, world, width, height } = frame
+  if (galaxyRadar().active) return // слой проснулся — звезду метит drawRadar
+  const tgt = world.jumpTargetIndex
+  if (tgt == null || tgt === world.systemIndex) return
+
+  const systems = hudGalaxyFor(world)
+  const star = systems[tgt]
+  const origin = systems[world.systemIndex]
+  if (!star || !origin) return
+
+  // Направление на звезду в МИРОВЫХ осях — тем же отображением, что кладёт слой галактики.
+  _pinDir.set(star.x - origin.x, star.z - origin.z, star.y - origin.y)
+  if (_pinDir.lengthSq() < 1e-9) return
+  _pinDir.normalize()
+
+  // Звезда практически на бесконечности: проецируем точку далеко по направлению от борта.
+  // Дистанцию к ней меряем не в метрах (их триллионы), а в СВЕТОВЫХ ГОДАХ — из геометрии.
+  const FAR = 1e9 // м — заведомо дальше любого тела системы, но в пределах проекции
+  _gtar.copy(world.player.state.pos).addScaledVector(_pinDir, FAR)
+  const color = `#${star.star.color.toString(16).padStart(6, '0')}`
+  const caption = `${properName(star.name)} · ${Math.round(distanceLy(origin, star))} св.лет`
+
+  const p = projectPoint(_gtar, camera, width, height)
+  if (!p.behind && isOnScreen(p.x, p.y, width, height, 20 * S)) {
+    navReticle(ctx, p.x, p.y, color)
+    text(ctx, caption, p.x, p.y + 12 * S, color, 'center')
+  } else {
+    offscreenArrow(frame, _gtar, color, true, caption)
+  }
 }
 
 /**
@@ -419,6 +554,9 @@ interface Marker {
   nav: boolean
   /** Ориентир (звезда, планета, кит): подпись безусловна, соседям не уступает. */
   primary: boolean
+  /** Радиус тела, м: дистанцию показываем до ПОВЕРХНОСТИ (минус радиус) — на неё садишься,
+   *  а не в центр. 0 у точечных (станция, кит): у них центр и есть «поверхность». */
+  surfaceR: number
 }
 
 /** Приоритет подписи: цель важнее ориентира, ориентир важнее спутника. */
@@ -442,11 +580,29 @@ function collectMarkers(world: World): Marker[] {
       // Станция и спутник вторичны — их подпись уступает планете, к которой они
       // липнут. Звезда и планета — ориентиры, подписаны всегда.
       primary: body.kind === 'star' || body.kind === 'planet' || body.kind === 'blackhole',
+      // До поверхности садишься, а не в центр: у крупных тел (планета/луна/звезда) дистанцию
+      // меряем от поверхности. Станция/чёрная дыра — точечные ориентиры, у них центр.
+      surfaceR:
+        body.kind === 'planet' || body.kind === 'moon' || body.kind === 'star' ? body.radius : 0,
     })
   }
   // Киты — тоже ориентиры: их МАРКУ пилот должен прочесть, это событие в системе.
   for (const titan of world.titans) {
-    out.push({ pos: titan.pos, name: properName(titan.name), color: HUD_COLORS.NEUTRAL, nav: false, primary: true })
+    out.push({ pos: titan.pos, name: properName(titan.name), color: HUD_COLORS.NEUTRAL, nav: false, primary: true, surfaceR: 0 })
+  }
+  // Статуи — ориентиры того же рода: десять километров камня, их видно с полсистемы, и подпись
+  // им нужна не меньше, чем планете. Своим списком (не тела), потому кладём отдельно.
+  for (const m of world.monoliths) {
+    out.push({
+      pos: m.pos,
+      name: MONOLITH_NAMES[m.variant] ?? 'Монолит',
+      color: MONOLITH_COLOR,
+      nav: m.id === world.navTargetId,
+      primary: true,
+      // Габарит статуи — километры: дистанцию меряем до ПОВЕРХНОСТИ, как у планеты, иначе
+      // «5 км до центра» читается как «врезался», хотя ты ещё снаружи.
+      surfaceR: m.radius,
+    })
   }
   return out
 }
@@ -467,14 +623,14 @@ function drawBodyMarkers({ ctx, camera, world, width, height }: HudFrame): void 
   shown.sort((a, b) => labelRank(a.m) - labelRank(b.m))
 
   const placed: Array<{ x: number; y: number }> = []
-  for (const { m, x, y, distance } of shown) {
+  for (const { m, x, y } of shown) {
     // Цель навигации — точка потолще: цвет на звёздном фоне различим плохо, а
     // разница в размере читается даже боковым зрением.
     dot(ctx, x, y, m.nav ? 2.5 * S : 1.5 * S, m.color)
-    // Рамка-прицел вокруг цели — только в обычном полёте. В масштабе (миелофон) система
-    // уже далеко и не для точной навигации: жирная рамка поверх тел лишь мельтешит, точки
-    // достаточно. Порог общий с запретом стыковки — «я гигант» здесь значит одно и то же.
-    if (m.nav && world.player.state.scale <= 1) navReticle(ctx, x, y, m.color)
+    // Рамка-прицел вокруг цели навигации — всегда, на любом масштабе (пока метки вообще
+    // рисуются): выбранную звезду/планету пилот метит и в лёгком зуме, а не только в упор.
+    // За PHASE_START общий фон гаснет, и там цель ведёт отдельный `drawTargetLock`.
+    if (m.nav) navReticle(ctx, x, y, m.color)
 
     // Ориентир и активная цель подпись не уступают: планету видно всегда, а
     // выбранную станцию (пусть у другой планеты) — потому что это цель. Вторичный
@@ -485,59 +641,108 @@ function drawBodyMarkers({ ctx, camera, world, width, height }: HudFrame): void 
     // Подпись отодвинута за рамку: иначе имя ложится ей на грань и не читается.
     const gap = (m.nav ? 12 : 6) * S
     text(ctx, m.name, x + gap, y - 5 * S, m.color)
-    text(ctx, formatDistance(distance), x + gap, y + 5 * S, m.color)
+    // До ПОВЕРХНОСТИ, а не до центра: садишься на поверхность, и «12 км» до неё честнее, чем
+    // до ядра сквозь тело. И от КОРАБЛЯ, не от камеры (на масштабе камера далеко за кормой).
+    text(ctx, formatDistance(Math.max(0, shipDistance(world, m.pos) - m.surfaceR)), x + gap, y + 5 * S, m.color)
     placed.push({ x, y })
   }
 }
 
-/**
- * Портрет захваченной цели — «того, кто с тобой» — НАД локатором справа. Лицо
- * вырезается из листа расы ПО КООРДИНАТАМ (клетка index в сетке 6×6), эмоция — из
- * состояния борта. Пока листа нет, рамка с инициалом держит место; догрузится —
- * лицо встанет само. Невидимку (в маскировке) не показываем, как и локатор.
- */
-function drawTargetPortrait({ ctx, world, width, height }: HudFrame): void {
-  if (world.lockedTargetId == null) return
-  const ship = world.ships.find((s) => s.id === world.lockedTargetId)
-  if (!ship || !ship.alive || !isVisible(ship)) return
+/** Клетка панели цели, м. Три строки подписи под ней — оттого шаг больше самой клетки. */
+const CELL = 48
+const CELL_STEP = 48 + 26
 
-  // HUD рисуется в уменьшенном внутреннем разрешении и растягивается, поэтому размер
-  // тут «крупнее», чем то же число в DOM. 48 — компактный портрет цели.
-  const size = 48 * S
-  // Стоит НАД локатором (тот вернулся в правый нижний угол): портрет центрирован по его
-  // оси, а снизу — три строки мелкой подписи (имя/род/корабль) до самого обода локатора.
+/** Подпись под клеткой: до трёх строк мелким кеглем. Возвращает базовый шрифт на место. */
+function cellCaption(ctx: CanvasRenderingContext2D, midX: number, y: number, lines: [string, string?, string?]): void {
+  const baseFont = ctx.font
+  ctx.font = `${Math.round(6 * S)}px "Consolas", "DejaVu Sans Mono", monospace`
+  text(ctx, lines[0].toUpperCase(), midX, y, HUD_COLORS.PRIMARY, 'center')
+  if (lines[1]) text(ctx, lines[1].toUpperCase(), midX, y + 7 * S, HUD_COLORS.DIM, 'center')
+  if (lines[2]) text(ctx, lines[2].toUpperCase(), midX, y + 14 * S, HUD_COLORS.DIM, 'center')
+  ctx.font = baseFont
+}
+
+/** Кружок-значок объекта в клетке: у крупного тела портрета нет, но цвет и форма есть. */
+function cellIcon(ctx: CanvasRenderingContext2D, x: number, y: number, color: string): void {
+  const cx = x + (CELL * S) / 2
+  const cy = y + (CELL * S) / 2
+  const r = (CELL * S) / 2 - 8 * S
+  ctx.fillStyle = color
+  ctx.beginPath()
+  ctx.arc(cx, cy, r, 0, Math.PI * 2)
+  ctx.fill()
+}
+
+/**
+ * ПАНЕЛИ ЦЕЛЕЙ — стопкой над локатором справа, снизу вверх. Целей ДВЕ и они независимы:
+ * контакт (Tab) и нав-цель (Shift+Tab). Рисуется только ВЫБРАННОЕ — одна клетка, две или ни одной.
+ *
+ * Цвет рамки говорит, что это: КРАСНАЯ — контакт (живой персонаж или контейнер, с ним говорят
+ * и по нему бьют), ГОЛУБАЯ — нав-цель (крупное: звезда, планета, луна, станция, монолит). Раньше
+ * панель была одна и только для борта, оттого захват станции или статуи ничем не отзывался, и
+ * было не понять, что вообще выбрано.
+ *
+ * У персонажа в клетке — лицо (вырезается из листа расы по координатам, эмоция из состояния).
+ * У крупного портрета нет и быть не может, поэтому кружок его цвета — но подпись ОБЯЗАТЕЛЬНА:
+ * что это и как зовётся.
+ */
+function drawTargetPanels(frame: HudFrame): void {
+  const { ctx, world, width, height } = frame
+  // Локатор в правом нижнем углу — стопка растёт от его верхней кромки вверх.
   const radiusX = 47 * 1.5 * S
   const radiusY = 47 * 0.75 * S
   const radarCx = width - radiusX - 12 * S
   const radarTop = height - 2 * radiusY - 12 * S
+  const size = CELL * S
   const x = radarCx - size / 2
-  const y = radarTop - size - 24 * S
+  let slot = 0
 
-  ctx.strokeStyle = HUD_COLORS.DIM
-  ctx.lineWidth = 1
-  ctx.strokeRect(Math.round(x) + 0.5, Math.round(y) + 0.5, Math.round(size), Math.round(size))
-
-  const sheet = loadSheet(portraitSheet(ship.persona.species, pilotEmotion(ship, world)))
-  if (sheetReady(sheet)) {
-    const cell = sheet.naturalWidth / PORTRAIT_GRID
-    const { col, row } = portraitCell(portraitIndex(ship))
-    ctx.imageSmoothingEnabled = false
-    ctx.drawImage(sheet, col * cell, row * cell, cell, cell, Math.round(x), Math.round(y), Math.round(size), Math.round(size))
-  } else {
-    text(ctx, (ship.name.trim().charAt(0) || '?').toUpperCase(), x + size / 2, y + size / 2 - 5 * S, HUD_COLORS.DIM, 'center')
+  /** Одна клетка: рамка своего цвета, содержимое рисует `body`, снизу подпись. */
+  const cell = (color: string, lines: [string, string?, string?], body: (x: number, y: number) => void): void => {
+    const y = radarTop - size - 24 * S - slot * CELL_STEP * S
+    body(x, y)
+    ctx.strokeStyle = color
+    ctx.lineWidth = 1
+    ctx.strokeRect(Math.round(x) + 0.5, Math.round(y) + 0.5, Math.round(size), Math.round(size))
+    cellCaption(ctx, x + size / 2, y + size + 2 * S, lines)
+    slot++
   }
 
-  // Под портретом — ИМЯ, РОД занятий и КОРАБЛЬ, а не одна роль «Торговец»: с кем имеешь
-  // дело, видно так же полно, как на плашке у причала. Шрифт МЕЛЬЧЕ основного (три строки
-  // должны влезть под компактный портрет); после — возвращаем базовый, иначе поедет весь HUD.
-  const midX = x + size / 2
-  const nameY = y + size + 2 * S
-  const baseFont = ctx.font
-  ctx.font = `${Math.round(6 * S)}px "Consolas", "DejaVu Sans Mono", monospace`
-  text(ctx, ship.pilotName.toUpperCase(), midX, nameY, HUD_COLORS.PRIMARY, 'center')
-  text(ctx, occupationName(ship.originKind, ship.faction).toUpperCase(), midX, nameY + 7 * S, HUD_COLORS.DIM, 'center')
-  text(ctx, chassisName(ship.loadout.chassis.name).toUpperCase(), midX, nameY + 14 * S, HUD_COLORS.DIM, 'center')
-  ctx.font = baseFont
+  // ── КОНТАКТ (Tab) — красным. Персонаж: лицо, имя, род занятий, корабль.
+  const ship = world.lockedTargetId == null ? null : world.ships.find((s) => s.id === world.lockedTargetId)
+  if (ship && ship.alive && isVisible(ship)) {
+    cell(
+      HUD_COLORS.DANGER,
+      [ship.pilotName, occupationName(ship.originKind, ship.faction), chassisName(ship.loadout.chassis.name)],
+      (cx, cy) => {
+        const sheet = loadSheet(portraitSheet(ship.persona.species, pilotEmotion(ship, world)))
+        if (sheetReady(sheet)) {
+          const c = sheet.naturalWidth / PORTRAIT_GRID
+          const { col, row } = portraitCell(portraitIndex(ship))
+          ctx.imageSmoothingEnabled = false
+          ctx.drawImage(sheet, col * c, row * c, c, c, Math.round(cx), Math.round(cy), Math.round(size), Math.round(size))
+        } else {
+          // Лист ещё грузится — инициал держит место, лицо встанет само.
+          text(ctx, (ship.name.trim().charAt(0) || '?').toUpperCase(), cx + size / 2, cy + size / 2 - 5 * S, HUD_COLORS.DIM, 'center')
+        }
+      },
+    )
+  } else if (world.lockedPodId != null) {
+    // Контейнер — тоже контакт (останки борта), но лица у него нет: кружок.
+    const pod = world.pods.find((p) => p.id === world.lockedPodId && p.alive)
+    if (pod) cell(HUD_COLORS.DANGER, [t('locator.kind.pod')], (cx, cy) => cellIcon(ctx, cx, cy, HUD_COLORS.WARN))
+  }
+
+  // ── НАВ-ЦЕЛЬ (Shift+Tab) — голубым. Крупное: кружок своего цвета + что это и как зовётся.
+  const nav = navTarget(world)
+  if (nav) {
+    const kindKey = `locator.kind.${nav.kind}` as Key
+    const body = world.bodies.find((b) => b.id === nav.id)
+    // Цвет — тот же, что метит тело на локаторе: значок и метка обязаны совпасть, иначе
+    // «кружок в панели» и «точка на радаре» читаются как разные объекты.
+    const color = body ? bodyColor(body) : MONOLITH_COLOR
+    cell(HUD_COLORS.PRIMARY, [properName(nav.name), t(kindKey)], (cx, cy) => cellIcon(ctx, cx, cy, color))
+  }
 }
 
 /**
@@ -699,6 +904,9 @@ function drawRadar(frame: HudFrame): void {
     size: number,
     ring = false,
     shape: 'square' | 'round' | 'diamond' = 'square',
+    /** Подпись у отметки — даём ТОЛЬКО выбранной нав-цели: подписать все значит не подписать
+     *  ни одной (на логарифмической шкале отметки жмутся к ободу и надписи слипнутся). */
+    label?: string,
   ) => {
     _point.copy(worldPos).sub(player.state.pos)
     const distance = _point.length()
@@ -748,6 +956,15 @@ function drawRadar(frame: HudFrame): void {
       ctx.fillRect(Math.round(px - size / 2), Math.round(my - size / 2), size, size)
     }
     if (ring) circle(ctx, px, my, size, color)
+
+    // Подпись выбранной цели: одно слово рядом с отметкой — чтобы её было видно СРАЗУ, а не
+    // искать глазами кольцо среди прижатых к ободу точек. Кегль мелкий, шрифт возвращаем.
+    if (label) {
+      const baseFont = ctx.font
+      ctx.font = `${Math.round(6 * S)}px "Consolas", "DejaVu Sans Mono", monospace`
+      text(ctx, label.toUpperCase(), px + size + 3 * S, my - 3 * S, color, 'left')
+      ctx.font = baseFont
+    }
   }
 
   // Цель навигации обведена кольцом: на логарифмической шкале, где все тела жмутся
@@ -760,7 +977,15 @@ function drawRadar(frame: HudFrame): void {
     const shape = body.kind === 'station' ? 'diamond' : 'round'
     // Звезда — крупнее прочих: она центр системы и ориентир, а не рядовая метка.
     const base = body.kind === 'star' || body.kind === 'blackhole' ? 5 : 3
-    plot(body.pos, bodyColor(body), Math.round((nav ? base + 1 : base) * S), nav, shape)
+    plot(body.pos, bodyColor(body), Math.round((nav ? base + 1 : base) * S), nav, shape, nav ? properName(body.name) : undefined)
+  }
+
+  // СТАТУИ. Они не тела (свой список — ни орбит, ни гравитации), поэтому на локатор их надо
+  // класть отдельно. Без этого километровые монолиты не отмечались вовсе — «непонятно, где они».
+  // Ромб, как у станции: рукотворное среди природного. Цвет камня отличает их от причала.
+  for (const m of world.monoliths) {
+    const nav = m.id === world.navTargetId
+    plot(m.pos, MONOLITH_COLOR, Math.round((nav ? 5 : 4) * S), nav, 'diamond', nav ? MONOLITH_NAMES[m.variant] : undefined)
   }
 
   // Камни — только ближние: пояс в двести шестьдесят отметок залил бы обод серым,
@@ -789,7 +1014,7 @@ function drawRadar(frame: HudFrame): void {
   // Локатор невидимку не берёт — то же правило, что у захвата и у головки ракеты.
   // Знакомого выделяем кольцом, как захваченного: среди точек он должен читаться особо.
   for (const ship of world.ships) {
-    if (!isVisible(ship)) continue
+    if (!isVisible(ship) || ship.divine) continue // бог Слово не светится на локаторе — его нет в космосе
     const marked = ship.id === world.lockedTargetId || ship.acquaintanceId != null
     plot(ship.state.pos, radarColor(ship, world), Math.round(3 * S), marked)
   }
@@ -799,6 +1024,9 @@ function drawRadar(frame: HudFrame): void {
 const RADAR_RANGE = 20_000
 /** Ближе этого камни рисуются, м. Дальше они — не препятствие, а пейзаж. */
 const ROCK_RANGE = 4_000
+
+/** Камень статуи: цвета в домене у неё нет — она декорация, а не тело. */
+const MONOLITH_COLOR = '#8d8677'
 
 /** Что это. Звезда жёлтая, причал белый, планета — фосфор консоли. */
 function bodyColor(body: BodyEntity): string {
@@ -894,6 +1122,8 @@ function bigValue(
   trend: number,
   maxWidth: number,
   above: string | null = null,
+  /** Поднять единицу измерения обратно на столько px: число с множителем спускаем, а её нет. */
+  unitLift = 0,
 ): void {
   const entryFont = ctx.font
   const aboveH = 11 * S // зарезервированная полоса под множитель — всегда, есть он или нет
@@ -926,9 +1156,10 @@ function bigValue(
   const numW = condense * natW
   const numH = BASE * STRETCH_Y
 
-  // Единица измерения — мельче и ПОД числом, не сбоку.
+  // Единица измерения — мельче и ПОД числом, не сбоку. `unitLift` возвращает её вверх,
+  // когда число с множителем намеренно спущено, а единица должна остаться на месте.
   ctx.font = hudFont(11 * S)
-  text(ctx, unit, x, numTop + numH + 1 * S, color)
+  text(ctx, unit, x, numTop + numH + 1 * S - unitLift, color)
 
   // Тренд-стрелка — справа от числа, на его середине.
   trendArrow(ctx, x + numW + 6 * S, numTop + numH / 2, trend, color)
@@ -969,7 +1200,10 @@ function drawReadouts({ ctx, world, height }: HudFrame): void {
   // Назад — с минусом (U+2212): реверс это не «ноль хода», а движение против носа.
   const sp = speedParts(speedMag)
   const reversing = vel.dot(_fwd) < -1
-  bigValue(ctx, x, speedTop, reversing ? `−${sp.value}` : sp.value, sp.unit, HUD_COLORS.PRIMARY, speedTrend, halfWidth, mult)
+  // Число спущено на NUM_DROP px, а единица «м/с» поднята ровно обратно — осталась на месте.
+  // Тем же сдвигом рисуем и масштаб справа, чтобы обе крупные цифры стояли на одной линии.
+  const NUM_DROP = 5 * S
+  bigValue(ctx, x, speedTop + NUM_DROP, reversing ? `−${sp.value}` : sp.value, sp.unit, HUD_COLORS.PRIMARY, speedTrend, halfWidth, mult, NUM_DROP)
 
   // Масштаб (миелофон) — справа, жёлтым, так же крупно. Появляется, только когда
   // прибор установлен: без него о масштабе речи нет.
@@ -980,7 +1214,8 @@ function drawReadouts({ ctx, world, height }: HudFrame): void {
     const scaleTrend = ds > scaleEps ? 1 : ds < -scaleEps ? -1 : 0
     _prevScale = scale
     const sc = scaleParts(scale)
-    bigValue(ctx, x + halfWidth, speedTop, sc.value, sc.unit, HUD_COLORS.TARGET, scaleTrend, halfWidth)
+    // Тот же NUM_DROP и подъём единицы, что у скорости, — цифры масштаба и скорости на одной линии.
+    bigValue(ctx, x + halfWidth, speedTop + NUM_DROP, sc.value, sc.unit, HUD_COLORS.TARGET, scaleTrend, halfWidth, null, NUM_DROP)
   }
 
   // ── Шкалы состояния: восемь строк по `step` ─────────────────────────────────
@@ -1012,8 +1247,9 @@ function drawReadouts({ ctx, world, height }: HudFrame): void {
     [t('hud.aux'), aux, aux < 0.15 ? HUD_COLORS.DANGER : HUD_COLORS.PRIMARY],
     // Нагрев СТВОЛА от стрельбы — отдельно от нагрева корпуса звездой.
     [t('hud.laser'), laser, laser > 0.7 ? HUD_COLORS.DANGER : HUD_COLORS.WARN],
-    // Температура КОРПУСА от близкой звезды. За порогом течёт щит, потом обшивка.
-    [t('hud.temp'), temp, temp > STAR_HEAT.LEAK_THRESHOLD ? HUD_COLORS.DANGER : temp > 0.5 ? HUD_COLORS.WARN : HUD_COLORS.DIM],
+    // Температура КОРПУСА от близкой звезды. На пороге разрушения корпус гибнет мгновенно;
+    // жёлтая с WARN (пора отворачивать), красная с CRITICAL (последнее окно).
+    [t('hud.temp'), temp, temp >= STAR_HEAT.CRITICAL ? HUD_COLORS.DANGER : temp >= STAR_HEAT.WARN ? HUD_COLORS.WARN : HUD_COLORS.DIM],
     // Заряд гиперпривода: тратится прыжком, черпается у звезды (светится целью).
     [t('hud.jump'), jump, jumpColor],
   ]
@@ -1083,12 +1319,15 @@ function gatherWarnings(frame: HudFrame): Plate | null {
   if (consumePendingBonVoyage()) pushWarning('bonVoyage', now)
 
   // ── Читаемые из мира состояния ──────────────────────────────────────────────
+  // Температура корпуса от звезды: WARN..CRITICAL — жёлтый «ПЕРЕГРЕВ», выше — красный
+  // «КРИТИЧЕСКИЙ ПЕРЕГРЕВ» (за ним корпус разрушается мгновенно — домен, см. stepStarHeat).
   const temp = player.hullHeat
-  if (temp > STAR_HEAT.LEAK_THRESHOLD) pushWarning('overheat', now)
-  else if (temp > 0.6) pushWarning('hullHot', now)
+  if (temp >= STAR_HEAT.CRITICAL) pushWarning('overheat', now)
+  else if (temp >= STAR_HEAT.WARN) pushWarning('hullHot', now)
 
   if (player.hull / player.spec.hull.hull < 0.25) pushWarning('hullCritical', now)
-  if (peakHeat(player) >= 1) pushWarning('laserHot', now)
+  // Ствол в отключке перегрева: жёлтая мигающая «ПЕРЕГРЕВ ЛАЗЕРА · ОХЛАЖДЕНИЕ» все 5 секунд.
+  if (laserOverheated(player, now)) pushWarning('laserHot', now)
   if (player.cruise.block === 'mass-lock') pushWarning('massLock', now)
   else if (player.cruise.block === 'proximity') pushWarning('gravityBrake', now)
   if (scooping(player)) pushWarning('refuel', now)

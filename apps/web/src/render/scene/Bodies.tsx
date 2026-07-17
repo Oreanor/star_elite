@@ -6,7 +6,8 @@ import { useSession } from '../../app/GameContext'
 import { ATMOSPHERE, ATMOSPHERE_COLOR, BODY_FADE, BODY_SEGMENTS, CITY_LIGHTS, CORONA, GIANT_RENDER_CAP, MOON_DECOR } from '../config'
 import { atmosphereGeometry, planetGeometry, starGeometry, type PlanetLook } from '../geometry/bodies'
 import { coronaGeometry } from '../geometry/corona'
-import { crossRaysGeometry, crossStationGeometry, solarStationGeometry, stationGeometry } from '../geometry/props'
+import { crossRaysGeometry, crossStationGeometry, stationGeometry } from '../geometry/props'
+import { crossGlbGeometry, stationGlbGeometry, stationGlbMaterial } from '../geometry/stationGlb'
 import { createDivineCrossMaterial } from '../materials/divineCross'
 import {
   crossRayMaterial,
@@ -58,9 +59,11 @@ const _tiltQuat = new Quaternion()
 const _billboard = new Matrix4()
 const _worldUp = /* @__PURE__ */ new Vector3(0, 1, 0)
 
-/** Ось симметрии геометрии в покое: у сферы это полюс, у кориолиса — продольная. */
+/**
+ * Ось симметрии геометрии в покое: у сферы (тела) это полюс. У GLB-станций — их «верх» (Meshy),
+ * то есть та же ось Y. Продольная ось (`0,0,1`) была нужна процедурному кориолису — его больше нет.
+ */
 const REST_POLE = new Vector3(0, 1, 0)
-const REST_BARREL = new Vector3(0, 0, 1)
 
 /**
  * Ставит тело на место и поворачивает его на угол, однозначно заданный временем.
@@ -214,8 +217,8 @@ function Star({ body }: { body: BodyEntity }) {
   // Корона — свой процедурный материал на звезду (цвет от класса, `uTime` двигает сцена).
   // Живёт в видеопамяти, поэтому при смене системы освобождаем явно (ниже), как поверхность.
   const material = useMemo(
-    () => createCoronaMaterial(body.color, body.calmCorona ?? false),
-    [body.color, body.calmCorona],
+    () => createCoronaMaterial(body.color),
+    [body.color],
   )
   useEffect(() => () => material.dispose(), [material])
   const glowSize = body.radius * CORONA.SCALE
@@ -300,19 +303,24 @@ function Station({ body }: { body: BodyEntity }) {
   const ref = useRef<Mesh>(null)
   const session = useSession()
 
-  // Кориолис вращается вокруг продольной оси — так было в оригинале. Домен задаёт
-  // ей `spinAxis = Z`, поэтому наклон здесь вырождается в тождество, а не в поворот.
+  // Облик — одна из пяти GLB-моделей; какая, решает домен по сиду системы (`stationModel`),
+  // потому у всех клиентов станция одинакова. Модель грузится асинхронно: до готовности
+  // отдаётся процедурная заглушка, а как меш доедет — подменяем по ИДЕНТИЧНОСТИ объекта.
+  const model = body.stationModel ?? 0
   useFrame(() => {
-    if (ref.current) {
-      place(ref.current, body, session.world.time, REST_BARREL)
-      ref.current.scale.setScalar(body.radius * worldShrink(session.world.player.state.scale))
-    }
+    const mesh = ref.current
+    if (!mesh) return
+    const g = stationGlbGeometry(model)
+    if (g && mesh.geometry !== g) mesh.geometry = g
+    const m = stationGlbMaterial(model)
+    if (m && mesh.material !== m) mesh.material = m
+    // Ось симметрии GLB-станции — её «верх» (Meshy: Y), НЕ продольная Z кориолиса. Кладём Y на
+    // ось спина (domain spinAxis) и крутим вокруг неё — иначе ось модели гоняется по кругу (кувырок).
+    place(mesh, body, session.world.time, REST_POLE)
+    mesh.scale.setScalar(body.radius * worldShrink(session.world.player.state.scale))
   })
 
-  // Облик станции — по ярлыку из домена (данные, не ветвление в симуляции).
-  const geometry = body.stationStyle === 'solar' ? solarStationGeometry() : stationGeometry()
-
-  return <mesh ref={ref} geometry={geometry} material={stationMaterial()} scale={body.radius} />
+  return <mesh ref={ref} geometry={stationGeometry()} material={stationMaterial()} scale={body.radius} />
 }
 
 /**
@@ -327,9 +335,16 @@ function CrossStation({ body }: { body: BodyEntity }) {
   useEffect(() => () => material.dispose(), [material])
 
   useFrame((_, dt) => {
-    if (!ref.current) return
-    place(ref.current, body, session.world.time, REST_BARREL)
-    ref.current.scale.setScalar(body.radius * worldShrink(session.world.player.state.scale))
+    const mesh = ref.current
+    if (!mesh) return
+    // Меш Креста грузится асинхронно — подменяем заглушку по идентичности. Материал НЕ трогаем:
+    // облик ему даёт божественный шейдер, а не текстуры модели.
+    const g = crossGlbGeometry()
+    if (g && mesh.geometry !== g) mesh.geometry = g
+    // Крест — монумент: он НЕ вращается (domain даёт ему spin 0), потому ось симметрии здесь
+    // роли не играет и `place` просто ставит его на место.
+    place(mesh, body, session.world.time, REST_POLE)
+    mesh.scale.setScalar(body.radius * worldShrink(session.world.player.state.scale))
     material.uniforms.uTime!.value += dt
   })
 

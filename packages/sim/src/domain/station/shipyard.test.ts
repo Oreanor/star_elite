@@ -26,18 +26,18 @@ describe('верфь корпусов', () => {
     const world = createWorld()
     // Ставим лёгкую сборку истребителя (с приводом): она заведомо влезет в грузовик,
     // и «успешную» смену не сорвёт грузоподъёмность — это проверяет отдельный тест.
-    world.player.loadout = SHIPYARD.find((o) => o.chassis.id === 'sidewinder')!.loadout()
-    const freighter = SHIPYARD.find((o) => o.chassis.id === 'freighter')!
+    world.player.loadout = SHIPYARD.find((o) => o.chassis.id === 'hermes')!.loadout()
+    const freighter = SHIPYARD.find((o) => o.chassis.id === 'atlas')!
 
     // В пустоте корпус не сменить: верфь есть только у станции.
     world.docked = false
     expect(swapHull(world, freighter.chassis, 0)).toBe('not-docked')
-    expect(world.player.loadout.chassis.id).toBe('sidewinder')
+    expect(world.player.loadout.chassis.id).toBe('hermes')
 
     world.docked = true
     world.player.hull = 1
     expect(swapHull(world, freighter.chassis, 0)).toBeNull()
-    expect(world.player.loadout.chassis.id).toBe('freighter')
+    expect(world.player.loadout.chassis.id).toBe('atlas')
     // Свежий корабль заправлен под завязку: корпус, щит и заряд привода — на максимум.
     expect(world.player.hull).toBe(world.player.spec.hull.hull)
     expect(world.player.jumpCharge).toBe(world.player.spec.jumpRange)
@@ -49,9 +49,10 @@ describe('верфь корпусов', () => {
     const world = createWorld()
     world.docked = true
     world.credits = 0
-    const demeter = SHIPYARD.find((o) => o.chassis.id === 'freighter')!
+    const demeter = SHIPYARD.find((o) => o.chassis.id === 'atlas')!
     expect(swapHull(world, demeter.chassis, 1)).toBe('no-money')
-    expect(world.player.loadout.chassis.id).toBe('aurora_mk3')
+    // Игрок стартует на «Авроре One» — корпус не сменился, денег нет.
+    expect(world.player.loadout.chassis.id).toBe('aurora_one')
   })
 
   /**
@@ -63,7 +64,7 @@ describe('верфь корпусов', () => {
     const world = createWorld()
     world.docked = true
     const start = world.player.loadout
-    const fit = fitOntoChassis(start, SHIPYARD.find((o) => o.chassis.id === 'apollo')!.chassis)
+    const fit = fitOntoChassis(start, SHIPYARD.find((o) => o.chassis.id === 'hermes')!.chassis)
     // Что-то не влезло ИЛИ влезло всё — но сумма ВНУТРЕННИХ модулей не потерялась:
     // слоты + осевшие в overflow внутренние = было (оружие/пилоны считаем отдельно).
     const weaponKinds = ['laser', 'missile', 'drone']
@@ -84,7 +85,7 @@ describe('верфь корпусов', () => {
 
     // Мелкий корпус (у «Ареса» слотов меньше, чем у «Авроры»): часть обвеса вытесняется
     // в трюм, а он забит рудой — переносу негде осесть.
-    const small = SHIPYARD.find((o) => o.chassis.id === 'sidewinder')!
+    const small = SHIPYARD.find((o) => o.chassis.id === 'hermes')!
     const before = world.player.loadout.chassis.id
     const result = swapHull(world, small.chassis, 0)
     if (result === 'no-room') {

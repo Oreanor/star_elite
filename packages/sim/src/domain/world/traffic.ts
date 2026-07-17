@@ -10,6 +10,7 @@ import { signed, type Rng } from '../../core/math'
 import type { Loadout } from '../loadout'
 import { createAIState } from '../ai/types'
 import { residentAcquaintances } from './acquaintance'
+import { SLOVO_KIND } from './slovo'
 import { rehydrateContactShip } from './plan'
 import { spawnPlatform } from './platforms'
 import { beginWarpArrival } from './warp'
@@ -150,7 +151,9 @@ function randomDirection(world: World, out: Vector3): Vector3 {
 
 /** Свои и беспилотники не в счёт: потолок считает ВСТРЕЧЕННЫХ. */
 const trafficCount = (world: World): number =>
-  world.ships.filter((s) => s.alive && !isDroneShip(s) && s.ai?.escortOf == null).length
+  // Бог (Слово) сидит у КАЖДОГО причала и трафиком не является: он вписан в мир, а не встречен.
+  // Не исключишь — он съедает место в потолке встреч в каждой системе со станцией.
+  world.ships.filter((s) => s.alive && !isDroneShip(s) && !s.divine && s.ai?.escortOf == null).length
 
 /**
  * Где родится группа и куда полетит.
@@ -333,6 +336,9 @@ export function spawnResidentContacts(world: World): ShipEntity[] {
   const anchor = residentAnchor(world)
   const born: ShipEntity[] = []
   for (const rec of residents) {
+    // Бог Слово не воскрешается трафиком: его сажает на Крест `spawnSlovo`, а его тип
+    // «god» вне `ENCOUNTERS` — иначе тут родился бы случайный борт под именем Слова.
+    if (rec.kindId === SLOVO_KIND) continue
     const kind = ENCOUNTERS.find((k) => k.id === rec.kindId) ?? ENCOUNTERS[0]!
     acquaintanceSpawnSite(world, station, _site)
     _scratch.copy(_site)
@@ -547,6 +553,8 @@ function despawnDistant(world: World): void {
   const limitSq = TRAFFIC.DESPAWN_RANGE * TRAFFIC.DESPAWN_RANGE
   world.ships = world.ships.filter((s) => {
     if (!s.alive || isDroneShip(s)) return true
+    // Слово — вписанный в мир бог, а не трафик: он всегда у своего Креста, его не убираем.
+    if (s.divine) return true
     if (s.id === world.lockedTargetId) return true
     if (s.ai?.escortOf != null) return true
     // ЗНАКОМЫЙ (с ним говорили) не растворяется, как прочий трафик: он отслеживается,
@@ -598,6 +606,9 @@ function rearm(world: World): void {
 
 /** Шаг трафика. Возвращает родившихся: приложению надо дать им пилотов. */
 export function stepTraffic(world: World, dt: number): ShipEntity[] {
+  // Пустынная система (Люцифер): трафика нет вовсе — ни встреч, ни завсегдатаев у причала.
+  // Выходим ДО despawnDistant: чистить некого, а спавнить тем более. Только бог и звезда.
+  if (world.desolate) return []
   despawnDistant(world)
 
   // Жизнь у причала — вне ритма встреч и вне первой задержки: станция обязана

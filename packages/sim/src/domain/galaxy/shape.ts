@@ -2,6 +2,7 @@ import {
   CORE_INDEX,
   GALAXY,
   GALAXY_SHAPES,
+  HOME_SHAPE,
   LUCIFER,
   SHAPE,
   type GalaxyShapeId,
@@ -62,21 +63,42 @@ function bulge(rng: Rng, radius: number = SHAPE.BULGE_RADIUS): Spot {
 }
 
 /**
- * Точка рукава. Плотность равномерна по площади (`r = √t`), поэтому центр
- * не оказывается пустым, а край — переполненным.
+ * Точка рукава — ЛОГАРИФМИЧЕСКАЯ спираль. Плотность равномерна по площади (`r = √t`),
+ * поэтому центр не оказывается пустым, а край — переполненным.
+ *
+ * ПОЧЕМУ ЛОГАРИФМИЧЕСКАЯ, а не архимедова (θ ∝ r), как было раньше.
+ *
+ * У архимедовой спирали `dθ/dr` постоянна, значит у основания тангенциальная составляющая шага
+ * (`r·dθ`) исчезающе мала против радиальной: рукав выходит из ядра СПИЦЕЙ, радиально. Именно это
+ * и было видно на карте. У логарифмической `θ ∝ ln r`, поэтому `r·dθ/dr` постоянно — угол между
+ * рукавом и радиусом (pitch) ОДИН И ТОТ ЖЕ на любом радиусе. Оттого ветвь отходит от ядра по
+ * касательной и вьётся с неизменным наклоном — так и устроены настоящие спирали.
+ *
+ * Полный размах (`sweep`) остаётся тем же числом из конфига: из него выводится наклон, а не
+ * наоборот, — `θ(1) − θ(inner) = sweep` по построению. Крутизну правят прежней ручкой.
  *
  * @param inner Откуда рукав начинается (у перемычки — с её конца, не из центра).
  */
 function arm(rng: Rng, t: number, arms: number, sweep: number, inner: number): Spot {
   const r = inner + (1 - inner) * Math.sqrt(t)
   const which = Math.floor(rng() * arms)
-  const theta = (which * Math.PI * 2) / arms + sweep * ((r - inner) / (1 - inner))
+  // ln(r/inner)/ln(1/inner) — доля намотки: 0 у основания, 1 у края. Наклон постоянен.
+  const wind = Math.log(r / inner) / Math.log(1 / inner)
+  const theta = (which * Math.PI * 2) / arms + sweep * wind
 
-  // Рукав распушается к краю: у основания он туго свит, на периферии рвётся.
-  const spread = SHAPE.SPIRAL_SPREAD * (0.35 + 0.65 * r)
+  /**
+   * Рукав РАСШИРЯЕТСЯ и РАССЕИВАЕТСЯ к краю: у основания туго свит, на периферии рвётся и тает
+   * в диске. Ширина растёт линейно, а разброс ПО УГЛУ — квадратично: именно он съедает рисунок
+   * ветви, превращая её из чёткой дуги в поток. Без него рукав дугой доходил до самого обода.
+   */
+  const grown = (r - inner) / (1 - inner)
+  const widen = 0.25 + 1.5 * grown
+  const spread = SHAPE.SPIRAL_SPREAD * widen
+  const th = theta + gauss(rng) * SHAPE.SPIRAL_SMEAR * widen * widen
+
   return {
-    x: r * Math.cos(theta) + gauss(rng) * spread,
-    y: r * Math.sin(theta) + gauss(rng) * spread,
+    x: r * Math.cos(th) + gauss(rng) * spread,
+    y: r * Math.sin(th) + gauss(rng) * spread,
     z: discZ(rng),
   }
 }
@@ -170,6 +192,15 @@ function placerFor(id: GalaxyShapeId, seed: number): Placer {
 
 /** Форма галактики выводится из её зерна. Другое зерно — другая галактика по Хабблу. */
 export function galaxyShape(seed: number = GALAXY.SEED): (typeof GALAXY_SHAPES)[number] {
+  /**
+   * Форма ДОМАШНЕЙ галактики — решение, а не бросок (см. `HOME_SHAPE`). Override держим ровно
+   * на зерне по умолчанию: чужая галактика (куст, когда до него дойдёт) обязана бросать СВОЮ
+   * форму из таблицы. Иначе лотерея выродилась бы во всех, и весь куст стал бы спиральным.
+   */
+  if (HOME_SHAPE && seed === GALAXY.SEED) {
+    const forced = GALAXY_SHAPES.find((s) => s.id === HOME_SHAPE)
+    if (forced) return forced
+  }
   const rng = makeRng(seed ^ 0x2545f491)
   let total = 0
   for (const s of GALAXY_SHAPES) total += s.weight

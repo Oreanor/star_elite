@@ -167,10 +167,10 @@ export const PT: Record<keyof typeof RU, string> = {
   'hud.laser': 'LASER',
   'hud.temp': 'TEMP',
   'hud.jump': 'SALTO',
-  'hud.overheat': 'SUPERAQUECE — ESTRELA',
-  'hud.hullHot': 'CASCO ESQUENTANDO',
+  'hud.overheat': 'SUPERAQUECIMENTO CRÍTICO',
+  'hud.hullHot': 'SUPERAQUECIMENTO',
   'hud.hullCritical': 'CASCO CRÍTICO',
-  'hud.laserHot': 'LASER SUPERAQUECIDO',
+  'hud.laserHot': 'LASER · RESFRIANDO',
   'hud.lowEnergy': 'SEM ENERGIA',
   'hud.noRockets': 'SEM MÍSSEIS',
   'hud.noLaser': 'SEM ARMA INSTALADA',
@@ -379,6 +379,8 @@ export const PT: Record<keyof typeof RU, string> = {
   'locator.kind.moon': 'lua',
   'locator.kind.station': 'estação',
   'locator.kind.blackhole': 'buraco negro',
+  'locator.kind.monolith': 'monólito',
+  'locator.kind.pod': 'contêiner',
 
   // ─── Pessoas: registro de conhecidos ─────────────────────────────────────────
   'people.title': 'PESSOAS',

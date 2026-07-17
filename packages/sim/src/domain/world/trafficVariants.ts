@@ -1,31 +1,25 @@
-import { AURORA_MK3, SIDEWINDER } from '../../config/chassis'
 import {
-  apolloLoadout,
-  aresLoadout,
-  artemisLoadout,
-  athenaLoadout,
+  auroraOneLoadout,
   freighterLoadout,
+  hermesLoadout,
+  orionLoadout,
+  pegasusLoadout,
+  perseusLoadout,
   pirateLeaderLoadout,
   pirateLoadout,
+  theseusLoadout,
   traderLoadout,
 } from '../../config/loadouts'
-import {
-  CARGO_LARGE,
-  CARGO_SMALL,
-  ENGINE_CIVILIAN,
-  HYPERDRIVE_BASIC,
-  PULSE_LASER_WORN,
-  RCS_CIVILIAN,
-  SHIELD_LIGHT,
-  SHIELD_STANDARD,
-} from '../../config/modules'
 import type { Rng } from '../../core/math'
-import { createLoadout, type Loadout } from '../loadout'
+import type { Loadout } from '../loadout'
 import type { Profession } from './persona'
 
 /**
  * Варианты борта для типа встречи: корпус и род занятий. Один «торговец» в таблице
  * встреч — это роль в трафике; на радаре и в разговоре видны разные корабли и профессии.
+ *
+ * Все корпуса — загруженные GLB-модели (процедурные сняты из игры): гражданские садятся на
+ * «Пегас»/«Тесей»/«Аврору One», боевые — на «Гермес»/«Орион» и стоковые пиратские сборки.
  */
 
 interface VariantEntry {
@@ -34,31 +28,11 @@ interface VariantEntry {
   readonly profession: Profession
 }
 
-/** Гражданский рейсовый на «Авроре» — не боевой стартовый комплект. */
-function auroraCourierLoadout(): Loadout {
-  return createLoadout(
-    AURORA_MK3,
-    [ENGINE_CIVILIAN, RCS_CIVILIAN, SHIELD_STANDARD, CARGO_LARGE, HYPERDRIVE_BASIC],
-    [PULSE_LASER_WORN],
-  )
-}
-
-/** Лёгкий курьер на «Аресе» с трюмом, без бронеплиты налётчика. */
-function aresMerchantLoadout(): Loadout {
-  return createLoadout(
-    SIDEWINDER,
-    [ENGINE_CIVILIAN, RCS_CIVILIAN, SHIELD_LIGHT, CARGO_SMALL, HYPERDRIVE_BASIC],
-    [PULSE_LASER_WORN],
-  )
-}
-
 const CIVIL_MIX: readonly VariantEntry[] = [
-  { weight: 18, loadout: apolloLoadout, profession: 'traveler' },
-  { weight: 16, loadout: athenaLoadout, profession: 'explorer' },
-  { weight: 14, loadout: auroraCourierLoadout, profession: 'businessman' },
-  { weight: 12, loadout: aresMerchantLoadout, profession: 'businessman' },
-  { weight: 10, loadout: traderLoadout, profession: 'businessman' },
-  { weight: 8, loadout: artemisLoadout, profession: 'military' },
+  { weight: 18, loadout: pegasusLoadout, profession: 'businessman' },
+  { weight: 16, loadout: theseusLoadout, profession: 'explorer' },
+  { weight: 14, loadout: auroraOneLoadout, profession: 'traveler' },
+  { weight: 12, loadout: traderLoadout, profession: 'businessman' },
 ]
 
 const BY_KIND: Record<string, readonly VariantEntry[]> = {
@@ -66,26 +40,22 @@ const BY_KIND: Record<string, readonly VariantEntry[]> = {
   convoy: CIVIL_MIX,
   freighter: [{ weight: 1, loadout: freighterLoadout, profession: 'businessman' }],
   police: [
-    { weight: 32, loadout: artemisLoadout, profession: 'military' },
-    { weight: 28, loadout: apolloLoadout, profession: 'military' },
-    { weight: 22, loadout: athenaLoadout, profession: 'military' },
+    { weight: 32, loadout: perseusLoadout, profession: 'military' },
+    { weight: 28, loadout: orionLoadout, profession: 'military' },
     { weight: 18, loadout: pirateLeaderLoadout, profession: 'military' },
   ],
   pirate: [
     { weight: 34, loadout: pirateLoadout, profession: 'pirate' },
-    { weight: 26, loadout: aresLoadout, profession: 'pirate' },
-    { weight: 22, loadout: apolloLoadout, profession: 'pirate' },
-    { weight: 18, loadout: artemisLoadout, profession: 'pirate' },
+    { weight: 26, loadout: hermesLoadout, profession: 'pirate' },
+    { weight: 22, loadout: theseusLoadout, profession: 'pirate' },
   ],
   gang: [
     { weight: 40, loadout: pirateLoadout, profession: 'pirate' },
-    { weight: 30, loadout: aresLoadout, profession: 'pirate' },
-    { weight: 30, loadout: apolloLoadout, profession: 'pirate' },
+    { weight: 30, loadout: hermesLoadout, profession: 'pirate' },
   ],
   raider: [
     { weight: 38, loadout: pirateLeaderLoadout, profession: 'pirate' },
-    { weight: 32, loadout: artemisLoadout, profession: 'pirate' },
-    { weight: 30, loadout: aresLoadout, profession: 'pirate' },
+    { weight: 32, loadout: orionLoadout, profession: 'pirate' },
   ],
 }
 

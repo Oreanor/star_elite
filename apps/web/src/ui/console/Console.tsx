@@ -8,13 +8,16 @@ import {
   livingContacts,
   localSettlement,
   stepDockTraffic,
+  stanceTo,
   type BodyEntity,
   type Contact,
+  type Relationship,
   type ShipEntity,
   type World,
 } from '@elite/sim'
 import { useOnlinePlayers, type OnlinePlayer } from '../../app/net/presence'
-import { currentLang, t, useLang } from '../i18n'
+import { currentLang, t, useLang, type Key } from '../i18n'
+import { UI } from '../theme'
 import { currentGameDate } from '../clock'
 import { chassisName, economyName, governmentName, occupationName, professionName, properName, speciesName } from '../i18n/dataNames'
 import { ACCENT, Button, Column, DIM, PilotPortrait, Table } from '../station/chrome'
@@ -241,15 +244,34 @@ interface Fact {
 }
 
 /** Единая плашка человека: портрет слева, справа имя/роль/деталь и кнопка «Связаться». */
+/**
+ * ОТНОШЕНИЕ словом и цветом. Ключи и слова — ТЕ ЖЕ, что в шапке диалога: пилот не должен
+ * переучиваться, переходя с карточки в разговор. Цвет несёт то же, что слово, — чтобы
+ * пробежать список глазами, не читая: враг красный, друг фосфорный, прочие погашены.
+ */
+const STANCE_KEY: Record<Relationship, Key> = {
+  friendly: 'dialogue.stance.friendly',
+  neutral: 'dialogue.stance.neutral',
+  hostile: 'dialogue.stance.hostile',
+}
+const STANCE_COLOR: Record<Relationship, string> = {
+  friendly: ACCENT,
+  neutral: DIM,
+  hostile: UI.DANGER,
+}
+
 function PersonPlaque({
   name,
   roleLine,
+  stance,
   detailLine,
   portrait,
   onTalk,
 }: {
   name: string
   roleLine?: string
+  /** Как он к тебе относится. Нет — не показываем строку вовсе (напр. это ты сам). */
+  stance?: Relationship
   detailLine?: string
   portrait: ReactNode
   onTalk?: () => void
@@ -261,6 +283,11 @@ function PersonPlaque({
         <div className="truncate text-sm tracking-widest" style={{ color: ACCENT }}>
           {name}
         </div>
+        {stance ? (
+          <div className="truncate text-xs tracking-widest" style={{ color: STANCE_COLOR[stance] }}>
+            {t(STANCE_KEY[stance])}
+          </div>
+        ) : null}
         {roleLine ? (
           <div className="truncate text-xs tracking-widest" style={{ color: DIM }}>
             {roleLine}
@@ -313,11 +340,22 @@ function PeopleTab({
   onChat: (player: OnlinePlayer) => void
 }) {
   const dockedHere = docked ? dockedPilots(world).slice(1).filter((s) => s.alive) : []
-  const contacts = contactsExceptDocked(livingContacts(world), dockedHere)
+  // Слово — особый бог на Кресте: ВНЕ категорий (не «пристыкованный», не «знакомый»), но
+  // на этой станции виден ВСЕГДА. Из «знакомых» исключаем, чтобы не задвоить после разговора.
+  const slovo = docked ? world.ships.find((s) => s.alive && s.divine) : undefined
+  const contacts = contactsExceptDocked(livingContacts(world), dockedHere).filter((c) => !c.ship?.divine)
 
   return (
     <div>
       <h1 className="text-2xl tracking-[0.2em]">{t('people.title')}</h1>
+
+      {/* СЛОВО — бог на Кресте. Вне категорий: отдельная плашка над списками, всегда, пока ты
+          на этой станции. Не «пристыкованный» и не «знакомый» (знакомым станет, когда заговоришь). */}
+      {slovo && (
+        <div className="mt-4 flex flex-wrap gap-3">
+          <DockPlaque ship={slovo} you={false} world={world} onTalk={onTalk} />
+        </div>
+      )}
 
       {/* ПРИСТЫКОВАНЫ — кто физически здесь, у причала: к ним можно подойти и заговорить.
           Могут быть и вовсе незнакомцы. Себя не показываем — свою плашку видеть незачем.
@@ -331,7 +369,7 @@ function PeopleTab({
           {dockedHere.length > 0 ? (
             <div className="mt-3 flex flex-wrap gap-3">
               {dockedHere.map((p) => (
-                <DockPlaque key={p.id} ship={p} you={false} onTalk={onTalk} />
+                <DockPlaque key={p.id} ship={p} you={false} world={world} onTalk={onTalk} />
               ))}
             </div>
           ) : (
@@ -450,6 +488,9 @@ function ContactPlaque({
     <PersonPlaque
       name={record.name}
       roleLine={roleLine}
+      // Отношение берём у ЖИВОГО борта (`stanceTo` учитывает и фракцию: свежий пират враждебен
+      // и без записи). Борта рядом нет — показываем, чем кончилось знакомство по журналу.
+      stance={ship ? stanceTo(world, ship) : record.relationship}
       detailLine={detailLine}
       portrait={
         ship ? (
@@ -464,12 +505,15 @@ function ContactPlaque({
 }
 
 /** Плашка пилота у причала. */
-function DockPlaque({ ship, you, onTalk }: { ship: ShipEntity; you: boolean; onTalk: (id: number) => void }) {
+function DockPlaque({ ship, you, world, onTalk }: { ship: ShipEntity; you: boolean; world: World; onTalk: (id: number) => void }) {
   return (
     <PersonPlaque
       name={ship.pilotName}
       roleLine={(you ? professionName(ship.persona.profession) : occupationName(ship.originKind, ship.faction)).toUpperCase()}
-      detailLine={chassisName(ship.loadout.chassis.name)}
+      // У СЕБЯ отношения нет — не показываем: «ты нейтрален к себе» это шум, а не сведения.
+      stance={you ? undefined : stanceTo(world, ship)}
+      // У бога корабля нет — вместо марки корпуса пусто: его строка «БОГ» уже всё сказала.
+      detailLine={ship.divine ? '' : chassisName(ship.loadout.chassis.name)}
       portrait={<PilotPortrait ship={ship} emotion="neutral" size={96} />}
       onTalk={you ? undefined : () => onTalk(ship.id)}
     />

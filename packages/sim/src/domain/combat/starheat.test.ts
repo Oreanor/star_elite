@@ -1,15 +1,16 @@
 import { Vector3 } from 'three'
 import { describe, expect, it } from 'vitest'
+import { STAR_HEAT } from '../../config/heat'
 import { createWorld, STARTER_SYSTEM, type World } from '../world'
 import { starExposure, stepStarHeat } from './starheat'
 
 /**
  * Нагрев корпуса звездой.
  *
- * Подойти можно, прижаться — нельзя: у короны корпус калится, за порогом течёт
- * сперва щит, потом обшивка, и спасает только манёвр. Проверяем не числа (они
- * переживут перебалансировку плохо), а СВОЙСТВА: вдали холодно, у короны жарко,
- * щит горит раньше корпуса, отвернул — остыл.
+ * Подойти можно, прижаться — нельзя: у короны корпус калится, и на полном жару РАЗРУШАЕТСЯ
+ * РАЗОМ — «отсидеться под щитом» нельзя, спасает только манёвр. Проверяем не числа (они
+ * переживут перебалансировку плохо), а СВОЙСТВА: вдали холодно, у короны жарко, до самого
+ * порога корпус цел, на пороге гибнет мгновенно, отвернул — остыл без потерь.
  */
 
 const DT = 1 / 120
@@ -83,50 +84,40 @@ describe('нагрев у звезды', () => {
     expect(starExposure(world.player, world)).toBeGreaterThan(0.9)
   })
 
-  it('щит горит раньше корпуса', () => {
+  it('до самого порога корпус ЦЕЛ, а на пороге гибнет МГНОВЕННО (не постепенная течь)', () => {
     const world = quiet()
-    place(world, 0.1)
+    place(world, 0.05) // глубоко в короне: облучение максимально, нагрев дойдёт до порога
     const p = world.player
 
-    // Ждём, пока щит не сгорит полностью.
-    let shieldGoneAt = -1
-    for (let i = 0; i < 120 * 30 && p.alive; i++) {
+    let destroyedAt = -1
+    for (let i = 0; i < 120 * 60 && p.alive; i++) {
       world.time += DT
+      const before = p.hullHeat
       stepStarHeat(p, world, DT)
-      if (shieldGoneAt < 0 && p.shield <= 0) shieldGoneAt = i
+      // Пока не достигли порога разрушения — ни щит, ни обшивка не тронуты: течи нет вовсе.
+      if (before < STAR_HEAT.DESTROY && p.alive) {
+        expect(p.shield).toBe(p.spec.hull.shield)
+        expect(p.hull).toBe(p.spec.hull.hull)
+      }
+      if (!p.alive && destroyedAt < 0) destroyedAt = i
     }
 
-    expect(shieldGoneAt).toBeGreaterThan(0)
-    // В момент, когда щит только исчез, обшивка ещё почти целая: корпус течёт ПОСЛЕ.
-    // (Проверяем через отдельный прогон до этого мгновения.)
-    const w2 = quiet()
-    place(w2, 0.1)
-    for (let i = 0; i <= shieldGoneAt; i++) {
-      w2.time += DT
-      stepStarHeat(w2.player, w2, DT)
-    }
-    expect(w2.player.hull).toBeGreaterThan(w2.player.spec.hull.hull * 0.8)
-  })
-
-  it('за порогом корпус в конце концов гибнет, если не уходить', () => {
-    const world = quiet()
-    place(world, 0.05)
-    cook(world, 60)
-    expect(world.player.alive).toBe(false)
+    expect(destroyedAt).toBeGreaterThan(0) // в конце концов сгорел — разом, на пороге
+    expect(p.alive).toBe(false)
   })
 
   it('отвернул — остыл, и потерь корпуса за короткий жар нет', () => {
     const world = quiet()
     place(world, 0.1)
-    cook(world, 7) // почти до порога, но течь едва началась
+    cook(world, 7) // прогрелись выше половины, но до порога разрушения далеко
     const heated = world.player.hullHeat
     expect(heated).toBeGreaterThan(0.5)
 
     place(world, 4) // ушли за SAFE_RATIO
     cook(world, 10)
     expect(world.player.hullHeat).toBeLessThan(0.05)
-    // За семь секунд у самой короны обшивка почти не пострадала: побег спасает.
-    expect(world.player.hull).toBeGreaterThan(world.player.spec.hull.hull * 0.95)
+    // Порога разрушения не достигли — обшивка не тронута вовсе: побег спасает целиком.
+    expect(world.player.hull).toBe(world.player.spec.hull.hull)
   })
 
   /**

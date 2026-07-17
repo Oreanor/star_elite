@@ -57,7 +57,9 @@ const DEFS: Record<WarnCode, Def> = {
   missileIn: { color: UI.DANGER, hz: 5, rank: 110, key: 'hud.missileWarn' },
   overheat: { color: UI.DANGER, hz: 3, rank: 100, key: 'hud.overheat' },
   hullCritical: { color: UI.DANGER, hz: 3, rank: 95, key: 'hud.hullCritical' },
-  laserHot: { color: UI.DANGER, hz: 3, rank: 90, key: 'hud.laserHot' },
+  // Перегрев ЛАЗЕРА — жёлтый (осторожность/«нельзя стрелять»), а не угроза жизни: ствол
+  // всего лишь глохнет на охлаждение. Мигает все 5 секунд отключки.
+  laserHot: { color: UI.WARN, hz: 3, rank: 90, key: 'hud.laserHot' },
   noRockets: { color: UI.WARN, hz: 0, rank: 84, key: 'hud.noRockets' },
   noLaser: { color: UI.WARN, hz: 0, rank: 84, key: 'hud.noLaser' },
   noJump: { color: UI.WARN, hz: 0, rank: 84, key: 'hud.noJump' },

@@ -37,9 +37,9 @@ export function starExposure(ship: ShipEntity, world: World): number {
 
 /**
  * Шаг нагрева. Температура тянется к облучённости — вверх у звезды, вниз вдали,
- * причём вниз быстрее. За порогом течёт прочность: `applyDamage` снимает сперва
- * щит, потом обшивку, и он же метит `lastHitAt`, из-за чего щит не восстанавливается,
- * пока жар не спадёт. Отвернул — перестало течь, через задержку щит пошёл обратно.
+ * причём вниз быстрее. Дойдя до DESTROY, корпус разрушается МГНОВЕННО: у короны нет
+ * постепенной течи и «отсидеться под щитом» — либо успел отвернуть по пушу, либо сгорел.
+ * Урон разом больше суммы щита и обшивки, чтобы `applyDamage` провёл штатную гибель.
  */
 export function stepStarHeat(ship: ShipEntity, world: World, dt: number): void {
   if (!ship.alive) return
@@ -50,11 +50,9 @@ export function stepStarHeat(ship: ShipEntity, world: World, dt: number): void {
   ship.hullHeat += (target - ship.hullHeat) * (1 - Math.exp(-rate * dt))
   ship.hullHeat = clamp(ship.hullHeat, 0, 1)
 
-  if (ship.hullHeat <= STAR_HEAT.LEAK_THRESHOLD) return
-
-  // Доля перегрева над порогом, 0..1. Квадрат даёт «медленно у порога, сильно у края».
-  const over = (ship.hullHeat - STAR_HEAT.LEAK_THRESHOLD) / (1 - STAR_HEAT.LEAK_THRESHOLD)
-  applyDamage(ship, STAR_HEAT.LEAK_MAX * over * over * dt, world.time)
+  if (ship.hullHeat >= STAR_HEAT.DESTROY) {
+    applyDamage(ship, ship.shield + ship.hull + 1, world.time)
+  }
 }
 
 /** Заряжается ли сейчас привод: прогрелись достаточно, но заряд ещё не полон. */

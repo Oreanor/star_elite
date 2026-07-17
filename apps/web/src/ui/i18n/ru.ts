@@ -164,10 +164,10 @@ export const RU = {
   'hud.laser': 'ЛАЗЕР',
   'hud.temp': 'ТЕМП',
   'hud.jump': 'ГИПЕР',
-  'hud.overheat': 'ПЕРЕГРЕВ — ОТ ЗВЕЗДЫ',
-  'hud.hullHot': 'КОРПУС ГРЕЕТСЯ',
+  'hud.overheat': 'КРИТИЧЕСКИЙ ПЕРЕГРЕВ',
+  'hud.hullHot': 'ПЕРЕГРЕВ',
   'hud.hullCritical': 'КОРПУС КРИТИЧЕСКИЙ',
-  'hud.laserHot': 'ПЕРЕГРЕВ ЛАЗЕРА',
+  'hud.laserHot': 'ПЕРЕГРЕВ ЛАЗЕРА · ОХЛАЖДЕНИЕ',
   'hud.lowEnergy': 'НЕТ ЭНЕРГИИ',
   'hud.noRockets': 'НЕТ РАКЕТ',
   'hud.noLaser': 'ЛАЗЕР НЕ УСТАНОВЛЕН',
@@ -376,6 +376,10 @@ export const RU = {
   'locator.kind.moon': 'луна',
   'locator.kind.station': 'станция',
   'locator.kind.blackhole': 'чёрная дыра',
+
+  'locator.kind.monolith': 'монолит',
+
+  'locator.kind.pod': 'контейнер',
 
   // ─── Люди: реестр знакомых ───────────────────────────────────────────────────
   'people.title': 'ЛЮДИ',

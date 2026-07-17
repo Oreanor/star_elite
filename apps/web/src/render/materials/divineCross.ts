@@ -1,4 +1,4 @@
-import { Color, DoubleSide, ShaderMaterial } from 'three'
+import { DoubleSide, ShaderMaterial } from 'three'
 
 /**
  * Материал станции-КРЕСТА — «бог в центре вселенной».
@@ -54,31 +54,52 @@ const fragment = /* glsl */ `
 #include <logdepthbuf_pars_fragment>
 
 uniform float uTime;
-uniform vec3 uHalo;
 
 varying vec3 vColor;
 varying vec3 vNormalV;
 varying vec3 vViewV;
 varying vec3 vLocal;
 
+float hash(vec2 p) {
+  p = fract(p * vec2(123.34, 456.21));
+  p += dot(p, p + 45.32);
+  return fract(p.x * p.y);
+}
+float vnoise(vec2 p) {
+  vec2 i = floor(p);
+  vec2 f = fract(p);
+  f = f * f * (3.0 - 2.0 * f);
+  return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), f.x),
+             mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), f.x), f.y);
+}
+float fbm(vec2 p) {
+  float s = 0.0, a = 0.5;
+  for (int i = 0; i < 4; i++) { s += a * vnoise(p); p *= 2.03; a *= 0.5; }
+  return s;
+}
+
 void main() {
   #include <logdepthbuf_fragment>
 
-  // Френель: к кромке (нормаль перпендикулярна взгляду) крест раскаляется — святой ореол края.
+  // Френель: к кромке (нормаль перпендикулярна взгляду) крест раскаляется добела.
   float facing = clamp(dot(normalize(vNormalV), normalize(vViewV)), 0.0, 1.0);
   float fresnel = pow(1.0 - facing, 3.0);
 
-  // Поток энергии по телу: несколько бегущих полос вдоль осей, пульсирующих во времени.
-  float flow =
-    0.5 + 0.5 * sin(vLocal.z * 16.0 - uTime * 2.2) *
-                sin(vLocal.x * 9.0 + uTime * 1.3);
-  float pulse = 0.7 + 0.3 * sin(uTime * 1.6);
+  // ГЛАДКАЯ ПЛАЗМА: медленный текучий fbm с домейн-варпом. Координата собрана из всех трёх
+  // осей, чтобы плазма покрывала каждую балку. Не разряды — плавные перетекающие сгустки.
+  vec2 uv = vec2(vLocal.x * 3.5 + vLocal.z * 2.0, vLocal.y * 3.5 - vLocal.z * 2.0);
+  float t = uTime * 0.12;
+  vec2 w = vec2(fbm(uv * 0.8 + t), fbm(uv * 0.8 + 7.3 - t));
+  float n = fbm(uv + w * 1.6);
+  float pulse = 0.85 + 0.15 * sin(uTime * 1.4);
 
-  // База — покраска граней; поверх золото-белое свечение по френелю и потоку.
-  vec3 col = vColor;
-  col += uHalo * (fresnel * 1.8 + flow * 0.35) * pulse;
-  col += uHalo * fresnel * fresnel * 1.2; // добела на самой кромке
+  // Бело-голубой градиент: тело голубое, гребни плазмы уходят добела — светится как звезда.
+  vec3 cold = vec3(0.10, 0.42, 1.0);
+  vec3 hot = vec3(0.80, 0.92, 1.0);
+  vec3 plasma = mix(cold, hot, smoothstep(0.35, 0.9, n));
 
+  vec3 col = plasma * (0.85 + 0.9 * n) * pulse;
+  col += vec3(0.85, 0.93, 1.0) * fresnel * 1.4; // добела на самой кромке
   gl_FragColor = vec4(col, 1.0);
 }
 `
@@ -93,8 +114,6 @@ export function createDivineCrossMaterial(): ShaderMaterial {
       // Амплитуда варпа в ЕДИНИЧНОЙ геометрии (крест масштабируется мешем). ~1.5% силуэта:
       // плывёт заметно, но крест не разваливается.
       uWarp: { value: 0.015 },
-      // Золото-белый ореол — «божественный» тон свечения.
-      uHalo: { value: new Color(0xfff0c8) },
     },
     vertexColors: true,
     side: DoubleSide,

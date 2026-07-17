@@ -21,8 +21,25 @@ import type { CargoPodEntity, ShipEntity, World } from '../world/entities'
 export type Task =
   /** Собрать контейнеры в радиусе `radius` от `anchor`, пока не кончатся или не забьётся трюм. */
   | { kind: 'collect-cargo'; anchor: Vector3; radius: number }
-  /** Долететь до точки `point` и встать рядом (встреча/рандеву). */
+  /** Долететь до НЕПОДВИЖНОЙ точки `point` и встать рядом. Для живых целей — задачи ниже. */
   | { kind: 'goto'; point: Vector3; arriveRadius: number }
+  /**
+   * Подойти к ТЕЛУ по его id и встать в `margin` от поверхности со своей стороны.
+   *
+   * Тело берём ПО ID и координаты читаем КАЖДЫЙ ШАГ, а не сохраняем точку: станция висит на
+   * ОРБИТЕ и всё время едет. От замороженной точки бот пёр туда, где станции уже нет, — со
+   * стороны это и выглядело как «летит то к ней, то от неё».
+   */
+  | { kind: 'approach-body'; bodyId: number; margin: number; arriveRadius: number }
+  /**
+   * Подойти к ЖИВОМУ БОРТУ по id (игрок или бот) и ДЕРЖАТЬСЯ рядом — «подлети ко мне».
+   *
+   * Позицию читаем каждый шаг: цель летит, и точка-слепок устарела бы мгновенно. Задача НЕ
+   * завершается сама: раньше она снималась по прибытии, бот тут же падал в обычное поведение
+   * и улетал по своим делам — со стороны это выглядело как «подлетел и промахнулся мимо».
+   * Снимается приказом («отставить», `clearTasks`), как и `hold`.
+   */
+  | { kind: 'rendezvous'; shipId: number; arriveRadius: number }
   /** Вернуться к нанимателю (кого сопровождает) и встать рядом. */
   | { kind: 'return-to-escort'; arriveRadius: number }
   /**
@@ -50,13 +67,18 @@ interface TaskStep {
   intent: MoveIntent | null
 }
 
+/** Живой борт по id — игрок или бот. `null`, если погиб или пропал из системы. */
+function shipById(world: World, id: number): ShipEntity | null {
+  if (world.player.id === id) return world.player.alive ? world.player : null
+  const s = world.ships.find((sh) => sh.id === id)
+  return s?.alive ? s : null
+}
+
 /** Наниматель (кого сопровождает бот), если он жив. Возврат/встреча ориентируются на него. */
 function patronOf(e: ShipEntity, world: World): ShipEntity | null {
   const id = e.ai?.escortOf
   if (id == null) return null
-  if (world.player.id === id) return world.player.alive ? world.player : null
-  const s = world.ships.find((sh) => sh.id === id)
-  return s?.alive ? s : null
+  return shipById(world, id)
 }
 
 /** Ближайший контейнер в районе задачи, который ВЛЕЗЕТ в трюм. Полный/чужой пропускаем. */
@@ -93,6 +115,27 @@ function runTask(e: ShipEntity, world: World, task: Task): TaskStep {
       const arrived = e.state.pos.distanceTo(task.point) <= task.arriveRadius
       if (arrived) return { done: true, intent: null }
       return { done: false, intent: { target: task.point, scoop: false, arriveRadius: task.arriveRadius } }
+    }
+    case 'approach-body': {
+      const body = world.bodies.find((b) => b.id === task.bodyId)
+      if (!body) return { done: true, intent: null } // тела нет (сменили систему) — снять задачу
+      // Точку подлёта считаем ЗАНОВО от ТЕКУЩЕГО места тела: станция едет по орбите, и
+      // сохранённая точка устарела бы. Встаём со своей стороны, в margin от поверхности.
+      _approach.copy(e.state.pos).sub(body.pos)
+      const len = _approach.length() || 1
+      _aimPoint.copy(body.pos).addScaledVector(_approach, (body.radius + task.margin) / len)
+      const arrived = e.state.pos.distanceTo(_aimPoint) <= task.arriveRadius
+      if (arrived) return { done: true, intent: null }
+      return { done: false, intent: { target: _aimPoint, scoop: false, arriveRadius: task.arriveRadius } }
+    }
+    case 'rendezvous': {
+      const target = shipById(world, task.shipId)
+      if (!target) return { done: true, intent: null } // цель погибла/пропала — снять задачу
+      // НИКОГДА не done: подлетел — держись рядом, пока не отставят. Снимать по прибытии нельзя:
+      // бот тут же уходил в свои дела, и «подлети ко мне» выглядело как пролёт мимо. Полёт-с-
+      // тормозом сам гасит ход у цели, поэтому он висит рядом, а не нарезает круги.
+      // Живая ссылка на позицию: цель летит, а пилот всё равно копирует её себе в кадре.
+      return { done: false, intent: { target: target.state.pos, scoop: false, arriveRadius: task.arriveRadius } }
     }
     case 'return-to-escort': {
       const patron = patronOf(e, world)
@@ -136,22 +179,33 @@ export function enqueueTask(e: ShipEntity, task: Task): boolean {
 }
 
 const _approach = new Vector3()
+/** Точка подлёта, пересчитываемая каждый шаг. Пилот копирует её себе — наружу не утекает. */
+const _aimPoint = new Vector3()
 
 /**
  * Поручение «подойди к телу и встань рядом»: бот летит к точке в `margin` метрах от
  * ПОВЕРХНОСТИ тела со СВОЕЙ стороны — не в центр (там он воткнулся бы в планету), а на
- * подлётную дугу. Годится для «встреть меня у той станции/планеты»: цель берут из
- * `navTargetId`. Реализовано через готовый `goto`, поэтому и полёт, и прибытие уже
- * покрыты его тестами; здесь проверяем лишь правильную точку выхода. `false` — не автобот.
+ * подлётную дугу. Годится для «встреть меня у той станции/планеты».
+ *
+ * Тело запоминаем ПО ID, а не точкой: станция висит на ОРБИТЕ и всё время едет, поэтому
+ * подлётная точка пересчитывается на каждом шаге (см. `approach-body`). С замороженной
+ * точкой бот шёл туда, где станции уже нет. `false` — не автобот.
  */
-export function assignApproach(e: ShipEntity, bodyPos: Vector3, bodyRadius: number, margin = 800): boolean {
+export function assignApproach(e: ShipEntity, bodyId: number, margin = 800): boolean {
   if (!e.ai) return false
-  _approach.copy(e.state.pos).sub(bodyPos)
-  const len = _approach.length() || 1
-  // Точка на сфере (radius + margin) со стороны бота: ближайший к нему безопасный подлёт.
-  const point = bodyPos.clone().addScaledVector(_approach, (bodyRadius + margin) / len)
   // Допуск прибытия — небольшой (не `margin`!), иначе бот «уже на месте», ещё вися вдали.
-  enqueueTask(e, { kind: 'goto', point, arriveRadius: 300 })
+  enqueueTask(e, { kind: 'approach-body', bodyId, margin, arriveRadius: 300 })
+  return true
+}
+
+/**
+ * Поручение «подлети ко мне»: бот идёт к ЖИВОМУ борту (обычно игроку) и встаёт рядом.
+ * Позиция читается каждый шаг по id — цель может лететь. Отдельный примитив, потому что
+ * `approach-nav` ведёт к НАВ-ЦЕЛИ (станции), и на просьбу «ко мне» бот улетал мимо, к ней.
+ */
+export function assignRendezvous(e: ShipEntity, shipId: number, arriveRadius = 220): boolean {
+  if (!e.ai) return false
+  enqueueTask(e, { kind: 'rendezvous', shipId, arriveRadius })
   return true
 }
 

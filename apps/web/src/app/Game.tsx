@@ -13,12 +13,13 @@ import { DockingCorridor } from '../render/scene/DockingCorridor'
 import { Dyson } from '../render/scene/Dyson'
 import { BlackHole } from '../render/scene/BlackHole'
 import { Dust } from '../render/scene/Dust'
-import { CargoPods, Explosions, ExplosionChunks, Missiles, StationShields, TractorBeam, Tracers, WarpFlashes } from '../render/scene/Effects'
+import { CargoPods, Explosions, ExplosionChunks, Missiles, MuzzleFlashes, StationShields, TractorBeam, Tracers, WarpFlashes } from '../render/scene/Effects'
 import { WarpArrivalPortals } from '../render/scene/WarpArrivalPortals'
 import { ShieldBubbles } from '../render/scene/ShieldBubbles'
 import { Exhaust } from '../render/scene/Exhaust'
 import { Lighting } from '../render/scene/Lighting'
-import { Drones, EnemyShips, FreighterShips, PlayerShip } from '../render/scene/Ships'
+import { Monoliths } from '../render/scene/Monoliths'
+import { Drones, EnemyShips, PlayerShip } from '../render/scene/Ships'
 import { RemotePlayers } from '../render/scene/RemotePlayers'
 import { Simulation } from '../render/scene/Simulation'
 import { Sky } from '../render/scene/Sky'
@@ -60,7 +61,7 @@ function Scene() {
       <PlayerShip />
       <WingMissiles />
       <EnemyShips />
-      <FreighterShips />
+      <Monoliths />
       <Drones />
       <RemotePlayers />
       <CargoPods />
@@ -72,6 +73,7 @@ function Scene() {
       <Exhaust />
 
       <Tracers />
+      <MuzzleFlashes />
       <Explosions />
       <ExplosionChunks />
       <WarpFlashes />

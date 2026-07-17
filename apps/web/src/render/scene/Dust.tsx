@@ -1,11 +1,11 @@
 import { useFrame } from '@react-three/fiber'
 import { useMemo, useRef } from 'react'
-import { BufferAttribute, BufferGeometry, LineSegments, Vector3 } from 'three'
+import { BufferAttribute, BufferGeometry, LineSegments, Mesh, Vector3 } from 'three'
 import { makeRng } from '@elite/sim'
 import { useSession } from '../../app/GameContext'
 import { DUST } from '../config'
 import { dustExtents, wrapUnit } from './dustMath'
-import { dustLaserMaterial, dustMaterial } from '../materials/materials'
+import { dustLaserMaterial, dustMaterial, dustNeonMaterial } from '../materials/materials'
 
 /**
  * Ближняя пыль — единственный источник ощущения скорости в пустоте:
@@ -15,29 +15,30 @@ import { dustLaserMaterial, dustMaterial } from '../materials/materials'
  * и читается как точка; на крейсерском ходу вытягивается в штрих.
  * Отдельного «режима гипердрайва» для этого не нужно.
  *
+ * На глубоком форсаже (лазерный ход) штрих ещё и УТОЛЩАЕТСЯ: линии толщины в WebGL нет,
+ * поэтому поверх яркой линии-керна кладётся камеро-ориентированная ЛЕНТА-квад — и мимо
+ * несутся жирные светящиеся трубки, а не иголки. Ниже порога накала лента не рисуется.
+ *
  * Частицы неподвижны в мире, но ОБОРАЧИВАЮТСЯ вокруг камеры: улетевшая назад
  * появляется впереди. Поэтому их всегда ровно DUST.COUNT.
  *
  * Хранятся они не в метрах, а в ДОЛЯХ куба, −0.5..0.5 от его центра.
- *
- * Куб растёт со скоростью (иначе штрих упирается в стенку), и это ломало
- * мировые координаты: точки, разбросанные в кубе на семьсот метров, оставались
- * в нём и после того, как куб раздувался до десяти километров. Пыль сваливалась
- * плитой набок, корабль уезжал от неё, а новую границу частица пересекала лишь
- * через десять километров пути. В долях куба такого не бывает: разброс равномерен
- * при любом размере, а рост куба лишь чуть разносит частицы — этого не видно.
  *
  * Темп проноса считается только по ЛОКАЛЬНОЙ скорости корабля. Орбитальный перенос
  * системы отсчёта и движение камеры не являются полётом сквозь пыль.
  */
 
 const _delta = new Vector3()
+const _streak = new Vector3()
+const _view = new Vector3()
+const _wax = new Vector3()
 
 export function Dust() {
   const session = useSession()
   const ref = useRef<LineSegments>(null)
+  const ribbonRef = useRef<Mesh>(null)
 
-  const { geometry, offsets } = useMemo(() => {
+  const { geometry, ribbonGeometry, offsets } = useMemo(() => {
     const rng = makeRng(0x9dc51)
     const offsets = new Float32Array(DUST.COUNT * 3)
     for (let i = 0; i < DUST.COUNT * 3; i++) offsets[i] = rng() - 0.5
@@ -46,48 +47,53 @@ export function Dust() {
     const positions = new Float32Array(DUST.COUNT * 6)
     const g = new BufferGeometry()
     g.setAttribute('position', new BufferAttribute(positions, 3))
-    return { geometry: g, offsets }
+
+    // ЛЕНТА (неон): шесть вершин на частицу (два треугольника квада). Тоже заранее.
+    const ribbon = new Float32Array(DUST.COUNT * 18)
+    const rg = new BufferGeometry()
+    rg.setAttribute('position', new BufferAttribute(ribbon, 3))
+    // UV ленты постоянны: x поперёк (−1..1, гаусс по краям в шейдере), y вдоль (0 голова→1 хвост).
+    // Углы совпадают с раскладкой позиций ниже: c0(+w,гол) c1(−w,гол) c2(−w,хв) c0 c2 c3(+w,хв).
+    const uv = new Float32Array(DUST.COUNT * 12)
+    for (let i = 0; i < DUST.COUNT; i++) {
+      const u = i * 12
+      uv[u] = 1; uv[u + 1] = 0 // c0
+      uv[u + 2] = -1; uv[u + 3] = 0 // c1
+      uv[u + 4] = -1; uv[u + 5] = 1 // c2
+      uv[u + 6] = 1; uv[u + 7] = 0 // c0
+      uv[u + 8] = -1; uv[u + 9] = 1 // c2
+      uv[u + 10] = 1; uv[u + 11] = 1 // c3
+    }
+    rg.setAttribute('uv', new BufferAttribute(uv, 2))
+    return { geometry: g, ribbonGeometry: rg, offsets }
   }, [])
 
-  useFrame(({ camera }, dt) => {
+  useFrame((state, dt) => {
+    const camera = state.camera
     const mesh = ref.current
-    if (!mesh) return
+    const ribbon = ribbonRef.current
+    if (!mesh || !ribbon) return
 
     const world = session.world
     const player = world.player
 
     // За звёздным масштабом пыль гаснет: мир за потолком отвода замер, а её куб всё растёт
-    // с ростом борта — на галактике он вжимается трясущейся коробкой и мельтешит. Ощущение
-    // скорости там даёт сама галактика. Гасим целиком — дешевле, чем гонять мёртвый буфер.
+    // с ростом борта — на галактике он вжимается трясущейся коробкой и мельтешит.
     const dead = player.state.scale >= DUST.HIDE_SCALE
     mesh.visible = !dead
-    if (dead) return
+    if (dead) {
+      ribbon.visible = false
+      return
+    }
 
-    // Это визуальное поле обязано окружать ГЛАЗ, а не центр корабля. Камера имеет
-    // упреждение по скорости и кинематографическую траекторию при отчаливании;
-    // привязанный к кораблю куб оставался позади, и пилот буквально влетал в него.
+    // Поле окружает ГЛАЗ (камеру), а не центр корабля: у камеры упреждение и кинотраектория.
     const origin = camera.position
     const velocity = player.state.vel
-
     const speed = velocity.length()
 
-    /**
-     * Куб — это несколько секунд полёта, штрих — доля кадра. Оба растут со
-     * скоростью, поэтому картинка не меняется ни на двухстах метрах в секунду,
-     * ни на девяти гигаметрах: за кадр корабль проходит одну и ту же долю куба.
-     *
-     * В покое куб не схлопывается в точку: у него есть `BOX`, размер стоячей пыли.
-     * Штрих держим в трети куба — тогда за гранью всегда есть куда лететь.
-     */
-    // Размеры куба, штриха и темп проноса — чистой функцией (её же гоняет тест на
-    // предельных скоростях). `box`/`streak` растут с масштабом борта (миелофон), а `rate`
-    // (базовый куб) — нет: иначе на большом кубе иголки стоят, а не несутся.
     const { box, tail, rate } = dustExtents(speed, dt, player.state.scale)
 
-    // ЛАЗЕРНЫЙ ход: на глубоком крейсере (десятки млн ×) пыль загорается. Накал растёт
-    // от GLOW_START к GLOW_FULL — на нём аддитивный яркий материал и штрихи длиннее, мимо
-    // несутся светящиеся линии. Ниже порога — обычный тусклый материал. Материал МЕНЯЕМ
-    // ссылкой (оба скомпилированы), а не переключаем blending на одном — иначе рекомпиляция.
+    // ЛАЗЕРНЫЙ ход: на глубоком крейсере пыль загорается. Накал 0..1 от GLOW_START к GLOW_FULL.
     const glow = Math.max(0, Math.min(1, (player.cruise.factor - DUST.GLOW_START) / (DUST.GLOW_FULL - DUST.GLOW_START)))
     if (glow > 0) {
       const laser = dustLaserMaterial()
@@ -99,12 +105,28 @@ export function Dust() {
     // Штрих удлиняем по накалу: линия тянется в лазерный след, а не в короткую искру.
     const tailGlow = tail * (1 + glow * DUST.GLOW_STREAK_BOOST)
 
-    // Орбиты двигают локальную систему на километры в секунду, но пилот у станции
-    // относительно пыли не летит. Двигаем узор только фактической скоростью борта.
+    // Неоновая лента толще с накалом — полуширина как доля длины штриха. Ниже порога не рисуем.
+    const neon = glow > 0
+    // УТОЛЩЕНИЕ замирает за NEON_FATTEN_MAX_FACTOR: лента жирнеет и от накала (ширина ∝ glowW),
+    // и от длины штриха (∝ скорость). За порогом гоним ширину по «зажатому» накалу glowW, а вклад
+    // длины давим множителем fatten = cap/factor — произведение выходит ∝ min(factor, cap), и
+    // труба перестаёт раздуваться на весь экран. Яркость и ДЛИНУ штриха это не трогает.
+    const fatFactor = Math.min(player.cruise.factor, DUST.NEON_FATTEN_MAX_FACTOR)
+    const glowW = Math.max(0, Math.min(1, (fatFactor - DUST.GLOW_START) / (DUST.GLOW_FULL - DUST.GLOW_START)))
+    const fatten = Math.min(1, DUST.NEON_FATTEN_MAX_FACTOR / Math.max(player.cruise.factor, 1))
+    const halfWidthFrac = DUST.NEON_HALF_WIDTH * glowW
+    const neonMat = dustNeonMaterial()
+    neonMat.uniforms.uOpacity!.value = 0.25 + 0.6 * glow
+    neonMat.uniforms.uTime!.value = state.clock.elapsedTime
+    ribbon.material = neonMat
+    ribbon.visible = neon
+
+    // Двигаем узор только фактической скоростью борта (орбита систему сдвигает, но это не полёт).
     _delta.copy(velocity).multiplyScalar(dt / rate)
 
     const attribute = mesh.geometry.getAttribute('position') as BufferAttribute
     const array = attribute.array as Float32Array
+    const ribArr = ribbon.geometry.getAttribute('position').array as Float32Array
 
     for (let i = 0; i < DUST.COUNT; i++) {
       const p = i * 3
@@ -117,22 +139,63 @@ export function Dust() {
       offsets[p + 1] = uy
       offsets[p + 2] = uz
 
-      const x = origin.x + ux * box
-      const y = origin.y + uy * box
-      const z = origin.z + uz * box
+      const hx = origin.x + ux * box
+      const hy = origin.y + uy * box
+      const hz = origin.z + uz * box
+      // Хвост тянется ПРОТИВ вектора скорости — как след на длинной выдержке.
+      const tx = hx - velocity.x * tailGlow
+      const ty = hy - velocity.y * tailGlow
+      const tz = hz - velocity.z * tailGlow
 
       const o = i * 6
-      array[o] = x
-      array[o + 1] = y
-      array[o + 2] = z
-      // Хвост тянется ПРОТИВ вектора скорости — как след на длинной выдержке.
-      array[o + 3] = x - velocity.x * tailGlow
-      array[o + 4] = y - velocity.y * tailGlow
-      array[o + 5] = z - velocity.z * tailGlow
+      array[o] = hx
+      array[o + 1] = hy
+      array[o + 2] = hz
+      array[o + 3] = tx
+      array[o + 4] = ty
+      array[o + 5] = tz
+
+      if (!neon) continue
+      // Ширина ленты — поперёк штриха и К КАМЕРЕ: ось = normalize(streak × view). Так лента
+      // всегда развёрнута плоскостью к глазу и читается трубкой, а не исчезает ребром.
+      _streak.set(hx - tx, hy - ty, hz - tz)
+      _view.set(hx - origin.x, hy - origin.y, hz - origin.z)
+      _wax.crossVectors(_streak, _view)
+      const wl = _wax.length()
+      if (wl < 1e-6) {
+        // Штрих смотрит прямо в глаз — ленты нет, сложим квад в точку (не мельтешит).
+        for (let k = 0; k < 18; k++) ribArr[i * 18 + k] = hx
+        continue
+      }
+      const halfW = (_streak.length() * halfWidthFrac * fatten) / wl
+      const wxx = _wax.x * halfW
+      const wyy = _wax.y * halfW
+      const wzz = _wax.z * halfW
+
+      // Четыре угла: голова±ширина, хвост±ширина → два треугольника (c0,c1,c2)(c0,c2,c3).
+      const r = i * 18
+      // c0 = head + w
+      ribArr[r] = hx + wxx; ribArr[r + 1] = hy + wyy; ribArr[r + 2] = hz + wzz
+      // c1 = head - w
+      ribArr[r + 3] = hx - wxx; ribArr[r + 4] = hy - wyy; ribArr[r + 5] = hz - wzz
+      // c2 = tail - w
+      ribArr[r + 6] = tx - wxx; ribArr[r + 7] = ty - wyy; ribArr[r + 8] = tz - wzz
+      // c0 again
+      ribArr[r + 9] = hx + wxx; ribArr[r + 10] = hy + wyy; ribArr[r + 11] = hz + wzz
+      // c2 again
+      ribArr[r + 12] = tx - wxx; ribArr[r + 13] = ty - wyy; ribArr[r + 14] = tz - wzz
+      // c3 = tail + w
+      ribArr[r + 15] = tx + wxx; ribArr[r + 16] = ty + wyy; ribArr[r + 17] = tz + wzz
     }
 
     attribute.needsUpdate = true
+    if (neon) (ribbon.geometry.getAttribute('position') as BufferAttribute).needsUpdate = true
   })
 
-  return <lineSegments ref={ref} geometry={geometry} material={dustMaterial()} frustumCulled={false} />
+  return (
+    <>
+      <lineSegments ref={ref} geometry={geometry} material={dustMaterial()} frustumCulled={false} />
+      <mesh ref={ribbonRef} geometry={ribbonGeometry} material={dustNeonMaterial()} frustumCulled={false} visible={false} />
+    </>
+  )
 }

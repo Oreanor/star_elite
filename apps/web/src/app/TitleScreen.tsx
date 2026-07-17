@@ -74,17 +74,47 @@ const KEY_GROUPS: { title: Key; rows: [Key, Key][] }[] = [
  * корабль просвечивает, но шрифт держится на своём фоне. Самый высокий экран (клавиши)
  * влезает целиком, оттого высота задана заранее, а не тянется по содержимому.
  */
-function MenuPanel({ children, fit = false }: { children: React.ReactNode; fit?: boolean }) {
+function MenuPanel({
+  children,
+  title,
+  footer,
+}: {
+  children: React.ReactNode
+  /** Заголовок модалки. Есть — шапка сверху с линией-разделителем. */
+  title?: React.ReactNode
+  /** Кнопки модалки. Есть — уходят в отдельный ФУТЕР (ряд, прижат к низу), а контент
+   *  прибит к ВЕРХУ. Нет — контент центрируется по вертикали (прежнее поведение). */
+  footer?: React.ReactNode
+}) {
   return (
     <div
-      // `fit` — высота по контенту (короткая модалка-подтверждение). Без него плашка держит
-      // фиксированные 29rem: у меню/клавиш/настроек разное наполнение, и общая высота не даёт
-      // им дёргаться при переключении. Модалке из строки текста и двух кнопок это ни к чему.
-      className={`flex ${fit ? 'max-h-[92vh]' : 'h-[29rem]'} w-[34rem] max-w-[92vw] flex-col items-center
-                 justify-center gap-4 overflow-y-auto rounded-2xl border p-8 backdrop-blur-md`}
+      // АВТО-РАЗМЕР по обеим осям: высота и ширина растут по контенту, пока есть место
+      // (потолок — вьюпорт: 92vh / 92vw), с полом ширины 34rem, чтобы узкие модалки не жались.
+      // Скролла в норме нет — плашка просто становится выше; overflow ниже лишь страховка.
+      className={`flex max-h-[92vh] w-auto min-w-[34rem] max-w-[92vw] flex-col
+                 rounded-2xl border p-8 backdrop-blur-md`}
       style={{ borderColor: 'rgba(63,115,145,0.7)', background: 'rgba(20,44,74,0.38)' }}
     >
-      {children}
+      {/* ШАПКА: заголовок модалки, отделён линией, прижат к верху. */}
+      {title && (
+        <div className="mb-5 shrink-0 border-b border-[#3f7391]/40 pb-4 text-center text-lg tracking-[0.35em] text-[#7fd6ff]">
+          {title}
+        </div>
+      )}
+      {/* Контент. С футером — прибит к ВЕРХУ и скроллится; без — по центру (как раньше). */}
+      <div
+        className={`flex flex-1 flex-col items-center gap-4 overflow-y-auto ${
+          footer ? 'justify-start' : 'justify-center'
+        }`}
+      >
+        {children}
+      </div>
+      {/* ФУТЕР: кнопки в РЯД, отделён линией, прижат к низу. */}
+      {footer && (
+        <div className="mt-6 flex shrink-0 flex-wrap justify-center gap-3 border-t border-[#3f7391]/40 pt-5">
+          {footer}
+        </div>
+      )}
     </div>
   )
 }
@@ -148,24 +178,8 @@ const LOCK_GIVE_UP_MS = 8000
 const TREMBLE_LEAD_MS = 90
 /** Сколько держим «вжух» до перехода в игру, мс: корабль успевает улететь, небо пустеет. */
 const LAUNCH_HOLD_MS = 1000
-/** Какой экран паузы раскрыт: главный, «как играть», таблица клавиш или настройки. */
-type PauseScreen = 'main' | 'guide' | 'keys' | 'settings'
-
-/**
- * «Как играть» — не таблица клавиш, а картинки-примеры того, чем можно заняться (полёт, бой,
- * добыча, навигация, торговля, люди, рост). Живёт рядом с клавишами, отдельным экраном:
- * прозе нужна своя высота с прокруткой, а не строка-в-строке под ключами.
- */
-const GUIDE_PARAS: Key[] = [
-  'guide.intro',
-  'guide.flight',
-  'guide.combat',
-  'guide.salvage',
-  'guide.nav',
-  'guide.station',
-  'guide.people',
-  'guide.growth',
-]
+/** Какой экран паузы раскрыт: главный, таблица клавиш или настройки. */
+type PauseScreen = 'main' | 'keys' | 'settings'
 
 /** Перезапуск CSS-анимации на том же элементе: сброс + форс reflow + назначение снова. */
 function restartAnimation(el: HTMLElement | null, animation: string): void {
@@ -242,10 +256,10 @@ function TitleLogo({
 }
 
 /**
- * Корабль с дюзами на титуле. Три струи — ЗА корпусом (в DOM раньше корабля → он их
+ * Корабль с дюзами на титуле. ДВЕ струи — ЗА корпусом (в DOM раньше корабля → он их
  * перекрывает): базы прячутся за кормой, плюмажи торчат сверху. Режим screen гасит чёрный
- * фон струи в свечение над тёмным небом. Центральная — быстрый нервный «пых» (≈0.8 c) и
- * чуть ниже боковых; боковые крупнее, период ≈2 c, синхронно и с лёгким сносом к центру.
+ * фон струи в свечение над тёмным небом. Боковые крупные, период ≈2 c, синхронно и с лёгким
+ * сносом к центру; центральной нет — крыльевой расклад, как у боевого корабля.
  *
  * Весь узел (корабль + струи) медленно покачивается — иллюзия полёта. Слои разделены,
  * чтобы transform-ы не спорили: внешний div держит позицию (`-translate-y-1/2`), внутренний
@@ -489,26 +503,31 @@ function TitleShip({ trembling, launched }: { trembling: boolean; launched: bool
           className="relative"
           style={{
             // Грузимся (`trembling`) — дрожь ведёт Web Animations API (выше), CSS-animation
-            // выключен. Готово (`launched`) — резкий СРЫВ и улёт вниз. Иначе — спокойная качка.
+            // выключен. Готово (`launched`) — срыв и улёт ВНИЗ. Длительность 0.5с (не 0.25):
+            // за четверть секунды улёт на 90vh не успевал прочитаться — корабль будто таял на
+            // месте под хлопком-«пуфом». Полсекунды дают увидеть, что он именно УЛЕТАЕТ вниз.
             animation: launched
-              ? 'title-ship-launch 0.25s cubic-bezier(0.85, 0, 1, 1) forwards'
+              ? 'title-ship-launch 0.5s cubic-bezier(0.7, 0, 1, 1) forwards'
               : trembling
                 ? 'none'
                 : 'title-ship-float 7s ease-in-out infinite',
           }}
         >
+        {/* Боковые струи сдвинуты на 8px К ЦЕНТРУ (calc от прежних 39.8/60.2%) — их НЕ трогаем.
+            Центральная струя возвращена на осевую линию арта (left-1/2, привязана к носу корабля,
+            а не к боковым), поэтому расклад — тот же, что и на боевом корабле: центр + две крыльевые. */}
         <img
           src="/flame_left.png"
           alt=""
           aria-hidden
-          className="absolute bottom-[82%] left-[39.8%] w-[13%] origin-bottom mix-blend-screen"
+          className="absolute bottom-[82%] left-[calc(39.8%_+_8px)] w-[13%] origin-bottom mix-blend-screen"
           style={{ animation: 'title-flame-left 1.5s ease-in-out infinite, flame-flicker 0.42s linear infinite' }}
         />
         <img
           src="/flame_right.png"
           alt=""
           aria-hidden
-          className="absolute bottom-[82%] left-[60.2%] w-[13%] origin-bottom mix-blend-screen"
+          className="absolute bottom-[82%] left-[calc(60.2%_-_8px)] w-[13%] origin-bottom mix-blend-screen"
           style={{ animation: 'title-flame-right 1.5s ease-in-out infinite, flame-flicker 0.35s linear infinite' }}
         />
         <img
@@ -776,7 +795,7 @@ export function Paused({
 
       {/* Корабль с дюзами — часть фона, но ПОВЕРХ звёзд: по центру, чуть ниже, ловит провал
           звёздного поля в bg.png и заслоняет собой мерцание. Курсор не трогает, кнопки поверх.
-          Пламя — ТРИ струи ПОД корпусом (в DOM раньше корабля → он их перекрывает): базы
+          Пламя — ДВЕ струи ПОД корпусом (в DOM раньше корабля → он их перекрывает): базы
           прячутся за кормой, плюмажи торчат сверху. Режим screen делает чёрный фон струи
           прозрачным и превращает её в свечение над тёмным небом. Позиции в % от корабля —
           правь bottom/left/w, если сопла окажутся не на месте.
@@ -838,9 +857,6 @@ export function Paused({
             <MenuButton onClick={() => { setConfirmNew(false); setScreen('keys') }}>
               {t('menu.keys')}
             </MenuButton>
-            <MenuButton onClick={() => { setConfirmNew(false); setScreen('guide') }}>
-              {t('menu.howto')}
-            </MenuButton>
             <MenuButton onClick={() => { setConfirmNew(false); setScreen('settings') }}>
               {t('menu.settings')}
             </MenuButton>
@@ -863,7 +879,7 @@ export function Paused({
           onClick={() => setConfirmNew(false)}
         >
           <div onClick={(e) => e.stopPropagation()}>
-            <MenuPanel fit>
+            <MenuPanel>
               <p className="max-w-sm text-center text-sm leading-relaxed tracking-widest text-[#7fd6ff]">
                 {t('menu.newGameConfirm')}
               </p>
@@ -879,38 +895,37 @@ export function Paused({
         </div>
       )}
 
-      {/* Панель клавиш/как-играть/настроек — оверлей ПОВЕРХ меню: всплыла, прочитал, закрыл.
+      {/* Панель клавиш/настроек — оверлей ПОВЕРХ меню: всплыла, прочитал, закрыл и вернулся.
           Клик мимо неё (по затемнению) или «назад» возвращает к кнопкам старта. */}
-      {(screen === 'keys' || screen === 'guide' || screen === 'settings') && (
+      {(screen === 'keys' || screen === 'settings') && (
         <div
           className="absolute inset-0 z-20 flex items-center justify-center bg-black/50 px-8"
           onClick={() => setScreen('main')}
         >
           <div onClick={(e) => e.stopPropagation()}>
-            <MenuPanel>
-              {screen === 'guide' ? (
-                <>
-                  <p className="text-sm tracking-[0.3em] text-[#7fd6ff]">{t('menu.howto')}</p>
-                  {/* Проза с ПРОКРУТКОЙ в своей высоте: примеры длиннее таблицы, а вкладки/кнопка
-                      «назад» должны стоять на месте. Мягкий голубой, межстрочный простор — читается. */}
-                  <div className="h-[17rem] w-full max-w-md space-y-3 overflow-y-auto pr-2 text-left text-sm leading-relaxed text-[#9fc6dc]">
-                    {GUIDE_PARAS.map((k) => (
-                      <p key={k}>{t(k)}</p>
-                    ))}
-                  </div>
+            <MenuPanel
+              title={t(screen === 'keys' ? 'menu.keys' : 'menu.settings')}
+              footer={
+                screen === 'keys' ? (
                   <MenuButton onClick={() => setScreen('main')}>{t('menu.back')}</MenuButton>
-                </>
-              ) : screen === 'keys' ? (
+                ) : (
+                  <>
+                    {onSignOut && <MenuButton onClick={onSignOut}>{t('auth.signout')}</MenuButton>}
+                    <MenuButton onClick={() => setScreen('main')}>{t('menu.back')}</MenuButton>
+                  </>
+                )
+              }
+            >
+              {screen === 'keys' ? (
                 <>
                   <Tabs
                     tabs={KEY_GROUPS.map((g) => t(g.title))}
                     active={t(KEY_GROUPS[keyGroup]!.title)}
                     onSelect={(label) => setKeyGroup(KEY_GROUPS.findIndex((g) => t(g.title) === label))}
                   />
-                  {/* Высота ФИКСИРОВАНА под самый длинный блок (9 строк): у групп
-                      разное число клавиш, и без этого при переключении вкладок список
-                      менял высоту, а центрирование дёргало вкладки и кнопку вверх-вниз. */}
-                  <dl className="h-[14rem] w-full max-w-md content-start space-y-1 text-left text-sm">
+                  {/* Высота по контенту с полом (min-h): высокие вкладки растягивают окно, а не
+                      скроллятся; короткие держат минимум, чтобы вкладки не дёргались. */}
+                  <dl className="min-h-[13rem] w-full max-w-md content-start space-y-1 text-left text-sm">
                     {KEY_GROUPS[keyGroup]!.rows.map(([keyLabel, keyWhat]) => (
                       <div key={keyLabel} className="flex gap-3">
                         <dt className="w-24 shrink-0 text-right text-[#7fd6ff]">{t(keyLabel)}</dt>
@@ -918,10 +933,9 @@ export function Paused({
                       </div>
                     ))}
                   </dl>
-                  <MenuButton onClick={() => setScreen('main')}>{t('menu.back')}</MenuButton>
                 </>
               ) : (
-                <Settings session={session} onBack={() => setScreen('main')} onSignOut={onSignOut} />
+                <Settings session={session} />
               )}
             </MenuPanel>
           </div>
@@ -935,6 +949,21 @@ export function Paused({
 
 const ASSIST_STORAGE_KEY = 'elite.assist'
 
+/** Порядок языков в селекте. Стартовый определяется в i18n: сохранённый → язык браузера → en. */
+const LANG_CODES: readonly Lang[] = ['ru', 'en', 'pt', 'fr', 'de', 'es', 'it']
+
+/** Селект языка: своя стрелка-шеврон (нативная жмётся в край), отодвинута от кромки. */
+const LANG_SELECT = {
+  appearance: 'none',
+  WebkitAppearance: 'none',
+  MozAppearance: 'none',
+  backgroundColor: 'rgba(10,26,47,0.82)',
+  backgroundImage:
+    "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8' fill='none'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%237fd6ff' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E\")",
+  backgroundRepeat: 'no-repeat',
+  backgroundPosition: 'right 0.75rem center',
+} as const
+
 /**
  * Настройки: язык интерфейса и лётный компьютер.
  *
@@ -943,15 +972,7 @@ const ASSIST_STORAGE_KEY = 'elite.assist'
  * компьютер — поле `intent`, общее для всей сессии; его выбор запоминается в
  * localStorage и подхватывается при следующем старте (см. createIntent).
  */
-function Settings({
-  session,
-  onBack,
-  onSignOut,
-}: {
-  session: ReturnType<typeof useSession>
-  onBack: () => void
-  onSignOut?: () => void
-}) {
+function Settings({ session }: { session: ReturnType<typeof useSession> }) {
   const lang = useLang()
   const [assist, setAssist] = useState(session.intent.flightAssist)
 
@@ -962,34 +983,31 @@ function Settings({
     setAssist(on)
   }
 
-  // Возвращаем СОДЕРЖИМОЕ панели, а не свой оверлей: рамку, фон и центрирование даёт
-  // общий MenuPanel заставки — настройки такой же экран на нём, как меню и клавиши.
+  // Только СОДЕРЖИМОЕ (язык + лётный компьютер). Кнопки «Выход»/«Назад» живут в футере
+  // MenuPanel, а не здесь: рамку, фон, верхнее прибитие и футер даёт общая плашка.
   return (
-    <>
-      <div className="flex w-full max-w-md flex-col gap-8">
+    <div className="flex w-full max-w-md flex-col gap-8">
         <Choice label={t('menu.language')}>
-          {/* Семь языков не влезут в один ряд узкой панели — пусть переносятся. */}
-          <div className="flex flex-wrap justify-end gap-2">
-            <Toggle active={lang === 'ru'} onClick={() => pickLang('ru')}>{t('menu.lang.ru')}</Toggle>
-            <Toggle active={lang === 'en'} onClick={() => pickLang('en')}>{t('menu.lang.en')}</Toggle>
-            <Toggle active={lang === 'pt'} onClick={() => pickLang('pt')}>{t('menu.lang.pt')}</Toggle>
-            <Toggle active={lang === 'fr'} onClick={() => pickLang('fr')}>{t('menu.lang.fr')}</Toggle>
-            <Toggle active={lang === 'de'} onClick={() => pickLang('de')}>{t('menu.lang.de')}</Toggle>
-            <Toggle active={lang === 'es'} onClick={() => pickLang('es')}>{t('menu.lang.es')}</Toggle>
-            <Toggle active={lang === 'it'} onClick={() => pickLang('it')}>{t('menu.lang.it')}</Toggle>
-          </div>
+          <select
+            value={lang}
+            onChange={(e) => pickLang(e.target.value as Lang)}
+            className="cursor-pointer border border-[#3f7391] py-1.5 pl-4 pr-9 text-sm tracking-[0.2em] text-[#7fd6ff]
+                       outline-none transition-colors hover:border-[#7fd6ff] focus:border-[#7fd6ff]"
+            style={LANG_SELECT}
+          >
+            {LANG_CODES.map((l) => (
+              <option key={l} value={l} style={{ background: '#0a1a2f', color: '#7fd6ff' }}>
+                {t(('menu.lang.' + l) as Key)}
+              </option>
+            ))}
+          </select>
         </Choice>
 
-        <Choice label={t('menu.assist')} hint={t('menu.assist.hint')}>
-          <Toggle active={assist} onClick={() => toggleAssist(true)}>{t('menu.on')}</Toggle>
-          <Toggle active={!assist} onClick={() => toggleAssist(false)}>{t('menu.off')}</Toggle>
-        </Choice>
-        {onSignOut && (
-          <MenuButton onClick={onSignOut}>{t('auth.signout')}</MenuButton>
-        )}
-      </div>
-      <MenuButton onClick={onBack}>{t('menu.back')}</MenuButton>
-    </>
+      <Choice label={t('menu.assist')} hint={t('menu.assist.hint')}>
+        <Toggle active={assist} onClick={() => toggleAssist(true)}>{t('menu.on')}</Toggle>
+        <Toggle active={!assist} onClick={() => toggleAssist(false)}>{t('menu.off')}</Toggle>
+      </Choice>
+    </div>
   )
 }
 

@@ -471,12 +471,21 @@ export function createPlayerController(intent: PlayerIntent): Controller {
     // Пока автобой ведёт корабль, гашетку жмёт он же. Спрашивать мышь тут было бы
     // странно: игрок отдал управление целиком, а не наполовину.
     wantsFire(ship: ShipEntity, world: World): boolean {
+      // Во время вылета (кинематик отстыковки) гашетка молчит: корабль ещё влетает в кадр.
+      // Разблокируется само, когда undocking() гаснет (~3 с) и борт уже целиком в кадре.
+      if (undocking()) return false
       if (autofightActive(world)) return aiController.wantsFire(ship, world)
       // Огонь — ЛКМ. Пробел отдан форсажу, поэтому клавиатурного дубля гашетки больше нет.
       return input.firing
     },
 
     wantsMissile(ship: ShipEntity, world: World): boolean {
+      // Пуск тоже заперт на время вылета — и нажатие не копим, чтобы ракета не ушла сразу
+      // по завершении кинематика.
+      if (undocking()) {
+        intent.missile = false
+        return false
+      }
       if (autofightActive(world)) return aiController.wantsMissile?.(ship, world) ?? false
       if (!intent.missile) return false
       // Однократно: иначе одно нажатие опустошает все пилоны за кадр.
