@@ -54,7 +54,7 @@ export const PT: Record<keyof typeof RU, string> = {
   'auth.toLogin': 'Já tem conta? Entre',
   'auth.wait': 'UM MOMENTO…',
   'auth.confirm': 'Conta criada. Se pedirem, confirme o e-mail pelo link enviado.',
-  'auth.loading': 'CARREGANDO PROGRESSO…',
+  'auth.loading': 'CARREGANDO O UNIVERSO…',
   'auth.signout': 'SAIR',
 
   // ─── Criação do piloto ───────────────────────────────────────────────────────

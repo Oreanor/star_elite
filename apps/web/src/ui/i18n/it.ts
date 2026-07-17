@@ -52,7 +52,7 @@ export const IT: Record<keyof typeof RU, string> = {
   'auth.toLogin': 'Hai un account? Accedi',
   'auth.wait': 'UN MOMENTO…',
   'auth.confirm': 'Account creato. Conferma la tua email dal link, se richiesto.',
-  'auth.loading': 'CARICO I PROGRESSI…',
+  'auth.loading': "CARICO L'UNIVERSO…",
   'auth.signout': 'ESCI',
 
   'create.title': 'CREA PILOTA',

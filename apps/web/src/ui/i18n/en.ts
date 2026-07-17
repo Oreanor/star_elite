@@ -50,7 +50,7 @@ export const EN: Record<keyof typeof RU, string> = {
   'auth.toLogin': 'Have an account? Sign in',
   'auth.wait': 'ONE MOMENT…',
   'auth.confirm': 'Account created. Confirm your email via the link if prompted.',
-  'auth.loading': 'LOADING PROGRESS…',
+  'auth.loading': 'LOADING UNIVERSE…',
   'auth.signout': 'SIGN OUT',
 
   'create.title': 'CREATE PILOT',

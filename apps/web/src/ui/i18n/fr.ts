@@ -51,7 +51,7 @@ export const FR: Record<keyof typeof RU, string> = {
   'auth.toLogin': 'Déjà un compte ? Se connecter',
   'auth.wait': 'UN INSTANT…',
   'auth.confirm': 'Compte créé. Confirmez votre e-mail via le lien si on vous le demande.',
-  'auth.loading': 'CHARGEMENT DE LA PROGRESSION…',
+  'auth.loading': "CHARGEMENT DE L'UNIVERS…",
   'auth.signout': 'DÉCONNEXION',
 
   'create.title': 'CRÉER UN PILOTE',

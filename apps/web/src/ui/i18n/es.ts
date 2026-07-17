@@ -52,7 +52,7 @@ export const ES: Record<keyof typeof RU, string> = {
   'auth.toLogin': '¿Ya tienes cuenta? Inicia sesión',
   'auth.wait': 'UN MOMENTO…',
   'auth.confirm': 'Cuenta creada. Confirma tu correo por el enlace si se te pide.',
-  'auth.loading': 'CARGANDO PROGRESO…',
+  'auth.loading': 'CARGANDO EL UNIVERSO…',
   'auth.signout': 'SALIR',
 
   'create.title': 'CREAR PILOTO',
