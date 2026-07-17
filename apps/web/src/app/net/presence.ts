@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react'
 import { onDisconnect, onValue, ref, remove, serverTimestamp, set } from 'firebase/database'
 import type { World } from '@elite/sim'
 import { currentUserId } from './account'
-import { rtdb } from './firebase'
+import { rtdb, serverNow } from './firebase'
+import { deadStamp, reapDead } from './reap'
 import { properName } from '../../ui/i18n/dataNames'
 
 /**
@@ -88,15 +89,38 @@ export async function clearPresence(): Promise<void> {
   await remove(ref(rtdb, `presence/${uid}`))
 }
 
+/**
+ * Насколько давняя отметка ещё считается «в сети», мс. Публикуем раз в 2 с, так что живой
+ * подтверждает себя тридцать раз за этот срок.
+ *
+ * Порог щедрый нарочно: фоновая вкладка душит таймеры до раза в минуту, и отошедший на кухню
+ * не должен пропадать из списка. Вычеркнуть живого не страшно — вернётся со следующим пакетом;
+ * но и мертвец теперь висит здесь минуту, а не вечно.
+ */
+const STALE_MS = 90_000
+
 /** Подписка на всех онлайн, КРОМЕ себя. Возвращает отписку. */
 export function subscribeOnline(cb: (players: OnlinePlayer[]) => void): () => void {
   if (!rtdb) return () => {}
   const me = currentUserId()
   return onValue(ref(rtdb, 'presence'), (snap) => {
-    const val = (snap.val() ?? {}) as Record<string, Partial<OnlinePlayer>>
+    const val = (snap.val() ?? {}) as Record<string, Partial<OnlinePlayer> & { t?: number }>
     const list: OnlinePlayer[] = []
+    const now = serverNow()
     for (const [uid, p] of Object.entries(val)) {
       if (uid === me || typeof p?.systemIndex !== 'number') continue
+      /**
+       * ПРОВЕРКА ЖИЗНИ, которой здесь не было вовсе: отметку `t` честно писали при каждой
+       * публикации — и ни разу не читали. Всё держалось на `onDisconnect`, а он лишь БЫСТРЫЙ
+       * путь, не гарантия: не заметил сервер обрыва — узел остался, и вышедший из игры висел
+       * в списке вечно, потому что стереть его было уже некому.
+       */
+      if (typeof p.t !== 'number' || now - p.t > STALE_MS) {
+        // Совсем древних попутно выносим из базы. Свежепротухших не трогаем: вдруг вкладка
+        // просто задремала — вернётся, и отметка оживёт сама.
+        if (deadStamp(p.t)) reapDead(`presence/${uid}`)
+        continue
+      }
       list.push({
         uid,
         name: p.name ?? '???',

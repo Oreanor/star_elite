@@ -1,6 +1,6 @@
 import { initializeApp, type FirebaseApp, type FirebaseOptions } from 'firebase/app'
 import { getAuth, type Auth } from 'firebase/auth'
-import { getDatabase, type Database } from 'firebase/database'
+import { getDatabase, onValue, ref, type Database } from 'firebase/database'
 import { getFirestore, type Firestore } from 'firebase/firestore'
 
 /**
@@ -37,3 +37,19 @@ export const rtdb: Database | null = app && config.databaseURL ? getDatabase(app
 
 /** Настроена ли сеть. Где ветвится «онлайн против офлайн» — спрашиваем это, а не env. */
 export const online: boolean = app !== null
+
+/**
+ * Поправка к часам сервера, мс. RTDB отдаёт её в служебном узле `/.info/serverTimeOffset`
+ * и держит свежей сама.
+ *
+ * Нужна затем, что отметки записей (`t: serverTimestamp()`) — в СЕРВЕРНЫХ миллисекундах, а
+ * `Date.now()` у клиента свой и может врать на минуты. Сравнивать их напрямую нельзя: при
+ * спешащих часах живой игрок выглядел бы протухшим, при отстающих — мертвец вечно свежим.
+ */
+let clockOffset = 0
+if (rtdb) onValue(ref(rtdb, '.info/serverTimeOffset'), (snap) => { clockOffset = (snap.val() as number) ?? 0 })
+
+/** «Сейчас» по часам СЕРВЕРА, мс. Только для сравнения с отметками записей. */
+export function serverNow(): number {
+  return Date.now() + clockOffset
+}

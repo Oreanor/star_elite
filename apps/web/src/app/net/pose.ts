@@ -1,7 +1,8 @@
-import { onDisconnect, onValue, ref, remove, set } from 'firebase/database'
+import { onDisconnect, onValue, ref, remove, serverTimestamp, set } from 'firebase/database'
 import type { World } from '@elite/sim'
 import { currentUserId } from './account'
 import { rtdb } from './firebase'
+import { deadStamp, reapDead } from './reap'
 
 /**
  * Быстрый канал позы — «где именно летит рядом». Это ВТОРОЙ presence, не путать с
@@ -37,10 +38,21 @@ export interface PoseSnapshot {
   vz: number
   /** Масштаб борта (миелофон): чужой видит тебя гигантом, если ты вырос. По умолчанию 1. */
   s: number
+  /**
+   * Отметка записи по часам СЕРВЕРА, мс — ДОКАЗАТЕЛЬСТВО ЖИЗНИ отправителя, а не время.
+   *
+   * Без неё «свежесть» мерили временем ПРИХОДА пакета — и это было неверно в самой основе.
+   * `onValue` слушает узел СИСТЕМЫ целиком и будит нас, когда в ней шевельнётся кто угодно,
+   * отдавая заодно и всех остальных. Собственная поза уходит 15 раз в секунду, каждая будит
+   * слушателя — и мертвец приезжал вместе с ней, «свежий» ровно потому, что жив ТЫ. Так он и
+   * висел в стартовой системе вечно. Отметку же за него не перепишет никто: она замерла в миг
+   * его последнего вздоха, и по ней он и опознаётся.
+   */
+  t: number
 }
 
-/** То, что клиент публикует о себе; uid добавляется на приёме из ключа узла. */
-export type PoseUpdate = Omit<PoseSnapshot, 'uid'>
+/** То, что клиент публикует о себе; uid берётся из ключа узла, отметку ставит сервер. */
+export type PoseUpdate = Omit<PoseSnapshot, 'uid' | 't'>
 
 /** Собрать свою позу из мира: абсолютная позиция, ориентация, скорость. */
 export function selfPose(world: World): PoseUpdate {
@@ -86,7 +98,7 @@ export async function publishPose(systemIndex: number, pose: PoseUpdate): Promis
   // onDisconnect вешаем ОДИН раз на путь, а не на каждый пакет (~15 Гц): отвалилась
   // вкладка — узел исчезнет у соседей сам.
   if (isNew) void onDisconnect(node).remove()
-  await set(node, pose)
+  await set(node, { ...pose, t: serverTimestamp() })
 }
 
 /** Снять свою позу сейчас (выход/размонтирование/прыжок), не дожидаясь `onDisconnect`. */
@@ -109,8 +121,16 @@ export function subscribePoses(systemIndex: number, cb: (snaps: PoseSnapshot[]) 
     const list: PoseSnapshot[] = []
     for (const [uid, p] of Object.entries(val)) {
       if (uid === me || typeof p?.x !== 'number') continue
+      // Мертвец: отметка замерла давным-давно (или её нет вовсе — прежняя сборка). Такого не
+      // показываем и СТИРАЕМ — иначе он лежал бы в базе вечно, ведь его onDisconnect уже не
+      // сработает никогда. Живого этим не заденешь: он переписывает отметку 15 раз в секунду.
+      if (deadStamp(p.t)) {
+        reapDead(`poses/${systemIndex}/${uid}`)
+        continue
+      }
       list.push({
         uid,
+        t: p.t as number,
         x: p.x,
         y: p.y ?? 0,
         z: p.z ?? 0,

@@ -3,16 +3,16 @@
     "presence": {
       ".read": "auth != null",
       "$uid": {
-        ".write": "auth != null && auth.uid === $uid",
-        ".validate": "newData.hasChildren(['name', 'systemIndex'])"
+        ".write": "auth != null && (auth.uid === $uid || (!newData.exists() && (!data.hasChild('t') || data.child('t').val() < now - 300000)))",
+        ".validate": "newData.hasChildren(['name', 'systemIndex', 't'])"
       }
     },
     "poses": {
       ".read": "auth != null",
       "$sys": {
         "$uid": {
-          ".write": "auth != null && auth.uid === $uid",
-          ".validate": "newData.hasChildren(['x', 'y', 'z'])"
+          ".write": "auth != null && (auth.uid === $uid || (!newData.exists() && (!data.hasChild('t') || data.child('t').val() < now - 300000)))",
+          ".validate": "newData.hasChildren(['x', 'y', 'z', 't'])"
         }
       }
     },
