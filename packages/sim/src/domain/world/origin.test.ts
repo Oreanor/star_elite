@@ -15,9 +15,9 @@ import type { World } from './entities'
  * иначе ВЗАИМНЫЕ расстояния поедут, и объект окажется не там, где ему положено.
  *
  * Список в `maybeShiftOrigin` — ручной, и это его слабость: новый список в `World` легко
- * завести и забыть строку. Так и вышло со статуями (уехали от причала за пол-а.е.), а аудит
- * по их следу вскрыл, что забыты были ещё болты, платформы, варпы, порталы и вспышки поля.
- * Эти тесты — страховка от следующего такого раза.
+ * завести и забыть строку. Так однажды и вышло: объект у причала уехал от него за пол-а.е., а
+ * аудит по этому следу вскрыл, что забыты были ещё болты, платформы, варпы, порталы и вспышки
+ * поля. Эти тесты — страховка от следующего такого раза.
  */
 
 /** Мир, отлетевший за порог: следующий `maybeShiftOrigin` обязан сработать. */
@@ -56,7 +56,6 @@ describe('плавающее начало координат', () => {
       ...world.bodies.map((b) => ({ what: `тело ${b.name}`, pos: b.pos })),
       ...world.ships.map((s) => ({ what: `борт ${s.name}`, pos: s.state.pos })),
       ...world.asteroids.map((a) => ({ what: 'астероид', pos: a.pos })),
-      ...world.monoliths.map((m) => ({ what: 'статуя', pos: m.pos })),
       ...world.titans.map((t) => ({ what: 'кит', pos: t.pos })),
       ...world.platforms.map((p) => ({ what: 'платформа', pos: p.pos })),
       ...world.pods.map((p) => ({ what: 'контейнер', pos: p.pos })),
@@ -76,17 +75,17 @@ describe('плавающее начало координат', () => {
     })
   })
 
-  /** Статуя держится СВОЕГО причала: это и был симптом — 500 световых секунд до неё. */
-  it('статуи не отрываются от причала', () => {
+  /** Окрестность держится СВОЕГО причала: это и был симптом — 500 световых секунд до него. */
+  it('окрестность не отрывается от причала', () => {
     const world = farFromOrigin()
     const station = world.bodies.find((b) => b.kind === 'station')!
-    const before = world.monoliths.map((m) => m.pos.distanceTo(station.pos))
+    const before = world.ships.map((s) => s.state.pos.distanceTo(station.pos))
     expect(before.length).toBeGreaterThan(0)
 
     maybeShiftOrigin(world)
 
-    world.monoliths.forEach((m, i) => {
-      expect(m.pos.distanceTo(station.pos)).toBeCloseTo(before[i]!, 3)
+    world.ships.forEach((s, i) => {
+      expect(s.state.pos.distanceTo(station.pos)).toBeCloseTo(before[i]!, 3)
     })
   })
 })
@@ -96,15 +95,15 @@ describe('плавающее начало координат', () => {
  *
  * Станция обращается вместе со своей планетой вокруг звезды, а вся окрестность, рождённая у
  * причала, живёт в его ПОСТУПАТЕЛЬНОЙ системе отсчёта: `stepOrbits` сдвигает её вслед за ним.
- * Список там тоже ручной. Статуй в нём не было — и они, поставленные в двадцати километрах от
- * причала, отставали на АСТРОНОМИЧЕСКУЮ ЕДИНИЦУ (время в игре сжато): те самые 500 световых
- * секунд. Мало было починить `maybeShiftOrigin` — сдвигов ДВА, и оба ручные.
+ * Список там тоже ручной, и забытый в нём объект отстаёт не на метры, а на АСТРОНОМИЧЕСКУЮ
+ * ЕДИНИЦУ (время в игре сжато) — те самые 500 световых секунд. Мало починить `maybeShiftOrigin`:
+ * сдвигов ДВА, и оба ручные.
  */
 describe('окрестность едет вместе с причалом по его орбите', () => {
-  it('статуя держится причала, когда тот уходит по орбите', () => {
+  it('окрестность держится причала, когда тот уходит по орбите', () => {
     const world = createWorld()
     const station = world.bodies.find((b) => b.kind === 'station')!
-    const before = world.monoliths.map((m) => m.pos.distanceTo(station.pos))
+    const before = world.ships.map((s) => s.state.pos.distanceTo(station.pos))
     expect(before.length).toBeGreaterThan(0)
 
     // Проматываем орбиты далеко вперёд: причал уедет вместе с планетой.
@@ -112,8 +111,8 @@ describe('окрестность едет вместе с причалом по 
     stepOrbits(world, 1e6)
     expect(station.pos.distanceTo(moved)).toBeGreaterThan(1000) // причал и правда уехал
 
-    world.monoliths.forEach((m, i) => {
-      expect(m.pos.distanceTo(station.pos), 'статуя отстала от причала').toBeCloseTo(before[i]!, 3)
+    world.ships.forEach((s, i) => {
+      expect(s.state.pos.distanceTo(station.pos), 'борт отстал от причала').toBeCloseTo(before[i]!, 3)
     })
   })
 })

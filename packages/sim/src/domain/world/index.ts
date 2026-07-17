@@ -13,7 +13,6 @@ export {
   type ShipEntity,
   type SurfaceBinding,
   type TitanEntity,
-  type MonolithEntity,
   type Tracer,
   type WarpFlash,
   type WarpPortal,
@@ -82,7 +81,6 @@ export {
   incomingMissile,
   nearestPod,
   navTarget,
-  MONOLITH_NAMES,
   type NavTarget,
   targetableStationsOf,
 } from './queries'
@@ -97,7 +95,6 @@ export {
 } from './warp'
 export { stepTraffic, spawnResidentContacts, stepDockedBerth, stepDockTraffic } from './traffic'
 export { spawnTitan, spawnTrafficTitan, stepTitans, titanCount, placeShowcaseTitans } from './titans'
-export { placeMonoliths } from './monoliths'
 export { placeShowcaseFleet } from './showcase'
 export { spawnPlatform, stepPlatforms } from './platforms'
 export { STARTER_SYSTEM, type PatrolDef, type SystemDef } from './system'

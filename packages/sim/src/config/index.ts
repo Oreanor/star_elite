@@ -3,7 +3,6 @@ export { MIELOPHONE } from './mielophone'
 export { BODY_KINDS, GRAVITY, MOON, type BodyKind } from './bodies'
 export { ASTEROID, DEBRIS, SCORE, WORLD } from './world'
 export { TITAN } from './titans'
-export { MONOLITH } from './monoliths'
 export { PLATFORM } from './platform'
 export {
   ARRIVAL,

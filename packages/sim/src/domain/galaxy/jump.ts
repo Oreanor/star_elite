@@ -9,7 +9,6 @@ import { systemDefOf } from './bridge'
 import { driftContacts } from './contacts'
 import { syncLiveContactsFromShips } from '../world/plan'
 import { spawnResidentContacts } from '../world/traffic'
-import { patchSharedStart } from './sharedStart'
 import { generateSystem } from './generate'
 import { distanceLy, placeSystem } from './shape'
 
@@ -37,7 +36,7 @@ export type JumpBlock = 'no-drive' | 'out-of-range' | 'out-of-charge' | 'same-sy
  */
 export function systemDefFor(index: number, galaxySeed: number, seatOverride?: number): SystemDef {
   if (index === WORLD.HOME_INDEX && galaxySeed === GALAXY.SEED) return STARTER_SYSTEM
-  return patchSharedStart(systemDefOf(generateSystem(index, galaxySeed), galaxySeed, seatOverride), index, galaxySeed)
+  return systemDefOf(generateSystem(index, galaxySeed), galaxySeed, seatOverride)
 }
 
 /** Расстояние до системы, световых лет. Диск не заворачивается — метрика прямая. */

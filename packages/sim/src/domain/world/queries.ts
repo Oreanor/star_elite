@@ -116,14 +116,9 @@ const NAV_KINDS = new Set<BodyEntity['kind']>(['star', 'planet', 'moon', 'statio
  */
 export function cycleCelestial(world: World): void {
   const from = world.player.state.pos
-  // Статуи листаются наравне с телами: они такие же ориентиры, только не небесные. Без этого
-  // их было не найти — стоят себе километровые, а выбрать нечем.
-  const cands: { id: number; pos: Vector3; station: boolean; d2: number }[] = [
-    ...world.bodies
-      .filter((b) => NAV_KINDS.has(b.kind))
-      .map((b) => ({ id: b.id, pos: b.pos, station: b.kind === 'station', d2: b.pos.distanceToSquared(from) })),
-    ...world.monoliths.map((m) => ({ id: m.id, pos: m.pos, station: false, d2: m.pos.distanceToSquared(from) })),
-  ]
+  const cands: { id: number; pos: Vector3; station: boolean; d2: number }[] = world.bodies
+    .filter((b) => NAV_KINDS.has(b.kind))
+    .map((b) => ({ id: b.id, pos: b.pos, station: b.kind === 'station', d2: b.pos.distanceToSquared(from) }))
   cands.sort((a, z) => a.d2 - z.d2)
   if (cands.length === 0) {
     world.navTargetId = null
@@ -137,36 +132,28 @@ export function cycleCelestial(world: World): void {
 }
 
 /**
- * НАВ-ЦЕЛЬ одним видом: небесное тело ИЛИ монолит-статуя.
+ * НАВ-ЦЕЛЬ одним видом: где она, какого размера и как зовётся.
  *
- * Монолиты живут своим списком (они не `BodyEntity` — ни орбит, ни гравитации, ни столкновений),
- * но выбирать их надо тем же Shift+Tab и метить теми же приборами. Чтобы не плодить второе поле
- * и не учить каждое место о втором списке, `navTargetId` остаётся ОДНИМ полем, а разрешение
- * «id → что это» живёт здесь. Всем потребителям нужно ровно это: где оно, какого размера и как
- * зовётся.
+ * Разрешение «id → что это» живёт здесь, а не у каждого потребителя: `navTargetId` — ОДНО поле,
+ * и приборам нужно ровно это, а не сам `BodyEntity` со всей его орбитальной машинерией.
  */
 export interface NavTarget {
   id: number
   pos: Vector3
   radius: number
   name: string
-  /** Небесное тело или статуя — HUD по этому решает, чем метить и как подписать. */
-  kind: BodyEntity['kind'] | 'monolith'
+  /** Чем метить и как подписать — HUD решает по виду тела. */
+  kind: BodyEntity['kind']
 }
 
-/** Что сейчас нав-цель: тело или монолит. `null` — не выбрано или пропало. */
+/** Что сейчас нав-цель. `null` — не выбрано или пропало. */
 export function navTarget(world: World): NavTarget | null {
   const id = world.navTargetId
   if (id === null) return null
   const body = world.bodies.find((b) => b.id === id)
   if (body) return { id, pos: body.pos, radius: body.radius, name: body.name, kind: body.kind }
-  const monolith = world.monoliths.find((m) => m.id === id)
-  if (monolith) return { id, pos: monolith.pos, radius: monolith.radius, name: MONOLITH_NAMES[monolith.variant] ?? 'Монолит', kind: 'monolith' }
   return null
 }
-
-/** Имена статуй по облику. Данные, не ветвление: новая статуя — строка здесь. */
-export const MONOLITH_NAMES: readonly string[] = ['Страж', 'Плакальщица', 'Безымянный']
 
 /** Ближайший контейнер в радиусе захвата — HUD подсказывает, что можно подобрать. */
 export function nearestPod(world: World, radius: number) {

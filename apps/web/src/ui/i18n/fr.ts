@@ -358,7 +358,6 @@ export const FR: Record<keyof typeof RU, string> = {
   'locator.kind.moon': 'lune',
   'locator.kind.station': 'station',
   'locator.kind.blackhole': 'trou noir',
-  'locator.kind.monolith': 'monolithe',
   'locator.kind.pod': 'conteneur',
 
   // Gens : registre des contacts.

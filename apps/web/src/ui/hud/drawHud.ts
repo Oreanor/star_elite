@@ -9,7 +9,6 @@ import {
   findBody,
   findStation,
   navTarget,
-  MONOLITH_NAMES,
   autofightActive,
   auxFraction,
   canAutoland,
@@ -590,20 +589,6 @@ function collectMarkers(world: World): Marker[] {
   for (const titan of world.titans) {
     out.push({ pos: titan.pos, name: properName(titan.name), color: HUD_COLORS.NEUTRAL, nav: false, primary: true, surfaceR: 0 })
   }
-  // Статуи — ориентиры того же рода: десять километров камня, их видно с полсистемы, и подпись
-  // им нужна не меньше, чем планете. Своим списком (не тела), потому кладём отдельно.
-  for (const m of world.monoliths) {
-    out.push({
-      pos: m.pos,
-      name: MONOLITH_NAMES[m.variant] ?? 'Монолит',
-      color: MONOLITH_COLOR,
-      nav: m.id === world.navTargetId,
-      primary: true,
-      // Габарит статуи — километры: дистанцию меряем до ПОВЕРХНОСТИ, как у планеты, иначе
-      // «5 км до центра» читается как «врезался», хотя ты ещё снаружи.
-      surfaceR: m.radius,
-    })
-  }
   return out
 }
 
@@ -678,9 +663,9 @@ function cellIcon(ctx: CanvasRenderingContext2D, x: number, y: number, color: st
  * контакт (Tab) и нав-цель (Shift+Tab). Рисуется только ВЫБРАННОЕ — одна клетка, две или ни одной.
  *
  * Цвет рамки говорит, что это: КРАСНАЯ — контакт (живой персонаж или контейнер, с ним говорят
- * и по нему бьют), ГОЛУБАЯ — нав-цель (крупное: звезда, планета, луна, станция, монолит). Раньше
- * панель была одна и только для борта, оттого захват станции или статуи ничем не отзывался, и
- * было не понять, что вообще выбрано.
+ * и по нему бьют), ГОЛУБАЯ — нав-цель (крупное: звезда, планета, луна, станция). Раньше панель
+ * была одна и только для борта, оттого захват станции ничем не отзывался, и было не понять,
+ * что вообще выбрано.
  *
  * У персонажа в клетке — лицо (вырезается из листа расы по координатам, эмоция из состояния).
  * У крупного портрета нет и быть не может, поэтому кружок его цвета — но подпись ОБЯЗАТЕЛЬНА:
@@ -740,7 +725,7 @@ function drawTargetPanels(frame: HudFrame): void {
     const body = world.bodies.find((b) => b.id === nav.id)
     // Цвет — тот же, что метит тело на локаторе: значок и метка обязаны совпасть, иначе
     // «кружок в панели» и «точка на радаре» читаются как разные объекты.
-    const color = body ? bodyColor(body) : MONOLITH_COLOR
+    const color = body ? bodyColor(body) : HUD_COLORS.PRIMARY
     cell(HUD_COLORS.PRIMARY, [properName(nav.name), t(kindKey)], (cx, cy) => cellIcon(ctx, cx, cy, color))
   }
 }
@@ -980,14 +965,6 @@ function drawRadar(frame: HudFrame): void {
     plot(body.pos, bodyColor(body), Math.round((nav ? base + 1 : base) * S), nav, shape, nav ? properName(body.name) : undefined)
   }
 
-  // СТАТУИ. Они не тела (свой список — ни орбит, ни гравитации), поэтому на локатор их надо
-  // класть отдельно. Без этого километровые монолиты не отмечались вовсе — «непонятно, где они».
-  // Ромб, как у станции: рукотворное среди природного. Цвет камня отличает их от причала.
-  for (const m of world.monoliths) {
-    const nav = m.id === world.navTargetId
-    plot(m.pos, MONOLITH_COLOR, Math.round((nav ? 5 : 4) * S), nav, 'diamond', nav ? MONOLITH_NAMES[m.variant] : undefined)
-  }
-
   // Камни — только ближние: пояс в двести шестьдесят отметок залил бы обод серым,
   // а нужен он затем, чтобы не влететь в глыбу, то есть на дистанции боя.
   for (const rock of world.asteroids) {
@@ -1024,9 +1001,6 @@ function drawRadar(frame: HudFrame): void {
 const RADAR_RANGE = 20_000
 /** Ближе этого камни рисуются, м. Дальше они — не препятствие, а пейзаж. */
 const ROCK_RANGE = 4_000
-
-/** Камень статуи: цвета в домене у неё нет — она декорация, а не тело. */
-const MONOLITH_COLOR = '#8d8677'
 
 /** Что это. Звезда жёлтая, причал белый, планета — фосфор консоли. */
 function bodyColor(body: BodyEntity): string {

@@ -39,9 +39,9 @@ export function maybeShiftOrigin(world: World): void {
    * Сдвинуть обязано ВСЁ, у чего есть место в мире. Список тут — ручной, и это его слабость:
    * заведёшь новый список в `World` и забудешь строку здесь — объекты молча останутся в старых
    * координатах, то есть окажутся за километры от того места, где им положено быть. Так и
-   * случилось со статуями: их поставили у причала, а после первого же сдвига они уехали за
-   * пол-а.е. Аудит по этому следу вскрыл, что так же забыты были болты, платформы, варп-вспышки,
-   * порталы и вспышки поля. НОВЫЙ СПИСОК С `pos` — НОВАЯ СТРОКА ЗДЕСЬ.
+   * случилось однажды: поставленное у причала после первого же сдвига уехало за пол-а.е. Аудит
+   * по этому следу вскрыл, что так же забыты были болты, платформы, варп-вспышки, порталы и
+   * вспышки поля. НОВЫЙ СПИСОК С `pos` — НОВАЯ СТРОКА ЗДЕСЬ.
    */
   for (const s of world.ships) s.state.pos.add(_shift)
   for (const a of world.asteroids) a.pos.add(_shift)
@@ -51,7 +51,6 @@ export function maybeShiftOrigin(world: World): void {
   for (const b of world.bolts) b.pos.add(_shift)
   for (const b of world.bodies) b.pos.add(_shift)
   for (const t of world.titans) t.pos.add(_shift)
-  for (const m of world.monoliths) m.pos.add(_shift)
   // Платформы-гнёзда стоят на месте — тем заметнее был бы их прыжок.
   for (const p of world.platforms) p.pos.add(_shift)
   for (const t of world.tracers) {

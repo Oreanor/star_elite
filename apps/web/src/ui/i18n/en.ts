@@ -358,7 +358,6 @@ export const EN: Record<keyof typeof RU, string> = {
   'locator.kind.station': 'station',
   'locator.kind.blackhole': 'black hole',
 
-  'locator.kind.monolith': 'monolith',
 
   'locator.kind.pod': 'cargo pod',
 
