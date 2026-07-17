@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useSession } from './GameContext'
 import { FlightCamera } from '../render/camera/FlightCamera'
 import { Post } from '../render/post/Post'
+import { Probe } from '../render/post/Probe'
 import { PIXEL_SCALE, RENDER } from '../render/config'
 import { AsteroidField } from '../render/scene/Asteroids'
 import { Bodies } from '../render/scene/Bodies'
@@ -87,6 +88,8 @@ function Scene() {
 
       {/* Последним: композер рисует кадр целиком, отключая автоотрисовку R3F. */}
       <Post />
+      {/* После композера: счётчики рендерера читаются, когда кадр уже нарисован. F3. */}
+      <Probe />
     </>
   )
 }
