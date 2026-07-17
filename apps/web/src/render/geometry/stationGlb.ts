@@ -65,6 +65,8 @@ function prepareStation(scene: Object3D): LoadedStation | null {
 }
 
 // Грузим все облики при импорте модуля. Пока не доехал — вызывающий падает на заглушку.
+// В памяти оттого живут ВСЕ пять, хотя в системе причал всегда один: терпимо ровно потому,
+// что текстуры ужаты до 256² (бюджет и цена ошибки — в шапке `GLB_HULLS` в `ships.ts`).
 const cache = new Map<number, LoadedStation>()
 for (let i = 0; i < STATION_URLS.length; i++) {
   const url = STATION_URLS[i]!
