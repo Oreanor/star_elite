@@ -19,6 +19,7 @@ import { WarpArrivalPortals } from '../render/scene/WarpArrivalPortals'
 import { ShieldBubbles } from '../render/scene/ShieldBubbles'
 import { Exhaust } from '../render/scene/Exhaust'
 import { Lighting } from '../render/scene/Lighting'
+import { Monoliths } from '../render/scene/Monoliths'
 import { Drones, EnemyShips, PlayerShip } from '../render/scene/Ships'
 import { RemotePlayers } from '../render/scene/RemotePlayers'
 import { Simulation } from '../render/scene/Simulation'
@@ -61,6 +62,7 @@ function Scene() {
       <PlayerShip />
       <WingMissiles />
       <EnemyShips />
+      <Monoliths />
       <Drones />
       <RemotePlayers />
       <CargoPods />

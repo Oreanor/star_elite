@@ -377,6 +377,7 @@ export const RU = {
   'locator.kind.station': 'станция',
   'locator.kind.blackhole': 'чёрная дыра',
 
+  'locator.kind.monolith': 'монолит',
 
   'locator.kind.pod': 'контейнер',
 

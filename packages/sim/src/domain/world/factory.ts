@@ -23,6 +23,7 @@ import { createIdSource, type IdSource } from './ids'
 import { DEFAULT_PERSONA, makePersona, type PilotProfile } from './persona'
 import { SLOVO_KIND, SLOVO_NAME, SLOVO_PERSONA } from './slovo'
 import { makePilotName } from './names'
+import { placeMonoliths } from './monoliths'
 import { maybeShiftOrigin } from './origin'
 import {
   keplerRate,
@@ -643,6 +644,15 @@ export function enterSystem(
   world.shockwaves = []
   world.warps = []
   world.warpPortals = []
+  /**
+   * Статуи ставим ПОСЛЕ чистки списков, а не до неё: сам `placeMonoliths` начинает с
+   * `monoliths = []` и заполняет заново. Стоя выше, он честно расставлял их — и тут же терял,
+   * потому что общая чистка обнуляла список в том же кадре. Статуй не было вовсе.
+   *
+   * Тела к этому мигу уже на своих орбитах (`stepOrbits` выше), поэтому веер считается от
+   * НАСТОЯЩЕГО места станции, а не от точки, где её нарисовала фабрика.
+   */
+  placeMonoliths(world)
   world.lockedTargetId = null
   world.navTargetId = world.bodies.find((b) => b.kind === 'station')?.id ?? null
   // Прибыли — выбранная для прыжка система достигнута, метку и точку выхода снимаем.
@@ -725,6 +735,7 @@ export function createWorld(def: SystemDef = STARTER_SYSTEM, profile?: PilotProf
     missiles: [],
     bolts: [],
     titans: [],
+    monoliths: [],
     platforms: [],
     bodies,
     tracers: [],
@@ -777,5 +788,6 @@ export function createWorld(def: SystemDef = STARTER_SYSTEM, profile?: PilotProf
   stepOrbits(world)
   // Если старт в системе с Крестом (Люцифер) — бог уже сидит на нём с первого кадра.
   spawnSlovo(world)
+  placeMonoliths(world)
   return world
 }

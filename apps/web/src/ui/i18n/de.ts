@@ -360,6 +360,7 @@ export const DE: Record<keyof typeof RU, string> = {
   'locator.kind.moon': 'Mond',
   'locator.kind.station': 'Station',
   'locator.kind.blackhole': 'Schwarzes Loch',
+  'locator.kind.monolith': 'Monolith',
   'locator.kind.pod': 'Frachtkapsel',
 
   // People: contacts registry.
