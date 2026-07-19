@@ -6,10 +6,12 @@ import { useSession } from '../../app/GameContext'
 import { useOnlinePlayers } from '../../app/net/presence'
 import { sendHit, subscribeHits } from '../../app/net/hits'
 import { clearPose, publishPose, selfPose, subscribePoses } from '../../app/net/pose'
+import { remoteTravelerActive } from '../../app/net/portal'
 import { PoseInterp } from '../../app/net/remotePlayers'
 import { GIANT_RENDER_CAP } from '../config'
 import { chassisGeometry } from '../geometry/ships'
 import { hullMaterialFor } from '../materials/materials'
+import { usePortalRenderSide } from './portalRenderContext'
 
 /**
  * Чужие игроки в мире. Связывает два канала: МЕДЛЕННЫЙ presence (кто в моей системе,
@@ -36,6 +38,7 @@ const _spawnQuat = /* @__PURE__ */ new Quaternion()
 
 export function RemotePlayers() {
   const session = useSession()
+  const activeWorld = usePortalRenderSide() === 'source'
   const peers = useOnlinePlayers()
   const ref = useRef<InstancedMesh>(null)
 
@@ -64,25 +67,27 @@ export function RemotePlayers() {
     return subscribePoses(sys, (snaps) => interp.ingest(snaps, performance.now()))
   }, [sys, interp])
 
-  // Уборка при размонтировании (прыжок/выход): снять свою позу и чужие борта из мира.
+  // Уборка при размонтировании: удалить только локальные копии чужих бортов.
+  // Глобальную pose здесь не снимаем: при handoff старый слот уходит уже после активации
+  // нового и иначе может удалить его только что опубликованную позицию.
   useEffect(() => {
     const registry = idByUid.current
     return () => {
       const world = session.world
       for (const id of registry.values()) despawnRemotePlayer(world, id)
       registry.clear()
-      void clearPose()
     }
   }, [session])
 
   // Приём попаданий по СЕБЕ: чужой болт долетел на клиенте стрелка, он прислал урон — и мы
   // сами бьём по своему HP (авторитет над своим здоровьем). Живёт, пока компонент смонтирован.
   useEffect(() => {
+    if (!activeWorld) return
     return subscribeHits((dmg) => {
       const world = session.world
       if (world.player.alive) applyDamage(world.player, dmg, world.time)
     })
-  }, [session])
+  }, [session, activeWorld])
 
   useFrame((_, dt) => {
     const world = session.world
@@ -93,7 +98,7 @@ export function RemotePlayers() {
     //    НЕ применил его (HP чужого — на его клиенте): кладём урон в ящик игрока по uid из
     //    нашего реестра, он применит сам. Затем список чистим — он живёт ровно один кадр.
     const hits = world.remoteHits
-    if (hits.length > 0) {
+    if (activeWorld && hits.length > 0) {
       for (const h of hits) {
         for (const [uid, id] of registry) {
           if (id === h.targetId) {
@@ -103,11 +108,16 @@ export function RemotePlayers() {
         }
       }
       hits.length = 0
+    } else if (!activeWorld && hits.length > 0) {
+      // Призрак в подготовленной системе не является сетевым авторитетом.
+      hits.length = 0
     }
 
     // 1) Публикуем свою позу ~PUBLISH_HZ, пока в космосе. В доке — снимаем: у причала
     //    борт не летает, соседи видят метку станции из presence, а не корабль.
-    if (world.docked) {
+    if (!activeWorld) {
+      pubAcc.current = 0
+    } else if (world.docked) {
       void clearPose()
     } else {
       pubAcc.current += dt
@@ -183,9 +193,10 @@ export function RemotePlayers() {
     const mesh = ref.current
     if (!mesh) return
     let count = 0
-    for (const id of registry.values()) {
+    for (const [uid, id] of registry) {
       const ship = world.ships.find((s) => s.id === id)
-      if (!ship || !isVisible(ship) || count >= MAX_REMOTE) continue
+      // В момент прохода этот uid рисует отдельная проекция с клип-плоскостью портала.
+      if (!ship || !isVisible(ship) || remoteTravelerActive(uid) || count >= MAX_REMOTE) continue
       _dummy.position.copy(ship.state.pos)
       _dummy.quaternion.copy(ship.state.quat)
       // Визуальный масштаб зажат потолком (см. GIANT_RENDER_CAP): километровый корпус вдали

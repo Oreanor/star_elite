@@ -20,11 +20,10 @@ import {
   type StationType,
 } from '../../config/galaxy'
 import { DYSON, type DysonSpec } from '../../config/dyson'
-import { WORLD } from '../../config/world'
 import { clamp, makeRng, type Rng } from '../../core/math'
-import { homeSystem } from './home'
 import { moonName, planetName, systemName } from './names'
 import { placeSystem } from './shape'
+import { applySharedStartCatalog, SHARED_START_INDEX } from './sharedStart'
 import type { Moon, Planet, SettledPlanet, Settlement, Star, StarSystem, Station } from './types'
 import { capitalOf } from './types'
 
@@ -346,10 +345,6 @@ export function generateSystem(index: number, seed: number = GALAXY.SEED): StarS
     return { index, name: 'Ядро', x, y, z, star: BLACK_HOLE, companion: null, dyson: null, planets: [], security: SECURITY_LEVELS[0] }
   }
 
-  // Родная система задана руками — но только в СВОЕЙ галактике. В любой другой
-  // под этим индексом стоит обычная звезда: Тиррион существует в одном экземпляре.
-  if (index === WORLD.HOME_INDEX && seed === GALAXY.SEED) return homeSystem(index, x, y, z)
-
   const name = systemName(rng)
   const star = makeStar(rng)
   // Спутник бросается СРАЗУ после главной звезды: порядок бросков — часть зерна,
@@ -366,7 +361,7 @@ export function generateSystem(index: number, seed: number = GALAXY.SEED): StarS
     ? securityFor(rng, GOVERNMENTS.indexOf(capital.settlement.government))
     : SECURITY_LEVELS[0]
 
-  return { ...draft, dyson: makeDyson(rng, capital), security }
+  return applySharedStartCatalog({ ...draft, dyson: makeDyson(rng, capital), security }, seed)
 }
 
 /**
@@ -412,12 +407,10 @@ export function generateGalaxy(seed: number = GALAXY.SEED): StarSystem[] {
   const systems: StarSystem[] = []
   const taken = new Set<string>()
 
-  // Имена «Ядро» и «Тиррион» заняты до первого броска: их дали руками, и
-  // переименовать их разведение коллизий не вправе. Иначе случайный сосед с тем
-  // же именем, стоящий по индексу раньше, вытеснил бы родную систему из её имени.
-  // Чёрная дыра есть у каждой галактики, Тиррион — только у родной.
-  const fixed = new Set(seed === GALAXY.SEED ? [CORE_INDEX, WORLD.HOME_INDEX] : [CORE_INDEX])
+  // «Ядро» и имя общего спавна («Люрилар») заняты до разведения коллизий.
+  const fixed = new Set(seed === GALAXY.SEED ? [CORE_INDEX, SHARED_START_INDEX] : [CORE_INDEX])
   for (const i of fixed) taken.add(generateSystem(i, seed).name)
+  if (seed === GALAXY.SEED) taken.add('Люрилар')
 
   for (let i = 0; i < count; i++) {
     const system = generateSystem(i, seed)

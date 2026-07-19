@@ -178,10 +178,8 @@ export function systemDefOf(system: StarSystem, galaxySeed: number, seatOverride
     dyson: system.dyson,
     planets,
     station: stationDef,
-    // Пояс есть не везде: он локален и живёт в масштабе километров, как бой.
-    belt: system.planets.length > 2
-      ? { center: [start[0] + 6_000, start[1], start[2] + 8_000], radius: 3_000, count: 220 }
-      : null,
+    // Камни — встречи трафика, не хардкод-пояс у старта.
+    belt: null,
     patrols: patrolsFor(system, start),
   }
 }

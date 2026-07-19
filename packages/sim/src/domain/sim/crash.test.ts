@@ -244,7 +244,6 @@ describe('удар о крупное тело', () => {
     })
     const player = world.player
     const rock = world.asteroids[0]!
-    // count:1 в фабрике раздувает камень до колосса (нав). Жмём обратно в мелочь.
     rock.radius = 8
     player.state.scale = 2
     player.state.pos.copy(rock.pos)

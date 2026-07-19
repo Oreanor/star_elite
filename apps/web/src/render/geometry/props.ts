@@ -1,4 +1,11 @@
-import { BoxGeometry, CylinderGeometry, TorusGeometry, type BufferGeometry } from 'three'
+import {
+  BoxGeometry,
+  BufferAttribute,
+  BufferGeometry,
+  CylinderGeometry,
+  EdgesGeometry,
+  TorusGeometry,
+} from 'three'
 import { CORRIDOR, PALETTE } from '../config'
 import { buildGeometry, quad, tri, type Triangle, type Vec3 } from './build'
 
@@ -441,6 +448,184 @@ export function crossStationGeometry(): BufferGeometry {
     crossCache = buildGeometry(tris)
   }
   return crossCache
+}
+
+let crossWireCache: BufferGeometry | null = null
+
+/**
+ * Каркас креста: рёбра объёмной геометрии. Рендер — LineSegments + аддитивный голубой.
+ * Порог угла отсекает швы внутри одной грани, оставляя силуэт балок.
+ */
+export function crossWireGeometry(): BufferGeometry {
+  crossWireCache ??= new EdgesGeometry(crossStationGeometry(), 20)
+  return crossWireCache
+}
+
+let crossPortalPanelsCache: BufferGeometry | null = null
+
+/**
+ * Окна-маски Крестов: плоские панели на гранях балок, чуть ВЫНЕСЕННЫЕ наружу
+ * (чтобы не z-fight'ить с чёрным корпусом при лог-глубине) и чуть УЖАТЫЕ от рёбер
+ * (неон читается рамкой). Сюда кладётся шейдер чужого скайбокса.
+ */
+export function crossPortalPanelsGeometry(): BufferGeometry {
+  if (crossPortalPanelsCache) return crossPortalPanelsCache
+  const L = 0.9
+  const hw = 0.08
+  const o = 0.006 // вынос наружу
+  const inset = 0.014 // поле под неоновую «рамку»
+  const C = 0xffffff
+  const tris: Triangle[] = []
+
+  // Балка X: длинные грани ±Y / ±Z и торцы ±X.
+  {
+    const x0 = -L + inset
+    const x1 = L - inset
+    const y = hw + o
+    const zs = hw - inset
+    tris.push(
+      ...quad([x0, y, -zs], [x1, y, -zs], [x1, y, zs], [x0, y, zs], C),
+      ...quad([x0, -y, zs], [x1, -y, zs], [x1, -y, -zs], [x0, -y, -zs], C),
+    )
+    const z = hw + o
+    const ys = hw - inset
+    tris.push(
+      ...quad([x0, -ys, z], [x1, -ys, z], [x1, ys, z], [x0, ys, z], C),
+      ...quad([x0, ys, -z], [x1, ys, -z], [x1, -ys, -z], [x0, -ys, -z], C),
+    )
+    const e = L + o
+    const s = hw - inset
+    tris.push(
+      ...quad([e, -s, -s], [e, s, -s], [e, s, s], [e, -s, s], C),
+      ...quad([-e, -s, s], [-e, s, s], [-e, s, -s], [-e, -s, -s], C),
+    )
+  }
+
+  // Балка Y: длинные ±X / ±Z и торцы ±Y.
+  {
+    const y0 = -L + inset
+    const y1 = L - inset
+    const x = hw + o
+    const zs = hw - inset
+    tris.push(
+      ...quad([x, y0, zs], [x, y1, zs], [x, y1, -zs], [x, y0, -zs], C),
+      ...quad([-x, y0, -zs], [-x, y1, -zs], [-x, y1, zs], [-x, y0, zs], C),
+    )
+    const z = hw + o
+    const xs = hw - inset
+    tris.push(
+      ...quad([-xs, y0, z], [xs, y0, z], [xs, y1, z], [-xs, y1, z], C),
+      ...quad([xs, y0, -z], [-xs, y0, -z], [-xs, y1, -z], [xs, y1, -z], C),
+    )
+    const e = L + o
+    const s = hw - inset
+    tris.push(
+      ...quad([-s, e, -s], [-s, e, s], [s, e, s], [s, e, -s], C),
+      ...quad([-s, -e, s], [-s, -e, -s], [s, -e, -s], [s, -e, s], C),
+    )
+  }
+
+  // Балка Z: длинные ±X / ±Y и торцы ±Z.
+  {
+    const z0 = -L + inset
+    const z1 = L - inset
+    const x = hw + o
+    const ys = hw - inset
+    tris.push(
+      ...quad([x, -ys, z0], [x, ys, z0], [x, ys, z1], [x, -ys, z1], C),
+      ...quad([-x, ys, z0], [-x, -ys, z0], [-x, -ys, z1], [-x, ys, z1], C),
+    )
+    const y = hw + o
+    const xs = hw - inset
+    tris.push(
+      ...quad([-xs, y, z0], [xs, y, z0], [xs, y, z1], [-xs, y, z1], C),
+      ...quad([xs, -y, z0], [-xs, -y, z0], [-xs, -y, z1], [xs, -y, z1], C),
+    )
+    const e = L + o
+    const s = hw - inset
+    tris.push(
+      ...quad([-s, -s, e], [s, -s, e], [s, s, e], [-s, s, e], C),
+      ...quad([s, -s, -e], [-s, -s, -e], [-s, s, -e], [s, s, -e], C),
+    )
+  }
+
+  crossPortalPanelsCache = buildGeometry(tris)
+  return crossPortalPanelsCache
+}
+
+let crossNeonTubesCache: BufferGeometry | null = null
+
+/**
+ * Неоновые лампы по рёбрам: тонкие ленты с UV (x = поперёк −1..1, y = вдоль 0..1).
+ * Аддитивный шейдер гасит к краю — светят линии, не грани.
+ */
+export function crossNeonTubesGeometry(): BufferGeometry {
+  if (crossNeonTubesCache) return crossNeonTubesCache
+  const edges = crossWireGeometry()
+  const ep = edges.getAttribute('position')
+  const hw = 0.014 // полуширина лампы в единичной геометрии
+  const positions: number[] = []
+  const uvs: number[] = []
+  const indices: number[] = []
+  let v = 0
+  for (let i = 0; i + 1 < ep.count; i += 2) {
+    const ax = ep.getX(i)
+    const ay = ep.getY(i)
+    const az = ep.getZ(i)
+    const bx = ep.getX(i + 1)
+    const by = ep.getY(i + 1)
+    const bz = ep.getZ(i + 1)
+    const dx = bx - ax
+    const dy = by - ay
+    const dz = bz - az
+    const len = Math.hypot(dx, dy, dz) || 1
+    // Две оси, перпендикулярные ребру — лента видна с любого ракурса.
+    let rx = 0
+    let ry = 1
+    let rz = 0
+    if (Math.abs(dy / len) > 0.9) {
+      rx = 1
+      ry = 0
+    }
+    let px = ry * dz - rz * dy
+    let py = rz * dx - rx * dz
+    let pz = rx * dy - ry * dx
+    let pl = Math.hypot(px, py, pz) || 1
+    px = (px / pl) * hw
+    py = (py / pl) * hw
+    pz = (pz / pl) * hw
+    let qx = dy * pz - dz * py
+    let qy = dz * px - dx * pz
+    let qz = dx * py - dy * px
+    const ql = Math.hypot(qx, qy, qz) || 1
+    qx = (qx / ql) * hw
+    qy = (qy / ql) * hw
+    qz = (qz / ql) * hw
+
+    // Две перекрёстные ленты (как + в сечении) — лампа круглая с любого угла.
+    for (const [ox, oy, oz] of [
+      [px, py, pz],
+      [qx, qy, qz],
+    ] as const) {
+      const base = v
+      positions.push(
+        ax - ox, ay - oy, az - oz,
+        ax + ox, ay + oy, az + oz,
+        bx + ox, by + oy, bz + oz,
+        bx - ox, by - oy, bz - oz,
+      )
+      uvs.push(-1, 0, 1, 0, 1, 1, -1, 1)
+      indices.push(base, base + 1, base + 2, base, base + 2, base + 3)
+      v += 4
+    }
+  }
+  const g = new BufferGeometry()
+  g.setAttribute('position', new BufferAttribute(new Float32Array(positions), 3))
+  g.setAttribute('uv', new BufferAttribute(new Float32Array(uvs), 2))
+  g.setIndex(indices)
+  g.computeBoundingSphere()
+  crossNeonTubesCache = g
+  return g
 }
 
 // ─── Грузовой контейнер ──────────────────────────────────────────────────────

@@ -58,8 +58,12 @@ describe('автопилот-к-цели', () => {
     const { world, target } = withTarget(AUTOPILOT.ARRIVE_RANGE - 50)
     const planet = world.bodies.find((b) => b.kind === 'planet')
     if (!planet) throw new Error('нужна планета')
-    // Центр далеко за пределами радиуса: иначе approachDist по поверхности = 0.
-    planet.pos.copy(world.player.state.pos).add(new Vector3(0, 0, -(planet.radius + 5_000_000)))
+    // Центр далеко за парковочной сферой 2R: иначе новый безопасный stand-off уже достигнут.
+    planet.pos.copy(world.player.state.pos).add(new Vector3(
+      0,
+      0,
+      -(planet.radius * AUTOPILOT.BODY_STANDOFF_RADII + 5_000_000),
+    ))
     world.navTargetId = planet.id
     world.targetFocus = 'nav'
     expect(world.lockedTargetId).toBe(target.id)
@@ -99,6 +103,45 @@ describe('автопилот-к-цели', () => {
 
     world.lockedTargetId = null // цель снята — вести некуда, штурвал возвращаем
     expect(flyToArrived(world)).toBe(true)
+  })
+
+  it('к телу паркуется у 2R и не отдаёт штурвал, пока не погасил ход', () => {
+    const { world } = withTarget(50_000)
+    const planet = world.bodies.find((b) => b.kind === 'planet')
+    if (!planet) throw new Error('нужна планета')
+    world.targetFocus = 'nav'
+    world.navTargetId = planet.id
+
+    const standOff = planet.radius * AUTOPILOT.BODY_STANDOFF_RADII
+    world.player.state.pos.copy(planet.pos).add(new Vector3(0, 0, standOff + AUTOPILOT.ARRIVE_RANGE / 2))
+    world.player.state.vel.set(0, 0, -world.player.spec.tuning.MAX_SPEED)
+
+    flyToController.update(world.player, world, 0.016)
+    expect(world.player.controls.retro).toBe(1)
+    expect(flyToArrived(world)).toBe(false)
+
+    world.player.state.vel.set(0, 0, 0)
+    expect(flyToArrived(world)).toBe(true)
+  })
+
+  it('на ×scale начинает тормозить по фактическому тормозному пути, а не по фиксированной зоне', () => {
+    const { world } = withTarget(50_000)
+    const planet = world.bodies.find((b) => b.kind === 'planet')!
+    const standOff = planet.radius * AUTOPILOT.BODY_STANDOFF_RADII
+    const remaining = AUTOPILOT.BRAKE_RANGE * 4
+
+    world.targetFocus = 'nav'
+    world.navTargetId = planet.id
+    world.player.state.scale = 1_000
+    world.player.state.pos.copy(planet.pos).add(new Vector3(0, 0, standOff + remaining))
+    // Выбег v/k заметно длиннее остатка: независимо от масштаба здесь уже нужен ручник.
+    world.player.state.vel.set(0, 0, -remaining * 30)
+
+    flyToController.update(world.player, world, 1 / 120)
+
+    expect(world.player.controls.throttle).toBe(0)
+    expect(world.player.controls.retro).toBe(1)
+    expect(flyToArrived(world)).toBe(false)
   })
 
   it('на галактическом × J ведёт к jumpTarget мягким газом и с форсажем на дальнем плече', () => {

@@ -277,7 +277,7 @@ function YouAreHere({ at }: { at: Vector3 }) {
   useFrame((state) => {
     if (ref.current) ref.current.quaternion.copy(state.camera.quaternion)
   })
-  return <mesh ref={ref} geometry={youMarkerGeometry} material={material} position={at} raycast={() => null} />
+  return <mesh ref={ref} geometry={youMarkerGeometry} material={material} position={[at.x, at.y, at.z]} raycast={() => null} />
 }
 
 /** Подпись «ВЫ» у своей звезды. DOM поверх канваса: её двигает кадр, а не React. */
@@ -351,7 +351,7 @@ function JumpSphere({ at, charge, max }: { at: Vector3; charge: number; max: num
 
   if (max <= 0) return null
   return (
-    <group ref={ref} position={at}>
+    <group ref={ref} position={[at.x, at.y, at.z]}>
       {charge < max - 1e-6 && (
         <lineLoop geometry={jumpRingGeometry} material={maxMat} scale={max} raycast={() => null} />
       )}
@@ -528,7 +528,7 @@ function ContactStars({ systems }: { systems: ContactSystem[] }) {
           }}
           geometry={contactMarkerGeometry}
           material={material}
-          position={s.pos}
+          position={[s.pos.x, s.pos.y, s.pos.z]}
           raycast={() => null}
         />
       ))}
@@ -629,7 +629,7 @@ function PlayerStars({ systems }: { systems: PlayerSystem[] }) {
           }}
           geometry={playerMarkerGeometry}
           material={material}
-          position={s.pos}
+          position={[s.pos.x, s.pos.y, s.pos.z]}
           raycast={() => null}
         />
       ))}
@@ -677,6 +677,7 @@ const BLOCK_KEY = {
   'same-system': 'map.block.here',
   docked: 'map.block.docked',
   cruising: 'map.block.cruising',
+  scaled: 'map.block.scaled',
 } as const
 
 function blockLabel(reason: NonNullable<ReturnType<typeof jumpBlock>>): string {
@@ -799,10 +800,11 @@ export function GalaxyMap({ onClose, embedded = false }: { onClose: () => void; 
 
   const content = (
     <>
-      {/* Единый расклад всех трёх карт: полотно в левых 2/3, пульт и инфо — в правой 1/3. */}
+      {/* Поле галактики занимает левые 2/3, но только 60% высоты: широкий Canvas сам
+          пересчитывает проекцию, поэтому диск читается эллипсом, а точки остаются круглыми. */}
       <div
         ref={viewport}
-        className="relative w-2/3 cursor-grab active:cursor-grabbing"
+        className="relative h-[60%] w-2/3 self-center cursor-grab active:cursor-grabbing"
         onPointerDown={() => (dragging.current = true)}
         onPointerUp={() => (dragging.current = false)}
         onPointerLeave={() => (dragging.current = false)}
@@ -843,6 +845,62 @@ export function GalaxyMap({ onClose, embedded = false }: { onClose: () => void; 
           <Route from={here} to={picked ? positionOf(picked.system) : null} />
           <StarLabel at={picked ? positionOf(picked.system) : null} box={label} />
         </Canvas>
+
+        {/* Управление картой живёт над самим звёздным полем: правая колонка остаётся
+            маршрутной карточкой и больше не требует внутреннего скролла. */}
+        <div
+          className="absolute left-3 top-3 z-20 w-[min(28rem,calc(100%-1.5rem))] space-y-2 rounded-lg border p-3 backdrop-blur-md"
+          style={{
+            borderColor: 'rgba(124,196,255,0.28)',
+            background: 'rgba(8,22,42,0.72)',
+          }}
+          onPointerDown={(e) => e.stopPropagation()}
+        >
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder={t('map.search')}
+            className="w-full rounded border bg-black/40 px-3 py-1.5 tracking-widest outline-none placeholder:opacity-40"
+            style={{
+              borderColor: search.length >= 2 && searchIndex == null ? UI.WARN : 'rgba(124,196,255,0.35)',
+              color: UI.PRIMARY,
+            }}
+          />
+          {search.length >= 2 && searchIndex == null && (
+            <span className="block" style={{ color: UI.WARN }}>{t('map.searchNone')}</span>
+          )}
+
+          <div className="flex flex-wrap gap-1">
+            {(['all', 'stations', 'primitive', 'empty'] as const).map((f) => {
+              const on = filter === f
+              return (
+                <button
+                  key={f}
+                  type="button"
+                  onClick={() => setFilter(f)}
+                  className="cursor-pointer border px-2 py-1 tracking-widest transition-colors"
+                  style={{
+                    borderColor: on ? UI.PRIMARY : UI.DIM,
+                    backgroundColor: on ? UI.PRIMARY : 'transparent',
+                    color: on ? '#000' : UI.DIM,
+                  }}
+                >
+                  {t(`map.filter.${f}` as 'map.filter.all')}
+                </button>
+              )
+            })}
+          </div>
+
+          <label className="flex cursor-pointer items-center gap-2 tracking-widest" style={{ color: UI.DIM }}>
+            <input
+              type="checkbox"
+              checked={showContacts}
+              onChange={(e) => setShowContacts(e.target.checked)}
+              className="cursor-pointer accent-[#7fd6ff]"
+            />
+            {t('map.showContacts')}
+          </label>
+        </div>
 
         {/* Подпись «ВЫ» и имя под курсором живут всегда: их двигает кадр, а не React. */}
         <div
@@ -902,10 +960,10 @@ export function GalaxyMap({ onClose, embedded = false }: { onClose: () => void; 
 
       </div>
 
-      {/* Правая 1/3: заголовок галактики, пульт (поиск / фильтр / знакомые) и выбранная
-          система. Гасим pointer-события, чтобы возня в пульте не крутила диск карты. */}
+      {/* Правая 1/3: только заголовок галактики и выбранная система. Управление
+          перенесено на поле слева, поэтому здесь нет ни скролла, ни тесного пульта. */}
       <div
-        className="flex w-1/3 shrink-0 flex-col gap-3 overflow-y-auto pl-1 text-xs"
+        className="flex w-1/3 shrink-0 flex-col gap-3 overflow-hidden pl-1 text-xs"
         onPointerDown={(e) => e.stopPropagation()}
       >
         <div>
@@ -916,52 +974,6 @@ export function GalaxyMap({ onClose, embedded = false }: { onClose: () => void; 
             {galaxyShapeName(galaxy.shape).toUpperCase()} · {t('map.starsCount', { n: systems.length })}
           </div>
         </div>
-
-        <input
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder={t('map.search')}
-          className="w-full rounded border bg-black/40 px-3 py-1.5 tracking-widest outline-none placeholder:opacity-40"
-          style={{
-            borderColor: search.length >= 2 && searchIndex == null ? UI.WARN : 'rgba(124,196,255,0.35)',
-            color: UI.PRIMARY,
-          }}
-        />
-        {search.length >= 2 && searchIndex == null && (
-          <span style={{ color: UI.WARN }}>{t('map.searchNone')}</span>
-        )}
-
-        {/* Фильтр по характеру системы: все / со станциями / примитивная жизнь / пусто. */}
-        <div className="flex flex-wrap gap-1">
-          {(['all', 'stations', 'primitive', 'empty'] as const).map((f) => {
-            const on = filter === f
-            return (
-              <button
-                key={f}
-                type="button"
-                onClick={() => setFilter(f)}
-                className="cursor-pointer border px-2 py-1 tracking-widest transition-colors"
-                style={{
-                  borderColor: on ? UI.PRIMARY : UI.DIM,
-                  backgroundColor: on ? UI.PRIMARY : 'transparent',
-                  color: on ? '#000' : UI.DIM,
-                }}
-              >
-                {t(`map.filter.${f}` as 'map.filter.all')}
-              </button>
-            )
-          })}
-        </div>
-
-        <label className="flex cursor-pointer items-center gap-2 tracking-widest" style={{ color: UI.DIM }}>
-          <input
-            type="checkbox"
-            checked={showContacts}
-            onChange={(e) => setShowContacts(e.target.checked)}
-            className="cursor-pointer accent-[#7fd6ff]"
-          />
-          {t('map.showContacts')}
-        </label>
 
         {/* Выбранная система — карточка прямо в колонке (раньше плашка у курсора).
             Ничего не выбрано — столбец пуст, без подсказок. */}
@@ -1049,8 +1061,12 @@ function SystemPopup({
 }) {
   const def = useMemo(() => systemDefFor(index, world.galaxySeed), [index, world.galaxySeed])
   const core = index === CORE_INDEX
-  // В полёте показываем готовность к H (не кнопку): у причала прыжка нет — только метка.
-  const blocked = docked ? null : jumpBlock(world, index)
+  const distance = jumpDistance(world, index)
+  // Дальность маршрута важна и при планировании у причала, где jumpBlock раньше
+  // заслонял её менее полезным сообщением «сначала отчальте».
+  const beyondDriveRange =
+    index !== world.systemIndex && world.player.spec.jumpRange > 0 && distance > world.player.spec.jumpRange
+  const blocked = beyondDriveRange ? 'out-of-range' : docked ? null : jumpBlock(world, index)
 
   // Все причалы системы — индексы их планет. Порядок планет в карте и в мире совпадает
   // (мост строит SystemDef.planets один-к-одному), поэтому индекс годится и для выхода.
@@ -1070,7 +1086,7 @@ function SystemPopup({
 
   return (
     <div
-      className={inline ? 'rounded-lg border p-4' : 'absolute z-30 w-96 rounded-lg border p-4 backdrop-blur-md'}
+      className={inline ? 'rounded-lg border p-3' : 'absolute z-30 w-96 rounded-lg border p-4 backdrop-blur-md'}
       style={{
         ...(pos ?? {}),
         borderColor: 'rgba(124,196,255,0.4)',
@@ -1081,7 +1097,7 @@ function SystemPopup({
       onPointerDown={(e) => e.stopPropagation()}
       onClick={(e) => e.stopPropagation()}
     >
-      <div className="flex gap-4">
+      <div className="flex flex-col">
         <div className="flex min-w-0 flex-1 flex-col">
           <div className="flex items-start justify-between gap-3">
             <h3 className="text-base leading-tight tracking-[0.2em]">{properName(system.name).toUpperCase()}</h3>
@@ -1090,7 +1106,7 @@ function SystemPopup({
             </button>
           </div>
 
-          <dl className="mt-3 space-y-1 text-sm">
+          <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
             <Row
               label={t('map.class')}
               value={`${system.star.class} · ${starClassName(system.star)}${
@@ -1101,29 +1117,34 @@ function SystemPopup({
             <Row label={t('map.planets')} value={String(system.planets.length)} />
             <Row label={t('map.stations')} value={String(stations.length)} />
             <Row label={t('map.life')} value={lifeName(systemLife(system))} />
+            <Row label={t('map.distance')} value={formatRange(distance)} />
           </dl>
 
           {core && <p className="mt-3 text-[11px] leading-relaxed" style={{ color: UI.WARN }}>{t('map.core')}</p>}
 
-          {!docked && (
+          {blocked && (
             <p
               className="mt-auto pt-3 text-[11px] tracking-widest"
-              style={{ color: blocked ? UI.DIM : UI.PRIMARY }}
+              style={{ color: UI.WARN }}
             >
-              {blocked ? blockLabel(blocked) : core ? t('map.jumpGalaxy') : t('map.jump')}
+              {blockLabel(blocked)}
             </p>
           )}
         </div>
 
-        {/* Справа — схемка выхода: все причалы системы кликаются, выбранный — крестиком. */}
-        <div className="w-40 shrink-0">
-          <StationPicker def={def} stationPlanets={stationPlanets} selected={world.jumpArrivalPlanet} onPick={onArrival} />
-          {stations.length > 1 && (
-            <p className="mt-2 text-[10px] leading-tight" style={{ color: UI.DIM }}>
-              {t('map.pickStation', { n: stations.length })}
-            </p>
-          )}
-        </div>
+        {/* Схема идёт отдельной строкой: длинные значения характеристик больше не заходят под неё. */}
+        {def.planets.length > 0 && (
+          <div className="mt-4 border-t pt-4" style={{ borderColor: 'rgba(124,196,255,0.18)' }}>
+            <div className="mx-auto w-full max-w-52">
+              <StationPicker def={def} stationPlanets={stationPlanets} selected={world.jumpArrivalPlanet} onPick={onArrival} />
+              {stations.length > 1 && (
+                <p className="mt-2 text-[10px] leading-tight" style={{ color: UI.DIM }}>
+                  {t('map.pickStation', { n: stations.length })}
+                </p>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )
@@ -1148,13 +1169,7 @@ function StationPicker({
   onPick: (planet: number | null) => void
 }) {
   const plotted = rings(def, stationPlanets)
-  if (plotted.length === 0) {
-    return (
-      <p className="text-[11px]" style={{ color: UI.DIM }}>
-        {t('map.noPlanets')}
-      </p>
-    )
-  }
+  if (plotted.length === 0) return null
   const marked = selected != null ? plotted[selected] : null
 
   return (
@@ -1188,11 +1203,11 @@ function StationPicker({
 
 function Row({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex gap-3">
-      <dt className="w-32 shrink-0 text-xs" style={{ color: UI.DIM }}>
+    <div className="flex min-w-0 items-baseline justify-between gap-2">
+      <dt className="min-w-0 text-xs" style={{ color: UI.DIM }}>
         {label}
       </dt>
-      <dd className="flex-1">{value}</dd>
+      <dd className="min-w-0 text-right leading-tight">{value}</dd>
     </div>
   )
 }

@@ -127,8 +127,8 @@ export function clearNavLock(world: World): void {
  * (поля взаимно гасятся). Нав гасим — старый фокус не держим. Мутирует мир.
  */
 export function cycleContact(world: World): void {
-  // Выше GHOST_BODY система для приборов мертва — контакты не перебираем.
-  if (world.player.state.scale >= MIELOPHONE.GHOST_BODY_SCALE) {
+  // С PHASE_END мелкий мир растворён — контакты не перебираем.
+  if (world.player.state.scale >= MIELOPHONE.PHASE_END) {
     clearContactLock(world)
     return
   }
@@ -188,25 +188,29 @@ export function isStellarNavKind(kind: NavTarget['kind']): boolean {
 }
 
 /**
- * Выше GHOST_BODY гасим контакты и любой незвёздный нав (в т.ч. застрявшую станцию).
- * Звезду / дыру и `jumpTargetIndex` НЕ трогаем — фокус на светиле переживает зум.
- * Зовётся из cleanup каждого кадра — иначе метка Кориолиса живёт до ручного Tab.
+ * Цели, чьи объекты уже «исчезли» для приборов при росте миелофона:
+ *  • с PHASE_END — борта/обломки/камни (мелкий мир растворился);
+ *  • с GHOST_BODY — планеты/станции/статуи (система отдана галактическому слою).
+ * Звезду / дыру не трогаем. Зовётся из cleanup каждого кадра.
  */
 export function pruneGiantScaleLocks(world: World): void {
-  if (world.player.state.scale < MIELOPHONE.GHOST_BODY_SCALE) return
-  clearContactLock(world)
+  const scale = world.player.state.scale
+  // Корабли и мелочь: фаза кончилась — рамка на призраке недопустима.
+  if (scale >= MIELOPHONE.PHASE_END) clearContactLock(world)
+
+  if (scale < MIELOPHONE.GHOST_BODY_SCALE) return
+  // Планеты / станции / глыбы: системы в кадре нет — только звезда/дыра.
   const nav = navTarget(world)
   if (!nav || !isStellarNavKind(nav.kind)) clearNavLock(world)
   else {
     world.lockedStationId = null
-    // Контакты сняты — портрет/J должны смотреть на оставшуюся звезду, не в пустой contact.
     world.targetFocus = 'nav'
   }
 }
 
 /** Гигант пояса — единственный рудный камень в нав-переборе (мелочь туда не тащим). */
 export function isNavBeltAsteroid(a: AsteroidEntity): boolean {
-  return a.alive && a.radius >= ASTEROID.RADIUS_MIN * ASTEROID.GIANT_SCALE
+  return a.alive && a.radius >= ASTEROID.NAV_RADIUS
 }
 
 /**
@@ -273,54 +277,32 @@ export function cycleCelestial(world: World): void {
 }
 
 /**
- * Q: сбросить текущий захват и взять ближайшую (перед носом) цель ТОГО ЖЕ класса.
- * Класс — как у кругов Tab / Shift+Tab: контакт `ship|pod|asteroid` или `nav.kind`.
- * Нет выбора — гасим оба захвата. Мутирует мир.
+ * Q: ближайшая цель круга Tab (борт / обломок / камень) — тот же порядок, что у Tab,
+ * всегда с головы списка. Не «тот же подкласс»: весь контактный круг. Мутирует мир.
  */
-export function retargetNearestSameClass(world: World): void {
-  if (world.targetFocus === 'nav' && world.navTargetId !== null) {
-    retargetCelestialNearestSameClass(world)
-    return
-  }
-  const contactKind: ContactKind | null =
-    world.lockedTargetId !== null
-      ? 'ship'
-      : world.lockedPodId !== null
-        ? 'pod'
-        : world.lockedAsteroidId !== null
-          ? 'asteroid'
-          : null
-  if (contactKind) {
-    retargetContactNearestSameClass(world, contactKind)
-    return
-  }
-  clearContactLock(world)
-  clearNavLock(world)
-}
-
-function retargetContactNearestSameClass(world: World, kind: ContactKind): void {
-  if (world.player.state.scale >= MIELOPHONE.GHOST_BODY_SCALE) {
+export function retargetNearestContact(world: World): void {
+  if (world.player.state.scale >= MIELOPHONE.PHASE_END) {
     clearContactLock(world)
     return
   }
   const from = world.player.state.pos
   shipAxes(world.player.state.quat, _fwd, _right, _up)
-  const cands: { id: number; kind: ContactKind; facing: number; d2: number }[] = []
-  if (kind === 'ship') {
-    for (const s of targetablesOf(world)) {
-      cands.push({ id: s.id, kind, ...facingScore(from, s.state.pos) })
-    }
-  } else if (kind === 'pod') {
-    for (const p of world.pods) {
-      if (!p.alive) continue
-      cands.push({ id: p.id, kind, ...facingScore(from, p.pos) })
-    }
-  } else {
-    for (const a of world.asteroids) {
-      if (!a.alive || a.pos.distanceToSquared(from) > ASTEROID_LOCK_RANGE_SQ) continue
-      cands.push({ id: a.id, kind, ...facingScore(from, a.pos) })
-    }
-  }
+  const cands: { id: number; kind: ContactKind; facing: number; d2: number }[] = [
+    ...targetablesOf(world).map((s) => {
+      const rank = facingScore(from, s.state.pos)
+      return { id: s.id, kind: 'ship' as const, ...rank }
+    }),
+    ...world.pods.filter((p) => p.alive).map((p) => {
+      const rank = facingScore(from, p.pos)
+      return { id: p.id, kind: 'pod' as const, ...rank }
+    }),
+    ...world.asteroids
+      .filter((a) => a.alive && a.pos.distanceToSquared(from) <= ASTEROID_LOCK_RANGE_SQ)
+      .map((a) => {
+        const rank = facingScore(from, a.pos)
+        return { id: a.id, kind: 'asteroid' as const, ...rank }
+      }),
+  ]
   if (cands.length === 0) {
     clearContactLock(world)
     return
@@ -335,59 +317,54 @@ function retargetContactNearestSameClass(world: World, kind: ContactKind): void 
   world.lockedAsteroidId = next.kind === 'asteroid' ? next.id : null
 }
 
-function retargetCelestialNearestSameClass(world: World): void {
-  const current = navTarget(world)
-  if (!current) {
-    clearNavLock(world)
-    return
-  }
-  const want = current.kind
+/**
+ * Shift+Q: ближайшая цель круга Shift+Tab (небесные / статуи / глыбы).
+ * Тот же порядок и состав, что у Shift+Tab, всегда с головы. Мутирует мир.
+ */
+export function retargetNearestCelestial(world: World): void {
   const from = world.player.state.pos
   shipAxes(world.player.state.quat, _fwd, _right, _up)
   const stellarOnly = world.player.state.scale >= MIELOPHONE.GHOST_BODY_SCALE
-  if (stellarOnly && !isStellarNavKind(want)) {
-    clearNavLock(world)
-    return
-  }
-  const cands: { id: number; station: boolean; facing: number; d2: number }[] = []
-  if (want === 'monolith') {
-    if (!stellarOnly) {
-      for (const m of world.monoliths) cands.push({ id: m.id, station: false, ...facingScore(from, m.pos) })
-    }
-  } else if (want === 'figurine') {
-    if (!stellarOnly) {
-      for (const f of world.figurines) {
-        if (!f.alive) continue
-        cands.push({ id: f.id, station: false, ...facingScore(from, f.pos) })
-      }
-    }
-  } else if (want === 'asteroid') {
-    if (!stellarOnly) {
-      for (const r of world.scenicRocks) {
-        if (!r.alive) continue
-        cands.push({ id: r.id, station: false, ...facingScore(from, r.pos) })
-      }
-      for (const a of world.asteroids) {
-        if (!isNavBeltAsteroid(a)) continue
-        cands.push({ id: a.id, station: false, ...facingScore(from, a.pos) })
-      }
-    }
-  } else {
-    for (const b of world.bodies) {
-      if (b.kind !== want) continue
-      if (stellarOnly && !STELLAR_KINDS.has(b.kind)) continue
-      cands.push({
-        id: b.id,
-        station: !stellarOnly && b.kind === 'station',
-        ...facingScore(from, b.pos),
-      })
-    }
-  }
+  const kinds = stellarOnly ? STELLAR_KINDS : NAV_KINDS
+  const cands = [
+    ...world.bodies
+      .filter((b) => kinds.has(b.kind))
+      .map((b) => {
+        const rank = facingScore(from, b.pos)
+        return { id: b.id, station: !stellarOnly && b.kind === 'station', ...rank }
+      }),
+    ...(stellarOnly
+      ? []
+      : [
+          ...world.monoliths.map((m) => {
+            const rank = facingScore(from, m.pos)
+            return { id: m.id, station: false, ...rank }
+          }),
+          ...world.figurines
+            .filter((f) => f.alive)
+            .map((f) => {
+              const rank = facingScore(from, f.pos)
+              return { id: f.id, station: false, ...rank }
+            }),
+          ...world.scenicRocks
+            .filter((r) => r.alive)
+            .map((r) => {
+              const rank = facingScore(from, r.pos)
+              return { id: r.id, station: false, ...rank }
+            }),
+          ...world.asteroids
+            .filter(isNavBeltAsteroid)
+            .map((a) => {
+              const rank = facingScore(from, a.pos)
+              return { id: a.id, station: false, ...rank }
+            }),
+        ]),
+  ]
+  cands.sort(byFacingThenNear)
   if (cands.length === 0) {
     clearNavLock(world)
     return
   }
-  cands.sort(byFacingThenNear)
   world.celestialCycleAt = world.time
   clearContactLock(world)
   world.targetFocus = 'nav'

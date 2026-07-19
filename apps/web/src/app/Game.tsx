@@ -5,93 +5,36 @@ import { FlightCamera } from '../render/camera/FlightCamera'
 import { Post } from '../render/post/Post'
 import { Probe } from '../render/post/Probe'
 import { PIXEL_SCALE, RENDER } from '../render/config'
-import { AsteroidField } from '../render/scene/Asteroids'
-import { Bodies } from '../render/scene/Bodies'
-import { GalaxyLayer } from '../render/scene/GalaxyLayer'
-import { Titans } from '../render/scene/Titans'
-import { Platforms } from '../render/scene/Platforms'
-import { DockingCorridor } from '../render/scene/DockingCorridor'
-import { Dyson } from '../render/scene/Dyson'
-import { BlackHole } from '../render/scene/BlackHole'
-import { Dust } from '../render/scene/Dust'
-import { CargoPods, Explosions, ExplosionChunks, Missiles, MuzzleFlashes, StationShields, TractorBeam, Tracers, WarpFlashes } from '../render/scene/Effects'
-import { WarpArrivalPortals } from '../render/scene/WarpArrivalPortals'
-import { ShieldBubbles } from '../render/scene/ShieldBubbles'
-import { Exhaust } from '../render/scene/Exhaust'
-import { Lighting } from '../render/scene/Lighting'
-import { Figurines } from '../render/scene/Figurines'
-import { Monoliths } from '../render/scene/Monoliths'
-import { RockDebris } from '../render/scene/RockDebris'
-import { ScenicRocks } from '../render/scene/ScenicRocks'
-import { Drones, EnemyShips, PlayerShip } from '../render/scene/Ships'
-import { RemotePlayers } from '../render/scene/RemotePlayers'
 import { Simulation } from '../render/scene/Simulation'
-import { Sky } from '../render/scene/Sky'
-import { Starfield } from '../render/scene/Starfield'
-import { WingMissiles } from '../render/scene/WingMissiles'
-import { JumpDirector, JumpHold, JumpRing } from '../render/scene/JumpFx'
+import { JumpDirector, PortalPublisher } from '../render/scene/JumpFx'
+import { JumpPortalWorldView } from '../render/scene/JumpPortalWorldView'
 import { UndockDirector } from '../render/scene/UndockFx'
+import { WorldVisuals } from '../render/scene/WorldVisuals'
+import { promotedJumpPortalWorld } from '../render/scene/jumpPortalWorld'
+import { Dust } from '../render/scene/Dust'
 import { attachInput } from '../platform/input/input'
 import { Hud } from '../ui/hud/Hud'
-import { JumpVeil } from './JumpVeil'
+import { RemotePortalDirector } from './RemotePortalDirector'
 
 /**
- * Сборка сцены. Порядок компонентов важен: R3F зовёт useFrame в порядке
- * монтирования, поэтому Simulation стоит первым (шагает мир), а Hud — последним
- * (читает уже посчитанный кадр вместе с камерой).
+ * Сборка сцены. Критический порядок кадров закреплён приоритетами: Simulation
+ * шагает мир на -100, портал синхронизирует устье на -90, Post рисует на 1.
+ * Порядок JSX остаётся смысловым и не является скрытой синхронизацией.
  */
-function Scene() {
+function Scene({ epoch }: { epoch: number }) {
+  const hasPromotedWorld = promotedJumpPortalWorld(useSession().world) !== null
   return (
     <>
       <Simulation />
-      {/* Сразу после шага мира: держит корабль на зарядке прыжка, до отрисовки и камеры. */}
-      <JumpHold />
+      <RemotePortalDirector />
       {/* Крутит время сцены вылета — до камеры и HUD, чтобы те читали свежий прогресс. */}
       <UndockDirector />
 
-      <Sky />
-      <Lighting />
-      <Starfield />
-      <GalaxyLayer />
-
-      <Bodies />
-      <BlackHole />
-      <Dyson />
-      <AsteroidField />
-      <Titans />
-      <Platforms />
-      <DockingCorridor />
-
-      <PlayerShip />
-      <WingMissiles />
-      <EnemyShips />
-      <Monoliths />
-      <Figurines />
-      <ScenicRocks />
-      <RockDebris />
-      <Drones />
-      <RemotePlayers />
-      <CargoPods />
-      <TractorBeam />
-      <Missiles />
-
-      {/* Аддитивные струи — после корпусов: они не пишут глубину и обязаны
-          лечь поверх уже нарисованной кормы. */}
-      <Exhaust />
-
-      <Tracers />
-      <MuzzleFlashes />
-      <Explosions />
-      <ExplosionChunks />
-      <WarpFlashes />
-      <WarpArrivalPortals />
-      <StationShields />
-      <ShieldBubbles />
-      <JumpRing />
+      {!hasPromotedWorld && <WorldVisuals key={epoch} />}
 
       <FlightCamera />
       {/* Пыль центрируется по уже рассчитанной камере, иначе её куб остаётся у корабля. */}
-      <Dust />
+      {!hasPromotedWorld && <Dust />}
       <Hud />
 
       {/* Последним: композер рисует кадр целиком, отключая автоотрисовку R3F. */}
@@ -116,10 +59,9 @@ export function Game({ ready }: { ready: boolean }) {
   const session = useSession()
 
   /**
-   * Прыжок пересобирает сцену целиком. Планеты, пояс и небо строятся один раз
-   * при монтировании; подменённый под ними мир они не заметят, и «Тиррион»
-   * останется висеть в кадре новой системы. `key` — не костыль: это признание,
-   * что миры до и после прыжка не связаны ничем, кроме корабля.
+   * При смене системы пересобираются только объекты мира. Камера, симуляция и Post
+   * остаются смонтированы: их скрытое состояние и GPU-буферы не должны сбрасываться
+   * в тот самый кадр, когда корабль пересекает портал.
    */
   const [epoch, setEpoch] = useState(session.world.epoch)
   useEffect(() => {
@@ -145,6 +87,8 @@ export function Game({ ready }: { ready: boolean }) {
           antialias: RENDER.ANTIALIAS,
           // Обычный буфер глубины разваливается на диапазоне 0.5 м … 4000 км.
           logarithmicDepthBuffer: RENDER.LOG_DEPTH,
+          // Stencil — маска портала прыжка (вторая комната в овале кольца).
+          stencil: true,
           powerPreference: 'high-performance',
         }}
         camera={{ fov: RENDER.FOV_CHASE, near: RENDER.NEAR, far: RENDER.FAR }}
@@ -154,8 +98,12 @@ export function Game({ ready }: { ready: boolean }) {
             Постановщик прыжка — ВНЕ ключа: подмена мира не должна его размонтировать. */}
         {ready && (
           <>
+            <Scene epoch={epoch} />
+            {/* Приоритет -90: уже после Simulation (-100), но до объектов сцены (0)
+                и Post (1). Поэтому collider, клип и кольцо видят одну позу кадра. */}
             <JumpDirector />
-            <Scene key={epoch} />
+            <PortalPublisher />
+            <JumpPortalWorldView />
           </>
         )}
       </Canvas>
@@ -166,9 +114,6 @@ export function Game({ ready }: { ready: boolean }) {
         className="pointer-events-none absolute inset-0 h-full w-full"
         style={{ imageRendering: PIXEL_SCALE > 1 ? 'pixelated' : 'auto' }}
       />
-
-      {/* Затемнение и титр прыжка — поверх всего. */}
-      <JumpVeil />
     </div>
   )
 }

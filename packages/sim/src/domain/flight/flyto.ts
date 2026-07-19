@@ -3,6 +3,7 @@ import { GALAXY_FLIGHT } from '../../config/galaxy'
 import { MIELOPHONE } from '../../config/mielophone'
 import { AUTOPILOT } from '../../config/station'
 import { CRUISE } from '../../config/cruise'
+import { PHYSICS } from '../../config/physics'
 import { clamp } from '../../core/math'
 import { placeSystem } from '../galaxy/shape'
 import type { Controller } from '../sim/controller'
@@ -85,7 +86,14 @@ function destination(world: World): Dest | null {
   if (world.targetFocus === 'nav') {
     const nav = navTarget(world)
     if (!nav) return null
-    return { pos: nav.pos, radius: nav.radius, bodyId: nav.id, galaxy: false }
+    // Автопилот «к планете» означает выйти к ней, а не целиться в центр шара.
+    // Сфера 2R оставляет один радиус высоты — достаточно, чтобы штатно погасить ход.
+    return {
+      pos: nav.pos,
+      radius: nav.radius * AUTOPILOT.BODY_STANDOFF_RADII,
+      bodyId: nav.id,
+      galaxy: false,
+    }
   }
   const ship = findShip(world, world.lockedTargetId)
   if (ship && ship !== world.player && ship.alive) {
@@ -196,7 +204,26 @@ export const flyToController: Controller = {
     const arrived = dest.galaxy ? distance <= 0 : distance <= AUTOPILOT.ARRIVE_RANGE
     if (arrived) {
       c.throttle = 0
-      if (speed > AUTOPILOT.PARK_SPEED && _toTarget.dot(ship.state.vel) > 0) c.retro = 1
+      // Дистанция ещё не означает остановку: на ×scale борт пересекает всю зону за
+      // один шаг. Ручник гасит полный вектор и крейсер независимо от направления.
+      if (speed > AUTOPILOT.PARK_SPEED) c.retro = 1
+      return
+    }
+
+    // Фиксированная BRAKE_RANGE годится лишь для выбора желаемой скорости. Решение
+    // «тормозить уже сейчас» обязано следовать из ФАКТИЧЕСКОГО хода: при ×scale тот
+    // же газ даёт пропорционально большую скорость, и борт иначе пересекает всю зону
+    // прибытия между двумя фиксированными шагами. Для экспоненциального ручника
+    // v(t)=v₀·e⁻ᵏᵗ, а полный выбег равен v₀/k.
+    const rawDistance = _toTarget.length()
+    const closingSpeed = rawDistance > 1
+      ? Math.max(0, ship.state.vel.dot(_toTarget) / rawDistance)
+      : 0
+    const handbrakeDistance = closingSpeed / PHYSICS.HANDBRAKE_RATE
+    if (closingSpeed > AUTOPILOT.PARK_SPEED
+      && handbrakeDistance * AUTOPILOT.CRUISE_BRAKE_MARGIN >= distance) {
+      c.throttle = 0
+      c.retro = 1
       return
     }
 
@@ -268,13 +295,14 @@ export function canEngageFlyTo(world: World): boolean {
 }
 
 /**
- * Пора ли вернуть штурвал: цель пропала (сменил захват, борт погиб) или мы уже у неё
- * (в пределах ARRIVE_RANGE от поверхности/точки). Дистанция, а не время: за уходящей
- * целью автопилот гнался бы, пока сам не долетит или пока ей не поставят точку.
+ * Пора ли вернуть штурвал: цель пропала или мы у неё И фактически остановились.
+ * Одна дистанция выключала автопилот на полном ходу — особенно заметно на ×scale.
  */
 export function flyToArrived(world: World): boolean {
   const dest = destination(world)
   if (!dest) return true
-  if (dest.galaxy) return approachDist(world.player.state.pos, dest) <= 0
-  return approachDist(world.player.state.pos, dest) <= AUTOPILOT.ARRIVE_RANGE
+  const closeEnough = dest.galaxy
+    ? approachDist(world.player.state.pos, dest) <= 0
+    : approachDist(world.player.state.pos, dest) <= AUTOPILOT.ARRIVE_RANGE
+  return closeEnough && world.player.state.vel.length() <= AUTOPILOT.PARK_SPEED
 }

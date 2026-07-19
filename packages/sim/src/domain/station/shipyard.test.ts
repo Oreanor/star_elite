@@ -51,8 +51,8 @@ describe('верфь корпусов', () => {
     world.credits = 0
     const demeter = SHIPYARD.find((o) => o.chassis.id === 'atlas')!
     expect(swapHull(world, demeter.chassis, 1)).toBe('no-money')
-    // Игрок стартует на «Авроре One» — корпус не сменился, денег нет.
-    expect(world.player.loadout.chassis.id).toBe('aurora_one')
+    // Игрок стартует на Spiritus Sanctus — корпус не сменился, денег нет.
+    expect(world.player.loadout.chassis.id).toBe('spiritus_sanctus')
   })
 
   /**

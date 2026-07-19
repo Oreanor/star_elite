@@ -1,11 +1,12 @@
 import { Quaternion, Vector3 } from 'three'
 import { describe, expect, it } from 'vitest'
 import { MISSILE_PYLON, MODULE_CATALOGUE } from '../../config/modules'
+import { ASTEROID } from '../../config/world'
 import { ECM, GUNNERY } from '../../config/weapons'
 import { raySphere } from '../../core/math'
 import { findEcm, isLaser, isMissile } from '../loadout'
 import { createWorld, STARTER_SYSTEM } from '../world'
-import type { MissileEntity, ShipEntity, World } from '../world/entities'
+import type { AsteroidEntity, MissileEntity, ShipEntity, World } from '../world/entities'
 import { stepBolts } from './bolts'
 import { applyDamage, regenShield } from './damage'
 import { fireEcm, regenEnergy } from './ecm'
@@ -342,6 +343,44 @@ describe('противоракетная система', () => {
     regenEnergy(victim, ECM.COOLDOWN)
     expect(fireEcm(world, victim)).toBe(true)
     expect(world.missiles.filter((m) => m.alive).length).toBe(0)
+  })
+
+  /** Как энергобомба: надвое floor(r/2), мелочь уничтожается. */
+  it('ракета дробит камень надвое', () => {
+    const world = quiet()
+    const rock: AsteroidEntity = {
+      id: world.ids.next(),
+      kind: 'asteroid',
+      pos: new Vector3(0, 0, -80),
+      vel: new Vector3(),
+      quat: new Quaternion(),
+      spin: new Vector3(),
+      radius: 40,
+      hull: ASTEROID.HULL,
+      shape: 0,
+      alive: true,
+    }
+    world.asteroids.push(rock)
+    world.missiles.push({
+      id: world.ids.next(),
+      kind: 'missile',
+      pos: new Vector3(0, 0, -80),
+      vel: new Vector3(0, 0, -1),
+      quat: new Quaternion(),
+      module: MISSILE_PYLON,
+      ownerId: world.player.id,
+      targetId: rock.id,
+      speed: MISSILE_PYLON.speed,
+      born: world.time,
+      alive: true,
+    })
+
+    stepMissiles(world, 1 / 120)
+    expect(rock.alive).toBe(false)
+    expect(world.missiles.filter((m) => m.alive)).toHaveLength(0)
+    const pieces = world.asteroids.filter((a) => a.alive)
+    expect(pieces).toHaveLength(2)
+    expect(pieces.every((a) => a.radius === 20)).toBe(true)
   })
 })
 

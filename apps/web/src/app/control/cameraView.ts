@@ -1,4 +1,5 @@
 import { clamp } from '@elite/sim'
+import { Quaternion } from 'three'
 import { consumePress, isHeld } from '../../platform/input/input'
 
 /**
@@ -32,6 +33,8 @@ const view = { azimuth: 0, distance: 1 }
  * оказывался чуть накренён даже после V.
  */
 let resetPending = false
+const pendingFrameRotation = new Quaternion()
+let frameRotationPending = false
 
 export function cameraView(): { readonly azimuth: number; readonly distance: number } {
   return view
@@ -49,6 +52,20 @@ export function consumeViewReset(): boolean {
   const pending = resetPending
   resetPending = false
   return pending
+}
+
+/** Перенести накопленный мировой базис камеры через связанное устье, не сбрасывая погоню. */
+export function queueCameraFrameRotation(rotation: Quaternion): void {
+  pendingFrameRotation.copy(rotation)
+  frameRotationPending = true
+}
+
+/** Одноразово забрать поворот мирового базиса при атомарной смене стороны портала. */
+export function consumeCameraFrameRotation(out: Quaternion): boolean {
+  if (!frameRotationPending) return false
+  out.copy(pendingFrameRotation)
+  frameRotationPending = false
+  return true
 }
 
 /**

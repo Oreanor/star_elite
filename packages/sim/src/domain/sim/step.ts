@@ -44,6 +44,7 @@ import { hasBomb, hasEcm } from '../loadout'
 import { MIELOPHONE } from '../../config/mielophone'
 import { effectiveRadius, stepScale } from '../scale/scale'
 import { stepGravity } from '../flight/gravity'
+import { stepJumpGateCollision } from '../flight/jumpGate'
 import {
   findLandable,
   isLandableAsteroid,
@@ -62,7 +63,11 @@ import {
   scoopFigurinesNear,
   tractorFigurines,
 } from '../world/figurines'
-import { isNavBeltAsteroid, MONOLITH_NAMES, pruneGiantScaleLocks } from '../world/queries'
+import {
+  isNavBeltAsteroid,
+  MONOLITH_NAMES,
+  pruneGiantScaleLocks,
+} from '../world/queries'
 import { stepOrbits } from '../world/orbits'
 import { maybeShiftOrigin } from '../world/origin'
 import { markContactLost } from '../world/acquaintance'
@@ -138,6 +143,7 @@ export function stepWorld(world: World, frameDt: number, controllers: Controller
     // попадание считается по свежим позициям целей, а не по вчерашним.
     stepBolts(world, dt)
     stepCollisions(world, dt)
+    for (const gate of world.jumpGates) stepJumpGateCollision(world.player, gate)
     stepShipCollisions(world)
     stepBodyCollisions(world, dt)
     stepScooping(world, controllers, dt)
@@ -243,7 +249,11 @@ function stepWeapons(world: World, controllers: ControllerMap, dt: number): void
 
     // Пилон: экипирован один тип за раз — обычная ракета или дрон-ракета. Одна клавиша.
     if (controller.wantsMissile?.(ship, world)) {
-      const target = ship === world.player ? world.lockedTargetId : world.player.id
+      // Камень — цель, если борта в захвате нет: ракета дробит его как бомба.
+      const target =
+        ship === world.player
+          ? (world.lockedTargetId ?? world.lockedAsteroidId)
+          : world.player.id
       if (!fireMissile(world, ship, target)) launchDrone(world, ship)
     }
   }
@@ -643,6 +653,6 @@ function cleanup(world: World): void {
       world.lockedStationId = null
     }
   }
-  // Выше GHOST_BODY станция/планета в нав — метка в пустоте; звезда/дыра и jumpTarget — живы.
+  // Миелофон: корабли с PHASE_END, планеты/станции с GHOST_BODY — цели снимаем.
   pruneGiantScaleLocks(world)
 }

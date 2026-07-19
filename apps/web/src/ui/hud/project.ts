@@ -96,6 +96,8 @@ export function formatScale(scale: number): string {
   if (scale < 100) return scale.toFixed(1)
   if (scale < 1e4) return Math.round(scale).toString()
   if (scale < 1e6) return `${Math.round(scale / 1e3)}k`
-  if (scale < 1e9) return `${Math.round(scale / 1e6)}M`
+  // На миллионном диапазоне целая M — слишком крупная ступень управления:
+  // 1.1M и 1.9M не должны выглядеть одинаково. Оставляем десятую долю миллиона.
+  if (scale < 1e9) return `${(scale / 1e6).toFixed(1)}M`
   return `${Math.round(scale / 1e9)}G`
 }

@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
+import { auroraOneLoadout } from '../../config/loadouts'
 import { DRONE_BAY, MISSILE_PYLON } from '../../config/modules'
 import { isDrone, isMissile } from '../loadout'
 import { createWorld } from '../world'
+import { refreshSpec } from '../world/factory'
 import {
   armMissiles,
   installedMissile,
@@ -25,22 +27,31 @@ function pylonTypes(world: ReturnType<typeof createWorld>): Set<string> {
   return ids
 }
 
+/** Операции ракетного слота проверяем на серийной «Авроре» с пилонами, не на безракетном Spiritus. */
+function missileWorld(): ReturnType<typeof createWorld> {
+  const world = createWorld()
+  world.player.loadout = auroraOneLoadout()
+  refreshSpec(world.player)
+  return world
+}
+
 describe('ракетный (мунишн) слот', () => {
-  it('на старте слот — обычные ракеты, дрона на борту нет (его покупают)', () => {
+  it('у стартового Spiritus Sanctus вообще нет ракетных пилонов', () => {
     const world = createWorld()
-    const munition = installedMissile(world.player)
-    expect(munition && isMissile(munition)).toBe(true)
+    expect(missilePylonIndices(world.player)).toHaveLength(0)
+    expect(installedMissile(world.player)).toBeNull()
+    expect(world.player.loadout.weapons.some((w) => w != null && isMissile(w))).toBe(false)
     expect(world.player.loadout.weapons.some((w) => w != null && isDrone(w))).toBe(false)
   })
 
   it('тот же тип на всех пилонах повторно не ставится', () => {
-    const world = createWorld()
+    const world = missileWorld()
     world.credits = 10_000_000
     expect(armMissiles(world, world.player, MISSILE_PYLON)).toBe('already-installed')
   })
 
   it('дрон-ракеты встают ВЗАМЕН обычных: слот держит один тип', () => {
-    const world = createWorld()
+    const world = missileWorld()
     world.credits = 10_000_000
     expect(armMissiles(world, world.player, DRONE_BAY)).toBeNull()
 
@@ -54,7 +65,7 @@ describe('ракетный (мунишн) слот', () => {
   })
 
   it('снять слот — очищает ВСЕ пилоны', () => {
-    const world = createWorld()
+    const world = missileWorld()
     expect(installedMissile(world.player)).not.toBeNull()
     expect(stripMissiles(world.player)).toBeNull()
     expect(installedMissile(world.player)).toBeNull()
@@ -62,7 +73,7 @@ describe('ракетный (мунишн) слот', () => {
   })
 
   it('продать слот — очищает пилоны и даёт кредиты один раз', () => {
-    const world = createWorld()
+    const world = missileWorld()
     const money = world.credits
     expect(sellMissiles(world, world.player)).toBeNull()
     expect(installedMissile(world.player)).toBeNull()

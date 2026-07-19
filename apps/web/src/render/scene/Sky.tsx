@@ -1,5 +1,5 @@
 import { useFrame, useThree } from '@react-three/fiber'
-import { useEffect } from 'react'
+import { useLayoutEffect } from 'react'
 import { clamp } from '@elite/sim'
 import { useSession } from '../../app/GameContext'
 import { SKY } from '../config'
@@ -33,8 +33,10 @@ export function Sky({ galaxyIndex = 0 }: { galaxyIndex?: number }) {
     scene.backgroundIntensity = SKY.INTENSITY * (1 - t)
   })
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     // Процедурная полоса появляется сразу; настоящая картинка подменит её, когда придёт.
+    // Layout-effect обязателен при handoff портала: новая основная Scene получает уже
+    // прогретую текстуру до следующего WebGL-кадра, без промежуточного background=null.
     const fallback = loadSky(galaxyIndex, (texture) => {
       scene.background = texture
       scene.environment = texture

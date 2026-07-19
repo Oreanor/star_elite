@@ -1,6 +1,24 @@
-export { arrivalBounds, arrivalPoint, stationSeat, type Arrival, type Point3 } from './arrival'
+export {
+  arrivalBounds,
+  arrivalPoint,
+  arrivalPointAt,
+  stationSeat,
+  type Arrival,
+  type Point3,
+} from './arrival'
 export { systemDefOf } from './bridge'
-export { isCore, jump, jumpBlock, jumpDistance, reachableSystems, systemDefFor, type JumpBlock } from './jump'
+export {
+  isCore,
+  commitPreparedJump,
+  jump,
+  jumpBlock,
+  jumpDistance,
+  jumpInDriveRange,
+  reachableSystems,
+  systemDefFor,
+  type JumpBlock,
+  type JumpOptions,
+} from './jump'
 export { generateGalaxy, generateSystem } from './generate'
 export {
   applyDelta,

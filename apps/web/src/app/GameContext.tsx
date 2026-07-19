@@ -12,13 +12,15 @@ import {
   placeShowcaseFleet,
   spawnResidentContacts,
   spawnSlovo,
-  startDocked,
+  startAtStation,
   jump,
+  commitPreparedJump,
   systemDefFor,
   CORE_INDEX,
   GALAXY,
   WORLD,
   type Arrival,
+  type JumpOptions,
   type Controller,
   type PlayerSave,
   type World,
@@ -83,39 +85,32 @@ export interface Session {
 
 const GameContext = createContext<Session | null>(null)
 
+/** Тот же контекст для второй полноценной R3F-сцены портала. */
+export function SessionScope({ session, children }: { session: Session; children: ReactNode }) {
+  return <GameContext.Provider value={session}>{children}</GameContext.Provider>
+}
+
 /**
  * Случайная обитаемая система из нагенерированных — новая игра начинается не дома,
  * а в незнакомом месте галактики.
  *
- * Ядро (чёрная дыра) и дом исключены намеренно: ядро — не система, а дом мы как раз
- * и хотим оставить позади. Станция обязательна: игрок стартует с торговым трюмом, и
- * забросить его в беззаконную пустоту без причала и рынка — это отнять смысл старта.
- * Math.random здесь уместен: это слой приложения, а не детерминированная симуляция.
+ * Офлайн-новичок: случайная система со станцией (ядро — не система).
+ * Math.random здесь уместен: слой приложения, не детерминированная симуляция.
  */
 function randomStartIndex(): number {
-  let fallback = CORE_INDEX
+  let fallback: number = WORLD.SHARED_START_INDEX
   for (let tries = 0; tries < 64; tries++) {
     const index = Math.floor(Math.random() * GALAXY.COUNT)
-    if (index === CORE_INDEX || index === WORLD.HOME_INDEX) continue
+    if (index === CORE_INDEX) continue
     fallback = index
     if (systemDefFor(index, GALAXY.SEED).station) return index
   }
-  // Не нашли со станцией за разумное число попыток — берём последнюю годную.
-  return fallback === CORE_INDEX ? WORLD.HOME_INDEX : fallback
+  return fallback
 }
 
-/**
- * ОБЩАЯ стартовая система для новичков в СЕТИ: все начинают у одной станции, чтобы
- * встречаться, а не искать друг друга по всей галактике. Детерминированно (без
- * Math.random): первая от начала обитаемая система со станцией, кроме ядра и дома.
- * Один сид — одна точка сбора для всех.
- */
+/** Сеть: все новички в Люриларе. */
 function sharedStartIndex(): number {
-  for (let index = 0; index < GALAXY.COUNT; index++) {
-    if (index === CORE_INDEX || index === WORLD.HOME_INDEX) continue
-    if (systemDefFor(index, GALAXY.SEED).station) return index
-  }
-  return WORLD.HOME_INDEX
+  return WORLD.SHARED_START_INDEX
 }
 
 function createSession(initialSave?: PlayerSave | null): Session {
@@ -150,9 +145,9 @@ function createSession(initialSave?: PlayerSave | null): Session {
     }
     if (idx >= 0) fitFromHold(world.player, idx)
   }
-  // Начинаем ПРИСТЫКОВАННЫМИ у причала — и новичок, и вернувшийся: станция и точка
-  // возврата, и безопасный старт. Не в открытом космосе за тысячу километров.
-  startDocked(world)
+  // Рядом с причалом, в полёте, носом на станцию — сразу видна (не меню дока).
+  // Зазор побольше: крест крупный, с 2.5 км балки забивают кадр чёрным.
+  startAtStation(world, 12_000)
 
   /**
    * ЗНАКОМЫЕ живут в системе с первого кадра — как и после прыжка.
@@ -161,7 +156,7 @@ function createSession(initialSave?: PlayerSave | null): Session {
    * приезжает из сейва (`applyPlayerSave`) уже ПОСЛЕ `enterSystem`, и жители системы не
    * заводились вовсе. Оттого встреченный борт выглядел знакомым (тот же сид — то же имя и
    * лицо), но памяти о тебе не имел: это был ДРУГОЙ корабль, свежий трафик без записи.
-   * Зовём после `startDocked` — игрок уже у причала, и знакомые заходят от него, а не от
+   * Зовём после `startAtStation` — игрок уже у причала, и знакомые заходят от него, а не от
    * точки выхода из гипера. Контроллеры им раздаст сборка ниже: она идёт по `world.ships`.
    */
   spawnResidentContacts(world)
@@ -229,7 +224,13 @@ function bindControllers(session: Session): void {
  * а карта, растущая на каждого убитого пирата, — это утечка.
  */
 export function syncControllers(session: Session): void {
-  if (session.controllers.size === session.world.ships.length + 1) return
+  // Один корабль мог исчезнуть и другой родиться в том же шаге: размер Map тогда тот
+  // же, но новый id навсегда остался бы без пилота. Проверяем идентичность набора, не длину.
+  if (
+    session.controllers.size === session.world.ships.length + 1
+    && session.controllers.has(session.world.player.id)
+    && session.world.ships.every((ship) => session.controllers.has(ship.id))
+  ) return
   bindControllers(session)
 }
 
@@ -241,14 +242,34 @@ export function syncControllers(session: Session): void {
  *
  * Возвращает false, если домен не пустил: причину спрашивают у `jumpBlock`.
  */
-export function jumpTo(session: Session, index: number, arrival: Arrival | null = null): boolean {
-  if (!jump(session.world, index, arrival)) return false
+export function jumpTo(
+  session: Session,
+  index: number,
+  arrival: Arrival | null = null,
+  options: JumpOptions = {},
+): boolean {
+  if (!jump(session.world, index, arrival, options)) return false
 
   // Режим сбрасываем ДО раздачи: автопилот стыковки вёл к причалу, которого
   // в новой системе нет, а `bindControllers` сажает за штурвал того, кто в режиме.
   session.mode = 'manual'
   bindControllers(session)
   session.onSystemChange?.(session.world.epoch)
+  return true
+}
+
+/** Принять уже отрендеренный портальный World без повторного enterSystem. */
+export function adoptPreparedJumpWorld(
+  session: Session,
+  destination: World,
+  index: number,
+  options: JumpOptions = {},
+): boolean {
+  if (!commitPreparedJump(session.world, destination, index, options)) return false
+  session.world = destination
+  session.mode = 'manual'
+  bindControllers(session)
+  session.onSystemChange?.(destination.epoch)
   return true
 }
 

@@ -29,22 +29,23 @@ export function oreUnits(radius: number): number {
   return Math.max(1, Math.round(volumeOf(radius) * ASTEROID.ORE_PER_VOLUME))
 }
 
+/** Масса камня для физики удара и HUD, т. Потолок на RADIUS_MAX — 1000 т. */
+export function asteroidMass(radius: number): number {
+  return radius * ASTEROID.MASS_PER_RADIUS
+}
+
 /** Радиус куска, который несёт заданную долю объёма исходного камня. */
 const radiusForShare = (radius: number, share: number) => radius * Math.cbrt(share)
 
-/** Можно ли расколоть камень дальше, или он уже одна единица груза. */
+/** Можно ли расколоть дальше: мельче MIN_SPLIT — только уничтожение. */
 export const splittable = (a: AsteroidEntity) => a.radius > ASTEROID.MIN_SPLIT_RADIUS
 
 /**
- * Расколоть камень. Осколки делят его объём поровну и разлетаются от центра.
+ * Расколоть или уничтожить. Крупный → осколки (объём поровну); мелочь ≤ MIN_SPLIT
+ * → вспышка и контейнер руды (дальше дробить нечего).
  *
  * Направления разлёта СМЕЩЕНЫ так, чтобы их сумма была нулём. Куски равны по
  * массе, значит центр масс остаётся на месте, а импульс сохраняется точно.
- * Возьми три случайных направления как есть — и каждый выстрел по поясу давал бы
- * ему случайный толчок; за час пояс уехал бы из системы, а сохранение импульса
- * перестало бы быть свойством, которое можно проверить тестом.
- *
- * Неделимый камень превращается в контейнер с рудой — он и был одной единицей.
  */
 export function shatter(world: World, a: AsteroidEntity): void {
   a.alive = false
@@ -59,8 +60,6 @@ export function shatter(world: World, a: AsteroidEntity): void {
   const pieces = ASTEROID.SPLIT_MIN + Math.floor(rng() * (ASTEROID.SPLIT_MAX - ASTEROID.SPLIT_MIN + 1))
   const radius = radiusForShare(a.radius, 1 / pieces)
 
-  // Раскол — событие редкое, не горячий путь: массив здесь дешевле, чем два прохода
-  // по RNG, которые обязаны выдать одни и те же числа.
   const dirs: Vector3[] = []
   _mean.set(0, 0, 0)
   for (let i = 0; i < pieces; i++) {
@@ -77,8 +76,6 @@ export function shatter(world: World, a: AsteroidEntity): void {
     world.asteroids.push({
       id: world.ids.next(),
       kind: 'asteroid',
-      // Осколок рождается ближе к поверхности исходного камня, а не в его центре:
-      // иначе три куска стартуют внутри друг друга.
       pos: a.pos.clone().addScaledVector(dir, a.radius - radius),
       vel: a.vel.clone().addScaledVector(dir, ASTEROID.SPLIT_SPEED),
       quat: a.quat.clone(),
@@ -91,11 +88,49 @@ export function shatter(world: World, a: AsteroidEntity): void {
   }
 }
 
-/** Урон камню. Разваливается — раскалывается, а не исчезает. */
+/** Урон камню. Один импульс лазера (HULL=1) — раскол или уничтожение мелочи. */
 export function damageAsteroid(world: World, a: AsteroidEntity, amount: number): void {
   if (!a.alive) return
   a.hull -= amount
   if (a.hull <= 0) shatter(world, a)
+}
+
+/**
+ * Удар энергобомбы по камню: надвое, радиус `floor(r/2)`.
+ * Половинка < MIN_SPLIT (10 м) или сам камень мельче — уничтожение в руду.
+ * Один импульс — один раскол (новые куски тем же залпом не трогаем).
+ */
+export function bombShatterAsteroid(world: World, a: AsteroidEntity): void {
+  if (!a.alive) return
+  a.alive = false
+  spawnExplosion(world, a.pos, a.vel, a.radius * 0.12)
+
+  const half = Math.floor(a.radius / 2)
+  if (half < ASTEROID.MIN_SPLIT_RADIUS) {
+    spawnOrePod(world, a.pos, a.vel, oreUnits(a.radius))
+    return
+  }
+
+  const rng = world.rng
+  _dir.set(signed(rng), signed(rng), signed(rng))
+  if (_dir.lengthSq() < 1e-6) _dir.set(1, 0, 0)
+  _dir.normalize()
+
+  for (const sign of [1, -1] as const) {
+    const dir = _dir.clone().multiplyScalar(sign)
+    world.asteroids.push({
+      id: world.ids.next(),
+      kind: 'asteroid',
+      pos: a.pos.clone().addScaledVector(dir, a.radius - half),
+      vel: a.vel.clone().addScaledVector(dir, ASTEROID.SPLIT_SPEED),
+      quat: a.quat.clone(),
+      spin: new Vector3(signed(rng), signed(rng), signed(rng)).multiplyScalar(0.35),
+      radius: half,
+      hull: ASTEROID.HULL,
+      shape: Math.floor(rng() * ASTEROID.SHAPES),
+      alive: true,
+    })
+  }
 }
 
 /** Влезет ли руда этого камня в трюм целиком. */

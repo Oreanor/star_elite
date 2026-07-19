@@ -1,23 +1,33 @@
 import { useFrame } from '@react-three/fiber'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Color, Matrix4, Mesh, Quaternion, Vector3, type Texture } from 'three'
+import { Color, Group, Matrix4, Mesh, Object3D, Quaternion, Vector3, type Texture } from 'three'
 import { type BodyEntity } from '@elite/sim'
 import { useSession } from '../../app/GameContext'
 import { ATMOSPHERE, ATMOSPHERE_COLOR, BODY_SEGMENTS, CITY_LIGHTS, CORONA, MOON_DECOR } from '../config'
-import { worldShrink } from '../worldShrink'
+import { starWorldShrink, worldShrink } from '../worldShrink'
 import { nearestStar, starTintColor } from '../starLight'
 import { atmosphereGeometry, planetGeometry, starGeometry } from '../geometry/bodies'
 import { coronaGeometry } from '../geometry/corona'
-import { crossRaysGeometry, crossStationGeometry, stationGeometry } from '../geometry/props'
-import { crossGlbGeometry, stationGlbGeometry, stationGlbMaterial } from '../geometry/stationGlb'
-import { createDivineCrossMaterial } from '../materials/divineCross'
 import {
-  crossRayMaterial,
+  crossNeonTubesGeometry,
+  crossPortalPanelsGeometry,
+  crossStationGeometry,
+  stationGeometry,
+} from '../geometry/props'
+import { stationGlbGeometry, stationGlbMaterial } from '../geometry/stationGlb'
+import {
   planetMaterial,
   planetTexturedMaterial,
   starMaterial,
   stationMaterial,
 } from '../materials/materials'
+import {
+  crossBodyMaterial,
+  crossNeonLampMaterial,
+  crossPortalMaterial,
+  syncCrossPortalSky,
+  tickCrossPortal,
+} from '../materials/crossPortal'
 import { createAtmosphereMaterial } from '../materials/atmosphere'
 import { createCityLightsMaterial } from '../materials/cityLights'
 import { createCoronaMaterial } from '../materials/starCorona'
@@ -59,11 +69,11 @@ const REST_POLE = new Vector3(0, 1, 0)
  * наклон оси читался бы как болтанка. Сначала кладём полюс на ось, потом крутим
  * вокруг неё — тогда полюс неподвижен, каким он в природе и бывает.
  */
-function place(mesh: Mesh, body: BodyEntity, time: number, rest: Vector3): void {
-  mesh.position.copy(body.pos)
+function place(node: Object3D, body: BodyEntity, time: number, rest: Vector3): void {
+  node.position.copy(body.pos)
   _tiltQuat.setFromUnitVectors(rest, body.spinAxis)
   _spinQuat.setFromAxisAngle(body.spinAxis, body.spin * time)
-  mesh.quaternion.copy(_spinQuat).multiply(_tiltQuat)
+  node.quaternion.copy(_spinQuat).multiply(_tiltQuat)
 }
 
 const _toStar = new Vector3()
@@ -220,16 +230,15 @@ function Star({ body }: { body: BodyEntity }) {
     () => (surface ? createStarSurfaceMaterial(surface) : null),
     [surface],
   )
-  // GPU-ресурсы освобождаем явно: смена системы размонтирует звезду, а текстура и
-  // шейдер живут в видеопамяти и сами не уйдут. Иначе каждый прыжок — утечка карты.
+  // Материал звезды — свой; карту класса шарит кэш starSurface (галактический LOD) —
+  // dispose текстуры здесь убил бы общий ресурс.
   useEffect(() => () => {
-    surface?.dispose()
     surfaceMaterial?.dispose()
-  }, [surface, surfaceMaterial])
+  }, [surfaceMaterial])
 
-  useFrame((state, dt) => {
-    // С порога галактики диск/корона гаснут сразу — светит точка слоя, не меш системы.
-    const shrink = worldShrink(session.world.player.state.scale)
+  useFrame((state) => {
+    // К границе — starWorldShrink (догон к ×STAR_INFLATE); дальше точка слоя.
+    const shrink = starWorldShrink(session.world.player.state.scale)
     const on = shrink > 0
     if (ref.current) {
       ref.current.visible = on
@@ -258,10 +267,12 @@ function Star({ body }: { body: BodyEntity }) {
       const edge = (2 * 0.975) / (CORONA.SCALE * Math.sqrt(1 - rOverD * rOverD))
       material.uniforms.uDiskFrac!.value = Math.min(edge, 0.96)
     }
-    // Плазма кипит и вращается в шейдерах — двигаем только время. Реальное (не мировое):
-    // это косметика, шаг симуляции ей не нужен, а под паузой звезда пусть живёт.
-    material.uniforms.uTime!.value += dt
-    if (surfaceMaterial) surfaceMaterial.uniforms.uTime!.value += dt
+    // Фаза абсолютна для мира, а не является возрастом экземпляра материала. WorldVisuals
+    // можно размонтировать/смонтировать при handoff — та же звезда обязана продолжить ровно
+    // тот кадр плазмы, который был виден внутри кольца, а не стартовать с uTime=0.
+    const visualTime = session.world.time
+    material.uniforms.uTime!.value = visualTime
+    if (surfaceMaterial) surfaceMaterial.uniforms.uTime!.value = visualTime
   })
 
   return (
@@ -314,37 +325,52 @@ function Station({ body }: { body: BodyEntity }) {
 }
 
 /**
- * Крест-храм. Тело креста рисуется божественным шейдером (силуэт «плывёт» как в кривом
- * зеркале, кромки раскаляются добела-в-золото), а из шести концов бьют аддитивные лучи.
- * `uTime` двигает варп и свечение; вращение и место — как у станции.
+ * Кресты: чёрный корпус, в окнах-масках — jpg-скайбокс (свой loadSky), рёбра — неон.
+ * Не вращается — монумент; place на группу.
  */
 function CrossStation({ body }: { body: BodyEntity }) {
-  const ref = useRef<Mesh>(null)
+  const groupRef = useRef<Group>(null)
   const session = useSession()
-  const material = useMemo(() => createDivineCrossMaterial(), [])
-  useEffect(() => () => material.dispose(), [material])
+  const portalMaterial = useMemo(crossPortalMaterial, [])
+  const neonMaterial = useMemo(crossNeonLampMaterial, [])
 
-  useFrame((_, dt) => {
-    const mesh = ref.current
-    if (!mesh) return
-    // Меш Креста грузится асинхронно — подменяем заглушку по идентичности. Материал НЕ трогаем:
-    // облик ему даёт божественный шейдер, а не текстуры модели.
-    const g = crossGlbGeometry()
-    if (g && mesh.geometry !== g) mesh.geometry = g
-    // Крест — монумент: он НЕ вращается (domain даёт ему spin 0), потому ось симметрии здесь
-    // роли не играет и `place` просто ставит его на место.
-    place(mesh, body, session.world.time, REST_POLE)
+  useEffect(() => () => {
+    const sky = portalMaterial.uniforms.uSkyMap!.value as Texture | null
+    sky?.dispose()
+    portalMaterial.dispose()
+    neonMaterial.dispose()
+  }, [portalMaterial, neonMaterial])
+
+  useFrame(() => {
+    const group = groupRef.current
+    if (!group) return
+    place(group, body, session.world.time, REST_POLE)
     const shrink = worldShrink(session.world.player.state.scale)
-    mesh.visible = shrink > 0
-    mesh.scale.setScalar(body.radius * shrink)
-    material.uniforms.uTime!.value += dt
+    group.visible = shrink > 0
+    group.scale.setScalar(body.radius * shrink)
+    syncCrossPortalSky(portalMaterial, session.world.galaxySeed)
+    tickCrossPortal(neonMaterial, session.world.time)
   })
 
   return (
-    <mesh ref={ref} geometry={crossStationGeometry()} material={material} scale={body.radius}>
-      {/* Лучи — отдельная аддитивная сетка внутри той же матрицы креста: крутятся с ним. */}
-      <mesh geometry={crossRaysGeometry()} material={crossRayMaterial()} renderOrder={2} />
-    </mesh>
+    <group ref={groupRef} scale={body.radius} frustumCulled={false}>
+      <mesh
+        geometry={crossStationGeometry()}
+        material={crossBodyMaterial()}
+        frustumCulled={false}
+      />
+      <mesh
+        geometry={crossPortalPanelsGeometry()}
+        material={portalMaterial}
+        frustumCulled={false}
+      />
+      <mesh
+        geometry={crossNeonTubesGeometry()}
+        material={neonMaterial}
+        frustumCulled={false}
+        renderOrder={1}
+      />
+    </group>
   )
 }
 

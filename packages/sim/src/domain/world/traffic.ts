@@ -5,7 +5,8 @@ import { TITAN } from '../../config/titans'
 import { PLATFORM } from '../../config/platform'
 import { ARRIVAL } from '../../config/galaxy'
 import { CONTACTS } from '../../config/contacts'
-import { TRAFFIC } from '../../config/world'
+import { ASTEROID, TRAFFIC } from '../../config/world'
+import { despawnDistantAsteroids, liveAsteroidCount, spawnAsteroidEncounter } from './asteroidEncounter'
 import { signed, type Rng } from '../../core/math'
 import type { Loadout } from '../loadout'
 import { createAIState } from '../ai/types'
@@ -610,6 +611,7 @@ export function stepTraffic(world: World, dt: number): ShipEntity[] {
   // Выходим ДО despawnDistant: чистить некого, а спавнить тем более. Только бог и звезда.
   if (world.desolate) return []
   despawnDistant(world)
+  despawnDistantAsteroids(world)
 
   // Жизнь у причала — вне ритма встреч и вне первой задержки: станция обязана
   // выглядеть живой сразу, а не через полминуты. Родившихся копим и вернём вместе.
@@ -637,6 +639,14 @@ export function stepTraffic(world: World, dt: number): ShipEntity[] {
   // Гнездо — событие, а не рядовая встреча: спавним его помимо потолка трафика.
   if (world.rng() < PLATFORM.ENCOUNTER_SHARE && world.platforms.length < PLATFORM.MAX) {
     return born.concat(spawnPlatform(world))
+  }
+
+  // Камни: одиночка (крупный) или стая (мельче, общая масса ≈ одному крупному).
+  // В пустоте чаще — у причала руду не стерегут россыпью.
+  const rockChance = ASTEROID.ENCOUNTER_SHARE * (0.55 + 0.9 * remoteness(world))
+  if (world.rng() < rockChance && liveAsteroidCount(world) < ASTEROID.MAX_LIVE) {
+    spawnAsteroidEncounter(world)
+    return born
   }
 
   if (trafficCount(world) >= TRAFFIC.MAX) return born

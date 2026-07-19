@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { createWorld, STARTER_SYSTEM, type World } from '.'
 import {
-  clearContactLock,
   cycleCelestial,
   cycleContact,
-  retargetNearestSameClass,
+  retargetNearestCelestial,
+  retargetNearestContact,
   targetablesOf,
 } from './queries'
 
@@ -86,8 +86,8 @@ describe('свежий Tab-перебор начинается с ближайш
   })
 })
 
-describe('Q — ближайшая цель того же класса', () => {
-  it('с борта сбрасывает круг и берёт ближайший борт, не следующий Tab', () => {
+describe('Q / Shift+Q — ближайшая из круга Tab / Shift+Tab', () => {
+  it('Q с середины круга Tab берёт ближайший контакт, не следующий Tab', () => {
     const world = withThreeHostiles()
     const [near, mid, far] = byDistance(world)
 
@@ -98,45 +98,40 @@ describe('Q — ближайшая цель того же класса', () => {
     cycleContact(world)
     expect(world.lockedTargetId).toBe(far)
 
-    retargetNearestSameClass(world)
+    retargetNearestContact(world)
     expect(world.lockedTargetId).toBe(near)
     expect(world.targetFocus).toBe('contact')
   })
 
-  it('с нав-планеты берёт ближайшую планету, не станцию', () => {
+  it('Shift+Q берёт ближайшее из небесного круга (голова Shift+Tab)', () => {
     const world = withThreeHostiles()
-    const planets = world.bodies
-      .filter((b) => b.kind === 'planet')
-      .slice()
-      .sort(
-        (a, b) =>
-          a.pos.distanceToSquared(world.player.state.pos) - b.pos.distanceToSquared(world.player.state.pos),
-      )
-    expect(planets.length).toBeGreaterThanOrEqual(1)
-    const station = world.bodies.find((b) => b.kind === 'station')
-    expect(station).toBeDefined()
+    cycleCelestial(world)
+    const first = world.navTargetId
+    expect(first).not.toBeNull()
+    cycleCelestial(world)
+    expect(world.navTargetId).not.toBe(first)
 
-    // Стояли на дальней планете (или единственной) — Q должен вернуть ближайшую планету.
-    const farPlanet = planets[planets.length - 1]!
-    world.navTargetId = farPlanet.id
-    world.targetFocus = 'nav'
-    world.lockedStationId = null
-    clearContactLock(world)
-
-    retargetNearestSameClass(world)
-    expect(world.navTargetId).toBe(planets[0]!.id)
-    expect(world.navTargetId).not.toBe(station!.id)
+    retargetNearestCelestial(world)
+    expect(world.navTargetId).toBe(first)
+    expect(world.targetFocus).toBe('nav')
+    expect(world.lockedTargetId).toBeNull()
   })
 
-  it('без выбора гасит оба захвата', () => {
+  it('Q без контактов гасит контактный захват, нав не трогает', () => {
     const world = withThreeHostiles()
-    world.lockedTargetId = null
+    // Убрать всех контактов: перебить патрули нельзя просто так — гасим через clear и пустой круг.
+    for (const s of targetablesOf(world)) s.alive = false
+    world.pods.length = 0
+    world.asteroids.length = 0
+    world.lockedTargetId = 1
     world.lockedPodId = null
     world.lockedAsteroidId = null
-    world.navTargetId = null
-    world.lockedStationId = null
-    retargetNearestSameClass(world)
+    cycleCelestial(world)
+    const nav = world.navTargetId
+    expect(nav).not.toBeNull()
+
+    retargetNearestContact(world)
     expect(world.lockedTargetId).toBeNull()
-    expect(world.navTargetId).toBeNull()
+    expect(world.navTargetId).toBe(nav)
   })
 })

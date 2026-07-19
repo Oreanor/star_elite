@@ -1,6 +1,6 @@
 import { useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef } from 'react'
-import { Color, InstancedBufferAttribute, InstancedMesh, Object3D, PlaneGeometry } from 'three'
+import { Color, InstancedBufferAttribute, InstancedMesh, Object3D, PlaneGeometry, Quaternion } from 'three'
 import type { ShipEntity } from '@elite/sim'
 import { useSession } from '../../app/GameContext'
 import { SHIELD_BUBBLE } from '../config'
@@ -18,6 +18,7 @@ import { shieldBubbleMaterial } from '../materials/materials'
 
 const _dummy = new Object3D()
 const _tint = /* @__PURE__ */ new Color()
+const _cameraQuat = /* @__PURE__ */ new Quaternion()
 
 export function ShieldBubbles() {
   const session = useSession()
@@ -40,6 +41,9 @@ export function ShieldBubbles() {
 
     const world = session.world
     const now = world.time
+    // FlightCamera работает на -50, поэтому здесь уже лежит окончательная поза этого
+    // кадра. Мировой кватернион нужен и на случай, если камеру позже посадят в rig.
+    camera.getWorldQuaternion(_cameraQuat)
     let count = 0
 
     const consider = (ship: ShipEntity): void => {
@@ -51,7 +55,7 @@ export function ShieldBubbles() {
       // Billboard: кружок смотрит в камеру всегда, оттого читается одинаковой окружностью
       // под любым ракурсом. Плоскость единичная (радиус 0.5), поэтому масштаб — ДИАМЕТР:
       // берём радиус корпуса ×2 ×коэффициент, чтобы кольцо охватывало корабль.
-      _dummy.quaternion.copy(camera.quaternion)
+      _dummy.quaternion.copy(_cameraQuat)
       _dummy.scale.setScalar(ship.spec.hull.radius * ship.state.scale * SHIELD_BUBBLE.RADIUS_FACTOR * 2)
       _dummy.updateMatrix()
       mesh.setMatrixAt(count, _dummy.matrix)

@@ -1,10 +1,11 @@
 import { Quaternion, Vector3 } from 'three'
 import { describe, expect, it } from 'vitest'
 import { MISSILE_PYLON } from '../../config/modules'
+import { ASTEROID } from '../../config/world'
 import { BOMB } from '../../config/weapons'
 import { stepWorld } from '../sim'
 import { createWorld, STARTER_SYSTEM, type World } from '../world'
-import type { MissileEntity, ShipEntity } from '../world/entities'
+import type { AsteroidEntity, MissileEntity, ShipEntity } from '../world/entities'
 import { aiController } from '../ai'
 import { bombReady, fireBomb } from './bomb'
 import { regenAux } from './ecm'
@@ -273,5 +274,51 @@ describe('энергетическая бомба', () => {
     world.time += BOMB.WAVE_LIFE + 0.1
     stepWorld(world, 1 / 60, new Map())
     expect(world.shockwaves.length).toBe(0)
+  })
+
+  function putRock(world: World, radius: number, z: number): AsteroidEntity {
+    const a: AsteroidEntity = {
+      id: world.ids.next(),
+      kind: 'asteroid',
+      pos: new Vector3(0, 0, z),
+      vel: new Vector3(),
+      quat: world.player.state.quat.clone(),
+      spin: new Vector3(),
+      radius,
+      hull: ASTEROID.HULL,
+      shape: 0,
+      alive: true,
+    }
+    world.asteroids.push(a)
+    return a
+  }
+
+  /** Камни: надвое floor(r/2); один импульс не дробит уже рождённые половинки. */
+  it('дробит каждый камень в радиусе надвое с округлением вниз', () => {
+    const { world } = withCrowd()
+    const big = putRock(world, 40, -200)
+    const mid = putRock(world, 25, -300)
+
+    expect(fireBomb(world, world.player)).toBe(true)
+    expect(big.alive).toBe(false)
+    expect(mid.alive).toBe(false)
+
+    const live = world.asteroids.filter((a) => a.alive)
+    expect(live).toHaveLength(4) // 2+2
+    expect(live.every((a) => a.radius === 20 || a.radius === 12)).toBe(true)
+    expect(live.filter((a) => a.radius === 20)).toHaveLength(2)
+    expect(live.filter((a) => a.radius === 12)).toHaveLength(2)
+  })
+
+  it('мельче 10 м уничтожает, а не оставляет осколки', () => {
+    const { world } = withCrowd()
+    const pebble = putRock(world, 9, -200)
+    const edge = putRock(world, 19, -250) // floor(19/2)=9 → тоже уничтожение
+
+    expect(fireBomb(world, world.player)).toBe(true)
+    expect(pebble.alive).toBe(false)
+    expect(edge.alive).toBe(false)
+    expect(world.asteroids.filter((a) => a.alive)).toHaveLength(0)
+    expect(world.pods.length).toBeGreaterThanOrEqual(2)
   })
 })

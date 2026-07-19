@@ -5,7 +5,7 @@ import { addCommodity, freeCapacity } from '../cargo/hold'
 import { COMMODITIES } from '../cargo/items'
 import { createWorld, STARTER_SYSTEM, type World } from '../world'
 import type { AsteroidEntity } from '../world/entities'
-import { damageAsteroid, oreUnits, scoopAsteroid, shatter, splittable } from './mining'
+import { asteroidMass, damageAsteroid, oreUnits, scoopAsteroid, shatter, splittable } from './mining'
 
 /** Мир без пояса и без патрулей: камни в тестах кладутся руками, поимённо. */
 function empty(): World {
@@ -110,18 +110,30 @@ describe('дробление сохраняет вещество', () => {
     }
   })
 
-  /** Камень не исчезает от урона — он раскалывается. Второй способ убить его сломал бы руду. */
-  it('лазер, добивший камень, оставляет осколки, а не пустоту', () => {
+  /** Один импульс раскалывает: HULL=1, осколки остаются в мире. */
+  it('лазер с одного раза раскалывает крупный камень на осколки', () => {
     const world = empty()
-    const parent = rock(world, 24)
+    const parent = rock(world, 40)
 
-    damageAsteroid(world, parent, ASTEROID.HULL / 2)
-    expect(parent.alive).toBe(true)
-    expect(world.asteroids.filter((a) => a.alive)).toHaveLength(1)
-
-    damageAsteroid(world, parent, ASTEROID.HULL / 2)
+    damageAsteroid(world, parent, 1)
     expect(parent.alive).toBe(false)
     expect(world.asteroids.filter((a) => a.alive).length).toBeGreaterThanOrEqual(ASTEROID.SPLIT_MIN)
+  })
+
+  /** Мелочь ≤ MIN_SPLIT не дробится — уничтожается в контейнер руды. */
+  it('мельче порога лазер уничтожает, а не дробит', () => {
+    const world = empty()
+    const pebble = rock(world, ASTEROID.MIN_SPLIT_RADIUS)
+    damageAsteroid(world, pebble, 1)
+    expect(pebble.alive).toBe(false)
+    expect(world.asteroids.filter((a) => a.alive)).toHaveLength(0)
+    expect(world.pods).toHaveLength(1)
+  })
+
+  it('масса на RADIUS_MAX — тысяча тонн', () => {
+    expect(asteroidMass(ASTEROID.RADIUS_MAX)).toBeCloseTo(1000)
+    expect(asteroidMass(ASTEROID.RADIUS_MIN)).toBeGreaterThan(0)
+    expect(asteroidMass(ASTEROID.RADIUS_MIN)).toBeLessThan(20)
   })
 })
 

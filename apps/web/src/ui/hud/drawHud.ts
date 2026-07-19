@@ -4,7 +4,9 @@ import {
   CRUISE,
   GUNNERY,
   MIELOPHONE,
+  STAR_CLASSES,
   STAR_HEAT,
+  asteroidMass,
   canDockAt,
   findBody,
   findStation,
@@ -680,13 +682,14 @@ function drawBodyMarkers({ ctx, camera, world, width, height }: HudFrame): void 
 /** Клетка панели цели над локатором. */
 const CELL = 48
 
-/** Подпись под клеткой: до трёх строк мелким кеглем. Возвращает базовый шрифт на место. */
-function cellCaption(ctx: CanvasRenderingContext2D, midX: number, y: number, lines: [string, string?, string?]): void {
+/** Подпись под клеткой: до четырёх строк мелким кеглем. Возвращает базовый шрифт на место. */
+function cellCaption(ctx: CanvasRenderingContext2D, midX: number, y: number, lines: [string, string?, string?, string?]): void {
   const baseFont = ctx.font
   ctx.font = `${Math.round(6 * S)}px "Consolas", "DejaVu Sans Mono", monospace`
   text(ctx, lines[0].toUpperCase(), midX, y, HUD_COLORS.PRIMARY, 'center')
   if (lines[1]) text(ctx, lines[1].toUpperCase(), midX, y + 7 * S, HUD_COLORS.DIM, 'center')
   if (lines[2]) text(ctx, lines[2].toUpperCase(), midX, y + 14 * S, HUD_COLORS.DIM, 'center')
+  if (lines[3]) text(ctx, lines[3].toUpperCase(), midX, y + 21 * S, HUD_COLORS.DIM, 'center')
   ctx.font = baseFont
 }
 
@@ -701,55 +704,21 @@ function cellIcon(ctx: CanvasRenderingContext2D, x: number, y: number, color: st
   ctx.fill()
 }
 
-/** Каталожный radius, при котором кружок в портрете упирается в MAX (≈ O / мелкий I). */
-const STAR_PORTRAIT_REF = 20_000
-
-/** `#rrggbb` → компоненты 0..255. */
-function hexRgb(hex: string): [number, number, number] {
-  const n = parseInt(hex.replace('#', ''), 16)
-  if (!Number.isFinite(n)) return [200, 200, 200]
-  return [(n >> 16) & 255, (n >> 8) & 255, n & 255]
-}
-
 /**
- * Звезда галактики в портрете: размер ∝ √radius. Есть карта класса — вращающийся
- * шарик с морфингом UV (без освещения); иначе градиентный фолбэк.
+ * Звезда галактики в портрете: тот же размер шара, что у планеты (рыбий глаз + плазма).
  */
 function cellStar(
   ctx: CanvasRenderingContext2D,
   x: number,
   y: number,
   color: string,
-  radiusUnits: number,
   classId: string,
   time: number,
 ): void {
   const cell = CELL * S
   const cx = x + cell / 2
   const cy = y + cell / 2
-  const t = Math.sqrt(clamp(radiusUnits / STAR_PORTRAIT_REF, 0, 1))
-  const rMin = cell * 0.12
-  const rMax = cell * 0.42
-  const r = rMin + t * (rMax - rMin)
-  if (drawStarBall(ctx, cx, cy, r, color, classId, time)) return
-
-  const [cr, cg, cb] = hexRgb(color)
-  const hx = cx - r * 0.28
-  const hy = cy - r * 0.32
-  const g = ctx.createRadialGradient(hx, hy, r * 0.05, cx, cy, r)
-  g.addColorStop(0, `rgb(${Math.min(255, cr + 90)},${Math.min(255, cg + 90)},${Math.min(255, cb + 90)})`)
-  g.addColorStop(0.35, `rgb(${cr},${cg},${cb})`)
-  g.addColorStop(0.75, `rgb(${(cr * 0.55) | 0},${(cg * 0.55) | 0},${(cb * 0.55) | 0})`)
-  g.addColorStop(1, `rgb(${(cr * 0.2) | 0},${(cg * 0.2) | 0},${(cb * 0.2) | 0})`)
-  ctx.fillStyle = g
-  ctx.beginPath()
-  ctx.arc(cx, cy, r, 0, Math.PI * 2)
-  ctx.fill()
-  ctx.strokeStyle = color
-  ctx.lineWidth = 1
-  ctx.beginPath()
-  ctx.arc(cx, cy, r, 0, Math.PI * 2)
-  ctx.stroke()
+  drawStarBall(ctx, cx, cy, cell / 2 - 8 * S, color, classId, time)
 }
 
 /**
@@ -767,7 +736,7 @@ function drawTargetPanels(frame: HudFrame): void {
   // Чуть выше локатора: место под 3 строки подписи (занятие · отношение · корпус).
   const y = radarTop - size - 36 * S
 
-  const cell = (color: string, lines: [string, string?, string?], body: (x: number, y: number) => void): void => {
+  const cell = (color: string, lines: [string, string?, string?, string?], body: (x: number, y: number) => void): void => {
     body(x, y)
     ctx.strokeStyle = color
     ctx.lineWidth = 1
@@ -797,7 +766,7 @@ function drawTargetPanels(frame: HudFrame): void {
     cell(
       color,
       [properName(sys.name), starClassName(sys.star), formatLy(remLy)],
-      (cx, cy) => cellStar(ctx, cx, cy, color, sys.star.radius, sys.star.class, world.time),
+      (cx, cy) => cellStar(ctx, cx, cy, color, sys.star.class, world.time),
     )
     return
   }
@@ -808,7 +777,12 @@ function drawTargetPanels(frame: HudFrame): void {
       const color = radarColor(ship, world)
       const stance = stanceTo(world, ship)
       const stanceKey = (`dialogue.stance.${stance}`) as Key
-      cell(color, [ship.pilotName, `${occupationName(ship.originKind, ship.faction)} · ${t(stanceKey)}`, chassisName(ship.loadout.chassis.name)], (cx, cy) => {
+      cell(color, [
+        ship.pilotName,
+        `${occupationName(ship.originKind, ship.faction)} · ${t(stanceKey)}`,
+        chassisName(ship.loadout.chassis.name),
+        formatDistance(shipDistance(world, ship.state.pos)),
+      ], (cx, cy) => {
         const sheet = loadSheet(portraitSheet(ship.persona.species, pilotEmotion(ship, world)))
         if (sheetReady(sheet)) {
           const c = sheet.naturalWidth / PORTRAIT_GRID
@@ -823,7 +797,7 @@ function drawTargetPanels(frame: HudFrame): void {
     }
     const pod = world.lockedPodId != null ? world.pods.find((p) => p.id === world.lockedPodId && p.alive) : null
     if (pod) {
-      cell(HUD_COLORS.WARN, [t('locator.kind.pod')], (cx, cy) => {
+      cell(HUD_COLORS.WARN, [t('locator.kind.pod'), formatDistance(shipDistance(world, pod.pos))], (cx, cy) => {
         drawPodCrate(ctx, cx + size / 2, cy + size / 2, size, HUD_COLORS.WARN, world.time)
       })
       return
@@ -832,9 +806,17 @@ function drawTargetPanels(frame: HudFrame): void {
       ? world.asteroids.find((a) => a.id === world.lockedAsteroidId && a.alive)
       : null
     if (rock) {
-      cell(HUD_COLORS.ROCK, [t('locator.kind.asteroid')], (cx, cy) => {
-        drawAsteroidChunk(ctx, cx + size / 2, cy + size / 2, size, HUD_COLORS.ROCK, rock.id, world.time)
-      })
+      cell(
+        HUD_COLORS.ROCK,
+        [
+          t('locator.kind.asteroid'),
+          formatStat('mass', asteroidMass(rock.radius)),
+          formatDistance(Math.max(0, shipDistance(world, rock.pos) - rock.radius)),
+        ],
+        (cx, cy) => {
+          drawAsteroidChunk(ctx, cx + size / 2, cy + size / 2, size, HUD_COLORS.ROCK, rock.id, world.time)
+        },
+      )
     }
     return
   }
@@ -843,13 +825,29 @@ function drawTargetPanels(frame: HudFrame): void {
   if (!nav) return
   const kindKey = `locator.kind.${nav.kind}` as Key
   const color = navMarkerColor(nav)
-  cell(color, [properName(nav.name), t(kindKey)], (cx, cy) => {
+  const navMass =
+    nav.kind === 'asteroid' ? formatStat('mass', asteroidMass(nav.radius)) : undefined
+  cell(color, [
+    properName(nav.name),
+    t(kindKey),
+    navMass,
+    formatDistance(Math.max(0, shipDistance(world, nav.pos) - nav.radius)),
+  ], (cx, cy) => {
     const px = cx + size / 2
     const py = cy + size / 2
+    const ballR = size / 2 - 8 * S
     if (nav.kind === 'planet' || nav.kind === 'moon') {
       const body = findBody(world, nav.id)
       if (body) {
-        drawPlanetBall(ctx, px, py, size / 2 - 8 * S, color, body, world.time)
+        drawPlanetBall(ctx, px, py, ballR, color, body, world.time)
+        return
+      }
+    }
+    if (nav.kind === 'star') {
+      const body = findBody(world, nav.id)
+      if (body) {
+        const classId = STAR_CLASSES.find((c) => c.color === body.color)?.id ?? ''
+        drawStarBall(ctx, px, py, ballR, color, classId, world.time)
         return
       }
     }
@@ -911,31 +909,28 @@ function drawRadar(frame: HudFrame): void {
 
     const player = world.player
     shipAxes(player.state.quat, _fwd, _right, _up)
-    // Дальность локатора — узкая окрестность (gr.sphereRadius), не весь диск слоя в кадре.
-    const range = gr.sphereRadius
-    if (range <= 0) return
+    // Сфера и точки — в св.г кадра (не в метрах): на миллионах × иначе локатор плывёт.
+    const rangeLy = gr.layerScale > 0 ? gr.sphereRadius / gr.layerScale : 0
+    if (rangeLy <= 0) return
     const pos = gr.positions
     const col = gr.colors
+    const invLy = 1 / gr.layerScale
+    const plx = (player.state.pos.x - gr.anchor.x) * invLy
+    const ply = (player.state.pos.y - gr.anchor.y) * invLy
+    const plz = (player.state.pos.z - gr.anchor.z) * invLy
 
     // Проецирует звезду (индекс·3) на локатор. `force` игнорирует сферу видимости (для
     // своей звезды — её показываем всегда). Возвращает экранную точку или null.
     const projStar = (b: number, force: boolean): { px: number; my: number } | null => {
-      // Мир-позиция звезды = якорь слоя + локальные·масштаб; сразу берём относительно борта.
-      _point.set(
-        gr.anchor.x + pos[b]! * gr.layerScale - player.state.pos.x,
-        gr.anchor.y + pos[b + 1]! * gr.layerScale - player.state.pos.y,
-        gr.anchor.z + pos[b + 2]! * gr.layerScale - player.state.pos.z,
-      )
+      _point.set(pos[b]! - plx, pos[b + 1]! - ply, pos[b + 2]! - plz)
       const distSq = _point.lengthSq()
-      if (!force && distSq > range * range) return null // вне сферы видимости
+      if (!force && distSq > rangeLy * rangeLy) return null
       const distance = Math.sqrt(distSq) || 1
       const x = _point.dot(_right)
       const z = _point.dot(_fwd)
       const flat = Math.hypot(x, z)
-      if (flat < 1e-3) return { px: cx, my: cy } // прямо над/под кораблём — в центр
-      // Линейно (не лог): локатор здесь — top-down мини-карта окрестности. За сферой (своя
-      // звезда, если отлетел) прижимаем к ободу.
-      const k = Math.min(1, distance / range)
+      if (flat < 1e-6) return { px: cx, my: cy }
+      const k = Math.min(1, distance / rangeLy)
       const px = cx + (x / flat) * k * radiusX
       const py = cy - (z / flat) * k * radiusY
       const lift = Math.max(-10 * S, Math.min(10 * S, (_point.dot(_up) / distance) * 20 * S))
@@ -959,38 +954,36 @@ function drawRadar(frame: HudFrame): void {
     const tgt = world.jumpTargetIndex
     if (tgt != null && tgt !== gr.originIndex && tgt >= 0 && tgt < gr.systemCount) {
       const b = tgt * 3
+      // Мир для ретикулы/стрелки; на локаторе — ly через projStar (стабильнее на большом ×).
       _gtar.set(
         gr.anchor.x + pos[b]! * gr.layerScale,
         gr.anchor.y + pos[b + 1]! * gr.layerScale,
         gr.anchor.z + pos[b + 2]! * gr.layerScale,
       )
-      // Остаток пути в св.г кадра (не карта origin↔star): уменьшается по мере полёта.
-      const remLy = gr.layerScale > 0 ? shipDistance(world, _gtar) / gr.layerScale : 0
-      // Имя — из той же галактики, что карта (с дельтой бога), не из сырого generate.
+      const remLy = Math.sqrt(
+        (pos[b]! - plx) ** 2 + (pos[b + 1]! - ply) ** 2 + (pos[b + 2]! - plz) ** 2,
+      )
       const starName = hudGalaxyFor(world)[tgt]?.name ?? galaxyStarName(world.galaxySeed, tgt)
       const title = starName ? properName(starName) : null
-      const range = formatLy(remLy)
-      // Две строки: «имя · дистанция» в одну уезжает за край кадра.
-      const arrowLabel = title ? `${title} · ${range}` : range
+      const rangeLabel = formatLy(remLy)
+      const arrowLabel = title ? `${title} · ${rangeLabel}` : rangeLabel
 
       const tp = projStar(b, true)
       if (tp) {
         dot(ctx, tp.px, tp.my, Math.max(1, 1.5 * S), HUD_COLORS.NAV)
         circle(ctx, tp.px, tp.my, 3.5 * S, HUD_COLORS.NAV)
-        // Подпись ВНУТРЬ локатора (к центру): иначе у правого/левого обода имя уезжает за кадр.
         const inward = tp.px >= cx
         const lx = tp.px + (inward ? -5 : 5) * S
         const align = inward ? 'right' : 'left'
         if (title) text(ctx, title, lx, tp.my - 5 * S, HUD_COLORS.NAV, align)
-        text(ctx, range, lx, tp.my + 4 * S, HUD_COLORS.NAV, align)
+        text(ctx, rangeLabel, lx, tp.my + 4 * S, HUD_COLORS.NAV, align)
       }
 
-      // Прицельная РЕТИКУЛА в кадре: скобки, имя, остаток св.г. За кадром — стрелка.
       const sp = projectPoint(_gtar, camera, width, height)
       if (!sp.behind && isOnScreen(sp.x, sp.y, width, height, 20 * S)) {
         corners(ctx, sp.x, sp.y, 16 * S, HUD_COLORS.NAV, 2)
         if (title) text(ctx, title, sp.x, sp.y + 14 * S, HUD_COLORS.NAV, 'center')
-        text(ctx, range, sp.x, sp.y + (title ? 22 : 14) * S, HUD_COLORS.NAV, 'center')
+        text(ctx, rangeLabel, sp.x, sp.y + (title ? 22 : 14) * S, HUD_COLORS.NAV, 'center')
       } else {
         offscreenArrow(frame, _gtar, HUD_COLORS.NAV, true, arrowLabel)
       }

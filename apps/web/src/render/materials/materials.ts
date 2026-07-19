@@ -603,6 +603,21 @@ export function crossRayMaterial(): MeshBasicMaterial {
   return crossRays
 }
 
+let crossWire: LineBasicMaterial | null = null
+
+/** Каркас креста (неон). Портал-грани — `crossPortal.ts`. */
+export function crossWireMaterial(): LineBasicMaterial {
+  crossWire ??= new LineBasicMaterial({
+    color: 0xa8f4ff,
+    transparent: true,
+    opacity: 1,
+    blending: AdditiveBlending,
+    depthWrite: false,
+    fog: false,
+  })
+  return crossWire
+}
+
 let stars: PointsMaterial | null = null
 
 export function starfieldMaterial(size: number): PointsMaterial {

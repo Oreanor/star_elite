@@ -34,4 +34,15 @@ describe('онлайн-старт Люрилар', () => {
       expect(stars[0]!.pos.distanceTo(stars[1]!.pos)).toBeCloseTo(def.companion!.separation, 1)
     }
   })
+
+  it('причал — Кресты (крест-каркас), не сгенерированный Кориолис', () => {
+    const def = systemDefFor(SHARED_START_INDEX, GALAXY.SEED)
+    expect(def.station?.name).toBe('Кресты')
+    expect(def.station?.style).toBe('cross')
+
+    const world = createWorld({ ...def, patrols: [], belt: null })
+    const station = world.bodies.find((b) => b.kind === 'station')
+    expect(station?.name).toBe('Кресты')
+    expect(station?.stationStyle).toBe('cross')
+  })
 })

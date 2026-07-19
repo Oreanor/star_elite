@@ -1,12 +1,13 @@
-import { useFrame } from '@react-three/fiber'
-import { useMemo, useRef } from 'react'
-import { InstancedMesh, Mesh, Object3D } from 'three'
-import { CHASSIS_CATALOGUE, clamp, isDroneShip, isVisible, warpDepartHidden, warpEmergeHidden } from '@elite/sim'
+import { useFrame, useThree } from '@react-three/fiber'
+import { useEffect, useMemo, useRef } from 'react'
+import { InstancedMesh, Mesh, Object3D, Plane, type Material } from 'three'
+import { CHASSIS_CATALOGUE, clamp, isDroneShip, isVisible, warpDepartHidden, warpEmergeHidden, type ShipEntity } from '@elite/sim'
 import { useSession } from '../../app/GameContext'
-import { shipHidden } from '../../app/control/jumpFx'
+import { jumpPortal, portalOpen } from '../../app/control/jumpPortal'
 import { GIANT_HIDE, GIANT_RENDER_CAP } from '../config'
 import { chassisGeometry, droneGeometry, placeholderGeometry } from '../geometry/ships'
 import { cloakMaterial, hullMaterial, hullMaterialFor } from '../materials/materials'
+import { usePortalRenderSide } from './portalRenderContext'
 
 /** Инстансов на ОДИН корпус: столько бортов одного облика влезает в кадр разом. */
 const MAX_PER_CHASSIS = 28
@@ -19,9 +20,30 @@ const BOT_CHASSIS_IDS = CHASSIS_CATALOGUE.map((c) => c.id).filter((id) => id !==
 // Единственный объект для сборки матриц. `new Object3D()` в кадре — мусор для GC.
 const _dummy = new Object3D()
 
+/** Бесконечная clip-плоскость допустима только пока корпус касается диска портала. */
+function touchesPortalPlane(ship: ShipEntity): boolean {
+  const p = jumpPortal()
+  const dx = ship.state.pos.x - p.ringPos.x
+  const dy = ship.state.pos.y - p.ringPos.y
+  const dz = ship.state.pos.z - p.ringPos.z
+  const axial = dx * p.ringNormal.x + dy * p.ringNormal.y + dz * p.ringNormal.z
+  const radius = ship.spec.hull.radius * ship.state.scale
+  if (Math.abs(axial) > radius) return false
+  const radialSq = Math.max(0, dx * dx + dy * dy + dz * dz - axial * axial)
+  const reach = p.ringRadius + radius
+  return radialSq <= reach * reach
+}
+
 export function PlayerShip() {
   const session = useSession()
+  const gl = useThree((s) => s.gl)
   const ref = useRef<Mesh>(null)
+  const portalSide = usePortalRenderSide()
+  const portalClipMat = useRef<Material | null>(null)
+  const portalClipBase = useRef<Material | null>(null)
+  const destinationClip = useMemo(() => new Plane(), [])
+
+  useEffect(() => () => portalClipMat.current?.dispose(), [])
 
   useFrame(() => {
     const mesh = ref.current
@@ -51,12 +73,35 @@ export function PlayerShip() {
     mesh.scale.setScalar(capped * (1 - hide))
     // Корабль исчезает, канув в кольцо прыжка: с этого мига его в старой системе уже нет.
     // И в гигант-режиме на FULL — уже в ноль, снимаем с отрисовки.
-    mesh.visible = player.alive && !shipHidden() && hide < 1
+    mesh.visible = player.alive && hide < 1
 
     // Свой корабль под полем видно — иначе пилот теряет собственный нос.
     // Чужой не видно вовсе, и это разные вещи: одна про интерфейс, другая про мир.
     // Материал зависит от корпуса: загруженный меш («Аврора One») — пластик, прочие — металл.
-    mesh.material = player.cloaked ? cloakMaterial() : hullMaterialFor(player.loadout.chassis.id)
+    const base = player.cloaked ? cloakMaterial() : hullMaterialFor(player.loadout.chassis.id)
+    const destination = portalSide === 'destination'
+    if (portalOpen() && (destination || touchesPortalPlane(player))) {
+      gl.localClippingEnabled = true
+      if (!portalClipMat.current || portalClipBase.current !== base) {
+        portalClipMat.current?.dispose()
+        portalClipMat.current = base.clone()
+        portalClipBase.current = base
+      }
+      const clipped = portalClipMat.current
+      if (destination) {
+        const p = jumpPortal()
+        // clipThere хранится в абсолютном кадре целевой системы, а её World уже
+        // перецентрован. Переносим только constant, нормаль остаётся той же.
+        destinationClip.copy(p.clipThere)
+        destinationClip.constant += destinationClip.normal.dot(session.world.originOffset)
+        clipped.clippingPlanes = [destinationClip]
+      } else {
+        clipped.clippingPlanes = [jumpPortal().clipHere]
+      }
+      mesh.material = clipped
+    } else {
+      mesh.material = base
+    }
   })
 
   return <mesh ref={ref} geometry={placeholderGeometry()} material={hullMaterial()} frustumCulled={false} />

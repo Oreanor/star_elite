@@ -205,6 +205,10 @@ export function stepOrbits(world: World, time = orbitTime(world)): void {
     for (const explosion of world.explosions) explosion.pos.add(_stationShift)
     for (const warp of world.warps) warp.pos.add(_stationShift)
     for (const portal of world.warpPortals) portal.pos.add(_stationShift)
+    // Связанный гиперпортал стоит в той же локальной окрестности, что игрок и станция.
+    // Если не унести collider этой же дельтой, визуал в следующем кадре скопирует
+    // его старую позицию и кольцо «улетит», хотя корабль относительно станции стоит.
+    for (const gate of world.jumpGates) gate.pos.add(_stationShift)
     for (const flash of world.shieldFlashes) {
       flash.pos.add(_stationShift)
       flash.center.add(_stationShift)

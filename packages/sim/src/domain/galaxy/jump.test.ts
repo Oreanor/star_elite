@@ -6,8 +6,9 @@ import { isHyperdrive } from '../loadout'
 import { COMMODITIES, addCommodity } from '../cargo'
 import { refreshSpec, createWorld, type World } from '../world'
 import { generateGalaxy, generateSystem } from './generate'
-import { jump, jumpBlock, jumpDistance, systemDefFor } from './jump'
+import { commitPreparedJump, jump, jumpBlock, jumpDistance, systemDefFor } from './jump'
 import { placeSystem, distanceLy } from './shape'
+import { stepWorld } from '../sim'
 
 /**
  * Прыжок — правило, а не кнопка. Всё проверяется без рендера: если для теста
@@ -65,11 +66,39 @@ describe('прыжок', () => {
     const world = createWorld()
     const range = world.player.spec.jumpRange
 
-    // Ядро галактики в сотне световых лет от дома — заведомо дальше базового привода.
-    expect(jumpDistance(world, CORE_INDEX)).toBeGreaterThan(range)
-    expect(jumpBlock(world, CORE_INDEX)).toBe('out-of-range')
-    expect(jump(world, CORE_INDEX)).toBe(false)
+    // Люрилар близко к ядру — ищем любую систему за пределом привода.
+    let far = -1
+    for (let i = 0; i < GALAXY.COUNT; i++) {
+      if (i === world.systemIndex) continue
+      if (jumpDistance(world, i) > range) {
+        far = i
+        break
+      }
+    }
+    expect(far).toBeGreaterThanOrEqual(0)
+    expect(jumpBlock(world, far)).toBe('out-of-range')
+    expect(jump(world, far)).toBe(false)
     expect(world.systemIndex).toBe(WORLD.HOME_INDEX)
+  })
+
+  // Баг карты: клик честно писал дальнюю цель, а cleanup симуляции стирал её в том
+  // же кадре. Дальность запрещает ПРЫЖОК, но не прокладку маршрута и осмотр системы.
+  it('дальняя цель карты переживает шаг мира', () => {
+    const world = createWorld()
+    let far = -1
+    for (let i = 0; i < GALAXY.COUNT; i++) {
+      if (i !== world.systemIndex && jumpDistance(world, i) > world.player.spec.jumpRange) {
+        far = i
+        break
+      }
+    }
+    expect(far).toBeGreaterThanOrEqual(0)
+
+    world.jumpTargetIndex = far
+    stepWorld(world, 0, new Map())
+
+    expect(world.jumpTargetIndex).toBe(far)
+    expect(jumpBlock(world, far)).toBe('out-of-range')
   })
 
   it('в себя не прыгают, и из дока тоже', () => {
@@ -97,6 +126,18 @@ describe('прыжок', () => {
     expect(jumpBlock(world, target)).toBeNull()
   })
 
+  it('коррекция масштаба запрещает гиперпрыжок вне 1×', () => {
+    const world = createWorld()
+    const target = neighbourWithin(world, world.player.spec.jumpRange)
+
+    world.player.state.scale = 2
+    expect(jumpBlock(world, target)).toBe('scaled')
+    expect(jump(world, target)).toBe(false)
+
+    world.player.state.scale = 1
+    expect(jumpBlock(world, target)).toBeNull()
+  })
+
   it('прыжок в пределах дальности меняет систему', () => {
     const world = createWorld()
     const target = neighbourWithin(world, world.player.spec.jumpRange)
@@ -104,9 +145,41 @@ describe('прыжок', () => {
     expect(jump(world, target)).toBe(true)
     expect(world.systemIndex).toBe(target)
     expect(world.epoch).toBe(1)
-    expect(world.systemName).not.toBe('Тиррион')
+    expect(world.systemIndex).not.toBe(WORLD.HOME_INDEX)
     // Звезда обязана быть: система без светила — это дыра в мосте.
     expect(world.bodies.some((b) => b.kind === 'star')).toBe(true)
+  })
+
+  it('переход принимает заранее построенный мир без повторной генерации окружения', () => {
+    const source = createWorld()
+    const target = neighbourWithin(source, source.player.spec.jumpRange)
+    const destination = createWorld()
+    expect(jump(destination, target)).toBe(true)
+
+    const bodies = destination.bodies
+    const ships = destination.ships
+    const chargeBefore = source.player.jumpCharge
+    const spent = jumpDistance(source, target)
+    source.credits = 4242
+
+    expect(commitPreparedJump(source, destination, target)).toBe(true)
+    expect(destination.bodies).toBe(bodies)
+    expect(destination.ships).toBe(ships)
+    expect(destination.credits).toBe(4242)
+    expect(destination.player.jumpCharge).toBeCloseTo(chargeBefore - spent)
+    expect(destination.epoch).toBe(source.epoch + 1)
+  })
+
+  it('обратный проход через уже оплаченную пару не требует второго заряда', () => {
+    const world = createWorld()
+    const source = world.systemIndex
+    const target = neighbourWithin(world, world.player.spec.jumpRange)
+
+    expect(jump(world, target)).toBe(true)
+    world.player.jumpCharge = 0
+    expect(jump(world, source)).toBe(false)
+    expect(jump(world, source, null, { establishedPortal: true })).toBe(true)
+    expect(world.player.jumpCharge).toBe(0)
   })
 
   /**
@@ -169,47 +242,42 @@ describe('прыжок', () => {
     expect(a.bodies.map((x) => x.name)).toEqual(b.bodies.map((x) => x.name))
   })
 
-  /** Дом задан вручную, но в галактике у него есть место — и прыгнуть домой можно. */
-  it('домой возвращаются в ту же рукописную систему', () => {
+  /** Дом — Люрилар: улететь и вернуться в ту же систему. */
+  it('домой возвращаются в Люрилар', () => {
     const world = createWorld()
     const target = neighbourWithin(world, world.player.spec.jumpRange)
 
     jump(world, target)
-    // Первый прыжок сжёг заряд; здесь проверяется адресация дома, а не топливо —
-    // доливаем бак, как это сделала бы звезда или причал.
     world.player.jumpCharge = world.player.spec.jumpRange
     expect(jump(world, WORLD.HOME_INDEX)).toBe(true)
-    expect(world.systemName).toBe('Тиррион')
+    expect(world.systemName).toBe('Люрилар')
+    expect(world.bodies.find((b) => b.kind === 'station')?.name).toBe('Кресты')
   })
 
   /**
-   * Карта читает каталог (`generateSystem`), сцена строит мир из `SystemDef`.
-   * Это два описания ОДНОЙ звезды, и разойтись им нельзя: пока они расходились,
-   * карта звала родную систему «Альовас», а причал под ногами — «Тиррион».
+   * Карта читает каталог (`generateSystem`), сцена — `SystemDef`. Имя и причал
+   * общего спавна обязаны совпасть (Люрилар / Кресты).
    */
-  it('каталог и сцена описывают родную систему одинаково', () => {
+  it('каталог и сцена описывают Люрилар одинаково', () => {
     const catalogue = generateSystem(WORLD.HOME_INDEX, GALAXY.SEED)
     const def = systemDefFor(WORLD.HOME_INDEX, GALAXY.SEED)
 
+    expect(catalogue.name).toBe('Люрилар')
     expect(catalogue.name).toBe(def.name)
     expect(catalogue.planets.length).toBe(def.planets.length)
     expect(catalogue.planets.map((p) => p.name)).toEqual(def.planets.map((p) => p.name))
     expect(catalogue.planets.map((p) => p.type)).toEqual(def.planets.map((p) => p.type))
 
     const capital = catalogue.planets.find((p) => p.station)
+    expect(capital?.station?.name).toBe('Кресты')
     expect(capital?.station?.name).toBe(def.station?.name)
+    expect(def.station?.style).toBe('cross')
     expect(catalogue.star.color).toBe(def.star.color)
   })
 
-  /** Тиррион существует в одном экземпляре: чужая галактика о нём не знает. */
-  it('в другой галактике под тем же индексом стоит обычная звезда', () => {
-    const alien = generateSystem(WORLD.HOME_INDEX, GALAXY.SEED ^ 0x1234)
-    expect(alien.name).not.toBe('Тиррион')
-  })
-
-  /** Имя, данное руками, не отбирает разведение коллизий: оно занято до бросков. */
-  it('в галактике ровно одна система с родным именем', () => {
-    const named = generateGalaxy(GALAXY.SEED).filter((s) => s.name === 'Тиррион')
+  /** Имя спавна занято до разведения коллизий — в галактике ровно один Люрилар. */
+  it('в галактике ровно одна система Люрилар', () => {
+    const named = generateGalaxy(GALAXY.SEED).filter((s) => s.name === 'Люрилар')
     expect(named.map((s) => s.index)).toEqual([WORLD.HOME_INDEX])
   })
 
@@ -227,8 +295,8 @@ describe('прыжок', () => {
     expect(jump(world, CORE_INDEX)).toBe(true)
     expect(world.galaxySeed).not.toBe(seedBefore) // галактика сменилась целиком
     expect(world.systemIndex).toBe(CORE_INDEX) // вышли у чёрной дыры новой галактики
-    // В новой галактике под индексом дома стоит уже не рукописный Тиррион.
-    expect(systemDefFor(WORLD.HOME_INDEX, world.galaxySeed).name).not.toBe('Тиррион')
+    // В чужой галактике индекс 1 — обычная звезда, не наш Люрилар.
+    expect(systemDefFor(WORLD.HOME_INDEX, world.galaxySeed).name).not.toBe('Люрилар')
   })
 
   /** Цепочка галактик детерминирована: тот же старт — то же следующее зерно. */

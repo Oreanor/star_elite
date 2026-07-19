@@ -9,7 +9,8 @@ import {
   flyToController,
   cycleContact,
   cycleCelestial,
-  retargetNearestSameClass,
+  retargetNearestContact,
+  retargetNearestCelestial,
   findCloak,
   findMielophone,
   hasBomb,
@@ -40,9 +41,8 @@ function ownsMielophone(player: World['player']): boolean {
 }
 
 /**
- * Ведущий кадра. Монтируется ПЕРВЫМ в сцене: R3F вызывает useFrame в порядке
- * регистрации, поэтому мир успевает шагнуть до того, как остальные компоненты
- * начнут читать его состояние.
+ * Ведущий кадра. Приоритет -100 гарантирует шаг мира раньше постановщиков и рендера,
+ * независимо от порядка монтирования React-компонентов.
  *
  * Ничего не рисует.
  */
@@ -175,7 +175,7 @@ export function Simulation() {
     //    на связь). Круги независимы: контакт и точка навигации не сбивают друг друга.
     // Когда галактика ПРОЯВИЛАСЬ (слой активен), листаются ЗВЁЗДЫ галактики (jumpTargetIndex) —
     // это единственное, что там перечислимо, поэтому берём их на любой Tab, с шифтом и без.
-    // Q — сброс и ближайшая цель ТОГО ЖЕ класса (борт→борт, планета→планета, звезда→звезда).
+    // Q / Shift+Q — ближайшая из того же круга, что Tab / Shift+Tab (на галактике — звезда слоя).
     if (consumePress('Tab')) {
       if (galaxyRadar().active) cycleGalaxyStar(world)
       else if (isHeld('ShiftLeft') || isHeld('ShiftRight')) cycleCelestial(world)
@@ -183,7 +183,8 @@ export function Simulation() {
     }
     if (consumePress('KeyQ')) {
       if (galaxyRadar().active) retargetNearestGalaxyStar(world)
-      else retargetNearestSameClass(world)
+      else if (isHeld('ShiftLeft') || isHeld('ShiftRight')) retargetNearestCelestial(world)
+      else retargetNearestContact(world)
     }
 
     // Пользовательский ракурс: облёт (←/→) и наезд (↑/↓), V — сброс. Чистая камера,
@@ -222,7 +223,7 @@ export function Simulation() {
     camera.position.add(world.originShift)
 
     clearPresses()
-  })
+  }, -100)
 
   return null
 }

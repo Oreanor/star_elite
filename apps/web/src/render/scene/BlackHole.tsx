@@ -70,7 +70,7 @@ function BlackHoleInstance({ body }: { body: BodyEntity }) {
     coreMat.dispose()
   }, [lensGeo, lensMat, coreGeo, coreMat])
 
-  useFrame((_, dt) => {
+  useFrame(() => {
     const shrink = worldShrink(session.world.player.state.scale)
     if (shrink <= 0) {
       if (coreRef.current) coreRef.current.visible = false
@@ -104,7 +104,9 @@ function BlackHoleInstance({ body }: { body: BodyEntity }) {
         const u = lensMat.uniforms
         u.uBhCenter!.value.copy(body.pos)
         u.uCameraPos!.value.copy(camera.position)
-        u.uTime!.value += dt
+        // Аккреционный диск имеет фазу времени мира, а не возраст React-компонента.
+        // Поэтому ремоунт после портала не запускает чёрную дыру заново с нуля.
+        u.uTime!.value = session.world.time
         u.uRs!.value = rs
         u.uInfluence!.value = influence
         u.uDiskInner!.value = params.diskInnerRadius * rs

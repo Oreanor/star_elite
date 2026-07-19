@@ -262,9 +262,9 @@ function carvedPositions(seed: number): Spot3[] {
     if (voidLy > 0) giants.push({ i, voidLy })
   }
 
-  // Не двигаем: ядро, дом и сами гиганты (иначе пузыри поползут друг в друга).
+  // Не двигаем: ядро, общий спавн и сами гиганты (иначе пузыри поползут друг в друга).
   const fixed = new Set<number>([CORE_INDEX, ...giants.map((g) => g.i)])
-  if (seed === GALAXY.SEED) fixed.add(WORLD.HOME_INDEX)
+  if (seed === GALAXY.SEED) fixed.add(WORLD.SHARED_START_INDEX)
 
   // Несколько проходов: вытолкнутый из одного пузыря может оказаться в другом.
   for (let pass = 0; pass < 5; pass++) {

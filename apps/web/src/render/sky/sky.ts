@@ -15,9 +15,12 @@ import { nebulaTexture } from './nebula'
 
 export const SKY_COUNT = 10
 
-function skyUrl(galaxyIndex: number): string {
+function normalizedSkyIndex(galaxyIndex: number): number {
   // Оборачиваем, а не падаем: галактик может стать больше, чем картинок.
-  const index = ((galaxyIndex % SKY_COUNT) + SKY_COUNT) % SKY_COUNT
+  return ((galaxyIndex % SKY_COUNT) + SKY_COUNT) % SKY_COUNT
+}
+
+function skyUrl(index: number): string {
   return `/sky/${index}.jpg`
 }
 
@@ -28,17 +31,39 @@ function configure(texture: Texture): Texture {
   return texture
 }
 
+// Небо, уже показанное во второй сцене портала, после прохода обязано стать фоном
+// основной сцены синхронно. Повторный TextureLoader давал кадр fallback и заметный flash.
+const loaded = new Map<number, Texture>()
+const loading = new Map<number, Array<(texture: Texture) => void>>()
+
 /**
  * @param onLoaded Зовётся, если картинка нашлась. Может не позваться никогда.
  * @returns процедурный фон, готовый к показу немедленно.
  */
 export function loadSky(galaxyIndex: number, onLoaded: (texture: Texture) => void): Texture {
+  const index = normalizedSkyIndex(galaxyIndex)
+  const ready = loaded.get(index)
+  if (ready) return ready
+
+  const listeners = loading.get(index)
+  if (listeners) {
+    listeners.push(onLoaded)
+    return configure(nebulaTexture())
+  }
+
+  loading.set(index, [onLoaded])
   new TextureLoader().load(
-    skyUrl(galaxyIndex),
-    (texture) => onLoaded(configure(texture)),
+    skyUrl(index),
+    (texture) => {
+      const readyTexture = configure(texture)
+      loaded.set(index, readyTexture)
+      const waiting = loading.get(index) ?? []
+      loading.delete(index)
+      for (const listener of waiting) listener(readyTexture)
+    },
     undefined,
     // 404 — не ошибка, а штатный случай: остаёмся на процедурной полосе.
-    () => {},
+    () => loading.delete(index),
   )
   return configure(nebulaTexture())
 }

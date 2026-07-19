@@ -7,7 +7,16 @@ export { defuseGrievance, hasGrievance, pendingHail, provoke, registerPlayerHit,
 export { auxFraction, energyFraction, fireEcm, regenAux, regenEnergy } from './ecm'
 export { spawnExplosion, spawnShieldFlash, spawnShockwave, spawnTracer } from './effects'
 export { chargeHyperdrive, scooping, starExposure, stepStarHeat } from './starheat'
-export { damageAsteroid, oreFits, oreUnits, scoopAsteroid, shatter, splittable } from './mining'
+export {
+  asteroidMass,
+  bombShatterAsteroid,
+  damageAsteroid,
+  oreFits,
+  oreUnits,
+  scoopAsteroid,
+  shatter,
+  splittable,
+} from './mining'
 export { damageScenicRock, destroyScenicRock } from './scenicRocks'
 export { stepMissiles } from './missiles'
 export { stepBolts } from './bolts'

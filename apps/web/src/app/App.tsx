@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { applyPilotProfile, interlocutor, jumpBlock, pendingHail, serializePlayer, stationInterlocutor, undock, type PilotProfile, type PlayerSave, type World } from '@elite/sim'
+import { applyPilotProfile, interlocutor, jumpBlock, pendingHail, serializePlayer, stationInterlocutor, undock, type JumpBlock, type PilotProfile, type PlayerSave, type World } from '@elite/sim'
 import { GameProvider, useSession } from './GameContext'
-import { jumping, startDepart } from './control/jumpFx'
+import { closePortal, establishedPortalCloseRequested, freshPortalKeyDown, jumpPortal, openPortal, portalActive, portalOpen, portalRetargetRequested } from './control/jumpPortal'
+import { disposeJumpPortalWorld } from '../render/scene/jumpPortalWorld'
 import { startUndock } from './control/undockFx'
 import { negotiate, negotiatorAvailable } from './control/negotiator'
 import { Game } from './Game'
@@ -20,6 +21,17 @@ import { PlayerChat, IncomingCall } from '../ui/chat/PlayerChat'
 import { subscribeInbox } from './net/chat'
 import type { OnlinePlayer } from './net/presence'
 import { t, useLang } from '../ui/i18n'
+import { pushWarning } from '../ui/hud/warnings'
+
+const JUMP_BLOCK_LABEL: Record<JumpBlock, Parameters<typeof t>[0]> = {
+  'no-drive': 'map.block.noDrive',
+  'out-of-range': 'map.block.range',
+  'out-of-charge': 'map.block.charge',
+  'same-system': 'map.block.here',
+  docked: 'map.block.docked',
+  cruising: 'map.block.cruising',
+  scaled: 'map.block.scaled',
+}
 
 /**
  * Оболочка: заставка, пауза и экран гибели. Это единственное место,
@@ -226,23 +238,76 @@ function Shell({ onRestart }: { onRestart: () => void }) {
   const flourishRef = useRef(false)
 
   /**
-   * Чёрная пелена перехода из титула в игру. После того как корабль улетел и небо
-   * секунду постояло пустым, экран гаснет в чёрное (0.4с), ПОД пеленой меняется вид
-   * (титул → станция), и затем светлеет уже на игровом кадре (0.4с). Всего 0.8с.
-   * Смену вида нельзя показывать «встык» — чёрный шов скрывает подмену дерева.
+   * Чёрная пелена перехода из титула в игру. После улёта корабля экран гаснет,
+   * ПОД пеленой титул снимается (иначе после fade снова пустая заставка — захват
+   * курсора ещё не пришёл), светлеем уже на игре.
    */
   const [veil, setVeil] = useState(false)
-  const fadeIntoGame = useCallback((swap: () => void) => {
-    setVeil(true)
-    window.setTimeout(() => {
-      swap()
-      // Под пеленой держим чёрное ещё полсекунды — не рвём переход встык, — и лишь потом
-      // светлеем со следующего кадра: под пеленой уже игра, не титул.
-      window.setTimeout(() => {
-        requestAnimationFrame(() => requestAnimationFrame(() => setVeil(false)))
-      }, VEIL_HOLD_MS)
-    }, VEIL_FADE_MS)
+  /** Под пеленой / пока ждём lock после интро — титул не монтируем. */
+  const [enterPlay, setEnterPlay] = useState(false)
+  const enterPlayRef = useRef(false)
+  enterPlayRef.current = enterPlay
+
+  /**
+   * Poll захвата живёт в Shell, не в TitleScreen: под пеленой Paused размонтируется,
+   * и его таймер умирал — мир замирал без lock, пока не кликнешь по канвасу.
+   */
+  const lockPollRef = useRef<number | null>(null)
+  const stopLockPoll = useCallback(() => {
+    if (lockPollRef.current !== null) {
+      window.clearTimeout(lockPollRef.current)
+      lockPollRef.current = null
+    }
   }, [])
+  const startLockPoll = useCallback(() => {
+    stopLockPoll()
+    const deadline = performance.now() + 8000
+    const tick = () => {
+      lockPollRef.current = null
+      void requestLock().then((ok) => {
+        if (ok || input.pointerLocked) {
+          stopLockPoll()
+          return
+        }
+        if (performance.now() >= deadline) {
+          stopLockPoll()
+          // Уже в игре — не выкидываем на титул; клик по канвасу доберёт захват.
+          if (enterPlayRef.current) return
+          setEnterPlay(false)
+          setStarted(false)
+          return
+        }
+        lockPollRef.current = window.setTimeout(tick, 200)
+      })
+    }
+    void requestLock().then((ok) => {
+      if (ok || input.pointerLocked) return
+      lockPollRef.current = window.setTimeout(tick, 200)
+    })
+  }, [stopLockPoll])
+
+  useEffect(() => () => stopLockPoll(), [stopLockPoll])
+
+  const fadeIntoGame = useCallback(
+    (swap: () => void) => {
+      setVeil(true)
+      window.setTimeout(() => {
+        // Сразу под чёрным: игра началась, заставку убрать — не ждать pointer lock.
+        setStarted(true)
+        setLaunching(false)
+        // Если START уже дал lock, после снятия титула сразу живём как обычная игра.
+        // enterPlay нужен только когда lock не пришёл и следующий клик должен добрать его.
+        setEnterPlay(!input.pointerLocked)
+        swap()
+        // Paused сейчас снимется — его poll умер бы; продолжаем здесь.
+        if (!session.world.docked) startLockPoll()
+        window.setTimeout(() => {
+          requestAnimationFrame(() => requestAnimationFrame(() => setVeil(false)))
+        }, VEIL_HOLD_MS)
+      }, VEIL_FADE_MS)
+    },
+    [session, startLockPoll],
+  )
 
   /**
    * Персонаж уже создан. Новичку (сейва не было) сперва показываем экран создания —
@@ -260,7 +325,15 @@ function Shell({ onRestart }: { onRestart: () => void }) {
     const sync = () => {
       const now = input.pointerLocked
       setLocked(now)
-      if (now) setStarted(true)
+      if (now) {
+        // START берёт lock заранее, пока титульный корабль ещё дрожит/улетает. До fade
+        // это всё ещё титул: смена resuming оборвала бы эффект, который ждёт ready.
+        if (!flourishRef.current) {
+          setStarted(true)
+          setEnterPlay(false)
+        }
+        stopLockPoll()
+      }
     }
     document.addEventListener('pointerlockchange', sync)
     document.addEventListener('visibilitychange', sync)
@@ -272,20 +345,24 @@ function Shell({ onRestart }: { onRestart: () => void }) {
       window.removeEventListener('focus', sync)
       window.removeEventListener('blur', sync)
     }
-  }, [])
+  }, [stopLockPoll])
 
   /**
    * «Полёт под меню»: открыт оверлей (карта/консоль/диалог) в ПОЛЁТЕ и окно в фокусе —
    * мир не замирает, корабль коастит (см. `session.menuFlying`). Свернул вкладку/ушёл в
    * другое окно (`blur`/hidden) — флаг гаснет, и Simulation падает в честную паузу: корабль
    * не должен лететь без присмотра. Док/гибель/титул сюда не попадают (нет `started`/есть
-   * `docked`/`over`). Пересчёт и на смену оверлея, и на фокус — оба меняют условие.
+   * `docked`/`over`).
+   *
+   * `enterPlay` — то же: после интро титул снят, а pointer lock ещё может не прийти
+   * (жест клика сгорел). Без флага мир стоял бы мёртвым, пока не кликнешь по канвасу.
    */
   useEffect(() => {
     const menuOpen = tab !== null || talking || dispatching || chatWith !== null
     const apply = () => {
       const focused = document.visibilityState === 'visible' && document.hasFocus()
-      session.menuFlying = started && !over && !docked && menuOpen && focused
+      session.menuFlying =
+        started && !over && !docked && focused && (menuOpen || enterPlay)
     }
     apply()
     window.addEventListener('focus', apply)
@@ -297,7 +374,7 @@ function Shell({ onRestart }: { onRestart: () => void }) {
       document.removeEventListener('visibilitychange', apply)
       session.menuFlying = false
     }
-  }, [session, tab, talking, dispatching, chatWith, started, over, docked])
+  }, [session, tab, talking, dispatching, chatWith, started, over, docked, enterPlay])
 
   // Симуляция сообщает о событиях один раз, из кадра. React узнаёт о них отсюда.
   useEffect(() => {
@@ -472,11 +549,13 @@ function Shell({ onRestart }: { onRestart: () => void }) {
       // «t» в реплике иначе положил бы трубку. Escape в поле пусть закрывает как всегда.
       const el = e.target as HTMLElement | null
       if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') && e.code !== 'Escape') return
-      // Пока идёт кино прыжка — клавиши молчат: ни консоли, ни второго прыжка.
-      if (jumping()) return
-
       // Браузер уже снял захват под оверлеем, так что закрыть его без Escape нечем.
       if (e.code === 'Escape') {
+        if (portalOpen()) {
+          closePortal()
+          disposeJumpPortalWorld()
+          return
+        }
         if (chatWith) closeChat()
         else if (dispatching) closeDispatch()
         else if (talking) closeTalk()
@@ -512,14 +591,59 @@ function Shell({ onRestart }: { onRestart: () => void }) {
         return
       }
 
-      // H — единственный вход в гипер: карта только метит систему (как у причала),
-      // прыжок — в космосе, если привод/заряд/дистанция позволяют (`jumpBlock`).
+      // H — удерживаемое раскрытие портала. Отпустил и удержал снова — сжатие;
+      // другая цель заменяет прежнюю пару, Esc остаётся аварийным мгновенным закрытием.
       if (e.code === 'KeyH') {
-        if (docked || talking || dispatching || jumping()) return
+        // Размер читает покадровое состояние isHeld. Браузерный key-repeat здесь нельзя
+        // считать новой командой: выбранная цель ещё не очищена, и каждый повтор заново
+        // создавал тот же портал с нулевого радиуса — визуально H иногда «не реагировала».
+        if (!freshPortalKeyDown(e.repeat)) return
+        if (docked || talking || dispatching) return
         const target = session.world.jumpTargetIndex
-        if (target == null || jumpBlock(session.world, target) !== null) return
+        const active = portalActive()
+        if (active) {
+          const current = jumpPortal()
+          if (current.committing) return
+          if (establishedPortalCloseRequested(target, current.paid)) {
+            closePortal()
+            disposeJumpPortalWorld()
+            pushWarning('portalClosed', session.world.time)
+            return
+          }
+          // enterSystem очищает jumpTargetIndex. Поэтому null означает «управлять старой
+          // парой», а ЛЮБОЙ выбранный индекс — новый явный приказ, в том числе прежняя
+          // система за спиной. Сравнение с current.index оставляло H привязанной к старому
+          // кольцу и делало второй переход в только что покинутую систему невозможным.
+          if (!portalRetargetRequested(target)) return
+        }
+        if (target == null) {
+          pushWarning('noTarget', session.world.time, {
+            label: t('hud.noJumpTarget'),
+            repeat: 0,
+          })
+          return
+        }
+        const blocked = jumpBlock(session.world, target)
+        if (blocked !== null) {
+          // Явное нажатие обязано отвечать каждый раз: общий cooldown `noJump` не должен
+          // превращать новую причину отказа после выбора системы в молчание.
+          pushWarning('noJump', session.world.time, {
+            label: t(JUMP_BLOCK_LABEL[blocked]),
+            repeat: 0,
+          })
+          return
+        }
+        if (active) {
+          closePortal()
+          disposeJumpPortalWorld()
+        }
         const planet = session.world.jumpArrivalPlanet
-        startDepart(session.world, target, planet != null ? { kind: 'body', planet } : null)
+        openPortal(
+          session.world,
+          target,
+          planet != null ? { kind: 'body', planet } : null,
+          performance.now() / 1000,
+        )
         if (tab !== null) closeConsole()
         return
       }
@@ -580,7 +704,10 @@ function Shell({ onRestart }: { onRestart: () => void }) {
         // Новичок сначала лепит пилота — экран стоит вместо титульного меню, до старта.
         <CharacterCreation world={session.world} onSubmit={createPilot} />
       ) : (
-        !locked && (
+        // Первый клик берёт pointer lock до конца титульного флориша. Сам по себе lock
+        // не должен размонтировать Paused: его эффект ещё ждёт ready и запускает fade.
+        // После интро enterPlay скрывает титул, если lock так и не пришёл.
+        (!locked || flourishRef.current) && !enterPlay && (
           <Paused
             resuming={started}
             auto={launching}
@@ -594,6 +721,13 @@ function Shell({ onRestart }: { onRestart: () => void }) {
               // сравнивают с пустым tab и ведут себя непредсказуемо).
               setTab('planet')
               setLaunching(false)
+              setEnterPlay(false) // док уже на экране — подавлять титул больше нечем
+            }}
+            onLockFailed={() => {
+              // Сдались, пока титул ещё на экране. Уже в enterPlay — Shell.poll / клик.
+              if (enterPlayRef.current) return
+              setEnterPlay(false)
+              setStarted(false)
             }}
             onNewGame={newGame}
             onSignOut={

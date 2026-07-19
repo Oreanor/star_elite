@@ -1,8 +1,7 @@
-import { CORE_INDEX, GALAXY } from '../../config/galaxy'
-import { WORLD } from '../../config/world'
+import { CORE_INDEX } from '../../config/galaxy'
 import { isCruising } from '../cruise/drive'
 import { enterSystem } from '../world/factory'
-import { STARTER_SYSTEM, type SystemDef } from '../world/system'
+import type { SystemDef } from '../world/system'
 import type { World } from '../world/entities'
 import { arrivalPointAt, scatterArrival, type Arrival } from './arrival'
 import { systemDefOf } from './bridge'
@@ -10,7 +9,9 @@ import { driftContacts } from './contacts'
 import { syncLiveContactsFromShips } from '../world/plan'
 import { spawnResidentContacts } from '../world/traffic'
 import { generateSystem } from './generate'
+import { applySharedStartWorld } from './sharedStart'
 import { distanceLy, placeSystem } from './shape'
+import { applyPlayerSave, serializePlayer } from '../save/player'
 
 /**
  * Межзвёздный прыжок.
@@ -25,18 +26,31 @@ import { distanceLy, placeSystem } from './shape'
  * просто опустел (нужно к светилу).
  */
 
-export type JumpBlock = 'no-drive' | 'out-of-range' | 'out-of-charge' | 'same-system' | 'docked' | 'cruising'
+export type JumpBlock = 'no-drive' | 'out-of-range' | 'out-of-charge' | 'same-system' | 'docked' | 'cruising' | 'scaled'
+
+export interface JumpOptions {
+  /** Уже раскрытая и оплаченная пара устьев: обратные проходы не тратят заряд повторно. */
+  establishedPortal?: boolean
+}
+
+function jumpAllowed(world: World, index: number, options: JumpOptions): boolean {
+  const blocked = jumpBlock(world, index)
+  if (blocked === null) return true
+  // Оплаченный тоннель отменяет только требования привода/заряда/дальности.
+  const physical = blocked === 'same-system' || blocked === 'docked' || blocked === 'cruising' || blocked === 'scaled'
+  return options.establishedPortal === true && !physical
+}
 
 /**
- * Описание системы по индексу.
- *
- * Родная система задана вручную: настоящее Солнце, настоящая Земля, станция там,
- * где висит МКС. С неё начинается игра, и первый кадр обязан быть тем самым.
- * Всё остальное выводится из зерна — 2500 систем, ни одна не хранится.
+ * Описание системы по индексу. Всё из зерна; у общего спавна (Люрилар) —
+ * правка причала в `applySharedStartWorld`.
  */
 export function systemDefFor(index: number, galaxySeed: number, seatOverride?: number): SystemDef {
-  if (index === WORLD.HOME_INDEX && galaxySeed === GALAXY.SEED) return STARTER_SYSTEM
-  return systemDefOf(generateSystem(index, galaxySeed), galaxySeed, seatOverride)
+  return applySharedStartWorld(
+    systemDefOf(generateSystem(index, galaxySeed), galaxySeed, seatOverride),
+    index,
+    galaxySeed,
+  )
 }
 
 /** Расстояние до системы, световых лет. Диск не заворачивается — метрика прямая. */
@@ -54,6 +68,9 @@ export function jumpBlock(world: World, index: number): JumpBlock | null {
   if (world.docked) return 'docked'
   // На крейсерском ходу привод не пускает: сначала сбрось скорость до обычной.
   if (isCruising(world.player)) return 'cruising'
+  // Коррекция миелофона меняет сам масштаб метрического кадра. Сшивать две системы
+  // в этот момент нельзя: одно и то же устье получило бы разные физические размеры.
+  if (world.player.state.scale !== 1) return 'scaled'
   if (index === world.systemIndex) return 'same-system'
 
   const drive = world.player.spec.jumpRange
@@ -70,6 +87,17 @@ export function jumpBlock(world: World, index: number): JumpBlock | null {
 /** Системы, до которых достаёт привод. Их и подсвечивает карта. */
 export function reachableSystems(world: World, indices: readonly number[]): number[] {
   return indices.filter((i) => jumpBlock(world, i) === null)
+}
+
+/**
+ * В пределах модели привода (заряд / круиз / док не смотрим).
+ * Метка jumpTarget живёт только пока цель в этой сфере — иначе отваливается.
+ */
+export function jumpInDriveRange(world: World, index: number): boolean {
+  if (index === world.systemIndex) return false
+  const drive = world.player.spec.jumpRange
+  if (drive <= 0) return false
+  return jumpDistance(world, index) <= drive
 }
 
 /**
@@ -95,8 +123,13 @@ function nextGalaxySeed(seed: number): number {
  * `arrival` — куда именно выйти в той системе. `null` значит «куда обычно»:
  * к столице. Само правило живёт в `arrival.ts`, здесь только протаскивается.
  */
-export function jump(world: World, index: number, arrival: Arrival | null = null): boolean {
-  if (jumpBlock(world, index) !== null) return false
+export function jump(
+  world: World,
+  index: number,
+  arrival: Arrival | null = null,
+  options: JumpOptions = {},
+): boolean {
+  if (!jumpAllowed(world, index, options)) return false
   // Дальность считаем ДО перехода: `enterSystem` сменит `systemIndex`, и отсчёт
   // сорвётся. Заряд тратится ровно на пройденный путь — сфера сжимается на него.
   const spent = jumpDistance(world, index)
@@ -117,7 +150,9 @@ export function jump(world: World, index: number, arrival: Arrival | null = null
   const start = scatterArrival(def, arrivalPointAt(def, arrival, world.calendarTime), drive > 0 ? spent / drive : 0, world.rng)
   syncLiveContactsFromShips(world)
   enterSystem(world, def, destIndex, start)
-  world.player.jumpCharge = Math.max(0, world.player.jumpCharge - spent)
+  if (!options.establishedPortal) {
+    world.player.jumpCharge = Math.max(0, world.player.jumpCharge - spent)
+  }
 
   // Прыжок — отрезок времени: сперва знакомые за кулисами делают ход (перелёт, гибель),
   // затем тех, чьё место — эта система, выставляем на радар. Порядок важен: сначала
@@ -126,6 +161,37 @@ export function jump(world: World, index: number, arrival: Arrival | null = null
   // `world.rng`, сброшенного `enterSystem` к зерну системы: детерминизм для сети/реплея.
   driftContacts(world)
   spawnResidentContacts(world)
+  return true
+}
+
+/**
+ * Завершить прыжок в УЖЕ построенный World. Окружение не генерируется повторно:
+ * переносим в него только свежего пилота и цену перехода. Это доменная операция,
+ * чтобы клиент и будущий сервер одинаково решали, можно ли принять готовую систему.
+ */
+export function commitPreparedJump(
+  source: World,
+  destination: World,
+  index: number,
+  options: JumpOptions = {},
+): boolean {
+  if (destination.systemIndex !== index || !jumpAllowed(source, index, options)) return false
+
+  const spent = jumpDistance(source, index)
+  const destinationSeed = destination.galaxySeed
+  applyPlayerSave(destination, {
+    ...serializePlayer(source),
+    galaxySeed: destinationSeed,
+    systemIndex: destination.systemIndex,
+  })
+  if (!options.establishedPortal) {
+    destination.player.jumpCharge = Math.max(0, source.player.jumpCharge - spent)
+  }
+  destination.time = source.time
+  destination.calendarTime = source.calendarTime
+  destination.epoch = source.epoch + 1
+  destination.jumpTargetIndex = null
+  destination.jumpArrivalPlanet = null
   return true
 }
 

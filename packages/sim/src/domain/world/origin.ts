@@ -64,6 +64,7 @@ export function maybeShiftOrigin(world: World): void {
   // Живут доли секунды, но сдвиг может прийтись ровно на них — и вспышка мигнёт не там.
   for (const w of world.warps) w.pos.add(_shift)
   for (const p of world.warpPortals) p.pos.add(_shift)
+  for (const gate of world.jumpGates) gate.pos.add(_shift)
   for (const f of world.shieldFlashes) {
     f.pos.add(_shift)
     f.center.add(_shift)

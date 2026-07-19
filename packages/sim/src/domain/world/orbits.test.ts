@@ -33,6 +33,23 @@ function wait(world: World, orbitSeconds: number): void {
 }
 
 describe('спутники', () => {
+  it('несёт открытый гиперпортал вместе с игроком в орбитальной системе отсчёта', () => {
+    const world = quiet()
+    const gate = {
+      pos: world.player.state.pos.clone().add(new Vector3(100, 0, 0)),
+      normal: new Vector3(1, 0, 0),
+      radius: 30,
+      tube: 2.4,
+    }
+    world.jumpGates.push(gate)
+    const before = gate.pos.clone().sub(world.player.state.pos)
+
+    wait(world, 1_000)
+
+    const after = gate.pos.clone().sub(world.player.state.pos)
+    expect(after.distanceTo(before)).toBeLessThan(1e-6)
+  })
+
   it('рождаются на орбите, а не в центре планеты', () => {
     const world = quiet()
     expect(moons(world).length).toBeGreaterThan(0)

@@ -2,6 +2,7 @@ import { BOMB } from '../../config/weapons'
 import type { ShipEntity, World } from '../world/entities'
 import { applyDamage } from './damage'
 import { spawnExplosion, spawnShockwave } from './effects'
+import { bombShatterAsteroid } from './mining'
 
 /**
  * Энергетическая бомба. Импульс сжигает всё враждебное вокруг корабля.
@@ -54,6 +55,13 @@ export function fireBomb(world: World, e: ShipEntity): boolean {
     m.alive = false
     spawnExplosion(world, m.pos, m.vel, 1.2)
   }
+
+  // Камни: каждый надвое (floor r/2); мелочь < 10 м — уничтожение. Снимок списка —
+  // иначе только что рождённые половинки попали бы под тот же импульс.
+  const rocks = world.asteroids.filter(
+    (a) => a.alive && a.pos.distanceToSquared(e.state.pos) <= radiusSq,
+  )
+  for (const rock of rocks) bombShatterAsteroid(world, rock)
 
   return true
 }

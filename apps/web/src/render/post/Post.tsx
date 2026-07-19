@@ -1,6 +1,6 @@
 import { useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef } from 'react'
-import { Vector2 } from 'three'
+import { Vector2, WebGLRenderTarget } from 'three'
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js'
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js'
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js'
@@ -9,15 +9,12 @@ import { useSession } from '../../app/GameContext'
 import { BLOOM, ZOOM_BLUR, ZOOM_FX, ZOOM_RIPPLE } from '../config'
 import { ZoomBlurShader } from './zoomBlur'
 import { ZoomRippleShader } from './zoomRipple'
+import { JumpPortalPass } from './portalPass'
+import { activeWorldRenderScene } from '../scene/jumpPortalWorld'
 
 /**
- * Свечение + на зуме миелофона: zoom-blur, поверх — радиальный ripple.
- *
- * Дёшево потому, что кадр МАЛЕНЬКИЙ (`PIXEL_SCALE`): проходы идут по буферу
- * в несколько раз меньше экрана. Оба эффекта в покое выключены.
- *
- * Кадр рисует КОМПОЗЕР, а не R3F. Любой `useFrame` с приоритетом выше нуля
- * отключает автоматическую отрисовку, и рисовать обязаны мы сами.
+ * Свечение + zoom-fx + stencil-портал прыжка.
+ * Кадр рисует композер (приоритет 1). Буферы со stencil — иначе маска портала мертва.
  */
 export function Post() {
   const gl = useThree((s) => s.gl)
@@ -29,9 +26,21 @@ export function Post() {
   const strength = useRef(0)
   const time = useRef(0)
 
-  const { composer, blurPass, ripplePass } = useMemo(() => {
-    const c = new EffectComposer(gl)
-    c.addPass(new RenderPass(scene, camera))
+  const { composer, renderPass, blurPass, ripplePass } = useMemo(() => {
+    const sz = gl.getDrawingBufferSize(new Vector2())
+    const rt = new WebGLRenderTarget(sz.x, sz.y, { stencilBuffer: true })
+    const c = new EffectComposer(gl, rt)
+    // Второй буфер композера тоже со stencil (EffectComposer клонирует параметры).
+    c.renderTarget2.stencilBuffer = true
+
+    const render = new RenderPass(scene, camera)
+    c.addPass(render)
+
+    const portal = new JumpPortalPass(
+      () => session.world,
+      () => camera,
+    )
+    c.addPass(portal as never)
 
     const blur = new ShaderPass(ZoomBlurShader)
     blur.uniforms.amount!.value = ZOOM_BLUR.AMOUNT
@@ -49,8 +58,8 @@ export function Post() {
     c.addPass(
       new UnrealBloomPass(new Vector2(1, 1), BLOOM.STRENGTH, BLOOM.RADIUS, BLOOM.THRESHOLD),
     )
-    return { composer: c, blurPass: blur, ripplePass: ripple }
-  }, [gl, scene, camera])
+    return { composer: c, renderPass: render, blurPass: blur, ripplePass: ripple }
+  }, [gl, scene, camera, session])
 
   useEffect(() => {
     composer.setSize(size.width, size.height)
@@ -59,7 +68,6 @@ export function Post() {
 
   useEffect(() => () => composer.dispose(), [composer])
 
-  // Приоритет 1: после HUD и симуляции, последним в кадре.
   useFrame((_, dt) => {
     const clamped = Math.min(dt, 0.05)
     const want = Math.abs(session.world.player.controls.grow) > 0 ? 1 : 0
@@ -80,6 +88,8 @@ export function Post() {
       ripplePass.uniforms.time!.value = time.current
     }
 
+    gl.localClippingEnabled = true
+    renderPass.scene = activeWorldRenderScene(scene, session.world)
     composer.render()
   }, 1)
 

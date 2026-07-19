@@ -228,6 +228,11 @@ const GLB_SCALE = 16
  *   npx @gltf-transform/cli resize --width 1024 --height 1024 in.glb out.glb
  */
 const GLB_HULLS: readonly GlbHullDef[] = [
+  // Spiritus экспортирован вдвое крупнее остальных Meshy-корпусов; scale 8 сохраняет длину 16 м.
+  // У силовой установки одно центральное сопло — это часть идентичности корпуса, не авторазводка.
+  { id: 'spiritus_sanctus', url: '/models/dove4.glb', scale: GLB_SCALE / 2,
+    yaw: GLB_YAW - Math.PI / 2, pitch: GLB_PITCH + Math.PI / 18, roll: GLB_ROLL,
+    nozzles: [{ offset: [0, -0.65, 5], radius: 1.25 }] },
   // «Аврора One»: выхлоп из ДВУХ центральных движков (тёмные тубусы). Сопла придвинуты ВПЕРЁД
   // к устьям движков (z 8.5, не 11 — иначе плюмаж отрывался от кормы) и опущены на ось тубусов.
   { id: 'aurora_one', url: '/models/aurora_one.glb', scale: GLB_SCALE, yaw: GLB_YAW, pitch: GLB_PITCH, roll: GLB_ROLL,

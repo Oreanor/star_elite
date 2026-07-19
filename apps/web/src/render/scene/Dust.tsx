@@ -1,5 +1,5 @@
 import { useFrame } from '@react-three/fiber'
-import { useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import { BufferAttribute, BufferGeometry, LineSegments, Mesh, Vector3 } from 'three'
 import { makeRng } from '@elite/sim'
 import { useSession } from '../../app/GameContext'
@@ -38,6 +38,19 @@ export function Dust() {
   const session = useSession()
   const ref = useRef<LineSegments>(null)
   const ribbonRef = useRef<Mesh>(null)
+  // Два одновременно отрисовываемых мира не могут делить mutable цвет и uniforms:
+  // последний useFrame иначе перекрашивает пыль обеих сцен своим спектром звезды.
+  const materials = useMemo(() => ({
+    dust: dustMaterial().clone(),
+    laser: dustLaserMaterial().clone(),
+    neon: dustNeonMaterial().clone(),
+  }), [])
+
+  useEffect(() => () => {
+    materials.dust.dispose()
+    materials.laser.dispose()
+    materials.neon.dispose()
+  }, [materials])
 
   const { geometry, ribbonGeometry, offsets } = useMemo(() => {
     const rng = makeRng(0x9dc51)
@@ -107,12 +120,12 @@ export function Dust() {
     // ЛАЗЕРНЫЙ ход: на глубоком крейсере пыль загорается. Накал 0..1 от GLOW_START к GLOW_FULL.
     const glow = Math.max(0, Math.min(1, (player.cruise.factor - DUST.GLOW_START) / (DUST.GLOW_FULL - DUST.GLOW_START)))
     if (glow > 0) {
-      const laser = dustLaserMaterial()
+      const laser = materials.laser
       laser.color.setHex(glowTint)
       laser.opacity = 0.4 + 0.5 * glow
       mesh.material = laser
     } else {
-      const dust = dustMaterial()
+      const dust = materials.dust
       dust.color.setHex(dustTint)
       mesh.material = dust
     }
@@ -129,7 +142,7 @@ export function Dust() {
     const glowW = Math.max(0, Math.min(1, (fatFactor - DUST.GLOW_START) / (DUST.GLOW_FULL - DUST.GLOW_START)))
     const fatten = Math.min(1, DUST.NEON_FATTEN_MAX_FACTOR / Math.max(player.cruise.factor, 1))
     const halfWidthFrac = DUST.NEON_HALF_WIDTH * glowW
-    const neonMat = dustNeonMaterial()
+    const neonMat = materials.neon
     neonMat.uniforms.uColor!.value.setHex(glowTint)
     neonMat.uniforms.uOpacity!.value = 0.25 + 0.6 * glow
     neonMat.uniforms.uTime!.value = state.clock.elapsedTime
@@ -209,8 +222,8 @@ export function Dust() {
 
   return (
     <>
-      <lineSegments ref={ref} geometry={geometry} material={dustMaterial()} frustumCulled={false} />
-      <mesh ref={ribbonRef} geometry={ribbonGeometry} material={dustNeonMaterial()} frustumCulled={false} visible={false} />
+      <lineSegments ref={ref} geometry={geometry} material={materials.dust} frustumCulled={false} />
+      <mesh ref={ribbonRef} geometry={ribbonGeometry} material={materials.neon} frustumCulled={false} visible={false} />
     </>
   )
 }

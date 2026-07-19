@@ -61,6 +61,17 @@ describe('гигантский масштаб гасит системный на
     expect(world.navTargetId).toBe(star!.id)
   })
 
+  it('с PHASE_END снимает захват борта — корабли уже растворились', () => {
+    const world = createWorld({ ...STARTER_SYSTEM, belt: null, patrols: [] })
+    const other = world.ships.find((s) => s.id !== world.player.id) ?? world.ships[0]
+    // Если патрулей нет — подставим фиктивный id; prune всё равно гасит контактный захват.
+    world.lockedTargetId = other?.id ?? 99
+    world.targetFocus = 'contact'
+    world.player.state.scale = MIELOPHONE.PHASE_END
+    pruneGiantScaleLocks(world)
+    expect(world.lockedTargetId).toBeNull()
+  })
+
   it('Shift+Tab выше GHOST_BODY берёт только звезду/дыру', () => {
     const world = createWorld({ ...STARTER_SYSTEM, belt: null, patrols: [] })
     world.player.state.scale = MIELOPHONE.GHOST_BODY_SCALE
@@ -69,22 +80,18 @@ describe('гигантский масштаб гасит системный на
     expect(nav?.kind === 'star' || nav?.kind === 'blackhole').toBe(true)
   })
 
-  it('звезда и jumpTarget переживают рост и сжатие через GHOST_BODY', () => {
-    // Баг, которого не должно быть: зум миелофона снимал фокус со светила.
+  it('звезда переживает рост через GHOST_BODY', () => {
     const world = createWorld({ ...STARTER_SYSTEM, belt: null, patrols: [] })
     const star = world.bodies.find((b) => b.kind === 'star')
     expect(star).toBeTruthy()
     world.navTargetId = star!.id
     world.targetFocus = 'nav'
-    world.jumpTargetIndex = world.systemIndex === 0 ? 1 : 0
-    const pinned = world.jumpTargetIndex
 
     for (const scale of [1, 1e3, MIELOPHONE.GHOST_BODY_SCALE, 1e6, MIELOPHONE.MAX_SCALE, 1e4, 1]) {
       world.player.state.scale = scale
       pruneGiantScaleLocks(world)
       expect(world.navTargetId).toBe(star!.id)
       expect(world.targetFocus).toBe('nav')
-      expect(world.jumpTargetIndex).toBe(pinned)
     }
   })
 })

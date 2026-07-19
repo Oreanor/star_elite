@@ -41,6 +41,7 @@ const KEY_GROUPS: { title: Key; rows: [Key, Key][] }[] = [
       ['key.target', 'key.target.what'],
       ['key.nav', 'key.nav.what'],
       ['key.retarget', 'key.retarget.what'],
+      ['key.clearNav', 'key.clearNav.what'],
       ['key.autofight', 'key.autofight.what'],
       ['key.missile', 'key.missile.what'],
       // Аукс-слот ОДИН, и клавиша одна — E: жмётся то, что в нём стоит (ПРО/бомба/маскировка/
@@ -591,6 +592,7 @@ export function Paused({
   onFade,
   onBoot,
   onDock,
+  onLockFailed,
   onNewGame,
   onSignOut,
 }: {
@@ -606,6 +608,8 @@ export function Paused({
   onBoot: () => void
   /** Финал авто-старта: посадить новичка на станцию (вместо запроса захвата курсора). */
   onDock?: () => void
+  /** poll сдался — Shell снова покажет титул (Paused уже мог быть снят под пеленой). */
+  onLockFailed?: () => void
   onNewGame: () => void
   /** Онлайн: выход из аккаунта (Firebase). */
   onSignOut?: () => void
@@ -646,7 +650,8 @@ export function Paused({
   // захват так и не дался (сдались) — тогда следующая попытка снова доиграет флориш.
   const fired = useRef(false)
 
-  // Захват получен — Paused размонтируется, и таймер обязан уйти вместе с ним.
+  // При возврате с паузы захват размонтирует Paused сразу. На титуле компонент живёт
+  // до конца флориша, но его poll всё равно должен уйти вместе с ним.
   useEffect(() => () => void (timer.current !== null && window.clearTimeout(timer.current)), [])
 
   /**
@@ -681,11 +686,13 @@ export function Paused({
   const poll = (deadline: number) => {
     timer.current = null
     void requestLock().then((ok) => {
-      if (ok) return // захват получен: Paused сейчас размонтируется
+      if (ok) return // захват получен: дальше переходом владеет Shell/титульный флориш
       if (performance.now() >= deadline) {
         setWaiting(false) // сдались — пусть кнопка снова принимает нажатие
         setLaunched(false) // и корабль обратно на место (не «улетевший») к следующей попытке
         fired.current = false // разрешаем флоришу сыграть заново на следующей попытке
+        // Под пеленой Shell уже снял Paused (`enterPlay`) — без колбэка титул не вернётся.
+        onLockFailed?.()
         return
       }
       timer.current = window.setTimeout(() => poll(deadline), LOCK_RETRY_MS)
@@ -696,7 +703,7 @@ export function Paused({
    * Запуск игры. На ПАУЗЕ корабля нет — грузим и возвращаемся сразу. На ТИТУЛЕ корабль
    * ДРОЖИТ (нарастающий тремор), пока строится сцена, — сам тремор и есть индикатор
    * загрузки. Как только сцена готова — «вжух» (`launched`) корабль срывается, и через
-   * секунду (небо успевает опустеть) уходим в игру/док.
+   * секунду (небо успевает опустеть) уходим в игру (полёт или док — по `world.docked`).
    *
    * `onBoot` блокирует поток на ~секунду, поэтому его откладываем на `TREMBLE_LEAD_MS`:
    * пусть тремор и «секундочку» успеют отрисоваться до блокировки (иначе их не видно).
@@ -705,18 +712,20 @@ export function Paused({
   const launch = () => {
     setWaiting(true)
     if (resuming) {
-      // Пауза: ни корабля, ни флориша — сцена уже построена, дожимаем захват сразу.
-      window.setTimeout(() => {
-        onBoot()
-        poll(performance.now() + LOCK_GIVE_UP_MS)
-      }, 0)
+      // Пауза: захват СРАЗУ в том же тике, что клик — иначе user activation сгорает
+      // в setTimeout, и браузер молчит, пока не кликнешь ещё раз по канвасу.
+      void requestLock()
+      onBoot()
+      poll(performance.now() + LOCK_GIVE_UP_MS)
       return
     }
-    // С МОМЕНТА нажатия START и на ВСЁ интро (дрожь → срыв → улёт → вылет со станции)
-    // мышь молчит: захват курсора берётся уже здесь (poll ниже), и без этого движение
-    // мыши копилось бы в ручку и уводило корабль — а он обязан улететь строго прямо.
-    // Вернётся мышь пилоту сама, когда кончится кино вылета (advanceUndock).
+    // С МОМЕНТА нажатия START: захват в том же жесте клика (после флориша браузер
+    // уже не даст без нового клика). Мышь в ручку не копим — stick suspended.
+    // Вернётся мышь пилоту сама, когда кончится кино вылета (advanceUndock), либо
+    // сразу в swap, если старт в полёте без undock-кино.
     setStickSuspended(true)
+    void requestLock()
+    poll(performance.now() + LOCK_GIVE_UP_MS)
     // Титул: пока строится сцена, корабль дрожит; станции не даём накрыть его панелью
     // (flourishRef). «Вжух» и переход — по сигналу готовности (`ready`), не по таймеру.
     flourishRef.current = true
@@ -742,8 +751,8 @@ export function Paused({
           // В полёт входим БЕЗ кино вылета (оно бывает только от причала), значит вернуть
           // мышь некому — делаем это здесь, иначе после «Продолжить» из космоса корабль
           // остался бы без управления. У причала мышь вернёт advanceUndock при отчаливании.
+          // Захват уже крутится с launch(); Shell продолжит poll после размонтирования Paused.
           setStickSuspended(false)
-          poll(performance.now() + LOCK_GIVE_UP_MS)
         }
       }
       if (onFade) onFade(swap)
@@ -757,7 +766,7 @@ export function Paused({
     launch()
   }
 
-  // Авто-старт новичка: флориш и посадка на станцию проигрываются сами, без нажатия.
+  // Авто-старт новичка: флориш и переход в мир проигрываются сами, без нажатия.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => void (auto && launch()), [])
 

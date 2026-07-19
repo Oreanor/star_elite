@@ -36,6 +36,15 @@ export {
   type LandableSurface,
 } from './landing'
 export { stepShip } from './model'
+export {
+  crossedJumpGate,
+  fitsInsideJumpGate,
+  jumpGateSide,
+  linkedPortalAhead,
+  linkedPortalTargetRadius,
+  stepJumpGateCollision,
+  stepLinkedPortalRadius,
+} from './jumpGate'
 export { bankToward, interceptPoint, steerToward } from './steering'
 export {
   createControls,

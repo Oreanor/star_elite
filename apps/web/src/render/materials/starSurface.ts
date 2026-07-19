@@ -27,39 +27,94 @@ const CLASS_BY_COLOR = new Map<number, string>(STAR_CLASSES.map((c) => [c.color,
 const TEXTURED = new Set(['O', 'B', 'A', 'F', 'G', 'K', 'M'])
 
 /**
+ * `full` — система вблизи (1774×887); `lo` — галактика / HUD (512×256, см. scripts/star-lo.mjs).
+ */
+export type StarSurfaceQuality = 'full' | 'lo'
+
+/**
  * URL карты поверхности по цвету звезды — или `null`, если класса нет среди
  * текстурированных (коричневый/нейтронный/чёрная дыра, а также хардкод-солнце дома).
  * Тогда звезда остаётся на плоском цвете — это штатный фолбэк, а не поломка.
  */
-export function starSurfaceUrl(color: number): string | null {
+export function starSurfaceUrl(
+  color: number,
+  quality: StarSurfaceQuality = 'full',
+): string | null {
   const id = CLASS_BY_COLOR.get(color)
-  return id && TEXTURED.has(id) ? `/stars/star-${id}.webp` : null
+  if (!id || !TEXTURED.has(id)) return null
+  return quality === 'lo' ? `/stars/lo/star-${id}.webp` : `/stars/star-${id}.webp`
 }
 
-function configure(texture: Texture): Texture {
+function cacheKey(color: number, quality: StarSurfaceQuality): string {
+  return `${quality}:${color}`
+}
+
+function configure(texture: Texture, quality: StarSurfaceQuality): Texture {
   // По долготе карта заворачивается на 360°, поэтому горизонталь ПОВТОРЯЕТСЯ: без
   // этого «кипящее» смещение UV за край дало бы шов. Вертикаль (полюса) — зажата.
   texture.wrapS = RepeatWrapping
   texture.colorSpace = SRGBColorSpace
-  texture.anisotropy = 16 // поверхность видна вскользь у лимба звезды; three зажмёт до макс
+  // lo — мелкий LOD галактики; full — лимб вблизи, анизотропия нужна.
+  texture.anisotropy = quality === 'lo' ? 1 : 16
   return texture
 }
 
+/** Кэш карт: full (Bodies) и lo (галактика) живут раздельно. */
+const surfaceCache = new Map<string, Texture>()
+const surfaceLoading = new Set<string>()
+
 /**
- * Грузит карту поверхности звезды по её цвету. Лениво и по одной: в детальном виде
- * всегда ровно одна система, значит и текстур звёзд в кадре — одна-две (двойная).
- * @returns true, если для этого класса карта есть и загрузка пошла.
+ * Грузит карту поверхности звезды по её цвету.
+ * @returns true, если для этого класса карта есть и загрузка пошла / уже в кэше.
  */
-export function loadStarSurface(color: number, onLoaded: (texture: Texture) => void): boolean {
-  const url = starSurfaceUrl(color)
+export function loadStarSurface(
+  color: number,
+  onLoaded: (texture: Texture) => void,
+  quality: StarSurfaceQuality = 'full',
+): boolean {
+  const key = cacheKey(color, quality)
+  const cached = surfaceCache.get(key)
+  if (cached) {
+    onLoaded(cached)
+    return true
+  }
+  const url = starSurfaceUrl(color, quality)
   if (!url) return false
+  if (surfaceLoading.has(key)) return true
+  surfaceLoading.add(key)
   new TextureLoader().load(
     url,
-    (texture) => onLoaded(configure(texture)),
+    (texture) => {
+      const ready = configure(texture, quality)
+      surfaceCache.set(key, ready)
+      surfaceLoading.delete(key)
+      onLoaded(ready)
+    },
     undefined,
-    () => {}, // нет файла — молча остаёмся на плоском цвете
+    () => {
+      surfaceLoading.delete(key) // нет файла — молча остаёмся на плоском цвете
+    },
   )
   return true
+}
+
+/** Уже загруженная lo-карта (синхронно) — для галактического LOD без колбэка в кадре. */
+export function starSurfaceTexture(
+  color: number,
+  quality: StarSurfaceQuality = 'lo',
+): Texture | null {
+  return surfaceCache.get(cacheKey(color, quality)) ?? null
+}
+
+/**
+ * Прогрев lo-карт главной последовательности: на галактическом слое ближайшие
+ * звёзды разных классов могут смениться за кадр — ждать каждую нельзя.
+ */
+export function preloadStarSurfaces(onReady?: () => void): void {
+  for (const c of STAR_CLASSES) {
+    if (!TEXTURED.has(c.id)) continue
+    loadStarSurface(c.color, () => onReady?.(), 'lo')
+  }
 }
 
 const vertex = /* glsl */ `
@@ -146,4 +201,23 @@ export function createStarSurfaceMaterial(map: Texture): ShaderMaterial {
     },
     fog: false,
   })
+}
+
+/** Материалы галактического LOD — только lo-карты. Bodies держит свои материалы. */
+const loMaterialCache = new Map<number, ShaderMaterial>()
+
+export function starSurfaceMaterial(color: number): ShaderMaterial | null {
+  const map = starSurfaceTexture(color, 'lo')
+  if (!map) return null
+  let mat = loMaterialCache.get(color)
+  if (!mat) {
+    mat = createStarSurfaceMaterial(map)
+    loMaterialCache.set(color, mat)
+  }
+  return mat
+}
+
+/** Крутит кипение у lo-материалов галактического LOD. */
+export function tickStarSurfaceTime(time: number): void {
+  for (const mat of loMaterialCache.values()) mat.uniforms.uTime!.value = time
 }

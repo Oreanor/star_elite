@@ -5,6 +5,10 @@ import {
   BufferAttribute,
   BufferGeometry,
   Color,
+  Group,
+  InstancedMesh,
+  Mesh,
+  Object3D,
   type PerspectiveCamera,
   Points,
   ShaderMaterial,
@@ -13,6 +17,18 @@ import {
 import { applyDelta, GALAXY, generateGalaxy, SCALE, type BodyEntity } from '@elite/sim'
 import { useSession } from '../../app/GameContext'
 import { GALAXY_LAYER } from '../config'
+import {
+  createGalaxyStarDiscMaterial,
+  createGalaxyStarShellMaterial,
+  galaxyStarDiscGeometry,
+  galaxyStarShellGeometry,
+} from '../materials/galaxyStarMesh'
+import {
+  preloadStarSurfaces,
+  starSurfaceMaterial,
+  starSurfaceTexture,
+  tickStarSurfaceTime,
+} from '../materials/starSurface'
 import { galaxyRadar } from './galaxyRadar'
 
 /**
@@ -21,14 +37,15 @@ import { galaxyRadar } from './galaxyRadar'
  * Якорь = барицентр своей системы (середина пары / звезда / дыра): local координаты
  * совпадают с телами — двойная проявляется двойной, подмена без шва.
  *
- * Размер точки = R·STAR_INFLATE (все классы одинаково раздуты, пропорции честные).
- * Сфера кадра шире локатора: в космосе поле, на мини-карте — соседи.
+ * Дальние — мягкие точки; близкие (diamPx ≥ MESH_PX) — сфера+корона (до MESH_MAX);
+ * самые крупные (TEXTURE_PX) — lo-карта класса (`/stars/lo/star-*.webp`, 512×256).
  *
  * Буфер: сначала главные (индекс = systemIndex), затем спутники двойных.
  */
 const vertex = /* glsl */ `
 attribute float size; // радиус в св.г слоя = R·STAR_INFLATE / LY_TO_M
 attribute float boost; // 0 = спокойная, 1 = активная (jumpTarget)
+attribute float lod;   // 1 = рисует меш — точку гасим
 
 uniform float uRadius;
 uniform float uEdge;
@@ -37,19 +54,18 @@ uniform float uLayerScale;
 uniform float uProj;
 uniform float uSpeckPx;
 uniform float uMaxPx;
-uniform float uGlowSize;
+uniform float uGlowPaddingPx;
 uniform float uActiveSize;
 uniform float uCalmSize;
 
 varying vec3 vColor;
 varying float vT;
-varying float vPhase; // 0..1 — уникальная фаза мерцания от позиции
+varying float vPhase;
 varying float vBoost;
 
 void main() {
   vColor = color;
   vBoost = boost;
-  // Стабильный hash: каждая звезда переливается в своём ритме, без атрибута.
   vPhase = fract(sin(dot(position.xy, vec2(12.9898, 78.233))) * 43758.5453);
   vec4 world = modelMatrix * vec4(position, 1.0);
   float dist = length(world.xyz - uPlayer);
@@ -57,15 +73,25 @@ void main() {
   vec4 mv = viewMatrix * world;
   gl_Position = projectionMatrix * mv;
 
+  if (lod > 0.5 || vT <= 0.0) {
+    gl_PointSize = 0.0;
+    return;
+  }
+
   float rRender = size * uLayerScale;
   float camDist = max(length(mv.xyz), 1.0);
   float diamPx = 2.0 * uProj * rRender / camDist;
   float sizeMul = mix(uCalmSize, uActiveSize, boost);
-  gl_PointSize = min(max(diamPx * uGlowSize * sizeMul, uSpeckPx), uMaxPx);
+  float discPx = diamPx * sizeMul;
+  // Ореол растёт вместе с диском, но получает экранный запас по краям: вдали
+  // звезда остаётся светом, вблизи свечение не превращается в наклейку одного размера.
+  float glowPx = discPx + 2.0 * uGlowPaddingPx;
+  gl_PointSize = min(max(glowPx, uSpeckPx), uMaxPx);
 }
 `
 
 const fragment = /* glsl */ `
+
 uniform float uTime;
 uniform float uTwinkleAmp;
 uniform float uTwinkleSpeed;
@@ -74,6 +100,10 @@ uniform float uActiveBright;
 uniform float uCalmBright;
 uniform float uActiveTwinkle;
 uniform float uCalmTwinkle;
+uniform float uHaloGain;
+uniform float uHaloAlpha;
+uniform float uBackgroundGlow;
+uniform float uBackgroundAlpha;
 
 varying vec3 vColor;
 varying float vT;
@@ -83,16 +113,30 @@ varying float vBoost;
 void main() {
   if (vT <= 0.0) discard;
   vec2 pc = gl_PointCoord - vec2(0.5);
-  float r2 = dot(pc, pc) * 4.0;
-  if (r2 > 1.0) discard;
+  float r = length(pc) * 2.0;
+  if (r > 1.0) discard;
 
-  // Мячик: яркое ядро + мягкий ореол; цвет звезды читается, не белая пыль starfield.
-  float core = exp(-10.0 * r2);
-  float halo = exp(-1.35 * r2);
-  float sphere = sqrt(max(0.0, 1.0 - r2));
+  // Второй draw call рисует только очень слабую широкую дымку. Отдельного ядра здесь
+  // нет: одиночная звезда почти не меняется, а перекрытия в плотном поле подсвечивают фон.
+  if (uBackgroundGlow > 0.5) {
+    float haze = exp(-2.2 * r * r) * (1.0 - smoothstep(0.58, 1.0, r));
+    float hazeAlpha = haze * uBackgroundAlpha * vT;
+    if (hazeAlpha < 0.002) discard;
+    gl_FragColor = vec4(vColor * 0.72, hazeAlpha);
+    return;
+  }
+
+  // Дешёвое свечение: компактное ядро + широкий мягкий ореол (additive → рой с ребра).
+  float soft = 1.0 - smoothstep(0.35, 1.0, r);
+  float r2 = r * r;
+  float core = exp(-18.0 * r2);
+  float halo = exp(-1.4 * r2) * soft;
   float bright = mix(uCalmBright, uActiveBright, vBoost);
-  vec3 col = vColor * (0.35 + 0.55 * sphere + 1.4 * core + 0.4 * halo) * bright;
-  float alpha = (core * 0.95 + halo * 0.5 + sphere * 0.25) * vT;
+  vec3 col = vColor * (0.55 * core + uHaloGain * halo) * bright;
+  // Белое горячее ядро пропускает через bloom все спектральные классы, включая красные.
+  col += vec3(1.0) * core * 0.70 * bright;
+  // halo уже содержит soft; второй множитель делал край слишком жёстким.
+  float alpha = (core * 0.85 + halo * uHaloAlpha) * vT;
 
   float w1 = uTwinkleSpeed + vPhase * uTwinkleSpread;
   float w2 = uTwinkleSpeed * 0.37 + (1.0 - vPhase) * uTwinkleSpread * 0.5;
@@ -103,7 +147,8 @@ void main() {
   col *= twinkle;
   alpha *= mix(0.88, 1.05, 0.5 + 0.5 * wave * mix(uCalmTwinkle, 1.0, vBoost));
 
-  if (alpha < 0.02) discard;
+  // Слабый хвост нужен именно для суммарной засветки плотного звёздного поля.
+  if (alpha < 0.004) discard;
   gl_FragColor = vec4(col, alpha);
 }
 `
@@ -111,7 +156,16 @@ void main() {
 const _colour = new Color()
 const _bary = new Vector3()
 const _tmp = new Vector3()
+const _obj = new Object3D()
 const DEG2RAD = Math.PI / 180
+
+/** Top-k LOD без аллокаций: индексы и diamPx лучших кандидатов. */
+const _lodIdx = new Int32Array(32)
+const _lodPx = new Float32Array(32)
+/** Порядок mesh-кандидатов по diamPx (убыв.) — без аллокаций. */
+const _lodOrder = new Int32Array(32)
+/** Какие из mesh-слотов уже взяли текстуру в этом кадре. */
+const _texTaken = new Uint8Array(32)
 
 /** Радиус точки в св.г слоя: (R_м · STAR_INFLATE) / LY_TO_M → rRender = R·INFLATE / scale. */
 function sizeLy(radiusUnits: number): number {
@@ -121,10 +175,14 @@ function sizeLy(radiusUnits: number): number {
 type StarBuffers = {
   positions: Float32Array
   colors: Float32Array
+  /** Цвет класса (hex) — ключ lo-карты `/stars/lo/star-*.webp`. */
+  colorHex: Uint32Array
   /** Каталожный radius — из него sizeLy (HMR конфига без пересборки геометрии). */
   radiusUnits: Float32Array
   /** 0/1: активная цель Tab / карты. */
   boost: Float32Array
+  /** 0/1: эту звезду рисует меш, не точка. */
+  lod: Float32Array
   count: number
   systemCount: number
   homeCompanionIndex: number
@@ -151,14 +209,34 @@ function homePair(bodies: BodyEntity[]): BodyEntity[] {
   return hole ? [hole] : []
 }
 
+/** Вставить кандидата в top-k по diamPx (без полной сортировки). */
+function considerLod(i: number, diamPx: number, k: number): void {
+  let worst = 0
+  for (let j = 1; j < k; j++) {
+    if (_lodPx[j]! < _lodPx[worst]!) worst = j
+  }
+  if (_lodIdx[worst]! < 0 || diamPx > _lodPx[worst]!) {
+    _lodIdx[worst] = i
+    _lodPx[worst] = diamPx
+  }
+}
+
 export function GalaxyLayer() {
   const session = useSession()
-  const ref = useRef<Points>(null)
+  const groupRef = useRef<Group>(null)
+  const pointsRef = useRef<Points>(null)
+  const discRef = useRef<InstancedMesh>(null)
+  const shellRef = useRef<InstancedMesh>(null)
+  const texMeshRefs = useRef<(Mesh | null)[]>([])
 
   const [awake, setAwake] = useState(false)
   const anchorTrue = useRef(new Vector3())
   const starData = useRef<StarBuffers | null>(null)
   const sizeKey = useRef(0)
+
+  useEffect(() => {
+    if (awake) preloadStarSurfaces()
+  }, [awake])
 
   const geometry = useMemo(() => {
     if (!awake) return null
@@ -172,9 +250,11 @@ export function GalaxyLayer() {
 
     const positions = new Float32Array(count * 3)
     const colors = new Float32Array(count * 3)
+    const colorHex = new Uint32Array(count)
     const sizes = new Float32Array(count)
     const radiusUnits = new Float32Array(count)
-    const boost = new Float32Array(count) // спокойные по умолчанию
+    const boost = new Float32Array(count)
+    const lod = new Float32Array(count)
 
     const pair = homePair(world.bodies)
     const homePrimary = pair[0] ?? null
@@ -186,10 +266,13 @@ export function GalaxyLayer() {
       positions[i * 3] = s.x - origin.x
       positions[i * 3 + 1] = s.z - origin.z
       positions[i * 3 + 2] = s.y - origin.y
-      _colour.setHex(s.star.color)
+      const primaryColor =
+        i === world.systemIndex && homePrimary ? homePrimary.color : s.star.color
+      _colour.setHex(primaryColor)
       colors[i * 3] = _colour.r
       colors[i * 3 + 1] = _colour.g
       colors[i * 3 + 2] = _colour.b
+      colorHex[i] = primaryColor
       radiusUnits[i] =
         i === world.systemIndex && homePrimary
           ? homePrimary.radius / SCALE.STAR_RADIUS
@@ -203,10 +286,13 @@ export function GalaxyLayer() {
       positions[b] = positions[i * 3]! + _tmp.x * sep
       positions[b + 1] = positions[i * 3 + 1]! + _tmp.y * sep
       positions[b + 2] = positions[i * 3 + 2]! + _tmp.z * sep
-      _colour.setHex(s.companion.color)
+      const companionColor =
+        i === world.systemIndex && pair[1] ? pair[1].color : s.companion.color
+      _colour.setHex(companionColor)
       colors[b] = _colour.r
       colors[b + 1] = _colour.g
       colors[b + 2] = _colour.b
+      colorHex[write] = companionColor
       radiusUnits[write] =
         i === world.systemIndex && pair[1]
           ? pair[1].radius / SCALE.STAR_RADIUS
@@ -221,11 +307,14 @@ export function GalaxyLayer() {
     g.setAttribute('color', new BufferAttribute(colors, 3))
     g.setAttribute('size', new BufferAttribute(sizes, 1))
     g.setAttribute('boost', new BufferAttribute(boost, 1))
+    g.setAttribute('lod', new BufferAttribute(lod, 1))
     starData.current = {
       positions,
       colors,
+      colorHex,
       radiusUnits,
       boost,
+      lod,
       count,
       systemCount,
       homeCompanionIndex,
@@ -249,13 +338,17 @@ export function GalaxyLayer() {
           uProj: { value: 1000 },
           uSpeckPx: { value: GALAXY_LAYER.SPECK_PX },
           uMaxPx: { value: GALAXY_LAYER.MAX_PIXELS },
-          uGlowSize: { value: GALAXY_LAYER.GLOW_SIZE },
+          uGlowPaddingPx: { value: GALAXY_LAYER.GLOW_PADDING_PX },
           uActiveSize: { value: GALAXY_LAYER.ACTIVE_SIZE_MUL },
           uCalmSize: { value: GALAXY_LAYER.CALM_SIZE_MUL },
           uActiveBright: { value: GALAXY_LAYER.ACTIVE_BRIGHT },
           uCalmBright: { value: GALAXY_LAYER.CALM_BRIGHT },
           uActiveTwinkle: { value: GALAXY_LAYER.ACTIVE_TWINKLE },
           uCalmTwinkle: { value: GALAXY_LAYER.CALM_TWINKLE },
+          uHaloGain: { value: GALAXY_LAYER.POINT_HALO_GAIN },
+          uHaloAlpha: { value: GALAXY_LAYER.POINT_HALO_ALPHA },
+          uBackgroundGlow: { value: 0 },
+          uBackgroundAlpha: { value: 0 },
           uTime: { value: 0 },
           uTwinkleAmp: { value: GALAXY_LAYER.TWINKLE_AMP },
           uTwinkleSpeed: { value: GALAXY_LAYER.TWINKLE_SPEED },
@@ -272,7 +365,25 @@ export function GalaxyLayer() {
   )
   useEffect(() => () => material.dispose(), [material])
 
-  /** Какой индекс уже подсвечен — не гоняем весь буфер boost каждый кадр. */
+  const backgroundGlowMaterial = useMemo(() => {
+    const glow = material.clone()
+    glow.depthTest = true
+    glow.uniforms.uSpeckPx!.value = 1
+    glow.uniforms.uMaxPx!.value = GALAXY_LAYER.BACKGROUND_GLOW_MAX_PX
+    glow.uniforms.uGlowPaddingPx!.value = GALAXY_LAYER.BACKGROUND_GLOW_PADDING_PX
+    glow.uniforms.uBackgroundGlow!.value = 1
+    glow.uniforms.uBackgroundAlpha!.value = GALAXY_LAYER.BACKGROUND_GLOW_ALPHA
+    return glow
+  }, [material])
+  useEffect(() => () => backgroundGlowMaterial.dispose(), [backgroundGlowMaterial])
+
+  const discMat = useMemo(() => createGalaxyStarDiscMaterial(), [])
+  const shellMat = useMemo(() => createGalaxyStarShellMaterial(), [])
+  useEffect(() => () => {
+    discMat.dispose()
+    shellMat.dispose()
+  }, [discMat, shellMat])
+
   const activeKey = useRef<number | null>(null)
   const boostData = useRef<StarBuffers | null>(null)
 
@@ -287,9 +398,12 @@ export function GalaxyLayer() {
       if (scale >= GALAXY_LAYER.WAKE_SCALE) setAwake(true)
       return
     }
-    const points = ref.current
+    const group = groupRef.current
+    const points = pointsRef.current
+    const disc = discRef.current
+    const shell = shellRef.current
     const data = starData.current
-    if (!points || !data) return
+    if (!group || !points || !data) return
     if (boostData.current !== data) {
       boostData.current = data
       activeKey.current = null
@@ -303,41 +417,74 @@ export function GalaxyLayer() {
     } else {
       _bary.copy(world.player.state.pos)
     }
-    points.position.copy(_bary)
+    group.position.copy(_bary)
     anchorTrue.current.copy(_bary).add(world.originOffset)
     world.galaxyAnchorTrue = anchorTrue.current
 
     const effScale = Math.min(scale, GALAXY_LAYER.LOCK_SCALE)
     const layerScale = GALAXY_LAYER.LY_TO_M / effScale
-    points.scale.setScalar(layerScale)
+    group.scale.setScalar(layerScale)
     material.uniforms.uLayerScale!.value = layerScale
+    backgroundGlowMaterial.uniforms.uLayerScale!.value = layerScale
 
-    // Своя пара — с реальных тел: орбита и барицентр, шов «звезда-в-звезду».
+    // Своя пара: на малом × совмещаем точку слоя с телом (шов). На миллионах
+    // (pos−bary)/layerScale раздувается до сотен св.г — откатываем в каталог.
     const home = world.systemIndex
     if (pair[0] && layerScale > 0) {
       const posAttr = points.geometry.getAttribute('position') as BufferAttribute
       const pos = posAttr.array as Float32Array
+      const seamMax = GALAXY_LAYER.HOME_SEAM_MAX_LY
       _tmp.copy(pair[0].pos).sub(_bary).divideScalar(layerScale)
-      pos[home * 3] = _tmp.x
-      pos[home * 3 + 1] = _tmp.y
-      pos[home * 3 + 2] = _tmp.z
-      if (pair[1] && data.homeCompanionIndex >= 0) {
+      const seamOk = _tmp.lengthSq() <= seamMax * seamMax
+      if (seamOk) {
+        pos[home * 3] = _tmp.x
+        pos[home * 3 + 1] = _tmp.y
+        pos[home * 3 + 2] = _tmp.z
+      } else {
+        pos[home * 3] = 0
+        pos[home * 3 + 1] = 0
+        pos[home * 3 + 2] = 0
+      }
+      if (data.homeCompanionIndex >= 0) {
         const c = data.homeCompanionIndex
-        _tmp.copy(pair[1].pos).sub(_bary).divideScalar(layerScale)
-        pos[c * 3] = _tmp.x
-        pos[c * 3 + 1] = _tmp.y
-        pos[c * 3 + 2] = _tmp.z
+        if (seamOk && pair[1]) {
+          _tmp.copy(pair[1].pos).sub(_bary).divideScalar(layerScale)
+          if (_tmp.lengthSq() <= seamMax * seamMax) {
+            pos[c * 3] = _tmp.x
+            pos[c * 3 + 1] = _tmp.y
+            pos[c * 3 + 2] = _tmp.z
+          } else {
+            binaryDir(home, _tmp)
+            const sep = GALAXY_LAYER.BINARY_SEP_LY
+            pos[c * 3] = sep * _tmp.x
+            pos[c * 3 + 1] = sep * _tmp.y
+            pos[c * 3 + 2] = sep * _tmp.z
+          }
+        } else {
+          binaryDir(home, _tmp)
+          const sep = GALAXY_LAYER.BINARY_SEP_LY
+          pos[c * 3] = sep * _tmp.x
+          pos[c * 3 + 1] = sep * _tmp.y
+          pos[c * 3 + 2] = sep * _tmp.z
+        }
       }
       posAttr.needsUpdate = true
     }
 
-    // Подтянуть size/speck после правки конфига (HMR) без пересборки геометрии.
     const sk =
       GALAXY_LAYER.STAR_INFLATE
       + GALAXY_LAYER.SPECK_PX
-      + GALAXY_LAYER.GLOW_SIZE
+      + GALAXY_LAYER.MAX_PIXELS
+      + GALAXY_LAYER.GLOW_PADDING_PX
+      + GALAXY_LAYER.BACKGROUND_GLOW_PADDING_PX
+      + GALAXY_LAYER.BACKGROUND_GLOW_MAX_PX
+      + GALAXY_LAYER.BACKGROUND_GLOW_ALPHA
       + GALAXY_LAYER.ACTIVE_SIZE_MUL
       + GALAXY_LAYER.CALM_SIZE_MUL
+      + GALAXY_LAYER.MESH_PX
+      + GALAXY_LAYER.MESH_MAX
+      + GALAXY_LAYER.TEXTURE_PX
+      + GALAXY_LAYER.TEXTURE_MAX
     if (sk !== sizeKey.current) {
       sizeKey.current = sk
       const sizeAttr = points.geometry.getAttribute('size') as BufferAttribute
@@ -346,16 +493,18 @@ export function GalaxyLayer() {
       sizeAttr.needsUpdate = true
       material.uniforms.uSpeckPx!.value = GALAXY_LAYER.SPECK_PX
       material.uniforms.uMaxPx!.value = GALAXY_LAYER.MAX_PIXELS
-      material.uniforms.uGlowSize!.value = GALAXY_LAYER.GLOW_SIZE
+      material.uniforms.uGlowPaddingPx!.value = GALAXY_LAYER.GLOW_PADDING_PX
       material.uniforms.uActiveSize!.value = GALAXY_LAYER.ACTIVE_SIZE_MUL
       material.uniforms.uCalmSize!.value = GALAXY_LAYER.CALM_SIZE_MUL
       material.uniforms.uActiveBright!.value = GALAXY_LAYER.ACTIVE_BRIGHT
       material.uniforms.uCalmBright!.value = GALAXY_LAYER.CALM_BRIGHT
       material.uniforms.uActiveTwinkle!.value = GALAXY_LAYER.ACTIVE_TWINKLE
       material.uniforms.uCalmTwinkle!.value = GALAXY_LAYER.CALM_TWINKLE
+      backgroundGlowMaterial.uniforms.uMaxPx!.value = GALAXY_LAYER.BACKGROUND_GLOW_MAX_PX
+      backgroundGlowMaterial.uniforms.uGlowPaddingPx!.value = GALAXY_LAYER.BACKGROUND_GLOW_PADDING_PX
+      backgroundGlowMaterial.uniforms.uBackgroundAlpha!.value = GALAXY_LAYER.BACKGROUND_GLOW_ALPHA
     }
 
-    // Подсветка jumpTarget: одна яркая, остальные спокойные.
     const tgt = world.jumpTargetIndex
     const active =
       tgt != null && tgt >= 0 && tgt < data.systemCount && tgt !== world.systemIndex ? tgt : null
@@ -368,10 +517,13 @@ export function GalaxyLayer() {
     }
 
     const cam = state.camera as PerspectiveCamera
-    material.uniforms.uProj!.value = state.gl.domElement.height / Math.tan((cam.fov * DEG2RAD) / 2)
+    const uProj = state.gl.domElement.height / Math.tan((cam.fov * DEG2RAD) / 2)
+    material.uniforms.uProj!.value = uProj
     material.uniforms.uTime!.value = world.time
+    backgroundGlowMaterial.uniforms.uProj!.value = uProj
+    discMat.uniforms.uTime!.value = world.time
+    tickStarSurfaceTime(world.time)
 
-    // Кадр и локатор — разные сферы: в космосе поле галактики, на мини-карте только соседи.
     const fade = GALAXY_LAYER.FADE_IN_START
     const lock = GALAXY_LAYER.LOCK_SCALE
     const t =
@@ -388,6 +540,9 @@ export function GalaxyLayer() {
     material.uniforms.uRadius!.value = radiusM
     material.uniforms.uEdge!.value = edgeM
     ;(material.uniforms.uPlayer!.value as Vector3).copy(world.player.state.pos)
+    backgroundGlowMaterial.uniforms.uRadius!.value = radiusM
+    backgroundGlowMaterial.uniforms.uEdge!.value = edgeM
+    ;(backgroundGlowMaterial.uniforms.uPlayer!.value as Vector3).copy(world.player.state.pos)
 
     const locatorLy =
       GALAXY_LAYER.LOCATOR_RANGE_LY_START
@@ -395,11 +550,146 @@ export function GalaxyLayer() {
     const locatorRadiusM = locatorLy * layerScale
 
     const on = scale >= GALAXY_LAYER.FADE_IN_START
-    points.visible = on
+    group.visible = on
+
+    // LOD: крупные → сфера+корона; самые крупные с картой класса — отдельный пул.
+    const meshMax = Math.min(GALAXY_LAYER.MESH_MAX, _lodIdx.length)
+    const texMax = Math.min(GALAXY_LAYER.TEXTURE_MAX, texMeshRefs.current.length)
+    for (let j = 0; j < meshMax; j++) {
+      _lodIdx[j] = -1
+      _lodPx[j] = -1
+      _texTaken[j] = 0
+    }
+    data.lod.fill(0)
+    for (let t = 0; t < texMax; t++) {
+      const tm = texMeshRefs.current[t]
+      if (tm) tm.visible = false
+    }
+    const posArr = data.positions
+    const player = world.player.state.pos
+    const meshPx = GALAXY_LAYER.MESH_PX
+    if (on && disc && shell) {
+      for (let i = 0; i < data.count; i++) {
+        const lx = posArr[i * 3]!
+        const ly = posArr[i * 3 + 1]!
+        const lz = posArr[i * 3 + 2]!
+        const wx = _bary.x + lx * layerScale
+        const wy = _bary.y + ly * layerScale
+        const wz = _bary.z + lz * layerScale
+        const dist = Math.hypot(wx - player.x, wy - player.y, wz - player.z)
+        const edgeT = (radiusM - dist) / Math.max(edgeM, 1)
+        if (edgeT <= 0) continue
+
+        const rLy = sizeLy(data.radiusUnits[i]!)
+        const rRender = rLy * layerScale
+        const camDist = Math.hypot(wx - cam.position.x, wy - cam.position.y, wz - cam.position.z)
+        const sizeMul = data.boost[i]! > 0.5 ? GALAXY_LAYER.ACTIVE_SIZE_MUL : GALAXY_LAYER.CALM_SIZE_MUL
+        const diamPx = (2 * uProj * rRender * sizeMul) / Math.max(camDist, 1)
+        if (diamPx < meshPx) continue
+        considerLod(i, diamPx, meshMax)
+      }
+
+      // Убывающий порядок по diamPx — текстуру забирают самые ближние.
+      let cand = 0
+      for (let j = 0; j < meshMax; j++) {
+        if (_lodIdx[j]! < 0) continue
+        _lodOrder[cand++] = j
+      }
+      for (let a = 1; a < cand; a++) {
+        const key = _lodOrder[a]!
+        const keyPx = _lodPx[key]!
+        let b = a - 1
+        while (b >= 0 && _lodPx[_lodOrder[b]!]! < keyPx) {
+          _lodOrder[b + 1] = _lodOrder[b]!
+          b--
+        }
+        _lodOrder[b + 1] = key
+      }
+
+      let texUsed = 0
+      for (let o = 0; o < cand && texUsed < texMax; o++) {
+        const slot = _lodOrder[o]!
+        const i = _lodIdx[slot]!
+        if (_lodPx[slot]! < GALAXY_LAYER.TEXTURE_PX) break
+        const hex = data.colorHex[i]!
+        if (!starSurfaceTexture(hex)) continue
+        const mat = starSurfaceMaterial(hex)
+        const tm = texMeshRefs.current[texUsed]
+        if (!mat || !tm) continue
+        const rLy = sizeLy(data.radiusUnits[i]!)
+        const sizeMul = data.boost[i]! > 0.5
+          ? GALAXY_LAYER.ACTIVE_SIZE_MUL
+          : GALAXY_LAYER.CALM_SIZE_MUL
+        tm.position.set(posArr[i * 3]!, posArr[i * 3 + 1]!, posArr[i * 3 + 2]!)
+        tm.scale.setScalar(rLy * sizeMul)
+        tm.quaternion.identity()
+        tm.material = mat
+        tm.visible = true
+        _texTaken[slot] = 1
+        texUsed++
+      }
+
+      let shellCount = 0
+      let discCount = 0
+      for (let j = 0; j < meshMax; j++) {
+        const i = _lodIdx[j]!
+        if (i < 0) continue
+        data.lod[i] = 1
+        const rLy = sizeLy(data.radiusUnits[i]!)
+        const sizeMul = data.boost[i]! > 0.5
+          ? GALAXY_LAYER.ACTIVE_SIZE_MUL
+          : GALAXY_LAYER.CALM_SIZE_MUL
+        const visualRadiusLy = rLy * sizeMul
+        const diamPx = _lodPx[j]!
+        // Радиус короны = радиус диска + постоянный экранный запас. Поэтому она
+        // масштабируется, но медленнее диска и не схлопывается на дальнем LOD.
+        const shellMul = 1 + (2 * GALAXY_LAYER.GLOW_PADDING_PX) / Math.max(diamPx, 1)
+        const px = posArr[i * 3]!
+        const py = posArr[i * 3 + 1]!
+        const pz = posArr[i * 3 + 2]!
+        _colour.setRGB(data.colors[i * 3]!, data.colors[i * 3 + 1]!, data.colors[i * 3 + 2]!)
+
+        // Текстурный диск — отдельный меш; процедурную сферу не дублируем.
+        if (_texTaken[j] === 0) {
+          _obj.position.set(px, py, pz)
+          _obj.scale.setScalar(visualRadiusLy)
+          _obj.quaternion.identity()
+          _obj.updateMatrix()
+          disc.setMatrixAt(discCount, _obj.matrix)
+          disc.setColorAt(discCount, _colour)
+          discCount++
+        }
+
+        _obj.position.set(px, py, pz)
+        _obj.scale.setScalar(visualRadiusLy * shellMul)
+        _obj.quaternion.identity()
+        _obj.updateMatrix()
+        shell.setMatrixAt(shellCount, _obj.matrix)
+        shell.setColorAt(shellCount, _colour)
+        shellCount++
+      }
+
+      disc.count = discCount
+      shell.count = shellCount
+      disc.instanceMatrix.needsUpdate = true
+      shell.instanceMatrix.needsUpdate = true
+      if (disc.instanceColor) disc.instanceColor.needsUpdate = true
+      if (shell.instanceColor) shell.instanceColor.needsUpdate = true
+      disc.visible = discCount > 0
+      shell.visible = shellCount > 0
+    } else if (disc && shell) {
+      disc.count = 0
+      shell.count = 0
+      disc.visible = false
+      shell.visible = false
+    }
+
+    const lodAttr = points.geometry.getAttribute('lod') as BufferAttribute
+    lodAttr.needsUpdate = true
 
     const gr = galaxyRadar()
     gr.active = on
-    gr.anchor.copy(points.position)
+    gr.anchor.copy(group.position)
     gr.layerScale = layerScale
     gr.sphereRadius = locatorRadiusM
     gr.originIndex = world.systemIndex
@@ -412,13 +702,46 @@ export function GalaxyLayer() {
 
   if (!geometry) return null
   return (
-    <points
-      ref={ref}
-      geometry={geometry}
-      material={material}
-      frustumCulled={false}
-      renderOrder={-1}
-      visible={false}
-    />
+    <group ref={groupRef} frustumCulled={false} visible={false}>
+      <points
+        geometry={geometry}
+        material={backgroundGlowMaterial}
+        frustumCulled={false}
+        renderOrder={-2}
+      />
+      <points
+        ref={pointsRef}
+        geometry={geometry}
+        material={material}
+        frustumCulled={false}
+        renderOrder={-1}
+      />
+      <instancedMesh
+        ref={discRef}
+        args={[galaxyStarDiscGeometry(), discMat, GALAXY_LAYER.MESH_MAX]}
+        frustumCulled={false}
+        renderOrder={-1}
+        visible={false}
+      />
+      <instancedMesh
+        ref={shellRef}
+        args={[galaxyStarShellGeometry(), shellMat, GALAXY_LAYER.MESH_MAX]}
+        frustumCulled={false}
+        renderOrder={-1}
+        visible={false}
+      />
+      {Array.from({ length: GALAXY_LAYER.TEXTURE_MAX }, (_, i) => (
+        <mesh
+          key={i}
+          ref={(el) => {
+            texMeshRefs.current[i] = el
+          }}
+          geometry={galaxyStarDiscGeometry()}
+          frustumCulled={false}
+          renderOrder={-1}
+          visible={false}
+        />
+      ))}
+    </group>
   )
 }

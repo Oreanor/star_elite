@@ -4,9 +4,8 @@ import { PerspectiveCamera, Quaternion, Vector3 } from 'three'
 import { CRUISE, clamp } from '@elite/sim'
 import { manoeuvreHoldsCamera } from '../../app/control/playerController'
 import { useSession } from '../../app/GameContext'
-import { jumpFx, jumpShake } from '../../app/control/jumpFx'
 import { undocking, undockProgress } from '../../app/control/undockFx'
-import { cameraView, consumeViewReset } from '../../app/control/cameraView'
+import { cameraView, consumeCameraFrameRotation, consumeViewReset } from '../../app/control/cameraView'
 import { bombShake } from '../bombFeel'
 import { CAMERA, GIANT_RENDER_CAP, RENDER } from '../config'
 
@@ -28,7 +27,6 @@ const _twist = new Quaternion()
 const _desiredQuat = new Quaternion()
 const _shake = new Vector3()
 const _bombShake = new Vector3()
-const _jumpShake = new Vector3()
 const _camRot = new Quaternion()
 /** Пользовательский облёт: рыскание всей связки камеры вокруг СОБСТВЕННОЙ вертикали борта. */
 const _orbit = new Quaternion()
@@ -105,6 +103,16 @@ export function FlightCamera() {
     const player = session.world.player
     const state = player.state
 
+    // JumpDirector уже перенёс саму камеру. Переносим тем же поворотом её скрытый базис,
+    // иначе следующий кадр пружины пересчитывает старый курс и создаёт видимый рывок.
+    if (consumeCameraFrameRotation(_deltaRot)) {
+      camSwing.premultiply(_deltaRot).normalize()
+      if (frozen.current) {
+        frozen.current.offset.applyQuaternion(_deltaRot)
+        frozen.current.quat.premultiply(_deltaRot).normalize()
+      }
+    }
+
     /**
      * Отъезд под РАЗМЕР корпуса: базовое смещение выверено под истребитель (радиус ≈ SIZE_REF),
      * крупный борт («Атлас») иначе оказался бы внутри кадра. Множитель ≥ 1 — мелкий корабль
@@ -141,37 +149,6 @@ export function FlightCamera() {
       camera.quaternion.copy(_desiredQuat)
       // HUD проецирует маркеры в этом же useFrame-цикле, до WebGL-рендера.
       // Без свежей матрицы он видел позу камеры прошлого кадра и все метки мерцали.
-      camera.updateMatrixWorld(true)
-      previousFactor.current = player.cruise.factor
-      return
-    }
-
-    /**
-     * ОТПРАВЛЕНИЕ В ПРЫЖОК: камера НАБЛЮДАЕТ, а не преследует. Она встаёт за точкой
-     * старта и оттуда смотрит, как корабль срывается, уходит к далёкому кольцу и тает
-     * в нём, — поэтому поза считается от ЗАМОРОЖЕННОЙ позы старта (`shipStart`/`ringQuat`),
-     * а не от живого корабля, и не едет за носом. На зарядке добавляется дрожь.
-     */
-    if (jumpFx().phase === 'depart') {
-      const fx = jumpFx()
-      const off = CAMERA.CHASE_OFFSET
-      _offset.set(off[0], off[1], off[2]).multiplyScalar(sizeFactor).applyQuaternion(fx.ringQuat)
-      _target.copy(fx.shipStart).add(_offset)
-      _desiredQuat.copy(fx.ringQuat).multiply(_pitchDown)
-
-      const a = running ? 1 - Math.exp(-CAMERA.CHASE_STIFFNESS * dt) : 1
-      camera.position.lerp(_target, a)
-      camera.quaternion.slerp(_desiredQuat, a)
-
-      const js = jumpShake()
-      if (js > 1e-4) {
-        const time = session.world.time
-        _jumpShake
-          .set(shakeAt(time, 2.3), shakeAt(time, 5.1), shakeAt(time, 9.7))
-          .multiplyScalar(js * CAMERA.JUMP_SHAKE_MAX)
-        camera.position.add(_jumpShake.applyQuaternion(camera.quaternion))
-      }
-
       camera.updateMatrixWorld(true)
       previousFactor.current = player.cruise.factor
       return
@@ -433,7 +410,7 @@ export function FlightCamera() {
       camera.updateProjectionMatrix()
     }
     camera.updateMatrixWorld(true)
-  })
+  }, -50)
 
   return null
 }

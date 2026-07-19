@@ -1,5 +1,6 @@
 import { Vector3 } from 'three'
 import { describe, expect, it } from 'vitest'
+import { GALAXY } from '../../config/galaxy'
 import { chargeHyperdrive, scooping, stepStarHeat } from '../combat'
 import { dock } from '../station/docking'
 import { createWorld, type World } from '../world'
@@ -33,7 +34,7 @@ function heat(world: World, seconds: number): void {
 /** Индекс системы, до которой заведомо можно дотянуться полным баком. */
 function reachableTarget(world: World): number {
   const range = world.player.spec.jumpRange
-  for (let i = 0; i < 2500; i++) {
+  for (let i = 0; i < GALAXY.COUNT; i++) {
     if (i === world.systemIndex) continue
     const d = jumpDistance(world, i)
     if (d > 1 && d < range) return i

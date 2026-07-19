@@ -1,6 +1,6 @@
 import type { Chassis } from '../domain/loadout'
 import { createLoadout, type Loadout } from '../domain/loadout'
-import { ATLAS, AURORA_ONE, HERMES, ORION, PEGASUS, PERSEUS, THESEUS } from './chassis'
+import { ATLAS, AURORA_ONE, HERMES, ORION, PEGASUS, PERSEUS, SPIRITUS_SANCTUS, THESEUS } from './chassis'
 import {
   ARMOUR_PLATE,
   BEAM_LASER_HEAVY,
@@ -37,16 +37,16 @@ import {
  */
 export function playerStartLoadout(): Loadout {
   return createLoadout(
-    AURORA_ONE,
+    SPIRITUS_SANCTUS,
     // Базовый гиперпривод стоит с завода: без него не улететь из системы вообще,
     // а «заработай сорок пять тысяч, чтобы впервые куда-то полететь» — не начало игры.
     // Дальний рейс всё равно надо покупать: девять световых лет — это соседи.
     [ENGINE_STANDARD, RCS_STANDARD, SHIELD_STANDARD, ARMOUR_PLATE, CARGO_LARGE, HYPERDRIVE_BASIC, CLOAK_FIELD],
     // ТРИ лазера (класс задаёт цвет луча): ЗЕЛЁНЫЙ класс 2 на СЕРЕДИНЕ крыла, КРАСНЫЙ
     // класс 3 на ЗАКОНЦОВКАХ (по краям), голубой класс 1 «Столб» в ЦЕНТРЕ (носа) — бьёт вдвое
-    // реже, но луч втрое толще. Порядок строго по hardpoints: [середина, законцовка, центр,
-    // пилон×2]. У Авроры One два пилона (не четыре) — ракеты на обоих.
-    [BURST_LASER, BEAM_LASER_HEAVY, PULSE_LASER_CENTRAL, MISSILE_PYLON, MISSILE_PYLON],
+    // реже, но луч втрое толще. У Spiritus Sanctus только три пушечные точки: ракетных
+    // пилонов на корпусе нет вообще.
+    [BURST_LASER, BEAM_LASER_HEAVY, PULSE_LASER_CENTRAL],
   )
 }
 
@@ -113,7 +113,7 @@ export function freighterLoadout(): Loadout {
  * купив, тут же летит — а не собирает корабль из пустых слотов.
  */
 
-/** «Аврора One» — стартовый корпус игрока, он же товар на верфи. */
+/** «Аврора One» — серийный корпус на верфи. */
 export function auroraOneLoadout(): Loadout {
   return createLoadout(
     AURORA_ONE,

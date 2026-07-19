@@ -1,11 +1,12 @@
 import { Quaternion, Vector3 } from 'three'
 import { GUNNERY } from '../../config/weapons'
 import { SHIELD } from '../../config/station'
-import type { MissileEntity, ShipEntity, World } from '../world/entities'
+import type { AsteroidEntity, MissileEntity, ShipEntity, World } from '../world/entities'
 import { isEngageable } from './engage'
 import { breakFromHit } from './breakage'
 import { applyDamage } from './damage'
 import { spawnExplosion, spawnShieldFlash } from './effects'
+import { bombShatterAsteroid } from './mining'
 
 /**
  * Самонаведение — ПРОПОРЦИОНАЛЬНОЕ. Ракета доворачивает вектор скорости со
@@ -46,6 +47,12 @@ function findTarget(world: World, id: number | null): ShipEntity | null {
   return ship && isEngageable(ship) ? ship : null
 }
 
+function findAsteroid(world: World, id: number | null): AsteroidEntity | null {
+  if (id === null) return null
+  const rock = world.asteroids.find((a) => a.id === id)
+  return rock && rock.alive ? rock : null
+}
+
 function detonate(world: World, m: MissileEntity, victim: ShipEntity | null): void {
   m.alive = false
   spawnExplosion(world, m.pos, m.vel, 2.2)
@@ -75,14 +82,65 @@ function hitStationShield(world: World, m: MissileEntity): boolean {
 }
 
 /**
+ * Ракета о камень: тот же раскол, что у энергобомбы (надвое / <10 м уничтожение).
+ */
+function hitAsteroid(world: World, m: MissileEntity): boolean {
+  for (const a of world.asteroids) {
+    if (!a.alive) continue
+    const r = a.radius + GUNNERY.MISSILE_PROXIMITY
+    if (m.pos.distanceToSquared(a.pos) > r * r) continue
+    detonate(world, m, null)
+    bombShatterAsteroid(world, a)
+    return true
+  }
+  return false
+}
+
+/**
  * Угловая скорость линии визирования, рад/с. Это ровно та величина, за которой
  * обязана успевать головка: v⊥ / d.
  */
-function lineOfSightRate(m: MissileEntity, target: ShipEntity, toTargetUnit: Vector3, distance: number): number {
-  _relVel.copy(target.state.vel).sub(m.vel)
+function lineOfSightRate(
+  m: MissileEntity,
+  targetVel: Vector3,
+  toTargetUnit: Vector3,
+  distance: number,
+): number {
+  _relVel.copy(targetVel).sub(m.vel)
   // Вдоль линии визирования сближение головку не волнует — только поперёк.
   _relVel.addScaledVector(toTargetUnit, -_relVel.dot(toTargetUnit))
   return _relVel.length() / Math.max(distance, 1)
+}
+
+/** Доворот вектора скорости на цель (корабль или камень) — пропорциональное наведение. */
+function steerAt(
+  m: MissileEntity,
+  targetPos: Vector3,
+  targetVel: Vector3,
+  dt: number,
+  fuse: number,
+): 'hit' | 'lost' | 'ok' {
+  _toTarget.copy(targetPos).sub(m.pos)
+  const distance = _toTarget.length()
+  if (distance < fuse) return 'hit'
+
+  _toTarget.divideScalar(distance)
+  if (lineOfSightRate(m, targetVel, _toTarget, distance) > m.module.seekerRate) {
+    return 'lost'
+  }
+
+  _dir.copy(m.vel).normalize()
+  _relVel.copy(targetVel).sub(m.vel)
+  _omega.crossVectors(_toTarget, _relVel).divideScalar(distance)
+  const rate = _omega.length() * GUNNERY.NAV_CONSTANT
+  if (rate > 1e-6) {
+    _axis.copy(_omega).normalize()
+    _q.setFromAxisAngle(_axis, Math.min(rate, m.module.turnRate) * dt)
+    _dir.applyQuaternion(_q)
+    m.quat.setFromUnitVectors(_forward, _dir)
+  }
+  m.vel.copy(_dir).multiplyScalar(m.speed)
+  return 'ok'
 }
 
 export function stepMissiles(world: World, dt: number): void {
@@ -108,48 +166,36 @@ export function stepMissiles(world: World, dt: number): void {
      * от Ω, которую ракета накопила сама. Отсчёт срыва обязан начинаться тогда же,
      * когда начинается доворот, иначе головку судят за чужую вину.
      */
-    const target = age < m.module.armTime ? null : findTarget(world, m.targetId)
-    if (target) {
-      _toTarget.copy(target.state.pos).sub(m.pos)
-      const distance = _toTarget.length()
+    const armed = age >= m.module.armTime
+    const shipTarget = armed ? findTarget(world, m.targetId) : null
+    const rockTarget = armed && !shipTarget ? findAsteroid(world, m.targetId) : null
 
-      if (distance < GUNNERY.MISSILE_PROXIMITY) {
-        detonate(world, m, target)
+    if (shipTarget) {
+      const steer = steerAt(m, shipTarget.state.pos, shipTarget.state.vel, dt, GUNNERY.MISSILE_PROXIMITY)
+      if (steer === 'hit') {
+        detonate(world, m, shipTarget)
         continue
       }
-
-      _toTarget.divideScalar(distance)
-
       // Срыв наведения — навсегда. Головка не «моргает»: потеряв цель,
       // она её больше не найдёт, и ракета уходит болванкой.
-      if (lineOfSightRate(m, target, _toTarget, distance) > m.module.seekerRate) {
-        m.targetId = null
-      } else {
-        // Доворачиваем ВЕКТОР СКОРОСТИ, а не позицию: ракета имеет инерцию,
-        // поэтому на встречных курсах она проскакивает мимо.
-        _dir.copy(m.vel).normalize()
-
-        // Ω = (r × v_отн) / |r|². Единичный `_toTarget` уже поделён на |r| один раз.
-        _relVel.copy(target.state.vel).sub(m.vel)
-        _omega.crossVectors(_toTarget, _relVel).divideScalar(distance)
-
-        const rate = _omega.length() * GUNNERY.NAV_CONSTANT
-        if (rate > 1e-6) {
-          _axis.copy(_omega).normalize()
-          // Упёрлись в turnRate — Ω гасить нечем, и головка вот-вот потеряет цель.
-          _q.setFromAxisAngle(_axis, Math.min(rate, m.module.turnRate) * dt)
-          _dir.applyQuaternion(_q)
-          m.quat.setFromUnitVectors(_forward, _dir)
-        }
-        m.vel.copy(_dir).multiplyScalar(m.speed)
+      if (steer === 'lost') m.targetId = null
+    } else if (rockTarget) {
+      const fuse = rockTarget.radius + GUNNERY.MISSILE_PROXIMITY
+      const steer = steerAt(m, rockTarget.pos, rockTarget.vel, dt, fuse)
+      if (steer === 'hit') {
+        detonate(world, m, null)
+        bombShatterAsteroid(world, rockTarget)
+        continue
       }
+      if (steer === 'lost') m.targetId = null
     } else if (m.vel.lengthSq() > 1e-6) {
       // Без цели ракета просто летит: скорость меняет только разгон.
       m.vel.setLength(m.speed)
     }
 
     m.pos.addScaledVector(m.vel, dt)
-    hitStationShield(world, m)
+    if (hitStationShield(world, m)) continue
+    hitAsteroid(world, m)
   }
 
   world.missiles = world.missiles.filter((m) => m.alive)

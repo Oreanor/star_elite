@@ -3,7 +3,6 @@ import { useMemo, useRef } from 'react'
 import { AdditiveBlending, InstancedMesh, MeshBasicMaterial, Object3D, Quaternion, Vector3 } from 'three'
 import { clamp, CRUISE, shipAxes, type ShipEntity } from '@elite/sim'
 import { useSession } from '../../app/GameContext'
-import { shipHidden } from '../../app/control/jumpFx'
 import { EXHAUST, GIANT_RENDER_CAP } from '../config'
 import { flameGeometry } from '../geometry/flame'
 import { chassisNozzles, MISSILE_NOZZLE, type Nozzle } from '../geometry/ships'
@@ -193,7 +192,7 @@ function Flames({ cone }: { cone: Cone }) {
     }
 
     // Корабль игрока канул в кольцо — гасим и его факел вместе с корпусом.
-    if (!shipHidden()) emitShip(world.player)
+    emitShip(world.player)
     for (const ship of world.ships) emitShip(ship)
 
     /**

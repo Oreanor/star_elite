@@ -7,7 +7,7 @@ import type { Chassis } from '../domain/loadout'
  */
 
 /**
- * «Аврора One» — стартовый корпус игрока: длинный острый нос, дельта-
+ * «Аврора One» — серийный корпус: длинный острый нос, дельта-
  * крыло с поднятыми законцовками, спаренные гондолы и два наклонных киля. Геометрия —
  * НЕ процедурная, а загруженный меш (`aurora_one.glb`), поэтому корпус живёт как обычная
  * запись каталога, а рендер сам знает по id, что грузить сетку, а не собирать из примитивов.
@@ -45,6 +45,18 @@ export const AURORA_ONE: Chassis = {
     { kind: 'aux', maxClass: 3 },
   ],
   cost: 82_000,
+}
+
+/**
+ * «Spiritus Sanctus» — личный корабль игрока. Рама и раскладка полностью наследуют
+ * «Аврору One»; собственный id нужен, чтобы модель и владение честно жили в сейве.
+ * Единственное визуальное отличие силовой установки — одно центральное сопло — задаёт рендер.
+ */
+export const SPIRITUS_SANCTUS: Chassis = {
+  ...AURORA_ONE,
+  id: 'spiritus_sanctus',
+  name: 'Spiritus Sanctus',
+  hardpoints: AURORA_ONE.hardpoints.filter((hardpoint) => hardpoint.kind !== 'pylon'),
 }
 
 /**
@@ -136,6 +148,7 @@ export const ATLAS: Chassis = {
 }
 
 export const CHASSIS_CATALOGUE: readonly Chassis[] = [
+  SPIRITUS_SANCTUS,
   AURORA_ONE,
   HERMES,
   PERSEUS,

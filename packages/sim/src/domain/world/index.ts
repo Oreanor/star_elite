@@ -23,6 +23,7 @@ export {
   type WarpFlash,
   type WarpPortal,
   type WarpArrivalPortal,
+  type JumpGate,
   type World,
 } from './entities'
 export { enterSystem, createWorld, layoutSystemBodies, makeShip, refreshSpec, spawnSlovo, startAtStation, applyPilotProfile } from './factory'
@@ -86,7 +87,8 @@ export {
   cycleTarget,
   cycleContact,
   cycleCelestial,
-  retargetNearestSameClass,
+  retargetNearestContact,
+  retargetNearestCelestial,
   clearContactLock,
   clearNavLock,
   pruneGiantScaleLocks,
@@ -113,6 +115,13 @@ export {
   warpDepartHidden,
 } from './warp'
 export { stepTraffic, spawnResidentContacts, stepDockedBerth, stepDockTraffic } from './traffic'
+export {
+  spawnAsteroidEncounter,
+  spawnAloneAsteroid,
+  spawnAsteroidPack,
+  despawnDistantAsteroids,
+  liveAsteroidCount,
+} from './asteroidEncounter'
 export { spawnTitan, spawnTrafficTitan, stepTitans, titanCount, placeShowcaseTitans } from './titans'
 export { placeMonoliths } from './monoliths'
 export {

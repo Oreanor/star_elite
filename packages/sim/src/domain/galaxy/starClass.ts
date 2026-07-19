@@ -4,7 +4,6 @@ import {
   STAR_CLASSES,
   type StarClassId,
 } from '../../config/galaxy'
-import { WORLD } from '../../config/world'
 import { makeRng, type Rng } from '../../core/math'
 import { systemName } from './names'
 
@@ -30,7 +29,6 @@ function weightedPick<T extends { readonly weight: number }>(rng: Rng, table: re
 /** Спектральный класс первичной звезды системы (без радиуса и массы). */
 export function primaryClassId(index: number, seed: number = GALAXY.SEED): StarClassId {
   if (index === CORE_INDEX) return 'H'
-  if (index === WORLD.HOME_INDEX && seed === GALAXY.SEED) return 'G'
   const rng = makeRng(seed ^ Math.imul(index, 0x9e3779b1))
   systemName(rng) // тот же префикс, что в generateSystem — результат не нужен
   return weightedPick(rng, STAR_CLASSES).id

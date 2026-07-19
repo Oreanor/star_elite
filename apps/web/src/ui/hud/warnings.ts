@@ -31,6 +31,7 @@ export type WarnCode =
   | 'noRockets'
   | 'noLaser'
   | 'noJump'
+  | 'portalClosed'
   | 'noAux'
   | 'noTarget'
   | 'landPrompt'
@@ -71,6 +72,7 @@ const DEFS: Record<WarnCode, Def> = {
   noRockets: { color: UI.WARN, hz: 0, rank: 84, key: 'hud.noRockets' },
   noLaser: { color: UI.WARN, hz: 0, rank: 84, key: 'hud.noLaser' },
   noJump: { color: UI.WARN, hz: 0, rank: 84, key: 'hud.noJump' },
+  portalClosed: { color: UI.PRIMARY, hz: 0, rank: 43, key: 'hud.portalClosed' },
   noAux: { color: UI.WARN, hz: 0, rank: 84, key: 'hud.noAux' },
   noTarget: { color: UI.WARN, hz: 0, rank: 84, key: 'hud.noTarget' },
   // Окно стоянки: голубое — «нажмите L». Выше стыковки.

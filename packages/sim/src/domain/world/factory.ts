@@ -224,11 +224,10 @@ export function refreshSpec(e: ShipEntity): void {
   })
 }
 
-/** Камней в одной кучке — не больше десятка. Пояс — россыпь групп, а не сплошная стена. */
-const CLUMP_MAX = 10
-/** Разброс камней внутри кучки, м. Меньше радиуса пояса на порядок — группы читаются раздельно. */
-const CLUMP_SPREAD = 340
-
+/**
+ * Тестовый/редкий пояс из SystemDef. В игре `belt: null` — камни рождает
+ * трафик (`asteroidEncounter`). Здесь без исполинов: размеры из общего диапазона.
+ */
 function makeAsteroids(rng: Rng, ids: IdSource, def: SystemDef): AsteroidEntity[] {
   const belt = def.belt
   if (!belt) return []
@@ -236,31 +235,26 @@ function makeAsteroids(rng: Rng, ids: IdSource, def: SystemDef): AsteroidEntity[
   const center = new Vector3(...belt.center)
   const start = new Vector3(...def.playerStart)
   const asteroids: AsteroidEntity[] = []
-
-  // Раскладываем не равномерным облаком, а КУЧКАМИ по ≤10 камней: между группами
-  // остаётся пустота, в поясе есть куда лететь, и «стена из тысячи» не встаёт разом.
+  const clumpMax = 10
+  const clumpSpread = 340
   let placed = 0
   while (placed < belt.count) {
-    // Центр кучки — на торе пояса (кольцо, а не шар: внутри должно быть куда лететь).
     const angle = rng() * Math.PI * 2
     const ringR = belt.radius * (0.35 + 0.65 * Math.sqrt(rng()))
     const cx = center.x + Math.cos(angle) * ringR
     const cy = center.y + signed(rng) * belt.radius * 0.08
     const cz = center.z + Math.sin(angle) * ringR
-
-    // 3..10 камней в кучке, но не больше, чем осталось до общего числа пояса.
-    const size = Math.min(CLUMP_MAX, belt.count - placed, 3 + Math.floor(rng() * (CLUMP_MAX - 2)))
+    const size = Math.min(clumpMax, belt.count - placed, 3 + Math.floor(rng() * (clumpMax - 2)))
     for (let k = 0; k < size; k++) {
       placed++
       const pos = new Vector3(
-        cx + signed(rng) * CLUMP_SPREAD,
-        cy + signed(rng) * CLUMP_SPREAD * 0.4, // тор приплюснут — и кучка тоже
-        cz + signed(rng) * CLUMP_SPREAD,
+        cx + signed(rng) * clumpSpread,
+        cy + signed(rng) * clumpSpread * 0.4,
+        cz + signed(rng) * clumpSpread,
       )
-
-      // Не роняем камень игроку на голову в момент старта.
       if (pos.distanceTo(start) < 300) continue
-
+      // Тестовый пояс — мелкая половина диапазона, не исполины встреч.
+      const radius = range(rng, ASTEROID.RADIUS_MIN, ASTEROID.RADIUS_MIN * 4)
       asteroids.push({
         id: ids.next(),
         kind: 'asteroid',
@@ -268,35 +262,13 @@ function makeAsteroids(rng: Rng, ids: IdSource, def: SystemDef): AsteroidEntity[
         vel: new Vector3(signed(rng), signed(rng) * 0.3, signed(rng)).multiplyScalar(1.3),
         quat: new Quaternion().setFromEuler(new Euler(rng() * 6, rng() * 6, rng() * 6)),
         spin: new Vector3(signed(rng), signed(rng), signed(rng)).multiplyScalar(0.12),
-        radius: range(rng, ASTEROID.RADIUS_MIN, ASTEROID.RADIUS_MAX),
+        radius,
         hull: ASTEROID.HULL,
         shape: Math.floor(rng() * ASTEROID.SHAPES),
         alive: true,
       })
     }
   }
-
-  // Две глыбы дальше от старта: ×GIANT и ×COLOSSUS — посадочные шары среди мелочи.
-  if (asteroids.length >= 2) {
-    const byDist = asteroids
-      .map((a, i) => ({ i, d: a.pos.distanceToSquared(start) }))
-      .sort((a, b) => b.d - a.d)
-    const scaleUp = (index: number, scale: number): void => {
-      const rock = asteroids[index]!
-      rock.radius *= scale
-      rock.hull *= scale
-      // Крупной глыбе незачем кувыркаться быстро — иначе ховер укачивает.
-      rock.spin.multiplyScalar(0.15)
-    }
-    scaleUp(byDist[0]!.i, ASTEROID.COLOSSUS_SCALE)
-    scaleUp(byDist[1]!.i, ASTEROID.GIANT_SCALE)
-  } else if (asteroids.length === 1) {
-    const only = asteroids[0]!
-    only.radius *= ASTEROID.COLOSSUS_SCALE
-    only.hull *= ASTEROID.COLOSSUS_SCALE
-    only.spin.multiplyScalar(0.15)
-  }
-
   return asteroids
 }
 
@@ -495,7 +467,8 @@ function makeBodies(ids: IdSource, def: SystemDef): BodyEntity[] {
       surface: null,
       population: 0,
       settlement: null,
-      spin: 0.08,
+      // Крест — монумент, не крутится. Тор/веер — как раньше.
+      spin: def.station.style === 'cross' ? 0 : 0.08,
       spinAxis: new Vector3(0, 0, 1),
       orbit: stationOrbit,
       stationStyle: def.station.style,
@@ -672,12 +645,8 @@ export function enterSystem(
 
   world.ships = makePatrols(rng, world.ids, def)
   world.bodies = makeBodies(world.ids, def)
-  // Спутники, планеты и станция — на орбитах к `calendarTime` (общие часы сервера).
-  stepOrbits(world)
-  world.asteroids = makeAsteroids(rng, world.ids, def)
-  // Бог на Кресте: до чистки списков, чтобы `spawnResidentContacts` уже застал его живым бортом.
-  spawnSlovo(world)
-
+  // Бой старой системы гасим ДО орбит: stepOrbits двигает ракеты/трассы вместе со
+  // станцией — чужой мусор (и тесты с заглушками) не должен переживать вход.
   world.pods = []
   world.missiles = []
   world.titans = []
@@ -687,6 +656,14 @@ export function enterSystem(
   world.shockwaves = []
   world.warps = []
   world.warpPortals = []
+  // Устья принадлежат системе. Свой портал после перехода добавит новое ближнее
+  // устье, сетевые — заново материализуются из RTDB-проекции новой системы.
+  world.jumpGates = []
+  // Спутники, планеты и станция — на орбитах к `calendarTime` (общие часы сервера).
+  stepOrbits(world)
+  world.asteroids = makeAsteroids(rng, world.ids, def)
+  // Бог на Кресте: после чистки боя, до спавна резидентов — живой борт на радаре.
+  spawnSlovo(world)
   /**
    * Статуи ставим ПОСЛЕ чистки списков, а не до неё: сам `placeMonoliths` начинает с
    * `monoliths = []` и заполняет заново. Стоя выше, он честно расставлял их — и тут же терял,
@@ -796,6 +773,7 @@ export function createWorld(def: SystemDef = STARTER_SYSTEM, profile?: PilotProf
     shockwaves: [],
     warps: [],
     warpPortals: [],
+    jumpGates: [],
     docked: false,
     dockArmed: true,
     dockOccupantId: null,
