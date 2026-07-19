@@ -53,10 +53,12 @@ const pressedThisFrame = new Set<string>()
 /** Истина с ОС: keyup теряется при pointer lock / Alt+Tab, Set «залипает». */
 let modShift = false
 let modCtrl = false
+let modAlt = false
 
 function syncModifiers(e: KeyboardEvent | MouseEvent): void {
   modShift = e.getModifierState('Shift')
   modCtrl = e.getModifierState('Control')
+  modAlt = e.getModifierState('Alt')
   if (modShift) {
     held.add('ShiftLeft')
     held.add('ShiftRight')
@@ -71,11 +73,19 @@ function syncModifiers(e: KeyboardEvent | MouseEvent): void {
     held.delete('ControlLeft')
     held.delete('ControlRight')
   }
+  if (modAlt) {
+    held.add('AltLeft')
+    held.add('AltRight')
+  } else {
+    held.delete('AltLeft')
+    held.delete('AltRight')
+  }
 }
 
 export function isHeld(code: string): boolean {
   if (code === 'ShiftLeft' || code === 'ShiftRight') return modShift
   if (code === 'ControlLeft' || code === 'ControlRight') return modCtrl
+  if (code === 'AltLeft' || code === 'AltRight') return modAlt
   return held.has(code)
 }
 

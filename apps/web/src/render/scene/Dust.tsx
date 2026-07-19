@@ -3,9 +3,10 @@ import { useMemo, useRef } from 'react'
 import { BufferAttribute, BufferGeometry, LineSegments, Mesh, Vector3 } from 'three'
 import { makeRng } from '@elite/sim'
 import { useSession } from '../../app/GameContext'
-import { DUST } from '../config'
-import { dustExtents, wrapUnit } from './dustMath'
+import { DUST, GIANT_RENDER_CAP } from '../config'
 import { dustLaserMaterial, dustMaterial, dustNeonMaterial } from '../materials/materials'
+import { nearestStar, starTintHex } from '../starLight'
+import { dustExtents, wrapUnit } from './dustMath'
 
 /**
  * Ближняя пыль — единственный источник ощущения скорости в пустоте:
@@ -77,8 +78,7 @@ export function Dust() {
     const world = session.world
     const player = world.player
 
-    // За звёздным масштабом пыль гаснет: мир за потолком отвода замер, а её куб всё растёт
-    // с ростом борта — на галактике он вжимается трясущейся коробкой и мельтешит.
+    // Гаснем вместе с гигант-скрытием борта — раньше на CAP (4000) пыль пропадала слишком рано.
     const dead = player.state.scale >= DUST.HIDE_SCALE
     mesh.visible = !dead
     if (dead) {
@@ -91,16 +91,30 @@ export function Dust() {
     const velocity = player.state.vel
     const speed = velocity.length()
 
-    const { box, tail, rate } = dustExtents(speed, dt, player.state.scale)
+    // Камера и меш зажаты GIANT_RENDER_CAP, а скорость ∝ полному scale. Куб пыли считаем
+    // в «экранных» единицах (как будто рост = cap): иначе за потолком отвода куб раздувается
+    // от истинной скорости×scale и пустеет — коробка «уходит», частиц рядом с глазом нет.
+    const visualScale = Math.min(player.state.scale, GIANT_RENDER_CAP)
+    const visualSpeed = speed * (visualScale / Math.max(player.state.scale, 1e-9))
+    const { box, tail, rate } = dustExtents(visualSpeed, dt, visualScale)
+
+    // Спектр ближайшей звезды слегка красит пыль: у красного карлика след теплее.
+    const star = nearestStar(world, player.state.pos)
+    const starHex = star?.color ?? 0xffffff
+    const dustTint = starTintHex(DUST.COLOR, starHex, DUST.STAR_TINT)
+    const glowTint = starTintHex(DUST.GLOW_COLOR, starHex, DUST.STAR_TINT)
 
     // ЛАЗЕРНЫЙ ход: на глубоком крейсере пыль загорается. Накал 0..1 от GLOW_START к GLOW_FULL.
     const glow = Math.max(0, Math.min(1, (player.cruise.factor - DUST.GLOW_START) / (DUST.GLOW_FULL - DUST.GLOW_START)))
     if (glow > 0) {
       const laser = dustLaserMaterial()
+      laser.color.setHex(glowTint)
       laser.opacity = 0.4 + 0.5 * glow
       mesh.material = laser
     } else {
-      mesh.material = dustMaterial()
+      const dust = dustMaterial()
+      dust.color.setHex(dustTint)
+      mesh.material = dust
     }
     // Штрих удлиняем по накалу: линия тянется в лазерный след, а не в короткую искру.
     const tailGlow = tail * (1 + glow * DUST.GLOW_STREAK_BOOST)
@@ -116,6 +130,7 @@ export function Dust() {
     const fatten = Math.min(1, DUST.NEON_FATTEN_MAX_FACTOR / Math.max(player.cruise.factor, 1))
     const halfWidthFrac = DUST.NEON_HALF_WIDTH * glowW
     const neonMat = dustNeonMaterial()
+    neonMat.uniforms.uColor!.value.setHex(glowTint)
     neonMat.uniforms.uOpacity!.value = 0.25 + 0.6 * glow
     neonMat.uniforms.uTime!.value = state.clock.elapsedTime
     ribbon.material = neonMat

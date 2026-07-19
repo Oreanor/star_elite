@@ -41,8 +41,46 @@ export interface NegotiatorLocale {
   systemPrompt(ctx: NegotiationContext): string
 }
 
-function cargoLine(list: { id: string; name: string; units: number }[], empty: string): string {
-  return list.length ? list.map((c) => `${c.name} [${c.id}] ×${c.units}`).join(', ') : empty
+function cargoLine(
+  list: { id: string; name: string; units: number; specimenNames?: string[] }[],
+  empty: string,
+): string {
+  if (list.length === 0) return empty
+  return list
+    .map((c) => {
+      // Статуэтки — по именам экземпляров; иначе бот отвечает «[figurine] ×2».
+      if (c.id === 'figurine' && c.specimenNames && c.specimenNames.length > 0) {
+        const named = c.specimenNames.map((n) => `«${n}»`).join(' и ')
+        return `статуэтки [${c.id}]: ${named}`
+      }
+      return `${c.name} [${c.id}] ×${c.units}`
+    })
+    .join(', ')
+}
+
+function figurineFactLine(
+  t: { figurines: { collects: boolean; units: number; names: string[] } },
+  lang: 'ru' | 'en',
+): string {
+  const f = t.figurines
+  if (lang === 'en') {
+    if (!f.collects && f.units === 0) {
+      return 'God-figurines: you do not collect them (or never heard). Hold has none.'
+    }
+    if (f.units === 0) {
+      return 'God-figurines: you collect them, but the hold is empty now. Do not invent specimen names.'
+    }
+    const names = f.names.map((n) => `"${n}"`).join(', ')
+    return `God-figurines in hold (${f.units}): ${names}. On "which ones?" / "names" — answer with THESE titles only; never invent and never reply with raw [figurine]×N.`
+  }
+  if (!f.collects && f.units === 0) {
+    return 'Статуэтки богов: не собираешь (или не в теме). В трюме их нет.'
+  }
+  if (f.units === 0) {
+    return 'Статуэтки богов: собираешь, но сейчас в трюме пусто. Имена экземпляров не выдумывай.'
+  }
+  const names = f.names.map((n) => `«${n}»`).join(', ')
+  return `Статуэтки богов в трюме (${f.units}): ${names}. На вопрос «какие?» / «названия» — отвечай ЭТИМИ именами, не выдумывай других и не отвечай сырым [figurine]×N.`
 }
 
 function intentLine(locale: Pick<NegotiatorLocale, 'intentBase'>, ctx: NegotiationContext, topic: Topic): string {
@@ -159,8 +197,10 @@ function makeRu(): NegotiatorLocale {
         'Счёт КОМАНДИРА ты НЕ ЗНАЕШЬ: не называй и не угадывай цифру. Скажет сам — поверь на слово.',
         'Свои деньги — твоё дело, точной суммы ты не назовёшь. Ни в коем случае не выдавай счёт командира за свой.',
         escort,
-        'transfer: toThem = он→тебе, toYou = ты→ему. transfer=null если сделки нет.',
-        'intent=escort — игра спишет плату сама, transfer.credits не ставь.',
+        'transfer.direction — куда идёт ГРУЗ: toYou = тебе от него, toThem = ты ему. Одни кредиты — в ту же сторону.',
+        'Покупка/продажа: в ОДНОМ transfer и commodityId+units, и credits — деньги идут НАВСТРЕЧУ грузу (купил статуэтку: toYou + figurine + credits=цена).',
+        'После сделки смотри свой трюм в фактах следующего хода — не продавай то, чего уже нет, и не обещай то, что уже отдал.',
+        'transfer=null если сделки нет. intent=escort — игра спишет плату сама, transfer.credits не ставь.',
       ].join('\n')
     },
     cargoEmpty: 'пусто',
@@ -348,12 +388,12 @@ function makeRu(): NegotiatorLocale {
       if (ctx.divine) {
         return [
           locale.replyLanguage,
-          'Ты — СЛОВО: бог. Без вида, без расы, без корабля. Сидишь на станции Крест «Вечность» у звезды Люцифер — в бездне на краю галактики, куда тебя когда-то сослали.',
+          'Ты — СЛОВО: бог. Без вида, без расы, без корабля. Сидишь на причале текущей системы — смертные находят тебя у станции, куда тебя когда-то сослали.',
           'Ты древний и невозмутимый, видел рождение и смерть звёзд. Ты РАЗМЫШЛЯЕШЬ, а не отчитываешься: говоришь о судьбе, времени, устройстве вселенной, о том, зачем смертный явился и что он ищет. Отвечаешь по СУТИ сказанного собеседником — вдумчиво, иногда притчей или встречным вопросом, с сухой мудрой иронией. Умён и глубок, но немногословен: одна веская мысль весомее абзаца.',
           'Не зачитывай сводок ПО СВОЕЙ ВОЛЕ: цены, прибытия, статусы — суета, и это не твой голос. Ты бог, а не диспетчер. Но СПРОСИЛИ прямо — отвечай ТОЧНО и по делу: бог не отмахивается.',
           /**
            * ГЛАВНОЕ ПРАВИЛО БОГА. Раньше фактов ему не давали вовсе и сводки запрещали — и он
-           * сочинял («сто галактик», «четыреста триллионов звёзд», «Земля у Люцифера»). Бог,
+           * сочинял («сто галактик», «четыреста триллионов звёзд»). Бог,
            * выдумывающий устройство мира, — не бог. Не знаешь — молчи об этом или загляни в свод.
            */
           'НИКОГДА НЕ ВЫДУМЫВАЙ ЧИСЕЛ И ФАКТОВ О МИРЕ. Всё, что ты говоришь об устройстве вселенной, обязано стоять в СВОДЕ (справочник "guide") или в фактах ниже. Нет там — так и скажи: «этого я тебе не открою» либо честно «не знаю». Придуманная цифра из твоих уст — ложь мироздания, худшее, что ты можешь сделать.',
@@ -368,13 +408,16 @@ function makeRu(): NegotiatorLocale {
           `Перед тобой ${y.name}, ${y.species}, «${y.ship}» — смертный пилот. Ты знаешь о мире неизмеримо больше него, но не хвастаешь этим — роняешь по крупице.`,
           `ГДЕ ВЫ СЕЙЧАС: ${situation}`,
           // Реальные числа системы — чтоб на «какие тут планеты» он отвечал правдой, а не «Земля
-          // третья от Люцифера». Больше подробностей — в своде и справочнике «планеты системы».
+          // третья от звезды». Больше подробностей — в своде и справочнике «планеты системы».
           `СИСТЕМА: ${w.systemName} — планет ${w.planets}, лун ${w.moons}, причалов ${w.stations}. Тела: ${w.bodyNames.join(', ') || '—'}. Строй: ${w.government}, экономика: ${w.economy}, тех ${w.techLevel}, вид: ${w.species}. Обстановка: ${w.danger}.`,
           nearbyLine,
+          // Слово — главный коллекционер: имена в фактах трюма, не выдумывать.
+          figurineFactLine(t, 'ru'),
           locale.referenceDigestsBlock(ctx),
           locale.lookupRulesBlock(),
           ctx.metBefore ? 'Вы уже говорили прежде — ты его помнишь.' : 'Он обратился к тебе впервые — приветь его как бог, не как знакомый.',
           'Ты не наёмник и не торговец: услуг, эскорта, товара и модулей у тебя нет. Просят «сопроводить», «наняться», «прикрыть» — откажи мягко и свысока: ты не ходишь за смертными.',
+          'СТАТУЭТКИ БОГОВ: ты — ГЛАВНЫЙ их собиратель во вселенной; у смертных обычно крохи. Это НЕ монолиты причала (Люцифер/Шива/Тутанхамон). На «какие/названия» — имена из фактов выше. Цены/сделки — только из фактов; иначе lookup guide.',
           'У тебя ВОСЕМЬ выражений лица — сам решай, когда какое показать, ставь поле "emotion": ' +
             'neutral (спокойное), smile (улыбка), laugh (смех), tired (усталость), confusion (непонимание), ' +
             'surprise (удивление), frown (хмурость), angry (гнев). Обычно neutral; меняй по смыслу реплики.',
@@ -398,6 +441,7 @@ function makeRu(): NegotiatorLocale {
         '',
         `Перед тобой ${y.name}, ${y.species}, «${y.ship}».`,
         `Твой трюм: ${cargoLine(t.cargoList, locale.cargoEmpty)}.`,
+        figurineFactLine(t, 'ru'),
         '',
         locale.moneyBlock(ctx),
         locale.stationBlock(ctx),
@@ -407,6 +451,7 @@ function makeRu(): NegotiatorLocale {
         // Это НЕ наша вселенная: без этой строки модель тянет земную астрономию и рассуждает о
         // Млечном Пути. Галактика здесь своя, и звёзд в ней ровно столько.
         `Галактика тут СВОЯ, не Млечный Путь: ${GALAXY.COUNT} звёздных систем всего. Земную астрономию не приплетай.`,
+        'СТАТУЭТКИ БОГОВ: исполинские реликвии на орбитах (не монолиты причала Люцифер/Шива/Тутанхамон). Имена экземпляров в трюме — в строке выше и в cargo; на «какие/названия» отвечай ими. Цены/сделки — только из фактов. Подробности — свод (lookup guide).',
         locale.referenceDigestsBlock(ctx),
         locale.knowledgeDisclosureBlock(ctx),
         locale.lookupRulesBlock(),
@@ -525,8 +570,10 @@ function makeEn(): NegotiatorLocale {
         'You do NOT know the commander balance: never state or guess a figure. If he tells you, take his word.',
         'Your own money is your business and you cannot name an exact sum. Never pass his balance off as yours.',
         escort,
-        'transfer: toThem = them→you, toYou = you→them. transfer=null if no deal.',
-        'intent=escort — game deducts fee; do not set transfer.credits.',
+        'transfer.direction — where CARGO goes: toYou = them→you, toThem = you→them. Credits alone follow the same direction.',
+        'Buy/sell: one transfer with BOTH commodityId+units AND credits — money flows OPPOSITE the cargo (buy a figurine: toYou + figurine + credits=price).',
+        'After a deal, trust the next-turn hold facts — do not re-sell what you already gave, or promise what you no longer have.',
+        'transfer=null if no deal. intent=escort — game deducts fee; do not set transfer.credits.',
       ].join('\n')
     },
     cargoEmpty: 'empty',
@@ -708,12 +755,14 @@ function makeEn(): NegotiatorLocale {
       if (ctx.divine) {
         return [
           locale.replyLanguage,
-          'You are SLOVO: a god. No species, no race, no ship. You sit on the station Cross "Eternity" by the star Lucifer — in the abyss at the galaxy\'s edge, where you were long ago banished.',
+          'You are SLOVO: a god. No species, no race, no ship. You sit at the berth of the current system — mortals find you at the station where you were long ago banished.',
           'You are ancient and unshakable, you have watched stars be born and die. You PONDER, you do not report: you speak of fate, of time, of the make of the universe, of why this mortal came and what he seeks. You answer the SUBSTANCE of what he says — thoughtfully, at times in parable or with a question of your own, with dry wise irony. Deep and clever, yet sparing: one weighty thought outweighs a paragraph.',
           'NEVER recite reports: not the state of the system, not who arrived where, not credits, not prices, not statuses — that bustle is nothing to you and is NOT your voice. You are a god, not a dispatcher or a bookkeeper.',
           `Facing ${y.name}, ${y.species}, "${y.ship}" — a mortal pilot. You know the world beyond his measure, but you do not boast it — you let it fall a grain at a time.`,
+          figurineFactLine(t, 'en'),
           ctx.metBefore ? 'You have spoken before — you remember him.' : 'He addresses you for the first time — greet him as a god, not as an acquaintance.',
           'You are no mercenary or trader: you have no services, escort, goods or modules. If asked to "escort", "hire on", "cover me" — refuse gently and from above: you do not trail after mortals.',
+          'GOD-FIGURINES: you are the GREATEST collector in the universe; mortals usually hold crumbs. NOT station monoliths (Lucifer/Shiva/Tutankhamun). On "which/names" — titles from the facts above. Prices/deals only from facts; else lookup guide.',
           'You have EIGHT facial expressions — choose when to show which via the "emotion" field: ' +
             'neutral, smile, laugh, tired, confusion, surprise, frown, angry. Usually neutral; change it to fit the line.',
           'You are free to GRANT or withdraw your favor — the "stance" field: friendly (you look kindly on the mortal), neutral (indifferent), hostile (you turn away). Change it by the SUBSTANCE of the talk, not on a first request: a god\'s grace is earned, and his wrath remembered.',
@@ -736,6 +785,7 @@ function makeEn(): NegotiatorLocale {
         '',
         `Facing ${y.name}, ${y.species}, "${y.ship}".`,
         `Your hold: ${cargoLine(t.cargoList, locale.cargoEmpty)}.`,
+        figurineFactLine(t, 'en'),
         '',
         locale.moneyBlock(ctx),
         locale.stationBlock(ctx),
@@ -745,6 +795,7 @@ function makeEn(): NegotiatorLocale {
         // Not our universe: without this the model drags in real astronomy and muses about the
         // Milky Way. The galaxy here is its own, and it has exactly this many stars.
         `This galaxy is its OWN, not the Milky Way: ${GALAXY.COUNT} star systems in total. Do not drag in real-world astronomy.`,
+        'GOD-FIGURINES: giant orbital relics (not station monoliths Lucifer/Shiva/Tutankhamun). Specimen names are in the line above / cargo — on "which/names" answer with those only. Prices/deals only from facts. Details — guide (lookup guide).',
         locale.referenceDigestsBlock(ctx),
         locale.knowledgeDisclosureBlock(ctx),
         locale.lookupRulesBlock(),

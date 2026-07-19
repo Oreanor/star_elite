@@ -15,7 +15,10 @@ export interface Controller {
   update(ship: ShipEntity, world: World, dt: number): void
   /** Хочет ли стрелять из основного оружия в этом шаге. */
   wantsFire(ship: ShipEntity, world: World): boolean
-  /** Хочет ли пустить ракету. */
+  /**
+   * Хочет ли выстрелить с пилона. Тип — что экипировано: ракета или дрон-ракета
+   * (на пилонах один тип за раз). Боты тоже через это.
+   */
   wantsMissile?(ship: ShipEntity, world: World): boolean
   /** Хочет ли пустить противоракетный импульс. */
   wantsEcm?(ship: ShipEntity, world: World): boolean
@@ -27,12 +30,13 @@ export interface Controller {
    * секунду. Спрашивается ровно одно нажатие.
    */
   wantsCloak?(ship: ShipEntity, world: World): boolean
-  /** Хочет ли выпустить беспилотник (однократно). Боты пока не умеют. */
-  wantsDrone?(ship: ShipEntity, world: World): boolean
   /** Держит ли тяговый луч. Боты не жадные — им трофеи не нужны. */
   wantsTractor?(ship: ShipEntity, world: World): boolean
-  /** Держит ли клавишу крейсерского хода. Боты пока не умеют — и не нужно. */
-  wantsCruise?(ship: ShipEntity, world: World): boolean
+  /**
+   * Крейсерский ход. `false` — отпущен; `true` — разгон к MAX_FACTOR;
+   * число > 1 — ДЕРЖАТЬ множитель (защёлка: не растёт и не тает, пока нет блока).
+   */
+  wantsCruise?(ship: ShipEntity, world: World): boolean | number
 }
 
 /** Кто чем управляет. Ключ — id корабля. */

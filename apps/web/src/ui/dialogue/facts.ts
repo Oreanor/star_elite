@@ -18,6 +18,12 @@ import {
   shipWhereabouts,
   stationStock,
   stanceTo,
+  collectsFigurines,
+  figurineGiftOpenness,
+  figurinePriceFactor,
+  figurineTitleName,
+  figurineTitlesInHold,
+  type FigurineHobby,
   type Mood,
   type Persona,
   type Relationship,
@@ -67,11 +73,35 @@ export interface PartySnapshot {
   /** Трюм словами: «Руда ×20, Металлы ×10» или «пусто». */
   cargo: string
   /** Трюм машиночитаемо: чтобы модель могла указать товар в сделке по id. */
-  cargoList: { id: string; name: string; units: number }[]
+  cargoList: { id: string; name: string; units: number; specimenNames?: string[] }[]
   /** Свободный трюм, т: сколько ещё влезет. Бот не обещает больше, чем поместится. */
   freeHold: number
   /** Роль/намерение: пират, торговец, нанятый эскорт. */
   role: string
+  /**
+   * Статуэтки богов: знает ли, увлечённость, сколько в трюме, доля цены от потолка.
+   * Для промпта — чтобы не врал «у меня нет», когда в cargoList уже есть figurine.
+   */
+  figurines: FigurineHobbySnapshot
+}
+
+/** Снимок хобби статуэток для переговоров. */
+export interface FigurineHobbySnapshot {
+  hobby: FigurineHobby | null
+  collects: boolean
+  /** Увлечённость 0..1 (у не-коллекционера 0). */
+  zeal: number
+  /** Сколько статуэток в трюме. */
+  units: number
+  /**
+   * Имена экземпляров в трюме — ОТВЕЧАЙ ИМИ на «какие?».
+   * Пустой список при units>0 — только счётчик (старый сейв); не выдумывай имён.
+   */
+  names: string[]
+  /** Доля от потолка цены (0 — не ценит / не собирает). */
+  priceFactor: number
+  /** Охота дарить друзьям 0..1. */
+  giftOpenness: number
 }
 
 /**
@@ -419,12 +449,42 @@ function roleOf(other: ShipEntity, playerId: number): string {
   return `${occ}, мирный рейс`
 }
 
-function cargoList(ship: ShipEntity): { id: string; name: string; units: number }[] {
-  const out: { id: string; name: string; units: number }[] = []
+function cargoList(
+  ship: ShipEntity,
+): { id: string; name: string; units: number; specimenNames?: string[] }[] {
+  const out: { id: string; name: string; units: number; specimenNames?: string[] }[] = []
   for (const it of ship.hold.items) {
-    if (it.kind === 'commodity') out.push({ id: it.commodity.id, name: it.commodity.name, units: it.units })
+    if (it.kind !== 'commodity') continue
+    if (it.commodity.id === 'figurine') {
+      const specimenNames =
+        it.specimens && it.specimens.length > 0
+          ? it.specimens.map((s) => figurineTitleName(s.titleId))
+          : undefined
+      out.push({
+        id: it.commodity.id,
+        name: it.commodity.name,
+        units: it.units,
+        specimenNames,
+      })
+      continue
+    }
+    out.push({ id: it.commodity.id, name: it.commodity.name, units: it.units })
   }
   return out
+}
+
+function figurineSnapshot(ship: ShipEntity): FigurineHobbySnapshot {
+  const hobby = ship.persona.figurineHobby ?? null
+  const names = figurineTitlesInHold(ship)
+  return {
+    hobby,
+    collects: collectsFigurines(hobby ?? undefined),
+    zeal: hobby?.aware ? hobby.zeal : 0,
+    units: names.length,
+    names,
+    priceFactor: figurinePriceFactor(hobby ?? undefined),
+    giftOpenness: figurineGiftOpenness(hobby ?? undefined),
+  }
 }
 
 /**
@@ -496,6 +556,7 @@ function party(ship: ShipEntity, role: string): PartySnapshot {
     cargoList: cargoList(ship),
     freeHold: Math.floor(freeCapacity(ship.hold)),
     role,
+    figurines: figurineSnapshot(ship),
   }
 }
 

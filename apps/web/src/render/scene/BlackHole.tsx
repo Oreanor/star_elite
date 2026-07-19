@@ -8,14 +8,13 @@ import {
   Vector3,
 } from 'three'
 import type { BodyEntity } from '@elite/sim'
-import { clamp } from '@elite/sim'
 import { useSession } from '../../app/GameContext'
-import { BODY_FADE, GIANT_RENDER_CAP } from '../config'
 import {
   BLACK_HOLE_DEFAULTS,
   createBlackHoleMaterial,
   type BlackHoleParams,
 } from '../materials/blackHole'
+import { worldShrink } from '../worldShrink'
 
 /**
  * Чёрная дыра: чёрный горизонт + аккреционный диск + линза неба (шейдер на сфере снаружи).
@@ -26,13 +25,6 @@ export type { BlackHoleParams }
 
 const _axis = new Vector3()
 const _cam = new Vector3()
-
-function worldShrink(scale: number): number {
-  if (scale <= GIANT_RENDER_CAP) return 1
-  const recede = GIANT_RENDER_CAP / scale
-  const fade = 1 - clamp((scale - BODY_FADE.START) / (BODY_FADE.END - BODY_FADE.START), 0, 1)
-  return recede * fade
-}
 
 function paramsFromHorizon(horizon: number, body: BodyEntity): BlackHoleParams {
   _axis.copy(body.spinAxis)
@@ -80,6 +72,11 @@ function BlackHoleInstance({ body }: { body: BodyEntity }) {
 
   useFrame((_, dt) => {
     const shrink = worldShrink(session.world.player.state.scale)
+    if (shrink <= 0) {
+      if (coreRef.current) coreRef.current.visible = false
+      if (lensRef.current) lensRef.current.visible = false
+      return
+    }
     const rs = horizon * shrink
 
     _cam.copy(camera.position).sub(body.pos)
@@ -93,6 +90,7 @@ function BlackHoleInstance({ body }: { body: BodyEntity }) {
     const lensOn = dist > rs * 6.2
 
     if (coreRef.current) {
+      coreRef.current.visible = true
       coreRef.current.position.copy(body.pos)
       coreRef.current.scale.setScalar(rs * 1.02)
     }

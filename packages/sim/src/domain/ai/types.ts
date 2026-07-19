@@ -30,6 +30,11 @@ export interface AIState {
    * что написано на кнопке.
    */
   orderedTargetId: number | null
+  /**
+   * Мягкая цель автобоя (обломок / астероид). Не корабль — у неё нет `ShipEntity`,
+   * поэтому приказ живёт отдельно от `orderedTargetId`. null — бьём борт или цели нет.
+   */
+  orderedSoft: { kind: 'pod' | 'asteroid'; id: number } | null
   /** Куда сейчас летим: патрульная точка или точка отрыва. */
   waypoint: Vector3
   /** Район патрулирования. Бот не улетает из него без причины. */
@@ -137,6 +142,7 @@ export function createAIState(home: Vector3, rng: Rng): AIState {
     mode: 'patrol',
     targetId: null,
     orderedTargetId: null,
+    orderedSoft: null,
     waypoint: home.clone(),
     home: home.clone(),
     thinkTimer: rng() * 0.12,

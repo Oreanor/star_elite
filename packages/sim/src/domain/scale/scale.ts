@@ -1,6 +1,8 @@
+import { Vector3 } from 'three'
+import { GALAXY_FLIGHT } from '../../config/galaxy'
 import { MIELOPHONE } from '../../config/mielophone'
 import { clamp } from '../../core/math'
-import type { ShipEntity } from '../world/entities'
+import type { ShipEntity, World } from '../world/entities'
 
 /**
  * Миелофон: непрерывный масштаб борта. Чистый домен — ни рендера, ни камеры, только
@@ -11,9 +13,21 @@ import type { ShipEntity } from '../world/entities'
  * сервер и чужой клиент видят один и тот же размер.
  */
 
+const _anchor = new Vector3()
+const _offset = new Vector3()
+
 /** Радиус корпуса с учётом масштаба: во столько раз больше силуэт для столкновений. */
 export function effectiveRadius(e: ShipEntity): number {
   return e.spec.hull.radius * e.state.scale
+}
+
+/**
+ * Во сколько раз боевая скорость и тяга выше паспортных при данном масштабе.
+ * Без этого гигант ползёт теми же 220 м/с, и «ехать по звёздам на газу» нельзя —
+ * остаётся только крейсер, задуманный для единичного борта в системе.
+ */
+export function speedScaleFactor(scale: number): number {
+  return Math.max(1, scale / MIELOPHONE.SPEED_SCALE_REF)
 }
 
 /**
@@ -26,14 +40,60 @@ export function effectiveMass(e: ShipEntity): number {
 }
 
 /**
+ * Метров кадра в одном св.году при данном росте — та же формула, что у галактического
+ * слоя и аима J. Единый источник: иначе зум, локатор и автопилот разъедутся.
+ */
+export function metersPerLy(scale: number): number {
+  return GALAXY_FLIGHT.LY_TO_M / Math.min(Math.max(scale, 1), MIELOPHONE.MAX_SCALE)
+}
+
+/**
+ * Якорь галактики в ЛОКАЛЬНЫХ метрах кадра (true − originOffset).
+ * Тот же выбор, что у `jumpStarDestination`: слой → своя звезда → pos борта.
+ */
+export function galaxyAnchorLocal(world: World, out: Vector3): Vector3 {
+  if (world.galaxyAnchorTrue) {
+    return out.copy(world.galaxyAnchorTrue).sub(world.originOffset)
+  }
+  const home = world.bodies.find((b) => b.kind === 'star')
+  if (home) return out.copy(home.pos)
+  return out.copy(world.player.state.pos)
+}
+
+/**
+ * Сохранить галактический локус при смене масштаба: ly = (pos−anchor)/m(S) неподвижен.
+ * Полёт двигает pos (и локус); зум лишь перепроецирует текущий локус в новые метры.
+ * Ниже GHOST_BODY — системные метры, ремап к якорю ломал бы орбиты.
+ */
+export function preserveGalaxyLocus(
+  ship: ShipEntity,
+  world: World,
+  oldScale: number,
+  newScale: number,
+): void {
+  if (oldScale === newScale) return
+  if (Math.min(oldScale, newScale) < MIELOPHONE.GHOST_BODY_SCALE) return
+  const mOld = metersPerLy(oldScale)
+  const mNew = metersPerLy(newScale)
+  if (mOld === mNew || mOld <= 0) return
+  galaxyAnchorLocal(world, _anchor)
+  _offset.copy(ship.state.pos).sub(_anchor).multiplyScalar(mNew / mOld)
+  ship.state.pos.copy(_anchor).add(_offset)
+}
+
+/**
  * Шаг масштаба от сигнала `controls.grow`. Экспоненциально: постоянный сигнал = постоянная
  * скорость «зума» на глаз. Домен не спрашивает, ЕСТЬ ли артефакт, — он лишь исполняет
  * команду; право расти выдаёт тот, кто заполняет controls (позже — наличие модуля).
+ *
+ * `world` нужен, чтобы при росте/усадке в галактическом режиме не «уплывать» сквозь
+ * звёзды: позиция пересчитывается под неизменный локус в св.г.
  */
-export function stepScale(e: ShipEntity, dt: number): void {
+export function stepScale(e: ShipEntity, dt: number, world?: World): void {
   // Право расти даёт УСТРОЙСТВО: нет миелофона в слоте — сигнал роста игнорируется.
   // Гейт в домене (не в клиенте) — значит и сервер, и чужой клиент согласны, кто может расти.
   if (!e.spec.hasMielophone) return
+  const oldScale = e.state.scale
   const grow = e.controls.grow
   if (grow > 0) {
     // РОСТ питается от батареи доп-отсека. Расход — по логарифму (масштаб множится):
@@ -51,13 +111,27 @@ export function stepScale(e: ShipEntity, dt: number): void {
     e.state.scale *= Math.exp(grow * MIELOPHONE.GROW_RATE * dt)
   }
   e.state.scale = clamp(e.state.scale, MIELOPHONE.MIN_SCALE, MIELOPHONE.MAX_SCALE)
+
+  if (world && e.state.scale !== oldScale) {
+    preserveGalaxyLocus(e, world, oldScale, e.state.scale)
+  }
+
+  // Скорость ∝ scale (потолок и тяга). При смене масштаба держим ДОЛЮ от потолка:
+  // иначе сжатие оставляет гиперскорость с крупного ×, а рост с газом — FA догоняет
+  // новый потолок рывком («внезапно большая» на спидометре).
+  // Без тяги при РОСТЕ vel не надуваем: иначе на нулевом газе скорость сама ползёт вверх.
+  const oldF = speedScaleFactor(oldScale)
+  const newF = speedScaleFactor(e.state.scale)
+  if (oldF > 0 && newF !== oldF) {
+    const thrusting = Math.abs(e.controls.throttle) > 1e-3
+    if (newF < oldF || thrusting) e.state.vel.multiplyScalar(newF / oldF)
+  }
 }
 
 /**
  * Насколько борт ЕЩЁ присутствует в единичном мире: 1 до PHASE_START, к PHASE_END → 0.
  * Кривая ease-in (`1 − t^FADE_EXP`): почти до конца плотный, потом гаснет рывком — так
- * полупрозрачных «призраков» в кадре мало. Рендер берёт это как opacity, домен — как «ещё
- * взаимодействует ли». Чистая функция от одного числа: и клиент, и сервер считают одинаково.
+ * полупрозрачных «призраков» в кадре мало. Чистая функция от одного числа: и клиент, и сервер считают одинаково.
  */
 export function phasePresence(scale: number): number {
   if (scale <= MIELOPHONE.PHASE_START) return 1

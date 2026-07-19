@@ -19,7 +19,10 @@ import { WarpArrivalPortals } from '../render/scene/WarpArrivalPortals'
 import { ShieldBubbles } from '../render/scene/ShieldBubbles'
 import { Exhaust } from '../render/scene/Exhaust'
 import { Lighting } from '../render/scene/Lighting'
+import { Figurines } from '../render/scene/Figurines'
 import { Monoliths } from '../render/scene/Monoliths'
+import { RockDebris } from '../render/scene/RockDebris'
+import { ScenicRocks } from '../render/scene/ScenicRocks'
 import { Drones, EnemyShips, PlayerShip } from '../render/scene/Ships'
 import { RemotePlayers } from '../render/scene/RemotePlayers'
 import { Simulation } from '../render/scene/Simulation'
@@ -63,6 +66,9 @@ function Scene() {
       <WingMissiles />
       <EnemyShips />
       <Monoliths />
+      <Figurines />
+      <ScenicRocks />
+      <RockDebris />
       <Drones />
       <RemotePlayers />
       <CargoPods />

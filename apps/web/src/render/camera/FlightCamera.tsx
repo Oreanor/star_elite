@@ -70,6 +70,7 @@ export function FlightCamera() {
 
   /** Множитель крейсера в прошлом кадре: по его росту и виден разгон. */
   const previousFactor = useRef(1)
+  /** Были ли на поверхности в прошлом кадре — чтобы один раз зафиксировать ракурс при посадке. */
 
   /**
    * Ориентация камеры хранится РАЗОБРАННОЙ — курс с тангажом отдельно, крен
@@ -227,6 +228,8 @@ export function FlightCamera() {
      */
     const view = cameraView()
     const orbiting = Math.abs(view.azimuth) > 1e-3
+    // Ховер — полёт по сфере: камера как в обычной погоне (облёт стрелками).
+    const stableChase = orbiting
 
     const offset = CAMERA.CHASE_OFFSET
     _offset.set(offset[0], offset[1], offset[2]).multiplyScalar(sizeFactor)
@@ -253,10 +256,10 @@ export function FlightCamera() {
       _camRot.copy(camSwing).multiply(camTwist)
       _offset.applyQuaternion(_camRot)
     } else {
-      // При облёте база смещения — в СВЯЗАННЫХ осях борта (сглаженных курс+крен): камера за
-      // кормой И ЕСТЬ ноль, поэтому облёт обязан идти в его осях. От мировых борт валится набок.
+      // При облёте / на поверхности база смещения — от сглаженного курса камеры, а не от
+      // сырого quat борта (на грунте тот крутится со спином тела).
       _camRot.copy(camSwing).multiply(camTwist)
-      _offset.applyQuaternion(orbiting ? _camRot : state.quat)
+      _offset.applyQuaternion(stableChase ? _camRot : state.quat)
     }
     // Миелофон: камера отъезжает НА ТОТ ЖЕ множитель, что и размер борта. Оттого свой
     // корабль на экране всегда одного размера, а мир вокруг «уменьшается» — не «я расту».
@@ -351,19 +354,26 @@ export function FlightCamera() {
     // из кадра. Точное dt/a садилось ровно на корму и на первом же скачке скорости
     // (включении крейсера) перелетало вперёд — корабль пропадал.
     // На СТОЯЩЕМ мире — жёстко и без упреждения: иначе оно сместило бы неподвижную камеру.
-    if (running) {
-      // Упреждение считаем по скорости, ОБРЕЗАННОЙ базовым MAX_SPEED. Иначе на крейсере
-      // (vel = MAX_SPEED × factor, до ×90) член vel·LEAD выносит цель на километры ВПЕРЁД
-      // корабля — камера обгоняет, а корабль отстаёт назад. Раньше упреждения не было вовсе
-      // и на сильном разгоне корабль уходил ВПЕРЁД из кадра — так и надо. Обрезка оставляет
-      // упреждение для обычного манёвра, но на крейсере оно исчезающе мало против пройденного
-      // пути, и корабль снова убегает вперёд, как прежде.
+    //
+    // За GIANT_RENDER_CAP отвод камеры и меш уже заморожены: мягкая пружина + vel∝scale
+    // дают ложное «стою, а уезжаю вперёд». Жёсткий погон с капа — силуэт в кадре.
+    // Ниже капа — пружина с потолком отставания (MAX_AHEAD).
+    if (running && state.scale < GIANT_RENDER_CAP) {
+      // Упреждение по скорости, ОБРЕЗАННОЙ базовым MAX_SPEED. Иначе на крейсере
+      // член vel·LEAD выносит цель на километры ВПЕРЁД корабля — камера обгоняет.
       const cap = player.spec.tuning.MAX_SPEED
       _lead.copy(state.vel)
       if (_lead.lengthSq() > cap * cap) _lead.setLength(cap)
       _target.addScaledVector(_lead, CAMERA.VELOCITY_LEAD)
       camera.position.lerp(_target, chaseAlpha)
+
+      const maxLag = _offset.length() * CAMERA.MAX_AHEAD
+      const lag = camera.position.distanceTo(_target)
+      if (lag > maxLag && lag > 1e-6) {
+        camera.position.lerp(_target, 1 - maxLag / lag)
+      }
     } else {
+      // Стоящий мир / гигантский × — жёстко к цели за кормой.
       camera.position.copy(_target)
     }
 

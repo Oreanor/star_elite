@@ -606,7 +606,7 @@ function rearm(world: World): void {
 
 /** Шаг трафика. Возвращает родившихся: приложению надо дать им пилотов. */
 export function stepTraffic(world: World, dt: number): ShipEntity[] {
-  // Пустынная система (Люцифер): трафика нет вовсе — ни встреч, ни завсегдатаев у причала.
+  // Пустынная система: трафика нет вовсе — ни встреч, ни завсегдатаев у причала.
   // Выходим ДО despawnDistant: чистить некого, а спавнить тем более. Только бог и звезда.
   if (world.desolate) return []
   despawnDistant(world)

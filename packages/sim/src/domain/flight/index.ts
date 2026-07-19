@@ -12,7 +12,29 @@ export {
 export { forward, shipAxes } from './axes'
 export { bodyMass, gravityAccel, gravityReach, stepGravity } from './gravity'
 export { canEngageFlyTo, flyToArrived, flyToController } from './flyto'
-export { armAutoland, canAutoland, nearestLandable, surfaceAltitude } from './landing'
+export {
+  armAutoland,
+  canAutoland,
+  enterSurfaceFlight,
+  findLandable,
+  isLandable,
+  isLandableAsteroid,
+  isLandableBody,
+  isLandableScenic,
+  isSurfaceLargeEnough,
+  landingCue,
+  landingScaleOk,
+  landingPromptTarget,
+  landOnSurface,
+  meshSolidRadius,
+  landShip,
+  nearestLandable,
+  releaseLanding,
+  stepAutoland,
+  stepLanding,
+  surfaceAltitude,
+  type LandableSurface,
+} from './landing'
 export { stepShip } from './model'
 export { bankToward, interceptPoint, steerToward } from './steering'
 export {

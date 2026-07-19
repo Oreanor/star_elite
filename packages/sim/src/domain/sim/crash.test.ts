@@ -1,27 +1,28 @@
 import { Vector3 } from 'three'
 import { describe, expect, it } from 'vitest'
+import { CRUISE } from '../../config/cruise'
+import { LANDING } from '../../config/landing'
+import { MIELOPHONE } from '../../config/mielophone'
 import { PHYSICS } from '../../config/physics'
 import { DOCKING } from '../../config/station'
 import { shipAxes } from '../flight/axes'
-import { armAutoland } from '../flight/landing'
+import { armAutoland, releaseLanding } from '../flight/landing'
 import { createWorld, STARTER_SYSTEM, type BodyEntity, type World } from '../world'
 import { stepWorld } from './step'
 
 /**
  * Контакт с крупным телом.
  *
- * У планеты и луны ТВЁРДАЯ поверхность: неуправляемое касание разбивает корабль,
- * сесть можно только автопосадкой (L в окне высот). Звезда сжигает, чёрная дыра
- * проходима. У станции защитное поле — оно не относится к гравитации поверхности.
+ * У планеты, луны, статуи и глыбы ТВЁРДАЯ поверхность: неуправляемое касание
+ * отбрасывает назад без урона (жёлтый «КРУШЕНИЕ»), сесть — только автопосадкой
+ * (L в окне высот). Звезда сжигает, чёрная дыра проходима. У станции — поле.
  */
 
 const NO_CONTROLLERS = new Map()
 
 /**
  * РОВНО один шаг физики. Кадр в 1/60 содержит их два, и корабль, застрявший в
- * коре, погибал бы от второго удара даже с щитом, который его от первого спас.
- * Тест обязан видеть один удар, иначе он не различает «щит не помог» и
- * «щит помог, но ненадолго».
+ * коре, ловил бы второй удар. Тест обязан видеть один контакт.
  */
 const oneStep = (world: World) => stepWorld(world, PHYSICS.FIXED_DT, NO_CONTROLLERS)
 
@@ -53,24 +54,56 @@ function hover(world: World, body: BodyEntity, altitude: number): void {
   player.controls.throttle = 0
 }
 
-/** Заводит непрерываемую автопосадку с 60 м и крутит шаги, пока корабль не сядет. */
+/** Заводит непрерываемую автопосадку из окна высот и крутит шаги, пока корабль не сядет. */
 function landViaAutoland(world: World, body: BodyEntity): void {
-  hover(world, body, 60)
+  hover(world, body, LANDING.HOVER_ALT)
   if (!armAutoland(world)) throw new Error('автопосадка не завелась — корабль не в окне высот')
   for (let i = 0; i < 3000 && !world.player.landedOn; i++) oneStep(world)
 }
 
 describe('удар о крупное тело', () => {
-  it('неуправляемое касание планеты разбивает корабль — поверхность твёрдая', () => {
+  it('неуправляемое касание планеты отбрасывает без урона — поверхность твёрдая', () => {
     const world = quiet()
+    const player = world.player
     const planet = bodyOf(world, 'planet')
+    const before = player.hull + player.shield
     ram(world, planet, 4_000)
 
     oneStep(world)
 
-    // Не включил автопосадку (L) в окне высот — планета больше не «мягкий батут».
-    expect(world.player.alive).toBe(false)
-    expect(world.player.landedOn).toBeNull()
+    expect(player.alive).toBe(true)
+    expect(player.hull + player.shield).toBe(before)
+    expect(player.landedOn).toBeNull()
+    // Уходит ОТ планеты, а не сквозь неё.
+    expect(player.state.vel.x).toBeGreaterThan(0)
+    expect(player.state.pos.distanceTo(planet.pos)).toBeGreaterThanOrEqual(planet.radius)
+    expect(player.lastCrashAt).toBe(world.time)
+    expect(player.lastCrashHit).toEqual({ kind: 'planet', name: planet.name })
+  })
+
+  /**
+   * РЕГРЕССИЯ. На полном крейсере шаг — десятки тысяч км; точечная проверка и
+   * `isPhased → skip` пропускали целую планету между кадрами — «всегда пролетаю
+   * насквозь». Заметание ловит пересечение; отскок гасит крейсер и ставит
+   * на сторону подхода.
+   */
+  it('крейсер не прошивает планету насквозь за один шаг', () => {
+    const world = quiet()
+    const player = world.player
+    const planet = bodyOf(world, 'planet')
+    const jump = planet.radius * 4
+    player.state.pos.copy(planet.pos).setX(planet.pos.x - planet.radius - 1_000)
+    player.state.vel.set(jump / PHYSICS.FIXED_DT, 0, 0)
+    player.cruise.factor = CRUISE.MAX_FACTOR
+    player.controls.throttle = 0
+
+    oneStep(world)
+
+    expect(player.alive).toBe(true)
+    expect(player.cruise.factor).toBe(1)
+    expect(player.state.vel.length()).toBeLessThanOrEqual(LANDING.CRASH_BOUNCE_MAX + 1e-6)
+    // После отскока — снаружи, на стороне подхода (отрицательный X от центра).
+    expect(player.state.pos.x).toBeLessThan(planet.pos.x)
   })
 
   it('автопосадка сажает без урона щиту и корпусу', () => {
@@ -145,9 +178,14 @@ describe('удар о крупное тело', () => {
 
     oneStep(world)
 
-    // Столкновение считается по effectiveRadius (радиус×масштаб): гигант не сквозит сквозь
-    // планету — неуправляемое касание его разбивает, как и обычный корабль.
-    expect(player.alive).toBe(false)
+    // Столкновение считается по effectiveRadius: гигант не сквозит сквозь планету —
+    // отскакивает, как обычный корабль, и метит крушение для пуша.
+    expect(player.alive).toBe(true)
+    expect(player.lastCrashAt).toBe(world.time)
+    expect(player.lastCrashHit).toEqual({ kind: 'planet', name: planet.name })
+    expect(player.state.pos.distanceTo(planet.pos)).toBeGreaterThanOrEqual(
+      planet.radius + player.spec.hull.radius * player.state.scale - 1,
+    )
   })
 
   it('автопосаженный корпус лежит в плоскости, перпендикулярной радиусу', () => {
@@ -166,20 +204,23 @@ describe('удар о крупное тело', () => {
     expect(Math.abs(forward.dot(normal))).toBeLessThan(1e-6)
   })
 
-  it('новая тяга немедленно отрывает севший корабль от поверхности', () => {
+  it('L отпускает стоянку без телепорта', () => {
     const world = quiet()
     const player = world.player
     const planet = bodyOf(world, 'planet')
     landViaAutoland(world, planet)
+    const before = player.state.pos.clone()
 
-    player.controls.throttle = 0.2
-    oneStep(world)
-
+    expect(releaseLanding(player, world)).toBe(true)
     expect(player.landedOn).toBeNull()
-    expect(player.state.vel.dot(player.state.pos.clone().sub(planet.pos).normalize())).toBeGreaterThan(0)
+    expect(player.state.pos.distanceTo(before)).toBeLessThan(1)
   })
 
-  it('касание звезды сжигает без отскока', () => {
+  /**
+   * Игрок не уходит в Game Over: касание звезды — отскок, полные щиты/корпус и
+   * красный «корабль потерян · звезда …». Боты по-прежнему сгорают.
+   */
+  it('касание звезды у игрока — потерян с причиной, игра дальше', () => {
     const world = quiet()
     const player = world.player
     const star = bodyOf(world, 'star')
@@ -187,8 +228,46 @@ describe('удар о крупное тело', () => {
 
     oneStep(world)
 
-    expect(player.alive).toBe(false)
-    expect(player.hullHeat).toBe(1)
+    expect(player.alive).toBe(true)
+    expect(player.hull).toBe(player.spec.hull.hull)
+    expect(player.shield).toBe(player.spec.hull.shield)
+    expect(player.lastLostAt).toBe(world.time)
+    expect(player.lastLostHit).toEqual({ kind: 'star', name: star.name })
+    expect(player.state.vel.x).toBeGreaterThan(0)
+  })
+
+  it('с ×50 касание астероида не даёт крушения', () => {
+    const world = createWorld({
+      ...STARTER_SYSTEM,
+      patrols: [],
+      belt: { count: 1, radius: 500, spread: 50, center: [200, 0, 0] },
+    })
+    const player = world.player
+    const rock = world.asteroids[0]!
+    // count:1 в фабрике раздувает камень до колосса (нав). Жмём обратно в мелочь.
+    rock.radius = 8
+    player.state.scale = 2
+    player.state.pos.copy(rock.pos)
+    player.state.pos.x += rock.radius + player.spec.hull.radius - 1
+    player.state.vel.set(-40, 0, 0)
+
+    oneStep(world)
+
+    expect(player.lastCrashAt).toBeLessThan(0)
+  })
+
+  it('с ×10000 касание планеты не даёт крушения', () => {
+    const world = quiet()
+    const player = world.player
+    const planet = bodyOf(world, 'planet')
+    player.state.scale = MIELOPHONE.GHOST_BODY_SCALE
+    ram(world, planet, 40)
+
+    oneStep(world)
+
+    expect(player.lastCrashAt).toBeLessThan(0)
+    expect(player.lastLostAt).toBeLessThan(0)
+    // Не отскочили наружу (было бы vel.x > 0) — сквозь, как задумано.
     expect(player.state.vel.x).toBeLessThanOrEqual(0)
   })
 

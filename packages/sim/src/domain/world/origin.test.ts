@@ -57,6 +57,7 @@ describe('плавающее начало координат', () => {
       ...world.ships.map((s) => ({ what: `борт ${s.name}`, pos: s.state.pos })),
       ...world.asteroids.map((a) => ({ what: 'астероид', pos: a.pos })),
       ...world.monoliths.map((m) => ({ what: 'статуя', pos: m.pos })),
+      ...world.scenicRocks.map((r) => ({ what: 'глыба', pos: r.pos })),
       ...world.titans.map((t) => ({ what: 'кит', pos: t.pos })),
       ...world.platforms.map((p) => ({ what: 'платформа', pos: p.pos })),
       ...world.pods.map((p) => ({ what: 'контейнер', pos: p.pos })),
@@ -114,6 +115,19 @@ describe('окрестность едет вместе с причалом по 
 
     world.monoliths.forEach((m, i) => {
       expect(m.pos.distanceTo(station.pos), 'статуя отстала от причала').toBeCloseTo(before[i]!, 3)
+    })
+  })
+
+  it('пояс глыб едет вместе с причалом', () => {
+    const world = createWorld()
+    const station = world.bodies.find((b) => b.kind === 'station')!
+    const before = world.scenicRocks.map((r) => r.pos.distanceTo(station.pos))
+    expect(before.length).toBeGreaterThan(0)
+
+    stepOrbits(world, 1e6)
+
+    world.scenicRocks.forEach((r, i) => {
+      expect(r.pos.distanceTo(station.pos), 'глыба отстала от причала').toBeCloseTo(before[i]!, 3)
     })
   })
 })

@@ -7,7 +7,9 @@ import { stepWorld, type Controller } from '../sim'
 import { createWorld, STARTER_SYSTEM, type World } from '../world'
 import type { PatrolDef } from '../world/system'
 import { applyDamage } from './damage'
-import { canScoopAt, scoopBlock, scoopReadiness, spawnWreckage, tryScoop } from './salvage'
+import { addItem } from '../cargo/hold'
+import { COMMODITIES } from '../cargo/items'
+import { canScoopAt, jettisonItem, scoopBlock, scoopReadiness, spawnWreckage, tryScoop } from './salvage'
 
 /**
  * Мир без пояса, но с одним пиратом: астероиды тут только мешают, а обломок
@@ -349,5 +351,41 @@ describe('дрейф контейнера', () => {
     const [a, b] = world.pods
     expect(a && b).toBeTruthy()
     expect(a!.vel.distanceTo(b!.vel)).toBeGreaterThan(1)
+  })
+})
+
+describe('выброс из трюма', () => {
+  it('ящик появляется в нескольких метрах по носу и летит как трофей', () => {
+    const world = quiet()
+    const ship = world.player
+    ship.state.pos.set(0, 0, 0)
+    ship.state.quat.identity()
+    expect(addItem(ship.hold, { kind: 'commodity', commodity: COMMODITIES.FOOD, units: 1 })).toBe(true)
+    const index = ship.hold.items.length - 1
+    expect(jettisonItem(world, ship, index)).toBe(true)
+    const pod = world.pods[world.pods.length - 1]!
+    const ahead = ship.state.pos.distanceTo(pod.pos)
+    expect(ahead).toBeGreaterThanOrEqual(SALVAGE.JETTISON_AHEAD_MIN)
+    expect(ahead).toBeLessThanOrEqual(SALVAGE.JETTISON_AHEAD_MAX)
+    // Identity: нос = −Z.
+    expect(pod.pos.z).toBeCloseTo(-ahead, 3)
+    expect(pod.debris).toBeUndefined()
+    // Со стоящего борта — тот же разлёт kick'ом, что у контейнера с обломка.
+    expect(pod.vel.length()).toBeGreaterThan(1)
+    expect(pod.spin.length()).toBeGreaterThan(0)
+  })
+
+  it('руда выплёвывается осколком, не ящиком', () => {
+    const world = quiet()
+    const ship = world.player
+    ship.state.pos.set(0, 0, 0)
+    ship.state.quat.identity()
+    expect(addItem(ship.hold, { kind: 'commodity', commodity: COMMODITIES.MINERALS, units: 2 })).toBe(true)
+    const index = ship.hold.items.length - 1
+    expect(jettisonItem(world, ship, index)).toBe(true)
+    const pod = world.pods[world.pods.length - 1]!
+    expect(pod.debris).toBeDefined()
+    expect(pod.debris!.radius).toBeGreaterThan(0)
+    expect(pod.vel.length()).toBeGreaterThan(1)
   })
 })

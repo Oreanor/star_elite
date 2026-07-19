@@ -34,12 +34,20 @@ export type WarnCode =
   | 'noAux'
   | 'noTarget'
   | 'landPrompt'
+  | 'landApproach'
+  | 'landDetach'
+  | 'crash'
+  | 'shipLost'
   | 'dockReady'
   | 'dockCorridor'
   | 'orbitExit'
   | 'hail'
   | 'refuel'
   | 'bonVoyage'
+  | 'noRoom'
+  | 'holdFull'
+  | 'cruiseLatch'
+  | 'cruiseUnlatch'
 
 interface Def {
   /** Цвет рамки, текста и полупрозрачного фона. */
@@ -65,9 +73,16 @@ const DEFS: Record<WarnCode, Def> = {
   noJump: { color: UI.WARN, hz: 0, rank: 84, key: 'hud.noJump' },
   noAux: { color: UI.WARN, hz: 0, rank: 84, key: 'hud.noAux' },
   noTarget: { color: UI.WARN, hz: 0, rank: 84, key: 'hud.noTarget' },
-  // Окно автопосадки: жёлтое и МИГАЕТ (действие по времени — успеть нажать), приоритет
-  // выше прочих жёлтых «нельзя»: пропустишь — разобьёшься. Реальная угроза жизни перебьёт.
-  landPrompt: { color: UI.WARN, hz: 2, rank: 86, key: 'hud.landPrompt' },
+  // Окно стоянки: голубое — «нажмите L». Выше стыковки.
+  landPrompt: { color: UI.PRIMARY, hz: 2, rank: 86, key: 'hud.landPrompt' },
+  // За 1000 м: жёлтая «подготовка к ховер-режиму», L ещё рано.
+  landApproach: { color: UI.WARN, hz: 0, rank: 85, key: 'hud.landApproach' },
+  // Сидим на поверхности: не мигает — состояние, а не дедлайн. L отпускает.
+  landDetach: { color: UI.PRIMARY, hz: 0, rank: 42, key: 'hud.landDetach' },
+  // Неуправляемый удар о твердь: отскок без урона. Жёлтое — «осторожно», не гибель.
+  crash: { color: UI.WARN, hz: 3, rank: 70, key: 'hud.crash' },
+  // Игрок «погиб» и воскрес: красное, выше ракеты — причина должна быть видна сразу.
+  shipLost: { color: UI.DANGER, hz: 3, rank: 120, key: 'hud.shipLost' },
   dockHint: { color: UI.PRIMARY, hz: 0, rank: 38, key: 'hud.dockHint' },
   contactLost: { color: UI.DANGER, hz: 0, rank: 68, key: 'hud.contactLost' },
   hullHot: { color: UI.WARN, hz: 2, rank: 60, key: 'hud.hullHot' },
@@ -83,6 +98,13 @@ const DEFS: Record<WarnCode, Def> = {
   // Напутствие при вылете: голубое, ровно горит (не мигает). Приоритет невысок — реальная
   // угроза на отходе (если вдруг) должна перебить добрые пожелания.
   bonVoyage: { color: UI.PRIMARY, hz: 0, rank: 42, key: 'hud.bonVoyage' },
+  // Трюм не вмещает ближайший контейнер: жёлтое «нельзя», не угроза жизни.
+  holdFull: { color: UI.WARN, hz: 0, rank: 48, key: 'hud.holdFull' },
+  // Выкладка статуэтки: орбита низкая или тела слишком близко.
+  noRoom: { color: UI.WARN, hz: 0, rank: 72, key: 'hud.noRoom' },
+  // Защёлка форсажа (Alt) / сброс Ctrl — голубые, разовые, не угроза.
+  cruiseLatch: { color: UI.PRIMARY, hz: 0, rank: 41, key: 'hud.cruiseLatch' },
+  cruiseUnlatch: { color: UI.PRIMARY, hz: 0, rank: 41, key: 'hud.cruiseUnlatch' },
 }
 
 export interface Plate {

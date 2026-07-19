@@ -393,15 +393,27 @@ function Shell({ onRestart }: { onRestart: () => void }) {
   // Клик по пристыкованному пилоту в доке: наводимся на него и открываем канал.
   // Курсор у причала уже свободен, мир стоит — только показать окно разговора.
   const talkTo = useCallback((shipId: number) => {
-    session.world.lockedTargetId = shipId
+    const w = session.world
+    w.navTargetId = null
+    w.lockedStationId = null
+    w.lockedPodId = null
+    w.lockedAsteroidId = null
+    w.lockedTargetId = shipId
+    w.targetFocus = 'contact'
     setTalking(true)
   }, [session])
   // «Навести» из вкладки «Люди»: захватываем борт знакомого — стрелка HUD поведёт к
   // нему. В полёте закрываем консоль, чтобы мир ожил и можно было лететь; у причала
   // лететь некуда, метку просто держим.
   const locateShip = useCallback((shipId: number) => {
-    session.world.lockedTargetId = shipId
-    if (!session.world.docked) closeConsole()
+    const w = session.world
+    w.navTargetId = null
+    w.lockedStationId = null
+    w.lockedPodId = null
+    w.lockedAsteroidId = null
+    w.lockedTargetId = shipId
+    w.targetFocus = 'contact'
+    if (!w.docked) closeConsole()
   }, [session, closeConsole])
   // «Проложить курс» к знакомому в другой системе: метим её целью прыжка и переводим
   // на карту галактики — там виден маршрут, а H в полёте прыгнет по этой метке.
@@ -448,9 +460,10 @@ function Shell({ onRestart }: { onRestart: () => void }) {
    * оверлей (консоль ИЛИ канал связи): два флага паузы однажды разошлись бы, и мир
    * остался бы стоять под закрытым окном.
    *
-   * У причала консоль открыта всегда — M/G/I там молчат, вкладки жмут мышью. В полёте
-   * та же клавиша открывает консоль на своей вкладке, при открытой переводит на неё,
-   * а повторная своя — закрывает. С кем говорить, решает домен (`interlocutor`).
+   * M/G/I — карта системы / галактики / корабль (верфь у причала) — одинаково и в доке,
+   * и в полёте. У причала консоль всегда открыта: клавиша только меняет вкладку; повтор
+   * своей — назад на «станция». В полёте: открыть / переключить / повтор — закрыть.
+   * С кем говорить — `interlocutor`.
    */
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -486,18 +499,23 @@ function Shell({ onRestart }: { onRestart: () => void }) {
         if (!interlocutor(session.world)) {
           const hail = pendingHail(session.world)
           if (!hail) return
-          session.world.lockedTargetId = hail.id
+          const w = session.world
+          w.navTargetId = null
+          w.lockedStationId = null
+          w.lockedPodId = null
+          w.lockedAsteroidId = null
+          w.lockedTargetId = hail.id
+          w.targetFocus = 'contact'
         }
         setTalking(true)
         releaseLock()
         return
       }
 
-      // H — гиперпрыжок к цели, намеченной на карте галактики. Прыгать можно только
-      // в полёте (у причала карта лишь метит цель), поэтому у станции клавиша молчит.
-      // Точку выхода домен возьмёт из мира (`jumpArrivalPlanet`): причал или звезда.
+      // H — единственный вход в гипер: карта только метит систему (как у причала),
+      // прыжок — в космосе, если привод/заряд/дистанция позволяют (`jumpBlock`).
       if (e.code === 'KeyH') {
-        if (docked || talking || dispatching) return
+        if (docked || talking || dispatching || jumping()) return
         const target = session.world.jumpTargetIndex
         if (target == null || jumpBlock(session.world, target) !== null) return
         const planet = session.world.jumpArrivalPlanet
@@ -506,13 +524,24 @@ function Shell({ onRestart }: { onRestart: () => void }) {
         return
       }
 
+      // M/G/I — система / галактика / корабль (у причала — та же верфь). И там, и там:
+      // открыть вкладку; повтор своей — назад (в доке на «станцию», в полёте — закрыть).
       const wanted: ConsoleTab | null =
         e.code === 'KeyM' ? 'system' : e.code === 'KeyG' ? 'galaxy' : e.code === 'KeyI' ? 'ship' : null
-      if (!wanted || talking || dispatching || docked) return
+      if (!wanted || talking || dispatching || chatWith) return
+
+      if (docked) {
+        // Консоль уже на экране: только вкладка. `tab` после флориша может быть null, хотя
+        // рисуется «станция» (`tab ?? 'planet'`) — сравниваем с тем, что видит игрок.
+        const current = tab ?? 'planet'
+        if (current === wanted) setTab('planet')
+        else setTab(wanted)
+        return
+      }
 
       if (tab === wanted) closeConsole()
       else if (tab === null) openConsole(wanted)
-      else setTab(wanted) // консоль уже открыта, курсор отпущен — просто меняем вкладку
+      else setTab(wanted)
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
@@ -561,6 +590,9 @@ function Shell({ onRestart }: { onRestart: () => void }) {
             onBoot={() => setBooted(true)}
             onDock={() => {
               setDocked(true)
+              // Как при обычной стыковке: консоль на вкладке станции (не null — иначе M/G
+              // сравнивают с пустым tab и ведут себя непредсказуемо).
+              setTab('planet')
               setLaunching(false)
             }}
             onNewGame={newGame}

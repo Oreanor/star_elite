@@ -1,5 +1,6 @@
 import { Vector3 } from 'three'
 import { GRAVITY } from '../../config/bodies'
+import { SCALE } from '../../config/galaxy'
 import { orbitSec } from '../../config/time'
 import type { BodyEntity, OrbitDef, World } from './entities'
 
@@ -33,9 +34,14 @@ export function keplerRate(centralMass: number, orbitRadius: number): number {
   return Math.sqrt((GRAVITY.G * centralMass) / orbitRadius ** 3)
 }
 
-/** Масса звезды из радиуса. */
+/** Масса звезды из радиуса (старый путь: ∝ R³). Для дыр и тестов без massSolar. */
 export function starMass(radius: number): number {
   return GRAVITY.STAR_DENSITY * (4 / 3) * Math.PI * radius ** 3
+}
+
+/** Масса звезды из каталожной massSolar — честная, не раздутая гигантом. */
+export function starMassSolar(massSolar: number): number {
+  return massSolar * SCALE.SOLAR_MASS
 }
 
 /** Масса планеты из радиуса и типа. */
@@ -136,11 +142,16 @@ export function stepOrbits(world: World, time = orbitTime(world)): void {
   // скоростью, которая в локальном полёте была бы недостижима.
   const station = world.bodies.find((body) => body.kind === 'station')
   if (station) _stationBefore.copy(station.pos)
-  const boundBody = world.player.landedOn
-    ? world.bodies.find((body) => body.id === world.player.landedOn!.bodyId)
+  const landingId = world.player.landedOn?.bodyId ?? null
+  const boundBody = landingId !== null
+    ? world.bodies.find((body) => body.id === landingId) ?? null
+    : null
+  // Сидим на статуе — она не body; едет со станцией, игрок должен получить ТОТ ЖЕ сдвиг.
+  const boundMonolith = landingId !== null && !boundBody
+    ? world.monoliths.find((m) => m.id === landingId) ?? null
     : null
   let playerReference = boundBody ?? null
-  if (!playerReference) {
+  if (!playerReference && !boundMonolith) {
     let bestSurface = Infinity
     for (const body of world.bodies) {
       const surface = body.pos.distanceTo(world.player.state.pos) - body.radius
@@ -184,6 +195,8 @@ export function stepOrbits(world: World, time = orbitTime(world)): void {
     for (const titan of world.titans) titan.pos.add(_stationShift)
     // Статуи стоят У ПРИЧАЛА — без этой строки они и отставали на пол-системы.
     for (const monolith of world.monoliths) monolith.pos.add(_stationShift)
+    // Пояс глыб держится за Люцифера — едет вместе с причалом и статуями.
+    for (const rock of world.scenicRocks) rock.pos.add(_stationShift)
     for (const platform of world.platforms) platform.pos.add(_stationShift)
     for (const tracer of world.tracers) {
       tracer.from.add(_stationShift)
@@ -195,6 +208,11 @@ export function stepOrbits(world: World, time = orbitTime(world)): void {
     for (const flash of world.shieldFlashes) {
       flash.pos.add(_stationShift)
       flash.center.add(_stationShift)
+    }
+    // Сели на статую — едем её сдвигом станции, а не орбитой чужой планеты рядом.
+    if (boundMonolith) {
+      world.player.state.pos.add(_stationShift)
+      world.originShift.add(_stationShift)
     }
   }
 }

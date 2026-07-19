@@ -1,8 +1,9 @@
-import type { CargoItem, Commodity, LifeLevel, ShipModule } from '@elite/sim'
+import { figurineTitleName, type CargoItem, type Commodity, type LifeLevel, type ShipModule } from '@elite/sim'
 import { currentLang, t, type Key } from './i18n'
 import {
   COMMODITY_L,
   COMMODITY_DESC_L,
+  FIGURINE_TITLE_L,
   GALAXY_SHAPE_L,
   MODULE_L,
   OCCUPATION_FACTION_L,
@@ -65,7 +66,17 @@ export function speciesName(s: string): string {
 
 /** Имя предмета трюма на языке интерфейса — товар с количеством, модуль по id. */
 export function itemDisplayName(item: CargoItem): string {
-  return item.kind === 'commodity' ? `${commodityName(item.commodity)} ×${item.units}` : moduleName(item.module)
+  if (item.kind === 'module') return moduleName(item.module)
+  if (item.commodity.id === 'figurine' && item.specimens && item.specimens.length > 0) {
+    const titles = item.specimens.map((s) => figurineTitleLocal(s.titleId))
+    return titles.length === 1 ? titles[0]! : titles.map((n) => `«${n}»`).join(', ')
+  }
+  return `${commodityName(item.commodity)} ×${item.units}`
+}
+
+/** Имя экземпляра статуэтки: канон RU из домена, иначе таблица языка. */
+export function figurineTitleLocal(titleId: string): string {
+  return pick(FIGURINE_TITLE_L, titleId, figurineTitleName(titleId))
 }
 
 /**

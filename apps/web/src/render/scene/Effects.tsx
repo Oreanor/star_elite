@@ -497,7 +497,8 @@ export function CargoPods() {
 
     let count = 0
     for (const pod of session.world.pods) {
-      if (!pod.alive || count >= MAX_PODS) continue
+      // Осколки глыб рисует `RockDebris` — простые камни с текстурой астероида.
+      if (!pod.alive || pod.debris || count >= MAX_PODS) continue
       _dummy.position.copy(pod.pos)
       _dummy.quaternion.copy(pod.quat)
       _dummy.scale.setScalar(1)

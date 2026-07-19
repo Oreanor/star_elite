@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
+import { MIELOPHONE } from '../../config/mielophone'
 import { createWorld, STARTER_SYSTEM, type World } from '.'
-import { cycleTarget, targetablesOf } from './queries'
+import { cycleCelestial, cycleTarget, pruneGiantScaleLocks, targetablesOf } from './queries'
 
 /** Мир с пиратом и нейтралом перед носом игрока. */
 function withPirateAndNeutral(): World {
@@ -35,5 +36,55 @@ describe('захват цели берёт любую фракцию', () => {
     }))
     expect(visited.has('neutral')).toBe(true)
     expect(visited.has('hostile')).toBe(true)
+  })
+})
+
+describe('гигантский масштаб гасит системный нав', () => {
+  // Баг: выше GHOST_BODY HUD ещё рисовал рамку Кориолиса / планеты в пустоте —
+  // захват жил, а тела уже не для приборов. Остаются только звезда и дыра.
+  it('prune снимает станцию и оставляет звезду', () => {
+    const world = createWorld({ ...STARTER_SYSTEM, belt: null, patrols: [] })
+    const station = world.bodies.find((b) => b.kind === 'station')
+    const star = world.bodies.find((b) => b.kind === 'star')
+    expect(station).toBeTruthy()
+    expect(star).toBeTruthy()
+
+    world.navTargetId = station!.id
+    world.lockedStationId = station!.id
+    world.player.state.scale = MIELOPHONE.GHOST_BODY_SCALE
+    pruneGiantScaleLocks(world)
+    expect(world.navTargetId).toBeNull()
+    expect(world.lockedStationId).toBeNull()
+
+    world.navTargetId = star!.id
+    pruneGiantScaleLocks(world)
+    expect(world.navTargetId).toBe(star!.id)
+  })
+
+  it('Shift+Tab выше GHOST_BODY берёт только звезду/дыру', () => {
+    const world = createWorld({ ...STARTER_SYSTEM, belt: null, patrols: [] })
+    world.player.state.scale = MIELOPHONE.GHOST_BODY_SCALE
+    cycleCelestial(world)
+    const nav = world.bodies.find((b) => b.id === world.navTargetId)
+    expect(nav?.kind === 'star' || nav?.kind === 'blackhole').toBe(true)
+  })
+
+  it('звезда и jumpTarget переживают рост и сжатие через GHOST_BODY', () => {
+    // Баг, которого не должно быть: зум миелофона снимал фокус со светила.
+    const world = createWorld({ ...STARTER_SYSTEM, belt: null, patrols: [] })
+    const star = world.bodies.find((b) => b.kind === 'star')
+    expect(star).toBeTruthy()
+    world.navTargetId = star!.id
+    world.targetFocus = 'nav'
+    world.jumpTargetIndex = world.systemIndex === 0 ? 1 : 0
+    const pinned = world.jumpTargetIndex
+
+    for (const scale of [1, 1e3, MIELOPHONE.GHOST_BODY_SCALE, 1e6, MIELOPHONE.MAX_SCALE, 1e4, 1]) {
+      world.player.state.scale = scale
+      pruneGiantScaleLocks(world)
+      expect(world.navTargetId).toBe(star!.id)
+      expect(world.targetFocus).toBe('nav')
+      expect(world.jumpTargetIndex).toBe(pinned)
+    }
   })
 })

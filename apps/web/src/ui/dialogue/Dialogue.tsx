@@ -71,8 +71,8 @@ const STANCE_KEY: Record<Relationship, Key> = {
 }
 
 const STANCE_COLOR: Record<Relationship, string> = {
-  friendly: UI.PRIMARY,
-  neutral: UI.PRIMARY,
+  friendly: UI.ALLY,
+  neutral: UI.DIM,
   hostile: UI.DANGER,
 }
 

@@ -245,9 +245,8 @@ interface Fact {
 
 /** Единая плашка человека: портрет слева, справа имя/роль/деталь и кнопка «Связаться». */
 /**
- * ОТНОШЕНИЕ словом и цветом. Ключи и слова — ТЕ ЖЕ, что в шапке диалога: пилот не должен
- * переучиваться, переходя с карточки в разговор. Цвет несёт то же, что слово, — чтобы
- * пробежать список глазами, не читая: враг красный, друг фосфорный, прочие погашены.
+ * ОТНОШЕНИЕ словом и цветом. Ключи и слова — ТЕ ЖЕ, что в шапке диалога и на метках
+ * кабины: враг красный, друг зелёный, нейтрал погашенный. Фосфор UI — хром, не «друг».
  */
 const STANCE_KEY: Record<Relationship, Key> = {
   friendly: 'dialogue.stance.friendly',
@@ -255,7 +254,7 @@ const STANCE_KEY: Record<Relationship, Key> = {
   hostile: 'dialogue.stance.hostile',
 }
 const STANCE_COLOR: Record<Relationship, string> = {
-  friendly: ACCENT,
+  friendly: UI.ALLY,
   neutral: DIM,
   hostile: UI.DANGER,
 }

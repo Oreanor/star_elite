@@ -3,10 +3,11 @@ import { GRAVITY, MOON } from '../../config/bodies'
 import { orbitSec } from '../../config/time'
 import { pirateLeaderLoadout, pirateLoadout, playerStartLoadout } from '../../config/loadouts'
 import { ARRIVAL, GALAXY, HUMAN_SPECIES } from '../../config/galaxy'
+import { FIGURINE } from '../../config/figurines'
 import { ASTEROID, TRAFFIC, WORLD } from '../../config/world'
 import { makeRng, range, signed, type Rng } from '../../core/math'
 import { createAIState } from '../ai/types'
-import { cargoMass, createHold } from '../cargo/hold'
+import { addFigurineSpecimens, cargoMass, createHold } from '../cargo/hold'
 import { createCruiseState } from '../cruise/drive'
 import { createControls, createShipState } from '../flight/types'
 import { deriveShipSpec, isDrone, isMissile, NO_HULL_UPGRADES, type Loadout, type WeaponModule } from '../loadout'
@@ -20,16 +21,22 @@ import type {
   World,
 } from './entities'
 import { createIdSource, type IdSource } from './ids'
-import { DEFAULT_PERSONA, makePersona, type PilotProfile } from './persona'
+import {
+  collectsFigurines,
+  DEFAULT_PERSONA,
+  makePersona,
+  type PilotProfile,
+} from './persona'
 import { SLOVO_KIND, SLOVO_NAME, SLOVO_PERSONA } from './slovo'
 import { makePilotName } from './names'
+import { placeFigurines, rollFigurineSpecimen, stockSlovoCollection } from './figurines'
 import { placeMonoliths } from './monoliths'
 import { maybeShiftOrigin } from './origin'
 import {
   keplerRate,
   orbitFromOffset,
   planetMass,
-  starMass,
+  starMassSolar,
   stepOrbits,
   stepOrbitsOnBodies,
 } from './orbits'
@@ -77,6 +84,14 @@ export function makeShip(
   const persona = rng ? makePersona(rng) : DEFAULT_PERSONA
   const pilotName = rng ? makePilotName(rng, persona.species) : name
 
+  // Коллекционеру-NPC — 1…2 именованных статуэтки. Полный набор — только у Слова (`stockSlovoCollection`).
+  if (faction !== 'player' && rng && collectsFigurines(persona.figurineHobby)) {
+    const n =
+      FIGURINE.HOLD_MIN + Math.floor(rng() * (FIGURINE.HOLD_MAX - FIGURINE.HOLD_MIN + 1))
+    const specimens = Array.from({ length: n }, () => rollFigurineSpecimen(rng))
+    addFigurineSpecimens(hold, specimens)
+  }
+
   return {
     id: ids.next(),
     kind: 'ship',
@@ -94,6 +109,10 @@ export function makeShip(
     // Привод заряжен полностью: первый прыжок доступен без визита к звезде.
     jumpCharge: spec.jumpRange,
     lastHitAt: -1e9,
+    lastCrashAt: -1e9,
+    lastCrashHit: null,
+    lastLostAt: -1e9,
+    lastLostHit: null,
     lastShieldHitAt: -1e9,
     lastHullHitAt: -1e9,
     energy: spec.power.capacity,
@@ -157,6 +176,8 @@ export function spawnSlovo(world: World): void {
     ship.clearance = true
     ship.kinematic = true
     ship.ai = null
+    // Главный коллекционер: полный каталог имён. makeShip без rng трюм не наполняет.
+    stockSlovoCollection(ship.hold, world.rng)
     if (known) ship.acquaintanceId = known.id
     world.ships.push(ship)
   }
@@ -254,6 +275,28 @@ function makeAsteroids(rng: Rng, ids: IdSource, def: SystemDef): AsteroidEntity[
       })
     }
   }
+
+  // Две глыбы дальше от старта: ×GIANT и ×COLOSSUS — посадочные шары среди мелочи.
+  if (asteroids.length >= 2) {
+    const byDist = asteroids
+      .map((a, i) => ({ i, d: a.pos.distanceToSquared(start) }))
+      .sort((a, b) => b.d - a.d)
+    const scaleUp = (index: number, scale: number): void => {
+      const rock = asteroids[index]!
+      rock.radius *= scale
+      rock.hull *= scale
+      // Крупной глыбе незачем кувыркаться быстро — иначе ховер укачивает.
+      rock.spin.multiplyScalar(0.15)
+    }
+    scaleUp(byDist[0]!.i, ASTEROID.COLOSSUS_SCALE)
+    scaleUp(byDist[1]!.i, ASTEROID.GIANT_SCALE)
+  } else if (asteroids.length === 1) {
+    const only = asteroids[0]!
+    only.radius *= ASTEROID.COLOSSUS_SCALE
+    only.hull *= ASTEROID.COLOSSUS_SCALE
+    only.spin.multiplyScalar(0.15)
+  }
+
   return asteroids
 }
 
@@ -337,12 +380,12 @@ function companionMass(comp: StarCompanionDef | BlackHoleCompanionDef): number {
     const r = comp.visualRadius
     return GRAVITY.STAR_DENSITY * (4 / 3) * Math.PI * r ** 3 * 2
   }
-  return starMass(comp.radius)
+  return starMassSolar(comp.massSolar)
 }
 
 function makeBodies(ids: IdSource, def: SystemDef): BodyEntity[] {
   const comp = def.companion
-  const m1 = starMass(def.star.radius)
+  const m1 = starMassSolar(def.star.massSolar)
   const m2 = comp ? companionMass(comp) : 0
 
   const primary: BodyEntity = {
@@ -653,11 +696,16 @@ export function enterSystem(
    * НАСТОЯЩЕГО места станции, а не от точки, где её нарисовала фабрика.
    */
   placeMonoliths(world)
+  placeFigurines(world)
   world.lockedTargetId = null
+  world.lockedPodId = null
+  world.lockedAsteroidId = null
   world.navTargetId = world.bodies.find((b) => b.kind === 'station')?.id ?? null
+  world.targetFocus = 'nav'
   // Прибыли — выбранная для прыжка система достигнута, метку и точку выхода снимаем.
   world.jumpTargetIndex = null
   world.jumpArrivalPlanet = null
+  world.galaxyAnchorTrue = null // слой галактики встанет заново в новой системе
   world.trafficTimer = TRAFFIC.FIRST_DELAY
 
   world.docked = false
@@ -736,6 +784,8 @@ export function createWorld(def: SystemDef = STARTER_SYSTEM, profile?: PilotProf
     bolts: [],
     titans: [],
     monoliths: [],
+    figurines: [],
+    scenicRocks: [],
     platforms: [],
     bodies,
     tracers: [],
@@ -752,8 +802,13 @@ export function createWorld(def: SystemDef = STARTER_SYSTEM, profile?: PilotProf
     lockedTargetId: null,
     lockedStationId: null,
     lockedPodId: null,
+    lockedAsteroidId: null,
     navTargetId: station?.id ?? null,
+    targetFocus: 'nav',
+    contactCycleAt: -1e9,
+    celestialCycleAt: -1e9,
     jumpTargetIndex: null,
+    galaxyAnchorTrue: null,
     jumpArrivalPlanet: null,
     trafficTimer: TRAFFIC.FIRST_DELAY,
     originOffset: new Vector3(),
@@ -789,5 +844,6 @@ export function createWorld(def: SystemDef = STARTER_SYSTEM, profile?: PilotProf
   // Если старт в системе с Крестом (Люцифер) — бог уже сидит на нём с первого кадра.
   spawnSlovo(world)
   placeMonoliths(world)
+  placeFigurines(world)
   return world
 }

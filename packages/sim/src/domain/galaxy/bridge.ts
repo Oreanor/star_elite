@@ -1,5 +1,5 @@
 import { MOON } from '../../config/bodies'
-import { LUCIFER, PLANET_COLORS, SCALE } from '../../config/galaxy'
+import { PLANET_COLORS, SCALE } from '../../config/galaxy'
 import { makeRng } from '../../core/math'
 import type { PatrolDef, SystemDef } from '../world/system'
 import { capitalOf, type Planet, type StarSystem } from './types'
@@ -106,38 +106,6 @@ function moonsOf(planet: Planet, radius: number): SystemDef['planets'][number]['
 export function systemDefOf(system: StarSystem, galaxySeed: number, seatOverride?: number): SystemDef {
   const rng = makeRng(galaxySeed ^ (system.index + 1))
 
-  // ЛЮЦИФЕР — одинокая звезда-гигант в пустоте: планет и пояса нет. Прибытие масштабируем ОТ
-  // РАДИУСА: выходим на 2.4×R от центра — чуть выше зоны жара (SAFE_RATIO=1.2 над поверхностью
-  // = 2.2×R) и вне притяжения, но звезда во всё небо. По оси к светилу выстроена процессия:
-  // причал-ВЕЕР (солнечная станция, док), за ним КРЕСТ («бог в центре вселенной», с ботом
-  // Словом), и дальше пылает сам Люцифер. Нос в −Z. Честная физика, без «приручения» жара.
-  if (system.index === LUCIFER.INDEX) {
-    const r = system.star.radius * SCALE.STAR_RADIUS
-    // Причалы стоят ВДЕСЯТЕРО дальше от звезды, чем прежде (24×R вместо 2.4×R): гигант
-    // больше не нависает над станциями, а горит в глубине кадра ровным диском. Игрок
-    // выходит рядом с причалами (нос в −Z, к звезде), а не в жерло короны.
-    const dist = r * 24
-    return {
-      name: system.name,
-      seed: Math.floor(rng() * 2 ** 31),
-      playerStart: [0, 0, dist],
-      star: { pos: [0, 0, 0], radius: r, color: system.star.color },
-      companion: null,
-      dyson: null,
-      planets: [],
-      // Основной причал — «солнечный веер», вдесятеро крупнее кориолиса (radius 400 → 4000).
-      station: { name: 'Причал «Веер»', pos: [0, 0, dist - 16_000], radius: 4_000, style: 'solar' },
-      // Крест-храм — ВДЕСЯТЕРО крупнее (radius 6000→60000): исполинский монумент с лучами из
-      // концов. Отодвинут глубже к звезде (dist−90000), чтобы 60-км крест не накрыл 4-км Веер:
-      // расстояние центров 74 км > 60+4 км суммы радиусов. На нём — Слово.
-      extraStations: [{ name: 'Крест «Вечность»', pos: [0, 0, dist - 90_000], radius: 60_000, style: 'cross' }],
-      belt: null,
-      patrols: [],
-      // Бездна: ни трафика, ни завсегдатаев — пусто, только Люцифер и бог на Кресте.
-      desolate: true,
-    }
-  }
-
   const planets = system.planets.map((p, i) => {
     const radius = p.radius * SCALE.PLANET_RADIUS
     return {
@@ -167,6 +135,7 @@ export function systemDefOf(system: StarSystem, galaxySeed: number, seatOverride
     ? {
         radius: system.companion.radius * SCALE.STAR_RADIUS,
         color: system.companion.color,
+        massSolar: system.companion.massSolar,
         separation: (starRadius + system.companion.radius * SCALE.STAR_RADIUS) * (3 + rng() * 4),
       }
     : null
@@ -199,7 +168,12 @@ export function systemDefOf(system: StarSystem, galaxySeed: number, seatOverride
     name: system.name,
     seed,
     playerStart: start,
-    star: { pos: [0, 0, 0], radius: starRadius, color: system.star.color },
+    star: {
+      pos: [0, 0, 0],
+      radius: starRadius,
+      color: system.star.color,
+      massSolar: system.star.massSolar,
+    },
     companion,
     dyson: system.dyson,
     planets,

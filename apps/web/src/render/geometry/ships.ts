@@ -1,6 +1,6 @@
 import { BufferGeometry, Matrix4, type Material, type Mesh } from 'three'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
-import { PALETTE } from '../config'
+import { MATERIAL, PALETTE } from '../config'
 import { buildGeometry, quad, symmetric, tri, type Triangle, type Vec3 } from './build'
 import { bell, panel } from './parts'
 
@@ -262,9 +262,10 @@ const _scaleM = new Matrix4()
 function matteGlbHull(material: Material): void {
   const m = material as import('three').MeshStandardMaterial
   if (m.emissive) m.emissiveIntensity = 0.12
-  if (typeof m.metalness === 'number') m.metalness = 0
-  if (typeof m.roughness === 'number') m.roughness = 0.85
-  m.envMapIntensity = 0.25
+  // Чуть металла — звезда даёт спекуляр; полный пластик (0) блика не ловил.
+  if (typeof m.metalness === 'number') m.metalness = MATERIAL.GLB_HULL_METALNESS
+  if (typeof m.roughness === 'number') m.roughness = MATERIAL.GLB_HULL_ROUGHNESS
+  m.envMapIntensity = MATERIAL.GLB_HULL_ENV
   m.needsUpdate = true
 }
 

@@ -74,6 +74,7 @@ export function homeSystem(index: number, x: number, y: number, z: number): Star
       // каким игрок увидит её в кадре.
       color: STARTER_SYSTEM.star.color,
       radius: Math.round(STARTER_SYSTEM.star.radius / SCALE.STAR_RADIUS),
+      massSolar: STARTER_SYSTEM.star.massSolar,
       scoopable: G_CLASS.scoopable,
     },
     // Родная система одиночная — как и её описание в STARTER_SYSTEM.

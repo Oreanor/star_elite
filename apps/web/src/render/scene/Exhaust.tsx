@@ -7,6 +7,7 @@ import { shipHidden } from '../../app/control/jumpFx'
 import { EXHAUST, GIANT_RENDER_CAP } from '../config'
 import { flameGeometry } from '../geometry/flame'
 import { chassisNozzles, MISSILE_NOZZLE, type Nozzle } from '../geometry/ships'
+import { nearestStar, starTintHex } from '../starLight'
 
 /**
  * Струи из сопел — как у турбо-зажигалки: узкий белый керн внутри голубого факела.
@@ -107,6 +108,12 @@ function Flames({ cone }: { cone: Cone }) {
     const time = world.time
     const step = session.running ? dt : 0
     let count = 0
+
+    // Спектр звезды множит vertex colors факела: у красного карлика плазма теплее.
+    // material.color — дешёвый тинт без переписывания буфера геометрии.
+    const star = nearestStar(world, world.player.state.pos)
+    const tint = starTintHex(0xffffff, star?.color ?? 0xffffff, EXHAUST.STAR_TINT)
+    cone.material.color.setHex(tint)
 
     /**
      * Общий вывод факелов: и корабль, и ракета — это позиция, поворот и сопла.

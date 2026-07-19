@@ -1,4 +1,5 @@
 import { SRGBColorSpace, TextureLoader, type Texture } from 'three'
+import type { PlanetType } from '@elite/sim'
 import type { PlanetLook } from '../geometry/bodies'
 
 /**
@@ -16,6 +17,20 @@ import type { PlanetLook } from '../geometry/bodies'
  * Файлы: `public/planets/<тип>/<номер>.jpg`.
  */
 
+/** Что за мир — говорит домен (`body.surface`), во что красить — знает рендер. */
+const LOOK_BY_SURFACE: Record<PlanetType, PlanetLook> = {
+  'Скалистая': 'rocky',
+  'Ледяная': 'ice',
+  'Газовый гигант': 'gas',
+  'Океаническая': 'ocean',
+  'Земного типа': 'terra',
+}
+
+/** Доменный тип → палитра/карта. Нет surface (луна) — скала. */
+export function planetLook(surface: PlanetType | null | undefined): PlanetLook {
+  return (surface && LOOK_BY_SURFACE[surface]) || 'rocky'
+}
+
 /** Сколько картинок лежит для каждого типа. Данные, а не догадка по 404. */
 const VARIANTS: Record<PlanetLook, number> = {
   terra: 2,
@@ -31,6 +46,11 @@ export function pickVariant(look: PlanetLook, seed: number): number {
   // Целочисленное перемешивание: младшие биты seed сами по себе почти не гуляют.
   const mixed = Math.imul(seed ^ 0x9e3779b9, 0x85ebca6b) >>> 0
   return mixed % count
+}
+
+/** URL карты поверхности — тот же путь, что грузит TextureLoader в сцене. */
+export function planetTextureUrl(look: PlanetLook, variant: number): string {
+  return `/planets/${look}/${variant}.jpg`
 }
 
 const cache = new Map<string, Texture>()
@@ -54,7 +74,7 @@ export function loadPlanetTexture(
 
   let cancelled = false
   new TextureLoader().load(
-    `/planets/${key}.jpg`,
+    planetTextureUrl(look, variant),
     (texture) => {
       texture.colorSpace = SRGBColorSpace
       // Планета почти всегда видна ВСКОЛЬЗЬ (шар), и у лимба текстура сжимается по

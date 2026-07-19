@@ -1,10 +1,12 @@
 import {
   CORE_INDEX,
+  EMPTY_SYSTEM_CHANCE,
   FAUNA_SPECIES,
   GALAXY,
-  LUCIFER,
   GOVERNMENTS,
   HUMAN_SPECIES,
+  MAIN_SEQUENCE_IDS,
+  PLANETS_BY_STAR,
   PLANET_TYPES,
   PLAYABLE_SPECIES,
   SECURITY_LEVELS,
@@ -14,6 +16,7 @@ import {
   type Government,
   type PlanetType,
   type SecurityLevel,
+  type StarClassId,
   type StationType,
 } from '../../config/galaxy'
 import { DYSON, type DysonSpec } from '../../config/dyson'
@@ -29,17 +32,15 @@ import { capitalOf } from './types'
 const BLACK_HOLE: Star = (() => {
   const c = STAR_CLASSES.find((s) => s.id === 'H')
   if (!c) throw new Error('в каталоге светил нет чёрной дыры')
-  return { class: c.id, className: c.name, color: c.color, radius: c.radius, scoopable: false }
+  return {
+    class: c.id,
+    className: c.name,
+    color: c.color,
+    radius: c.radius,
+    massSolar: c.massSolar,
+    scoopable: false,
+  }
 })()
-
-/** Люцифер: ярчайшая звезда, хардкод. Класс F — ради webp-карты, всё прочее своё. */
-const LUCIFER_STAR: Star = {
-  class: LUCIFER.CLASS,
-  className: 'Люцифер',
-  color: LUCIFER.COLOR,
-  radius: LUCIFER.RADIUS,
-  scoopable: true,
-}
 
 /**
  * Статический генератор галактики: одно зерно → всегда одни и те же 2500 систем.
@@ -77,12 +78,15 @@ const pickStarClass = (rng: Rng) => weightedPick(rng, STAR_CLASSES)
 
 function makeStar(rng: Rng): Star {
   const c = pickStarClass(rng)
+  // Разброс ±15%: две звезды класса G не обязаны быть близнецами.
+  // Масса и радиус на одном коэффициенте — иначе «крупная» звезда была бы лёгкой.
+  const spread = 0.85 + rng() * 0.3
   return {
     class: c.id,
     className: c.name,
     color: c.color,
-    // Разброс ±15%: две звезды класса G не обязаны быть близнецами.
-    radius: Math.round(c.radius * (0.85 + rng() * 0.3)),
+    radius: Math.round(c.radius * spread),
+    massSolar: c.massSolar * spread,
     scoopable: c.scoopable,
   }
 }
@@ -142,8 +146,8 @@ function makeMoons(rng: Rng, planet: string, type: PlanetType): Moon[] {
  */
 const BINARY_CHANCE = 0.2
 
-/** Звёзды главной последовательности, от горячей к холодной: из них и пары. */
-const MAIN_SEQUENCE = STAR_CLASSES.filter((c) => c.scoopable)
+/** Главная последовательность (не сверхгиганты): из них и пары. */
+const MAIN_SEQUENCE = STAR_CLASSES.filter((c) => MAIN_SEQUENCE_IDS.includes(c.id))
 
 function makeCompanion(rng: Rng, primary: Star): Star | null {
   const pi = MAIN_SEQUENCE.findIndex((c) => c.id === primary.class)
@@ -159,11 +163,19 @@ function makeCompanion(rng: Rng, primary: Star): Star | null {
     ? MAIN_SEQUENCE[pi]!
     : MAIN_SEQUENCE[pi + 1 + Math.floor(rng() * (MAIN_SEQUENCE.length - 1 - pi))]!
 
-  // Радиус — от каталожного его класса с разбросом, но никогда не крупнее главной.
+  // Радиус/масса — от каталога с разбросом, но никогда не крупнее/тяжелее главной.
   const spread = twin ? 0.78 + rng() * 0.2 : 0.85 + rng() * 0.25
   const radius = Math.min(Math.round(cls.radius * spread), Math.round(primary.radius * 0.98))
+  const massSolar = Math.min(cls.massSolar * spread, primary.massSolar * 0.98)
 
-  return { class: cls.id, className: cls.name, color: cls.color, radius, scoopable: cls.scoopable }
+  return {
+    class: cls.id,
+    className: cls.name,
+    color: cls.color,
+    radius,
+    massSolar,
+    scoopable: cls.scoopable,
+  }
 }
 
 /** Кем населён мир: чаще люди, иначе — один из инопланетных гуманоидов. */
@@ -254,19 +266,34 @@ function settlementChance(type: PlanetType): number {
   }
 }
 
-function makePlanets(rng: Rng, system: string, habitable: boolean): Planet[] {
+/** Таблица типов с ненулевым весом для класса — вес 0 значит «не бывает». */
+function planetTable(starClass: StarClassId): { id: PlanetType; weight: number }[] {
+  const weights = PLANETS_BY_STAR[starClass]
+  return PLANET_TYPES
+    .map((t) => ({ id: t.id, weight: weights[t.id] }))
+    .filter((t) => t.weight > 0)
+}
+
+function makePlanets(rng: Rng, system: string, habitable: boolean, starClass: StarClassId): Planet[] {
+  const table = planetTable(starClass)
+  // У дыры/останка таблицы нет — пустая система, и это нормально.
+  if (table.length === 0) return []
+
+  // Пустые системы ок: у O/B/T/N пустота — не баг генератора.
+  if (!habitable && rng() < EMPTY_SYSTEM_CHANCE[starClass]) return []
+
   // Обитаемая система обязана иметь хотя бы один мир: иначе население есть,
   // а жить ему негде — и станции негде висеть.
   const count = habitable ? 1 + Math.floor(rng() * 7) : Math.floor(rng() * 8)
   if (count === 0) return []
 
-  // В обитаемой системе один мир назначается землеподобным: у колонизации
-  // должна быть причина. Остальные заселяются по своему типу и часто беднее.
-  const seat = habitable ? Math.floor(rng() * count) : -1
+  // Столица-земля — только если класс вообще допускает «Земного типа».
+  const canSeat = PLANETS_BY_STAR[starClass]['Земного типа'] > 0
+  const seat = habitable && canSeat ? Math.floor(rng() * count) : -1
 
   const planets: Planet[] = []
   for (let i = 0; i < count; i++) {
-    const type: PlanetType = i === seat ? 'Земного типа' : weightedPick(rng, PLANET_TYPES).id
+    const type: PlanetType = i === seat ? 'Земного типа' : weightedPick(rng, table).id
 
     const settled = habitable && rng() < settlementChance(type)
     const settlement = settled ? makeSettlement(rng, i === seat ? 1 : 0.55) : null
@@ -292,11 +319,15 @@ function makePlanets(rng: Rng, system: string, habitable: boolean): Planet[] {
   return planets
 }
 
-/** Обитаемость системы зависит от звезды: у нейтронной никто не живёт. */
-function habitationChance(scoopable: boolean, starClass: string): number {
+/**
+ * Обитаемость зависит от звезды. Нет веса «Земного типа» — колоний нет в принципе
+ * (O/B/T/N/H): нечего сажать в «золотую зону».
+ */
+function habitationChance(scoopable: boolean, starClass: StarClassId): number {
+  if (PLANETS_BY_STAR[starClass]['Земного типа'] <= 0) return 0
   if (!scoopable) return 0.04
-  if (starClass === 'O' || starClass === 'B') return 0.18 // слишком яркие и короткоживущие
   if (starClass === 'M') return 0.42
+  if (starClass === 'A') return 0.35
   return 0.68 // F, G, K — золотая середина
 }
 
@@ -315,14 +346,6 @@ export function generateSystem(index: number, seed: number = GALAXY.SEED): StarS
     return { index, name: 'Ядро', x, y, z, star: BLACK_HOLE, companion: null, dyson: null, planets: [], security: SECURITY_LEVELS[0] }
   }
 
-  // Люцифер стоит НЕ на своём клеточном месте, а в пустоте над диском (LUCIFER.POS):
-  // хардкодная ярчайшая звезда, к которой уходят прыжком отовсюду. Планет и спутника нет —
-  // одинокое светило в бездне. Позиция задаётся руками, оттого `placeSystem` здесь игнорим.
-  if (index === LUCIFER.INDEX) {
-    // x/y/z уже из placeSystem, а он для Люцифера возвращает LUCIFER.POS — координаты сходятся.
-    return { index, name: 'Люцифер', x, y, z, star: LUCIFER_STAR, companion: null, dyson: null, planets: [], security: SECURITY_LEVELS[0] }
-  }
-
   // Родная система задана руками — но только в СВОЕЙ галактике. В любой другой
   // под этим индексом стоит обычная звезда: Тиррион существует в одном экземпляре.
   if (index === WORLD.HOME_INDEX && seed === GALAXY.SEED) return homeSystem(index, x, y, z)
@@ -334,7 +357,7 @@ export function generateSystem(index: number, seed: number = GALAXY.SEED): StarS
   const companion = makeCompanion(rng, star)
 
   const habitable = rng() < habitationChance(star.scoopable, star.class)
-  const planets = makePlanets(rng, name, habitable)
+  const planets = makePlanets(rng, name, habitable, star.class)
 
   // Охрану пространства наводит тот, у кого флот, — самый населённый мир.
   const draft: StarSystem = { index, name, x, y, z, star, companion, dyson: null, planets, security: SECURITY_LEVELS[0] }
@@ -393,9 +416,7 @@ export function generateGalaxy(seed: number = GALAXY.SEED): StarSystem[] {
   // переименовать их разведение коллизий не вправе. Иначе случайный сосед с тем
   // же именем, стоящий по индексу раньше, вытеснил бы родную систему из её имени.
   // Чёрная дыра есть у каждой галактики, Тиррион — только у родной.
-  const fixed = new Set(
-    seed === GALAXY.SEED ? [CORE_INDEX, LUCIFER.INDEX, WORLD.HOME_INDEX] : [CORE_INDEX, LUCIFER.INDEX],
-  )
+  const fixed = new Set(seed === GALAXY.SEED ? [CORE_INDEX, WORLD.HOME_INDEX] : [CORE_INDEX])
   for (const i of fixed) taken.add(generateSystem(i, seed).name)
 
   for (let i = 0; i < count; i++) {
@@ -413,8 +434,5 @@ export function generateGalaxy(seed: number = GALAXY.SEED): StarSystem[] {
 
     systems.push(name === system.name ? system : { ...system, name })
   }
-  // Люцифер — 2501-й, дописан в ХВОСТ: он не в цикле (i < COUNT его минует), но существует
-  // в массиве, оттого виден на карте и локаторе. Индекс в массиве совпадает с LUCIFER.INDEX.
-  systems.push(generateSystem(LUCIFER.INDEX, seed))
   return systems
 }

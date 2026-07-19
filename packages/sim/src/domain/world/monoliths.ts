@@ -1,6 +1,6 @@
 import { Vector3 } from 'three'
 import { MONOLITH } from '../../config/monoliths'
-import { makeRng } from '../../core/math'
+import { makeRng, range, type Rng } from '../../core/math'
 import type { BodyEntity, World } from './entities'
 
 /**
@@ -25,17 +25,57 @@ function anchorStation(world: World): BodyEntity | null {
 }
 
 /**
+ * Пояс глыб вокруг Люцифера. Тор, а не шар: внутри остаётся «двор», куда можно влететь,
+ * и камни читаются кольцом у силуэта, а не облаком, закрывающим статую.
+ */
+function placeScenicRocks(world: World, rng: Rng): void {
+  world.scenicRocks = []
+  // Пояс держится за Люцифера (variant 0). Нет его — не из чего строить двор.
+  const lucifer = world.monoliths.find((m) => m.variant === 0)
+  if (!lucifer) return
+
+  for (let i = 0; i < MONOLITH.ROCK_COUNT; i++) {
+    const angle = rng() * Math.PI * 2
+    const dist = lucifer.radius * range(rng, MONOLITH.ROCK_GAP_MIN, MONOLITH.ROCK_GAP_MAX)
+    const lift = (rng() - 0.5) * lucifer.radius * MONOLITH.ROCK_THICKNESS
+
+    const pos = lucifer.pos
+      .clone()
+      .addScaledVector(_out, Math.cos(angle) * dist)
+      .addScaledVector(_side, Math.sin(angle) * dist)
+      .addScaledVector(_up, lift)
+
+    const spinAxis = new Vector3(rng() - 0.5, rng() - 0.5, rng() - 0.5)
+    if (spinAxis.lengthSq() < 1e-6) spinAxis.set(0, 1, 0)
+    spinAxis.normalize()
+
+    const radius = range(rng, MONOLITH.ROCK_RADIUS_MIN, MONOLITH.ROCK_RADIUS_MAX)
+    world.scenicRocks.push({
+      id: world.ids.next(),
+      kind: 'scenicRock',
+      shape: Math.floor(rng() * MONOLITH.ROCK_SHAPES),
+      pos,
+      spinAxis,
+      spin: MONOLITH.ROCK_SPIN * (0.6 + rng() * 0.8),
+      radius,
+      // Крупнее камень — толще корка: иначе километровый и мелкий гибли бы за один залп.
+      hull: MONOLITH.ROCK_HULL * (radius / MONOLITH.ROCK_RADIUS_MIN),
+      alive: true,
+    })
+  }
+}
+
+/**
  * Расставить статуи у причала: по одной каждого облика, веером вокруг станции.
  *
  * Веер, а не куча: каждую сдвигаем по углу на равную долю круга, чтобы они не слипались и
- * читались порознь. Наклон и удаление слегка разные — иначе строй выглядит забором. При
- * нынешнем единственном облике веер вырождается в одну точку, и это правильно: формула та же,
- * добавишь облик — расстановка разведёт их сама, ничего здесь не трогая.
+ * читались порознь. Наклон и удаление слегка разные — иначе строй выглядит забором.
  */
 export function placeMonoliths(world: World): void {
   const station = anchorStation(world)
-  if (!station) return
   world.monoliths = []
+  world.scenicRocks = []
+  if (!station) return
 
   // Сид системы + соль: расстановка своя у каждой системы, но повторяемая.
   const rng = makeRng((world.systemIndex ^ 0x4d4f4e4f) >>> 0)
@@ -79,4 +119,6 @@ export function placeMonoliths(world: World): void {
       radius: MONOLITH.RADIUS,
     })
   }
+
+  placeScenicRocks(world, rng)
 }

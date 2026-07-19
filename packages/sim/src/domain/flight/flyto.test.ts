@@ -1,8 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import { Vector3 } from 'three'
+import { GALAXY_FLIGHT } from '../../config/galaxy'
+import { MIELOPHONE } from '../../config/mielophone'
 import { AUTOPILOT } from '../../config/station'
+import { placeSystem } from '../galaxy/shape'
 import { createWorld, STARTER_SYSTEM } from '../world'
 import { canEngageFlyTo, flyToArrived, flyToController } from './flyto'
+
+const _nose = new Vector3(0, 0, -1)
+const _to = new Vector3()
 
 /**
  * Автопилот-к-цели — ОБЫЧНЫЙ Controller: без рендера, без ввода. Проверяем СВОЙСТВА
@@ -24,7 +30,14 @@ function withTarget(dist: number, side = 0) {
   target.state.pos.copy(world.player.state.pos).add(new Vector3(side, 0, -dist))
   world.lockedTargetId = target.id
   world.lockedStationId = null
+  world.targetFocus = 'contact'
   return { world, target }
+}
+
+/** Нос (−Z) точно на точку — иначе wantsCruise отказывает из‑за CRUISE_ALIGN. */
+function faceToward(world: ReturnType<typeof createWorld>, target: Vector3): void {
+  _to.copy(target).sub(world.player.state.pos).normalize()
+  world.player.state.quat.setFromUnitVectors(_nose, _to)
 }
 
 describe('автопилот-к-цели', () => {
@@ -38,6 +51,26 @@ describe('автопилот-к-цели', () => {
     world.lockedTargetId = target.id
     world.docked = true
     expect(canEngageFlyTo(world)).toBe(false) // в доке не летают
+  })
+
+  it('фокус нав (Shift+Tab) — J ведёт к телу, а не к старому борту', () => {
+    // Борт уже «у носа» — старый flyto считал бы прибытие по нему и глушил тягу.
+    const { world, target } = withTarget(AUTOPILOT.ARRIVE_RANGE - 50)
+    const planet = world.bodies.find((b) => b.kind === 'planet')
+    if (!planet) throw new Error('нужна планета')
+    // Центр далеко за пределами радиуса: иначе approachDist по поверхности = 0.
+    planet.pos.copy(world.player.state.pos).add(new Vector3(0, 0, -(planet.radius + 5_000_000)))
+    world.navTargetId = planet.id
+    world.targetFocus = 'nav'
+    expect(world.lockedTargetId).toBe(target.id)
+    expect(canEngageFlyTo(world)).toBe(true)
+    expect(flyToArrived(world)).toBe(false) // ведём к планете, не к ближнему пирату
+
+    flyToController.update(world.player, world, 0.016)
+    expect(world.player.controls.throttle).toBeGreaterThan(0.5)
+
+    world.targetFocus = 'contact'
+    expect(flyToArrived(world)).toBe(true) // фокус снова на близком борте
   })
 
   it('к далёкой цели идёт полным ходом, у близкой глохнет', () => {
@@ -66,5 +99,42 @@ describe('автопилот-к-цели', () => {
 
     world.lockedTargetId = null // цель снята — вести некуда, штурвал возвращаем
     expect(flyToArrived(world)).toBe(true)
+  })
+
+  it('на галактическом × J ведёт к jumpTarget мягким газом и с форсажем на дальнем плече', () => {
+    // Tab на проявленном слое пишет jumpTarget — захвата системы нет, автопилот обязан сюда.
+    const { world } = withTarget(5000)
+    world.lockedTargetId = null
+    world.targetFocus = 'nav'
+    world.navTargetId = null
+    world.player.state.scale = MIELOPHONE.GHOST_BODY_SCALE
+    const jump = world.systemIndex === 0 ? 1 : 0
+    world.jumpTargetIndex = jump
+    world.galaxyAnchorTrue = world.player.state.pos.clone().add(world.originOffset)
+
+    expect(canEngageFlyTo(world)).toBe(true)
+    expect(flyToArrived(world)).toBe(false)
+
+    flyToController.update(world.player, world, 0.016)
+    // Аккуратный газ: не полный ход и не ноль на дальнем плече.
+    expect(world.player.controls.throttle).toBeGreaterThan(0)
+    expect(world.player.controls.throttle).toBeLessThanOrEqual(GALAXY_FLIGHT.THROTTLE_CRUISE)
+
+    // Мировая точка звезды — как в flyto (якорь + Δly·м/св.г).
+    const origin = placeSystem(world.systemIndex, world.galaxySeed)
+    const star = placeSystem(jump, world.galaxySeed)
+    const mPerLy =
+      GALAXY_FLIGHT.LY_TO_M / Math.min(world.player.state.scale, MIELOPHONE.MAX_SCALE)
+    const starPos = new Vector3(
+      world.player.state.pos.x + (star.x - origin.x) * mPerLy,
+      world.player.state.pos.y + (star.z - origin.z) * mPerLy,
+      world.player.state.pos.z + (star.y - origin.y) * mPerLy,
+    )
+    faceToward(world, starPos)
+    expect(flyToController.wantsCruise?.(world.player, world)).toBe(true)
+
+    // Ниже порога галактики jumpTarget для J не считается — иначе метры св.года абсурдны.
+    world.player.state.scale = 1
+    expect(canEngageFlyTo(world)).toBe(false)
   })
 })

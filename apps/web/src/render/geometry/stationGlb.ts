@@ -1,5 +1,6 @@
 import { BufferGeometry, Matrix4, type Material, type Mesh, type Object3D, type MeshStandardMaterial } from 'three'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
+import { MATERIAL } from '../config'
 
 /**
  * Станции из GLB-моделей (Meshy). Пять обликов; какой в какой системе — решает домен по
@@ -34,9 +35,9 @@ const _norm = new Matrix4()
 function matteStation(material: Material): void {
   const m = material as MeshStandardMaterial
   if (m.emissive) m.emissiveIntensity = 0.15
-  if (typeof m.metalness === 'number') m.metalness = 0.1
-  if (typeof m.roughness === 'number') m.roughness = 0.8
-  m.envMapIntensity = 0.3
+  if (typeof m.metalness === 'number') m.metalness = MATERIAL.GLB_STATION_METALNESS
+  if (typeof m.roughness === 'number') m.roughness = MATERIAL.GLB_STATION_ROUGHNESS
+  m.envMapIntensity = MATERIAL.GLB_STATION_ENV
   m.needsUpdate = true
 }
 

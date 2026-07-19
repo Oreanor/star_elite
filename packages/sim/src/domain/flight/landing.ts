@@ -1,8 +1,15 @@
 import { Matrix4, Quaternion, Vector3 } from 'three'
 import { LANDING } from '../../config/landing'
 import { effectiveRadius } from '../scale/scale'
-import type { BodyEntity, ShipEntity, World } from '../world/entities'
+import type {
+  AsteroidEntity,
+  BodyEntity,
+  ScenicRockEntity,
+  ShipEntity,
+  World,
+} from '../world/entities'
 import { shipAxes } from './axes'
+import { stepShip } from './model'
 
 const _normal = /* @__PURE__ */ new Vector3()
 const _forward = /* @__PURE__ */ new Vector3()
@@ -11,83 +18,281 @@ const _up = /* @__PURE__ */ new Vector3()
 const _back = /* @__PURE__ */ new Vector3()
 const _basis = /* @__PURE__ */ new Matrix4()
 const _targetQuat = /* @__PURE__ */ new Quaternion()
+const _spinQ = /* @__PURE__ */ new Quaternion()
 
-export function isLandable(body: BodyEntity): boolean {
+/** Поверхность-шар для стоянки: планета, луна, астероид, глыба. Статуи — нет. */
+export interface LandableSurface {
+  id: number
+  pos: Vector3
+  radius: number
+  /** Собственное вращение тела, рад/с + ось. У астероида — из вектора spin. */
+  spinRate: number
+  spinAxis: Vector3
+}
+
+export function isLandableBody(body: BodyEntity): boolean {
   return body.kind === 'planet' || body.kind === 'moon'
 }
 
-/** Высота корабля над поверхностью тела, м (габарит борта учтён). Может быть отрицательной. */
-export function surfaceAltitude(ship: ShipEntity, body: BodyEntity): number {
-  return ship.state.pos.distanceTo(body.pos) - body.radius - effectiveRadius(ship)
+/** Миелофон вырос — стоянка выключена (окна высот не масштабируются). */
+export function landingScaleOk(ship: ShipEntity): boolean {
+  return ship.state.scale <= LANDING.MAX_SHIP_SCALE + 1e-9
 }
 
-/** Ближайшее посадочное тело и высота над ним; null — таких рядом нет. */
+/** Поверхность достаточно крупная относительно текущего корпуса. */
+export function isSurfaceLargeEnough(surfaceRadius: number, ship: ShipEntity): boolean {
+  return surfaceRadius >= effectiveRadius(ship) * LANDING.ASTEROID_MIN_SCALE
+}
+
+/**
+ * Астероид годится для стоянки: жив, борт ≤ 1×, камень ≥ ASTEROID_MIN_SCALE корпусов.
+ * Мелочь не «притягивает» — её скуп/таран, не орбитальная стоянка.
+ */
+export function isLandableAsteroid(rock: AsteroidEntity, ship: ShipEntity): boolean {
+  return (
+    rock.alive &&
+    landingScaleOk(ship) &&
+    isSurfaceLargeEnough(rock.radius, ship)
+  )
+}
+
+/** Глыба двора — те же ворота размера, что у астероида (к тверди меша). */
+export function isLandableScenic(rock: ScenicRockEntity, ship: ShipEntity): boolean {
+  return (
+    rock.alive &&
+    landingScaleOk(ship) &&
+    isSurfaceLargeEnough(meshSolidRadius(rock.radius), ship)
+  )
+}
+
+/** @deprecated имя для старых импортов — то же, что `isLandableBody`. */
+export const isLandable = isLandableBody
+
+/** Высота корабля над поверхностью, м (габарит борта учтён). Может быть отрицательной. */
+export function surfaceAltitude(
+  ship: ShipEntity,
+  surface: { pos: Vector3; radius: number },
+): number {
+  return ship.state.pos.distanceTo(surface.pos) - surface.radius - effectiveRadius(ship)
+}
+
+function bodyAsSurface(body: BodyEntity): LandableSurface {
+  return {
+    id: body.id,
+    pos: body.pos,
+    radius: body.radius,
+    spinRate: body.spin,
+    spinAxis: body.spinAxis,
+  }
+}
+
+/** Радиус тверди неровного камня — ближе к текстуре, чем bounding sphere. */
+export function meshSolidRadius(radius: number): number {
+  return radius * LANDING.MESH_SOLID
+}
+
+function scenicRockAsSurface(rock: ScenicRockEntity): LandableSurface {
+  return {
+    id: rock.id,
+    pos: rock.pos,
+    // Меш по внешней сфере — твердь глубже, высота стоянки от неё.
+    radius: meshSolidRadius(rock.radius),
+    spinRate: rock.spin,
+    spinAxis: rock.spinAxis,
+  }
+}
+
+/** Скрэтч для астероида: `spinAxis` переиспользуем, наружу не отдаём. */
+const _rockSurface: LandableSurface = {
+  id: 0,
+  pos: new Vector3(),
+  radius: 0,
+  spinRate: 0,
+  spinAxis: new Vector3(0, 1, 0),
+}
+
+function rockIntoSurface(rock: AsteroidEntity, out: LandableSurface): LandableSurface {
+  out.id = rock.id
+  out.pos = rock.pos
+  out.radius = meshSolidRadius(rock.radius)
+  out.spinRate = rock.spin.length()
+  if (out.spinRate > 1e-9) out.spinAxis.copy(rock.spin).multiplyScalar(1 / out.spinRate)
+  else out.spinAxis.set(0, 1, 0)
+  return out
+}
+
+/** Найти поверхность стоянки по id (шар: тело, астероид, глыба — не статуя). */
+export function findLandable(
+  world: World,
+  id: number,
+  ship: ShipEntity,
+): LandableSurface | null {
+  if (!landingScaleOk(ship)) return null
+  const body = world.bodies.find((b) => b.id === id)
+  if (body && isLandableBody(body) && isSurfaceLargeEnough(body.radius, ship)) {
+    return bodyAsSurface(body)
+  }
+  const rock = world.asteroids.find((a) => a.id === id)
+  if (rock && isLandableAsteroid(rock, ship)) return rockIntoSurface(rock, _rockSurface)
+  const scenic = world.scenicRocks.find((r) => r.id === id)
+  if (scenic && isLandableScenic(scenic, ship)) return scenicRockAsSurface(scenic)
+  return null
+}
+
+/**
+ * Ближайшая посадочная поверхность среди тех, чья высота проходит `accept`.
+ * В густом поясе глыб «просто ближайшая» часто ниже PROMPT_LO и глушила бы окно
+ * посадки на соседний камень — поэтому автопосадка фильтрует по окну отдельно.
+ */
+function nearestLandableWhere(
+  world: World,
+  ship: ShipEntity,
+  accept: (altitude: number) => boolean,
+): { id: number; altitude: number } | null {
+  let bestId = -1
+  let bestAltitude = Infinity
+
+  const consider = (id: number, surface: { pos: Vector3; radius: number }): void => {
+    const altitude = surfaceAltitude(ship, surface)
+    if (!accept(altitude)) return
+    if (altitude < bestAltitude) {
+      bestAltitude = altitude
+      bestId = id
+    }
+  }
+
+  if (!landingScaleOk(ship)) return null
+
+  for (const body of world.bodies) {
+    if (!isLandableBody(body) || !isSurfaceLargeEnough(body.radius, ship)) continue
+    consider(body.id, body)
+  }
+  for (const rock of world.asteroids) {
+    if (!isLandableAsteroid(rock, ship)) continue
+    // Высоту меряем до тверди (MESH_SOLID), не до внешней сферы меша.
+    consider(rock.id, { pos: rock.pos, radius: meshSolidRadius(rock.radius) })
+  }
+  // Статуи сознательно не здесь: сложный силуэт, стоянка только над шарами.
+  for (const scenic of world.scenicRocks) {
+    if (!isLandableScenic(scenic, ship)) continue
+    consider(scenic.id, { pos: scenic.pos, radius: meshSolidRadius(scenic.radius) })
+  }
+  if (bestId < 0) return null
+  return { id: bestId, altitude: bestAltitude }
+}
+
+/** Ближайшая посадочная поверхность и высота над ней; null — рядом садиться не на что. */
 export function nearestLandable(
   world: World,
   ship: ShipEntity,
-): { body: BodyEntity; altitude: number } | null {
-  let best: { body: BodyEntity; altitude: number } | null = null
-  for (const body of world.bodies) {
-    if (!isLandable(body)) continue
-    const altitude = surfaceAltitude(ship, body)
-    if (best === null || altitude < best.altitude) best = { body, altitude }
-  }
-  return best
+): { id: number; altitude: number } | null {
+  return nearestLandableWhere(world, ship, () => true)
 }
 
 /**
- * В окне ли высот для автопосадки: игрок жив, не сидит и не садится, и до поверхности
- * ближайшего тела от PROMPT_LO до PROMPT_HI. Это же условие показывает пуш-подсказку —
- * подсказка и возможность нажать существуют ровно одновременно.
+ * Поверхность в окне автопосадки (PROMPT_LO…PROMPT_HI). Ближайшая среди подходящих —
+ * не среди всех: соседняя глыба в 50 м не должна глушить камень в 150 м.
  */
-export function canAutoland(world: World): boolean {
-  const p = world.player
-  if (!p.alive || p.landedOn || p.autoland !== null) return false
-  const near = nearestLandable(world, p)
-  if (!near) return false
-  return near.altitude <= LANDING.PROMPT_HI && near.altitude >= LANDING.PROMPT_LO
+export function landingPromptTarget(world: World): { id: number; altitude: number } | null {
+  const cue = landingCue(world)
+  return cue?.phase === 'prompt' ? { id: cue.id, altitude: cue.altitude } : null
 }
 
-/** Включить непрерываемую автопосадку игрока на ближайшее тело, если он в окне. */
+/**
+ * Что показать на HUD у поверхности: подготовка (APPROACH_HI…PROMPT_HI) или «нажми L»
+ * (PROMPT_LO…PROMPT_HI). Ближайшая подходящая поверхность — не «просто ближайшая».
+ */
+export function landingCue(
+  world: World,
+): { id: number; altitude: number; phase: 'approach' | 'prompt' } | null {
+  const p = world.player
+  if (!p.alive || p.landedOn || p.autoland !== null) return null
+  if (!landingScaleOk(p)) return null
+
+  const prompt = nearestLandableWhere(
+    world,
+    p,
+    (altitude) => altitude <= LANDING.PROMPT_HI && altitude >= LANDING.PROMPT_LO,
+  )
+  if (prompt) return { ...prompt, phase: 'prompt' }
+
+  const approach = nearestLandableWhere(
+    world,
+    p,
+    (altitude) => altitude <= LANDING.APPROACH_HI && altitude > LANDING.PROMPT_HI,
+  )
+  if (approach) return { ...approach, phase: 'approach' }
+
+  return null
+}
+
+/**
+ * В окне ли высот для автопосадки. Подсказка «нажмите L» и возможность нажать —
+ * ровно одновременно; «подготовка» выше по высоте L ещё не даёт.
+ */
+export function canAutoland(world: World): boolean {
+  return landingPromptTarget(world) !== null
+}
+
+/** Включить непрерываемую автопосадку игрока на поверхность в окне высот. */
 export function armAutoland(world: World): boolean {
-  if (!canAutoland(world)) return false
-  world.player.autoland = nearestLandable(world, world.player)!.body.id
+  const target = landingPromptTarget(world)
+  if (!target) return false
+  world.player.autoland = target.id
   return true
 }
 
+/** Положить корпус брюхом к нормали (нос в касательной). */
+function orientBelly(ship: ShipEntity, normal: Vector3): void {
+  shipAxes(ship.state.quat, _forward, _right, _up)
+  _forward.addScaledVector(normal, -_forward.dot(normal))
+  if (_forward.lengthSq() < 1e-9) {
+    _forward.set(0, 1, 0)
+    if (Math.abs(_forward.dot(normal)) > 0.9) _forward.set(1, 0, 0)
+    _forward.addScaledVector(normal, -_forward.dot(normal))
+  }
+  _forward.normalize()
+  _right.crossVectors(_forward, normal).normalize()
+  _back.copy(_forward).negate()
+  ship.state.quat.setFromRotationMatrix(_basis.makeBasis(_right, normal, _back)).normalize()
+}
+
 /**
- * Шаг НЕПРЕРЫВАЕМОЙ автопосадки. Пока стоит `ship.autoland`, ведём корабль вниз сами:
- * управляемый сход вдоль нормали (без инерции), плавный доворот корпуса в касательную;
- * у самой поверхности фиксируем посадкой. true — этот шаг ведём мы, интегратор и
- * гравитацию звать не надо (ввод игрока при этом ни на что не влияет — оттого непрерываемо).
+ * Шаг автозахода на ховер. Ведём к HOVER_ALT вдоль нормали; у цели — полёт по сфере.
+ * true — этот шаг ведём мы (без гравитации/интегратора).
  */
 export function stepAutoland(ship: ShipEntity, world: World, dt: number): boolean {
   if (ship.autoland === null) return false
-  const body = world.bodies.find((candidate) => candidate.id === ship.autoland)
-  if (!body || !isLandable(body)) {
+  if (!landingScaleOk(ship)) {
+    ship.autoland = null
+    return false
+  }
+  const surface = findLandable(world, ship.autoland, ship)
+  if (!surface) {
     ship.autoland = null
     return false
   }
 
-  _normal.copy(ship.state.pos).sub(body.pos)
+  _normal.copy(ship.state.pos).sub(surface.pos)
   if (_normal.lengthSq() < 1e-9) _normal.set(0, 1, 0)
   _normal.normalize()
 
-  const altitude = surfaceAltitude(ship, body)
-  if (altitude <= LANDING.CONTACT_GAP) {
-    landShip(ship, body) // ровняет, стопорит, ставит landedOn
+  const altitude = surfaceAltitude(ship, surface)
+  const err = altitude - LANDING.HOVER_ALT
+  if (Math.abs(err) <= LANDING.HOVER_SNAP) {
+    enterSurfaceFlight(ship, surface)
     ship.autoland = null
     return true
   }
 
-  // Управляемый сход вдоль нормали: без инерции, шаг ограничен остатком высоты.
-  const drop = Math.min(LANDING.DESCENT_SPEED * dt, altitude - LANDING.CONTACT_GAP)
-  ship.state.pos.addScaledVector(_normal, -drop)
+  // К цели по нормали: слишком высоко — вниз (−normal), слишком низко — вверх.
+  const step = Math.min(LANDING.DESCENT_SPEED * dt, Math.abs(err))
+  ship.state.pos.addScaledVector(_normal, err > 0 ? -step : step)
   ship.state.vel.set(0, 0, 0)
   ship.state.angVel.set(0, 0, 0)
   ship.controls.throttle = 0
 
-  // Плавный доворот в касательную — та же поза, что даст landShip, но не рывком.
+  // Плавный доворот брюхом к нормали на заходе — дальше пилот крутит сам.
   shipAxes(ship.state.quat, _forward, _right, _up)
   _forward.addScaledVector(_normal, -_forward.dot(_normal))
   if (_forward.lengthSq() < 1e-9) {
@@ -104,30 +309,23 @@ export function stepAutoland(ship: ShipEntity, world: World, dt: number): boolea
   return true
 }
 
-/** Положить корпус касательно к сфере и остановить его без урона. */
-export function landShip(ship: ShipEntity, body: BodyEntity): boolean {
-  if (!ship.alive || !isLandable(body)) return false
+/**
+ * Включить ховер: высота HOVER_ALT, дальше полёт по сфере своей физикой.
+ * Отрыв — крейсер ≥ ESCAPE_CRUISE или L; скорость сохраняется.
+ */
+export function enterSurfaceFlight(ship: ShipEntity, surface: LandableSurface): boolean {
+  if (!ship.alive) return false
 
-  shipAxes(ship.state.quat, _forward, _right, _up)
-  _normal.copy(ship.state.pos).sub(body.pos)
-  if (_normal.lengthSq() < 1e-9) _normal.copy(_up)
+  _normal.copy(ship.state.pos).sub(surface.pos)
+  if (_normal.lengthSq() < 1e-9) _normal.set(0, 1, 0)
   _normal.normalize()
 
-  // Сохраняем направление носа, но убираем радиальную составляющую: корпус ложится
-  // в касательную плоскость, а не втыкается носом в грунт.
-  _forward.addScaledVector(_normal, -_forward.dot(_normal))
-  if (_forward.lengthSq() < 1e-9) {
-    _forward.set(0, 1, 0)
-    if (Math.abs(_forward.dot(_normal)) > 0.9) _forward.set(1, 0, 0)
-    _forward.addScaledVector(_normal, -_forward.dot(_normal))
-  }
-  _forward.normalize()
-  _right.crossVectors(_forward, _normal).normalize()
-  _back.copy(_forward).negate()
-  ship.state.quat.setFromRotationMatrix(_basis.makeBasis(_right, _normal, _back)).normalize()
+  orientBelly(ship, _normal)
 
-  ship.landedOn = { bodyId: body.id, normal: _normal.clone() }
-  ship.state.pos.copy(body.pos).addScaledVector(_normal, body.radius + effectiveRadius(ship))
+  ship.landedOn = { bodyId: surface.id, normal: _normal.clone() }
+  ship.state.pos
+    .copy(surface.pos)
+    .addScaledVector(_normal, surface.radius + effectiveRadius(ship) + LANDING.HOVER_ALT)
   ship.state.vel.set(0, 0, 0)
   ship.state.angVel.set(0, 0, 0)
   ship.controls.throttle = 0
@@ -139,35 +337,91 @@ export function landShip(ship: ShipEntity, body: BodyEntity): boolean {
   return true
 }
 
+/** @deprecated имя — то же, что `enterSurfaceFlight` (ховер, не касание грунта). */
+export function landOnSurface(ship: ShipEntity, surface: LandableSurface): boolean {
+  return enterSurfaceFlight(ship, surface)
+}
+
+/** Ховер над телом мира (планета/луна). */
+export function landShip(ship: ShipEntity, body: BodyEntity): boolean {
+  if (!isLandableBody(body)) return false
+  return enterSurfaceFlight(ship, bodyAsSurface(body))
+}
+
+/** Снять ховер. Позу/скорость не трогаем — летишь куда летел; L / ×ESCAPE отпускают. */
+export function releaseLanding(ship: ShipEntity, _world: World): boolean {
+  if (!ship.landedOn) return false
+  ship.autoland = null
+  ship.landedOn = null
+  return true
+}
+
+/** Высота ховера с покачиванием, м. */
+function hoverAltitude(time: number): number {
+  return LANDING.HOVER_ALT + LANDING.HOVER_BOB_AMP * Math.sin(time * LANDING.HOVER_BOB_OMEGA)
+}
+
 /**
- * Удержать корабль на движущейся поверхности. true означает, что обычную
- * гравитацию и интегратор в этом шаге вызывать не надо.
+ * Прижать к сфере ховера: позиция на (R + er + alt), скорость только касательная.
+ * Без этого обычная физика уносит с планеты при любом тангаже вверх.
  */
-export function stepLanding(ship: ShipEntity, world: World): boolean {
+function constrainToHoverSphere(
+  ship: ShipEntity,
+  surface: LandableSurface,
+  binding: { normal: Vector3 },
+  time: number,
+): void {
+  _normal.copy(ship.state.pos).sub(surface.pos)
+  if (_normal.lengthSq() < 1e-9) _normal.set(0, 1, 0)
+  else _normal.normalize()
+  binding.normal.copy(_normal)
+
+  const vn = ship.state.vel.dot(_normal)
+  if (Math.abs(vn) > 1e-12) ship.state.vel.addScaledVector(_normal, -vn)
+
+  const radius =
+    surface.radius + effectiveRadius(ship) + hoverAltitude(time)
+  ship.state.pos.copy(surface.pos).addScaledVector(_normal, radius)
+}
+
+/**
+ * Ховер по сфере: своя физика (stepShip + рельс по радиусу).
+ * true — гравитацию/интегратор снаружи не зовём. false — обычный полёт
+ * (нет привязки или только что отпустили на ×ESCAPE).
+ */
+export function stepLanding(ship: ShipEntity, world: World, dt: number): boolean {
   const binding = ship.landedOn
   if (!binding) return false
 
-  const body = world.bodies.find((candidate) => candidate.id === binding.bodyId)
-  if (!body || !isLandable(body)) {
+  // Вырос миелофоном — отпускаем: дальше обычная физика, не сфера-ховер.
+  if (!landingScaleOk(ship)) {
+    releaseLanding(ship, world)
+    return false
+  }
+
+  const surface = findLandable(world, binding.bodyId, ship)
+  if (!surface) {
     ship.landedOn = null
     return false
   }
 
-  const normal = binding.normal
-  if (ship.controls.throttle > LANDING.TAKEOFF_THROTTLE) {
-    // `stepOrbits` уже переносит игрока вместе с ближайшим телом, поэтому здесь
-    // нужна только локальная скорость отрыва, без многокилометровой орбитальной.
-    ship.state.vel.copy(normal).multiplyScalar(LANDING.TAKEOFF_SPEED)
-    ship.state.pos.copy(body.pos).addScaledVector(
-      normal,
-      body.radius + effectiveRadius(ship) + LANDING.RELEASE_GAP,
-    )
-    ship.landedOn = null
+  // До порога — быстрый ховер по сфере; на ×ESCAPE — обычная физика, летишь дальше.
+  if (ship.cruise.factor >= LANDING.ESCAPE_CRUISE) {
+    releaseLanding(ship, world)
     return false
   }
 
-  ship.state.pos.copy(body.pos).addScaledVector(normal, body.radius + effectiveRadius(ship))
-  ship.state.vel.set(0, 0, 0)
-  ship.state.angVel.set(0, 0, 0)
+  // Тело крутится — корабль едет с поверхностью, иначе астероид ускользает из-под ног.
+  if (Math.abs(surface.spinRate) > 1e-9) {
+    _spinQ.setFromAxisAngle(surface.spinAxis, surface.spinRate * dt)
+    ship.state.pos.sub(surface.pos).applyQuaternion(_spinQ).add(surface.pos)
+    ship.state.quat.premultiply(_spinQ).normalize()
+    ship.state.vel.applyQuaternion(_spinQ)
+  }
+
+  // Тяга/ручки — как в вакууме; радиальную составляющую потом срежем снапом на сферу.
+  stepShip(ship.state, ship.controls, ship.spec.tuning, dt)
+  constrainToHoverSphere(ship, surface, binding, world.time)
+
   return true
 }

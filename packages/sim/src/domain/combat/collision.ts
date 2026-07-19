@@ -1,4 +1,5 @@
 import { Vector3 } from 'three'
+import { LANDING } from '../../config/landing'
 import { IMPACT } from '../../config/weapons'
 import { SHIELD } from '../../config/station'
 import type { ShipEntity } from '../world/entities'
@@ -54,7 +55,9 @@ export function resolveShipVsSphere(
   // Вырос (миелофон) — НЕУЯЗВИМ к столкновениям, но ОСТАЁТСЯ ТВЁРДЫМ: раздвижка и импульс
   // выше уже применены (не проваливается), а урон гиганту не наносим. За каждой мошкой,
   // что в тебя тычется, гиганту не уследить — глупо за это гибнуть.
-  if (ship.state.scale <= 1 && rawImpact > 1) applyDamage(ship, rawImpact, time)
+  if (ship.state.scale <= 1 && rawImpact > 1) {
+    applyDamage(ship, rawImpact, time, { kind: 'impact', name: '' })
+  }
   return rawImpact
 }
 
@@ -103,12 +106,58 @@ export function resolveShipVsShip(a: ShipEntity, b: ShipEntity, time: number): v
   // боя-по-столкновению пока нет. Выросший (миелофон) сам неуязвим (scale>1).
   const localPair = !a.kinematic && !b.kinematic
   const base = Math.abs(closing) * IMPACT.RAM_DAMAGE_PER_SPEED
-  if (localPair && a.state.scale <= 1) applyDamage(a, base * (b.state.scale / a.state.scale), time)
-  if (localPair && b.state.scale <= 1) applyDamage(b, base * (a.state.scale / b.state.scale), time)
+  if (localPair && a.state.scale <= 1) {
+    applyDamage(a, base * (b.state.scale / a.state.scale), time, { kind: 'impact', name: b.name })
+  }
+  if (localPair && b.state.scale <= 1) {
+    applyDamage(b, base * (a.state.scale / b.state.scale), time, { kind: 'impact', name: a.name })
+  }
 }
 
 const _sdelta = new Vector3()
 const _snormal = new Vector3()
+const _solidPrev = new Vector3()
+
+/**
+ * Отскок от твёрдой сферы (планета, статуя, глыба) — БЕЗ урона.
+ *
+ * Неуправляемый контакт: отбрасывает назад (жёлтый «КРУШЕНИЕ» у HUD), сесть можно
+ * только по L. После крейсерского туннеля корабль оказывается на ДАЛЬНЕЙ стороне;
+ * ставим его на сторону подхода и гасим сверхсвет — иначе отражение унесло бы на 29c.
+ *
+ * @returns скорость налёта до отскока, м/с.
+ */
+export function bounceOffSolid(
+  ship: ShipEntity,
+  center: Vector3,
+  radius: number,
+  dt: number,
+): number {
+  ship.cruise.factor = 1
+  const reach = radius + effectiveRadius(ship)
+
+  // Сторона подхода — откуда пришли за шаг (интегратор уже сдвинул pos).
+  _solidPrev.copy(ship.state.pos).addScaledVector(ship.state.vel, -dt)
+  _snormal.copy(_solidPrev).sub(center)
+  if (_snormal.lengthSq() < 1e-12) {
+    _snormal.copy(ship.state.vel).negate()
+    if (_snormal.lengthSq() < 1e-12) _snormal.set(1, 0, 0)
+  }
+  _snormal.normalize()
+
+  const impactSpeed = Math.max(0, -ship.state.vel.dot(_snormal))
+  ship.state.pos.copy(center).addScaledVector(_snormal, reach)
+
+  const closing = ship.state.vel.dot(_snormal)
+  if (closing < 0) {
+    ship.state.vel.addScaledVector(_snormal, -closing * (1 + LANDING.CRASH_BOUNCE))
+  }
+  const speed = ship.state.vel.length()
+  if (speed > LANDING.CRASH_BOUNCE_MAX) {
+    ship.state.vel.multiplyScalar(LANDING.CRASH_BOUNCE_MAX / speed)
+  }
+  return impactSpeed
+}
 
 /**
  * Отскок корабля от защитного поля станции. В отличие от удара о твердь — БЕЗ урона:

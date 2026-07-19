@@ -1,5 +1,5 @@
 import { Vector3 } from 'three'
-import { findBody, findShip, type World } from '@elite/sim'
+import { findShip, navTarget, type World } from '@elite/sim'
 import { isHeld } from '../../platform/input/input'
 import { galaxyRadar } from '../../render/scene/galaxyRadar'
 
@@ -47,10 +47,12 @@ export function stepTargetPreview(world: World): void {
   }
 
   if (isHeld('ShiftLeft') || isHeld('ShiftRight')) {
-    const body = findBody(world, world.navTargetId)
-    if (!body) return void (state.active = false)
-    state.pos.copy(body.pos)
-    state.radius = Math.max(body.radius, 2)
+    // Через `navTarget`: монолиты не тела, и `findBody` их терял — Shift+Tab на статую
+    // не давал предпросмотра камеры.
+    const nav = navTarget(world)
+    if (!nav) return void (state.active = false)
+    state.pos.copy(nav.pos)
+    state.radius = Math.max(nav.radius, 2)
     state.active = true
     return
   }
@@ -60,6 +62,15 @@ export function stepTargetPreview(world: World): void {
     if (!pod) return void (state.active = false)
     state.pos.copy(pod.pos)
     state.radius = POD_RADIUS
+    state.active = true
+    return
+  }
+
+  if (world.lockedAsteroidId !== null) {
+    const rock = world.asteroids.find((a) => a.id === world.lockedAsteroidId && a.alive)
+    if (!rock) return void (state.active = false)
+    state.pos.copy(rock.pos)
+    state.radius = Math.max(rock.radius, 2)
     state.active = true
     return
   }

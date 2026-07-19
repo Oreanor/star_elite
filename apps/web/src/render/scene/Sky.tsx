@@ -23,7 +23,13 @@ export function Sky({ galaxyIndex = 0 }: { galaxyIndex?: number }) {
    */
   useFrame(() => {
     const scale = session.world.player.state.scale
-    const t = clamp((scale - SKY.FADE_START_SCALE) / (SKY.FADE_END_SCALE - SKY.FADE_START_SCALE), 0, 1)
+    const span = SKY.FADE_END_SCALE - SKY.FADE_START_SCALE
+    const t =
+      span <= 0
+        ? scale >= SKY.FADE_START_SCALE
+          ? 1
+          : 0
+        : clamp((scale - SKY.FADE_START_SCALE) / span, 0, 1)
     scene.backgroundIntensity = SKY.INTENSITY * (1 - t)
   })
 

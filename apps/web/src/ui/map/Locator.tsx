@@ -1,6 +1,18 @@
-import { useRef, useState } from 'react'
+import { useReducer, useRef, useState } from 'react'
 import { Vector3 } from 'three'
-import { isVisible, shipAxes, type BodyEntity, type ShipEntity, type World } from '@elite/sim'
+import {
+  clearContactLock,
+  clearNavLock,
+  isVisible,
+  MONOLITH_NAMES,
+  figurineDisplayName,
+  NAV_ASTEROID_NAME,
+  shipAxes,
+  stanceTo,
+  type BodyEntity,
+  type ShipEntity,
+  type World,
+} from '@elite/sim'
 import { UI } from '../theme'
 import { t, useLang } from '../i18n'
 import { chassisName, occupationName, properName } from '../i18n/dataNames'
@@ -10,10 +22,10 @@ import { useWheelZoom } from './useWheelZoom'
  * Локатор — большой круглый радар консоли: вид сверху, нос корабля ВВЕРХ.
  *
  * Тот же прибор, что в углу кабины (`drawRadar`), но во весь экран и живой: его можно
- * КРУТИТЬ и НАКЛОНЯТЬ драгом (на себя — от себя), приближать колесом и наводиться на
- * отметку, чтобы прочитать, кто это. В кабине этого нет намеренно: там мыши нет, радар
- * плоский. Здесь панель на паузе (курсор отпущен), мир статичен — перерисовка на драг
- * дёшева, кадровый цикл не нужен.
+ * КРУТИТЬ и НАКЛОНЯТЬ драгом, приближать колесом и КЛИКАТЬ отметку — выбор пишет в те же
+ * поля мира, что Tab / Shift+Tab / карта системы (`navTargetId` или `lockedTargetId` +
+ * `targetFocus`). HUD и J/P читают их сразу. Наведение показывает карточку; клик —
+ * захват.
  *
  * Наклон превращает круг в ЭЛЛИПС: все координаты пересчитываются проекцией
  * `project` — поворот в плоскости (yaw), затем наклон (tilt) сжимает ось «вперёд»
@@ -40,19 +52,23 @@ const _up = new Vector3()
 const _rel = new Vector3()
 
 function shipColor(ship: ShipEntity, world: World): string {
-  if (ship.faction === 'hostile') return UI.DANGER
   if (ship.kinematic) return UI.PLAYER
-  return ship.faction === world.player.faction ? UI.ALLY : UI.NEUTRAL
+  const stance = stanceTo(world, ship)
+  if (stance === 'hostile') return UI.DANGER
+  if (stance === 'friendly') return UI.ALLY
+  return UI.NEUTRAL
 }
 
 function bodyColor(body: BodyEntity): string {
   if (body.kind === 'star') return UI.STAR
-  if (body.kind === 'blackhole') return '#5a2868'
+  if (body.kind === 'blackhole') return UI.BLACKHOLE
   if (body.kind === 'station') return UI.STATION
-  return UI.PRIMARY
+  return UI.PLANET
 }
 
 type Shape = 'square' | 'round' | 'diamond'
+
+type SelectKind = 'body' | 'monolith' | 'figurine' | 'asteroid' | 'ship'
 
 interface Blip {
   key: string
@@ -67,6 +83,9 @@ interface Blip {
   ring: boolean
   title: string
   subtitle: string
+  /** Клик пишет захват в мир — тот же id, что у тела/борта/статуи. */
+  selectId: number
+  selectKind: SelectKind
 }
 
 /** Проекция точки диска на экран: сперва поворот в плоскости, затем наклон и зум. */
@@ -106,14 +125,69 @@ function blips(world: World): Blip[] {
       color: bodyColor(body),
       shape: body.kind === 'station' ? 'diamond' : 'round',
       size: body.kind === 'star' || body.kind === 'blackhole' ? 11 : 7,
-      ring: body.id === world.navTargetId,
+      ring: body.id === world.navTargetId && world.targetFocus === 'nav',
       title: properName(body.name),
       subtitle: t(`locator.kind.${body.kind}` as 'locator.kind.planet'),
+      selectId: body.id,
+      selectKind: 'body',
+    })
+  }
+
+  for (const m of world.monoliths) {
+    const d = toDisc(world, m.pos)
+    if (!d) continue
+    out.push({
+      key: `mono-${m.id}`,
+      ...d,
+      color: UI.MONOLITH,
+      shape: 'round',
+      size: 9,
+      ring: m.id === world.navTargetId && world.targetFocus === 'nav',
+      title: properName(MONOLITH_NAMES[m.variant] ?? 'Монолит'),
+      subtitle: t('locator.kind.monolith'),
+      selectId: m.id,
+      selectKind: 'monolith',
+    })
+  }
+
+  for (const f of world.figurines) {
+    if (!f.alive) continue
+    const d = toDisc(world, f.pos)
+    if (!d) continue
+    out.push({
+      key: `fig-${f.id}`,
+      ...d,
+      color: UI.MONOLITH,
+      shape: 'round',
+      size: 9,
+      ring: f.id === world.navTargetId && world.targetFocus === 'nav',
+      title: figurineDisplayName(f),
+      subtitle: t('locator.kind.figurine'),
+      selectId: f.id,
+      selectKind: 'figurine',
+    })
+  }
+
+  for (const rock of world.scenicRocks) {
+    if (!rock.alive) continue
+    const d = toDisc(world, rock.pos)
+    if (!d) continue
+    out.push({
+      key: `rock-${rock.id}`,
+      ...d,
+      color: UI.MONOLITH,
+      shape: 'round',
+      size: 7,
+      ring: rock.id === world.navTargetId && world.targetFocus === 'nav',
+      title: properName(NAV_ASTEROID_NAME),
+      subtitle: t('locator.kind.asteroid'),
+      selectId: rock.id,
+      selectKind: 'asteroid',
     })
   }
 
   for (const ship of world.ships) {
-    if (!isVisible(ship)) continue
+    if (!isVisible(ship) || ship.divine) continue
     const d = toDisc(world, ship.state.pos)
     if (!d) continue
     out.push({
@@ -122,13 +196,41 @@ function blips(world: World): Blip[] {
       color: shipColor(ship, world),
       shape: 'square',
       size: 7,
-      ring: ship.id === world.lockedTargetId || ship.acquaintanceId != null,
+      // Кольцо только у активного Tab-захвата — не у знакомых.
+      ring: ship.id === world.lockedTargetId && world.targetFocus === 'contact',
       title: ship.pilotName,
       subtitle: `${occupationName(ship.originKind, ship.faction)} · ${chassisName(ship.loadout.chassis.name)}`,
+      selectId: ship.id,
+      selectKind: 'ship',
     })
   }
 
   return out
+}
+
+/** Клик по отметке — тот же захват, что Tab / Shift+Tab / карта системы. */
+function applySelect(world: World, kind: SelectKind, id: number): void {
+  if (kind === 'ship') {
+    if (world.lockedTargetId === id && world.targetFocus === 'contact') {
+      clearContactLock(world)
+      return
+    }
+    clearNavLock(world)
+    clearContactLock(world)
+    world.lockedTargetId = id
+    world.targetFocus = 'contact'
+    return
+  }
+  // Тело, статуя или глыба — нав-цель (как Shift+Tab).
+  if (world.navTargetId === id && world.targetFocus === 'nav') {
+    clearNavLock(world)
+    return
+  }
+  clearContactLock(world)
+  world.navTargetId = id
+  world.targetFocus = 'nav'
+  const body = world.bodies.find((b) => b.id === id)
+  world.lockedStationId = body?.kind === 'station' ? id : null
 }
 
 /** Расстояние, отвечающее доле радиуса k (обратная логарифмической шкале радара). */
@@ -141,6 +243,7 @@ function fmtDist(m: number): string {
 
 export function Locator({ world }: { world: World }) {
   useLang()
+  const [, bump] = useReducer((n: number) => n + 1, 0)
   const [hover, setHover] = useState<string | null>(null)
   // Поворот, наклон и зум диска. Наклон по умолчанию — лёгкий (радар-«тарелка»), но
   // 0 даёт честный вид сверху; крайние значения зажаты, чтобы диск не выворачивался.
@@ -149,6 +252,8 @@ export function Locator({ world }: { world: World }) {
   const [zoom, setZoom] = useState(1)
   const box = useRef<HTMLDivElement>(null)
   const drag = useRef<{ x: number; y: number } | null>(null)
+  /** После драга pointerup на метке не должен считаться кликом. */
+  const dragged = useRef(false)
   useWheelZoom(box, (dy) => setZoom((z) => Math.min(3, Math.max(0.6, z * (dy > 0 ? 0.9 : 1.1)))))
 
   const proj = (rt: number, fwd: number, h: number) => project(rt, fwd, h, yaw, tilt, zoom)
@@ -158,7 +263,8 @@ export function Locator({ world }: { world: World }) {
     .map((b) => ({ b, base: proj(b.rt, b.fwd, 0), tip: proj(b.rt, b.fwd, b.h) }))
     // Дальние (больше «вперёд» после поворота) рисуем первыми — ближние лягут поверх.
     .sort((a, b) => b.base.depth - a.base.depth)
-  const active = marks.find((m) => m.b.key === hover)?.b ?? null
+  // Карточка: выбранная цель важнее наведения — пилот видит, что захватил.
+  const active = marks.find((m) => m.b.ring)?.b ?? marks.find((m) => m.b.key === hover)?.b ?? null
 
   // Обод, сетка и конус — через ту же проекцию. Кольца сетки: эллипсы rx=r·zoom, ry=r·cos·zoom.
   const gridRings = [0.25, 0.5, 0.75, 1]
@@ -173,12 +279,14 @@ export function Locator({ world }: { world: World }) {
       <div
         ref={box}
         onPointerDown={(e) => {
+          dragged.current = false
           drag.current = { x: e.clientX, y: e.clientY }
           e.currentTarget.setPointerCapture(e.pointerId)
         }}
         onPointerMove={(e) => {
           const s = drag.current
           if (!s) return
+          if (Math.abs(e.clientX - s.x) + Math.abs(e.clientY - s.y) > 3) dragged.current = true
           setYaw((y) => y - (e.clientX - s.x) * 0.008)
           setTilt((tl) => Math.max(0, Math.min(1.35, tl + (e.clientY - s.y) * 0.006)))
           drag.current = { x: e.clientX, y: e.clientY }
@@ -235,6 +343,11 @@ export function Locator({ world }: { world: World }) {
                 key={b.key}
                 onMouseEnter={() => setHover(b.key)}
                 onMouseLeave={() => setHover((h) => (h === b.key ? null : h))}
+                onClick={() => {
+                  if (dragged.current) return
+                  applySelect(world, b.selectKind, b.selectId)
+                  bump()
+                }}
                 style={{ cursor: 'pointer' }}
               >
                 <circle cx={tip.x} cy={tip.y} r={16} fill="transparent" />
@@ -244,9 +357,9 @@ export function Locator({ world }: { world: World }) {
                 )}
                 <Mark shape={b.shape} cx={tip.x} cy={tip.y} size={b.size} color={b.color} />
                 {(b.ring || on) && (
-                  <circle cx={tip.x} cy={tip.y} r={b.size + 4} fill="none" stroke={b.color} strokeOpacity={on ? 0.9 : 0.5} />
+                  <circle cx={tip.x} cy={tip.y} r={b.size + 4} fill="none" stroke={b.color} strokeOpacity={b.ring || on ? 0.9 : 0.5} />
                 )}
-                {on && (
+                {(on || b.ring) && (
                   <text x={tip.x + b.size + 8} y={tip.y + 4} fontSize={13} fill={b.color} style={{ pointerEvents: 'none', userSelect: 'none' }}>
                     {b.title}
                   </text>
@@ -262,7 +375,13 @@ export function Locator({ world }: { world: World }) {
         <h1 className="text-xl tracking-[0.3em]">{t('locator.title')}</h1>
         <p className="mb-6 mt-1 text-[11px] tracking-widest opacity-50">{t('locator.count', { n: marks.length })}</p>
         {active ? (
-          <div className="rounded border p-4" style={{ borderColor: 'rgba(124,196,255,0.24)' }}>
+          <div
+            className="rounded border p-4"
+            style={{
+              borderColor: active.ring ? active.color : 'rgba(124,196,255,0.24)',
+              background: active.ring ? 'rgba(124,196,255,0.08)' : 'transparent',
+            }}
+          >
             <div className="text-base tracking-widest" style={{ color: active.color }}>
               {active.title}
             </div>

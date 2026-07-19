@@ -45,6 +45,67 @@ describe('линейная динамика', () => {
     // Крейсер входит в физику как обычный множитель — никаких особых режимов.
     expect(s.vel.length()).toBeGreaterThan(spec().tuning.MAX_SPEED * 5)
   })
+
+  it('миелофон поднимает потолок скорости пропорционально масштабу', () => {
+    // Иначе гигант ползёт паспортными 220 м/с и «на газу до звезды» невозможно.
+    const s = createShipState()
+    s.scale = 100
+    const c = createControls()
+    c.throttle = 1
+    const t = spec().tuning
+    const dt = 1 / 120
+    for (let i = 0; i < 30 * 120; i++) stepShip(s, c, t, dt)
+    expect(s.vel.length()).toBeGreaterThan(t.MAX_SPEED * 50)
+    expect(s.vel.length()).toBeLessThanOrEqual(t.MAX_SPEED * 100 + 1e-6)
+  })
+
+  it('ручник гасит любой ход в ноль за долю секунды', () => {
+    // На ×scale ретро вдоль носа не справлялось — борт «куда-то летел» на нулевом газе.
+    const s = createShipState()
+    s.scale = 1e6
+    s.vel.set(0, 0, -1e9)
+    const c = createControls()
+    c.throttle = 0
+    c.retro = 1
+    const t = spec().tuning
+    const dt = 1 / 120
+    for (let i = 0; i < 0.5 * 120; i++) stepShip(s, c, t, dt)
+    expect(s.vel.length()).toBe(0)
+  })
+
+  it('на ×scale выбег с нулевым газом гасит ход за пару секунд', () => {
+    // ASSIST_SPEED_DAMP ~0.35 оставлял гиганта «плыть» минуту — отпустил ПКМ, а спидометр стоит.
+    const s = createShipState()
+    s.scale = 1e6
+    s.vel.set(0, 0, -spec().tuning.MAX_SPEED * 1e6)
+    const c = createControls()
+    c.throttle = 0
+    c.flightAssist = true
+    const t = spec().tuning
+    const dt = 1 / 120
+    for (let i = 0; i < 2.5 * 120; i++) stepShip(s, c, t, dt)
+    expect(s.vel.length()).toBe(0)
+  })
+
+  it('ручник сбрасывает газ — после отпускания FA не выстреливает к старому throttle×scale', () => {
+    // Держал газ на гиганте, затормозил Ctrl, отпустил — раньше FA сразу тянул к commanded.
+    const s = createShipState()
+    s.scale = 1e5
+    s.vel.set(0, 0, -1e8)
+    const c = createControls()
+    c.throttle = 1
+    c.flightAssist = true
+    c.retro = 1
+    const t = spec().tuning
+    const dt = 1 / 120
+    for (let i = 0; i < 0.5 * 120; i++) stepShip(s, c, t, dt)
+    expect(s.vel.length()).toBe(0)
+    expect(c.throttle).toBe(0) // рукоять снята ручником
+
+    c.retro = 0
+    for (let i = 0; i < 0.25 * 120; i++) stepShip(s, c, t, dt)
+    expect(s.vel.length()).toBeLessThan(1)
+  })
 })
 
 describe('инерция и снос', () => {

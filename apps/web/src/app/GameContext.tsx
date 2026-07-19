@@ -123,19 +123,13 @@ function createSession(initialSave?: PlayerSave | null): Session {
   // что дали снаружи: онлайн уже загрузил серверный сейв (null = новичок без прогресса).
   const save = initialSave !== undefined ? initialSave : loadSave()
   const world = createWorld()
-  // DEV/ВРЕМЕННО: новичок стартует у ЛЮЦИФЕРА — на Кресте «Вечность», где сидит Слово (показать
-  // локацию). Люцифер дописан в хвост генератора, поэтому его индекс = GALAXY.COUNT. Вернувшийся
-  // по сейву входит как обычно, в свою систему. Выключается снятием флага.
-  const LUCIFER_START = false
-  // Повторный вход — в СВОЮ сохранённую систему своим сидом. Новичок: у Люцифера (пока),
-  // иначе в сети — ОБЩАЯ точка сбора, офлайн — случайная. Систему строим по (сид, индекс).
+  // Повторный вход — в СВОЮ сохранённую систему своим сидом. Новичок: в сети — ОБЩАЯ
+  // точка сбора, офлайн — случайная. Систему строим по (сид, индекс).
   const index = save
     ? save.systemIndex
-    : LUCIFER_START
-      ? GALAXY.COUNT
-      : online
-        ? sharedStartIndex()
-        : randomStartIndex()
+    : online
+      ? sharedStartIndex()
+      : randomStartIndex()
   const seed = save ? save.galaxySeed : world.galaxySeed
   enterSystem(world, systemDefFor(index, seed), index)
   // Пилота накладываем ПОСЛЕ enterSystem: тот пересобирает окружение, но борт игрока
@@ -157,12 +151,8 @@ function createSession(initialSave?: PlayerSave | null): Session {
     if (idx >= 0) fitFromHold(world.player, idx)
   }
   // Начинаем ПРИСТЫКОВАННЫМИ у причала — и новичок, и вернувшийся: станция и точка
-  // возврата, и безопасный старт. Не в открытом космосе за тысячу километров. У Люцифера
-  // (DEV) причаливаем именно к КРЕСТУ, а не к «Вееру»: среди двух станций берём крест.
-  const berth = !save && LUCIFER_START
-    ? world.bodies.find((b) => b.kind === 'station' && b.stationStyle === 'cross')
-    : undefined
-  startDocked(world, berth)
+  // возврата, и безопасный старт. Не в открытом космосе за тысячу километров.
+  startDocked(world)
 
   /**
    * ЗНАКОМЫЕ живут в системе с первого кадра — как и после прыжка.

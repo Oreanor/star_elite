@@ -1,6 +1,6 @@
 import { useFrame } from '@react-three/fiber'
 import { useMemo, useRef } from 'react'
-import { InstancedMesh, Mesh, Object3D, Vector3 } from 'three'
+import { InstancedMesh, Mesh, Object3D } from 'three'
 import { CHASSIS_CATALOGUE, clamp, isDroneShip, isVisible, warpDepartHidden, warpEmergeHidden } from '@elite/sim'
 import { useSession } from '../../app/GameContext'
 import { shipHidden } from '../../app/control/jumpFx'
@@ -18,8 +18,6 @@ const BOT_CHASSIS_IDS = CHASSIS_CATALOGUE.map((c) => c.id).filter((id) => id !==
 
 // Единственный объект для сборки матриц. `new Object3D()` в кадре — мусор для GC.
 const _dummy = new Object3D()
-/** Увод своего корпуса назад в гигант-режиме. Модульный — `new Vector3()` в кадре не аллоцируем. */
-const _hideBack = new Vector3()
 
 export function PlayerShip() {
   const session = useSession()
@@ -44,17 +42,15 @@ export function PlayerShip() {
     // в лог-буфере глубины. По игре ты растёшь дальше — просто на экране размер замирает.
     const capped = Math.min(player.state.scale, GIANT_RENDER_CAP)
     mesh.quaternion.copy(player.state.quat)
+    mesh.position.copy(player.state.pos)
 
-    // Гигант-режим: выше GIANT_HIDE.START свой корпус УХОДИТ С ГЛАЗ — в галактическом
-    // миелофоне центрированный борт закрывает звёзды, которые ты двигаешь. Уводим его назад
-    // по оси хвоста (+Z локально — туда, где камера) и сводим масштаб в ноль; на FULL снимаем
-    // с отрисовки. Плавно, а не рывком: START..FULL — окно перехода.
+    // Гигант-режим: выше GIANT_HIDE.START свой корпус тает НА МЕСТЕ (масштаб → 0).
+    // Раньше уводили назад к камере — с pitch камеры это читалось как «уполз вниз
+    // под камеру» на миллионных ×. Центр кадра и так освобождается, сдвиг не нужен.
     const hide = clamp((player.state.scale - GIANT_HIDE.START) / (GIANT_HIDE.FULL - GIANT_HIDE.START), 0, 1)
-    _hideBack.set(0, 0, 1).applyQuaternion(player.state.quat).multiplyScalar(hide * capped * 30)
-    mesh.position.copy(player.state.pos).add(_hideBack)
     mesh.scale.setScalar(capped * (1 - hide))
     // Корабль исчезает, канув в кольцо прыжка: с этого мига его в старой системе уже нет.
-    // И в гигант-режиме на FULL — уже целиком уведён назад и в ноль, снимаем с отрисовки.
+    // И в гигант-режиме на FULL — уже в ноль, снимаем с отрисовки.
     mesh.visible = player.alive && !shipHidden() && hide < 1
 
     // Свой корабль под полем видно — иначе пилот теряет собственный нос.

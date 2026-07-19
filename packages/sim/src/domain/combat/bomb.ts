@@ -44,7 +44,7 @@ export function fireBomb(world: World, e: ShipEntity): boolean {
 
     // Полный запас цели: при power = 1 это ровно смертельный удар, кем бы она ни была.
     const lethal = ship.spec.hull.shield + ship.spec.hull.hull
-    applyDamage(ship, lethal * power, world.time)
+    applyDamage(ship, lethal * power, world.time, { kind: 'bomb', name: '' })
   }
 
   // Ракеты в воздухе гибнут от любого импульса: жечь электронику дешевле, чем броню.

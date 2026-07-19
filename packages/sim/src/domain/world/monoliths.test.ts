@@ -45,14 +45,31 @@ describe('монолиты у причала', () => {
   it('в системе БЕЗ причала статуй нет — им не у чего стоять', () => {
     const world = createWorld({ ...STARTER_SYSTEM, station: null, extraStations: [] })
     expect(world.monoliths).toHaveLength(0)
+    expect(world.scenicRocks).toHaveLength(0)
+  })
+
+  it('у Люцифера лежит пояс глыб километрового класса', () => {
+    const world = createWorld()
+    const lucifer = world.monoliths.find((m) => m.variant === 0)
+    expect(lucifer).toBeDefined()
+    expect(world.scenicRocks).toHaveLength(MONOLITH.ROCK_COUNT)
+    for (const rock of world.scenicRocks) {
+      expect(rock.alive).toBe(true)
+      expect(rock.hull).toBeGreaterThan(0)
+      expect(rock.radius).toBeGreaterThanOrEqual(MONOLITH.ROCK_RADIUS_MIN)
+      expect(rock.radius).toBeLessThanOrEqual(MONOLITH.ROCK_RADIUS_MAX)
+      const d = rock.pos.distanceTo(lucifer!.pos)
+      expect(d).toBeGreaterThan(lucifer!.radius * MONOLITH.ROCK_GAP_MIN * 0.9)
+      expect(d).toBeLessThan(lucifer!.radius * MONOLITH.ROCK_GAP_MAX * 1.2)
+    }
   })
 
   /** Их надо МОЧЬ выбрать: Shift+Tab листает тела и статуи одним кругом. */
   it('выбираются нав-целью наравне с телами', () => {
     const world = createWorld()
     const ids = new Set(world.monoliths.map((m) => m.id))
-    // Круг конечен — за число тел со статуями он обязан пройти по всем.
-    const total = world.bodies.length + world.monoliths.length
+    // Круг конечен — за число тел со статуями и глыбами он обязан пройти по всем.
+    const total = world.bodies.length + world.monoliths.length + world.scenicRocks.length
     let hitMonolith = false
     for (let i = 0; i < total + 2; i++) {
       cycleCelestial(world)
@@ -67,5 +84,27 @@ describe('монолиты у причала', () => {
       }
     }
     expect(hitMonolith).toBe(true)
+  })
+
+  /** Глыбы двора — тоже нав-цели: иначе видимый камень нельзя выбрать Shift+Tab. */
+  it('глыбы двора выбираются нав-целью коричневым родом asteroid', () => {
+    const world = createWorld()
+    const ids = new Set(world.scenicRocks.map((r) => r.id))
+    expect(ids.size).toBeGreaterThan(0)
+    const total =
+      world.bodies.length + world.monoliths.length + world.scenicRocks.length + 1
+    let hit = false
+    for (let i = 0; i < total + 2; i++) {
+      cycleCelestial(world)
+      if (world.navTargetId !== null && ids.has(world.navTargetId)) {
+        hit = true
+        const nav = navTarget(world)
+        expect(nav).not.toBeNull()
+        expect(nav!.kind).toBe('asteroid')
+        expect(nav!.radius).toBeGreaterThanOrEqual(MONOLITH.ROCK_RADIUS_MIN)
+        break
+      }
+    }
+    expect(hit).toBe(true)
   })
 })

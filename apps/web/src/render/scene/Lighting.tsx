@@ -1,8 +1,9 @@
 import { useFrame, useThree } from '@react-three/fiber'
 import { useRef } from 'react'
 import { Color, DirectionalLight, Vector3 } from 'three'
-import type { BodyEntity } from '@elite/sim'
 import { useSession } from '../../app/GameContext'
+import { GALAXY_LAYER, LIGHT } from '../config'
+import { nearestStar, tintedSunColor } from '../starLight'
 
 /**
  * Свет сцены.
@@ -14,37 +15,14 @@ import { useSession } from '../../app/GameContext'
  *
  * Поэтому добавлен ЗАПОЛНЯЮЩИЙ свет от камеры, смещённый вбок и вверх.
  * Физически его быть не должно; без него не видно корабля.
+ *
+ * Спектр ключевого — от ближайшей звезды (`starLight`): тот же выбор, что у
+ * атмосферы, флейра и тинта пыли.
  */
 
 const _sunDirection = new Vector3()
 const _fillOffset = new Vector3()
-
-// Цвет ключевого света берём от класса звезды, но подмешиваем к тёплому белому: чистый
-// спектральный оттенок выжёг бы читаемость (голубой гигант красил бы корпус в синьку), а
-// так у красного карлика сцена явно теплеет, у голубого — холодеет, но борт не «перекрашен».
 const _sunColor = new Color()
-const _starColor = new Color()
-const SUN_BASE = new Color(0xfff2dd) // прежний тёплый белый — к нему тянем от цвета звезды
-const SUN_TINT = 0.45 // доля цвета звезды в свете (0 — как было, 1 — чистый спектр)
-
-/**
- * Какая звезда светит. У одиночной выбор очевиден; у двойной свет и терминатор
- * задаёт БЛИЖАЙШАЯ — среди пары корабль освещает то солнце, к которому подошёл,
- * а не то, что первым попалось в списке тел.
- */
-function litBy(world: ReturnType<typeof useSession>['world'], from: Vector3): BodyEntity | null {
-  let best: BodyEntity | null = null
-  let nearest = Infinity
-  for (const body of world.bodies) {
-    if (body.kind !== 'star') continue
-    const d = body.pos.distanceToSquared(from)
-    if (d < nearest) {
-      nearest = d
-      best = body
-    }
-  }
-  return best
-}
 
 export function Lighting() {
   const session = useSession()
@@ -55,9 +33,12 @@ export function Lighting() {
 
   useFrame(() => {
     const player = session.world.player.state.pos
+    const scale = session.world.player.state.scale
+    // Галактика в кадре — системной звезды нет, ключевой свет гасим (остаётся заливка).
+    const galaxyOn = scale >= GALAXY_LAYER.FADE_IN_START
 
     const sun = sunRef.current
-    const star = litBy(session.world, player)
+    const star = nearestStar(session.world, player)
     if (sun && star) {
       // Направленному свету важно только направление. Держим источник рядом
       // с игроком, чтобы дальность не имела значения, а терминатор был верен.
@@ -67,9 +48,10 @@ export function Lighting() {
       sun.target.updateMatrixWorld()
       // Свет наследует спектр звезды (подмешан к тёплому белому): у красного карлика
       // сцена теплеет, у голубого гиганта — холодеет. Так класс звезды виден не только
-      // на диске, но и на освещении корпуса. Без аллокаций — переиспользуем _sunColor.
-      _sunColor.copy(SUN_BASE).lerp(_starColor.set(star.color), SUN_TINT)
+      // на диске, но и на освещении корпуса.
+      tintedSunColor(star.color, _sunColor)
       sun.color.copy(_sunColor)
+      sun.intensity = galaxyOn ? 0 : LIGHT.SUN_INTENSITY
     }
 
     const fill = fillRef.current
@@ -88,14 +70,11 @@ export function Lighting() {
        * Яркости подобраны под почти белые корпуса: с ними ключевой свет пришлось
        * убавить, иначе освещённый борт выгорает в плоское белое пятно и гранёность
        * пропадает ровно так же, как пропадала от темноты.
+       * Hemi занижен намеренно: ночная сторона планет должна быть темнее дня.
        */}
-      {/* Цвет ключевого света задаётся в кадре по классу звезды (см. useFrame выше);
-          здесь лишь стартовый тёплый белый на первый кадр до его установки. */}
-      <directionalLight ref={sunRef} intensity={1.9} color={0xfff2dd} />
-      {/* Заполняющий: холоднее и слабее ключевого, иначе сцена станет плоской. */}
-      <directionalLight ref={fillRef} intensity={0.55} color={0xa8c4e6} />
-      {/* Небо сверху, отражённый свет снизу: теневая сторона перестаёт быть дырой. */}
-      <hemisphereLight args={[0x4a6480, 0x141a22, 0.5]} />
+      <directionalLight ref={sunRef} intensity={LIGHT.SUN_INTENSITY} color={LIGHT.SUN_BASE} />
+      <directionalLight ref={fillRef} intensity={LIGHT.FILL_INTENSITY} color={LIGHT.FILL_COLOR} />
+      <hemisphereLight args={[LIGHT.HEMI_SKY, LIGHT.HEMI_GROUND, LIGHT.HEMI_INTENSITY]} />
     </>
   )
 }

@@ -123,7 +123,8 @@ function transferLine(r: TransferResult): string | null {
     parts.push(r.direction === 'toThem' ? `Передано: ${r.commodityName} ×${r.units}` : `Получено: ${r.commodityName} ×${r.units}`)
   }
   if (r.credits > 0) {
-    parts.push(r.direction === 'toThem' ? `Списано: ${r.credits} кр` : `Зачислено: ${r.credits} кр`)
+    // Покупка: груз toYou, но деньги с игрока — смотрим creditsFromPlayer, не direction.
+    parts.push(r.creditsFromPlayer ? `Списано: ${r.credits} кр` : `Зачислено: ${r.credits} кр`)
   }
   return parts.length ? parts.join(' · ') : null
 }

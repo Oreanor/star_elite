@@ -1,4 +1,6 @@
+import { Vector3 } from 'three'
 import { AI } from '../../config/ai'
+import { isEngageable } from '../combat/engage'
 import { findShip } from '../world/queries'
 import type { World } from '../world/entities'
 import { createAIState } from './types'
@@ -10,8 +12,11 @@ import { createAIState } from './types'
  * `ShipControls`. Ровно то, ради чего `Controller` и был единственным швом между
  * «кто решает» и «что летит» — посадить бота в корабль игрока стоит одной ссылки.
  *
- * Отличие одно: цель ему НАЗНАЧЕНА (`orderedTargetId`), а не выбрана. Приказ
- * исходит от игрока, и менять его пилот не вправе.
+ * Отличие одно: цель ему НАЗНАЧЕНА (`orderedTargetId` / `orderedSoft`), а не выбрана.
+ * Приказ исходит от игрока, и менять его пилот не вправе.
+ *
+ * Бьём то, что физически бьётся лазером: борт, контейнер, астероид — и только когда
+ * фокус контакта (`targetFocus: contact`). Нав (планета/звезда) P не атакует.
  *
  * Правила отпускания штурвала живут ЗДЕСЬ, а не в слое ввода: они одинаковы
  * и на клиенте, и на сервере, и проверяются тестом без всякого браузера.
@@ -25,19 +30,39 @@ export function autofightActive(world: World): boolean {
 }
 
 /**
- * Взять цель в автобой. Возвращает false, если брать нечего: цель не захвачена,
- * мертва или это не враг. Молчаливый отказ хуже — HUD обязан сказать почему.
+ * Взять цель в автобой. Возвращает false, если брать нечего: фокус на наве,
+ * цель не захвачена или это не бьющийся контакт. Молчаливый отказ хуже — HUD
+ * обязан сказать почему.
  */
 export function engageAutofight(world: World): boolean {
   const player = world.player
   if (!player.alive) return false
+  // Как J смотрит на фокус: Shift+Tab на планету не превращает P в стрельбу по камню
+  // из старого Tab — иначе снова путаница «куда жму».
+  if (world.targetFocus !== 'contact') return false
+
+  if (world.lockedPodId !== null) {
+    const pod = world.pods.find((p) => p.id === world.lockedPodId && p.alive)
+    if (!pod) return false
+    const ai = createAIState(player.state.pos, world.rng)
+    ai.orderedSoft = { kind: 'pod', id: pod.id }
+    ai.missileCooldown = 0
+    player.ai = ai
+    return true
+  }
+
+  if (world.lockedAsteroidId !== null) {
+    const rock = world.asteroids.find((a) => a.id === world.lockedAsteroidId && a.alive)
+    if (!rock) return false
+    const ai = createAIState(player.state.pos, world.rng)
+    ai.orderedSoft = { kind: 'asteroid', id: rock.id }
+    ai.missileCooldown = 0
+    player.ai = ai
+    return true
+  }
 
   const target = findShip(world, world.lockedTargetId)
-  if (!target || !target.alive) return false
-  // Захватить Tab-ом можно кого угодно (чтобы окликнуть или приказать), но АВТОБОЙ
-  // открывает огонь лишь по врагу: случайно натравить бота на союзника/нейтрала нельзя.
-  // Хочешь ударить не-врага — стреляй вручную, по прицелу; это твой осознанный выстрел.
-  if (target.faction !== 'hostile') return false
+  if (!target || !target.alive || !isEngageable(target)) return false
 
   const ai = createAIState(player.state.pos, world.rng)
   ai.orderedTargetId = target.id
@@ -65,8 +90,23 @@ export function autofightSpent(world: World): boolean {
   if (!ai) return false
   if (!player.alive) return true
 
+  if (ai.orderedSoft) {
+    const pos = softPos(world, ai.orderedSoft)
+    if (!pos) return true
+    return pos.distanceTo(player.state.pos) > ABORT_RANGE
+  }
+
   const target = findShip(world, ai.orderedTargetId)
   if (!target || !target.alive) return true
 
   return target.state.pos.distanceTo(player.state.pos) > ABORT_RANGE
+}
+
+function softPos(world: World, soft: { kind: 'pod' | 'asteroid'; id: number }): Vector3 | null {
+  if (soft.kind === 'pod') {
+    const pod = world.pods.find((p) => p.id === soft.id && p.alive)
+    return pod?.pos ?? null
+  }
+  const rock = world.asteroids.find((a) => a.id === soft.id && a.alive)
+  return rock?.pos ?? null
 }

@@ -3,11 +3,13 @@ import {
   GALAXY,
   GALAXY_SHAPES,
   HOME_SHAPE,
-  LUCIFER,
   SHAPE,
   type GalaxyShapeId,
+  type StarClassId,
 } from '../../config/galaxy'
+import { WORLD } from '../../config/world'
 import { makeRng, type Rng } from '../../core/math'
+import { primaryClassId, voidLyOf } from './starClass'
 
 /**
  * Где стоит звезда. Форма галактики — ДАННЫЕ: каждая запись знает только,
@@ -220,18 +222,14 @@ export interface Spot3 {
 }
 
 /**
- * Положение системы по её индексу. Зерно системы то же, что у `generateSystem`:
- * координаты и содержимое обязаны быть выводимы из одного индекса, иначе
- * галактику нельзя будет строить по требованию.
+ * Базовое место по форме диска — БЕЗ пустот гигантов. Поток бросков СВОЙ, не общий
+ * с `generateSystem`: иначе рукава расцветились бы по спектру самой звезды.
+ * Гиганты остаются здесь; соседей сдвигает `placeSystem`.
  */
-export function placeSystem(index: number, seed: number = GALAXY.SEED): Spot3 {
+export function placeSystemRaw(index: number, seed: number = GALAXY.SEED): Spot3 {
   // Чёрная дыра сидит ровно в центре. Это не звезда, ей не нужен бросок кости.
   if (index === CORE_INDEX) return { x: 0, y: 0, z: 0 }
-  // Люцифер висит в пустоте над диском, руками — не по броску (см. LUCIFER.POS).
-  if (index === LUCIFER.INDEX) return { x: LUCIFER.POS[0], y: LUCIFER.POS[1], z: LUCIFER.POS[2] }
 
-  // Поток бросков СВОЙ, не общий с `generateSystem`. Общий связал бы место звезды
-  // с её классом: рукава расцветились бы по спектру, и это было бы видно.
   const rng = makeRng(seed ^ Math.imul(index, 0x9e3779b1) ^ 0x7f4a7c15)
   const place = placerFor(galaxyShape(seed).id, seed)
 
@@ -242,6 +240,73 @@ export function placeSystem(index: number, seed: number = GALAXY.SEED): Spot3 {
 
   const R = GALAXY.RADIUS_LY
   return { x: spot.x * R, y: spot.y * R, z: spot.z * R }
+}
+
+/** Кэш вытеснения: одно зерно — один проход по 2500 систем. */
+let _voidCache: { seed: number; pos: Spot3[] } | null = null
+
+/**
+ * Положение после вырезания пустот вокруг O/B. Прыжки, карта и слой галактики
+ * читают одно и то же — иначе аим уедет от точки на локаторе.
+ */
+function carvedPositions(seed: number): Spot3[] {
+  if (_voidCache?.seed === seed) return _voidCache.pos
+
+  const count = GALAXY.COUNT
+  const pos: Spot3[] = new Array(count)
+  for (let i = 0; i < count; i++) pos[i] = placeSystemRaw(i, seed)
+
+  const giants: { i: number; voidLy: number }[] = []
+  for (let i = 0; i < count; i++) {
+    const voidLy = voidLyOf(primaryClassId(i, seed))
+    if (voidLy > 0) giants.push({ i, voidLy })
+  }
+
+  // Не двигаем: ядро, дом и сами гиганты (иначе пузыри поползут друг в друга).
+  const fixed = new Set<number>([CORE_INDEX, ...giants.map((g) => g.i)])
+  if (seed === GALAXY.SEED) fixed.add(WORLD.HOME_INDEX)
+
+  // Несколько проходов: вытолкнутый из одного пузыря может оказаться в другом.
+  for (let pass = 0; pass < 5; pass++) {
+    for (const g of giants) {
+      const gp = pos[g.i]!
+      for (let j = 0; j < count; j++) {
+        if (fixed.has(j)) continue
+        const p = pos[j]!
+        let dx = p.x - gp.x
+        let dy = p.y - gp.y
+        let dz = p.z - gp.z
+        let d = Math.hypot(dx, dy, dz)
+        if (d >= g.voidLy) continue
+        if (d < 1e-12) {
+          // Совпали в точке — толкаем по оси, детерминированно.
+          dx = 1
+          dy = 0
+          dz = 0
+          d = 1
+        }
+        const s = g.voidLy / d
+        pos[j] = { x: gp.x + dx * s, y: gp.y + dy * s, z: gp.z + dz * s }
+      }
+    }
+  }
+
+  _voidCache = { seed, pos }
+  return pos
+}
+
+/**
+ * Положение системы по индексу: форма диска + пустоты вокруг гигантов (voidLy в
+ * STAR_CLASSES). Выводимо из зерна — generateSystem / прыжок / карта совпадают.
+ */
+export function placeSystem(index: number, seed: number = GALAXY.SEED): Spot3 {
+  if (index === CORE_INDEX) return { x: 0, y: 0, z: 0 }
+  return carvedPositions(seed)[index]!
+}
+
+/** Есть ли у класса пустота (для тестов и UI). */
+export function hasGiantVoid(classId: StarClassId): boolean {
+  return voidLyOf(classId) > 0
 }
 
 /** Евклидово расстояние, св. годы. Диск не заворачивается — метрика прямая. */

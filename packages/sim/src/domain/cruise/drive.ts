@@ -3,6 +3,7 @@ import { CRUISE } from '../../config/cruise'
 import { GRAVITY } from '../../config/bodies'
 import { isHostileTo } from '../ai/targeting'
 import { forward } from '../flight/axes'
+import { speedScaleFactor } from '../scale/scale'
 import type { ShipEntity, World } from '../world/entities'
 
 const _fwd = /* @__PURE__ */ new Vector3()
@@ -18,9 +19,11 @@ const _out = /* @__PURE__ */ new Vector3()
  *     Иначе любой бой кончается мгновенным побегом, и боя нет.
  *
  *  2. ВЫХОД У ЗВЕЗДЫ. Незадолго до зоны притяжения привод начинает обычный
- *     экспоненциальный спад к ×1. Планеты, луны и чёрные дыры его не тормозят.
+ *     экспоненциальный спад к ×1. Планеты и луны привод не тормозят — мимо них
+ *     можно пройти на крейсере, — но КОРА у них твёрдая: `stepBodyCollisions`
+ *     заметает отрезок шага и на фазе (иначе на 29c прошиваешь планету между кадрами).
  *
- *  3. ВНЕ ФАЗЫ. Разогнавшись, корабль не стреляет и не сталкивается.
+ *  3. ВНЕ ФАЗЫ. Разогнавшись, корабль не стреляет и не бьётся о мелочь/станцию.
  *     Лазер, выпущенный на двадцати девяти световых, не догонит собственный ствол.
  */
 
@@ -83,7 +86,7 @@ function starRequiresExit(ship: ShipEntity, world: World, alreadyBraking: boolea
     // При уже начатом выходе держим решение до полной расчётной зоны максимального
     // хода: уменьшающийся каждый шаг тормозной путь не должен включить привод обратно.
     const speed = alreadyBraking
-      ? ship.spec.tuning.MAX_SPEED * CRUISE.MAX_FACTOR
+      ? ship.spec.tuning.MAX_SPEED * CRUISE.MAX_FACTOR * speedScaleFactor(ship.state.scale)
       : ship.state.vel.length()
     const brakingDistance = speed / CRUISE.DECAY_RATE
     if (altitude <= gravityEdge + minimumBuffer + brakingDistance) return true
@@ -91,23 +94,43 @@ function starRequiresExit(ship: ShipEntity, world: World, alreadyBraking: boolea
   return false
 }
 
+/** `false` — отпущен; `true` — разгон к MAX; число — защёлка на этом множителе. */
+export type CruiseWant = boolean | number
+
 /**
  * Шаг привода. Вызывается до физики: он определяет множитель, с которым
  * интегратор посчитает тягу.
  *
- * @param want Игрок держит клавишу крейсера.
+ * @param want Клавиша / защёлка (см. `CruiseWant`).
  */
-export function updateCruise(ship: ShipEntity, world: World, want: boolean, dt: number): void {
+export function updateCruise(ship: ShipEntity, world: World, want: CruiseWant, dt: number): void {
   const cruise = ship.cruise
+
+  // Ретро (Ctrl) рубит форсаж СРАЗУ. Экспоненциальный спад с ×40M — секунды «выхода»,
+  // а пилоту нужен мгновенный обрыв: тормоз важнее удержания пробела в том же кадре.
+  if (ship.controls.retro > 0) {
+    cruise.factor = 1
+    cruise.block = null
+    cruise.engaged = false
+    ship.controls.cruise = 1
+    return
+  }
+
+  const holdAt = typeof want === 'number' && want > 1 ? want : 0
+  const requesting = want === true || holdAt > 0
 
   let target = 1
   let block: CruiseBlock = null
 
-  if (want && ship.alive) {
+  if (requesting && ship.alive) {
     if (massLocked(ship, world)) {
       block = 'mass-lock'
     } else if (starRequiresExit(ship, world, cruise.block === 'proximity')) {
       block = 'proximity'
+    } else if (holdAt > 0) {
+      // Защёлка: множитель СТОИТ, не ползёт к MAX и не тает.
+      target = holdAt
+      cruise.factor = holdAt
     } else {
       target = CRUISE.MAX_FACTOR
     }
@@ -119,9 +142,10 @@ export function updateCruise(ship: ShipEntity, world: World, want: boolean, dt: 
   // скорость роста ≈50 в секунду: за две десятых секунды множитель улетал до 10.
   // Никакого «держишь — постепенно разгоняешься» там не было, был рывок.
   // Умножение на exp(k·dt) даёт постоянное время удвоения: ~8 с до полного хода.
+  // При защёлке factor уже выставлен — ветки ниже no-op (target === factor).
   if (target > cruise.factor) {
     cruise.factor = Math.min(target, cruise.factor * Math.exp(CRUISE.CHARGE_RATE * dt))
-  } else {
+  } else if (target < cruise.factor) {
     // Сбросить ход всегда легче, чем набрать.
     cruise.factor = Math.max(target, cruise.factor * Math.exp(-CRUISE.DECAY_RATE * dt))
   }
@@ -132,6 +156,6 @@ export function updateCruise(ship: ShipEntity, world: World, want: boolean, dt: 
   if (target <= 1 && cruise.factor < CRUISE.IDLE_EPSILON) cruise.factor = 1
 
   cruise.block = block
-  cruise.engaged = want && ship.alive
+  cruise.engaged = requesting && ship.alive
   ship.controls.cruise = cruise.factor
 }

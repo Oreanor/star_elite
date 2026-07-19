@@ -1,6 +1,7 @@
 import { Quaternion, Vector3 } from 'three'
+import { MONOLITH } from '../../config/monoliths'
 import { SALVAGE } from '../../config/weapons'
-import { signed } from '../../core/math'
+import { range, signed } from '../../core/math'
 import type { Rng } from '../../core/math'
 import { addItem, freeCapacity } from '../cargo/hold'
 import { COMMODITIES, itemMass, type CargoItem, type Commodity } from '../cargo/items'
@@ -17,9 +18,17 @@ import { refreshSpec } from '../world/factory'
 const _rel = new Vector3()
 const _nose = new Vector3()
 const _toPod = new Vector3()
+const _jetPos = new Vector3()
 
-function spawnPod(world: World, pos: Vector3, vel: Vector3, item: CargoItem): void {
+function spawnPod(
+  world: World,
+  pos: Vector3,
+  vel: Vector3,
+  item: CargoItem,
+  opts?: { debris?: NonNullable<CargoPodEntity['debris']>; kick?: number },
+): void {
   const rng = world.rng
+  const kick = opts?.kick ?? 9
   const pod: CargoPodEntity = {
     id: world.ids.next(),
     kind: 'pod',
@@ -29,15 +38,38 @@ function spawnPod(world: World, pos: Vector3, vel: Vector3, item: CargoItem): vo
     vel: vel
       .clone()
       .multiplyScalar(SALVAGE.POD_VELOCITY_INHERIT)
-      .add(new Vector3(signed(rng), signed(rng), signed(rng)).multiplyScalar(9)),
+      .add(new Vector3(signed(rng), signed(rng), signed(rng)).multiplyScalar(kick)),
     quat: new Quaternion(),
     spin: new Vector3(signed(rng), signed(rng), signed(rng)).multiplyScalar(0.6),
     item,
     born: world.time,
     alive: true,
     tractored: false,
+    debris: opts?.debris,
   }
   world.pods.push(pod)
+}
+
+/**
+ * Осколок взорванной глыбы двора: руда в трюм, вид — простой камень с текстурой облика.
+ * `kick` сильнее обычного ящика: километровый развал должен разлететься заметно.
+ */
+export function spawnRockDebrisPod(
+  world: World,
+  pos: Vector3,
+  vel: Vector3,
+  shape: number,
+  radius: number,
+  units: number,
+  kick: number,
+): void {
+  spawnPod(
+    world,
+    pos,
+    vel,
+    { kind: 'commodity', commodity: COMMODITIES.MINERALS, units },
+    { debris: { shape, radius }, kick },
+  )
 }
 
 /**
@@ -48,7 +80,7 @@ function spawnPod(world: World, pos: Vector3, vel: Vector3, item: CargoItem): vo
  * и удваивать его в списке значило бы утроить его частоту.
  */
 const LOOT_TABLE: readonly Commodity[] = Object.values(COMMODITIES).filter(
-  (c) => c.id !== COMMODITIES.SCRAP.id,
+  (c) => c.id !== COMMODITIES.SCRAP.id && c.id !== COMMODITIES.FIGURINE.id,
 )
 
 /** Случайная добыча из трюма пирата. `null` — не повезло, трюм был пуст. */
@@ -241,15 +273,53 @@ export function spawnCommodityPods(
 }
 
 /**
- * Выбросить весь груз за борт. Тем же кодом, что высыпает трюм из обломка:
- * приказ «сбрось груз» не должен рождать второй способ терять контейнеры.
+ * Выброс по носу: точка в нескольких метрах впереди, полёт — как у трофея
+ * (контейнер) или осколка глыбы (руда). Тот же `spawnPod`, второй путь не плодим.
+ */
+function spitPodAhead(world: World, ship: ShipEntity, item: CargoItem): void {
+  const dist = range(world.rng, SALVAGE.JETTISON_AHEAD_MIN, SALVAGE.JETTISON_AHEAD_MAX)
+  forward(ship.state.quat, _nose)
+  _jetPos.copy(ship.state.pos).addScaledVector(_nose, dist)
+
+  const ore = item.kind === 'commodity' && item.commodity.id === COMMODITIES.MINERALS.id
+  if (ore) {
+    // Руда — камнем: тот же вид и разлёт, что у осколков двора статуи.
+    spawnPod(world, _jetPos, ship.state.vel, item, {
+      debris: {
+        shape: Math.floor(world.rng() * MONOLITH.ROCK_SHAPES),
+        radius: MONOLITH.ROCK_DEBRIS_RADIUS * (0.7 + world.rng() * 0.6),
+      },
+      kick: MONOLITH.ROCK_DEBRIS_SPEED,
+    })
+    return
+  }
+
+  // Обычный груз / модуль — ящик с тем же kick и кувырком, что трофей с обломка.
+  spawnPod(world, _jetPos, ship.state.vel, item)
+}
+
+/**
+ * Выбросить один предмет трюма в космос контейнером по носу.
+ */
+export function jettisonItem(world: World, ship: ShipEntity, index: number): boolean {
+  if (world.docked) return false
+  const item = ship.hold.items[index]
+  if (!item) return false
+  spitPodAhead(world, ship, item)
+  ship.hold.items.splice(index, 1)
+  refreshSpec(ship)
+  return true
+}
+
+/**
+ * Выбросить весь груз за борт по носу.
  *
  * Пересобираем характеристики: груз имеет массу, масса — ускорения. Освободившийся
  * трюм обязан отразиться на манёвре сразу, а не при следующей стыковке.
  */
 export function jettisonCargo(world: World, ship: ShipEntity): number {
   const dropped = ship.hold.items.length
-  for (const item of ship.hold.items) spawnPod(world, ship.state.pos, ship.state.vel, item)
+  for (const item of ship.hold.items) spitPodAhead(world, ship, item)
   ship.hold.items = []
   if (dropped > 0) refreshSpec(ship)
   return dropped
@@ -266,7 +336,7 @@ export function jettisonWeapons(world: World, ship: ShipEntity): number {
   let dropped = 0
   ship.loadout.weapons = ship.loadout.weapons.map((weapon) => {
     if (!weapon) return null
-    spawnPod(world, ship.state.pos, ship.state.vel, { kind: 'module', module: weapon })
+    spitPodAhead(world, ship, { kind: 'module', module: weapon })
     dropped += 1
     return null
   })

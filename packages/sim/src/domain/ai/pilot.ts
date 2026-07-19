@@ -148,6 +148,12 @@ export const aiController: Controller = {
     // Выучка растягивает время реакции: слабый пилот думает дольше, а не бьёт слабее.
     if (rethink) ai.thinkTimer = AI.THINK_INTERVAL / ai.skill
 
+    // Автобой по обломку/астероиду: не ShipEntity, обычный selectTarget их не видит.
+    if (ai.orderedSoft) {
+      flyOrderedSoft(e, ai, world, dt, rethink)
+      return
+    }
+
     // Побег из системы прыжком: напуганный борт с приводом может уйти совсем.
     // Решение редкое и в такт размышления; пока заряжается — уходит и уязвим.
     // Перебивает весь остальной бой: ему уже не до цели.
@@ -678,5 +684,89 @@ function decideFire(e: ShipEntity, ai: AIState, target: ShipEntity, distance: nu
   // Угловой размер цели падает как 1/d. Стрелять «примерно туда» издали —
   // значит просто греть стволы.
   const angularSize = Math.atan2(target.spec.hull.radius, Math.max(distance, 1))
+  ai.wantsFire = cone < Math.min(AI.FIRE_CONE, angularSize * 2.2)
+}
+
+/** Габарит контейнера для конуса огня — у pod нет hull.radius. Метры. */
+const POD_FIRE_RADIUS = 4
+
+/**
+ * Автобой по обломку или астероиду. Тот же шов ShipControls, но цель — точка с
+ * радиусом, не корабль: без преследования/ракет, только сближение и лазер.
+ */
+function flyOrderedSoft(
+  e: ShipEntity,
+  ai: AIState,
+  world: World,
+  dt: number,
+  rethink: boolean,
+): void {
+  const soft = ai.orderedSoft
+  if (!soft) return
+  const c = e.controls
+  c.rudder = 0
+  c.strafe = 0
+  c.strafeUp = 0
+  c.retro = 0
+  c.boost = 1
+  c.flightAssist = true
+  ai.wantsMissile = false
+  ai.wantsEcm = false
+
+  let pos: Vector3 | null = null
+  let vel: Vector3 | null = null
+  let radius = POD_FIRE_RADIUS
+  if (soft.kind === 'pod') {
+    const pod = world.pods.find((p) => p.id === soft.id && p.alive)
+    if (pod) {
+      pos = pod.pos
+      vel = pod.vel
+    }
+  } else {
+    const rock = world.asteroids.find((a) => a.id === soft.id && a.alive)
+    if (rock) {
+      pos = rock.pos
+      vel = rock.vel
+      radius = rock.radius
+    }
+  }
+
+  if (!pos || !vel) {
+    // Цель пропала — гасим ход; `autofightSpent` снимет пилота на следующем опросе.
+    c.throttle = 0
+    c.pitch = 0
+    c.yaw = 0
+    c.roll = 0
+    return
+  }
+
+  _toTarget.copy(pos).sub(e.state.pos)
+  const distance = _toTarget.length()
+  if (rethink) {
+    if (distance < AI.ENGAGE) setMode(ai, 'attack')
+    else setMode(ai, 'pursue')
+  }
+  updateAimJitter(ai, world, distance, dt)
+
+  // Упреждение по скорости болта — камень и контейнер тоже движутся.
+  const flight = distance / Math.max(GUNNERY.BOLT_SPEED, 1)
+  _aim.copy(pos).addScaledVector(vel, flight).add(ai.aimJitter)
+
+  steerToward(e.state, _aim, 2.2, _steer)
+  c.pitch = _steer.pitch
+  c.yaw = _steer.yaw
+  c.roll = bankToward(e.state, _aim)
+  c.throttle =
+    ai.mode === 'attack'
+      ? distance > AI.ATTACK_SLOW_RANGE
+        ? AI.ATTACK_THROTTLE_FAR
+        : AI.ATTACK_THROTTLE_NEAR
+      : 1
+
+  if (ai.mode !== 'attack' || distance > AI.FIRE_RANGE) return
+  shipAxes(e.state.quat, _fwd, _right, _up)
+  _toTarget.copy(_aim).sub(e.state.pos).normalize()
+  const cone = Math.acos(clamp(_fwd.dot(_toTarget), -1, 1))
+  const angularSize = Math.atan2(radius, Math.max(distance, 1))
   ai.wantsFire = cone < Math.min(AI.FIRE_CONE, angularSize * 2.2)
 }

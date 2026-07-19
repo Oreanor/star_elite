@@ -6,6 +6,7 @@ import { useSession } from '../../app/GameContext'
 import { MOON_DECOR } from '../config'
 import { moonGeometry } from '../geometry/bodies'
 import { moonMaterial } from '../materials/materials'
+import { worldShrink } from '../worldShrink'
 
 /**
  * Мелкие луны: вся свита системы одним вызовом отрисовки.
@@ -62,6 +63,12 @@ export function MoonSwarm({ moons }: { moons: readonly BodyEntity[] }) {
     const mesh = ref.current
     if (!mesh) return
 
+    const shrink = worldShrink(session.world.player.state.scale)
+    if (shrink <= 0) {
+      mesh.count = 0
+      return
+    }
+
     const time = session.world.time
     for (let i = 0; i < moons.length; i++) {
       const body = moons[i]!
@@ -72,7 +79,7 @@ export function MoonSwarm({ moons }: { moons: readonly BodyEntity[] }) {
       _spin.setFromAxisAngle(body.spinAxis, body.spin * time)
       _dummy.quaternion.copy(_spin).multiply(_tilt)
       // Геометрия единичного радиуса — настоящий размер задаёт масштаб.
-      _dummy.scale.setScalar(body.radius)
+      _dummy.scale.setScalar(body.radius * shrink)
       _dummy.updateMatrix()
       mesh.setMatrixAt(i, _dummy.matrix)
     }

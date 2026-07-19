@@ -978,9 +978,9 @@ export function cargoValue(ship: ShipEntity): number {
   return total
 }
 
-/** Прилавок станции. Пока весь каталог: цену и наличие каждого решает рынок. */
+/** Прилавок станции. Каталог без коллекционных статуэток — их только находят в системе. */
 export function commodityStock(): readonly Commodity[] {
-  return Object.values(COMMODITIES)
+  return Object.values(COMMODITIES).filter((c) => c.id !== COMMODITIES.FIGURINE.id)
 }
 
 /** Цена покупки единицы здесь. Выше цены продажи на спред — прилавок не благотворитель. */
@@ -1019,7 +1019,8 @@ export type TradeError = 'no-money' | 'no-room'
  */
 export function canBuyCommodity(world: World, ship: ShipEntity, commodity: Commodity): TradeError | null {
   if (world.credits < commodityBuyPrice(world, commodity)) return 'no-money'
-  if (freeCapacity(ship.hold) < commodity.unitMass) return 'no-room'
+  // Масса 0 (статуэтки) места не занимает.
+  if (commodity.unitMass > 0 && freeCapacity(ship.hold) < commodity.unitMass) return 'no-room'
   return null
 }
 
@@ -1037,7 +1038,10 @@ export function buyCommodity(world: World, ship: ShipEntity, commodity: Commodit
   if (price <= 0 || units <= 0) return 0
 
   const affordable = Math.floor(world.credits / price)
-  const fits = Math.floor(freeCapacity(ship.hold) / commodity.unitMass)
+  const fits =
+    commodity.unitMass <= 0
+      ? units
+      : Math.floor(freeCapacity(ship.hold) / commodity.unitMass)
   const taken = Math.min(units, affordable, fits)
   if (taken <= 0) return 0
 

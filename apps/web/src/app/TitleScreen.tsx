@@ -31,6 +31,7 @@ const KEY_GROUPS: { title: Key; rows: [Key, Key][] }[] = [
       ['key.reversal', 'key.reversal.what'],
       ['key.retro', 'key.retro.what'],
       ['key.cruise', 'key.cruise.what'],
+      ['key.cruiseLatch', 'key.cruiseLatch.what'],
     ],
   },
   {
@@ -39,10 +40,11 @@ const KEY_GROUPS: { title: Key; rows: [Key, Key][] }[] = [
       ['key.fire', 'key.fire.what'],
       ['key.target', 'key.target.what'],
       ['key.nav', 'key.nav.what'],
+      ['key.retarget', 'key.retarget.what'],
       ['key.autofight', 'key.autofight.what'],
       ['key.missile', 'key.missile.what'],
       // Аукс-слот ОДИН, и клавиша одна — E: жмётся то, что в нём стоит (ПРО/бомба/маскировка/
-      // миелофон). Дрон (Q) — капсула, в справку не выносим.
+      // миелофон). Пилон (R) — один тип ракеты за раз (обычная / дрон-ракета).
       ['key.aux', 'key.aux.what'],
     ],
   },

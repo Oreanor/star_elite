@@ -18,7 +18,7 @@ const CROSS_SYS: SystemDef = {
   name: 'Люцифер',
   seed: 1,
   playerStart: [0, 0, 1_000],
-  star: { pos: [0, 0, 0], radius: 1e9, color: 0xffffff },
+  star: { pos: [0, 0, 0], radius: 1e9, color: 0xffffff, massSolar: 1 },
   companion: null,
   dyson: null,
   planets: [],

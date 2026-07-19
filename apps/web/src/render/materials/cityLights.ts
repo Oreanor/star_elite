@@ -56,6 +56,7 @@ uniform float uDensity;
 uniform float uCells;
 uniform float uIntensity;
 uniform float uTerminator;
+uniform float uAirglow;
 
 varying vec3 vLocal;
 varying vec3 vNormal;
@@ -90,8 +91,11 @@ void main() {
   vec3 n = normalize(vNormal);
 
   // Ночь. Мягкий край: у терминатора города зажигаются, а не появляются разом.
-  float night = 1.0 - smoothstep(-uTerminator, uTerminator, dot(n, normalize(uLight)));
-  if (night < 0.01) discard;
+  float nDotL = dot(n, normalize(uLight));
+  float night = 1.0 - smoothstep(-uTerminator, uTerminator, nDotL);
+  // Airglow у терминатора — тонкая полоса, читается даже без городов.
+  float dusk = exp(-nDotL * nDotL * 18.0) * uAirglow;
+  if (night < 0.01 && dusk < 0.004) discard;
 
   /**
    * Города жмутся к экватору: полюса — это лёд. Множитель по широте — не
@@ -154,9 +158,14 @@ void main() {
   // Скользящий взгляд у лимба — города видно с ребра, они тускнеют и сливаются.
   float facing = max(dot(n, normalize(vView)), 0.0);
 
-  float alpha = glow * night * facing * uIntensity;
+  float cities = glow * night * facing * uIntensity;
+  // Полоса терминатора чуть холоднее натрия — иначе сливается с городами.
+  float band = dusk * facing * (0.55 + 0.45 * night);
+  float alpha = cities + band;
   if (alpha < 0.004) discard;
-  gl_FragColor = vec4(uColor * alpha, alpha);
+  vec3 bandCol = mix(uColor, vec3(0.55, 0.72, 1.0), 0.45);
+  vec3 col = uColor * cities + bandCol * band;
+  gl_FragColor = vec4(col, alpha);
 }
 `
 
@@ -170,7 +179,7 @@ export function createCityLightsMaterial(population: number): ShaderMaterial {
   // линейная шкала сделала бы всё, кроме столицы, чёрным.
   const filled = Math.min(1, Math.log10(1 + population) / Math.log10(1 + CITY_LIGHTS.FULL_AT))
 
-  return new ShaderMaterial({
+  const mat = new ShaderMaterial({
     vertexShader: vertex,
     fragmentShader: fragment,
     uniforms: {
@@ -180,6 +189,7 @@ export function createCityLightsMaterial(population: number): ShaderMaterial {
       uCells: { value: CITY_LIGHTS.CELLS },
       uIntensity: { value: CITY_LIGHTS.INTENSITY },
       uTerminator: { value: CITY_LIGHTS.TERMINATOR },
+      uAirglow: { value: CITY_LIGHTS.AIRGLOW },
     },
     transparent: true,
     blending: AdditiveBlending,
@@ -187,4 +197,6 @@ export function createCityLightsMaterial(population: number): ShaderMaterial {
     depthWrite: false,
     fog: false,
   })
+  mat.userData.baseColor = CITY_LIGHTS.COLOR
+  return mat
 }

@@ -40,6 +40,15 @@ export function activeDrones(world: World, owner: ShipEntity): number {
   return count
 }
 
+/** Осталось дронов-ракет в пилонах (тот же R, что у ракет). */
+export function droneAmmo(e: ShipEntity): number {
+  let total = 0
+  e.spec.mounts.forEach((mount, i) => {
+    if (isDrone(mount.weapon)) total += e.guns[i]?.ammo ?? 0
+  })
+  return total
+}
+
 /**
  * Выпустить аппарат с готового контейнера.
  *

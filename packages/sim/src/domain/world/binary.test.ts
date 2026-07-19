@@ -1,12 +1,11 @@
 import { Vector3 } from 'three'
 import { describe, expect, it } from 'vitest'
-import { GRAVITY } from '../../config/bodies'
 import { GALAXY } from '../../config/galaxy'
 import { generateGalaxy } from '../galaxy/generate'
 import { systemDefFor } from '../galaxy/jump'
 import { createWorld } from './index'
 import type { BodyEntity, World } from './entities'
-import { stepOrbits } from './orbits'
+import { starMassSolar, stepOrbits } from './orbits'
 
 /**
  * Двойные звёзды.
@@ -30,8 +29,6 @@ function someBinary(): { index: number; world: World; stars: [BodyEntity, BodyEn
   throw new Error('в галактике нет двойной из двух звёзд')
 }
 
-const starMass = (radius: number): number => GRAVITY.STAR_DENSITY * (4 / 3) * Math.PI * radius ** 3
-
 function wait(world: World, seconds: number): void {
   world.time += seconds
   stepOrbits(world)
@@ -48,8 +45,9 @@ describe('двойные звёзды', () => {
   it('спутник не крупнее главной и не экзотический', () => {
     for (const s of generateGalaxy(GALAXY.SEED)) {
       if (!s.companion) continue
-      // Главной зовут более массивную — значит и более крупную.
+      // Главной зовут более массивную — и радиус, и масса не выше.
       expect(s.companion.radius).toBeLessThanOrEqual(s.star.radius)
+      expect(s.companion.massSolar).toBeLessThanOrEqual(s.star.massSolar)
       // Только главная последовательность: топливо у пары есть у обеих.
       expect(s.companion.scoopable).toBe(true)
     }
@@ -88,10 +86,12 @@ describe('двойные звёзды', () => {
   })
 
   it('центр масс неподвижен, пока пара кружит', () => {
-    const { world, stars } = someBinary()
+    const { world, stars, index } = someBinary()
     const [a, b] = stars
-    const ma = starMass(a.radius)
-    const mb = starMass(b.radius)
+    // Массы — из каталога (massSolar), не ∝ R³: иначе гигант утащил бы барицентр.
+    const sys = generateGalaxy(GALAXY.SEED).find((s) => s.index === index)!
+    const ma = starMassSolar(sys.star.massSolar)
+    const mb = starMassSolar(sys.companion!.massSolar)
 
     const centre = new Vector3()
     const first = new Vector3()

@@ -84,26 +84,31 @@ describe('нагрев у звезды', () => {
     expect(starExposure(world.player, world)).toBeGreaterThan(0.9)
   })
 
-  it('до самого порога корпус ЦЕЛ, а на пороге гибнет МГНОВЕННО (не постепенная течь)', () => {
+  it('до самого порога корпус ЦЕЛ, а на пороге — мгновенная «потеря» (не постепенная течь)', () => {
     const world = quiet()
     place(world, 0.05) // глубоко в короне: облучение максимально, нагрев дойдёт до порога
     const p = world.player
+    const star = world.bodies.find((b) => b.kind === 'star')!
 
-    let destroyedAt = -1
-    for (let i = 0; i < 120 * 60 && p.alive; i++) {
+    let lostAt = -1
+    for (let i = 0; i < 120 * 60 && p.lastLostAt < 0; i++) {
       world.time += DT
       const before = p.hullHeat
       stepStarHeat(p, world, DT)
       // Пока не достигли порога разрушения — ни щит, ни обшивка не тронуты: течи нет вовсе.
-      if (before < STAR_HEAT.DESTROY && p.alive) {
+      if (before < STAR_HEAT.DESTROY && p.lastLostAt < 0) {
         expect(p.shield).toBe(p.spec.hull.shield)
         expect(p.hull).toBe(p.spec.hull.hull)
       }
-      if (!p.alive && destroyedAt < 0) destroyedAt = i
+      if (p.lastLostAt >= 0 && lostAt < 0) lostAt = i
     }
 
-    expect(destroyedAt).toBeGreaterThan(0) // в конце концов сгорел — разом, на пороге
-    expect(p.alive).toBe(false)
+    // Игрок не уходит в Game Over: полные щиты и штамп «корона · звезда».
+    expect(lostAt).toBeGreaterThan(0)
+    expect(p.alive).toBe(true)
+    expect(p.shield).toBe(p.spec.hull.shield)
+    expect(p.hull).toBe(p.spec.hull.hull)
+    expect(p.lastLostHit).toEqual({ kind: 'heat', name: star.name })
   })
 
   it('отвернул — остыл, и потерь корпуса за короткий жар нет', () => {

@@ -21,8 +21,10 @@ export interface Star {
   /** Человекочитаемый класс: «Жёлтый карлик». Не имя — имя у звезды общее с системой. */
   readonly className: string
   readonly color: number
-  /** Радиус в игровых метрах — для 3D-сцены системы. */
+  /** Радиус в каталожных единицах (× SCALE.STAR_RADIUS → метры мира). */
   readonly radius: number
+  /** Масса в массах Солнца. Не ∝ R³: иначе гиганты ломают периоды двойных. */
+  readonly massSolar: number
   /** Можно ли зачерпнуть топливо. Это и есть настоящая цена маршрута. */
   readonly scoopable: boolean
 }

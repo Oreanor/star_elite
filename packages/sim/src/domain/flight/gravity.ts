@@ -1,5 +1,6 @@
 import { Vector3 } from 'three'
 import { GRAVITY } from '../../config/bodies'
+import { MIELOPHONE } from '../../config/mielophone'
 import { isPhased } from '../cruise/drive'
 import { effectiveRadius } from '../scale/scale'
 import type { BodyEntity, ShipEntity, World } from '../world/entities'
@@ -94,6 +95,10 @@ function protectedStationOrbit(ship: ShipEntity, body: BodyEntity, world: World)
 /** Шаг притяжения: добавляет ускорение к скорости корабля. */
 export function stepGravity(ship: ShipEntity, world: World, dt: number): void {
   if (isPhased(ship)) return
+  // С GHOST_BODY effectiveRadius уже системный: «высота» над планетой всегда отрицательна,
+  // тяга не отпускает, камера с лагом — борт «уползает» из кадра. Крупная твердь тут
+  // и так сквозная (GHOST_BODY) — гравитацию гасим тем же порогом.
+  if (ship.state.scale >= MIELOPHONE.GHOST_BODY_SCALE) return
 
   for (const body of world.bodies) {
     if (protectedStationOrbit(ship, body, world)) continue

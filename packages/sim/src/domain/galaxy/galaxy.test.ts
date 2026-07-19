@@ -1,7 +1,14 @@
 import { describe, expect, it } from 'vitest'
-import { CORE_INDEX, GALAXY, HOME_SHAPE, SHAPE } from '../../config/galaxy'
+import {
+  CORE_INDEX,
+  GALAXY,
+  HOME_SHAPE,
+  PLANETS_BY_STAR,
+  SHAPE,
+  STAR_CLASSES,
+} from '../../config/galaxy'
 import { generateGalaxy, generateSystem } from './generate'
-import { distanceLy, galaxyShape, placeSystem } from './shape'
+import { distanceLy, galaxyShape, placeSystem, placeSystemRaw } from './shape'
 import { capitalOf, isInhabited, settledPlanets, stationsOf, systemLife } from './types'
 
 /**
@@ -27,12 +34,9 @@ describe('генерация галактики', () => {
     expect({ ...galaxy[7]!, name: '' }).toEqual({ ...solo, name: '' })
   })
 
-  it('строит COUNT процедурных систем плюс Люцифер, все имена уникальны', () => {
+  it('строит COUNT систем, все имена уникальны', () => {
     const galaxy = generateGalaxy()
-    // COUNT систем из зерна ПЛЮС Люцифер, дописанный в хвост (2501-й, см. LUCIFER.INDEX):
-    // он хардкод поверх генерации, а не одна из COUNT — оттого длина на единицу больше.
-    expect(galaxy).toHaveLength(GALAXY.COUNT + 1)
-    expect(galaxy[GALAXY.COUNT]?.name).toBe('Люцифер')
+    expect(galaxy).toHaveLength(GALAXY.COUNT)
     expect(new Set(galaxy.map((s) => s.name)).size).toBe(galaxy.length)
   })
 })
@@ -159,6 +163,64 @@ describe('инварианты системы', () => {
     for (const s of galaxy.slice(0, 50)) {
       expect(placeSystem(s.index)).toEqual({ x: s.x, y: s.y, z: s.z })
     }
+  })
+
+  it('классы светил: O ≫ M ≫ N по радиусу, масса не из объёма', () => {
+    const byId = (id: string) => STAR_CLASSES.find((c) => c.id === id)!
+    expect(byId('O').radius).toBeGreaterThan(byId('B').radius)
+    expect(byId('B').radius).toBeGreaterThan(byId('A').radius)
+    expect(byId('G').radius).toBeGreaterThan(byId('M').radius)
+    expect(byId('M').radius).toBeGreaterThan(byId('N').radius)
+    // O в ~16 раз крупнее Солнца по радиусу, но не в 4096 раз тяжелее.
+    expect(byId('O').radius / byId('G').radius).toBeGreaterThan(10)
+    expect(byId('O').massSolar / byId('G').massSolar).toBeLessThan(40)
+  })
+
+  it('вокруг O/B — пустота: соседей почти нет внутри voidLy', () => {
+    // Гиганты редки; пузырь вытесняет остальных на край. Инвариант — мало кто
+    // остаётся глубоко внутри (чуть-чуть — дом/другие гиганты, их не двигаем).
+    let inside = 0
+    let giants = 0
+    for (const g of galaxy) {
+      const voidLy = STAR_CLASSES.find((c) => c.id === g.star.class)?.voidLy ?? 0
+      if (voidLy <= 0) continue
+      giants++
+      // Сам гигант остаётся на сыром месте формы — рукав не красят по спектру.
+      expect(placeSystemRaw(g.index)).toEqual({ x: g.x, y: g.y, z: g.z })
+      for (const s of galaxy) {
+        if (s.index === g.index) continue
+        if (distanceLy(g, s) < voidLy * 0.95) inside++
+      }
+    }
+    expect(giants).toBeGreaterThan(0)
+    // На 2500 систем внутри пузырей — единицы (дом, пересечения гигантов), не рой.
+    expect(inside).toBeLessThan(giants * 3)
+  })
+
+  it('тип планеты следует классу звезды: вес 0 — мира нет', () => {
+    for (const s of galaxy) {
+      const weights = PLANETS_BY_STAR[s.star.class]
+      for (const p of s.planets) {
+        expect(weights[p.type]).toBeGreaterThan(0)
+      }
+    }
+  })
+
+  it('у O/B/I/S/R/T/N нет землеподобных и океанов; пустые системы бывают', () => {
+    const barren = new Set(['O', 'B', 'I', 'S', 'R', 'T', 'N'])
+    let empty = 0
+    let supers = 0
+    for (const s of galaxy) {
+      if (s.planets.length === 0 && s.star.class !== 'H') empty++
+      if (s.star.class === 'I' || s.star.class === 'S' || s.star.class === 'R') supers++
+      if (!barren.has(s.star.class)) continue
+      for (const p of s.planets) {
+        expect(p.type).not.toBe('Земного типа')
+        expect(p.type).not.toBe('Океаническая')
+      }
+    }
+    expect(empty).toBeGreaterThan(0)
+    expect(supers).toBeGreaterThan(0)
   })
 
   /**

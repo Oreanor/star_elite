@@ -31,12 +31,13 @@ describe('диспетчер станции', () => {
     if (brief.nearestPopulated) expect(brief.nearestPopulated.populated).toBe(true)
   })
 
-  it('небесный круг берёт станцию на связь (lockedStationId), контакт-захват независим', () => {
+  it('небесный круг берёт станцию на связь и гасит старый контакт', () => {
     const w = world()
     const station = targetableStationsOf(w)[0]!
 
-    // Контакт-захват борта существует сам по себе — небесный круг (Shift+Tab) НЕ должен его сбить.
+    // Был захват борта — Shift+Tab на станцию обязан его сбросить (один фокус).
     w.lockedTargetId = 42
+    w.targetFocus = 'contact'
 
     // Листаем небесные тела по удалению, пока круг не встанет на станцию.
     let guard = 0
@@ -47,7 +48,8 @@ describe('диспетчер станции', () => {
 
     expect(w.navTargetId).toBe(station.id) // станция — точка навигации
     expect(w.lockedStationId).toBe(station.id) // и взята на связь (T → диспетчер)
-    expect(w.lockedTargetId).toBe(42) // борт-контакт не тронут: круги независимы
+    expect(w.lockedTargetId).toBeNull() // старый контакт сброшен
+    expect(w.targetFocus).toBe('nav')
     expect(stationInterlocutor(w)?.id).toBe(station.id)
   })
 })

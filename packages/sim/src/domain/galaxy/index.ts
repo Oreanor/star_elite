@@ -13,7 +13,7 @@ export {
 } from './delta'
 export { driftContacts, contactWhereabouts, shipWhereabouts, type Whereabouts } from './contacts'
 export { galaxyName, moonName, planetName, systemName } from './names'
-export { distanceLy, galaxyShape, placeSystem, type Spot3 } from './shape'
+export { distanceLy, galaxyShape, placeSystem, placeSystemRaw, type Spot3 } from './shape'
 export {
   canDock,
   canRefuel,

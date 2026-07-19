@@ -18,6 +18,7 @@ import {
 import {
   CORE_INDEX,
   GALAXY,
+  STAR_CLASSES,
   arrivalBounds,
   galaxyName,
   galaxyShape,
@@ -31,17 +32,25 @@ import {
   stationsOf,
   systemDefFor,
   systemLife,
-  type Arrival,
   type StarSystem,
   type SystemDef,
   type World,
 } from '@elite/sim'
 import { useSession } from '../../app/GameContext'
 import { useOnlinePlayers } from '../../app/net/presence'
-import { jumping, startDepart } from '../../app/control/jumpFx'
 import { UI } from '../theme'
 import { t, useLang } from '../i18n'
-import { galaxyShapeName, lifeName, properName } from '../i18n/dataNames'
+import { galaxyShapeName, lifeName, properName, starClassName } from '../i18n/dataNames'
+
+/** Каталожный радиус Солнца (класс G) — единица размера на карте. */
+const SOLAR_CATALOG_R = STAR_CLASSES.find((c) => c.id === 'G')!.radius
+
+/** Радиус звезды в R☉ из каталожных единиц генератора. */
+function formatStarSize(catalogRadius: number): string {
+  const r = catalogRadius / SOLAR_CATALOG_R
+  const n = r >= 100 ? String(Math.round(r)) : r >= 10 ? r.toFixed(0) : r >= 1 ? r.toFixed(1) : r.toFixed(2)
+  return t('map.starSize', { n })
+}
 
 /**
  * Карта галактики.
@@ -70,9 +79,9 @@ const LY_PER_PARSEC = 3.26156
  * поле. Настоящая звезда на таком масштабе — точка, и точкой ей и место.
  */
 function starScale(radiusUnits: number): number {
-  // Радиусы классов лежат от 60 (нейтронная) до 2400 (голубой гигант) — это
-  // сорок раз. Корень сжимает разброс: иначе карлики становятся невидимы.
-  return 0.05 + Math.sqrt(radiusUnits / 2400) * 0.18
+  // Радиусы классов — от нейтронной до O; корень сжимает разброс, иначе карлики
+  // пропадают, а гиганты заливают поле. Нормируем на типичный O (~16 R☉).
+  return 0.05 + Math.sqrt(radiusUnits / SOLAR_CATALOG_R / 16) * 0.18
 }
 
 /**
@@ -736,9 +745,11 @@ export function GalaxyMap({ onClose, embedded = false }: { onClose: () => void; 
     setSelected(index)
     // Затаргетились: выбор переживёт закрытие карты и отчаливание. Точку выхода по
     // умолчанию ставим на причал системы (место станции), если он там есть.
+    // Это и есть «цель гиперпрыжка»: HUD метит звезду, H прыгает, когда можно.
     world.jumpTargetIndex = index
     const seat = stationSeat(systemDefFor(index, world.galaxySeed))
     world.jumpArrivalPlanet = seat >= 0 ? seat : null
+    bump()
   }
   const control = useRef({ yaw: 0.6, pitch: 0.5, distance: GALAXY.RADIUS_LY * 2.6, target: new Vector3() })
   const dragging = useRef(false)
@@ -785,15 +796,6 @@ export function GalaxyMap({ onClose, embedded = false }: { onClose: () => void; 
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose, embedded])
-
-  const doJump = (index: number, arrival: Arrival | null) => {
-    // Кино уже идёт — второй запуск пересобрал бы позу на середине. Отсекаем.
-    if (jumping()) return
-    // Не прыгаем мгновенно: запускаем кино отправления и закрываем карту, чтобы мир
-    // снова пошёл. Сам прыжок исполнит постановщик под чёрным экраном.
-    startDepart(session.world, index, arrival)
-    onClose()
-  }
 
   const content = (
     <>
@@ -857,6 +859,11 @@ export function GalaxyMap({ onClose, embedded = false }: { onClose: () => void; 
         >
           <div className="tracking-widest">{picked ? properName(picked.system.name).toUpperCase() : ''}</div>
           <div style={{ color: UI.DIM }}>{picked ? formatRange(picked.distance) : ''}</div>
+          <div style={{ color: UI.DIM }}>
+            {picked
+              ? `${picked.system.star.class} · ${formatStarSize(picked.system.star.radius)}`
+              : ''}
+          </div>
         </div>
 
         {/* Подписи знакомых — по одной на систему с живым контактом. Позицию каждой
@@ -970,7 +977,6 @@ export function GalaxyMap({ onClose, embedded = false }: { onClose: () => void; 
               world.jumpArrivalPlanet = planet
               bump()
             }}
-            onJump={() => doJump(selected, world.jumpArrivalPlanet != null ? { kind: 'body', planet: world.jumpArrivalPlanet } : null)}
             onClose={() => {
               setSelected(null)
               world.jumpTargetIndex = null
@@ -1016,11 +1022,9 @@ export function GalaxyMap({ onClose, embedded = false }: { onClose: () => void; 
 }
 
 /**
- * Плашка выбранной системы — всплывает У КУРСОРА по клику на звезду. Показывает лишь
- * то, ради чего систему выбирают: имя, сколько миров и причалов, до чего дошла жизнь,
- * и СХЕМКУ, где точку выхода ставят ТОЛЬКО у планеты со станцией — в пустоту больше
- * не прыгают. У причала прыжка нет: там только метят цель, а метка переживёт отчаливание;
- * прыгают уже в полёте — кнопкой здесь или клавишей H в кабине.
+ * Плашка выбранной системы — та же, что у причала: имя, миры, жизнь и схемка выхода
+ * у станции. Кнопки прыжка нет нигде: метка пишется в мир и переживает отчаливание;
+ * гипер — только клавишей H в космосе, когда привод и заряд позволяют.
  */
 function SystemPopup({
   system,
@@ -1030,7 +1034,6 @@ function SystemPopup({
   at,
   inline = false,
   onArrival,
-  onJump,
   onClose,
 }: {
   system: StarSystem
@@ -1042,11 +1045,11 @@ function SystemPopup({
   /** Встроена в колонку инфо (статичная карточка), а не всплывает у курсора. */
   inline?: boolean
   onArrival: (planet: number | null) => void
-  onJump: () => void
   onClose: () => void
 }) {
   const def = useMemo(() => systemDefFor(index, world.galaxySeed), [index, world.galaxySeed])
   const core = index === CORE_INDEX
+  // В полёте показываем готовность к H (не кнопку): у причала прыжка нет — только метка.
   const blocked = docked ? null : jumpBlock(world, index)
 
   // Все причалы системы — индексы их планет. Порядок планет в карте и в мире совпадает
@@ -1079,7 +1082,6 @@ function SystemPopup({
       onClick={(e) => e.stopPropagation()}
     >
       <div className="flex gap-4">
-        {/* Слева — данные и действие. */}
         <div className="flex min-w-0 flex-1 flex-col">
           <div className="flex items-start justify-between gap-3">
             <h3 className="text-base leading-tight tracking-[0.2em]">{properName(system.name).toUpperCase()}</h3>
@@ -1089,6 +1091,13 @@ function SystemPopup({
           </div>
 
           <dl className="mt-3 space-y-1 text-sm">
+            <Row
+              label={t('map.class')}
+              value={`${system.star.class} · ${starClassName(system.star)}${
+                system.companion ? ` · ${t('map.binary')}` : ''
+              }`}
+            />
+            <Row label={t('map.size')} value={formatStarSize(system.star.radius)} />
             <Row label={t('map.planets')} value={String(system.planets.length)} />
             <Row label={t('map.stations')} value={String(stations.length)} />
             <Row label={t('map.life')} value={lifeName(systemLife(system))} />
@@ -1097,17 +1106,12 @@ function SystemPopup({
           {core && <p className="mt-3 text-[11px] leading-relaxed" style={{ color: UI.WARN }}>{t('map.core')}</p>}
 
           {!docked && (
-            <button
-              type="button"
-              disabled={blocked !== null}
-              onClick={onJump}
-              className={`mt-auto w-full border py-2 text-sm tracking-[0.3em] transition-colors ${
-                blocked ? 'cursor-not-allowed opacity-40' : 'cursor-pointer hover:bg-[#7fd6ff] hover:text-black'
-              }`}
-              style={{ borderColor: blocked ? UI.DIM : UI.PRIMARY, color: blocked ? UI.DIM : UI.PRIMARY }}
+            <p
+              className="mt-auto pt-3 text-[11px] tracking-widest"
+              style={{ color: blocked ? UI.DIM : UI.PRIMARY }}
             >
               {blocked ? blockLabel(blocked) : core ? t('map.jumpGalaxy') : t('map.jump')}
-            </button>
+            </p>
           )}
         </div>
 

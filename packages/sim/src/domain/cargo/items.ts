@@ -1,3 +1,4 @@
+import { FIGURINE_TITLES } from '../../config/figurines'
 import type { ShipModule } from '../loadout'
 
 /**
@@ -29,6 +30,16 @@ export interface Commodity {
   contraband: boolean
 }
 
+/** Экземпляр статуэтки в трюме: имя, облик и габарит — чтобы выкладка не теряла личность. */
+export interface FigurineSpecimen {
+  /** Ключ из `FIGURINE_TITLES` — канон имени в конфиге. */
+  titleId: string
+  /** Облик GLB (как у мировой сущности). */
+  variant: number
+  /** Габарит, м. */
+  radius: number
+}
+
 export interface CommodityStack {
   kind: 'commodity'
   commodity: Commodity
@@ -44,6 +55,11 @@ export interface CommodityStack {
    * синхронизируется — у каждого своя цена входа.
    */
   costBasis?: number
+  /**
+   * Экземпляры статуэток (`figurine`): длина должна совпадать с `units`.
+   * Без этого бот в переговорах не знает имён и отвечает «[figurine] ×2».
+   */
+  specimens?: FigurineSpecimen[]
 }
 
 export interface ModuleItem {
@@ -67,9 +83,21 @@ export function itemValue(item: CargoItem): number {
 }
 
 export function itemName(item: CargoItem): string {
-  return item.kind === 'commodity'
-    ? `${item.commodity.name} ×${item.units}`
-    : item.module.name
+  if (item.kind === 'module') return item.module.name
+  if (item.commodity.id === 'figurine' && item.specimens && item.specimens.length > 0) {
+    // Имена экземпляров — иначе в журнале/фактах снова «Статуэтка ×2».
+    const titles = item.specimens.map((s) => figurineTitleName(s.titleId))
+    return titles.length === 1 ? titles[0]! : titles.map((n) => `«${n}»`).join(', ')
+  }
+  return `${item.commodity.name} ×${item.units}`
+}
+
+/** Каноническое имя статуэтки по id; неизвестный ключ — общее «Статуэтка». */
+export function figurineTitleName(titleId: string): string {
+  for (const t of FIGURINE_TITLES) {
+    if (t.id === titleId) return t.name
+  }
+  return 'Статуэтка'
 }
 
 /**
@@ -92,4 +120,18 @@ export const COMMODITIES = {
   SLAVES: { id: 'slaves', name: 'Рабы', description: 'Живой груз. Вне закона в цивилизованных мирах — оттого и в цене.', unitMass: 1, basePrice: 1240, tier: 3, contraband: true },
   LUXURIES: { id: 'luxuries', name: 'Роскошь', description: 'Редкости для тех, кому некуда девать деньги. Малый вес, крупный навар.', unitMass: 0.5, basePrice: 1850, tier: 12, contraband: false },
   NARCOTICS: { id: 'narcotics', name: 'Наркотики', description: 'Запрещённая химия. Дорога, компактна и пахнет штрафом.', unitMass: 0.4, basePrice: 2900, tier: 9, contraband: true },
+  /**
+   * Статуэтка богов — коллекционная реликвия с орбиты системы.
+   * Масса 0: в трюме не весит. Не путать с монолитами у причала.
+   */
+  FIGURINE: {
+    id: 'figurine',
+    name: 'Статуэтка',
+    description:
+      'Статуэтка богов: исполинская реликвия, сжатая в трюм. Их собирают по всей галактике — престиж и суеверие. Не путать с монолитами у причала.',
+    unitMass: 0,
+    basePrice: 5000,
+    tier: 12,
+    contraband: false,
+  },
 } as const satisfies Record<string, Commodity>

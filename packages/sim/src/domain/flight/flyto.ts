@@ -1,17 +1,23 @@
 import { Vector3 } from 'three'
+import { GALAXY_FLIGHT } from '../../config/galaxy'
+import { MIELOPHONE } from '../../config/mielophone'
 import { AUTOPILOT } from '../../config/station'
 import { CRUISE } from '../../config/cruise'
 import { clamp } from '../../core/math'
+import { placeSystem } from '../galaxy/shape'
 import type { Controller } from '../sim/controller'
+import { galaxyAnchorLocal, metersPerLy, speedScaleFactor } from '../scale/scale'
 import type { ShipEntity, World } from '../world/entities'
-import { findBody, findShip } from '../world/queries'
+import { findShip, navTarget } from '../world/queries'
 import { steerToward } from './steering'
 
 /**
  * Автопилот-НА-ЦЕЛЬ. Третий режим рядом с автостыковкой и автобоем: «лети к тому,
- * что захвачено» — борту (`lockedTargetId`) или станции (`lockedStationId`). В отличие
- * от автостыковки он не заходит в створ и не садится, а просто подводит нос к цели,
- * тормозит у неё и возвращает штурвал (см. `flyToArrived`).
+ * что в фокусе» — последний перебор. Tab (`targetFocus: contact`) → захваченный борт;
+ * Shift+Tab / карта (`targetFocus: nav`) → нав-тело или статуя; на галактическом
+ * масштабе Tab пишет `jumpTargetIndex` (захват системы недоступен) — J ведёт туда.
+ * В отличие от автостыковки он не заходит в створ и не садится, а просто подводит
+ * нос к цели, тормозит у неё и возвращает штурвал (см. `flyToArrived`).
  *
  * Это ОБЫЧНЫЙ Controller — тот же шов, что автостыковка: заполняет тот же `ShipControls`,
  * не зная физики, и не может ни разогнаться сверх паспорта, ни развернуться быстрее
@@ -22,6 +28,8 @@ import { steerToward } from './steering'
  *  — на дальнем ПРЯМОМ перегоне он просит ФОРСАЖ (`wantsCruise`), иначе до планеты в
  *    полумиллиарде метров он ползёт боевыми 220 м/с десятки минут;
  *  — курс ОГИБАЕТ тела на пути (`aimAround`), а не идёт носом сквозь звезду или планету.
+ * К галактической звезде — тоже форсаж на дальнем плече; тормоз режем по BRAKE_LY
+ * (системный путь ×40M·scale длиннее св.года кадра — иначе крейсер никогда не включится).
  */
 
 const _toTarget = new Vector3()
@@ -33,14 +41,62 @@ const _lateral = new Vector3()
 const _perp = new Vector3()
 const _nose = new Vector3()
 const _aim = new Vector3()
+const _jumpPos = new Vector3()
+const _anchor = new Vector3()
 
-/** Куда ведём: позиция захваченного борта (живого) или станции. null — вести некуда. */
-function targetPos(world: World): Vector3 | null {
+type Dest = {
+  pos: Vector3
+  radius: number
+  bodyId: number | null
+  /** Галактический перегон: мягкий газ, без крейсера, прибытие в св.г. */
+  galaxy: boolean
+}
+
+/**
+ * Мировая (локальная) точка выбранной звезды галактики.
+ * Оси как у слоя: мир(x,y,z) ← ly(x,z,y). Якорь — true-coords слоя или своя звезда.
+ */
+function jumpStarDestination(world: World): Dest | null {
+  const idx = world.jumpTargetIndex
+  if (idx == null || idx === world.systemIndex) return null
+  // Ниже GHOST_BODY св.годы в метрах абсурдны — J там про нав/контакт.
+  if (world.player.state.scale < MIELOPHONE.GHOST_BODY_SCALE) return null
+
+  const origin = placeSystem(world.systemIndex, world.galaxySeed)
+  const star = placeSystem(idx, world.galaxySeed)
+  const mPerLy = metersPerLy(world.player.state.scale)
+  const dx = (star.x - origin.x) * mPerLy
+  const dy = (star.z - origin.z) * mPerLy
+  const dz = (star.y - origin.y) * mPerLy
+
+  galaxyAnchorLocal(world, _anchor)
+  _jumpPos.set(_anchor.x + dx, _anchor.y + dy, _anchor.z + dz)
+  // radius = зона прибытия: approachDist дойдёт до 0 за ARRIVE_LY до точки.
+  return { pos: _jumpPos, radius: GALAXY_FLIGHT.ARRIVE_LY * mPerLy, bodyId: null, galaxy: true }
+}
+
+/** Куда ведём и какой «поверхностный» радиус цели (у борта — 0: точка). null — вести некуда. */
+function destination(world: World): Dest | null {
+  // Галактика: Tab/карта → jumpTarget. Захвата системы нет — это и есть «цель» для J.
+  const jump = jumpStarDestination(world)
+  if (jump) return jump
+
+  // Фокус — единственный ответ «куда J»: захваты независимы, иначе пират перебивает планету.
+  if (world.targetFocus === 'nav') {
+    const nav = navTarget(world)
+    if (!nav) return null
+    return { pos: nav.pos, radius: nav.radius, bodyId: nav.id, galaxy: false }
+  }
   const ship = findShip(world, world.lockedTargetId)
-  if (ship && ship !== world.player && ship.alive) return ship.state.pos
-  const station = findBody(world, world.lockedStationId)
-  if (station) return station.pos
+  if (ship && ship !== world.player && ship.alive) {
+    return { pos: ship.state.pos, radius: 0, bodyId: null, galaxy: false }
+  }
   return null
+}
+
+/** Дистанция до «зоны прибытия»: у тела — до поверхности, у борта — до центра. */
+function approachDist(from: Vector3, dest: { pos: Vector3; radius: number }): number {
+  return Math.max(0, from.distanceTo(dest.pos) - dest.radius)
 }
 
 /**
@@ -52,7 +108,13 @@ function targetPos(world: World): Vector3 | null {
  * Возвращает `true`, если путь перекрыт (аим уведён): по нему `wantsCruise` глушит форсаж —
  * сверхсвет в обход планеты недопустим.
  */
-function aimAround(ship: ShipEntity, world: World, dest: Vector3, out: Vector3): boolean {
+function aimAround(
+  ship: ShipEntity,
+  world: World,
+  dest: Vector3,
+  skipBodyId: number | null,
+  out: Vector3,
+): boolean {
   out.copy(dest)
   const pos = ship.state.pos
   _dir.copy(dest).sub(pos)
@@ -63,7 +125,7 @@ function aimAround(ship: ShipEntity, world: World, dest: Vector3, out: Vector3):
   let nearest = Infinity
   let blocked = false
   for (const body of world.bodies) {
-    if (body.id === world.lockedStationId) continue // это и есть цель, не препятствие
+    if (skipBodyId !== null && body.id === skipBodyId) continue // это и есть цель, не препятствие
     _toBody.copy(body.pos).sub(pos)
     const along = _toBody.dot(_dir)
     if (along <= 0 || along >= dist) continue // тело позади борта или дальше цели
@@ -88,6 +150,18 @@ function aimAround(ship: ShipEntity, world: World, dest: Vector3, out: Vector3):
   return blocked
 }
 
+/** Газ к галактической звезде: доля потолка от дистанции в св.г, без полного хода. */
+function galaxyThrottle(distanceM: number, scale: number): number {
+  const mPerLy = metersPerLy(scale)
+  const distLy = distanceM / mPerLy
+  if (distLy <= 0) return 0
+  if (distLy >= GALAXY_FLIGHT.BRAKE_LY) return GALAXY_FLIGHT.THROTTLE_CRUISE
+  // Линейно от CRUISE на BRAKE_LY к CREEP на ARRIVE (ARRIVE уже вычтен в approachDist).
+  const t = distLy / GALAXY_FLIGHT.BRAKE_LY
+  return GALAXY_FLIGHT.THROTTLE_CREEP
+    + t * (GALAXY_FLIGHT.THROTTLE_CRUISE - GALAXY_FLIGHT.THROTTLE_CREEP)
+}
+
 export const flyToController: Controller = {
   update(ship: ShipEntity, world: World): void {
     const c = ship.controls
@@ -99,41 +173,46 @@ export const flyToController: Controller = {
     c.retro = 0
     c.flightAssist = true
 
-    const dest = targetPos(world)
+    const dest = destination(world)
     if (!dest) {
       c.throttle = 0
       return
     }
 
-    _toTarget.copy(dest).sub(ship.state.pos)
-    const distance = _toTarget.length()
+    const distance = approachDist(ship.state.pos, dest)
 
     // Нос — на ТОЧКУ ОБХОДА (она же цель, когда путь свободен). Упреждение не берём:
     // автопилот доставляет к точке, а не бьёт по ней; подравняться под ход цели можно
     // и вручную, забрав штурвал по прибытии.
-    aimAround(ship, world, dest, _aim)
+    aimAround(ship, world, dest.pos, dest.bodyId, _aim)
     steerToward(ship.state, _aim, 2.2, _steer)
     c.pitch = _steer.pitch
     c.yaw = _steer.yaw
 
     const speed = ship.state.vel.length()
+    _toTarget.copy(dest.pos).sub(ship.state.pos)
 
-    // Дошли — паркуемся: гасим ход у цели, дальше штурвал заберёт Simulation по flyToArrived.
-    if (distance <= AUTOPILOT.ARRIVE_RANGE) {
+    // Дошли — паркуемся. У галактики radius уже = ARRIVE_LY·м/св.г → distance≤0 в зоне.
+    const arrived = dest.galaxy ? distance <= 0 : distance <= AUTOPILOT.ARRIVE_RANGE
+    if (arrived) {
       c.throttle = 0
       if (speed > AUTOPILOT.PARK_SPEED && _toTarget.dot(ship.state.vel) > 0) c.retro = 1
       return
     }
 
-    // Скорость подхода падает с дистанцией — иначе автопилот влетает в цель на паспортных
-    // сотнях метров в секунду. Тяга — доля потолка: лётный компьютер подтянет саму скорость.
-    const wanted = clamp(
-      (distance / AUTOPILOT.BRAKE_RANGE) * AUTOPILOT.APPROACH_SPEED,
-      AUTOPILOT.CREEP_SPEED,
-      AUTOPILOT.APPROACH_SPEED,
-    )
-    const cap = Math.max(ship.spec.tuning.MAX_SPEED, 1)
-    c.throttle = clamp(wanted / cap, 0, 1)
+    if (dest.galaxy) {
+      c.throttle = galaxyThrottle(distance, ship.state.scale)
+    } else {
+      // Скорость подхода падает с дистанцией — иначе автопилот влетает в цель на паспортных
+      // сотнях метров в секунду. Тяга — доля потолка: лётный компьютер подтянет саму скорость.
+      const wanted = clamp(
+        (distance / AUTOPILOT.BRAKE_RANGE) * AUTOPILOT.APPROACH_SPEED,
+        AUTOPILOT.CREEP_SPEED,
+        AUTOPILOT.APPROACH_SPEED,
+      )
+      const cap = Math.max(ship.spec.tuning.MAX_SPEED, 1)
+      c.throttle = clamp(wanted / cap, 0, 1)
+    }
 
     // Летим не туда, куда смотрит нос (проскочили, инерция) — гасим тягу и доворачиваемся.
     if (speed > AUTOPILOT.PARK_SPEED && _toTarget.dot(ship.state.vel) < 0) {
@@ -148,45 +227,54 @@ export const flyToController: Controller = {
   },
 
   /**
-   * Форсаж на автоследовании — только на дальнем ПРЯМОМ перегоне и под тройной охраной:
-   * есть место затормозить, нос наведён, путь чист. `updateCruise` добавит свои запреты
-   * (массовая блокировка врагом, выход у звезды) — этот метод лишь ПРОСИТ разгон.
+   * Форсаж на автоследовании — на дальнем ПРЯМОМ перегоне (система и галактика).
+   * Охрана: место затормозить, нос наведён; в системе ещё путь чист от тел.
+   * `updateCruise` добавит массовую блокировку / выход у звезды — здесь лишь просьба.
    */
   wantsCruise(ship: ShipEntity, world: World): boolean {
-    const dest = targetPos(world)
+    const dest = destination(world)
     if (!dest) return false
-    _toTarget.copy(dest).sub(ship.state.pos)
-    const distance = _toTarget.length()
+    const distance = approachDist(ship.state.pos, dest)
+    if (distance <= 0) return false
 
-    // Хватает ли места погасить крейсерский ход до цели (тормозной путь ≈ v/DECAY_RATE).
-    const cruiseSpeed = ship.spec.tuning.MAX_SPEED * CRUISE.MAX_FACTOR
-    const brakeDist = cruiseSpeed / CRUISE.DECAY_RATE
-    if (distance <= brakeDist * AUTOPILOT.CRUISE_BRAKE_MARGIN) return false
+    if (dest.galaxy) {
+      // Тормозной путь крейсера ∝ scale превышает ly кадра — режем по BRAKE_LY.
+      const distLy = distance / metersPerLy(ship.state.scale)
+      if (distLy <= GALAXY_FLIGHT.BRAKE_LY * AUTOPILOT.CRUISE_BRAKE_MARGIN) return false
+    } else {
+      const cruiseSpeed =
+        ship.spec.tuning.MAX_SPEED * CRUISE.MAX_FACTOR * speedScaleFactor(ship.state.scale)
+      const brakeDist = cruiseSpeed / CRUISE.DECAY_RATE
+      if (distance <= brakeDist * AUTOPILOT.CRUISE_BRAKE_MARGIN) return false
+    }
 
     // Нос уже на цели — иначе сверхсвет уносит боком. Нос корабля смотрит в −Z.
+    _toTarget.copy(dest.pos).sub(ship.state.pos)
+    const raw = _toTarget.length()
     _nose.set(0, 0, -1).applyQuaternion(ship.state.quat)
-    _dir.copy(_toTarget).multiplyScalar(1 / Math.max(distance, 1))
+    _dir.copy(_toTarget).multiplyScalar(1 / Math.max(raw, 1))
     if (_nose.dot(_dir) < AUTOPILOT.CRUISE_ALIGN) return false
 
-    // Прямой путь свободен от тел — крейсер не рулит в обход планеты.
-    if (aimAround(ship, world, dest, _aim)) return false
+    // В системе — не крейсерить в обход планеты. У галактики тел на луче нет.
+    if (!dest.galaxy && aimAround(ship, world, dest.pos, dest.bodyId, _aim)) return false
     return true
   },
 }
 
-/** Есть ли куда вести: захвачен живой борт или станция, игрок жив и не пристыкован. */
+/** Есть ли куда вести: есть цель в фокусе (или звезда галактики), игрок жив и не пристыкован. */
 export function canEngageFlyTo(world: World): boolean {
   if (!world.player.alive || world.docked) return false
-  return targetPos(world) !== null
+  return destination(world) !== null
 }
 
 /**
  * Пора ли вернуть штурвал: цель пропала (сменил захват, борт погиб) или мы уже у неё
- * (в пределах ARRIVE_RANGE). Дистанция, а не время: за уходящей целью автопилот гнался бы,
- * пока сам не долетит или пока ей не поставят точку.
+ * (в пределах ARRIVE_RANGE от поверхности/точки). Дистанция, а не время: за уходящей
+ * целью автопилот гнался бы, пока сам не долетит или пока ей не поставят точку.
  */
 export function flyToArrived(world: World): boolean {
-  const dest = targetPos(world)
+  const dest = destination(world)
   if (!dest) return true
-  return dest.distanceTo(world.player.state.pos) <= AUTOPILOT.ARRIVE_RANGE
+  if (dest.galaxy) return approachDist(world.player.state.pos, dest) <= 0
+  return approachDist(world.player.state.pos, dest) <= AUTOPILOT.ARRIVE_RANGE
 }

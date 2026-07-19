@@ -6,6 +6,7 @@ import { useSession } from '../../app/GameContext'
 import { asteroidShapes } from '../geometry/rocks'
 import { rockMaterial, rockTexturedMaterial } from '../materials/materials'
 import { loadRockTexture } from '../materials/rockTextures'
+import { worldShrink } from '../worldShrink'
 
 /**
  * Пояс астероидов: по одному InstancedMesh на каждую форму.
@@ -35,6 +36,13 @@ function ShapeBatch({ shapeIndex }: { shapeIndex: number }) {
     const mesh = ref.current
     if (!mesh) return
 
+    // С галактикой пояс исчезает вместе с планетами (worldShrink → 0).
+    const shrink = worldShrink(session.world.player.state.scale)
+    if (shrink <= 0) {
+      mesh.count = 0
+      return
+    }
+
     let count = 0
     for (const rock of session.world.asteroids) {
       if (rock.shape !== shapeIndex || count >= MAX_PER_SHAPE) continue
@@ -42,7 +50,7 @@ function ShapeBatch({ shapeIndex }: { shapeIndex: number }) {
       _dummy.position.copy(rock.pos)
       _dummy.quaternion.copy(rock.quat)
       // Геометрия единичного радиуса — настоящий размер задаёт масштаб.
-      _dummy.scale.setScalar(rock.radius)
+      _dummy.scale.setScalar(rock.radius * shrink)
       _dummy.updateMatrix()
       mesh.setMatrixAt(count, _dummy.matrix)
       count++

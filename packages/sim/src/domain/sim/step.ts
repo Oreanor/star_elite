@@ -2,6 +2,7 @@ import { Quaternion, Vector3 } from 'three'
 import { WARP } from '../../config/ai'
 import { CONTACTS } from '../../config/contacts'
 import { PHYSICS } from '../../config/physics'
+import { raySphere } from '../../core/math'
 import { BOMB, GUNNERY, SALVAGE } from '../../config/weapons'
 import { ASTEROID, DEBRIS, SCORE } from '../../config/world'
 import { SHIELD } from '../../config/station'
@@ -16,12 +17,12 @@ import {
   fireLasers,
   fireMissile,
   bounceOffShield,
+  bounceOffSolid,
   isDroneShip,
   launchDrone,
   regenAux,
   regenEnergy,
   regenShield,
-  resolveShipVsShip,
   resolveShipVsSphere,
   scoopAsteroid,
   shatter,
@@ -33,6 +34,7 @@ import {
   stepStarHeat,
   stepMissiles,
   stepBolts,
+  surviveLethal,
   toggleCloak,
   tractorPods,
   tryScoop,
@@ -42,10 +44,25 @@ import { hasBomb, hasEcm } from '../loadout'
 import { MIELOPHONE } from '../../config/mielophone'
 import { effectiveRadius, stepScale } from '../scale/scale'
 import { stepGravity } from '../flight/gravity'
-import { landShip, stepAutoland, stepLanding } from '../flight/landing'
+import {
+  findLandable,
+  isLandableAsteroid,
+  landOnSurface,
+  landShip,
+  meshSolidRadius,
+  stepAutoland,
+  stepLanding,
+} from '../flight/landing'
 import { stepShip } from '../flight/model'
 import { stepDocking } from '../station/docking'
-import type { ShipEntity, World } from '../world/entities'
+import type { CrashHit, ShipEntity, World } from '../world/entities'
+import {
+  canAttractFigurine,
+  figurineDisplayName,
+  scoopFigurinesNear,
+  tractorFigurines,
+} from '../world/figurines'
+import { isNavBeltAsteroid, MONOLITH_NAMES, pruneGiantScaleLocks } from '../world/queries'
 import { stepOrbits } from '../world/orbits'
 import { maybeShiftOrigin } from '../world/origin'
 import { markContactLost } from '../world/acquaintance'
@@ -120,9 +137,9 @@ export function stepWorld(world: World, frameDt: number, controllers: Controller
     // Болты летят и заметают отрезок ПОСЛЕ движения кораблей и ракет этого шага:
     // попадание считается по свежим позициям целей, а не по вчерашним.
     stepBolts(world, dt)
-    stepCollisions(world)
+    stepCollisions(world, dt)
     stepShipCollisions(world)
-    stepBodyCollisions(world)
+    stepBodyCollisions(world, dt)
     stepScooping(world, controllers, dt)
     stepDocking(world)
   }
@@ -163,12 +180,12 @@ function stepPhysics(world: World, dt: number): void {
     if (ship.warpEmerging || ship.warpDeparting) continue
     if (stepAutoland(ship, world, dt)) {
       // Непрерываемая автопосадка ведёт корабль вниз сама: ни гравитации, ни интегратора.
-    } else if (!stepLanding(ship, world)) {
+    } else if (!stepLanding(ship, world, dt)) {
       stepGravity(ship, world, dt)
       stepShip(ship.state, ship.controls, ship.spec.tuning, dt)
       // Миелофон: рост/усадка масштаба от сигнала. До столкновений — они считаются по
       // свежему размеру этого шага.
-      stepScale(ship, dt)
+      stepScale(ship, dt, world)
     }
     // Нагрев звездой ДО регенерации щита: если корона течёт, `applyDamage`
     // пометит попадание, и щит в этом же шаге восстанавливаться не станет.
@@ -216,7 +233,6 @@ function stepWeapons(world: World, controllers: ControllerMap, dt: number): void
     }
 
     if (controller.wantsBomb?.(ship, world) && hasBomb(ship.loadout)) fireBomb(world, ship)
-    if (controller.wantsDrone?.(ship, world)) launchDrone(world, ship)
 
     // На крейсерском ходу корабль вне фазы: лазер с относительной скоростью
     // 20 км/с — не оружие, а недоразумение.
@@ -225,9 +241,10 @@ function stepWeapons(world: World, controllers: ControllerMap, dt: number): void
     const hostile = ship.faction !== 'player'
     if (controller.wantsFire(ship, world)) fireLasers(world, ship, hostile)
 
+    // Пилон: экипирован один тип за раз — обычная ракета или дрон-ракета. Одна клавиша.
     if (controller.wantsMissile?.(ship, world)) {
       const target = ship === world.player ? world.lockedTargetId : world.player.id
-      fireMissile(world, ship, target)
+      if (!fireMissile(world, ship, target)) launchDrone(world, ship)
     }
   }
 }
@@ -256,19 +273,62 @@ function stepAsteroids(world: World, dt: number): void {
   }
 }
 
-function stepCollisions(world: World): void {
+/** Игроку — штамп и цель для жёлтого «КРУШЕНИЕ» (HUD держит плашку, пока толкаем). */
+function noteCrash(world: World, ship: ShipEntity, hit: CrashHit): void {
+  if (ship !== world.player) return
+  ship.lastCrashAt = world.time
+  ship.lastCrashHit = hit
+}
+
+/** Неуправляемый удар о твердь: отскок без урона + пуш игроку. */
+function crashBounce(
+  world: World,
+  ship: ShipEntity,
+  center: Vector3,
+  radius: number,
+  dt: number,
+  hit: CrashHit,
+): void {
+  bounceOffSolid(ship, center, radius, dt)
+  noteCrash(world, ship, hit)
+}
+
+function stepCollisions(world: World, dt: number): void {
   for (const ship of allShips(world)) {
     if (!ship.alive) continue
     // Кинематический борт не толкаем: его положение авторитетно из внешнего источника.
     if (ship.kinematic) continue
-    // Вне фазы: на 20 км/с шаг физики — 165 м, больше любого астероида.
-    // Столкновение всё равно не сработало бы — корабль пролетел бы насквозь.
-    if (isPhased(ship)) continue
+    // С GHOST_BODY весь пояс сквозной (как планеты). Ниже при росте — только нав-гиганты.
+    if (ship.state.scale >= MIELOPHONE.GHOST_BODY_SCALE) continue
+    const grown = ship.state.scale > 1
 
     for (const a of world.asteroids) {
       if (!a.alive) continue
-      const reach = a.radius + effectiveRadius(ship)
-      if (a.pos.distanceToSquared(ship.state.pos) > reach * reach) continue
+      // Вырос — мелочь пояса сквозная; твердь только у Shift+Tab-гиганта.
+      if (grown && !isNavBeltAsteroid(a)) continue
+      // Крупный камень твёрдый и в крейсере. Мелочь на сверхсвете не ловим:
+      // шаг больше камня, и ловить незачем.
+      const landable = isLandableAsteroid(a, ship)
+      if (isPhased(ship) && !landable) continue
+      // Посадочная глыба: твердь ближе к текстуре, чем bounding sphere меша.
+      const hitR = landable ? meshSolidRadius(a.radius) : a.radius
+      if (!hitsBodySphere(ship, a.pos, hitR, dt)) continue
+
+      // Уже на ховере над этим камнем — сфера сама держит высоту.
+      if (ship.landedOn?.bodyId === a.id) continue
+      // Автозаход дошёл до тверди раньше HOVER — включаем стоянку.
+      if (ship.autoland === a.id) {
+        const surface = findLandable(world, a.id, ship)
+        if (surface) landOnSurface(ship, surface)
+        ship.autoland = null
+        continue
+      }
+
+      // Посадочная глыба — отскок без урона (как статуя), не таран с расколом.
+      if (landable) {
+        crashBounce(world, ship, a.pos, hitR, dt, { kind: 'asteroid', name: '' })
+        continue
+      }
 
       // Мелкий камень уходит в трюм — если там есть место. Тогда удара не было вовсе.
       // Черпает только игрок: боту руда не нужна, а корёжить его о камни — нужно.
@@ -278,6 +338,8 @@ function stepCollisions(world: World): void {
       const impact = resolveShipVsSphere(
         ship, a.pos, a.vel, a.radius, a.radius * ASTEROID.MASS_PER_RADIUS, world.time,
       )
+      // Пуш и при росте (миелофон): урон гиганту не идёт, но «не разбивает» должно быть видно.
+      noteCrash(world, ship, { kind: 'asteroid', name: '' })
 
       /**
        * Настоящий удар колет камень. Касание — нет.
@@ -293,48 +355,54 @@ function stepCollisions(world: World): void {
 }
 
 /**
- * Столкновения кораблей друг с другом — нужны только миелофону: выросший борт давит
- * мелочь, сам почти цел. Пока гиганта в системе нет, весь проход пропускается, и обычные
- * корабли остаются сквозными, как были (бой — это манёвр, а не бильярд). Пара считается,
- * лишь если в ней есть выросший борт: два обычных корабля друг о друга не бьются.
+ * Столкновения корабль↔корабль отключены при росте: борта — Tab-контакты, не Shift+Tab.
+ * При scale>1 твердь только у небесных/нав-целей (планеты, станции, глыбы…).
+ * Обычный масштаб (1) и так сквозной — бой манёвром, не бильярдом.
  */
-function stepShipCollisions(world: World): void {
-  const ships = allShips(world)
-
-  // Дёшево отсекаем весь проход, пока никто не вырос.
-  let anyBig = false
-  for (const s of ships) {
-    if (s.state.scale > MIELOPHONE.COLLIDE_MIN_SCALE) {
-      anyBig = true
-      break
-    }
-  }
-  if (!anyBig) return
-
-  for (let i = 0; i < ships.length; i++) {
-    const a = ships[i]!
-    if (!a.alive || isPhased(a)) continue
-    for (let j = i + 1; j < ships.length; j++) {
-      const b = ships[j]!
-      if (!b.alive || isPhased(b)) continue
-      // Оба кинематические (два чужих игрока по сети) — двигать физикой некого, пропускаем.
-      // А пару, где ОДИН кинематический, решаем: он служит стеной, другого выталкивает
-      // (иначе гигант проваливался бы сквозь чужой борт — тот был пропущен целиком).
-      if (a.kinematic && b.kinematic) continue
-      // Сталкиваются только пары, где есть гигант.
-      if (Math.max(a.state.scale, b.state.scale) <= MIELOPHONE.COLLIDE_MIN_SCALE) continue
-      resolveShipVsShip(a, b, world.time)
-    }
-  }
+function stepShipCollisions(_world: World): void {
+  // Раньше гигант давил мелочь — при любом росте это только мешало.
 }
 
 /** Точка контакта корабля с полем станции — для вспышки. Горячий путь, без аллокаций. */
 const _shieldContact = /* @__PURE__ */ new Vector3()
+const _bodyPrev = /* @__PURE__ */ new Vector3()
+const _bodyDir = /* @__PURE__ */ new Vector3()
+
+/**
+ * Касание сферы за шаг: точка сейчас ИЛИ отрезок «где был → где стал».
+ *
+ * На полном крейсере шаг — десятки тысяч км; точечная проверка пропускает целую
+ * планету между кадрами. Заметание закрывает туннель: поверхность остаётся твёрдой
+ * и на сверхсвете.
+ */
+function hitsBodySphere(
+  ship: ShipEntity,
+  center: Vector3,
+  radius: number,
+  dt: number,
+): boolean {
+  const reach = radius + effectiveRadius(ship)
+  if (center.distanceToSquared(ship.state.pos) <= reach * reach) return true
+
+  const speed = ship.state.vel.length()
+  if (speed * dt < 1e-6) return false
+
+  // Где были в начале шага (интегратор уже сдвинул pos).
+  _bodyPrev.copy(ship.state.pos).addScaledVector(ship.state.vel, -dt)
+  _bodyDir.copy(ship.state.pos).sub(_bodyPrev)
+  const span = _bodyDir.length()
+  if (span < 1e-9) return false
+  _bodyDir.multiplyScalar(1 / span)
+  const t = raySphere(_bodyPrev, _bodyDir, center, reach)
+  return t >= 0 && t <= span
+}
+
 /**
  * Столкновение с крупным телом.
  *
- * Планета и луна принимают корабль на поверхность при любом касании. Звезда
- * сжигает без отскока, а чёрная дыра не имеет твёрдой сферы вообще.
+ * Планета и луна — твёрдая кора: даже в крейсере (иначе на 29c пролетаешь насквозь
+ * между шагами). Неуправляемый контакт — отскок без урона; сесть — только по L.
+ * Звезда сжигает без отскока, чёрная дыра сферы не имеет.
  *
  * Станция — другое дело: врезаться в неё НЕЛЬЗЯ. У поверхности стоит защитное поле,
  * и корабль без допуска отпружинивает от него назад, теряя ход (голубая вспышка, без
@@ -342,62 +410,112 @@ const _shieldContact = /* @__PURE__ */ new Vector3()
  * автостыковка по L, ведущая корабль коридором колец. Тарану дорога закрыта: слишком
  * быстрый гасит скорость о поле, а стыковка перестала быть следствием «подлетел тихо».
  */
-function stepBodyCollisions(world: World): void {
+function stepBodyCollisions(world: World, dt: number): void {
   for (const ship of allShips(world)) {
     if (!ship.alive) continue
     // Кинематический борт не толкаем и не убиваем о тела: его положение внешнее.
     if (ship.kinematic) continue
-    for (const body of world.bodies) {
-      // Горизонт не является твёрдой оболочкой: гравитация действует, но пройти
-      // через геометрический центр ничто не запрещает.
-      if (body.kind === 'blackhole') continue
+    // С GHOST_BODY_SCALE крупная твердь (планеты/звёзды/станции/статуи) сквозная.
+    // При 1 < scale < GHOST_BODY твердь остаётся — это как раз Shift+Tab-навигация.
+    const ghostBody = ship.state.scale >= MIELOPHONE.GHOST_BODY_SCALE
 
-      // Звезда остаётся смертельной после автоматического выхода из крейсера. Обычно
-      // перегрев убивает раньше, но касание поверхности гарантированно завершает полёт.
-      if (body.kind === 'star') {
-        const reach = body.radius + effectiveRadius(ship)
-        if (body.pos.distanceToSquared(ship.state.pos) > reach * reach) continue
-        ship.hullHeat = 1
-        ship.shield = 0
-        applyDamage(ship, ship.hull, world.time)
-        continue
-      }
+    if (!ghostBody) {
+      for (const body of world.bodies) {
+        // Горизонт не является твёрдой оболочкой: гравитация действует, но пройти
+        // через геометрический центр ничто не запрещает.
+        if (body.kind === 'blackhole') continue
 
-      // На полном крейсере корабль вне обычного взаимодействия: посадка начинается
-      // лишь после отпускания Z (крейсер) и выхода из фазы.
-      if (isPhased(ship)) continue
-
-      if (body.kind === 'station') {
-        // Допуск — билет сквозь поле: корабль идёт коридором на стыковку, поле молчит.
-        if (ship.clearance) continue
-        const shieldR = body.radius * SHIELD.RADIUS_FACTOR
-        const reach = shieldR + effectiveRadius(ship)
-        if (body.pos.distanceToSquared(ship.state.pos) > reach * reach) continue
-        // Вспышка при любом касании поля (`impact >= 0`), но ЯРКОСТЬ — по силе удара:
-        // упор тягой еле светится (поле «на месте», но не слепит), таран — в полную силу.
-        // `-1` значит контакта не было — тогда молчим.
-        const impact = bounceOffShield(ship, body.pos, shieldR, _shieldContact)
-        if (impact >= 0) {
-          const intensity = Math.max(
-            SHIELD.FLASH_MIN_INTENSITY,
-            Math.min(1, impact / SHIELD.FLASH_REF_SPEED),
-          )
-          spawnShieldFlash(world, _shieldContact, body.pos, intensity)
+        // Звезда: касание поверхности. Игрок — отскок + «корабль потерян» (щиты полные,
+        // игра дальше). Бот — сгорает. Перегрев короны убивает раньше, см. stepStarHeat.
+        if (body.kind === 'star') {
+          if (!hitsBodySphere(ship, body.pos, body.radius, dt)) continue
+          if (ship.faction === 'player') {
+            bounceOffSolid(ship, body.pos, body.radius, dt)
+            ship.cruise.factor = 1
+            surviveLethal(ship, world.time, { kind: 'star', name: body.name })
+            continue
+          }
+          ship.hullHeat = 1
+          ship.shield = 0
+          ship.cruise.factor = 1
+          applyDamage(ship, ship.hull, world.time, { kind: 'star', name: body.name })
+          continue
         }
-        continue
+
+        if (body.kind === 'station') {
+          // Крейсер сквозь поле станции не таранит: стыковка — на боевом ходу.
+          if (isPhased(ship)) continue
+          // Допуск — билет сквозь поле: корабль идёт коридором на стыковку, поле молчит.
+          if (ship.clearance) continue
+          const shieldR = body.radius * SHIELD.RADIUS_FACTOR
+          const reach = shieldR + effectiveRadius(ship)
+          if (body.pos.distanceToSquared(ship.state.pos) > reach * reach) continue
+          // Вспышка при любом касании поля (`impact >= 0`), но ЯРКОСТЬ — по силе удара:
+          // упор тягой еле светится (поле «на месте», но не слепит), таран — в полную силу.
+          // `-1` значит контакта не было — тогда молчим.
+          const impact = bounceOffShield(ship, body.pos, shieldR, _shieldContact)
+          if (impact >= 0) {
+            const intensity = Math.max(
+              SHIELD.FLASH_MIN_INTENSITY,
+              Math.min(1, impact / SHIELD.FLASH_REF_SPEED),
+            )
+            spawnShieldFlash(world, _shieldContact, body.pos, intensity)
+            noteCrash(world, ship, { kind: 'station', name: body.name })
+          }
+          continue
+        }
+
+        // Планета / луна — твёрдые и в фазе крейсера.
+        if (body.kind !== 'planet' && body.kind !== 'moon') continue
+        if (!hitsBodySphere(ship, body.pos, body.radius, dt)) continue
+
+        // УПРАВЛЯЕМО — мягкая посадка. НЕУПРАВЛЯЕМО — отскок без урона («КРУШЕНИЕ»).
+        if (ship.autoland === body.id || ship.landedOn?.bodyId === body.id) {
+          landShip(ship, body)
+        } else {
+          crashBounce(world, ship, body.pos, body.radius, dt, {
+            kind: body.kind,
+            name: body.name,
+          })
+        }
+        break
       }
 
-      const reach = body.radius + effectiveRadius(ship)
-      if (body.pos.distanceToSquared(ship.state.pos) > reach * reach) continue
+      // Статуи / статуэтки — крупная твердь, до GHOST_BODY_SCALE.
+      for (const monolith of world.monoliths) {
+        if (!hitsBodySphere(ship, monolith.pos, monolith.radius, dt)) continue
+        crashBounce(world, ship, monolith.pos, monolith.radius, dt, {
+          kind: 'monolith',
+          name: MONOLITH_NAMES[monolith.variant] ?? 'Монолит',
+        })
+        break
+      }
 
-      // Контакт с поверхностью. УПРАВЛЯЕМО (идёт автопосадка на это тело или уже сидим
-      // на нём) — ложимся мягко. НЕУПРАВЛЯЕМО (не успел нажать L в окне высот) —
-      // разбиваемся: планета больше не «мягкий батут», у неё твёрдая поверхность.
-      if (ship.autoland === body.id || ship.landedOn?.bodyId === body.id) {
-        landShip(ship, body)
+      for (const fig of world.figurines) {
+        if (!fig.alive) continue
+        if (!hitsBodySphere(ship, fig.pos, fig.radius, dt)) continue
+        if (canAttractFigurine(ship, fig)) continue
+        crashBounce(world, ship, fig.pos, fig.radius, dt, {
+          kind: 'figurine',
+          name: figurineDisplayName(fig),
+        })
+        break
+      }
+    }
+
+    // Глыбы двора — в Shift+Tab; сквозные только с GHOST_BODY (как планеты).
+    if (ghostBody) continue
+    for (const rock of world.scenicRocks) {
+      if (!rock.alive) continue
+      const hitR = meshSolidRadius(rock.radius)
+      if (!hitsBodySphere(ship, rock.pos, hitR, dt)) continue
+      if (ship.landedOn?.bodyId === rock.id) continue
+      if (ship.autoland === rock.id) {
+        const surface = findLandable(world, rock.id, ship)
+        if (surface) landOnSurface(ship, surface)
+        ship.autoland = null
       } else {
-        ship.shield = 0
-        applyDamage(ship, ship.hull, world.time)
+        crashBounce(world, ship, rock.pos, hitR, dt, { kind: 'scenicRock', name: '' })
       }
       break
     }
@@ -411,24 +529,27 @@ function stepBodyCollisions(world: World): void {
  * Луч спрашивается у Controller, как стрельба: симуляция не знает про клавишу C.
  */
 function stepScooping(world: World, controllers: ControllerMap, dt: number): void {
-  if (world.pods.length === 0) return
   const player = world.player
+  const wantTractor =
+    player.alive && !!controllerFor(controllers, player).wantsTractor?.(player, world)
 
   clearTractorMarks(world)
 
-  if (player.alive && controllerFor(controllers, player).wantsTractor?.(player, world)) {
-    tractorPods(world, player, dt)
-  }
-  if (player.alive) scoopNearby(world, player)
+  if (world.pods.length > 0) {
+    if (wantTractor) tractorPods(world, player, dt)
+    if (player.alive) scoopNearby(world, player)
 
-  // Компаньон на поручении СБОРА черпает тем же правилом, что игрок: тяговый луч
-  // притягивает, `tryScoop` забирает при касании. Так «собери грузы» и вправду набивает
-  // его трюм, а не остаётся словами. Прочие боты груз не трогают — у них нет такой задачи.
-  for (const ship of world.ships) {
-    if (!ship.alive || ship.ai?.tasks[0]?.kind !== 'collect-cargo') continue
-    tractorPods(world, ship, dt)
-    scoopNearby(world, ship)
+    // Компаньон на поручении СБОРА черпает тем же правилом, что игрок.
+    for (const ship of world.ships) {
+      if (!ship.alive || ship.ai?.tasks[0]?.kind !== 'collect-cargo') continue
+      tractorPods(world, ship, dt)
+      scoopNearby(world, ship)
+    }
   }
+
+  // Статуэтки: луч C в окне размера миелофона, подбор при касании.
+  if (wantTractor) tractorFigurines(world, player, dt)
+  if (player.alive) scoopFigurinesNear(world, player)
 }
 
 /** Забрать все контейнеры в радиусе подбора корабля. Общее правило для игрока и бота. */
@@ -492,6 +613,8 @@ function cleanup(world: World): void {
   // Убитый камень уже раскололся в `damageAsteroid` — здесь только выметаем мёртвых.
   // Второе место, гасящее астероид по прочности, однажды забыло бы про осколки.
   world.asteroids = world.asteroids.filter((a) => a.alive)
+  // Глыбы двора: взорвались в `damageScenicRock` — тут только выметаем трупы.
+  world.scenicRocks = world.scenicRocks.filter((r) => r.alive)
 
   expirePods(world)
 
@@ -503,4 +626,23 @@ function cleanup(world: World): void {
   if (world.lockedPodId !== null && !world.pods.some((p) => p.id === world.lockedPodId && p.alive)) {
     world.lockedPodId = null
   }
+  if (world.lockedAsteroidId !== null && !world.asteroids.some((a) => a.id === world.lockedAsteroidId && a.alive)) {
+    world.lockedAsteroidId = null
+  }
+  // Нав-цель могла быть глыбой двора / гигантом пояса / статуэткой — снимаем, если её нет.
+  if (world.navTargetId !== null) {
+    const id = world.navTargetId
+    const stillThere =
+      world.bodies.some((b) => b.id === id) ||
+      world.monoliths.some((m) => m.id === id) ||
+      world.figurines.some((f) => f.id === id && f.alive) ||
+      world.scenicRocks.some((r) => r.id === id && r.alive) ||
+      world.asteroids.some((a) => a.id === id && a.alive)
+    if (!stillThere) {
+      world.navTargetId = null
+      world.lockedStationId = null
+    }
+  }
+  // Выше GHOST_BODY станция/планета в нав — метка в пустоте; звезда/дыра и jumpTarget — живы.
+  pruneGiantScaleLocks(world)
 }

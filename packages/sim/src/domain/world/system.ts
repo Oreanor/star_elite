@@ -36,6 +36,8 @@ export interface StarCompanionDef {
   kind?: 'star'
   radius: number
   color: number
+  /** Масса в M☉ — как у главной, не из радиуса. */
+  massSolar: number
   separation: number
 }
 
@@ -64,7 +66,13 @@ export interface SystemDef {
   /** Одно число задаёт всю расстановку: пояс, патрули, разброс. */
   seed: number
   playerStart: readonly [number, number, number]
-  star: { pos: readonly [number, number, number]; radius: number; color: number }
+  star: {
+    pos: readonly [number, number, number]
+    radius: number
+    color: number
+    /** Масса в M☉. Период двойной и гравитация — отсюда, не из ∝ R³. */
+    massSolar: number
+  }
   /**
    * Спутник двойной: вторая звезда или чёрная дыра (барицентр, `separation`, орбита).
    * Позиции нет — место даёт время, как у звёзд пары.
@@ -105,7 +113,7 @@ export interface SystemDef {
   patrols: readonly PatrolDef[]
   /**
    * Пустынная система: НИКАКОГО трафика — ни встреч, ни завсегдатаев у причала, ни китов и
-   * гнёзд. Люцифер таков: он в бездне, вне маршрутов, там только бог. Данные, не хардкод.
+   * гнёзд. Данные, не хардкод.
    */
   desolate?: boolean
 }
@@ -163,7 +171,7 @@ export const STARTER_SYSTEM: SystemDef = {
    * влево и занимает полнеба: масштаб виден с первого кадра, до всякого движения.
    */
   playerStart: [STATION_ORBIT, 0, -AU + 2_000],
-  star: { pos: [0, 0, 0], radius: SOLAR_RADIUS, color: 0xffd9a0 },
+  star: { pos: [0, 0, 0], radius: SOLAR_RADIUS, color: 0xffd9a0, massSolar: 1 },
   // Родная система одиночная: с неё начинают, и лишних сущностей ей не нужно.
   companion: null,
   dyson: null,

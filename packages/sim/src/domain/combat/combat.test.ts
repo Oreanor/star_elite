@@ -157,12 +157,22 @@ describe('щит и корпус', () => {
     expect(p.hull).toBe(p.spec.hull.hull - 10)
   })
 
-  it('корабль гибнет при нулевом корпусе', () => {
+  it('игрок при нулевом корпусе выживает: щиты полные и штамп причины', () => {
     const world = quiet()
     const p = world.player
-    applyDamage(p, 1e6, 0)
-    expect(p.alive).toBe(false)
-    expect(p.hull).toBe(0)
+    applyDamage(p, 1e6, 0, { kind: 'laser', name: '' })
+    expect(p.alive).toBe(true)
+    expect(p.hull).toBe(p.spec.hull.hull)
+    expect(p.shield).toBe(p.spec.hull.shield)
+    expect(p.lastLostAt).toBe(0)
+    expect(p.lastLostHit).toEqual({ kind: 'laser', name: '' })
+  })
+
+  it('бот гибнет при нулевом корпусе', () => {
+    const { enemy } = withOneEnemy()
+    applyDamage(enemy, 1e6, 0)
+    expect(enemy.alive).toBe(false)
+    expect(enemy.hull).toBe(0)
   })
 
   it('щит не восстанавливается сразу после попадания', () => {

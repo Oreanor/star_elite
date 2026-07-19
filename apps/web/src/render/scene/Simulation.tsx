@@ -1,6 +1,7 @@
 import { useFrame, useThree } from '@react-three/fiber'
 import {
   armAutoland,
+  releaseLanding,
   autodockController,
   canEngageAutodock,
   canEngageFlyTo,
@@ -8,10 +9,12 @@ import {
   flyToController,
   cycleContact,
   cycleCelestial,
+  retargetNearestSameClass,
   findCloak,
   findMielophone,
   hasBomb,
   hasEcm,
+  droneAmmo,
   isLaser,
   missileAmmo,
   serializePlayer,
@@ -19,7 +22,7 @@ import {
   type Controller,
   type World,
 } from '@elite/sim'
-import { cycleGalaxyStar, galaxyRadar } from './galaxyRadar'
+import { cycleGalaxyStar, galaxyRadar, retargetNearestGalaxyStar } from './galaxyRadar'
 import { syncControllers, useSession, type Session } from '../../app/GameContext'
 import { coastController } from '../../app/control/playerController'
 import { stepCameraView } from '../../app/control/cameraView'
@@ -143,8 +146,9 @@ export function Simulation() {
     // в Shell, на обычном слушателе окна.
     // Пытаешься применить прибор, которого нет (или пустую обойму) — плашка объясняет,
     // почему клавиша молчит. Иначе «нажал — ничего» читается как баг, а не как «не куплено».
+    // R — пилон. Тип один за раз: обычная ракета или дрон-ракета (что экипировано).
     if (consumePress('KeyR')) {
-      if (missileAmmo(world.player) > 0) intent.missile = true
+      if (missileAmmo(world.player) > 0 || droneAmmo(world.player) > 0) intent.missile = true
       else pushWarning('noRockets', world.time)
     }
     // Аукс-слот ОДИН — значит и клавиша одна: E активирует то, что в нём стоит.
@@ -159,9 +163,8 @@ export function Simulation() {
       else if (hasEcm(l)) intent.ecm = true
       else if (!ownsMielophone(world.player)) pushWarning('noAux', world.time)
     }
-    if (consumePress('KeyQ')) intent.drone = true
 
-    // Жмёшь гашетку без единого лазера на борту — то же напоминание (ракеты/дрон — своя
+    // Жмёшь гашетку без единого лазера на борту — то же напоминание (ракеты — своя
     // клавиша). Держание, а не тап: плашка сама не частит, её гасит кулдаун очереди.
     if (input.firing && !world.player.spec.mounts.some((m) => isLaser(m.weapon))) {
       pushWarning('noLaser', world.time)
@@ -172,10 +175,15 @@ export function Simulation() {
     //    на связь). Круги независимы: контакт и точка навигации не сбивают друг друга.
     // Когда галактика ПРОЯВИЛАСЬ (слой активен), листаются ЗВЁЗДЫ галактики (jumpTargetIndex) —
     // это единственное, что там перечислимо, поэтому берём их на любой Tab, с шифтом и без.
+    // Q — сброс и ближайшая цель ТОГО ЖЕ класса (борт→борт, планета→планета, звезда→звезда).
     if (consumePress('Tab')) {
       if (galaxyRadar().active) cycleGalaxyStar(world)
       else if (isHeld('ShiftLeft') || isHeld('ShiftRight')) cycleCelestial(world)
       else cycleContact(world)
+    }
+    if (consumePress('KeyQ')) {
+      if (galaxyRadar().active) retargetNearestGalaxyStar(world)
+      else retargetNearestSameClass(world)
     }
 
     // Пользовательский ракурс: облёт (←/→) и наезд (↑/↓), V — сброс. Чистая камера,
@@ -183,14 +191,14 @@ export function Simulation() {
     stepCameraView(dt)
 
     if (consumePress('KeyL')) {
-      // Приоритет — автопосадка: если висим в окне высот над телом, L сажает (доменный
-      // флаг, непрерываемо, режим не меняем). Иначе прежняя логика автостыковки к станции.
+      // L: отмена стыковки → отлип с поверхности → автопосадка → автостыковка.
       if (session.mode === 'autodock') setPilot(session, 'manual')
+      else if (world.player.landedOn) releaseLanding(world.player, world)
       else if (armAutoland(world)) { /* автопосадка пошла — ведёт домен, штурвал вернётся сам */ }
       else if (canEngageAutodock(world)) setPilot(session, 'autodock')
     }
 
-    // J — автопилот НА ЦЕЛЬ: лети к захваченному борту/станции. Нет захвата — плашка объясняет.
+    // J — автопилот НА ЦЕЛЬ: контакт / нав / звезда галактики (jumpTarget). Нет цели — плашка.
     if (consumePress('KeyJ')) {
       if (session.mode === 'flyto') setPilot(session, 'manual')
       else if (canEngageFlyTo(world)) setPilot(session, 'flyto')

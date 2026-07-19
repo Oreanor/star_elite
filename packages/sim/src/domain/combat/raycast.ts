@@ -2,7 +2,15 @@ import { Vector3 } from 'three'
 import { GUNNERY } from '../../config/weapons'
 import { SHIELD } from '../../config/station'
 import { raySphere } from '../../core/math'
-import type { AsteroidEntity, BodyEntity, MissileEntity, PlatformEntity, ShipEntity, World } from '../world/entities'
+import type {
+  AsteroidEntity,
+  BodyEntity,
+  MissileEntity,
+  PlatformEntity,
+  ScenicRockEntity,
+  ShipEntity,
+  World,
+} from '../world/entities'
 
 /** Что первым встретил луч. Все поля null — луч ушёл в пустоту. */
 export interface LaserHit {
@@ -10,6 +18,8 @@ export interface LaserHit {
   distance: number
   ship: ShipEntity | null
   asteroid: AsteroidEntity | null
+  /** Глыба двора статуи — взрывается, руды не даёт. */
+  scenicRock: ScenicRockEntity | null
   missile: MissileEntity | null
   platform: PlatformEntity | null
   /** Станция, о ЩИТ которой погас луч. Урона не наносит — станция неуязвима. */
@@ -43,12 +53,21 @@ export function castLaser(
   shooter: ShotSource,
   range: number,
 ): LaserHit {
-  const hit: LaserHit = { distance: range, ship: null, asteroid: null, missile: null, platform: null, station: null }
+  const hit: LaserHit = {
+    distance: range,
+    ship: null,
+    asteroid: null,
+    scenicRock: null,
+    missile: null,
+    platform: null,
+    station: null,
+  }
   const closer = (t: number): boolean => t >= 0 && t < hit.distance
   const set = (t: number, next: Partial<LaserHit>): void => {
     hit.distance = t
     hit.ship = next.ship ?? null
     hit.asteroid = next.asteroid ?? null
+    hit.scenicRock = next.scenicRock ?? null
     hit.missile = next.missile ?? null
     hit.platform = next.platform ?? null
     hit.station = next.station ?? null
@@ -113,6 +132,14 @@ export function castLaser(
       if (a.pos.distanceToSquared(origin) > (range + a.radius) ** 2) continue
       const t = raySphere(origin, dir, a.pos, a.radius)
       if (closer(t)) set(t, { asteroid: a })
+    }
+
+    // Глыбы двора статуи: километровые мишени, взрываются без руды.
+    for (const rock of world.scenicRocks) {
+      if (!rock.alive) continue
+      if (rock.pos.distanceToSquared(origin) > (range + rock.radius) ** 2) continue
+      const t = raySphere(origin, dir, rock.pos, rock.radius)
+      if (closer(t)) set(t, { scenicRock: rock })
     }
 
     // Ракету можно сбить — и свою, и чужую. Кроме собственной: она уходит прямо

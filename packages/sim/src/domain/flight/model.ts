@@ -1,5 +1,7 @@
 import { Quaternion, Vector3 } from 'three'
+import { PHYSICS } from '../../config/physics'
 import { approach, damp } from '../../core/math'
+import { speedScaleFactor } from '../scale/scale'
 import { shipAxes } from './axes'
 import type { ShipControls, ShipState, ShipTuning } from './types'
 
@@ -82,18 +84,35 @@ function desiredRollRate(c: ShipControls, t: ShipTuning): number {
 function integrateLinear(s: ShipState, c: ShipControls, t: ShipTuning, dt: number): void {
   shipAxes(s.quat, _fwd, _right, _up)
 
-  // Форсаж и крейсер — просто множители. Интегратор не знает, что это «режимы».
-  const power = c.boost * c.cruise
+  // Ручник (Ctrl): гасит ВЕСЬ вектор скорости. Раньше здесь была ретро-тяга вдоль носа —
+  // на ×scale / крейсере она не успевала, и борт «куда-то летел» даже на нулевом газе.
+  if (c.retro > 0) {
+    // Сбрасываем газ в controls: иначе после отпускания ручника FA тянет к старому
+    // commanded = throttle×scale и корабль «выстреливает». Пилот/ИИ заново дадут газ.
+    c.throttle = 0
+    const grow = speedScaleFactor(s.scale)
+    s.vel.multiplyScalar(Math.exp(-PHYSICS.HANDBRAKE_RATE * c.retro * dt))
+    // Добиваем в ноль ниже 0.1% потолка текущего масштаба — иначе хвост экспоненты
+    // на гигаметрах/с висит секундами.
+    const stopAt = Math.max(1, t.MAX_SPEED * grow * 0.001)
+    if (s.vel.lengthSq() < stopAt * stopAt) s.vel.set(0, 0, 0)
+    s.pos.addScaledVector(s.vel, dt)
+    return
+  }
 
-  // Ретро-тяга слабее основной: разгоняться всегда легче, чем тормозить.
-  const thrust = c.throttle * t.THRUST * power - c.retro * t.THRUST * 0.45
+  // Форсаж и крейсер — просто множители. Интегратор не знает, что это «режимы».
+  // Миелофон поднимает тягу и потолок вместе с размером: иначе гигант ползёт как истребитель.
+  const power = c.boost * c.cruise
+  const grow = speedScaleFactor(s.scale)
+
+  const thrust = c.throttle * t.THRUST * power * grow
   _accel.copy(_fwd).multiplyScalar(thrust / t.MASS)
 
   // Поперечная тяга маневровых. Форсаж её не касается: это другие двигатели.
   const lateral = Math.hypot(c.strafe, c.strafeUp)
   if (lateral > 1e-6) {
     // Зажимаем в круг, а не в квадрат: по диагонали тяга не должна быть больше.
-    const scale = t.STRAFE_THRUST / (t.MASS * Math.max(1, lateral))
+    const scale = (t.STRAFE_THRUST * grow) / (t.MASS * Math.max(1, lateral))
     _accel.addScaledVector(_right, c.strafe * scale)
     _accel.addScaledVector(_up, c.strafeUp * scale)
   }
@@ -103,7 +122,7 @@ function integrateLinear(s: ShipState, c: ShipControls, t: ShipTuning, dt: numbe
   if (c.flightAssist) applyFlightAssist(s, c, t, dt)
 
   // Абсолютный потолок: иначе тяга уводит скорость в бесконечность.
-  const cap = t.MAX_SPEED * power
+  const cap = t.MAX_SPEED * power * grow
   const speed = s.vel.length()
   if (speed > cap) s.vel.multiplyScalar(cap / speed)
 
@@ -127,7 +146,19 @@ function applyFlightAssist(s: ShipState, c: ShipControls, t: ShipTuning, dt: num
   }
 
   // Без этого корабль разгонялся бы вечно, пока есть тяга.
-  const commanded = c.throttle * t.MAX_SPEED * c.boost * c.cruise
-  const corrected = along + (commanded - along) * Math.min(1, t.ASSIST_SPEED_DAMP * dt)
+  // Командная скорость — доля газа от потолка текущего масштаба (× speedScaleFactor).
+  const grow = speedScaleFactor(s.scale)
+  const commanded = c.throttle * t.MAX_SPEED * c.boost * c.cruise * grow
+  const coasting =
+    c.throttle === 0 && c.retro === 0 && c.strafe === 0 && c.strafeUp === 0
+  // На выбеге — COAST_RATE: иначе ASSIST_SPEED_DAMP оставляет гиганта «плыть» минуту.
+  const speedDamp = coasting ? Math.max(t.ASSIST_SPEED_DAMP, PHYSICS.COAST_RATE) : t.ASSIST_SPEED_DAMP
+  const corrected = along + (commanded - along) * Math.min(1, speedDamp * dt)
   s.vel.addScaledVector(_fwd, corrected - along)
+
+  // Нулевой газ: режем хвост относительно потолка ×scale (как ручник), не абсолютные 0.5 м/с.
+  if (coasting) {
+    const stopAt = Math.max(0.5, t.MAX_SPEED * grow * 0.001)
+    if (s.vel.lengthSq() < stopAt * stopAt) s.vel.set(0, 0, 0)
+  }
 }

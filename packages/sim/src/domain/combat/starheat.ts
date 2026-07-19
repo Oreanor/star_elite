@@ -35,11 +35,27 @@ export function starExposure(ship: ShipEntity, world: World): number {
   return hottest
 }
 
+/** Имя ближайшей по высоте звезды — для пуша «потерян · звезда / корона». */
+function nearestStarName(ship: ShipEntity, world: World): string {
+  let best = ''
+  let bestAlt = Infinity
+  for (const body of world.bodies) {
+    if (body.kind !== 'star') continue
+    const alt = body.pos.distanceTo(ship.state.pos) - body.radius
+    if (alt < bestAlt) {
+      bestAlt = alt
+      best = body.name
+    }
+  }
+  return best
+}
+
 /**
  * Шаг нагрева. Температура тянется к облучённости — вверх у звезды, вниз вдали,
  * причём вниз быстрее. Дойдя до DESTROY, корпус разрушается МГНОВЕННО: у короны нет
  * постепенной течи и «отсидеться под щитом» — либо успел отвернуть по пушу, либо сгорел.
- * Урон разом больше суммы щита и обшивки, чтобы `applyDamage` провёл штатную гибель.
+ * Урон разом больше суммы щита и обшивки, чтобы `applyDamage` провёл штатную гибель
+ * (у игрока — «потерян» с восстановлением щита, у бота — смерть).
  */
 export function stepStarHeat(ship: ShipEntity, world: World, dt: number): void {
   if (!ship.alive) return
@@ -51,7 +67,10 @@ export function stepStarHeat(ship: ShipEntity, world: World, dt: number): void {
   ship.hullHeat = clamp(ship.hullHeat, 0, 1)
 
   if (ship.hullHeat >= STAR_HEAT.DESTROY) {
-    applyDamage(ship, ship.shield + ship.hull + 1, world.time)
+    applyDamage(ship, ship.shield + ship.hull + 1, world.time, {
+      kind: 'heat',
+      name: nearestStarName(ship, world),
+    })
   }
 }
 
@@ -65,8 +84,7 @@ export function scooping(ship: ShipEntity): boolean {
 }
 
 /**
- * Зарядка гипердвигателя у звезды. Черпается, лишь когда корпус прогрет до
- * `CHARGE_HEAT`, и растёт до предела модели (`spec.jumpRange`). Нагрев считается
+ * Зарядка гипердвигателя от звезды. Зови ПОСЛЕ `stepStarHeat` в том же кадре:
  * ДО этого шага — `stepStarHeat` уже обновил `hullHeat` в этом же кадре.
  */
 export function chargeHyperdrive(ship: ShipEntity, dt: number): void {

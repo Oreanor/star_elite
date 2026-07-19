@@ -200,8 +200,8 @@ export function stationMaterial(): MeshStandardMaterial {
     vertexColors: true,
     flatShading: true,
     side: DoubleSide,
-    metalness: 0.4,
-    roughness: 0.6,
+    metalness: MATERIAL.STATION_METALNESS,
+    roughness: MATERIAL.STATION_ROUGHNESS,
   })
   return station
 }

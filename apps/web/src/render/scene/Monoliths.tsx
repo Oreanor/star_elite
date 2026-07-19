@@ -4,12 +4,13 @@ import { Mesh, Quaternion } from 'three'
 import type { MonolithEntity } from '@elite/sim'
 import { useSession } from '../../app/GameContext'
 import { statueGlbGeometry, statueGlbMaterial } from '../geometry/statueGlb'
+import { worldShrink } from '../worldShrink'
 
 /**
  * Статуи-исполины у причала. Декорация масштаба: висят и медленно кувыркаются.
  *
- * Каждая — свой меш, без инстансинга: их ТРИ на систему, и облики у всех разные — батчить
- * нечего. Шага симуляции у них нет вовсе: угол берётся как `spin·time`, поэтому пауза их не
+ * Каждая — свой меш, без инстансинга: обликов мало и они разные — батчить нечего.
+ * Шага симуляции у них нет вовсе: угол берётся как `spin·time`, поэтому пауза их не
  * рассинхронит, а прыжок и сеть дают тот же угол при том же времени.
  */
 
@@ -26,8 +27,9 @@ function Monolith({ monolith }: { monolith: MonolithEntity }) {
     // километровой статуи заглушку не стоит, её было бы видно с полсистемы.
     const g = statueGlbGeometry(monolith.variant)
     const m = statueGlbMaterial(monolith.variant)
-    mesh.visible = g !== null
-    if (!g || !m) return
+    const shrink = worldShrink(session.world.player.state.scale)
+    mesh.visible = g !== null && shrink > 0
+    if (!g || !m || shrink <= 0) return
     if (mesh.geometry !== g) mesh.geometry = g
     if (mesh.material !== m) mesh.material = m
 
@@ -35,7 +37,7 @@ function Monolith({ monolith }: { monolith: MonolithEntity }) {
     // Угол ОТ ВРЕМЕНИ, а не накоплением: то же время — тот же угол.
     _spin.setFromAxisAngle(monolith.spinAxis, monolith.spin * session.world.time)
     mesh.quaternion.copy(_spin)
-    mesh.scale.setScalar(monolith.radius)
+    mesh.scale.setScalar(monolith.radius * shrink)
   })
 
   return <mesh ref={ref} frustumCulled={false} />

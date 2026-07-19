@@ -5,4 +5,5 @@ export {
   updateCruise,
   type CruiseBlock,
   type CruiseState,
+  type CruiseWant,
 } from './drive'

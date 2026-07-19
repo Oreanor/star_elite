@@ -86,16 +86,23 @@ export function moodTo(world: World, other: ShipEntity): Mood {
 }
 
 /**
- * ОТНОШЕНИЕ борта к игроку одним из трёх слов — то, что показывает шапка диалога.
- * В отличие от `moodTo` (это ТОН реплики, где есть ещё «насторожён»), тут ровно три
- * состояния репутации: враг всегда враждебен, иначе — итог знакомства (дружелюбен или
- * нейтрален). Свежий пират, с кем ещё не виделись, — всё равно ВРАЖДЕБНЫЙ по фракции,
- * а не «нейтральный» из пустой записи знакомства.
+ * ОТНОШЕНИЕ борта к игроку одним из трёх слов — шапка диалога, метки HUD/локатора,
+ * карточки «Люди». В отличие от `moodTo` (ТОН реплики, где есть ещё «насторожён»),
+ * тут ровно три состояния: враг / друг / нейтрал.
+ *
+ * Порядок: фракция-враг сильнее записи; иначе — `relationship` знакомого (друг часто
+ * остаётся `faction: neutral`, и без этой строки метка серая); иначе свой по фракции
+ * (`player`) — зелёный союзник; иначе нейтрал. Свежий пират без знакомства — враг
+ * по фракции, а не «нейтральный» из пустой записи.
  */
 export function stanceTo(world: World, other: ShipEntity): Relationship {
   if (other.faction === 'hostile') return 'hostile'
-  const rec = world.acquaintances.find((a) => a.id === other.acquaintanceId)
-  return rec?.relationship ?? 'neutral'
+  const rec = other.acquaintanceId != null
+    ? world.acquaintances.find((a) => a.id === other.acquaintanceId)
+    : undefined
+  if (rec) return rec.relationship
+  if (other.faction === world.player.faction) return 'friendly'
+  return 'neutral'
 }
 
 /** Соц-жест игрока в свободной речи: то, что домен из текста не вычленит сам. */

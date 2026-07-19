@@ -6,6 +6,7 @@ import { spawnExplosion, spawnShieldFlash, spawnTracer } from './effects'
 import { registerPlayerHit } from './grievance'
 import { damageAsteroid } from './mining'
 import { castLaser } from './raycast'
+import { damageScenicRock } from './scenicRocks'
 
 /**
  * Полёт лазерных болтов. Лазер больше НЕ мгновенный: болт летит снарядом и попадает
@@ -42,7 +43,7 @@ function resolveHit(world: World, bolt: BoltEntity, hitPos: Vector3, hit: Return
       // Щит ДО удара: по нему решается, изнашивается ли сам щит (цел) или ломается
       // деталь (пробит). Считаем до applyDamage — оно этот щит и просадит.
       const shieldUp = hit.ship.shield > 0
-      applyDamage(hit.ship, bolt.damage, world.time)
+      applyDamage(hit.ship, bolt.damage, world.time, { kind: 'laser', name: '' })
       // Поломка снаряжения — только у игрока (боты не чинятся). Враг ли стрелял, не
       // важно: попали по игроку — железо под ударом. Кинематический борт (чужой) — мимо.
       if (hit.ship.faction === 'player') breakFromHit(hit.ship, shieldUp, world.rng)
@@ -55,6 +56,10 @@ function resolveHit(world: World, bolt: BoltEntity, hitPos: Vector3, hit: Return
     spawnExplosion(world, hitPos, hit.asteroid.vel, 0.4)
     // Камень не исчезает — он раскалывается. Правило дробления живёт в одном месте.
     damageAsteroid(world, hit.asteroid, bolt.damage)
+  } else if (hit.scenicRock) {
+    // Искра в точке удара; гибель рождает свой крупный взрыв в `destroyScenicRock`.
+    spawnExplosion(world, hitPos, _still, 0.8)
+    damageScenicRock(world, hit.scenicRock, bolt.damage)
   } else if (hit.missile) {
     // Ракета не «повреждается»: у неё нет прочности, только боевая часть.
     hit.missile.alive = false

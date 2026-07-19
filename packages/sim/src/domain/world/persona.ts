@@ -1,4 +1,5 @@
 import { CHARACTER } from '../../config/character'
+import { FIGURINE } from '../../config/figurines'
 import { HUMAN_SPECIES, PLAYABLE_SPECIES, SPECIES } from '../../config/galaxy'
 import type { Rng } from '../../core/math'
 
@@ -82,6 +83,53 @@ export interface Persona {
    * занятий берётся из `originKind`. Пока чистый лейбл — как ты представляешься собеседнику.
    */
   profession?: Profession
+  /**
+   * Отношение к статуэткам богов. У NPC бросается при рождении; у игрока обычно нет —
+   * он сам решает, собирать ли.
+   */
+  figurineHobby?: FigurineHobby
+}
+
+/**
+ * Хобби статуэток богов.
+ * - `aware: false` — не в теме → статуэток нет, zeal = 0;
+ * - `zeal: 0` — не собирает → статуэток нет;
+ * - `zeal` ∈ (0..1] — коллекционер: от увлечённости — доля от потолка цены и охота дарить.
+ *   Высокий zeal ≠ жмот: на честный обмен и деньги идёт охотно.
+ */
+export interface FigurineHobby {
+  aware: boolean
+  /** Увлечённость 0..1. Ноль — не собирает. */
+  zeal: number
+}
+
+/** Собирает ли (знает и zeal > 0). */
+export function collectsFigurines(hobby: FigurineHobby | undefined): boolean {
+  return !!hobby?.aware && hobby.zeal > 0
+}
+
+/** Доля от потолка цены для своих статуэток; 0 — не коллекционер. */
+export function figurinePriceFactor(hobby: FigurineHobby | undefined): number {
+  if (!collectsFigurines(hobby)) return 0
+  const z = hobby!.zeal
+  const lo = FIGURINE.PRICE_AT_ZEAL_LOW
+  const hi = FIGURINE.PRICE_AT_ZEAL_HIGH
+  return lo + (hi - lo) * z
+}
+
+/** Насколько охотно дарит друзьям (0..1); совпадает с zeal у коллекционера. */
+export function figurineGiftOpenness(hobby: FigurineHobby | undefined): number {
+  return collectsFigurines(hobby) ? hobby!.zeal : 0
+}
+
+/** Бросок хобби при рождении NPC. */
+export function rollFigurineHobby(rng: Rng): FigurineHobby {
+  if (FIGURINE.TEST_ALL_COLLECTORS) {
+    return { aware: true, zeal: 0.55 + rng() * 0.45 }
+  }
+  if (rng() < FIGURINE.HOBBY_UNAWARE) return { aware: false, zeal: 0 }
+  if (rng() < FIGURINE.HOBBY_ZEAL_ZERO) return { aware: true, zeal: 0 }
+  return { aware: true, zeal: 0.05 + rng() * 0.95 }
 }
 
 /**
@@ -106,6 +154,8 @@ export const DEFAULT_PERSONA: Persona = {
   accuracy: 3,
   species: HUMAN_SPECIES,
   profession: 'traveler',
+  // Тесты/дроны: не коллекционеры, пока RNG не бросил.
+  figurineHobby: { aware: true, zeal: 0 },
 }
 
 /** Черта 1..5 из RNG. */
@@ -122,6 +172,7 @@ export function makePersona(rng: Rng): Persona {
   const disposition = DISPOSITIONS[Math.floor(rng() * DISPOSITIONS.length)]!
   // Новые оси тянем ПОСЛЕ прежних (вид — последним из старых): так у уже существующих
   // персон прежние поля не меняются, сдвигается лишь поток дальше по спавну.
+  // Хобби статуэток — после вида: ещё один бросок в хвосте потока.
   return {
     disposition,
     intellect: trait(rng),
@@ -131,6 +182,7 @@ export function makePersona(rng: Rng): Persona {
     species: makeSpecies(rng),
     agility: trait(rng),
     accuracy: trait(rng),
+    figurineHobby: rollFigurineHobby(rng),
   }
 }
 

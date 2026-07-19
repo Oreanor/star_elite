@@ -14,13 +14,9 @@ import { ATMOSPHERE } from '../config'
  * дальнюю половину съедает буфер глубины — её загораживает сама планета, — и от
  * атмосферы остаётся ободок в ширину зазора, то есть ничего.
  *
- * Центр диска при этом не светится: там взгляд перпендикулярен поверхности, и
- * френель даёт ноль. Свечение появляется само там, где ему и место, — на лимбе.
- *
- * Ночная сторона тёмная: множитель — освещённость по нормали, с мягким
- * терминатором. Иначе планета получала бы кольцо вокруг всего диска, включая ту
- * половину, куда звезда не светит, и терминатор, честно посчитанный светом,
- * тонул бы в этом кольце.
+ * Ночная сторона не чёрная дыра: тонкий airglow на лимбе и у терминатора —
+ * то самое голубое свечение земной ночи из космоса. Дневной лимб ярче и тинтится
+ * спектром звезды снаружи (см. Bodies).
  *
  * Логарифмический буфер глубины подключается ЯВНО: `ShaderMaterial` не получает
  * его чанки сам, а без них оболочка планеты в ста тысячах километров начинает
@@ -54,6 +50,8 @@ uniform vec3 uLight;
 uniform float uPower;
 uniform float uIntensity;
 uniform float uTerminator;
+uniform float uAirglow;
+uniform float uAirglowPower;
 
 varying vec3 vNormal;
 varying vec3 vView;
@@ -62,16 +60,22 @@ void main() {
   #include <logdepthbuf_fragment>
 
   vec3 n = normalize(vNormal);
+  vec3 L = normalize(uLight);
+  float nDotL = dot(n, L);
 
   // Френель: единица на лимбе, ноль в центре диска.
   float rim = 1.0 - abs(dot(n, normalize(vView)));
   float density = pow(clamp(rim, 0.0, 1.0), uPower);
 
-  // Освещённость с мягким терминатором: воздух светится и чуть за краем тени —
-  // там, где солнце уже село для поверхности, но ещё видно с высоты.
-  float lit = smoothstep(-uTerminator, uTerminator, dot(n, normalize(uLight)));
+  // Дневной лимб с мягким терминатором.
+  float day = smoothstep(-uTerminator, uTerminator, nDotL);
+  float dayGlow = density * day * uIntensity;
 
-  float alpha = density * lit * uIntensity;
+  // Ночной airglow: тонкий лимб на тёмной половине + полоска у терминатора.
+  float night = 1.0 - day;
+  float nightRim = pow(clamp(rim, 0.0, 1.0), uAirglowPower) * night * uAirglow;
+  float dusk = exp(-nDotL * nDotL * 14.0) * density * uAirglow * 1.1;
+  float alpha = dayGlow + nightRim + dusk;
   if (alpha < 0.002) discard;
   gl_FragColor = vec4(uColor * alpha, alpha);
 }
@@ -86,11 +90,10 @@ void main() {
  * смотрит последняя из них. Планет в системе единицы, и лишний шейдер тут
  * дешевле неправильного терминатора.
  *
- * Само направление обновляется в кадре записью в uniform. React в этом не
- * участвует: менять проп ради движения света — это перерисовка дерева на кадр.
+ * Само направление и тинт звезды обновляются в кадре записью в uniform.
  */
 export function createAtmosphereMaterial(color: number): ShaderMaterial {
-  return new ShaderMaterial({
+  const mat = new ShaderMaterial({
     vertexShader: vertex,
     fragmentShader: fragment,
     uniforms: {
@@ -99,6 +102,8 @@ export function createAtmosphereMaterial(color: number): ShaderMaterial {
       uPower: { value: ATMOSPHERE.POWER },
       uIntensity: { value: ATMOSPHERE.INTENSITY },
       uTerminator: { value: ATMOSPHERE.TERMINATOR },
+      uAirglow: { value: ATMOSPHERE.AIRGLOW },
+      uAirglowPower: { value: ATMOSPHERE.AIRGLOW_POWER },
     },
     transparent: true,
     blending: AdditiveBlending,
@@ -106,4 +111,7 @@ export function createAtmosphereMaterial(color: number): ShaderMaterial {
     depthWrite: false,
     fog: false,
   })
+  // Базовый цвет типа мира — тинт звезды накладывается в кадре поверх него.
+  mat.userData.baseColor = color
+  return mat
 }

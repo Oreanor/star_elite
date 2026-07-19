@@ -1,10 +1,12 @@
 import { useFrame } from '@react-three/fiber'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Matrix4, Mesh, Quaternion, Vector3, type Texture } from 'three'
-import { clamp, type BodyEntity, type PlanetType } from '@elite/sim'
+import { Color, Matrix4, Mesh, Quaternion, Vector3, type Texture } from 'three'
+import { type BodyEntity } from '@elite/sim'
 import { useSession } from '../../app/GameContext'
-import { ATMOSPHERE, ATMOSPHERE_COLOR, BODY_FADE, BODY_SEGMENTS, CITY_LIGHTS, CORONA, GIANT_RENDER_CAP, MOON_DECOR } from '../config'
-import { atmosphereGeometry, planetGeometry, starGeometry, type PlanetLook } from '../geometry/bodies'
+import { ATMOSPHERE, ATMOSPHERE_COLOR, BODY_SEGMENTS, CITY_LIGHTS, CORONA, MOON_DECOR } from '../config'
+import { worldShrink } from '../worldShrink'
+import { nearestStar, starTintColor } from '../starLight'
+import { atmosphereGeometry, planetGeometry, starGeometry } from '../geometry/bodies'
 import { coronaGeometry } from '../geometry/corona'
 import { crossRaysGeometry, crossStationGeometry, stationGeometry } from '../geometry/props'
 import { crossGlbGeometry, stationGlbGeometry, stationGlbMaterial } from '../geometry/stationGlb'
@@ -20,7 +22,7 @@ import { createAtmosphereMaterial } from '../materials/atmosphere'
 import { createCityLightsMaterial } from '../materials/cityLights'
 import { createCoronaMaterial } from '../materials/starCorona'
 import { createStarSurfaceMaterial, loadStarSurface } from '../materials/starSurface'
-import { loadPlanetTexture, pickVariant } from '../sky/planets'
+import { loadPlanetTexture, pickVariant, planetLook } from '../sky/planets'
 import { MoonSwarm } from './Moons'
 
 /**
@@ -34,24 +36,6 @@ import { MoonSwarm } from './Moons'
  * накопленный угол зависит от частоты кадров, ползёт после паузы и не совпадёт
  * с тем, что насчитает сервер. Тот же приём, что и с фиксированным шагом физики.
  */
-
-/**
- * Что за мир — говорит домен (`body.surface`), во что его красить — знает рендер.
- * Ровно один словарь; новый тип планеты не требует ни единого `if` в сцене.
- */
-const LOOK_BY_SURFACE: Record<PlanetType, PlanetLook> = {
-  'Скалистая': 'rocky',
-  'Ледяная': 'ice',
-  'Газовый гигант': 'gas',
-  'Океаническая': 'ocean',
-  'Земного типа': 'terra',
-}
-
-function lookFor(body: BodyEntity): PlanetLook {
-  // `noUncheckedIndexedAccess` не верит даже полному Record — и правильно делает:
-  // тип поверхности приходит из домена и однажды может там появиться новый.
-  return (body.surface && LOOK_BY_SURFACE[body.surface]) || 'rocky'
-}
 
 const _spinQuat = new Quaternion()
 const _tiltQuat = new Quaternion()
@@ -83,21 +67,8 @@ function place(mesh: Mesh, body: BodyEntity, time: number, rest: Vector3): void 
 }
 
 const _toStar = new Vector3()
-
-/**
- * За потолком отвода камеры (`GIANT_RENDER_CAP`) мир ЗАМИРАЕТ: борт и камера дальше не
- * растут, поэтому реальные тела перестают отъезжать и повисли бы в кадре огромными. Домножаем
- * их размер на cap/рост — на звёздном масштабе планеты и светило съёживаются, будто уплыли
- * вдаль. Но сжатая в пиксель звезда всё равно СВЕТИТ яркой точкой, поэтому к BODY_FADE.END
- * размер догашивается в ноль (меш схлопывается в точку и пропадает) — система освобождает
- * кадр под галактику ещё до её проявления.
- */
-function worldShrink(scale: number): number {
-  if (scale <= GIANT_RENDER_CAP) return 1
-  const recede = GIANT_RENDER_CAP / scale
-  const fade = 1 - clamp((scale - BODY_FADE.START) / (BODY_FADE.END - BODY_FADE.START), 0, 1)
-  return recede * fade
-}
+const _airTint = new Color()
+const _lightsTint = new Color()
 
 function Planet({ body }: { body: BodyEntity }) {
   const ref = useRef<Mesh>(null)
@@ -105,7 +76,7 @@ function Planet({ body }: { body: BodyEntity }) {
   const lightsRef = useRef<Mesh>(null)
   const session = useSession()
 
-  const look = lookFor(body)
+  const look = planetLook(body.surface)
   const seed = body.id * 7919
   // Луна получает грубую сферу: с расстояния, на котором её видно, шестьдесят
   // меридианов не отличить от ста шестидесяти, а у гиганта их шесть штук.
@@ -146,10 +117,12 @@ function Planet({ body }: { body: BodyEntity }) {
   useEffect(() => () => lightsMaterial?.dispose(), [lightsMaterial])
 
   useFrame(() => {
-    // Размер жмётся к точке за потолком камеры: гигантский борт «отъезжает» от системы.
+    // С галактикой планета исчезает сразу (не тает до ×50k).
     const shrink = worldShrink(session.world.player.state.scale)
+    const on = shrink > 0
 
     if (ref.current) {
+      ref.current.visible = on
       place(ref.current, body, session.world.time, REST_POLE)
       ref.current.scale.setScalar(body.radius * shrink)
     }
@@ -159,6 +132,7 @@ function Planet({ body }: { body: BodyEntity }) {
      * связанных осях. Оболочка воздуха — нет: она гладкая, и вращать в ней нечего.
      */
     if (lightsRef.current) {
+      lightsRef.current.visible = on
       place(lightsRef.current, body, session.world.time, REST_POLE)
       lightsRef.current.scale.setScalar(body.radius * CITY_LIGHTS.SCALE * shrink)
     }
@@ -167,17 +141,29 @@ function Planet({ body }: { body: BodyEntity }) {
     // Позиция — из тела, свет — из звезды. Плавающее начало координат двигает
     // и то и другое.
     if (air) {
+      air.visible = on
       air.position.copy(body.pos)
       air.scale.setScalar(body.radius * airScale * shrink)
     }
 
     if (!airMaterial && !lightsMaterial) return
 
-    const star = session.world.bodies.find((b) => b.kind === 'star')
+    // Ближайшая к ПЛАНЕТЕ — у двойных систем терминатор от «своего» солнца.
+    const star = nearestStar(session.world, body.pos)
     if (!star) return
     _toStar.copy(star.pos).sub(body.pos).normalize()
-    airMaterial?.uniforms.uLight!.value.copy(_toStar)
-    lightsMaterial?.uniforms.uLight!.value.copy(_toStar)
+    if (airMaterial) {
+      airMaterial.uniforms.uLight!.value.copy(_toStar)
+      const base = (airMaterial.userData.baseColor as number) ?? 0x6fb4ff
+      starTintColor(base, star.color, ATMOSPHERE.STAR_TINT, _airTint)
+      airMaterial.uniforms.uColor!.value.copy(_airTint)
+    }
+    if (lightsMaterial) {
+      lightsMaterial.uniforms.uLight!.value.copy(_toStar)
+      const base = (lightsMaterial.userData.baseColor as number) ?? CITY_LIGHTS.COLOR
+      starTintColor(base, star.color, CITY_LIGHTS.STAR_TINT, _lightsTint)
+      lightsMaterial.uniforms.uColor!.value.copy(_lightsTint)
+    }
   })
 
   return (
@@ -242,14 +228,16 @@ function Star({ body }: { body: BodyEntity }) {
   }, [surface, surfaceMaterial])
 
   useFrame((state, dt) => {
-    // Светило тоже съёживается за потолком: на галактическом масштабе оно становится
-    // одной из точек галактики, а не висит огромным диском поверх звёздного поля.
+    // С порога галактики диск/корона гаснут сразу — светит точка слоя, не меш системы.
     const shrink = worldShrink(session.world.player.state.scale)
+    const on = shrink > 0
     if (ref.current) {
+      ref.current.visible = on
       ref.current.position.copy(body.pos)
       ref.current.scale.setScalar(body.radius * shrink)
     }
     if (glowRef.current) {
+      glowRef.current.visible = on
       glowRef.current.position.copy(body.pos)
       // Плоскость короны РАЗВОРАЧИВАЕМ лицом к камере вручную — это billboard: у свечения
       // нет поверхности, оно всегда смотрит на зрителя. Но НЕ копируем кватернион камеры
@@ -317,7 +305,9 @@ function Station({ body }: { body: BodyEntity }) {
     // Ось симметрии GLB-станции — её «верх» (Meshy: Y), НЕ продольная Z кориолиса. Кладём Y на
     // ось спина (domain spinAxis) и крутим вокруг неё — иначе ось модели гоняется по кругу (кувырок).
     place(mesh, body, session.world.time, REST_POLE)
-    mesh.scale.setScalar(body.radius * worldShrink(session.world.player.state.scale))
+    const shrink = worldShrink(session.world.player.state.scale)
+    mesh.visible = shrink > 0
+    mesh.scale.setScalar(body.radius * shrink)
   })
 
   return <mesh ref={ref} geometry={stationGeometry()} material={stationMaterial()} scale={body.radius} />
@@ -344,7 +334,9 @@ function CrossStation({ body }: { body: BodyEntity }) {
     // Крест — монумент: он НЕ вращается (domain даёт ему spin 0), потому ось симметрии здесь
     // роли не играет и `place` просто ставит его на место.
     place(mesh, body, session.world.time, REST_POLE)
-    mesh.scale.setScalar(body.radius * worldShrink(session.world.player.state.scale))
+    const shrink = worldShrink(session.world.player.state.scale)
+    mesh.visible = shrink > 0
+    mesh.scale.setScalar(body.radius * shrink)
     material.uniforms.uTime!.value += dt
   })
 

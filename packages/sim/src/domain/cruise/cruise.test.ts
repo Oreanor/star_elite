@@ -65,6 +65,33 @@ describe('крейсерский привод', () => {
     expect(world.player.cruise.factor).toBe(1)
     expect(isPhased(world.player)).toBe(false)
   })
+
+  it('ретро рубит множитель сразу, без экспоненциального спада', () => {
+    // Ctrl должен мгновенно гасить форсаж: спад DECAY_RATE с ×40M — секунды «выхода».
+    const world = emptySystem()
+    toDeepSpace(world)
+    spool(world, true, 30)
+    expect(world.player.cruise.factor).toBeGreaterThan(CRUISE.MAX_FACTOR * 0.95)
+
+    world.player.controls.retro = 1
+    updateCruise(world.player, world, true, 1 / 120) // даже если пробел ещё зажат
+    expect(world.player.cruise.factor).toBe(1)
+    expect(world.player.controls.cruise).toBe(1)
+    expect(world.player.cruise.engaged).toBe(false)
+  })
+
+  it('защёлка (число) держит множитель: не растёт к MAX и не тает', () => {
+    const world = emptySystem()
+    toDeepSpace(world)
+    spool(world, true, 8)
+    const held = world.player.cruise.factor
+    expect(held).toBeGreaterThan(10)
+    expect(held).toBeLessThan(CRUISE.MAX_FACTOR * 0.5)
+
+    spool(world, held, 5) // «want» = замороженный множитель
+    expect(world.player.cruise.factor).toBe(held)
+    expect(world.player.cruise.engaged).toBe(true)
+  })
 })
 
 describe('массовая блокировка', () => {

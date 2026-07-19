@@ -1,7 +1,16 @@
 import { useEffect, useRef, useState } from 'react'
 import { UI } from '../theme'
 import { Vector3 } from 'three'
-import { shipAxes, type BodyEntity, type World } from '@elite/sim'
+import {
+  clearContactLock,
+  clearNavLock,
+  MONOLITH_NAMES,
+  figurineDisplayName,
+  shipAxes,
+  stanceTo,
+  type BodyEntity,
+  type World,
+} from '@elite/sim'
 import { currentLang, t, useLang } from '../i18n'
 import { properName } from '../i18n/dataNames'
 import { useWheelZoom } from './useWheelZoom'
@@ -46,15 +55,18 @@ const LIFT_RANGE = 60_000
  * боевым захватом; красить им планету значило бы «вот во что ты стреляешь».
  * Выбранное тело выделяется не цветом, а размером, заливкой и пунктирным кольцом.
  */
-const BODY = UI.PRIMARY
+/** Хром панели карты — фосфор UI. Маркеры планет — `PLANET` (голубой). */
+const CHROME = UI.PRIMARY
+const BODY = UI.PLANET
 const SHIP = UI.SALVAGE
-const STAR = '#ffe6a8'
-const STATION = '#ffffff'
-const BLACK_HOLE = '#5a2868'
+const STAR = UI.STAR
+const STATION = UI.STATION
+const BLACK_HOLE = UI.BLACKHOLE
 /** Знакомый на радаре: свой тон, чтобы не спутать с планетой и с игроком. */
 const CONTACT = '#b98bff'
 /** Живой игрок: розовый — та же семантика, что на локаторе и карте галактики. */
 const PLAYER = UI.PLAYER
+const MONOLITH = UI.MONOLITH
 
 const colourOf = (kind: MarkerKind): string =>
   kind === 'star'
@@ -63,15 +75,17 @@ const colourOf = (kind: MarkerKind): string =>
       ? BLACK_HOLE
       : kind === 'station'
       ? STATION
-      : kind === 'ship'
-        ? SHIP
-        : kind === 'contact'
-          ? CONTACT
-          : kind === 'player'
-            ? PLAYER
-            : BODY
+      : kind === 'monolith' || kind === 'figurine'
+        ? MONOLITH
+        : kind === 'ship'
+          ? SHIP
+          : kind === 'contact'
+            ? CONTACT
+            : kind === 'player'
+              ? PLAYER
+              : BODY
 
-type MarkerKind = BodyEntity['kind'] | 'ship' | 'contact' | 'player'
+type MarkerKind = BodyEntity['kind'] | 'monolith' | 'figurine' | 'ship' | 'contact' | 'player'
 
 interface Marker {
   /** У корабля своего id нет: он не тело. Отрицательный — значит, не выбирается. */
@@ -89,6 +103,8 @@ interface Marker {
   range: number
   /** Центральное светило: стоит в центре, орбитой не мерится. */
   isStar: boolean
+  /** Цвет метки: у знакомых — по отношению, иначе `colourOf(kind)`. */
+  tint?: string
 }
 
 /**
@@ -137,7 +153,11 @@ function markers(world: World): Marker[] {
     // Кинематических (живых игроков) сюда не берём — они идут отдельным слоем `players`
     // розовым, даже если ты с ними уже знаком: «живой человек здесь» важнее метки знакомства.
     .filter((s) => s.alive && s.acquaintanceId != null && !s.kinematic)
-    .map((s) => ({ id: -1000 - s.id, name: s.name, kind: 'contact' as MarkerKind, pos: s.state.pos }))
+    .map((s) => {
+      const stance = stanceTo(world, s)
+      const tint = stance === 'friendly' ? UI.ALLY : stance === 'hostile' ? UI.DANGER : CONTACT
+      return { id: -1000 - s.id, name: s.name, kind: 'contact' as MarkerKind, pos: s.state.pos, tint }
+    })
 
   // Живые игроки в этой системе (кинематические борта). Отрицательный id (−2000−id)
   // держит их невыбираемыми: игрок летит, «цель навигации» на нём означала бы погоню.
@@ -147,6 +167,20 @@ function markers(world: World): Marker[] {
 
   const raw = [
     ...world.bodies.map((b) => ({ id: b.id, name: b.name, kind: b.kind as MarkerKind, pos: b.pos })),
+    ...world.monoliths.map((m) => ({
+      id: m.id,
+      name: MONOLITH_NAMES[m.variant] ?? 'Монолит',
+      kind: 'monolith' as MarkerKind,
+      pos: m.pos,
+    })),
+    ...world.figurines
+      .filter((f) => f.alive)
+      .map((f) => ({
+        id: f.id,
+        name: figurineDisplayName(f),
+        kind: 'figurine' as MarkerKind,
+        pos: f.pos,
+      })),
     { id: -1, name: t('map.you'), kind: 'ship' as MarkerKind, pos: player },
     ...contacts,
     ...players,
@@ -184,6 +218,7 @@ function markers(world: World): Marker[] {
       ring: r,
       range: m.range,
       isStar: m.isStar,
+      tint: 'tint' in m && typeof m.tint === 'string' ? m.tint : undefined,
     }
   })
 }
@@ -203,7 +238,8 @@ function formatDistance(metres: number): string {
  * Выбирается всё, что стоит на месте: звезда, планета, луна, причал. Корабль —
  * нет: он летит, и «цель навигации» на нём означала бы преследование, а не курс.
  */
-const selectable = (m: Marker) => m.kind !== 'ship' && m.kind !== 'contact'
+const selectable = (m: Marker) =>
+  m.kind !== 'ship' && m.kind !== 'contact' && m.kind !== 'player'
 
 /** Состав системы одной строкой: сколько чего в ней есть. */
 function census(world: World): string {
@@ -276,7 +312,16 @@ export function SystemMap({
   // Выбор цели: и клик по метке на диске, и строка списка ведут сюда — одно состояние
   // `navTargetId`, одна подсветка. Тот же клик по выбранному снимает выбор.
   const applySelect = (id: number) => {
-    world.navTargetId = world.navTargetId === id ? null : id
+    // Карта пишет в тот же нав-захват, что Shift+Tab; контакт гасим — один фокус.
+    if (world.navTargetId === id && world.targetFocus === 'nav') {
+      clearNavLock(world)
+    } else {
+      clearContactLock(world)
+      world.navTargetId = id
+      world.targetFocus = 'nav'
+      const body = world.bodies.find((b) => b.id === id)
+      world.lockedStationId = body?.kind === 'station' ? id : null
+    }
     bump((n) => n + 1)
   }
   // С диска — только если это был клик, а не завершение вращения (dragged сбросится на
@@ -308,7 +353,7 @@ export function SystemMap({
       </div>
       </div>
 
-      <div className="flex w-1/3 shrink-0 flex-col" style={{ color: BODY }}>
+      <div className="flex w-1/3 shrink-0 flex-col" style={{ color: CHROME }}>
         <h1 className="text-xl tracking-[0.3em]">{properName(world.systemName).toUpperCase()}</h1>
         {/* Состав системы: сколько звёзд, планет, лун и причалов — видно, что тут есть. */}
         <p className="mb-6 mt-1 text-[11px] tracking-widest opacity-50">{census(world)}</p>
@@ -325,9 +370,9 @@ export function SystemMap({
                   onClick={() => applySelect(m.id)}
                   className="flex w-full cursor-pointer items-baseline gap-3 rounded border px-3 py-2 text-left text-sm transition-colors"
                   style={{
-                    borderColor: active ? BODY : 'rgba(124,196,255,0.16)',
+                    borderColor: active ? CHROME : 'rgba(124,196,255,0.16)',
                     background: active ? 'rgba(124,196,255,0.12)' : 'transparent',
-                    color: colourOf(m.kind),
+                    color: m.tint ?? colourOf(m.kind),
                   }}
                 >
                   <span className="flex-1 truncate">{properName(m.name)}</span>
@@ -343,7 +388,7 @@ export function SystemMap({
             type="button"
             onClick={onClose}
             className="mt-auto w-full cursor-pointer rounded border py-2 text-sm tracking-[0.3em] transition-colors hover:bg-white/10"
-            style={{ borderColor: BODY }}
+            style={{ borderColor: CHROME }}
           >
             {t('map.close')}
           </button>
@@ -440,7 +485,7 @@ function Hologram({
       {marks.map(({ m, base, tip }) => {
         const active = m.id === navTargetId
         const clickable = selectable(m)
-        const colour = colourOf(m.kind)
+        const colour = m.tint ?? colourOf(m.kind)
 
         return (
           <g

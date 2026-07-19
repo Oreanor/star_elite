@@ -16,6 +16,7 @@ import {
   stepManoeuvre,
 } from '@elite/sim'
 import { consumePress, input, isHeld } from '../../platform/input/input'
+import { pushWarning } from '../../ui/hud/warnings'
 import { chargeThrottle, jumpFx } from './jumpFx'
 import { undocking } from './undockFx'
 
@@ -33,15 +34,16 @@ import { undocking } from './undockFx'
 
 /** Скорость изменения тяги клавишами W/S, доля в секунду. */
 const THROTTLE_RATE = 0.9
+/** Сброс наддува ПКМ быстрее набора: отпустил — прибавка стекает за ~0.25 с, не за секунду. */
+const SURGE_RELEASE_RATE = 4
 
 /**
  * Задний ход — доля от крейсерской, доступная за нулём рукояти газа.
  *
  * Главное сопло смотрит назад и толкает только вперёд; пятиться нечем, кроме
- * маневровых — тех же, что тормозят на Ctrl и дают снос вбок. Поэтому назад
- * корабль ползёт медленно: 15% полного хода, не больше. Рукоять газа при этом
- * общая, S просто уводит её за ноль — сначала гасит ход до нуля, потом включает
- * реверс. Отдельного «когда в покое» не нужно: через ноль иначе не пройти.
+ * маневровых (снос вбок). Ctrl — ручник (гасит весь ход), не реверс. Поэтому назад
+ * корабль ползёт медленно: 15% полного хода через S за нулём рукояти. Рукоять газа
+ * общая: S сначала гасит ход до нуля, потом включает реверс.
  */
 const REVERSE_FRAC = 0.15
 
@@ -106,9 +108,16 @@ const TAPS: readonly TapKey[] = [
 ]
 
 export interface PlayerIntent {
-  /** Держит ли клавишу крейсерского хода. */
+  /** Держит ли клавишу крейсерского хода (Пробел) или защёлка Alt. */
   cruise: boolean
-  /** Хочет пустить ракету (однократно, гасится после выстрела). */
+  /**
+   * Защёлка форсажа (Alt): пробел можно отпустить — множитель ЗАМОРОЖЕН
+   * на `cruiseLatchFactor` (не ползёт к MAX). Сброс — Ctrl.
+   */
+  cruiseLatch: boolean
+  /** Множитель в миг Alt; 0 — нет защёлки. */
+  cruiseLatchFactor: number
+  /** Хочет выстрел с пилона (однократно): ракета или дрон-ракета — что экипировано. */
   missile: boolean
   /** Хочет пустить противоракетный импульс (однократно). */
   ecm: boolean
@@ -116,8 +125,6 @@ export interface PlayerIntent {
   bomb: boolean
   /** Хочет переключить маскировочное поле (однократно). Тумблер, а не удержание. */
   cloak: boolean
-  /** Хочет выпустить беспилотник (однократно). */
-  drone: boolean
   /** Держит тяговый луч (C). Не однократное действие — удержание. */
   tractor: boolean
   /** Тяга, 0..1. Живёт между кадрами, поэтому хранится тут, а не в ShipControls. */
@@ -137,6 +144,8 @@ export interface PlayerIntent {
   sFloorZero: boolean
   /** Было ли S подтверждённо зажато в прошлом кадре — для фронта нажатия. */
   sWasHeld: boolean
+  /** Ctrl зажат в прошлом кадре — пуш «ручное торможение» только на фронте. */
+  retroWasHeld: boolean
   flightAssist: boolean
 
   /**
@@ -166,16 +175,18 @@ function assistDefault(): boolean {
 export function createIntent(): PlayerIntent {
   return {
     cruise: false,
+    cruiseLatch: false,
+    cruiseLatchFactor: 0,
     missile: false,
     ecm: false,
     bomb: false,
     cloak: false,
-    drone: false,
     tractor: false,
     throttle: 0.45,
     surge: 0,
     sFloorZero: false,
     sWasHeld: false,
+    retroWasHeld: false,
     flightAssist: assistDefault(),
     growDir: 1,
     growWasHeld: false,
@@ -395,7 +406,7 @@ export function createPlayerController(intent: PlayerIntent): Controller {
        */
       if (input.throttleUp && intent.throttle < 0) intent.throttle = 0
       const headroom = 1 - intent.throttle
-      const surgeDelta = input.throttleUp ? THROTTLE_RATE * dt : -THROTTLE_RATE * dt
+      const surgeDelta = input.throttleUp ? THROTTLE_RATE * dt : -SURGE_RELEASE_RATE * dt
       intent.surge = clamp(intent.surge + surgeDelta, 0, headroom)
 
       c.throttle = intent.throttle + intent.surge
@@ -446,13 +457,37 @@ export function createPlayerController(intent: PlayerIntent): Controller {
       c.boost = input.throttleUp ? boostMult(ship.loadout) : 1
       c.retro = isHeld('ControlLeft') || isHeld('ControlRight') ? 1 : 0
 
-      // Крейсерский ход (то, что игрок зовёт «форсаж») — удержание ПРОБЕЛА. Огонь ушёл
-      // на ЛКМ, чтобы разгон и стрельба не делили клавишу. Раньше был Z, ещё раньше
-      // Shift — его перехватывали залипающие клавиши Windows.
+      // Крейсерский ход («форсаж») — удержание Пробела (разгон к MAX).
+      // Alt — защёлка: множитель встаёт; пробел можно отпустить.
+      // Повторный Пробел (край нажатия) снимает защёлку и снова набирает к MAX.
+      if (consumePress('AltLeft') || consumePress('AltRight')) {
+        if (!intent.cruiseLatch && ship.cruise.factor > 1.02) {
+          intent.cruiseLatch = true
+          intent.cruiseLatchFactor = ship.cruise.factor
+          pushWarning('cruiseLatch', world.time, { repeat: 0 })
+        }
+      }
+      if (intent.cruiseLatch && consumePress('Space')) {
+        intent.cruiseLatch = false
+        intent.cruiseLatchFactor = 0
+      }
       intent.cruise = isHeld('Space')
-      // Тормоз гасит и крейсер: жмёшь ретро (Ctrl) — выходишь из разгона, множитель
-      // стекает к единице. Ретро побеждает шифт того же кадра — тормоз важнее.
-      if (c.retro) intent.cruise = false
+      // Ручник (Ctrl) гасит крейсер сразу (см. updateCruise), снимает защёлку и весь
+      // вектор скорости. Побеждает пробел того же кадра — тормоз важнее.
+      // Рукоять газа тоже в ноль: иначе после отпускания FA выстреливает к
+      // оставшемуся throttle×scale («тормозил — отпустил — несусь»).
+      if (c.retro) {
+        if (!intent.retroWasHeld) pushWarning('cruiseUnlatch', world.time, { repeat: 0 })
+        intent.retroWasHeld = true
+        intent.cruiseLatch = false
+        intent.cruiseLatchFactor = 0
+        intent.cruise = false
+        intent.throttle = 0
+        intent.surge = 0
+        c.throttle = 0
+      } else {
+        intent.retroWasHeld = false
+      }
       // Луч — удержание, а не нажатие: пока держишь C, он тянет.
       intent.tractor = isHeld('KeyC')
 
@@ -520,15 +555,11 @@ export function createPlayerController(intent: PlayerIntent): Controller {
       return true
     },
 
-    /** Рой автобою не отдаём: он не знает, когда прикрытие нужнее ракеты. */
-    wantsDrone(): boolean {
-      if (!intent.drone) return false
-      intent.drone = false
-      return true
-    },
-
-    wantsCruise(_ship: ShipEntity, world: World): boolean {
-      return autofightActive(world) ? false : intent.cruise
+    wantsCruise(_ship: ShipEntity, world: World): boolean | number {
+      if (autofightActive(world)) return false
+      // Защёлка важнее пробела: иначе Space снова потащит к MAX.
+      if (intent.cruiseLatch && intent.cruiseLatchFactor > 1) return intent.cruiseLatchFactor
+      return intent.cruise
     },
 
     wantsTractor(_ship: ShipEntity, world: World): boolean {

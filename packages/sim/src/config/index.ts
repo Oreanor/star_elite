@@ -4,15 +4,18 @@ export { BODY_KINDS, GRAVITY, MOON, type BodyKind } from './bodies'
 export { ASTEROID, DEBRIS, SCORE, WORLD } from './world'
 export { TITAN } from './titans'
 export { MONOLITH } from './monoliths'
+export { FIGURINE, FIGURINE_TITLES, type FigurineTitleId } from './figurines'
 export { PLATFORM } from './platform'
 export {
   ARRIVAL,
   CORE_INDEX,
   GALAXY,
+  GALAXY_FLIGHT,
   GALAXY_SHAPES,
   HUMAN_SPECIES,
   PLANET_TYPES,
   PLAYABLE_SPECIES,
+  SCALE,
   STAR_CLASSES,
   SYNTH_SPECIES,
   type GalaxyShapeId,

@@ -51,7 +51,7 @@ function detonate(world: World, m: MissileEntity, victim: ShipEntity | null): vo
   spawnExplosion(world, m.pos, m.vel, 2.2)
   if (victim) {
     const shieldUp = victim.shield > 0 // до удара — им решается поломка (см. breakFromHit)
-    applyDamage(victim, m.module.damage, world.time)
+    applyDamage(victim, m.module.damage, world.time, { kind: 'missile', name: '' })
     if (victim.faction === 'player') breakFromHit(victim, shieldUp, world.rng)
   }
 }
