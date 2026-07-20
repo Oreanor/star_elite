@@ -155,9 +155,26 @@ export function BushLayer() {
     backdrop.position.copy(camera.position)
     backdrop.scale.setScalar(BUSH.BACKDROP_RADIUS_M)
 
-    // Слой сидит на корабле: его позиция и ориентация. Крона расходится перед кормой.
-    group.position.copy(world.player.state.pos)
-    group.quaternion.copy(world.player.state.quat)
+    // Слой сидит на корабле ПОЗИЦИЕЙ, но БЕЗ поворота (кадр выровнен по миру). Так осмотр
+    // мышью крутит камеру вокруг неподвижной кроны, а не тащит крону за носом корабля.
+    const ship = world.player.state
+    group.position.copy(ship.pos)
+    group.quaternion.identity()
+
+    // КОМНАТА МОНУМЕНТА: крона гаснет, в пустоте висит один крест (мир − ship.pos → локаль
+    // группы). Летаешь вокруг него свободно; отдаление считает `stepBush`.
+    if (bush.inMonument && session.monumentCross) {
+      bubbles.count = 0
+      edges.geometry.setDrawRange(0, 0)
+      const mc = session.monumentCross
+      cross.visible = true
+      cross.position.set(mc.x - ship.pos.x, mc.y - ship.pos.y, mc.z - ship.pos.z)
+      cross.scale.setScalar(BUSH.MONUMENT_ROOM_CROSS_R)
+      cross.quaternion.identity()
+      syncCrossPortalSky(crossPortalMat, world.galaxySeed)
+      tickCrossPortal(crossNeonMat, world.time)
+      return
+    }
 
     // Интро: из ×INTRO_SCALE схлопывается в тебя за INTRO_SECONDS. Центр — начало координат.
     if (introStart.current == null) introStart.current = world.time

@@ -4,6 +4,7 @@ import {
   identity,
   invertLorentz,
   mulMat,
+  neighborsOf,
   toBall,
   vec4,
   type BushTravel,
@@ -109,4 +110,48 @@ export function projectBush(universe: Universe, bush: BushTravel, proj: BushProj
     proj.ball[i * 3 + 1] = _ball.y
     proj.ball[i * 3 + 2] = _ball.z
   }
+}
+
+const _g: Mat4 = new Float64Array(16)
+const _pv: Vec4 = vec4()
+const _pb = { x: 0, y: 0, z: 0 }
+
+/**
+ * ВЫБОР ВЕТКИ ВЗГЛЯДОМ. Стоя в узле, игрок целится носом в пузырь-соседа и жмёт газ —
+ * едем к тому, чьё спроецированное направление лучше совпало со взглядом.
+ *
+ * Направление на соседа считаем в кадре игрока (та же проекция, что рисует крону), поэтому
+ * оно совпадает с тем, что видно на экране. `(nx,ny,nz)` — нос корабля в мировых осях; кадр
+ * игрока выровнен по миру (слой якорится без поворота), значит их можно сравнивать напрямую.
+ *
+ * @returns индекс соседа или −1, если ни один не попал в конус `minDot` (смотришь мимо).
+ */
+export function pickBranch(
+  universe: Universe,
+  node: number,
+  nx: number,
+  ny: number,
+  nz: number,
+  minDot: number,
+): number {
+  const from = universe.nodes[node]
+  if (!from) return -1
+  invertLorentz(from.transform, _g)
+  const ns = neighborsOf(universe, node)
+  let best = -1
+  let bestDot = minDot
+  for (let k = 0; k < ns.length; k++) {
+    const nb = universe.nodes[ns[k]!]
+    if (!nb) continue
+    applyMat(_g, nb.pos, _pv)
+    toBall(_pv, _pb)
+    const len = Math.hypot(_pb.x, _pb.y, _pb.z)
+    if (len < 1e-9) continue
+    const d = (nx * _pb.x + ny * _pb.y + nz * _pb.z) / len
+    if (d > bestDot) {
+      bestDot = d
+      best = ns[k]!
+    }
+  }
+  return best
 }

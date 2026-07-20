@@ -1,4 +1,5 @@
 import { createContext, useContext, useMemo, type ReactNode } from 'react'
+import { Vector3 } from 'three'
 import {
   addItem,
   aiController,
@@ -30,6 +31,7 @@ import {
   type World,
 } from '@elite/sim'
 import { createIntent, createPlayerController, type PlayerIntent } from './control/playerController'
+import { createBushController } from './control/bushController'
 import { online } from './net/firebase'
 import { loadSave } from './save/saveStore'
 
@@ -46,6 +48,8 @@ export interface Session {
   controllers: Map<number, Controller>
   /** Контроллер игрока. Автопилот его временно подменяет — и только его. */
   pilot: Controller
+  /** Штурвал на кусте: газ + осмотр мышью. Читает ввод, как и `pilot` (слой приложения). */
+  bushPilot: Controller
   /** Новая игра (сейва не было): UI покажет экран создания персонажа перед стартом. */
   isNewGame: boolean
   mode: PilotMode
@@ -55,6 +59,12 @@ export interface Session {
    */
   universe: Universe
   bush: BushTravel
+  /**
+   * Мировая точка креста в КОМНАТЕ МОНУМЕНТА, пока `bush.inMonument`. Живёт в сессии, а не
+   * в домене: `BushTravel` — чистое состояние рельса, а место креста в комнате — уже рендер
+   * (куда его поставили относительно игрока на входе). `null` — мы не в комнате.
+   */
+  monumentCross: Vector3 | null
   intent: PlayerIntent
   /**
    * Шагнул ли мир в этом кадре. Не второй флаг паузы: решение принимает один
@@ -186,6 +196,7 @@ function createSession(initialSave?: PlayerSave | null): Session {
 
   const intent = createIntent()
   const pilot = createPlayerController(intent)
+  const bushPilot = createBushController(intent)
 
   const controllers = new Map<number, Controller>()
   controllers.set(world.player.id, pilot)
@@ -196,10 +207,12 @@ function createSession(initialSave?: PlayerSave | null): Session {
     world,
     controllers,
     pilot,
+    bushPilot,
     isNewGame: save === null,
     mode: 'manual',
     universe: generateUniverse(GALAXY.WORD),
     bush: createBushTravel(),
+    monumentCross: null,
     intent,
     running: false,
     menuFlying: false,
@@ -220,8 +233,18 @@ function createSession(initialSave?: PlayerSave | null): Session {
  */
 function bindControllers(session: Session): void {
   session.controllers.clear()
+  // Тот же выбор штурвала по режиму, что и в `helmController` (Simulation): пересборка карты
+  // при смене трафика не должна ронять автопилот, рельсы куста или свободный полёт в комнате.
   const atTheHelm =
-    session.mode === 'autodock' ? autodockController : session.mode === 'flyto' ? flyToController : session.pilot
+    session.mode === 'autodock'
+      ? autodockController
+      : session.mode === 'flyto'
+        ? flyToController
+        : session.mode === 'bush'
+          ? session.bush.inMonument
+            ? session.pilot
+            : session.bushPilot
+          : session.pilot
   session.controllers.set(session.world.player.id, atTheHelm)
   for (const ship of session.world.ships) session.controllers.set(ship.id, aiController)
 }

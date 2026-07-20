@@ -24,13 +24,16 @@ import {
   departTo,
   enterBush,
   leaveBush,
-  neighborsOf,
+  monumentRoomExited,
   stepBushTravel,
   GALAXY,
+  UNIVERSE,
   type Controller,
   type World,
 } from '@elite/sim'
-import { bushController } from '../../app/control/bushController'
+import { Vector3 } from 'three'
+import { BUSH } from '../config'
+import { pickBranch } from './bushView'
 import { cycleGalaxyStar, galaxyRadar, retargetNearestGalaxyStar } from './galaxyRadar'
 import { syncControllers, useSession, type Session } from '../../app/GameContext'
 import { coastController } from '../../app/control/playerController'
@@ -68,8 +71,9 @@ function ownsMielophone(player: World['player']): boolean {
 function helmController(session: Session, coasting: boolean): Controller {
   if (session.mode === 'autodock') return autodockController
   if (session.mode === 'flyto') return flyToController
-  // На кусте манёвров нет вовсе — там едут по рельсам, а не летают.
-  if (session.mode === 'bush') return bushController
+  // На кусте манёвров нет — газ и осмотр мышью (`bushPilot`). Но в КОМНАТЕ МОНУМЕНТА полёт
+  // свободный: там пустое пространство с крестом, вокруг которого летаешь, — штурвал пилоту.
+  if (session.mode === 'bush') return session.bush.inMonument ? session.pilot : session.bushPilot
   return coasting ? coastController : session.pilot
 }
 
@@ -98,12 +102,18 @@ function touchedDoor(world: World): boolean {
   return false
 }
 
+const _nose = new Vector3()
+const _fwd = new Vector3()
+
 /**
  * Вход на куст и ход по нему.
  *
- * Газ здесь — СИГНАЛ «еду», а не тяга: позу корабля на ребре задаёт рельс, а не физика.
- * В узле корабль встаёт и ждёт выбора ветки; пока выбора нет (рендер и осмотр ещё не
- * сделаны), едем к первому соседу — иначе движение упёрлось бы в первом же узле.
+ * Газ — СИГНАЛ «еду», позу на ребре задаёт рельс. В узле корабль встаёт: игрок целится
+ * НОСОМ в пузырь-соседа (мышь вертит головой) и жмёт газ — едем к той ветке (`pickBranch`).
+ * Смотришь мимо всех — стоишь и осматриваешься.
+ *
+ * Достиг корня-креста — входим в КОМНАТУ МОНУМЕНТА: свободный полёт вокруг креста, отдалился
+ * — вернулся на куст (правила в домене: `monumentRoomExited`).
  */
 function stepBush(session: Session, dt: number): void {
   const { world, bush, universe } = session
@@ -113,6 +123,7 @@ function stepBush(session: Session, dt: number): void {
     // Дом — узел `GALAXY.HOME_NODE`: влетев в дыру своей галактики, оказываемся на её
     // месте в кусте, а не в случайной точке вселенной.
     enterBush(bush, GALAXY.HOME_NODE)
+    session.monumentCross = null
     setPilot(session, 'bush')
     pushWarning('bushEnter', world.time, {
       label: universe.nodes[bush.node]?.name ?? '',
@@ -121,19 +132,43 @@ function stepBush(session: Session, dt: number): void {
     return
   }
 
+  // КОМНАТА МОНУМЕНТА: летаешь свободно у креста (штурвал у пилота, см. helmController).
+  // Отдалился за порог — комната закрывается, снова стоишь в узле-корне на кусте.
+  if (bush.inMonument) {
+    const cross = session.monumentCross
+    if (cross && monumentRoomExited(world.player.state.pos.distanceTo(cross))) {
+      bush.inMonument = false
+      session.monumentCross = null
+      setPilot(session, 'bush')
+    }
+    return
+  }
+
   if (atNode(bush)) {
-    const next = neighborsOf(universe, bush.node)[0]
-    if (next != null) departTo(bush, universe, next)
+    // Газ + взгляд: нос корабля в мировых осях против направлений на соседей.
+    if (world.player.controls.throttle > 0) {
+      _nose.set(0, 0, -1).applyQuaternion(world.player.state.quat)
+      const pick = pickBranch(universe, bush.node, _nose.x, _nose.y, _nose.z, BUSH.BRANCH_MIN_DOT)
+      if (pick >= 0) departTo(bush, universe, pick)
+    }
     return
   }
 
   const arrived = stepBushTravel(bush, universe, world.player.controls.throttle > 0 ? 1 : 0, dt)
-  if (arrived >= 0) {
-    pushWarning('bushArrive', world.time, {
-      label: universe.nodes[arrived]?.name ?? '',
-      repeat: 0,
-    })
+  if (arrived < 0) return
+
+  if (arrived === UNIVERSE.MONUMENT_NODE) {
+    // Достиг креста — открываем комнату монумента. Крест ставим перед носом; отсюда мерим
+    // отдаление для выхода. Штурвал станет пилотским (helmController видит inMonument).
+    bush.inMonument = true
+    _fwd.set(0, 0, -1).applyQuaternion(world.player.state.quat)
+    session.monumentCross = world.player.state.pos.clone().addScaledVector(_fwd, BUSH.MONUMENT_ROOM_DIST)
+    setPilot(session, 'bush')
   }
+  pushWarning('bushArrive', world.time, {
+    label: universe.nodes[arrived]?.name ?? '',
+    repeat: 0,
+  })
 }
 
 export function Simulation() {
