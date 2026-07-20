@@ -124,6 +124,10 @@ function stepBush(session: Session, dt: number): void {
     // месте в кусте, а не в случайной точке вселенной.
     enterBush(bush, GALAXY.HOME_NODE)
     session.monumentCross = null
+    // Корабль ВСТАЁТ: на кусте он не летит, а стоит в начале координат (едет вселенная).
+    // Без обнуления он бы въехал с боевой скоростью и дрейфовал, пока лётный компьютер тормозит.
+    world.player.state.vel.set(0, 0, 0)
+    world.player.state.angVel.set(0, 0, 0)
     setPilot(session, 'bush')
     pushWarning('bushEnter', world.time, {
       label: universe.nodes[bush.node]?.name ?? '',
@@ -144,9 +148,13 @@ function stepBush(session: Session, dt: number): void {
     return
   }
 
+  // «Еду» — клавиша W (газ). Читаем ПРЯМО с неё, а не с `controls.throttle`: на кусте тяга
+  // в физику ноль (корабль стоит), поэтому throttle там всегда 0 и не годится как сигнал.
+  const going = isHeld('KeyW')
+
   if (atNode(bush)) {
     // Газ + взгляд: нос корабля в мировых осях против направлений на соседей.
-    if (world.player.controls.throttle > 0) {
+    if (going) {
       _nose.set(0, 0, -1).applyQuaternion(world.player.state.quat)
       const pick = pickBranch(universe, bush.node, _nose.x, _nose.y, _nose.z, BUSH.BRANCH_MIN_DOT)
       if (pick >= 0) departTo(bush, universe, pick)
@@ -154,7 +162,7 @@ function stepBush(session: Session, dt: number): void {
     return
   }
 
-  const arrived = stepBushTravel(bush, universe, world.player.controls.throttle > 0 ? 1 : 0, dt)
+  const arrived = stepBushTravel(bush, universe, going ? 1 : 0, dt)
   if (arrived < 0) return
 
   if (arrived === UNIVERSE.MONUMENT_NODE) {

@@ -6,13 +6,13 @@ import {
   BufferGeometry,
   Color,
   Group,
-  IcosahedronGeometry,
   InstancedBufferAttribute,
   InstancedMesh,
   LineSegments,
   Mesh,
   MeshBasicMaterial,
   Object3D,
+  PlaneGeometry,
   SphereGeometry,
   Texture,
 } from 'three'
@@ -86,8 +86,9 @@ export function BushLayer() {
 
   // Геометрия пузыря + СВОИ per-instance атрибуты (тон и туман каждого): собственные имена
   // не спорят с встроенным `instanceColor` three и держатся отдельно от матрицы инстанса.
+  // Плоский квад −1..1 (билборд к камере) вместо сферы: пузыри — 2D-кружки с градиентом.
   const bubbleGeo = useMemo(() => {
-    const g = new IcosahedronGeometry(1, 1)
+    const g = new PlaneGeometry(2, 2)
     g.setAttribute('aTint', new InstancedBufferAttribute(new Float32Array(COUNT * 3), 3))
     g.setAttribute('aFog', new InstancedBufferAttribute(new Float32Array(COUNT), 1))
     return g
@@ -199,7 +200,8 @@ export function BushLayer() {
       const r = Math.max(BUSH.BUBBLE_MIN_R_M, BUSH.BUBBLE_RADIUS_M * f)
       _dummy.position.set(ball[i * 3]! * scaleM, ball[i * 3 + 1]! * scaleM, ball[i * 3 + 2]! * scaleM)
       _dummy.scale.setScalar(r)
-      _dummy.quaternion.identity()
+      // Билборд: кружок всегда лицом к камере.
+      _dummy.quaternion.copy(camera.quaternion)
       _dummy.updateMatrix()
       bubbles.setMatrixAt(count, _dummy.matrix)
       tint[count * 3] = _base.r

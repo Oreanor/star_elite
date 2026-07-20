@@ -1,5 +1,5 @@
 import { deadzoneScale, type Controller, type ShipEntity, type World } from '@elite/sim'
-import { input, isHeld } from '../../platform/input/input'
+import { input } from '../../platform/input/input'
 import type { PlayerIntent } from './playerController'
 
 /**
@@ -41,8 +41,11 @@ export function createBushController(_intent: PlayerIntent): Controller {
       c.cruise = 0
       c.grow = 0
       c.flightAssist = true
-      // Газ — W. Он и сигнал рельсу «еду», и (скрытая) тяга борта.
-      c.throttle = isHeld('KeyW') ? 1 : 0
+      // ТЯГА В ФИЗИКУ — НОЛЬ: на кусте корабль стоит в начале координат, а «едет» вселенная
+      // (её выворачивает `bush.t`, а не движение борта). Дай ему реальную тягу — он полетит
+      // вперёд, камера с упреждением по скорости затрясётся, а осмотр мышью потонет в переносе.
+      // Сигнал «еду» для рельса читает `stepBush` прямо с клавиши W, не отсюда.
+      c.throttle = 0
     },
 
     wantsFire(): boolean {

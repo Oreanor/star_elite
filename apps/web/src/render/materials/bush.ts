@@ -21,8 +21,7 @@ attribute float aFog;
 
 varying vec3 vTint;
 varying float vFog;
-varying vec3 vNormalW;
-varying vec3 vViewDir;
+varying vec2 vUv;
 
 void main() {
   #ifdef USE_INSTANCING
@@ -30,12 +29,10 @@ void main() {
   #else
     mat4 im = mat4(1.0);
   #endif
-  vec4 world = modelMatrix * im * vec4(position, 1.0);
+  vUv = uv;
   vTint = aTint;
   vFog = aFog;
-  vNormalW = normalize(mat3(modelMatrix) * mat3(im) * normal);
-  vViewDir = normalize(cameraPosition - world.xyz);
-  gl_Position = projectionMatrix * viewMatrix * world;
+  gl_Position = projectionMatrix * viewMatrix * modelMatrix * im * vec4(position, 1.0);
   #include <logdepthbuf_vertex>
 }
 `
@@ -44,26 +41,24 @@ const BUBBLE_FRAG = /* glsl */ `
 #include <common>
 #include <logdepthbuf_pars_fragment>
 
-uniform float uPower;
 uniform float uRim;
 uniform float uBase;
 uniform float uAlpha;
 
 varying vec3 vTint;
 varying float vFog;
-varying vec3 vNormalW;
-varying vec3 vViewDir;
+varying vec2 vUv;
 
 void main() {
   #include <logdepthbuf_fragment>
-  vec3 n = normalize(vNormalW);
-  float ndv = abs(dot(n, normalize(vViewDir)));
-  // Френель: край силуэта ярок, центр прозрачен — «видно насквозь».
-  float fres = pow(1.0 - ndv, uPower);
-  // Дешёвая тонкоплёночная радуга: фаза от угла обзора, интерференция трёх «толщин».
-  vec3 film = 0.5 + 0.5 * cos(6.2831853 * (vec3(0.0, 0.33, 0.67) + fres * 1.6));
-  vec3 col = mix(vTint, film, 0.35);
-  float alpha = (uBase + fres * uRim) * vFog * uAlpha;
+  // ПЛОСКИЙ КРУГ (билборд к камере) с РАДИАЛЬНЫМ градиентом: мягкая заливка + светлое кольцо
+  // у края. Не 3D-сфера — куст читается как схема галактик, а не как поле мыльных шаров.
+  float r = length(vUv - 0.5) * 2.0;
+  if (r > 1.0) discard;
+  float disc = 1.0 - smoothstep(0.82, 1.0, r);
+  float rim = smoothstep(0.45, 0.94, r) * (1.0 - smoothstep(0.94, 1.0, r));
+  vec3 col = mix(vTint, vec3(1.0), rim * 0.6);
+  float alpha = (uBase * disc + rim * uRim) * vFog * uAlpha;
   if (alpha < 0.003) discard;
   gl_FragColor = vec4(col, alpha);
 }
@@ -72,9 +67,8 @@ void main() {
 export function bushBubbleMaterial(): ShaderMaterial {
   return new ShaderMaterial({
     uniforms: {
-      uPower: { value: 2.4 },
-      uRim: { value: 0.9 },
-      uBase: { value: 0.06 },
+      uRim: { value: 0.95 },
+      uBase: { value: 0.14 },
       uAlpha: { value: 1 },
     },
     vertexShader: BUBBLE_VERT,
