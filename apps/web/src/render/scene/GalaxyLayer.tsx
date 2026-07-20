@@ -29,7 +29,7 @@ import {
   starSurfaceTexture,
   tickStarSurfaceTime,
 } from '../materials/starSurface'
-import { galaxyRadar } from './galaxyRadar'
+import { galaxyRadar, resetGalaxyRadar } from './galaxyRadar'
 
 /**
  * Галактика как дальний край зума миелофона. С FADE_IN_START — сразу, без прозрачности.
@@ -386,6 +386,11 @@ export function GalaxyLayer() {
 
   const activeKey = useRef<number | null>(null)
   const boostData = useRef<StarBuffers | null>(null)
+
+  // Мост локатора — модульный синглтон, и он обязан умереть вместе со своим писателем.
+  // `WorldVisuals` снимается при смене системы и при подмене мира пройденным порталом;
+  // без этого буферы прошлого слоя жили дальше и HUD рисовал звёзды из небытия.
+  useEffect(() => () => resetGalaxyRadar(), [])
 
   useFrame((state) => {
     const world = session.world

@@ -335,7 +335,7 @@ function habitationChance(scoopable: boolean, starClass: StarClassId): number {
  * сгенерировать по требованию, не строя всю галактику. Это пригодится,
  * когда 2500 превратятся в 250 000.
  */
-export function generateSystem(index: number, seed: number = GALAXY.SEED): StarSystem {
+export function generateSystem(index: number, seed: number): StarSystem {
   const rng = makeRng(seed ^ Math.imul(index, 0x9e3779b1))
   const { x, y, z } = placeSystem(index, seed)
 
@@ -392,7 +392,7 @@ function makeDyson(rng: Rng, capital: SettledPlanet | null): DysonSpec | null {
  * зерна, столица (а с ней тех-уровень и строй) выйдет та же. На этом и держится
  * сетевая синхронизация цен — их не нужно пересылать, они считаются одинаково.
  */
-export function settlementAt(index: number, seed: number = GALAXY.SEED): Settlement | null {
+export function settlementAt(index: number, seed: number): Settlement | null {
   return capitalOf(generateSystem(index, seed))?.settlement ?? null
 }
 
@@ -402,7 +402,7 @@ export function settlementAt(index: number, seed: number = GALAXY.SEED): Settlem
  * Единственное, что нельзя вывести из одного индекса, — уникальность имён:
  * коллизия видна только на фоне остальных. Поэтому имена разводятся здесь.
  */
-export function generateGalaxy(seed: number = GALAXY.SEED): StarSystem[] {
+export function generateGalaxy(seed: number): StarSystem[] {
   const count = GALAXY.COUNT
   const systems: StarSystem[] = []
   const taken = new Set<string>()

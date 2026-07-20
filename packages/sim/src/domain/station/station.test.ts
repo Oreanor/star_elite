@@ -9,7 +9,7 @@ import { stepWorld, type Controller, type ControllerMap } from '../sim'
 import { createWorld, STARTER_SYSTEM, type World } from '../world'
 import { stepOrbits } from '../world/orbits'
 import { autodockController, canEngageAutodock } from './autopilot'
-import { canDockAt, dock, findStation, stationRange, undock } from './docking'
+import { canDockAt, dock, dockThreshold, findStation, stationRange, undock } from './docking'
 import { buy, buyCommodity, canBuyCommodity, commodityBuyPrice, commoditySellPrice, masterClass, repair, repairChance, repairCost, sellItem } from './shop'
 
 function quiet(): World {
@@ -197,7 +197,9 @@ describe('стыковка', () => {
     for (let i = 0; i < 120 * 90 && !world.docked; i++) stepWorld(world, 1 / 120, controllers)
 
     expect(world.docked).toBe(true)
-    expect(stationRange(world.player, station)).toBeLessThan(DOCKING.RANGE)
+    // Порог берём ФОРМУЛОЙ, а не константой: зона стыковки растёт с радиусом причала
+    // (0.3·R, но не тоньше DOCKING.RANGE), иначе тест ломается от смены габарита станции.
+    expect(stationRange(world.player, station)).toBeLessThan(dockThreshold(station))
   })
 })
 

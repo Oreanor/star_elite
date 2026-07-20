@@ -92,8 +92,23 @@ export function placeMonoliths(world: World): void {
   if (_side.lengthSq() < 1e-6) _side.set(1, 0, 0)
   _side.normalize()
 
-  for (let variant = 0; variant < MONOLITH.VARIANTS; variant++) {
-    const angle = (variant / MONOLITH.VARIANTS) * Math.PI * 2
+  // Сколько их здесь вообще — 0..COUNT_MAX по сиду системы. Бросок ПЕРВЫЙ в потоке, до любых
+  // координат: так число статуй не зависит от того, где стоит причал.
+  const count = Math.floor(rng() * (MONOLITH.COUNT_MAX + 1))
+
+  // Какие облики достались этой системе. Тасуем список и берём первые `count` — двух
+  // одинаковых у одного причала быть не должно, а какие именно, решает сид.
+  const looks = Array.from({ length: MONOLITH.VARIANTS }, (_, i) => i)
+  for (let i = looks.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1))
+    ;[looks[i], looks[j]] = [looks[j]!, looks[i]!]
+  }
+
+  for (let i = 0; i < count; i++) {
+    const variant = looks[i]!
+    // Веер разводится по ФАКТИЧЕСКОМУ числу статуй, а не по числу обликов: иначе одинокая
+    // статуя вставала бы в позу «одной из трёх», оставив рядом пустые места строя.
+    const angle = (i / count) * Math.PI * 2
     const gap = MONOLITH.STATION_GAP_MIN + rng() * (MONOLITH.STATION_GAP_MAX - MONOLITH.STATION_GAP_MIN)
     const dist = MONOLITH.RADIUS * gap
 

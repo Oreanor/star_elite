@@ -1,6 +1,5 @@
 import {
   CORE_INDEX,
-  GALAXY,
   STAR_CLASSES,
   type StarClassId,
 } from '../../config/galaxy'
@@ -27,7 +26,7 @@ function weightedPick<T extends { readonly weight: number }>(rng: Rng, table: re
 }
 
 /** Спектральный класс первичной звезды системы (без радиуса и массы). */
-export function primaryClassId(index: number, seed: number = GALAXY.SEED): StarClassId {
+export function primaryClassId(index: number, seed: number): StarClassId {
   if (index === CORE_INDEX) return 'H'
   const rng = makeRng(seed ^ Math.imul(index, 0x9e3779b1))
   systemName(rng) // тот же префикс, что в generateSystem — результат не нужен

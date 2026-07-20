@@ -39,7 +39,7 @@ export const RU = {
   'menu.lost': 'КОРАБЛЬ ПОТЕРЯН',
   'menu.score': 'ОЧКОВ: {score}',
   'menu.restart': 'НАЧАТЬ ЗАНОВО',
-  'menu.loadingGfx': 'ЗАГРУЗКА ГРАФИКИ…',
+  'menu.loadingGfx': 'ВИЗУАЛИЗАЦИЯ…',
 
   // ─── Вход в сеть ───────────────────────────────────────────────────────────
   'auth.login': 'ВХОД',
@@ -52,7 +52,7 @@ export const RU = {
   'auth.toLogin': 'Уже есть аккаунт? Войти',
   'auth.wait': 'СЕКУНДУ…',
   'auth.confirm': 'Аккаунт создан. Если нужен — подтверди почту по ссылке из письма.',
-  'auth.loading': 'ЗАГРУЗКА ВСЕЛЕННОЙ…',
+  'auth.loading': 'СОЗДАНИЕ ВСЕЛЕННОЙ…',
   'auth.signout': 'ВЫЙТИ',
 
   // ─── Создание пилота ───────────────────────────────────────────────────────
@@ -182,6 +182,8 @@ export const RU = {
   'hud.noAux': 'ПРИБОР НЕ УСТАНОВЛЕН',
   'hud.noTarget': 'НЕТ ЦЕЛИ',
   'hud.noJumpTarget': 'ЦЕЛЕВАЯ СИСТЕМА НЕ ВЫБРАНА',
+  'hud.bushEnter': 'ВСЕЛЕННАЯ',
+  'hud.bushArrive': 'ГАЛАКТИКА',
   'hud.portalClosed': 'ПОРТАЛ ЗАКРЫТ',
   'hud.landApproach': 'ПОДГОТОВКА К ХОВЕР-РЕЖИМУ · {alt}',
   'hud.landPrompt': 'НАЖМИТЕ L · {alt}',

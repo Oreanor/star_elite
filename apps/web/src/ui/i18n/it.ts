@@ -40,7 +40,7 @@ export const IT: Record<keyof typeof RU, string> = {
   'menu.lost': 'NAVE PERDUTA',
   'menu.score': 'PUNTI: {score}',
   'menu.restart': 'RICOMINCIA',
-  'menu.loadingGfx': 'CARICO GRAFICA…',
+  'menu.loadingGfx': 'VISUALIZZAZIONE…',
 
   'auth.login': 'ACCEDI',
   'auth.register': 'REGISTRATI',
@@ -52,7 +52,7 @@ export const IT: Record<keyof typeof RU, string> = {
   'auth.toLogin': 'Hai un account? Accedi',
   'auth.wait': 'UN MOMENTO…',
   'auth.confirm': 'Account creato. Conferma la tua email dal link, se richiesto.',
-  'auth.loading': "CARICO L'UNIVERSO…",
+  'auth.loading': "CREAZIONE DELL'UNIVERSO…",
   'auth.signout': 'ESCI',
 
   'create.title': 'CREA PILOTA',
@@ -179,6 +179,8 @@ export const IT: Record<keyof typeof RU, string> = {
   'hud.noAux': 'NESSUN DISPOSITIVO',
   'hud.noTarget': 'NESSUN BERSAGLIO',
   'hud.noJumpTarget': 'NESSUN SISTEMA DI DESTINAZIONE SELEZIONATO',
+  'hud.bushEnter': 'UNIVERSO',
+  'hud.bushArrive': 'GALASSIA',
   'hud.portalClosed': 'PORTALE CHIUSO',
   'hud.landApproach': 'PREPARAZIONE HOVER · {alt}',
   'hud.landPrompt': 'PREMI L · {alt}',

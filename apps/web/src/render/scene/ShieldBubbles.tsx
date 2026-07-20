@@ -1,6 +1,6 @@
 import { useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef } from 'react'
-import { Color, InstancedBufferAttribute, InstancedMesh, Object3D, PlaneGeometry, Quaternion } from 'three'
+import { Color, InstancedBufferAttribute, InstancedMesh, Object3D, PlaneGeometry, Vector3 } from 'three'
 import type { ShipEntity } from '@elite/sim'
 import { useSession } from '../../app/GameContext'
 import { SHIELD_BUBBLE } from '../config'
@@ -18,7 +18,7 @@ import { shieldBubbleMaterial } from '../materials/materials'
 
 const _dummy = new Object3D()
 const _tint = /* @__PURE__ */ new Color()
-const _cameraQuat = /* @__PURE__ */ new Quaternion()
+const _camPos = /* @__PURE__ */ new Vector3()
 
 export function ShieldBubbles() {
   const session = useSession()
@@ -42,8 +42,8 @@ export function ShieldBubbles() {
     const world = session.world
     const now = world.time
     // FlightCamera работает на -50, поэтому здесь уже лежит окончательная поза этого
-    // кадра. Мировой кватернион нужен и на случай, если камеру позже посадят в rig.
-    camera.getWorldQuaternion(_cameraQuat)
+    // кадра. Нужна ПОЗИЦИЯ камеры: кольцо целится в неё, а не копирует ориентацию камеры.
+    camera.getWorldPosition(_camPos)
     let count = 0
 
     const consider = (ship: ShipEntity): void => {
@@ -52,10 +52,11 @@ export function ShieldBubbles() {
       if (age < 0 || age > 1) return
 
       _dummy.position.copy(ship.state.pos)
-      // Billboard: кружок смотрит в камеру всегда, оттого читается одинаковой окружностью
-      // под любым ракурсом. Плоскость единичная (радиус 0.5), поэтому масштаб — ДИАМЕТР:
-      // берём радиус корпуса ×2 ×коэффициент, чтобы кольцо охватывало корабль.
-      _dummy.quaternion.copy(_cameraQuat)
+      // Billboard в ТОЧКУ камеры, а не по её ориентации. Экранно-параллельный диск
+      // (copy(cameraQuat)) у корабля СБОКУ экрана виден косо и читается плоским эллипсом —
+      // «щит повернулся к выстрелу». Целясь нормалью прямо в камеру, кольцо предстаёт полной
+      // окружностью откуда угодно: и у своего борта, и у врага на краю кадра.
+      _dummy.lookAt(_camPos)
       _dummy.scale.setScalar(ship.spec.hull.radius * ship.state.scale * SHIELD_BUBBLE.RADIUS_FACTOR * 2)
       _dummy.updateMatrix()
       mesh.setMatrixAt(count, _dummy.matrix)

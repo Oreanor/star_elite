@@ -1,7 +1,7 @@
 import { Quaternion, Vector3 } from 'three'
 import { WARP } from '../../config/ai'
 import type { ShipEntity, WarpPortal, WarpFlash, World } from './entities'
-import { pickFreeSpawn } from './spawn'
+import { isClearOfSolids, pickFreeSpawn } from './spawn'
 
 /**
  * Гиперпереходы чужих кораблей.
@@ -52,7 +52,14 @@ export function spawnWarpFlash(world: World, pos: Vector3, arriving: boolean): v
  * вдоль `exitDir` и быстро гасит ход. Вызывать сразу после `spawnOne`.
  */
 export function beginWarpArrival(world: World, ship: ShipEntity, near: Vector3, exitDir: Vector3): void {
-  pickFreeSpawn(world, near, world.rng, _portal)
+  // Точку прихода уже выбрал трафик — по кромке дальности локатора, — и она не
+  // произвольная: борт обязан появиться там, где его видно. `pickFreeSpawn` же НИКОГДА
+  // не отдаёт саму точку (он расселяет новичка вокруг причала, где центр занят) и сразу
+  // уходит на 1400–4000 м в случайную сторону, а при тесноте растит кольцо дальше.
+  // Ведущего звена такая проверка считала занятым местом из-за СВОИХ ЖЕ ведомых в двухстах
+  // метрах — и уносила портал за 11 км при коридоре 6–9. Бережёмся только от твёрдого.
+  if (isClearOfSolids(world, near)) _portal.copy(near)
+  else pickFreeSpawn(world, near, world.rng, _portal)
   _dir.copy(exitDir)
   if (_dir.lengthSq() < 1e-6) _dir.set(0, 0, 1)
   _dir.normalize()

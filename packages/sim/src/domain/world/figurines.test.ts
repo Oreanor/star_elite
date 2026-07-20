@@ -74,7 +74,7 @@ describe('коллекционные статуэтки', () => {
     )
     expect(stack).toBeDefined()
     expect(itemMass(stack!)).toBe(0)
-    expect(stack!.kind === 'commodity' && stack.specimens?.[0]?.titleId).toBe(fig.titleId)
+    expect(stack!.kind === 'commodity' && stack!.specimens?.[0]?.titleId).toBe(fig.titleId)
   })
 
   it('у мировой статуэтки есть titleId из каталога', () => {

@@ -41,9 +41,43 @@ export function galaxyRadar(): GalaxyRadarState {
   return state
 }
 
+/**
+ * Погасить мост. Обязателен при размонтировании слоя галактики.
+ *
+ * Состояние — модульный синглтон, а его единственный писатель (`GalaxyLayer`) живёт
+ * внутри `WorldVisuals`, который снимается при смене системы и при подмене мира на
+ * пройденный портал. Без сброса `active` и буферы переживали своего хозяина: локатор
+ * продолжал рисовать звёзды НЕСУЩЕСТВУЮЩЕГО слоя (отсюда залипшая точка своей звезды,
+ * её рисуют принудительно, минуя сферу видимости), Tab уходил в галактическую ветку и
+ * молчал, а `drawPinnedStar` уступал маркер тому, кто его уже не рисует.
+ */
+export function resetGalaxyRadar(): void {
+  state.active = false
+  state.positions = null
+  state.colors = null
+  state.count = 0
+  state.systemCount = 0
+  state.homeCompanionIndex = -1
+  state.originIndex = 0
+  state.layerScale = 1
+  state.sphereRadius = 0
+}
+
+/** Есть ли у моста живые данные — не только поднятый флаг. */
+export function galaxyRadarUsable(): boolean {
+  return state.active && state.positions != null && state.colors != null
+    && state.layerScale > 0 && state.sphereRadius > 0 && state.systemCount > 0
+}
+
 /** Пауза Tab → новый круг с ближайшей (как у контактов / небесных). */
 const CYCLE_RESTART = 1.25 // с
 let _galaxyCycleAt = -1e9
+
+/**
+ * Сколько ближайших звёзд оставить в запасном круге, когда сфера локатора пуста.
+ * Не весь привод: перебирать Tab'ом сотню систем — не выбор, а мучение.
+ */
+const FAR_CANDS = 12
 
 /**
  * Дистанция до звезды в св.г кадра (локус борта − точка слоя).
@@ -83,6 +117,23 @@ function collectGalaxyCands(world: World): { index: number; dist: number }[] {
     seen.add(i)
   }
 
+  /**
+   * Сфера локатора — всего 4–14 св.г, а на масштабе в сотню миллионов борт легко
+   * уходит от неё на много больше. Пустой круг там — не «целей нет», а «локатор
+   * близорук»: прыгать-то есть куда, привод достаёт. Поэтому, если сфера не дала
+   * ничего, перебираем ВСЁ в дальности привода и берём ближайшие.
+   */
+  if (cands.length === 0) {
+    for (let i = 0; i < n; i++) {
+      if (i === state.originIndex) continue
+      if (!jumpInDriveRange(world, i)) continue
+      cands.push({ index: i, dist: starDistLySq(world.player, i) })
+      seen.add(i)
+    }
+    cands.sort((a, b) => a.dist - b.dist)
+    cands.length = Math.min(cands.length, FAR_CANDS)
+  }
+
   const pinned = world.jumpTargetIndex
   if (
     pinned != null
@@ -98,12 +149,18 @@ function collectGalaxyCands(world: World): { index: number; dist: number }[] {
   return cands
 }
 
-/** Перебор систем в сфере — только главные (не спутники двойных). */
-export function cycleGalaxyStar(world: World): void {
-  if (!state.active || !state.positions || state.sphereRadius <= 0) return
+/**
+ * Перебор систем в сфере — только главные (не спутники двойных).
+ *
+ * @returns взял ли Tab работу на себя. `false` — круг пуст (улетел за сферу локатора,
+ * все соседи вне привода), и вызывающий обязан отдать нажатие обычному захвату. Раньше
+ * ветка была тупиковой: вдали от галактики Tab не выбирал ни звезду, ни цель, и молчал.
+ */
+export function cycleGalaxyStar(world: World): boolean {
+  if (!state.active || !state.positions || state.sphereRadius <= 0) return false
   const cands = collectGalaxyCands(world)
   // Пусто — не трогаем метку карты: иначе Tab гасит выбранную на G звезду.
-  if (cands.length === 0) return
+  if (cands.length === 0) return false
 
   cands.sort((a, b) => a.dist - b.dist)
   const fresh = world.time - _galaxyCycleAt > CYCLE_RESTART
@@ -114,6 +171,7 @@ export function cycleGalaxyStar(world: World): void {
       ? -1
       : cands.findIndex((c) => c.index === curIdx)
   world.jumpTargetIndex = cands[(cur + 1) % cands.length]!.index
+  return true
 }
 
 /**

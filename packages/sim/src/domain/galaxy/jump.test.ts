@@ -251,7 +251,9 @@ describe('прыжок', () => {
     world.player.jumpCharge = world.player.spec.jumpRange
     expect(jump(world, WORLD.HOME_INDEX)).toBe(true)
     expect(world.systemName).toBe('Люрилар')
-    expect(world.bodies.find((b) => b.kind === 'station')?.name).toBe('Кресты')
+    // Причал тут обычный: крест уехал в центр вселенной. Важно, что он ЕСТЬ — домой
+    // возвращаются к причалу, а не в пустоту.
+    expect(world.bodies.find((b) => b.kind === 'station')).toBeDefined()
   })
 
   /**
@@ -269,9 +271,10 @@ describe('прыжок', () => {
     expect(catalogue.planets.map((p) => p.type)).toEqual(def.planets.map((p) => p.type))
 
     const capital = catalogue.planets.find((p) => p.station)
-    expect(capital?.station?.name).toBe('Кресты')
+    // Имя причала не задаём — важно, что каталог и сцена называют его ОДИНАКОВО.
+    // Разойдись они, и карта показывала бы один причал, а сцена — другой.
+    expect(capital?.station?.name).toBeDefined()
     expect(capital?.station?.name).toBe(def.station?.name)
-    expect(def.station?.style).toBe('cross')
     expect(catalogue.star.color).toBe(def.star.color)
   })
 
@@ -316,8 +319,8 @@ describe('прыжок', () => {
 
   it('расстояние симметрично и считается по трём осям', () => {
     const world = createWorld()
-    const a = placeSystem(WORLD.HOME_INDEX)
-    const b = placeSystem(7)
+    const a = placeSystem(WORLD.HOME_INDEX, GALAXY.SEED)
+    const b = placeSystem(7, GALAXY.SEED)
     expect(jumpDistance(world, 7)).toBeCloseTo(distanceLy(a, b))
     expect(distanceLy(a, b)).toBeCloseTo(distanceLy(b, a))
   })

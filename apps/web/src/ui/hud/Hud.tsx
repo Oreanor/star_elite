@@ -1,8 +1,12 @@
 import { useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useRef } from 'react'
+import { Quaternion, Vector3 } from 'three'
 import { useSession } from '../../app/GameContext'
 import { PIXEL_SCALE } from '../../render/config'
+import { jumpPortal, portalActive } from '../../app/control/jumpPortal'
+import { preparedJumpPortalWorld, syncDestCamera } from '../../render/scene/jumpPortalWorld'
 import { drawHud } from './drawHud'
+import type { PortalAperture } from './aperture'
 
 /**
  * HUD рисуется на отдельном 2D-канвасе ТОГО ЖЕ внутреннего разрешения, что и 3D,
@@ -15,6 +19,18 @@ import { drawHud } from './drawHud'
  * Компонент живёт внутри <Canvas>, но ничего в сцену не добавляет: ему нужен
  * только useFrame после всех остальных, чтобы читать уже посчитанный кадр.
  */
+/**
+ * Описание кольца живёт один вызов drawHud, поэтому структура одна на модуль:
+ * поля — ССЫЛКИ на векторы портала, копировать их незачем.
+ */
+const _aperture: PortalAperture = {
+  pos: new Vector3(),
+  quat: new Quaternion(),
+  radius: 0,
+  world: null,
+  camera: null,
+}
+
 export function Hud() {
   const session = useSession()
   const camera = useThree((state) => state.camera)
@@ -65,6 +81,23 @@ export function Hud() {
   const fpsRef = useRef(60)
 
   useFrame((_, dt) => {
+    // Переиспользуемая структура: в кадре не аллоцируем, а описание кольца всё равно
+    // живёт ровно один вызов drawHud.
+    const p = jumpPortal()
+    let aperture: PortalAperture | null = null
+    if (portalActive() && p.ringRadius > 0) {
+      const prepared = p.destReady ? preparedJumpPortalWorld() : null
+      _aperture.pos = p.ringPos
+      _aperture.quat = p.ringQuat
+      _aperture.radius = p.ringRadius
+      _aperture.world = prepared?.world ?? null
+      // Камеру второго мира двигает stencil-проход, а он идёт ПОСЛЕ этого useFrame.
+      // Синхронизируем сами: иначе первый кадр открытого портала считал бы метки по
+      // неинициализированной матрице. Вызов идемпотентен, проход повторит его сам.
+      _aperture.camera = prepared ? syncDestCamera(camera) : null
+      aperture = _aperture
+    }
+
     const ctx = acquire()
     const canvas = canvasRef.current
     if (!ctx || !canvas) return
@@ -80,6 +113,7 @@ export function Hud() {
       autodock: session.mode === 'autodock',
       flyto: session.mode === 'flyto',
       fps: fpsRef.current,
+      aperture,
     })
   })
 

@@ -39,7 +39,7 @@ export const FR: Record<keyof typeof RU, string> = {
   'menu.lost': 'VAISSEAU PERDU',
   'menu.score': 'SCORE : {score}',
   'menu.restart': 'RECOMMENCER',
-  'menu.loadingGfx': 'CHARGEMENT GRAPHISMES…',
+  'menu.loadingGfx': 'VISUALISATION…',
 
   'auth.login': 'CONNEXION',
   'auth.register': 'INSCRIPTION',
@@ -51,7 +51,7 @@ export const FR: Record<keyof typeof RU, string> = {
   'auth.toLogin': 'Déjà un compte ? Se connecter',
   'auth.wait': 'UN INSTANT…',
   'auth.confirm': 'Compte créé. Confirmez votre e-mail via le lien si on vous le demande.',
-  'auth.loading': "CHARGEMENT DE L'UNIVERS…",
+  'auth.loading': "CRÉATION DE L'UNIVERS…",
   'auth.signout': 'DÉCONNEXION',
 
   'create.title': 'CRÉER UN PILOTE',
@@ -178,6 +178,8 @@ export const FR: Record<keyof typeof RU, string> = {
   'hud.noAux': 'AUCUN MODULE MONTÉ',
   'hud.noTarget': 'AUCUNE CIBLE VERROUILLÉE',
   'hud.noJumpTarget': 'AUCUN SYSTÈME CIBLE SÉLECTIONNÉ',
+  'hud.bushEnter': 'UNIVERS',
+  'hud.bushArrive': 'GALAXIE',
   'hud.portalClosed': 'PORTAIL FERMÉ',
   'hud.landApproach': 'PRÉPARATION HOVER · {alt}',
   'hud.landPrompt': 'APPUYEZ SUR L · {alt}',

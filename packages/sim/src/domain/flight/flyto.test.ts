@@ -180,4 +180,37 @@ describe('автопилот-к-цели', () => {
     world.player.state.scale = 1
     expect(canEngageFlyTo(world)).toBe(false)
   })
+
+  /**
+   * РЕГРЕССИЯ: срыв в петлю. На большом ходу поперёк цели борт не сближался и не уходил
+   * назад — он ходил ВОКРУГ, и ни один из двух прежних тормозов не срабатывал: первый судит
+   * по скорости СБЛИЖЕНИЯ (в петле она мала), второй — только когда борт уже удаляется.
+   *
+   * Свойство, а не число: радиус разворота равен v²/a, и когда он больше дистанции, попасть
+   * в цель нельзя НИКАКИМ рулением — автопилот обязан сбрасывать ход, а не рулить усерднее.
+   */
+  it('на большом ходу поперёк цели тормозит, а не наматывает круги', () => {
+    const { world } = withTarget(3000)
+    const player = world.player
+    faceToward(world, world.ships[0]!.state.pos)
+
+    // Ход ПОПЕРЁК направления на цель (цель по −Z, скорость по +X) и заведомо большой.
+    player.state.vel.set(20_000, 0, 0)
+    flyToController.update(player, world, 1 / 60)
+
+    expect(player.controls.throttle).toBe(0)
+    expect(player.controls.retro).toBe(1)
+  })
+
+  it('сойдясь ходом с курсом, снова даёт газ', () => {
+    const { world } = withTarget(3000)
+    const player = world.player
+    faceToward(world, world.ships[0]!.state.pos)
+
+    // Тот же борт, но ход уже НА цель: тормозить не с чего.
+    player.state.vel.set(0, 0, -400)
+    flyToController.update(player, world, 1 / 60)
+
+    expect(player.controls.throttle).toBeGreaterThan(0)
+  })
 })

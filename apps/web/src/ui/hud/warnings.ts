@@ -49,6 +49,8 @@ export type WarnCode =
   | 'holdFull'
   | 'cruiseLatch'
   | 'cruiseUnlatch'
+  | 'bushEnter'
+  | 'bushArrive'
 
 interface Def {
   /** Цвет рамки, текста и полупрозрачного фона. */
@@ -107,6 +109,10 @@ const DEFS: Record<WarnCode, Def> = {
   // Защёлка форсажа (Alt) / сброс Ctrl — голубые, разовые, не угроза.
   cruiseLatch: { color: UI.PRIMARY, hz: 0, rank: 41, key: 'hud.cruiseLatch' },
   cruiseUnlatch: { color: UI.PRIMARY, hz: 0, rank: 41, key: 'hud.cruiseUnlatch' },
+  // Вселенная: вход на куст и прибытие в узел. Голубые, высокий ранг — это событие
+  // масштаба «сменилась галактика», его нельзя перебить бытовой подсказкой.
+  bushEnter: { color: UI.PRIMARY, hz: 2, rank: 92, key: 'hud.bushEnter' },
+  bushArrive: { color: UI.PRIMARY, hz: 0, rank: 91, key: 'hud.bushArrive' },
 }
 
 export interface Plate {

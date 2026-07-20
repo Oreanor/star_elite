@@ -193,7 +193,7 @@ function placerFor(id: GalaxyShapeId, seed: number): Placer {
 }
 
 /** Форма галактики выводится из её зерна. Другое зерно — другая галактика по Хабблу. */
-export function galaxyShape(seed: number = GALAXY.SEED): (typeof GALAXY_SHAPES)[number] {
+export function galaxyShape(seed: number): (typeof GALAXY_SHAPES)[number] {
   /**
    * Форма ДОМАШНЕЙ галактики — решение, а не бросок (см. `HOME_SHAPE`). Override держим ровно
    * на зерне по умолчанию: чужая галактика (куст, когда до него дойдёт) обязана бросать СВОЮ
@@ -226,7 +226,7 @@ export interface Spot3 {
  * с `generateSystem`: иначе рукава расцветились бы по спектру самой звезды.
  * Гиганты остаются здесь; соседей сдвигает `placeSystem`.
  */
-export function placeSystemRaw(index: number, seed: number = GALAXY.SEED): Spot3 {
+export function placeSystemRaw(index: number, seed: number): Spot3 {
   // Чёрная дыра сидит ровно в центре. Это не звезда, ей не нужен бросок кости.
   if (index === CORE_INDEX) return { x: 0, y: 0, z: 0 }
 
@@ -299,7 +299,7 @@ function carvedPositions(seed: number): Spot3[] {
  * Положение системы по индексу: форма диска + пустоты вокруг гигантов (voidLy в
  * STAR_CLASSES). Выводимо из зерна — generateSystem / прыжок / карта совпадают.
  */
-export function placeSystem(index: number, seed: number = GALAXY.SEED): Spot3 {
+export function placeSystem(index: number, seed: number): Spot3 {
   if (index === CORE_INDEX) return { x: 0, y: 0, z: 0 }
   return carvedPositions(seed)[index]!
 }

@@ -4,7 +4,7 @@ import { GRAVITY } from '../../config/bodies'
 import { CRUISE } from '../../config/cruise'
 import { createWorld, STARTER_SYSTEM } from '../world'
 import type { World } from '../world/entities'
-import { isPhased, updateCruise } from './drive'
+import { isPhased, updateCruise, type CruiseWant } from './drive'
 
 /** Астрономическая единица, м. Та же, что в описании системы. */
 const AU = 149_597_870_700
@@ -14,7 +14,7 @@ function emptySystem(): World {
 }
 
 /** Гонит привод `seconds` секунд с постоянным желанием. */
-function spool(world: World, want: boolean, seconds: number): void {
+function spool(world: World, want: CruiseWant, seconds: number): void {
   const dt = 1 / 120
   for (let i = 0; i < seconds * 120; i++) updateCruise(world.player, world, want, dt)
 }
@@ -88,7 +88,9 @@ describe('крейсерский привод', () => {
     expect(held).toBeGreaterThan(10)
     expect(held).toBeLessThan(CRUISE.MAX_FACTOR * 0.5)
 
-    spool(world, held, 5) // «want» = замороженный множитель
+    // «want» = замороженный множитель: `CruiseWant` — это `boolean | number`, и число
+    // здесь и есть проверяемая защёлка, а не случайная «истина».
+    spool(world, held, 5)
     expect(world.player.cruise.factor).toBe(held)
     expect(world.player.cruise.engaged).toBe(true)
   })

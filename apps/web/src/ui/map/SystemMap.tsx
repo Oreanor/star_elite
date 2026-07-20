@@ -11,8 +11,9 @@ import {
   type BodyEntity,
   type World,
 } from '@elite/sim'
-import { currentLang, t, useLang } from '../i18n'
+import { t, useLang } from '../i18n'
 import { properName } from '../i18n/dataNames'
+import { formatDistance } from '../hud/project'
 import { useWheelZoom } from './useWheelZoom'
 
 /**
@@ -223,16 +224,9 @@ function markers(world: World): Marker[] {
   })
 }
 
-/** Астрономическая единица, м. Планетные дистанции в километрах нечитаемы. */
-const AU = 149_597_870_700
-
-function formatDistance(metres: number): string {
-  const locale = currentLang() === 'ru' ? 'ru' : 'en-US'
-  if (metres >= 0.02 * AU) return `${(metres / AU).toFixed(2)} ${t('unit.au')}`
-  if (metres >= 1e6) return `${Math.round(metres / 1000).toLocaleString(locale)} ${t('unit.km')}`
-  if (metres >= 1000) return `${(metres / 1000).toFixed(1)} ${t('unit.km')}`
-  return `${Math.round(metres)} ${t('unit.m')}`
-}
+// Дистанции меряет общая лестница из `hud/project`: карта и окно обязаны называть
+// одно расстояние одинаково. Своя функция здесь считала в астрономических единицах —
+// та же величина читалась на карте иначе, чем на HUD.
 
 /**
  * Выбирается всё, что стоит на месте: звезда, планета, луна, причал. Корабль —

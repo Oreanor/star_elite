@@ -4,8 +4,10 @@ import { MISSILE_PYLON, MODULE_CATALOGUE } from '../../config/modules'
 import { ASTEROID } from '../../config/world'
 import { ECM, GUNNERY } from '../../config/weapons'
 import { raySphere } from '../../core/math'
+import { auroraOneLoadout } from '../../config/loadouts'
 import { findEcm, isLaser, isMissile } from '../loadout'
 import { createWorld, STARTER_SYSTEM } from '../world'
+import { refreshSpec } from '../world/factory'
 import type { AsteroidEntity, MissileEntity, ShipEntity, World } from '../world/entities'
 import { stepBolts } from './bolts'
 import { applyDamage, regenShield } from './damage'
@@ -37,12 +39,27 @@ function enemyAhead(world: World, distance: number): ShipEntity {
   return enemy
 }
 
-function withOneEnemy(): { world: World; enemy: ShipEntity } {
+/**
+ * `pylons` — выдать игроку корпус С РАКЕТНЫМИ ПИЛОНАМИ.
+ *
+ * У штатного «Spiritus Sanctus» их нет вовсе, и это РЕШЕНИЕ, а не пропуск: см.
+ * `missile-slot.test.ts` («у стартового Spiritus Sanctus вообще нет ракетных пилонов»).
+ * Поэтому ракетные проверки, как и операции мунишн-слота, ставим на серийную «Аврору»:
+ * та же рама и те же пушечные точки плюс два пилона.
+ *
+ * Без этого флага пусковых у игрока ноль, и ракетный тест не падает, а проходит
+ * ВПУСТУЮ: цикл по пусковым не делает ни одного витка, а `0 === 0` сходится.
+ */
+function withOneEnemy(pylons = false): { world: World; enemy: ShipEntity } {
   const world = createWorld({
     ...STARTER_SYSTEM,
     belt: null,
     patrols: [{ count: 1, at: [0, 0, -500], spread: 0, faction: 'hostile', name: 'Пират' }],
   })
+  if (pylons) {
+    world.player.loadout = auroraOneLoadout()
+    refreshSpec(world.player)
+  }
   return { world, enemy: world.ships[0]! }
 }
 
@@ -209,7 +226,7 @@ describe('ракеты на пилонах', () => {
    * в тот день, когда последний пилон отдали беспилотникам.
    */
   it('запас ракет равен числу пусковых, помноженному на их боекомплект', () => {
-    const { world, enemy } = withOneEnemy()
+    const { world, enemy } = withOneEnemy(true)
 
     const launchers = launcherIndices(world.player)
     expect(launchers.length).toBeGreaterThan(0)
@@ -229,7 +246,7 @@ describe('ракеты на пилонах', () => {
    * Стоило зарядить по две — залп из четырёх превратился в одну ракету за 0.8 с.
    */
   it('залп идёт с разных пусковых, пока они свободны', () => {
-    const { world, enemy } = withOneEnemy()
+    const { world, enemy } = withOneEnemy(true)
     const launchers = launcherIndices(world.player)
 
     // Ни одного шага мира: перезарядка не тикает, значит каждый пуск — новая пусковая.
@@ -261,7 +278,7 @@ describe('ракеты на пилонах', () => {
    * из-под стволов, и первый выстрел после пуска убивал бы её сам.
    */
   it('чужой лазер сбивает ракету, свой — нет', () => {
-    const { world, enemy } = withOneEnemy()
+    const { world, enemy } = withOneEnemy(true)
     enemyAhead(world, 500)
     // Разворачиваем врага носом к игроку: он должен видеть ракету перед собой.
     enemy.state.quat.setFromAxisAngle(new Vector3(0, 1, 0), Math.PI)
@@ -285,7 +302,7 @@ describe('ракеты на пилонах', () => {
 describe('противоракетная система', () => {
   /** Ракета игрока рядом с врагом: для врага она чужая, значит ПРО её видит. */
   function incoming(): { world: World; victim: ShipEntity; missile: MissileEntity } {
-    const { world, enemy } = withOneEnemy()
+    const { world, enemy } = withOneEnemy(true)
     fireMissile(world, world.player, enemy.id)
     const missile = world.missiles[0]!
     missile.pos.copy(enemy.state.pos)
@@ -314,7 +331,7 @@ describe('противоракетная система', () => {
   })
 
   it('не подрывает собственную ракету', () => {
-    const { world, enemy } = withOneEnemy()
+    const { world, enemy } = withOneEnemy(true)
     const player = world.player
 
     fireMissile(world, player, enemy.id)
@@ -398,7 +415,7 @@ describe('срыв наведения', () => {
   }
 
   function setup(): { world: World; player: ShipEntity; missile: MissileEntity } {
-    const { world, enemy } = withOneEnemy()
+    const { world, enemy } = withOneEnemy(true)
     const player = world.player
     player.state.pos.set(0, 0, 0)
     player.state.vel.set(0, 0, -100)
@@ -472,7 +489,7 @@ describe('срыв наведения', () => {
    * которую она получила уже с работающими рулями, — иначе судим за чужую вину.
    */
   it('головка не срывается на первом же кадре наведения', () => {
-    const { world, enemy } = withOneEnemy()
+    const { world, enemy } = withOneEnemy(true)
     const player = world.player
     player.state.pos.set(0, 0, 0)
     player.state.vel.set(0, 0, -80)
@@ -553,10 +570,14 @@ describe('наведение ракеты', () => {
   }
 
   it('попадает по цели, идущей поперёк курса', () => {
-    const { world, enemy } = withOneEnemy()
-    world.player.state.pos.set(0, 0, 0)
+    const { world, enemy } = withOneEnemy(true)
+    // Дуэль ВДАЛИ ОТ ПРИЧАЛА. Мир с плавающим началом координат ставит игрока в двух
+    // километрах перед станцией, и цель на −1200 по Z попадала внутрь её сферы (радиус
+    // причала — тысяча метров): ракета честно била в станцию, а не в борт. Уводим пару
+    // на сто километров вбок — там пусто.
+    world.player.state.pos.set(100_000, 0, 0)
     world.player.state.quat.copy(new Quaternion())
-    enemy.state.pos.set(0, 0, -1200)
+    enemy.state.pos.set(100_000, 0, -1200)
     enemy.state.vel.set(180, 0, 0) // строго поперёк: худший случай для погони
     const ehpBefore = enemy.hull + enemy.shield
 
@@ -576,7 +597,7 @@ describe('наведение ракеты', () => {
    * упёрлась в свой `turnRate` и перестала гасить Ω.
    */
   it('не теряет захват на цели, которую догоняет', () => {
-    const { world, enemy } = withOneEnemy()
+    const { world, enemy } = withOneEnemy(true)
     world.player.state.pos.set(0, 0, 0)
     world.player.state.quat.copy(new Quaternion())
     enemy.state.pos.set(0, 0, -1500)

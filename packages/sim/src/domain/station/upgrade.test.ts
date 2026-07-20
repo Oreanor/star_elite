@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
+import { auroraOneLoadout } from '../../config/loadouts'
 import { SHIELD_STANDARD } from '../../config/modules'
+import { refreshSpec } from '../world/factory'
 import { addItem } from '../cargo/hold'
 import { isMissile, isShield, type MissileModule, type ShieldModule } from '../loadout'
 import { createWorld } from '../world'
@@ -71,8 +73,12 @@ describe('прокачка модуля', () => {
   // Ракета — расходник: её не чинят, но пусковую УЛУЧШАЮТ бо́льшим боезапасом, не уроном.
   it('прокачка ракетной пусковой растит боезапас, а не урон', () => {
     const world = createWorld()
+    // Штатный «Spiritus Sanctus» без пилонов (это решение, см. missile-slot.test.ts),
+    // а прокачивать нужно установленную пусковую — берём серийную «Аврору».
+    world.player.loadout = auroraOneLoadout()
+    refreshSpec(world.player)
     const missile = world.player.loadout.weapons.find((w): w is MissileModule => w != null && isMissile(w))
-    if (!missile) throw new Error('у стартовой Авроры есть ракетные пилоны')
+    if (!missile) throw new Error('у серийной «Авроры» есть ракетные пилоны')
     const ammoBefore = missile.ammo
     const damageBefore = missile.damage
     world.credits = 10_000_000

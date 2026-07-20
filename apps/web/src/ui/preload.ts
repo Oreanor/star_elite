@@ -12,14 +12,27 @@ export const TITLE_ASSETS = [
 
 let titlePreload: Promise<void> | null = null
 
+/**
+ * Растеризовать картинку ЗАРАНЕЕ. `onload` означает лишь «байты пришли»; распаковка
+ * PNG в пиксели происходит при первой отрисовке — и происходила она уже ПОСЛЕ того,
+ * как полоса загрузки дошла до конца. Оттого заставка и проявлялась по частям, в
+ * порядке стоимости декодирования: сначала струи по 20 КБ, затем корабль на мегабайт,
+ * затем лого. `decode()` переносит эту работу под полосу, где ей и место.
+ */
+function decodeImage(img: HTMLImageElement): Promise<void> {
+  // Метода нет в старых движках, и он отвергается на битой картинке. Ни то, ни другое
+  // не должно мешать открыть меню — заставка не обязательна для игры.
+  return img.decode?.().catch(() => {}) ?? Promise.resolve()
+}
+
 /** Одна картинка в кэш; 404 не блокирует — заставка всё равно откроется. */
 function loadImage(url: string): Promise<void> {
   const img = loadSheet(url)
-  if (sheetReady(img)) return Promise.resolve()
-  return new Promise((resolve) => {
+  if (sheetReady(img)) return decodeImage(img)
+  return new Promise<void>((resolve) => {
     img.onload = () => resolve()
     img.onerror = () => resolve()
-  })
+  }).then(() => decodeImage(img))
 }
 
 /** Прогреть список URL; опционально — сколько уже готово. */

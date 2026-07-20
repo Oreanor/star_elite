@@ -40,7 +40,7 @@ export const DE: Record<keyof typeof RU, string> = {
   'menu.lost': 'SCHIFF VERLOREN',
   'menu.score': 'PUNKTE: {score}',
   'menu.restart': 'NEU BEGINNEN',
-  'menu.loadingGfx': 'GRAFIK LÄDT…',
+  'menu.loadingGfx': 'VISUALISIERUNG…',
 
   'auth.login': 'ANMELDEN',
   'auth.register': 'REGISTRIEREN',
@@ -52,7 +52,7 @@ export const DE: Record<keyof typeof RU, string> = {
   'auth.toLogin': 'Schon ein Konto? Anmelden',
   'auth.wait': 'EINEN MOMENT…',
   'auth.confirm': 'Konto erstellt. Bestätige deine E-Mail über den Link, falls verlangt.',
-  'auth.loading': 'UNIVERSUM LÄDT…',
+  'auth.loading': 'UNIVERSUM ENTSTEHT…',
   'auth.signout': 'ABMELDEN',
 
   'create.title': 'PILOT ERSTELLEN',
@@ -180,6 +180,8 @@ export const DE: Record<keyof typeof RU, string> = {
   'hud.noAux': 'KEIN GERÄT VERBAUT',
   'hud.noTarget': 'KEIN ZIEL ERFASST',
   'hud.noJumpTarget': 'KEIN ZIELSYSTEM AUSGEWÄHLT',
+  'hud.bushEnter': 'UNIVERSUM',
+  'hud.bushArrive': 'GALAXIE',
   'hud.portalClosed': 'PORTAL GESCHLOSSEN',
   'hud.landApproach': 'HOVER-VORBEREITUNG · {alt}',
   'hud.landPrompt': 'L DRÜCKEN · {alt}',

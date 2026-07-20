@@ -38,7 +38,7 @@ export const EN: Record<keyof typeof RU, string> = {
   'menu.lost': 'SHIP LOST',
   'menu.score': 'SCORE: {score}',
   'menu.restart': 'START OVER',
-  'menu.loadingGfx': 'LOADING GRAPHICS…',
+  'menu.loadingGfx': 'VISUALIZING…',
 
   'auth.login': 'SIGN IN',
   'auth.register': 'SIGN UP',
@@ -50,7 +50,7 @@ export const EN: Record<keyof typeof RU, string> = {
   'auth.toLogin': 'Have an account? Sign in',
   'auth.wait': 'ONE MOMENT…',
   'auth.confirm': 'Account created. Confirm your email via the link if prompted.',
-  'auth.loading': 'LOADING UNIVERSE…',
+  'auth.loading': 'CREATING UNIVERSE…',
   'auth.signout': 'SIGN OUT',
 
   'create.title': 'CREATE PILOT',
@@ -177,6 +177,8 @@ export const EN: Record<keyof typeof RU, string> = {
   'hud.noAux': 'NO DEVICE FITTED',
   'hud.noTarget': 'NO TARGET',
   'hud.noJumpTarget': 'NO TARGET SYSTEM SELECTED',
+  'hud.bushEnter': 'UNIVERSE',
+  'hud.bushArrive': 'GALAXY',
   'hud.portalClosed': 'PORTAL CLOSED',
   'hud.landApproach': 'HOVER PREP · {alt}',
   'hud.landPrompt': 'PRESS L · {alt}',

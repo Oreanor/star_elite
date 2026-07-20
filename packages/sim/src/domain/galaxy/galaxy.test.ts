@@ -16,26 +16,39 @@ import { capitalOf, isInhabited, settledPlanets, stationsOf, systemLife } from '
  * Без этого невозможны ни сохранения, ни сетевая игра.
  */
 describe('генерация галактики', () => {
+  // Тяжёлые галактические тесты живут под общим `testTimeout` из vitest.config.ts.
   it('детерминирована: то же зерно даёт ту же галактику', () => {
     expect(generateGalaxy(1234)).toEqual(generateGalaxy(1234))
   })
 
-  // Индекс 0 — всегда «Ядро» в любой галактике, сравнивать зёрна по нему нельзя.
+  /**
+   * Сравниваем ГАЛАКТИКИ целиком, а не одно имя по индексу 1.
+   *
+   * Прежняя проверка судила по единственному ИМЕНИ системы №1 и падала, как только
+   * два зерна совпадали в этой одной точке: совпадение имён из общего словаря не значит,
+   * что галактики одинаковы. Тест ловил случайность, а не свойство.
+   *
+   * Сравниваем систему ЦЕЛИКОМ, но не всю галактику: двадцати систем довольно, чтобы
+   * случайное совпадение стало невозможным (для осечки им пришлось бы сойтись всем,
+   * вместе со звёздами и планетами), а полный обход 2500 систем не укладывался в таймаут.
+   */
   it('разные зёрна дают разные галактики', () => {
-    expect(generateGalaxy(1)[1]?.name).not.toBe(generateGalaxy(2)[1]?.name)
+    const a = generateGalaxy(1).slice(1, 21)
+    const b = generateGalaxy(2).slice(1, 21)
+    expect(a).not.toEqual(b)
   })
 
   it('одиночная система совпадает с той же системой из полной галактики', () => {
     // generateSystem(i) обязан быть независим от соседей: иначе нельзя будет
     // подгружать системы по требованию, когда их станет 250 000.
-    const galaxy = generateGalaxy()
-    const solo = generateSystem(7)
+    const galaxy = generateGalaxy(GALAXY.SEED)
+    const solo = generateSystem(7, GALAXY.SEED)
     // Имя могло быть разведено при коллизии — сравниваем всё остальное.
     expect({ ...galaxy[7]!, name: '' }).toEqual({ ...solo, name: '' })
   })
 
   it('строит COUNT систем, все имена уникальны', () => {
-    const galaxy = generateGalaxy()
+    const galaxy = generateGalaxy(GALAXY.SEED)
     expect(galaxy).toHaveLength(GALAXY.COUNT)
     expect(new Set(galaxy.map((s) => s.name)).size).toBe(galaxy.length)
   })
@@ -56,7 +69,7 @@ describe('форма галактики', () => {
   })
 
   it('звёзды не вылетают за диск и он объёмный, но плоский', () => {
-    const galaxy = generateGalaxy()
+    const galaxy = generateGalaxy(GALAXY.SEED)
     let maxZ = 0
     for (const s of galaxy) {
       // Хвосты гауссианы длинные: край диска — не жёсткая стена, но и не вдвое дальше.
@@ -73,25 +86,25 @@ describe('форма галактики', () => {
    * между галактиками: сместись она, и «долететь до центра» потеряет смысл.
    */
   it('в центре чёрная дыра, и она одна', () => {
-    const galaxy = generateGalaxy()
+    const galaxy = generateGalaxy(GALAXY.SEED)
     const core = galaxy[CORE_INDEX]!
     expect(core.star.class).toBe('H')
-    expect(placeSystem(CORE_INDEX)).toEqual({ x: 0, y: 0, z: 0 })
+    expect(placeSystem(CORE_INDEX, GALAXY.SEED)).toEqual({ x: 0, y: 0, z: 0 })
     expect(core.planets).toHaveLength(0)
     expect(galaxy.filter((s) => s.star.class === 'H')).toHaveLength(1)
   })
 
   /** Место звезды не должно зависеть от её класса: иначе рукава окрасятся по спектру. */
   it('расстояние симметрично и обнуляется на себе', () => {
-    const a = placeSystem(11)
-    const b = placeSystem(12)
+    const a = placeSystem(11, GALAXY.SEED)
+    const b = placeSystem(12, GALAXY.SEED)
     expect(distanceLy(a, a)).toBe(0)
     expect(distanceLy(a, b)).toBeCloseTo(distanceLy(b, a))
   })
 })
 
 describe('инварианты системы', () => {
-  const galaxy = generateGalaxy()
+  const galaxy = generateGalaxy(GALAXY.SEED)
 
   it('обитаемая система имеет хотя бы одну планету и столицу', () => {
     // Регрессия: население без планет — жить негде, станции висеть не на чем.
@@ -161,7 +174,7 @@ describe('инварианты системы', () => {
   it('система выводится из индекса целиком, вместе с местом', () => {
     // Место берётся из отдельного потока бросков, но так же выводится из индекса.
     for (const s of galaxy.slice(0, 50)) {
-      expect(placeSystem(s.index)).toEqual({ x: s.x, y: s.y, z: s.z })
+      expect(placeSystem(s.index, GALAXY.SEED)).toEqual({ x: s.x, y: s.y, z: s.z })
     }
   })
 
@@ -186,7 +199,7 @@ describe('инварианты системы', () => {
       if (voidLy <= 0) continue
       giants++
       // Сам гигант остаётся на сыром месте формы — рукав не красят по спектру.
-      expect(placeSystemRaw(g.index)).toEqual({ x: g.x, y: g.y, z: g.z })
+      expect(placeSystemRaw(g.index, GALAXY.SEED)).toEqual({ x: g.x, y: g.y, z: g.z })
       for (const s of galaxy) {
         if (s.index === g.index) continue
         if (distanceLy(g, s) < voidLy * 0.95) inside++
@@ -229,7 +242,7 @@ describe('инварианты системы', () => {
    * зияет пустота. Правка весов не должна молча вернуть перемычку игроку под ноги.
    */
   it('домашняя галактика — спиральная, а не что выпадет', () => {
-    expect(galaxyShape().id).toBe('spiral')
+    expect(galaxyShape(GALAXY.SEED).id).toBe('spiral')
     // Но лотерея жива для ПРОЧИХ зёрен: override — только на домашнем (куст форму бросает сам).
     expect(HOME_SHAPE).toBe('spiral')
   })

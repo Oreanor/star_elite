@@ -16,20 +16,24 @@ import {
   jump,
   commitPreparedJump,
   systemDefFor,
+  createBushTravel,
+  generateUniverse,
   CORE_INDEX,
   GALAXY,
   WORLD,
   type Arrival,
   type JumpOptions,
   type Controller,
+  type BushTravel,
   type PlayerSave,
+  type Universe,
   type World,
 } from '@elite/sim'
 import { createIntent, createPlayerController, type PlayerIntent } from './control/playerController'
 import { online } from './net/firebase'
 import { loadSave } from './save/saveStore'
 
-export type PilotMode = 'manual' | 'autodock' | 'flyto'
+export type PilotMode = 'manual' | 'autodock' | 'flyto' | 'bush'
 
 /**
  * Мир живёт в обычном мутируемом объекте и НИКОГДА не попадает в состояние React.
@@ -45,6 +49,12 @@ export interface Session {
   /** Новая игра (сейва не было): UI покажет экран создания персонажа перед стартом. */
   isNewGame: boolean
   mode: PilotMode
+  /**
+   * Куст галактик и место на нём. Живут в СЕССИИ, а не в мире: `World` — это одна система,
+   * а куст стоит над всеми ими. Вселенная строится один раз из слова и больше не меняется.
+   */
+  universe: Universe
+  bush: BushTravel
   intent: PlayerIntent
   /**
    * Шагнул ли мир в этом кадре. Не второй флаг паузы: решение принимает один
@@ -188,6 +198,8 @@ function createSession(initialSave?: PlayerSave | null): Session {
     pilot,
     isNewGame: save === null,
     mode: 'manual',
+    universe: generateUniverse(GALAXY.WORD),
+    bush: createBushTravel(),
     intent,
     running: false,
     menuFlying: false,

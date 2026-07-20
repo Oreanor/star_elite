@@ -5,7 +5,7 @@ import { ASTEROID } from '../../config/world'
 import { PHYSICS } from '../../config/physics'
 import { effectiveRadius } from '../scale/scale'
 import { stepWorld } from '../sim/step'
-import { createWorld, STARTER_SYSTEM, type AsteroidEntity, type BodyEntity, type World } from '../world'
+import { createWorld, enterSystem, STARTER_SYSTEM, type AsteroidEntity, type BodyEntity, type World } from '../world'
 import {
   armAutoland,
   canAutoland,
@@ -20,6 +20,20 @@ const NO_CONTROLLERS = new Map()
 
 function quiet(): World {
   return createWorld({ ...STARTER_SYSTEM, patrols: [], belt: null })
+}
+
+/**
+ * Тихий мир в системе, где стоит Люцифер (облик 0) и лежит его двор глыб. Число статуй —
+ * бросок 0..COUNT_MAX по сиду системы, ноль законен, поэтому систему ищем перебором.
+ */
+function quietWithYard(): World {
+  // ОДИН мир, в который переходим системами: `createWorld` в цикле слишком дорог.
+  const world = quiet()
+  for (let i = 0; i < 200; i++) {
+    enterSystem(world, { ...STARTER_SYSTEM, patrols: [], belt: null }, i)
+    if (world.monoliths.some((m) => m.variant === 0)) return world
+  }
+  throw new Error('не нашлось системы с двором Люцифера')
 }
 
 function moonOf(world: World): BodyEntity {
@@ -163,7 +177,7 @@ describe('посадка на поверхность', () => {
   })
 
   it('на статую стоянка не предлагается', () => {
-    const world = quiet()
+    const world = quietWithYard()
     const statue = world.monoliths[0]
     expect(statue).toBeDefined()
     const player = world.player
@@ -183,7 +197,7 @@ describe('посадка на поверхность', () => {
   })
 
   it('автопосадка сажает на глыбу двора Люцифера', () => {
-    const world = createWorld({ ...STARTER_SYSTEM, patrols: [], belt: null })
+    const world = quietWithYard()
     const rock = world.scenicRocks[0]
     expect(rock).toBeDefined()
     const player = world.player

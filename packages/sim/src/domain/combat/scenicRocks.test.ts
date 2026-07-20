@@ -2,13 +2,28 @@ import { Vector3 } from 'three'
 import { describe, expect, it } from 'vitest'
 import { MONOLITH } from '../../config/monoliths'
 import { itemMass } from '../cargo/items'
-import { createWorld } from '../world'
+import { createWorld, enterSystem } from '../world'
+import { STARTER_SYSTEM } from '../world/system'
 import { castLaser } from './raycast'
 import { damageScenicRock } from './scenicRocks'
 
+/**
+ * Мир в системе, где стоит Люцифер (облик 0): пояс глыб держится за него. Число статуй —
+ * бросок 0..COUNT_MAX по сиду системы, и ноль законен, поэтому систему ищем перебором.
+ */
+function withYard(): ReturnType<typeof createWorld> {
+  // ОДИН мир, в который переходим системами: `createWorld` в цикле слишком дорог.
+  const world = createWorld()
+  for (let i = 0; i < 200; i++) {
+    enterSystem(world, STARTER_SYSTEM, i)
+    if (world.monoliths.some((m) => m.variant === 0)) return world
+  }
+  throw new Error('не нашлось системы с двором Люцифера')
+}
+
 describe('глыбы двора статуи', () => {
   it('луч попадает в глыбу', () => {
-    const world = createWorld()
+    const world = withYard()
     const rock = world.scenicRocks[0]
     expect(rock).toBeDefined()
 
@@ -21,7 +36,7 @@ describe('глыбы двора статуи', () => {
   })
 
   it('гибель сыпет подбираемые осколки с массой', () => {
-    const world = createWorld()
+    const world = withYard()
     const rock = world.scenicRocks[0]!
     const beforePods = world.pods.length
 
@@ -40,7 +55,7 @@ describe('глыбы двора статуи', () => {
   })
 
   it('крупный камень сыпет больше осколков, чем мелкий', () => {
-    const world = createWorld()
+    const world = withYard()
     const small = world.scenicRocks.reduce((a, b) => (a.radius <= b.radius ? a : b))
     const large = world.scenicRocks.reduce((a, b) => (a.radius >= b.radius ? a : b))
     // Разносим по радиусу заметно — иначе оба попадут в одну ступень округления.
@@ -59,7 +74,7 @@ describe('глыбы двора статуи', () => {
   })
 
   it('крупный камень крепче мелкого', () => {
-    const world = createWorld()
+    const world = withYard()
     const small = world.scenicRocks.reduce((a, b) => (a.radius <= b.radius ? a : b))
     const large = world.scenicRocks.reduce((a, b) => (a.radius >= b.radius ? a : b))
     expect(large.hull).toBeGreaterThan(small.hull)

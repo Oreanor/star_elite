@@ -4,6 +4,7 @@ import {
   clearContactLock,
   clearNavLock,
   isVisible,
+  MIELOPHONE,
   MONOLITH_NAMES,
   figurineDisplayName,
   NAV_ASTEROID_NAME,
@@ -116,7 +117,17 @@ function blips(world: World): Blip[] {
   shipAxes(world.player.state.quat, _fwd, _right, _up)
   const out: Blip[] = []
 
+  /**
+   * За `GHOST_BODY_SCALE` единичный мир растворяется: планеты, спутники и причалы уже
+   * не ориентиры, а `toDisc` зажимает `k` единицей — они прилипают к ободу и выглядят
+   * застывшими. `drawRadar` этот порог соблюдает давно, а здесь его не было вовсе:
+   * отсюда голубая точка планеты, висевшая на локаторе на миллионных масштабах.
+   * Остаются только звёзды и чёрные дыры — на них ещё можно править.
+   */
+  const stellarOnly = world.player.state.scale >= MIELOPHONE.GHOST_BODY_SCALE
+
   for (const body of world.bodies) {
+    if (stellarOnly && body.kind !== 'star' && body.kind !== 'blackhole') continue
     const d = toDisc(world, body.pos)
     if (!d) continue
     out.push({
@@ -132,6 +143,10 @@ function blips(world: World): Blip[] {
       selectKind: 'body',
     })
   }
+
+  // Статуи, статуэтки, глыбы, контейнеры и борта — тем более не ориентиры на таком
+  // масштабе: всё это мельче планеты, которую мы только что убрали.
+  if (stellarOnly) return out
 
   for (const m of world.monoliths) {
     const d = toDisc(world, m.pos)

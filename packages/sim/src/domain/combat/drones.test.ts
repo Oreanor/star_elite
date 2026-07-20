@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest'
+import { auroraOneLoadout } from '../../config/loadouts'
+import { refreshSpec } from '../world/factory'
 import { DRONE_BAY } from '../../config/modules'
 import { selectTarget } from '../ai/targeting'
 import { createAIState } from '../ai'
@@ -23,9 +25,16 @@ function withPirate(): { world: World; pirate: ShipEntity } {
   })
   const pirate = world.ships[0]
   if (!pirate) throw new Error('нет пирата')
+  // У «Spiritus Sanctus» ракетных пилонов нет вовсе (это решение, а не недосмотр —
+  // см. missile-slot.test.ts), а беспилотник живёт именно на пилоне. Поэтому проверяем
+  // на серийной «Авроре», как и остальные операции мунишн-слота.
+  world.player.loadout = auroraOneLoadout()
+  refreshSpec(world.player)
   // Дрон-ракеты — покупной тип мунишн-слота: на старте их нет, снаряжаем явно.
   world.credits = 1_000_000
-  armMissiles(world, world.player, DRONE_BAY)
+  // Возврат проверяем: молча провалившееся снаряжение раньше вываливалось пятью
+  // невнятными `null` из launchDrone вместо одной внятной ошибки здесь.
+  expect(armMissiles(world, world.player, DRONE_BAY)).toBeNull()
   world.player.state.pos.set(0, 0, 0)
   pirate.state.pos.set(0, 0, -300)
   pirate.ai = createAIState(new Vector3(0, 0, -300), world.rng)

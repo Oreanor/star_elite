@@ -228,11 +228,17 @@ const GLB_SCALE = 16
  *   npx @gltf-transform/cli resize --width 1024 --height 1024 in.glb out.glb
  */
 const GLB_HULLS: readonly GlbHullDef[] = [
-  // Spiritus экспортирован вдвое крупнее остальных Meshy-корпусов; scale 8 сохраняет длину 16 м.
-  // У силовой установки одно центральное сопло — это часть идентичности корпуса, не авторазводка.
-  { id: 'spiritus_sanctus', url: '/models/dove4.glb', scale: GLB_SCALE / 2,
-    yaw: GLB_YAW - Math.PI / 2, pitch: GLB_PITCH + Math.PI / 18, roll: GLB_ROLL,
-    nozzles: [{ offset: [0, -0.65, 5], radius: 1.25 }] },
+  // Масштаб ОБЩИЙ, как у прочих корпусов. Половинный достался от dove4: тот экспортировался
+  // вдвое крупнее остальных, и деление возвращало ему честные 16 м. У dove5 экспорт обычный,
+  // и та же поправка просто делала корабль вдвое мельче Авроры — при одной и той же раме.
+  // Радиус шасси (12 м) не менялся, так что сфера попаданий снова совпала с видимым бортом.
+  //
+  // Сопел у него НЕТ вовсе — пустой список, а не отсутствующее поле: `?? tailNozzles(...)`
+  // иначе развёл бы автоматическую пару по габаритам, и корпус получил бы факелы обратно.
+  // Тангаж: прямой угол (dove5 экспортирован носом вверх) минус 20° — подобрано глазами.
+  { id: 'spiritus_sanctus', url: '/models/dove5.glb', scale: GLB_SCALE,
+    yaw: GLB_YAW - Math.PI / 2, pitch: GLB_PITCH + Math.PI / 2 - Math.PI / 9, roll: GLB_ROLL,
+    nozzles: [] },
   // «Аврора One»: выхлоп из ДВУХ центральных движков (тёмные тубусы). Сопла придвинуты ВПЕРЁД
   // к устьям движков (z 8.5, не 11 — иначе плюмаж отрывался от кормы) и опущены на ось тубусов.
   { id: 'aurora_one', url: '/models/aurora_one.glb', scale: GLB_SCALE, yaw: GLB_YAW, pitch: GLB_PITCH, roll: GLB_ROLL,
@@ -324,14 +330,29 @@ function prepareGlbHull(scene: import('three').Object3D, def: GlbHullDef): Loade
   return { geometry: g, material, nozzles: def.nozzles ?? tailNozzles(g.boundingBox!) }
 }
 
-// Грузим ВСЕ GLB-корпуса при импорте модуля (на старте сцены): к открытию верфи готовы.
-// Пока не доехал — chassisGeometry падает на процедурную заглушку, материал — на штатный.
 const glbCache = new Map<string, LoadedHull>()
-for (const def of GLB_HULLS) {
-  new GLTFLoader().load(def.url, (gltf) => {
-    const hull = prepareGlbHull(gltf.scene, def)
-    if (hull) glbCache.set(def.id, hull)
-  })
+let hullsRequested = false
+
+/**
+ * Заказать ВСЕ GLB-корпуса разом: к открытию верфи они должны быть готовы, а какой
+ * корпус у игрока, реестр не знает.
+ *
+ * Раньше этот цикл стоял прямо на уровне модуля и стартовал ПРИ ИМПОРТЕ — то есть
+ * раньше, чем `main.tsx` успевал заказать титульные PNG. Семь мегабайт корпусов
+ * отбирали канал у заставки, и полоса «визуализации» доходила до конца, когда меню
+ * ещё не нарисовалось. Очередь теперь задаёт `main.tsx`, а не порядок импортов.
+ *
+ * Пока корпус не доехал — `chassisGeometry` падает на процедурную заглушку.
+ */
+export function preloadHulls(): void {
+  if (hullsRequested) return
+  hullsRequested = true
+  for (const def of GLB_HULLS) {
+    new GLTFLoader().load(def.url, (gltf) => {
+      const hull = prepareGlbHull(gltf.scene, def)
+      if (hull) glbCache.set(def.id, hull)
+    })
+  }
 }
 
 /** Геометрия GLB-корпуса, если загрузился; иначе null — вызывающий падает на заглушку. */

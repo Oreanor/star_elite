@@ -1,6 +1,7 @@
 import { MOON } from '../../config/bodies'
 import { PLANET_COLORS, SCALE } from '../../config/galaxy'
 import { makeRng } from '../../core/math'
+import { STATION_RADIUS } from '../world/system'
 import type { PatrolDef, SystemDef } from '../world/system'
 import { capitalOf, type Planet, type StarSystem } from './types'
 
@@ -159,7 +160,7 @@ export function systemDefOf(system: StarSystem, galaxySeed: number, seatOverride
     ? {
         name: seatStation.name,
         pos: [start[0], start[1], start[2] - 2_000] as [number, number, number],
-        radius: 400,
+        radius: STATION_RADIUS,
         model: stationModel,
       }
     : null

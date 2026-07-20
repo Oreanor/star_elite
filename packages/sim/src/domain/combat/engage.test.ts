@@ -2,8 +2,10 @@ import { Vector3 } from 'three'
 import { describe, expect, it } from 'vitest'
 import { createAIState } from '../ai'
 import { selectTarget } from '../ai/targeting'
+import { auroraOneLoadout } from '../../config/loadouts'
 import { createWorld, STARTER_SYSTEM, type World } from '../world'
 import type { ShipEntity } from '../world/entities'
+import { refreshSpec } from '../world/factory'
 import { stepMissiles } from './missiles'
 import { fireMissile } from './weapons'
 import { isEngageable } from './engage'
@@ -25,6 +27,11 @@ function withPirate(): { world: World; pirate: ShipEntity } {
   })
   const pirate = world.ships[0]
   if (!pirate) throw new Error('нет пирата')
+  // Правило створа проверяется в том числе головкой ракеты, а стреляет тут игрок.
+  // У штатного «Spiritus Sanctus» пилонов нет вовсе (решение, см. missile-slot.test.ts),
+  // поэтому ставим серийную «Аврору»: та же рама плюс два пилона.
+  world.player.loadout = auroraOneLoadout()
+  refreshSpec(world.player)
   world.player.state.pos.set(0, 0, 0)
   pirate.state.pos.set(0, 0, -400)
   pirate.ai = createAIState(new Vector3(0, 0, -400), world.rng)

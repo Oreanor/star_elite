@@ -20,9 +20,17 @@ import {
   missileAmmo,
   serializePlayer,
   stepWorld,
+  atNode,
+  departTo,
+  enterBush,
+  leaveBush,
+  neighborsOf,
+  stepBushTravel,
+  GALAXY,
   type Controller,
   type World,
 } from '@elite/sim'
+import { bushController } from '../../app/control/bushController'
 import { cycleGalaxyStar, galaxyRadar, retargetNearestGalaxyStar } from './galaxyRadar'
 import { syncControllers, useSession, type Session } from '../../app/GameContext'
 import { coastController } from '../../app/control/playerController'
@@ -60,6 +68,8 @@ function ownsMielophone(player: World['player']): boolean {
 function helmController(session: Session, coasting: boolean): Controller {
   if (session.mode === 'autodock') return autodockController
   if (session.mode === 'flyto') return flyToController
+  // На кусте манёвров нет вовсе — там едут по рельсам, а не летают.
+  if (session.mode === 'bush') return bushController
   return coasting ? coastController : session.pilot
 }
 
@@ -71,6 +81,59 @@ function setPilot(session: Session, mode: Session['mode']): void {
   // Он живёт в МИРЕ, а не в сессии: по нему решает ИИ, а тот про сессию не знает.
   // Полёт-к-цели допуска не даёт — он не заходит в створ, а тормозит поодаль.
   session.world.player.clearance = mode === 'autodock'
+}
+
+/**
+ * Дверь на куст — чёрная дыра. Влетел внутрь её сферы → едешь по вселенной.
+ *
+ * По замыслу дверь одна на галактику и стоит в ЯДРЕ; шарик у причала в Люриларе —
+ * временный вход для разработки. Поэтому ищем любое тело `blackhole`, а не конкретное:
+ * уедет временный — правило не поменяется.
+ */
+function touchedDoor(world: World): boolean {
+  for (const body of world.bodies) {
+    if (body.kind !== 'blackhole') continue
+    if (world.player.state.pos.distanceTo(body.pos) <= body.radius) return true
+  }
+  return false
+}
+
+/**
+ * Вход на куст и ход по нему.
+ *
+ * Газ здесь — СИГНАЛ «еду», а не тяга: позу корабля на ребре задаёт рельс, а не физика.
+ * В узле корабль встаёт и ждёт выбора ветки; пока выбора нет (рендер и осмотр ещё не
+ * сделаны), едем к первому соседу — иначе движение упёрлось бы в первом же узле.
+ */
+function stepBush(session: Session, dt: number): void {
+  const { world, bush, universe } = session
+
+  if (!bush.active) {
+    if (session.mode === 'bush' || !touchedDoor(world)) return
+    // Дом — узел `GALAXY.HOME_NODE`: влетев в дыру своей галактики, оказываемся на её
+    // месте в кусте, а не в случайной точке вселенной.
+    enterBush(bush, GALAXY.HOME_NODE)
+    setPilot(session, 'bush')
+    pushWarning('bushEnter', world.time, {
+      label: universe.nodes[bush.node]?.name ?? '',
+      repeat: 0,
+    })
+    return
+  }
+
+  if (atNode(bush)) {
+    const next = neighborsOf(universe, bush.node)[0]
+    if (next != null) departTo(bush, universe, next)
+    return
+  }
+
+  const arrived = stepBushTravel(bush, universe, world.player.controls.throttle > 0 ? 1 : 0, dt)
+  if (arrived >= 0) {
+    pushWarning('bushArrive', world.time, {
+      label: universe.nodes[arrived]?.name ?? '',
+      repeat: 0,
+    })
+  }
 }
 
 export function Simulation() {
@@ -176,10 +239,14 @@ export function Simulation() {
     // Когда галактика ПРОЯВИЛАСЬ (слой активен), листаются ЗВЁЗДЫ галактики (jumpTargetIndex) —
     // это единственное, что там перечислимо, поэтому берём их на любой Tab, с шифтом и без.
     // Q / Shift+Q — ближайшая из того же круга, что Tab / Shift+Tab (на галактике — звезда слоя).
+    // Галактическая ветка НЕ тупиковая: улетев за сферу локатора (4–14 св.г) или оставшись
+    // без соседей в дальности привода, `cycleGalaxyStar` возвращает false — и нажатие
+    // достаётся обычному кругу. Иначе Tab вдали от галактики не делал ровно ничего.
     if (consumePress('Tab')) {
-      if (galaxyRadar().active) cycleGalaxyStar(world)
-      else if (isHeld('ShiftLeft') || isHeld('ShiftRight')) cycleCelestial(world)
-      else cycleContact(world)
+      if (!galaxyRadar().active || !cycleGalaxyStar(world)) {
+        if (isHeld('ShiftLeft') || isHeld('ShiftRight')) cycleCelestial(world)
+        else cycleContact(world)
+      }
     }
     if (consumePress('KeyQ')) {
       if (galaxyRadar().active) retargetNearestGalaxyStar(world)
@@ -192,8 +259,17 @@ export function Simulation() {
     stepCameraView(dt)
 
     if (consumePress('KeyL')) {
+      /**
+       * ВРЕМЕННЫЙ ВЫХОД С КУСТА. Пока нет ни рендера, ни настоящего прибытия в галактику,
+       * режим куста — ловушка: манёвры отключены, и вернуть штурвал нечем. Убрать, когда
+       * появится честный выход (въезд в узел → влёт в галактику).
+       */
+      if (session.mode === 'bush') {
+        leaveBush(session.bush)
+        setPilot(session, 'manual')
+      }
       // L: отмена стыковки → отлип с поверхности → автопосадка → автостыковка.
-      if (session.mode === 'autodock') setPilot(session, 'manual')
+      else if (session.mode === 'autodock') setPilot(session, 'manual')
       else if (world.player.landedOn) releaseLanding(world.player, world)
       else if (armAutoland(world)) { /* автопосадка пошла — ведёт домен, штурвал вернётся сам */ }
       else if (canEngageAutodock(world)) setPilot(session, 'autodock')
@@ -207,6 +283,8 @@ export function Simulation() {
     }
     // Долетели (или цель пропала) — возвращаем штурвал: автопилот-к-цели не залипает.
     if (session.mode === 'flyto' && flyToArrived(world)) setPilot(session, 'manual')
+
+    stepBush(session, dt)
 
     // Отсюда и до конца кадра мир живёт: камера может догонять, факелы — дышать.
     session.running = true

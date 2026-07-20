@@ -31,6 +31,25 @@ function randomUnit(rng: Rng, out: Vector3): Vector3 {
  * проверять «сам себя» не нужно — а вот другие игроки уже лежат в `world.ships`
  * (как удалённые борта), и эта же проверка бережёт от спавна поверх друга.
  */
+/**
+ * Свободно ли место от НЕПОДВИЖНОГО: тел и живых астероидов. Кораблей не смотрит.
+ *
+ * Нужно там, где точка уже выбрана осмысленно и двигать её нельзя, а уберечься надо
+ * лишь от рождения внутри планеты. Приход трафика именно таков: звено садится плотным
+ * строем (`GROUP_SPREAD` — сотни метров, а `CLEARANCE` — восемьсот), и ведущий оказывался
+ * «загорожен» собственными ведомыми. Полная проверка гнала его на километры в сторону,
+ * и борт приходил за пределами дальности локатора — не там, куда его послал трафик.
+ */
+export function isClearOfSolids(world: World, p: Vector3): boolean {
+  for (const b of world.bodies) {
+    if (p.distanceTo(b.pos) < b.radius + SPAWN.CLEARANCE) return false
+  }
+  for (const a of world.asteroids) {
+    if (a.alive && p.distanceTo(a.pos) < a.radius + SPAWN.CLEARANCE) return false
+  }
+  return true
+}
+
 export function isFreeSpawn(world: World, p: Vector3): boolean {
   for (const b of world.bodies) {
     if (p.distanceTo(b.pos) < b.radius + SPAWN.CLEARANCE) return false

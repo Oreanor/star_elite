@@ -45,7 +45,7 @@ import { currentGameDate } from '../clock'
 import { HUD_SCALE } from '../../render/config'
 import { undocking, consumePendingBonVoyage } from '../../app/control/undockFx'
 import { drawUndockTunnel } from './drawUndock'
-import { galaxyRadar } from '../../render/scene/galaxyRadar'
+import { galaxyRadar, galaxyRadarUsable } from '../../render/scene/galaxyRadar'
 import { HUD_COLORS, bar, circle, corners, dot, ellipse, line, text } from './draw'
 import { t, type Key } from '../i18n'
 import { chassisName, occupationName, properName, starClassName } from '../i18n/dataNames'
@@ -53,6 +53,7 @@ import { formatStat } from '../station/format'
 import { drawFlare } from './drawFlare'
 import { angularSize, formatDistance, formatScale, projectPoint, scaleParts, speedParts } from './project'
 import { activeWarning, pushWarning, WARN_LIFE, type Plate } from './warnings'
+import { apertureEllipse, insideAperture, type PortalAperture } from './aperture'
 import {
   PORTRAIT_GRID,
   loadSheet,
@@ -94,6 +95,11 @@ export interface HudFrame {
   flyto: boolean
   /** Сглаженная частота кадров. Ни на что в игре не влияет — только показывается. */
   fps: number
+  /**
+   * Открытое кольцо прыжка. Подписи своей системы в дырку не лезут, подписи системы
+   * назначения рисуются ТОЛЬКО в ней: stencil-маска портала на 2D-канвас не действует.
+   */
+  aperture: PortalAperture | null
 }
 
 export function drawHud(frame: HudFrame): void {
@@ -506,7 +512,11 @@ const _pinDir = /* @__PURE__ */ new Vector3()
  */
 function drawPinnedStar(frame: HudFrame): void {
   const { ctx, camera, world, width, height } = frame
-  if (galaxyRadar().active) return // слой проснулся — звезду метит drawRadar
+  // Уступаем ТОЛЬКО тому, кто действительно нарисует. Прежняя проверка смотрела на голый
+  // флаг `active`, а он переживал размонтирование слоя (или его поднимал превью-мир за
+  // порталом): маркер не рисовал никто — ни здесь, ни в `drawRadar`, — и выбранная на карте
+  // звезда пропадала совсем. `galaxyRadarUsable` требует живых буферов, а не намерения.
+  if (galaxyRadarUsable()) return
   const tgt = world.jumpTargetIndex
   if (tgt == null || tgt === world.systemIndex) return
 
@@ -638,13 +648,34 @@ function collectMarkers(world: World): Marker[] {
   return out
 }
 
-function drawBodyMarkers({ ctx, camera, world, width, height }: HudFrame): void {
-  const shown: Array<{ m: Marker; x: number; y: number; distance: number }> = []
+function drawBodyMarkers({ ctx, camera, world, width, height, aperture }: HudFrame): void {
+  // Мир хранится у каждой метки: за кольцом стоит ВТОРАЯ система со своим floating
+  // origin и своим кораблём, и дистанцию до её тел надо мерить в её координатах.
+  const shown: Array<{ m: Marker; x: number; y: number; distance: number; from: World }> = []
+  const hole = apertureEllipse(aperture, camera, width, height)
+
   for (const m of collectMarkers(world)) {
     const p = projectPoint(m.pos, camera, width, height)
     if (p.behind || !isOnScreen(p.x, p.y, width, height)) continue
+    // Подпись своей системы, попавшая в дырку, лежала бы поверх чужого неба —
+    // ровно того, что stencil из кадра вырезал. Гасим.
+    if (hole && insideAperture(hole, p.x, p.y)) continue
     // projectPoint отдаёт переиспользуемый объект — копируем числа сразу.
-    shown.push({ m, x: p.x, y: p.y, distance: p.distance })
+    shown.push({ m, x: p.x, y: p.y, distance: p.distance, from: world })
+  }
+
+  // Симметрично: тела системы назначения подписываются, но только внутри кольца.
+  // Мир за маской — не декорация, а тот самый World, который примет игрок, поэтому
+  // метки честные и указывают туда, куда он прилетит.
+  const destWorld = aperture?.world
+  const destCamera = aperture?.camera
+  if (hole && destWorld && destCamera) {
+    for (const m of collectMarkers(destWorld)) {
+      const p = projectPoint(m.pos, destCamera, width, height)
+      if (p.behind || !isOnScreen(p.x, p.y, width, height)) continue
+      if (!insideAperture(hole, p.x, p.y)) continue
+      shown.push({ m, x: p.x, y: p.y, distance: p.distance, from: destWorld })
+    }
   }
 
   // Подписываем по важности: сперва цель и ориентиры (они занимают место), затем
@@ -654,7 +685,7 @@ function drawBodyMarkers({ ctx, camera, world, width, height }: HudFrame): void 
   shown.sort((a, b) => labelRank(a.m) - labelRank(b.m))
 
   const placed: Array<{ x: number; y: number }> = []
-  for (const { m, x, y } of shown) {
+  for (const { m, x, y, from } of shown) {
     // Цель навигации — точка чуть крупнее прочих: цвет на звёздном фоне слаб, а
     // разница в размере читается даже боковым зрением.
     dot(ctx, x, y, Math.max(1, (m.nav ? 1.5 * S : 1 * S) - 1), m.color)
@@ -674,7 +705,7 @@ function drawBodyMarkers({ ctx, camera, world, width, height }: HudFrame): void 
     text(ctx, m.name, x + gap, y - 5 * S, m.color)
     // До ПОВЕРХНОСТИ, а не до центра: садишься на поверхность, и «12 км» до неё честнее, чем
     // до ядра сквозь тело. И от КОРАБЛЯ, не от камеры (на масштабе камера далеко за кормой).
-    text(ctx, formatDistance(Math.max(0, shipDistance(world, m.pos) - m.surfaceR)), x + gap, y + 5 * S, m.color)
+    text(ctx, formatDistance(Math.max(0, shipDistance(from, m.pos) - m.surfaceR)), x + gap, y + 5 * S, m.color)
     placed.push({ x, y })
   }
 }
@@ -992,11 +1023,18 @@ function drawRadar(frame: HudFrame): void {
     // СВОЯ звезда (текущая система) — ВСЕГДА, кольцом и подписью, даже вне сферы: это
     // бесшовная подмена «система → звезда галактики» и точка отсчёта. Прочие подтянутся
     // на радар по мере роста — игрок видит, куда всё сходится.
-    const own = projStar(gr.originIndex * 3, true)
+    const ownB = gr.originIndex * 3
+    const own = projStar(ownB, true)
     if (own) {
-      dot(ctx, own.px, own.my, Math.max(1, 2 * S), HUD_COLORS.PRIMARY)
-      circle(ctx, own.px, own.my, 3 * S, HUD_COLORS.PRIMARY)
-      text(ctx, properName(world.systemName), own.px - 5 * S, own.my - 3 * S, HUD_COLORS.PRIMARY, 'right')
+      // Цвет — НАСТОЯЩИЙ цвет своей звезды из буфера слоя, а не HUD_COLORS.PRIMARY.
+      // `PRIMARY` и `PLANET` — один и тот же #7fd6ff, и голубая точка своей звезды, которая
+      // вдобавок нарисована `force` (вне сферы видимости, всегда), читалась как зависшая
+      // планета: «Люрилар голубой так и висит на локаторе». Кольцо и подпись отличают её от
+      // прочих звёзд, а цвет класса — от планеты.
+      const ownColor = `rgb(${Math.round(col[ownB]! * 255)},${Math.round(col[ownB + 1]! * 255)},${Math.round(col[ownB + 2]! * 255)})`
+      dot(ctx, own.px, own.my, Math.max(1, 2 * S), ownColor)
+      circle(ctx, own.px, own.my, 3 * S, ownColor)
+      text(ctx, properName(world.systemName), own.px - 5 * S, own.my - 3 * S, ownColor, 'right')
     }
     return
   }

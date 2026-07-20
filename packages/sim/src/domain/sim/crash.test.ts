@@ -240,7 +240,7 @@ describe('удар о крупное тело', () => {
     const world = createWorld({
       ...STARTER_SYSTEM,
       patrols: [],
-      belt: { count: 1, radius: 500, spread: 50, center: [200, 0, 0] },
+      belt: { count: 1, radius: 500, center: [200, 0, 0] },
     })
     const player = world.player
     const rock = world.asteroids[0]!

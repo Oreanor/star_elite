@@ -201,6 +201,13 @@ export function spawnSlovo(world: World): void {
 /** Пересобрать характеристики после смены модулей или груза. Вызывать на СОБЫТИЕ. */
 export function refreshSpec(e: ShipEntity): void {
   const spec = deriveShipSpec(e.loadout, cargoMass(e.hold), e.hullUp)
+  // Состояние стволов переносим по НОМЕРУ ПОДВЕСКИ, поэтому старую раскладку надо
+  // снять до подмены spec.
+  const wasByHardpoint = new Map<number, ShipEntity['guns'][number]>()
+  e.spec.mounts.forEach((mount, i) => {
+    const gun = e.guns[i]
+    if (gun) wasByHardpoint.set(mount.index, gun)
+  })
   e.spec = spec
   e.hold.capacity = spec.cargoCapacity
 
@@ -212,9 +219,19 @@ export function refreshSpec(e: ShipEntity): void {
   // Сменили привод — заряд не может превышать дальность новой модели.
   e.jumpCharge = Math.min(e.jumpCharge, spec.jumpRange)
 
-  // Стволы могли смениться: сохраняем боезапас там, где подвеска осталась подвеской.
-  e.guns = spec.mounts.map((mount, i) => {
-    const prev = e.guns[i]
+  /**
+   * Стволы могли смениться: сохраняем боезапас там, где подвеска осталась подвеской.
+   *
+   * Ключ — `mount.index` (номер подвески на раме), а НЕ позиция в `spec.mounts`.
+   * `mounts` — сжатый список: пустые подвески в него не попадают (`derive.ts`), поэтому
+   * стоит снять или поставить оружие, как позиции всех последующих съезжают, и состояние
+   * перетекает между чужими подвесками. Пойманный случай: смена корпуса на «Аврору» с
+   * двумя пилонами давала боезапас 2 вместо 4 — первый пилон наследовал `ammo: 0` от
+   * лазера, стоявшего на его прежнем месте, а `??` такой ноль считает законным значением
+   * и не заменяет его штатным боекомплектом.
+   */
+  e.guns = spec.mounts.map((mount) => {
+    const prev = wasByHardpoint.get(mount.index)
     return {
       cooldown: 0,
       heat: prev?.heat ?? 0,

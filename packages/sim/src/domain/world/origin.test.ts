@@ -1,7 +1,8 @@
 import { Vector3 } from 'three'
 import { describe, expect, it } from 'vitest'
 import { PHYSICS } from '../../config/physics'
-import { createWorld } from './factory'
+import { createWorld, enterSystem } from './factory'
+import { STARTER_SYSTEM } from './system'
 import { maybeShiftOrigin } from './origin'
 import { stepOrbits } from './orbits'
 import type { World } from './entities'
@@ -23,6 +24,26 @@ import type { World } from './entities'
 /** Мир, отлетевший за порог: следующий `maybeShiftOrigin` обязан сработать. */
 function farFromOrigin(): World {
   const world = createWorld()
+  world.player.state.pos.set(PHYSICS.FLOATING_ORIGIN_RADIUS * 2, 0, 0)
+  return world
+}
+
+/**
+ * Мир в системе, где статуи и их двор ЕСТЬ. Число статуй — бросок 0..COUNT_MAX по сиду
+ * системы, ноль законен, поэтому подходящую систему ищем перебором в ОДНОМ мире.
+ */
+function withYard(): World {
+  const world = createWorld()
+  for (let i = 0; i < 200; i++) {
+    enterSystem(world, STARTER_SYSTEM, i)
+    if (world.monoliths.some((m) => m.variant === 0)) return world
+  }
+  throw new Error('не нашлось системы с двором Люцифера')
+}
+
+/** То же, но борт заведомо за порогом сдвига начала координат. */
+function yardFarFromOrigin(): World {
+  const world = withYard()
   world.player.state.pos.set(PHYSICS.FLOATING_ORIGIN_RADIUS * 2, 0, 0)
   return world
 }
@@ -79,7 +100,7 @@ describe('плавающее начало координат', () => {
 
   /** Статуя держится СВОЕГО причала: это и был симптом — 500 световых секунд до неё. */
   it('статуи не отрываются от причала', () => {
-    const world = farFromOrigin()
+    const world = yardFarFromOrigin()
     const station = world.bodies.find((b) => b.kind === 'station')!
     const before = world.monoliths.map((m) => m.pos.distanceTo(station.pos))
     expect(before.length).toBeGreaterThan(0)
@@ -103,7 +124,7 @@ describe('плавающее начало координат', () => {
  */
 describe('окрестность едет вместе с причалом по его орбите', () => {
   it('статуя держится причала, когда тот уходит по орбите', () => {
-    const world = createWorld()
+    const world = withYard()
     const station = world.bodies.find((b) => b.kind === 'station')!
     const before = world.monoliths.map((m) => m.pos.distanceTo(station.pos))
     expect(before.length).toBeGreaterThan(0)
@@ -119,7 +140,7 @@ describe('окрестность едет вместе с причалом по 
   })
 
   it('пояс глыб едет вместе с причалом', () => {
-    const world = createWorld()
+    const world = withYard()
     const station = world.bodies.find((b) => b.kind === 'station')!
     const before = world.scenicRocks.map((r) => r.pos.distanceTo(station.pos))
     expect(before.length).toBeGreaterThan(0)
