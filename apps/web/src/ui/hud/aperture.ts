@@ -53,24 +53,30 @@ export function apertureEllipse(
 ): ApertureEllipse | null {
   if (!aperture || aperture.radius <= 0) return null
 
-  _axisX.set(1, 0, 0).applyQuaternion(aperture.quat).multiplyScalar(aperture.radius)
-  _axisY.set(0, 1, 0).applyQuaternion(aperture.quat).multiplyScalar(aperture.radius)
-
   // projectPoint отдаёт переиспользуемый объект — числа снимаем сразу после вызова.
   const c = projectPoint(aperture.pos, camera, width, height)
   if (c.behind) return null
   const cx = c.x
   const cy = c.y
 
+  // Полуоси берём НЕ по дальнему краю кольца, а по производной проекции у центра.
+  // Иначе на большом кольце (подлетел вплотную, оно во весь экран) точка `центр+радиус`
+  // уходит ЗА камеру, projectPoint кричит «behind», и апертура возвращала null — клип
+  // пропадал, и подписи ПЕРВОГО мира лезли в дырку. Пробуем малой долей радиуса (она
+  // заведомо перед камерой) и линейно масштабируем обратно.
+  const EPS = 0.01
+  _axisX.set(1, 0, 0).applyQuaternion(aperture.quat).multiplyScalar(aperture.radius * EPS)
+  _axisY.set(0, 1, 0).applyQuaternion(aperture.quat).multiplyScalar(aperture.radius * EPS)
+
   const a = projectPoint(_edge.copy(aperture.pos).add(_axisX), camera, width, height)
   if (a.behind) return null
-  const ax = a.x - cx
-  const ay = a.y - cy
+  const ax = (a.x - cx) / EPS
+  const ay = (a.y - cy) / EPS
 
   const b = projectPoint(_edge.copy(aperture.pos).add(_axisY), camera, width, height)
   if (b.behind) return null
-  const bx = b.x - cx
-  const by = b.y - cy
+  const bx = (b.x - cx) / EPS
+  const by = (b.y - cy) / EPS
 
   const det = ax * by - bx * ay
   // Вырожденный эллипс — кольцо строго в профиль: сквозь него ничего не видно,
