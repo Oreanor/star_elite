@@ -1,6 +1,7 @@
 import { AsteroidField } from './Asteroids'
 import { Bodies } from './Bodies'
 import { GalaxyLayer } from './GalaxyLayer'
+import { BushLayer } from './BushLayer'
 import { Titans } from './Titans'
 import { Platforms } from './Platforms'
 import { DockingCorridor } from './DockingCorridor'
@@ -50,6 +51,7 @@ export function WorldVisuals() {
       <Lighting />
       <Starfield />
       <GalaxyLayer />
+      <BushLayer />
 
       <Bodies />
       <BlackHole />
