@@ -37,6 +37,7 @@ import {
   type World,
 } from '@elite/sim'
 import { useSession } from '../../app/GameContext'
+import { BushMap } from './BushMap'
 import { useOnlinePlayers } from '../../app/net/presence'
 import { UI } from '../theme'
 import { t, useLang } from '../i18n'
@@ -684,7 +685,17 @@ function blockLabel(reason: NonNullable<ReturnType<typeof jumpBlock>>): string {
   return t(BLOCK_KEY[reason])
 }
 
-export function GalaxyMap({ onClose, embedded = false }: { onClose: () => void; embedded?: boolean }) {
+/**
+ * Тонкая обёртка: на КУСТЕ карта галактики — другая (`BushMap`, чужая галактика узла без
+ * привязки к текущему миру). Один хук здесь, тяжёлая карта живёт в `GalaxyMapImpl` и на
+ * кусте вовсе не монтируется — её мировые хуки (прыжок, знакомые) не спорят с чужим зерном.
+ */
+export function GalaxyMap(props: { onClose: () => void; embedded?: boolean }) {
+  if (useSession().bush.active) return <BushMap embedded={props.embedded} onClose={props.onClose} />
+  return <GalaxyMapImpl {...props} />
+}
+
+function GalaxyMapImpl({ onClose, embedded = false }: { onClose: () => void; embedded?: boolean }) {
   useLang()
   const session = useSession()
   const world = session.world

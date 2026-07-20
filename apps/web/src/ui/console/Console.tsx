@@ -27,6 +27,8 @@ import { Market } from '../station/Market'
 import { ShipScreen } from '../ship/ShipScreen'
 import { SystemMap } from '../map/SystemMap'
 import { GalaxyMap } from '../map/GalaxyMap'
+import { BushMap } from '../map/BushMap'
+import { useSession } from '../../app/GameContext'
 import { Locator } from '../map/Locator'
 
 /**
@@ -78,6 +80,7 @@ export function Console({
   peopleRefresh?: number
 }) {
   useLang()
+  const bushActive = useSession().bush.active
   const [, bump] = useReducer((n: number) => n + 1, 0)
 
   // Причал не застывает, пока сидишь в доке: мир на паузе, поэтому смену лиц у причала
@@ -190,8 +193,13 @@ export function Console({
           {tab === 'people' && (
             <PeopleTab key={peopleRefresh} world={world} docked={docked} onTalk={onTalk} onChat={onChat} />
           )}
+          {/* На КУСТЕ любой вид карты — карта куста: система и локатор завязаны на текущий
+              мир, который на рельсах заморожен, а показать надо галактику узла (или пустоту
+              между узлами). Ряд переключателей тут не нужен. */}
+          {isMapView(tab) && bushActive && <BushMap embedded onClose={onClose} />}
+
           {/* КАРТА — три вида под одной вкладкой: ряд переключателей и выбранный вид. */}
-          {isMapView(tab) && (() => {
+          {isMapView(tab) && !bushActive && (() => {
             // За масштабом (миелофон) единичная система растворилась — её карта неактивна.
             // Вид системы подменяется галактическим, а его кнопка гаснет. Локатор при этом
             // работает: он переключается на галактические звёзды (см. drawRadar).

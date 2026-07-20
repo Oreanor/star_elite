@@ -7,7 +7,7 @@ import { useSession } from '../../app/GameContext'
 import { undocking, undockProgress } from '../../app/control/undockFx'
 import { cameraView, consumeCameraFrameRotation, consumeViewReset } from '../../app/control/cameraView'
 import { bombShake } from '../bombFeel'
-import { CAMERA, GIANT_RENDER_CAP, RENDER } from '../config'
+import { BUSH, CAMERA, GIANT_RENDER_CAP, RENDER } from '../config'
 
 /**
  * Камера преследования и вид из кабины.
@@ -244,6 +244,13 @@ export function FlightCamera() {
     // корпус мерцает в лог-буфере, а на экране он и так во весь кадр. Тот же зажим у меша
     // корабля — тогда он остаётся постоянного размера, просто мир перестаёт уменьшаться.
     _offset.multiplyScalar(Math.min(state.scale, GIANT_RENDER_CAP))
+
+    // На КУСТЕ камера отъезжает, чтобы в кадр вошла КРОНА пузырей: базовая chase-дистанция
+    // выверена под бой у самого корабля, а тут смотрят на дерево галактик впереди. В комнате
+    // монумента отъезда нет — там свободный полёт у креста, обычная дистанция уместна.
+    if (session.mode === 'bush' && !session.bush.inMonument) {
+      _offset.multiplyScalar(BUSH.CAMERA_PULLBACK)
+    }
 
     // Пользовательский ракурс (стрелки): наезд множителем дистанции и облёт вокруг ЦЕНТРА
     // корабля. Облёт — жёсткий поворот всей связки камеры (и смещения, и взгляда ниже)

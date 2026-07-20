@@ -403,6 +403,8 @@ export const BUSH = {
    */
   MONUMENT_ROOM_DIST: 4000,
   MONUMENT_ROOM_CROSS_R: 700,
+  /** Во сколько раз камера отъезжает на кусте против боевой chase-дистанции — чтобы видеть крону. */
+  CAMERA_PULLBACK: 5,
 } as const
 
 /**
