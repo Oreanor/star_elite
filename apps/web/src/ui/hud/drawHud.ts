@@ -105,12 +105,15 @@ export interface HudFrame {
    */
   torusThrust: number
   /**
-   * Положение ДОМА (крест на домашней галактике) относительно корабля в комнате тора — для
-   * метки на локаторе и HUD-маркера на самой галактике. `null`, когда дом за полюсом или вне комнаты.
+   * Положения ДОМА (твоя галактика) и КРЕСТА (монумент) относительно корабля в комнате тора — для
+   * HUD-рамок и меток локатора. `null`, когда узел за полюсом или вне комнаты.
    */
   torusHome: { x: number; y: number; z: number } | null
-  /** Имя домашней галактики — подпись под маркером. */
+  torusMonument: { x: number; y: number; z: number } | null
+  /** Имя домашней галактики — подпись под её маркером. */
   torusHomeName: string
+  /** Активная цель автопилота в комнате (подсвечивается ярче), либо null. */
+  torusTarget: 'home' | 'cross' | null
   /** Сглаженная частота кадров. Ни на что в игре не влияет — только показывается. */
   fps: number
   /**
@@ -141,7 +144,7 @@ export function drawHud(frame: HudFrame): void {
   // станциями и планетами скрытого мира). Остаётся полётная суть: показания и тревоги.
   if (frame.bush) {
     drawReadouts(frame)
-    drawHomeMarker(frame)
+    drawTorusMarkers(frame)
     drawBushLocator(frame)
     const plate = gatherWarnings(frame)
     if (plate) paintWarningPlate(frame, plate)
@@ -940,31 +943,72 @@ function galaxyStarName(seed: number, index: number): string | null {
 }
 
 /**
- * HUD-МАРКЕР ДОМА: рамка-прицел прямо на домашней галактике + подпись. Пуфы все светятся, и
- * среди них дом теряется — жёсткая рамка с именем делает «мою» галактику безошибочной. За
- * кадром — стрелка-указатель к ней (как у прикреплённой звезды).
+ * HUD-МАРКЕРЫ КОМНАТЫ: рамки-прицелы с подписями на ДОМЕ (твоя галактика) и КРЕСТЕ (монумент).
+ * Пуфы все светятся и дом/крест среди них теряются — жёсткая рамка с именем делает цель
+ * безошибочной. Активная цель автопилота ярче (жёлтая), спящая — голубая. За кадром — стрелка.
  */
-function drawHomeMarker(frame: HudFrame): void {
-  const { ctx, camera, width, height, torusHome, torusHomeName } = frame
-  if (!torusHome) return
-  _gtar.set(torusHome.x, torusHome.y, torusHome.z)
-  const color = '#66e0ff'
+function markOne(
+  frame: HudFrame,
+  pos: { x: number; y: number; z: number },
+  name: string,
+  color: string,
+): void {
+  const { ctx, camera, width, height } = frame
+  _gtar.set(pos.x, pos.y, pos.z)
   const p = projectPoint(_gtar, camera, width, height)
   if (!p.behind && isOnScreen(p.x, p.y, width, height, 20 * S)) {
     navReticle(ctx, p.x, p.y, color)
-    text(ctx, torusHomeName, p.x, p.y + 12 * S, color, 'center')
+    text(ctx, name, p.x, p.y + 12 * S, color, 'center')
   } else {
-    offscreenArrow(frame, _gtar, color, true, torusHomeName)
+    offscreenArrow(frame, _gtar, color, true, name)
   }
 }
 
+function drawTorusMarkers(frame: HudFrame): void {
+  const { torusHome, torusMonument, torusHomeName, torusTarget } = frame
+  const homeColor = torusTarget === 'home' ? HUD_COLORS.TARGET : '#66e0ff'
+  const crossColor = torusTarget === 'cross' ? HUD_COLORS.TARGET : '#66e0ff'
+  if (torusHome) markOne(frame, torusHome, torusHomeName, homeColor)
+  if (torusMonument) markOne(frame, torusMonument, 'Кресты', crossColor)
+}
+
 /**
- * ЛОКАТОР КОМНАТЫ ТОРА: та же круговая шкала, что у системного радара, но показывает ровно одну
- * метку — ДОМ (крест на домашней галактике) по направлению от корабля. Так в пустоте всегда видно,
- * где дом и куда возвращаться. Дистанция по проекции задаёт вынос метки от центра к краю.
+ * ЛОКАТОР КОМНАТЫ ТОРА: та же круговая шкала, что у системного радара, но с двумя метками —
+ * ДОМ (твоя галактика) и КРЕСТ (монумент) по направлению от корабля. В пустоте всегда видно, где
+ * они и куда рулить. Активная цель автопилота ярче. Вынос от центра — по дистанции проекции.
  */
+function bushBlip(
+  frame: HudFrame,
+  pos: { x: number; y: number; z: number },
+  cx: number,
+  cy: number,
+  radiusX: number,
+  radiusY: number,
+  label: string,
+  active: boolean,
+): void {
+  const { ctx } = frame
+  _point.set(pos.x, pos.y, pos.z)
+  const distance = _point.length() || 1
+  const x = _point.dot(_right)
+  const z = _point.dot(_fwd)
+  const flat = Math.hypot(x, z)
+  const k = Math.min(1, distance / (TORUS.SCALE * 3))
+  const px = flat < 1e-6 ? cx : cx + (x / flat) * k * radiusX
+  const py = flat < 1e-6 ? cy : cy - (z / flat) * k * radiusY
+  const lift = Math.max(-10 * S, Math.min(10 * S, (_point.dot(_up) / distance) * 20 * S))
+  const my = py - lift
+  if (Math.abs(lift) > S) line(ctx, px, py, px, my, HUD_COLORS.DIM)
+  const color = active ? HUD_COLORS.TARGET : '#66e0ff'
+  const r = 3 * S
+  line(ctx, px - r, my, px + r, my, color, active ? 2 : 1)
+  line(ctx, px, my - r, px, my + r, color, active ? 2 : 1)
+  ctx.font = hudFont(9 * S)
+  text(ctx, label, px + r + 2 * S, my - 4 * S, color)
+}
+
 function drawBushLocator(frame: HudFrame): void {
-  const { ctx, world, width, height, torusHome, torusHomeName } = frame
+  const { ctx, world, width, height, torusHome, torusMonument, torusHomeName, torusTarget } = frame
   const radiusX = 47 * 1.5 * S
   const radiusY = 47 * 0.75 * S
   const cx = width - radiusX - 12 * S
@@ -976,27 +1020,9 @@ function drawBushLocator(frame: HudFrame): void {
   line(ctx, cx, cy - 3 * S, cx, cy + 3 * S, HUD_COLORS.DIM, FRAME_W)
   line(ctx, cx - 3 * S, cy, cx + 3 * S, cy, HUD_COLORS.DIM, FRAME_W)
 
-  if (!torusHome) return
-  const player = world.player
-  shipAxes(player.state.quat, _fwd, _right, _up)
-  _point.set(torusHome.x, torusHome.y, torusHome.z)
-  const distance = _point.length() || 1
-  const x = _point.dot(_right)
-  const z = _point.dot(_fwd)
-  const flat = Math.hypot(x, z)
-  const k = Math.min(1, distance / (TORUS.SCALE * 3))
-  const px = flat < 1e-6 ? cx : cx + (x / flat) * k * radiusX
-  const py = flat < 1e-6 ? cy : cy - (z / flat) * k * radiusY
-  const lift = Math.max(-10 * S, Math.min(10 * S, (_point.dot(_up) / distance) * 20 * S))
-  const my = py - lift
-  if (Math.abs(lift) > S) line(ctx, px, py, px, my, HUD_COLORS.DIM)
-
-  // Метка домашней галактики — крестик (совпадает с крестом-монументом в 3D) + ИМЯ галактики.
-  const r = 3 * S
-  line(ctx, px - r, my, px + r, my, HUD_COLORS.TARGET, 2)
-  line(ctx, px, my - r, px, my + r, HUD_COLORS.TARGET, 2)
-  ctx.font = hudFont(9 * S)
-  text(ctx, torusHomeName, px + r + 2 * S, my - 4 * S, HUD_COLORS.TARGET)
+  shipAxes(world.player.state.quat, _fwd, _right, _up)
+  if (torusHome) bushBlip(frame, torusHome, cx, cy, radiusX, radiusY, torusHomeName, torusTarget === 'home')
+  if (torusMonument) bushBlip(frame, torusMonument, cx, cy, radiusX, radiusY, 'Кресты', torusTarget === 'cross')
 }
 
 function drawRadar(frame: HudFrame): void {

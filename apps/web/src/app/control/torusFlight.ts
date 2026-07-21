@@ -8,6 +8,11 @@ import {
 } from '../../render/scene/hypertorus'
 import { TORUS } from '../../render/config'
 import { isHeld } from '../../platform/input/input'
+import {
+  setTorusAutopilotTarget,
+  torusAutopilotActive,
+  torusNav,
+} from './torusAutopilot'
 
 /**
  * ПОЛЁТ ПО ГИПЕРТОРУ. Корабль стоит в центре стереопроекции и вертится мышью (это делает
@@ -52,12 +57,32 @@ export function torusThrust(): number {
  * ОБРАТНОЕ к перемещению игрока — он будто летит вперёд сквозь неё).
  */
 export function stepTorusFlight(shipQuat: Quaternion, dt: number): void {
-  // Газ — обычный СЕКТОР: W наращивает, S убавляет, отпустил — держится. Тот же темп, что у пилота.
-  if (isHeld('KeyW')) throttle += TORUS.THROTTLE_RATE * dt
-  if (isHeld('KeyS')) throttle -= TORUS.THROTTLE_RATE * dt
+  _fwd.copy(_zBack).applyQuaternion(shipQuat)
+
+  if (torusAutopilotActive()) {
+    // Автопилот ведёт газ: прибыл — гасим и снимаем автопилот (штурвал возвращается мыши);
+    // иначе даём ход, как только нос совпал с направлением на цель.
+    const nav = torusNav()
+    if (nav.arrived) {
+      throttle -= TORUS.THROTTLE_RATE * dt
+      if (throttle <= 0) {
+        throttle = 0
+        setTorusAutopilotTarget(null)
+      }
+    } else if (nav.valid && _fwd.x * nav.dx + _fwd.y * nav.dy + _fwd.z * nav.dz > TORUS.AUTOPILOT_AIM_DOT) {
+      throttle += TORUS.THROTTLE_RATE * dt
+    } else {
+      // Нос ещё доворачивается на цель — ход притормаживаем, чтобы не промахнуться.
+      throttle -= TORUS.THROTTLE_RATE * dt
+    }
+  } else {
+    // Газ — обычный СЕКТОР: W наращивает, S убавляет, отпустил — держится. Тот же темп, что у пилота.
+    if (isHeld('KeyW')) throttle += TORUS.THROTTLE_RATE * dt
+    if (isHeld('KeyS')) throttle -= TORUS.THROTTLE_RATE * dt
+  }
   throttle = throttle < 0 ? 0 : throttle > 1 ? 1 : throttle
+
   if (throttle > 1e-4) {
-    _fwd.copy(_zBack).applyQuaternion(shipQuat)
     // Знак проверен численно (signcheck): при +angle галактика ПО НОСУ приближается — летим В неё.
     const angle = throttle * TORUS.FLY_RATE * dt
     rotPlaneW(_fwd.x, _fwd.y, _fwd.z, angle, _step)

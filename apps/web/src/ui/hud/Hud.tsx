@@ -7,7 +7,8 @@ import { PIXEL_SCALE } from '../../render/config'
 import { jumpPortal, portalActive } from '../../app/control/jumpPortal'
 import { preparedJumpPortalWorld, syncDestCamera } from '../../render/scene/jumpPortalWorld'
 import { torusThrust } from '../../app/control/torusFlight'
-import { torusHomeMarker } from '../../render/scene/HypertorusLayer'
+import { torusAutopilotTarget } from '../../app/control/torusAutopilot'
+import { torusHomeMarker, torusMonumentMarker } from '../../render/scene/HypertorusLayer'
 import { drawHud } from './drawHud'
 import type { PortalAperture } from './aperture'
 
@@ -121,7 +122,12 @@ export function Hud() {
         session.bush.active && torusHomeMarker.visible
           ? { x: torusHomeMarker.x, y: torusHomeMarker.y, z: torusHomeMarker.z }
           : null,
+      torusMonument:
+        session.bush.active && torusMonumentMarker.visible
+          ? { x: torusMonumentMarker.x, y: torusMonumentMarker.y, z: torusMonumentMarker.z }
+          : null,
       torusHomeName: session.universe.nodes[GALAXY.HOME_NODE]?.name ?? 'ДОМ',
+      torusTarget: session.bush.active ? torusAutopilotTarget() : null,
       fps: fpsRef.current,
       aperture,
     })

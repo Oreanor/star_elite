@@ -31,6 +31,7 @@ import { syncControllers, useSession, type Session } from '../../app/GameContext
 import { coastController } from '../../app/control/playerController'
 import { stepCameraView } from '../../app/control/cameraView'
 import { resetTorusFlight } from '../../app/control/torusFlight'
+import { cycleTorusAutopilot, resetTorusAutopilot } from '../../app/control/torusAutopilot'
 import { persistSave } from '../../app/save/saveStore'
 import { clearPresses, consumePress, input, isHeld, releaseLock } from '../../platform/input/input'
 import { gameTimeSec } from '../../app/net/worldClock'
@@ -113,6 +114,7 @@ function stepBush(session: Session): void {
     enterBush(bush, GALAXY.HOME_NODE)
     session.monumentCross = null
     resetTorusFlight()
+    resetTorusAutopilot()
     world.player.state.pos.set(0, 0, 0)
     world.player.state.vel.set(0, 0, 0)
     world.player.state.angVel.set(0, 0, 0)
@@ -239,7 +241,9 @@ export function Simulation() {
     // без соседей в дальности привода, `cycleGalaxyStar` возвращает false — и нажатие
     // достаётся обычному кругу. Иначе Tab вдали от галактики не делал ровно ничего.
     if (consumePress('Tab')) {
-      if (!galaxyRadar().active || !cycleGalaxyStar(world)) {
+      // В комнате тора Tab переключает цель автопилота: выкл → дом → крест → выкл.
+      if (session.bush.active) cycleTorusAutopilot()
+      else if (!galaxyRadar().active || !cycleGalaxyStar(world)) {
         if (isHeld('ShiftLeft') || isHeld('ShiftRight')) cycleCelestial(world)
         else cycleContact(world)
       }

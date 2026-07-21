@@ -18,6 +18,11 @@ import {
 import { smoothstep } from '@elite/sim'
 import { useSession } from '../../app/GameContext'
 import { stepTorusFlight, torusView } from '../../app/control/torusFlight'
+import {
+  setTorusNav,
+  torusAutopilotActive,
+  torusAutopilotTarget,
+} from '../../app/control/torusAutopilot'
 import { TORUS } from '../config'
 import { crossNeonTubesGeometry } from '../geometry/props'
 import { crossNeonLampMaterial, tickCrossPortal } from '../materials/crossPortal'
@@ -30,11 +35,11 @@ import {
 } from './hypertorus'
 
 /**
- * ДОМ-маркер: мировая позиция креста на домашней галактике, для локатора HUD. Слой считает её
- * каждый кадр, радар читает — так метка «дом» появляется на локаторе. `visible=false`, когда
- * дом ушёл за полюс проекции (не виден).
+ * Маркеры для HUD (локатор + рамка): мировые позиции ДОМА (твоя галактика) и КРЕСТА (монумент).
+ * Слой считает их каждый кадр, HUD читает. `visible=false`, когда узел ушёл за полюс проекции.
  */
 export const torusHomeMarker = { x: 0, y: 0, z: 0, visible: false }
+export const torusMonumentMarker = { x: 0, y: 0, z: 0, visible: false }
 
 /**
  * СЛОЙ ГИПЕРТОРА — замкнутая вселенная-решётка на 3-сфере S³, снесённая СТЕРЕОГРАФИЧЕСКОЙ
@@ -63,6 +68,25 @@ function brightnessOf(dist: number, depth: number): number {
   const far = 1 - smoothstep(TORUS.FOG_NEAR_M, TORUS.FOG_FAR_M, dist)
   const antipode = 1 - smoothstep(TORUS.ANTIPODE_NEAR, TORUS.ANTIPODE_FAR, depth)
   return far * antipode
+}
+
+/** Спроецировать узел `idx` (из `_rot`) в мировую позицию маркера HUD. Ушёл за полюс — скрыт. */
+function updateNodeMarker(
+  idx: number,
+  groupPos: { x: number; y: number; z: number },
+  marker: { x: number; y: number; z: number; visible: boolean },
+): void {
+  const o = idx * 4
+  const w = _rot[o + 3]!
+  if (w > TORUS.POLE_CULL) {
+    marker.visible = false
+    return
+  }
+  stereoProject(_rot[o]!, _rot[o + 1]!, _rot[o + 2]!, w, TORUS.SCALE, _p)
+  marker.x = _p.x + groupPos.x
+  marker.y = _p.y + groupPos.y
+  marker.z = _p.z + groupPos.z
+  marker.visible = true
 }
 
 export function HypertorusLayer() {
@@ -200,29 +224,38 @@ export function HypertorusLayer() {
     dots.geometry.getAttribute('aBright').needsUpdate = true
     dots.geometry.setDrawRange(0, d)
 
-    // КРЕСТ на ДОМАШНЕЙ галактике — якорь ориентации. Едет вместе с решёткой: по нему видно,
-    // где дом и куда возвращаться. Ушёл за полюс — прячем и снимаем метку локатора.
+    // ДОМ (твоя галактика) — маркер для HUD-рамки и локатора. Без креста: крест у монумента.
+    updateNodeMarker(TORUS.HOME_NODE, group.position, torusHomeMarker)
+
+    // КРЕСТ-МОНУМЕНТ — отдельный узел, помечен неоновым крестом (якорь + цель автопилота №2).
     const cross = crossRef.current
+    const mo = TORUS.MONUMENT_NODE * 4
+    const mw = _rot[mo + 3]!
+    updateNodeMarker(TORUS.MONUMENT_NODE, group.position, torusMonumentMarker)
     if (cross) {
-      const ho = TORUS.HOME_NODE * 4
-      const hw = _rot[ho + 3]!
-      if (hw > TORUS.POLE_CULL) {
+      if (mw > TORUS.POLE_CULL) {
         cross.visible = false
-        torusHomeMarker.visible = false
       } else {
-        stereoProject(_rot[ho]!, _rot[ho + 1]!, _rot[ho + 2]!, hw, TORUS.SCALE, _p)
+        stereoProject(_rot[mo]!, _rot[mo + 1]!, _rot[mo + 2]!, mw, TORUS.SCALE, _p)
         const fog = brightnessOf(Math.hypot(_p.x, _p.y, _p.z), _p.depth)
         cross.visible = true
         cross.position.set(_p.x, _p.y, _p.z)
         cross.scale.setScalar(Math.max(TORUS.PUFF_MIN_R_M, TORUS.PUFF_RADIUS_M * fog) * TORUS.CROSS_SCALE)
         cross.quaternion.copy(camera.quaternion)
         tickCrossPortal(crossMat, world.time)
-        // Мировая позиция для локатора: локаль группы + смещение группы (она на корабле).
-        torusHomeMarker.x = _p.x + group.position.x
-        torusHomeMarker.y = _p.y + group.position.y
-        torusHomeMarker.z = _p.z + group.position.z
-        torusHomeMarker.visible = true
       }
+    }
+
+    // АВТОПИЛОТ: направление на активную цель-узел + «прибыл» (её w у −1 = в центре проекции).
+    if (torusAutopilotActive()) {
+      const idx = torusAutopilotTarget() === 'home' ? TORUS.HOME_NODE : TORUS.MONUMENT_NODE
+      const o = idx * 4
+      const w = _rot[o + 3]!
+      stereoProject(_rot[o]!, _rot[o + 1]!, _rot[o + 2]!, w, TORUS.SCALE, _p)
+      const len = Math.hypot(_p.x, _p.y, _p.z)
+      const arrived = w < TORUS.AUTOPILOT_ARRIVE_W
+      if (len > 1e-3) setTorusNav(_p.x / len, _p.y / len, _p.z / len, true, arrived)
+      else setTorusNav(0, 0, 0, false, arrived)
     }
   })
 
