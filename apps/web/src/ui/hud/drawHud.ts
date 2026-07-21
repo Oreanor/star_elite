@@ -114,6 +114,8 @@ export interface HudFrame {
   torusHomeName: string
   /** Активная цель автопилота в комнате (подсвечивается ярче), либо null. */
   torusTarget: 'home' | 'cross' | null
+  /** Подписи ближайших галактик (узлы решётки = именованные галактики), либо null вне комнаты. */
+  torusLabels: { count: number; items: { x: number; y: number; z: number; name: string }[] } | null
   /** Сглаженная частота кадров. Ни на что в игре не влияет — только показывается. */
   fps: number
   /**
@@ -144,6 +146,7 @@ export function drawHud(frame: HudFrame): void {
   // станциями и планетами скрытого мира). Остаётся полётная суть: показания и тревоги.
   if (frame.bush) {
     drawReadouts(frame)
+    drawTorusLabels(frame)
     drawTorusMarkers(frame)
     drawBushLocator(frame)
     const plate = gatherWarnings(frame)
@@ -961,6 +964,24 @@ function markOne(
     text(ctx, name, p.x, p.y + 12 * S, color, 'center')
   } else {
     offscreenArrow(frame, _gtar, color, true, name)
+  }
+}
+
+/**
+ * ПОДПИСИ ближайших галактик: узлы решётки — именованные галактики, но подписываем только
+ * ближайшие (LABEL_COUNT), чтобы не заклепать экран. Тускло, без рамки — рамки только у целей.
+ */
+function drawTorusLabels(frame: HudFrame): void {
+  const { ctx, camera, width, height, torusLabels } = frame
+  if (!torusLabels) return
+  ctx.font = hudFont(8 * S)
+  for (let i = 0; i < torusLabels.count; i++) {
+    const lab = torusLabels.items[i]!
+    if (!lab.name) continue
+    _gtar.set(lab.x, lab.y, lab.z)
+    const p = projectPoint(_gtar, camera, width, height)
+    if (p.behind || !isOnScreen(p.x, p.y, width, height, 0)) continue
+    text(ctx, lab.name, p.x, p.y + 6 * S, HUD_COLORS.DIM, 'center')
   }
 }
 

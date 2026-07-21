@@ -490,6 +490,11 @@ export const TORUS = {
    */
   AUTOPILOT_AIM_DOT: 0.55,
   AUTOPILOT_ARRIVE_W: -0.97,
+  /**
+   * Каждый узел решётки — ИМЕНОВАННАЯ галактика (вершина i ↔ `universe.nodes[i]`). Подписывать все
+   * 720 — заклепать экран, поэтому HUD пишет имена только у ближайших LABEL_COUNT (самых ярких).
+   */
+  LABEL_COUNT: 6,
 } as const
 
 /**

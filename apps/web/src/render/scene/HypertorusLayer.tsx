@@ -42,6 +42,22 @@ export const torusHomeMarker = { x: 0, y: 0, z: 0, visible: false }
 export const torusMonumentMarker = { x: 0, y: 0, z: 0, visible: false }
 
 /**
+ * Подписи БЛИЖАЙШИХ галактик для HUD: имя узла + мировая позиция. Узел решётки = именованная
+ * галактика (`universe.nodes[i]`). Держим только LABEL_COUNT самых ярких (ближних) — иначе экран
+ * заклепало бы семьюстами имён. Слой заполняет каждый кадр, HUD рисует.
+ */
+export interface TorusLabel {
+  x: number
+  y: number
+  z: number
+  name: string
+}
+export const torusLabels: { count: number; items: TorusLabel[] } = {
+  count: 0,
+  items: Array.from({ length: TORUS.LABEL_COUNT }, () => ({ x: 0, y: 0, z: 0, name: '' })),
+}
+
+/**
  * СЛОЙ ГИПЕРТОРА — замкнутая вселенная-решётка на 3-сфере S³, снесённая СТЕРЕОГРАФИЧЕСКОЙ
  * проекцией. Показывается на рельсах комнаты (`session.bush.active`).
  *
@@ -62,6 +78,8 @@ const _base = new Color(TORUS.PUFF_COLOR)
 const _p = { x: 0, y: 0, z: 0, depth: 0 }
 const _rot = new Float64Array(GRID.vertCount * 4)
 const _s4 = new Float64Array(4)
+/** Яркость занятых слотов подписей за кадр (−1 = пусто) — отбор ближайших LABEL_COUNT. */
+const _labelFog = new Float32Array(TORUS.LABEL_COUNT)
 
 /** Яркость по глубине S³ — дальняя половина (у полюса/антипода) тонет во тьму. */
 function brightnessOf(dist: number, depth: number): number {
@@ -167,7 +185,12 @@ export function HypertorusLayer() {
     stepTorusFlight(world.player.state.quat, Math.min(dt, 0.1))
     applyPose(GRID, torusView(), _rot)
 
-    // ПУФЫ-галактики в узлах.
+    // ПУФЫ-галактики в узлах. Заодно отбираем ближайшие (самые яркие) под подписи имён.
+    const universe = session.universe
+    _labelFog.fill(-1)
+    const gx = group.position.x
+    const gy = group.position.y
+    const gz = group.position.z
     const tintAttr = puffGeo.getAttribute('aTint') as InstancedBufferAttribute
     const fogAttr = puffGeo.getAttribute('aFog') as InstancedBufferAttribute
     const tint = tintAttr.array as Float32Array
@@ -191,8 +214,27 @@ export function HypertorusLayer() {
       tint[count * 3 + 2] = _base.b
       fogArr[count] = fog
       count++
+
+      // Подпись: узел = именованная галактика. Держим топ-LABEL_COUNT по яркости; дом/крест
+      // не дублируем (у них своя рамка). Заменяем самый тусклый занятый слот.
+      if (i !== TORUS.HOME_NODE && i !== TORUS.MONUMENT_NODE) {
+        let minSlot = 0
+        for (let s = 1; s < _labelFog.length; s++) if (_labelFog[s]! < _labelFog[minSlot]!) minSlot = s
+        if (fog > _labelFog[minSlot]!) {
+          _labelFog[minSlot] = fog
+          const lab = torusLabels.items[minSlot]!
+          lab.x = _p.x + gx
+          lab.y = _p.y + gy
+          lab.z = _p.z + gz
+          lab.name = universe.nodes[i]?.name ?? ''
+        }
+      }
     }
     puffs.count = count
+    // Сколько слотов подписей реально заняты (яркость > −1).
+    let labeled = 0
+    for (let s = 0; s < _labelFog.length; s++) if (_labelFog[s]! > -1) labeled++
+    torusLabels.count = labeled
     puffs.instanceMatrix.needsUpdate = true
     tintAttr.needsUpdate = true
     fogAttr.needsUpdate = true
