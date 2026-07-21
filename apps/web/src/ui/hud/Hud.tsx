@@ -1,10 +1,13 @@
 import { useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useRef } from 'react'
 import { Quaternion, Vector3 } from 'three'
+import { GALAXY } from '@elite/sim'
 import { useSession } from '../../app/GameContext'
 import { PIXEL_SCALE } from '../../render/config'
 import { jumpPortal, portalActive } from '../../app/control/jumpPortal'
 import { preparedJumpPortalWorld, syncDestCamera } from '../../render/scene/jumpPortalWorld'
+import { torusThrust } from '../../app/control/torusFlight'
+import { torusHomeMarker } from '../../render/scene/HypertorusLayer'
 import { drawHud } from './drawHud'
 import type { PortalAperture } from './aperture'
 
@@ -113,6 +116,12 @@ export function Hud() {
       autodock: session.mode === 'autodock',
       flyto: session.mode === 'flyto',
       bush: session.bush.active,
+      torusThrust: session.bush.active ? torusThrust() : 0,
+      torusHome:
+        session.bush.active && torusHomeMarker.visible
+          ? { x: torusHomeMarker.x, y: torusHomeMarker.y, z: torusHomeMarker.z }
+          : null,
+      torusHomeName: session.universe.nodes[GALAXY.HOME_NODE]?.name ?? 'ДОМ',
       fps: fpsRef.current,
       aperture,
     })

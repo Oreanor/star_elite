@@ -22,6 +22,12 @@ export function Sky({ galaxyIndex = 0 }: { galaxyIndex?: number }) {
    * Пишем каждый кадр напрямую в сцену — ноль перерисовок React.
    */
   useFrame(() => {
+    // КОМНАТА ТОРА — математическая пустота: скайбокса нет. Гасим фон в ноль (окружение
+    // для металла оставляем — иначе корпус корабля почернеет).
+    if (session.bush.active) {
+      scene.backgroundIntensity = 0
+      return
+    }
     const scale = session.world.player.state.scale
     const span = SKY.FADE_END_SCALE - SKY.FADE_START_SCALE
     const t =

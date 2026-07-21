@@ -42,7 +42,7 @@ import {
 } from '@elite/sim'
 import { bombFlash, bombRing } from '../../render/bombFeel'
 import { currentGameDate } from '../clock'
-import { HUD_SCALE } from '../../render/config'
+import { HUD_SCALE, TORUS } from '../../render/config'
 import { undocking, consumePendingBonVoyage } from '../../app/control/undockFx'
 import { drawUndockTunnel } from './drawUndock'
 import { galaxyRadar, galaxyRadarUsable } from '../../render/scene/galaxyRadar'
@@ -99,6 +99,18 @@ export interface HudFrame {
    * забивали бы экран народом и планетами, которых уже не видно. Остаётся полётная суть.
    */
   bush: boolean
+  /**
+   * Тяга сквозь тор (`torusFlight`): в комнате борт стоит, `controls.throttle`=0, и прибор ТЯГА
+   * был бы мёртв. Кормим его отсюда — W/S/ПКМ видно на шкале. Вне комнаты 0 (берётся throttle).
+   */
+  torusThrust: number
+  /**
+   * Положение ДОМА (крест на домашней галактике) относительно корабля в комнате тора — для
+   * метки на локаторе и HUD-маркера на самой галактике. `null`, когда дом за полюсом или вне комнаты.
+   */
+  torusHome: { x: number; y: number; z: number } | null
+  /** Имя домашней галактики — подпись под маркером. */
+  torusHomeName: string
   /** Сглаженная частота кадров. Ни на что в игре не влияет — только показывается. */
   fps: number
   /**
@@ -129,6 +141,8 @@ export function drawHud(frame: HudFrame): void {
   // станциями и планетами скрытого мира). Остаётся полётная суть: показания и тревоги.
   if (frame.bush) {
     drawReadouts(frame)
+    drawHomeMarker(frame)
+    drawBushLocator(frame)
     const plate = gatherWarnings(frame)
     if (plate) paintWarningPlate(frame, plate)
     return
@@ -925,6 +939,66 @@ function galaxyStarName(seed: number, index: number): string | null {
   return _galSys[index]?.name ?? null
 }
 
+/**
+ * HUD-МАРКЕР ДОМА: рамка-прицел прямо на домашней галактике + подпись. Пуфы все светятся, и
+ * среди них дом теряется — жёсткая рамка с именем делает «мою» галактику безошибочной. За
+ * кадром — стрелка-указатель к ней (как у прикреплённой звезды).
+ */
+function drawHomeMarker(frame: HudFrame): void {
+  const { ctx, camera, width, height, torusHome, torusHomeName } = frame
+  if (!torusHome) return
+  _gtar.set(torusHome.x, torusHome.y, torusHome.z)
+  const color = '#66e0ff'
+  const p = projectPoint(_gtar, camera, width, height)
+  if (!p.behind && isOnScreen(p.x, p.y, width, height, 20 * S)) {
+    navReticle(ctx, p.x, p.y, color)
+    text(ctx, torusHomeName, p.x, p.y + 12 * S, color, 'center')
+  } else {
+    offscreenArrow(frame, _gtar, color, true, torusHomeName)
+  }
+}
+
+/**
+ * ЛОКАТОР КОМНАТЫ ТОРА: та же круговая шкала, что у системного радара, но показывает ровно одну
+ * метку — ДОМ (крест на домашней галактике) по направлению от корабля. Так в пустоте всегда видно,
+ * где дом и куда возвращаться. Дистанция по проекции задаёт вынос метки от центра к краю.
+ */
+function drawBushLocator(frame: HudFrame): void {
+  const { ctx, world, width, height, torusHome, torusHomeName } = frame
+  const radiusX = 47 * 1.5 * S
+  const radiusY = 47 * 0.75 * S
+  const cx = width - radiusX - 12 * S
+  const cy = height - radiusY - 12 * S
+  const FRAME_W = 2
+
+  ellipse(ctx, cx, cy, radiusX, radiusY, HUD_COLORS.DIM, FRAME_W)
+  ellipse(ctx, cx, cy, radiusX / 2, radiusY / 2, HUD_COLORS.DIM, FRAME_W)
+  line(ctx, cx, cy - 3 * S, cx, cy + 3 * S, HUD_COLORS.DIM, FRAME_W)
+  line(ctx, cx - 3 * S, cy, cx + 3 * S, cy, HUD_COLORS.DIM, FRAME_W)
+
+  if (!torusHome) return
+  const player = world.player
+  shipAxes(player.state.quat, _fwd, _right, _up)
+  _point.set(torusHome.x, torusHome.y, torusHome.z)
+  const distance = _point.length() || 1
+  const x = _point.dot(_right)
+  const z = _point.dot(_fwd)
+  const flat = Math.hypot(x, z)
+  const k = Math.min(1, distance / (TORUS.SCALE * 3))
+  const px = flat < 1e-6 ? cx : cx + (x / flat) * k * radiusX
+  const py = flat < 1e-6 ? cy : cy - (z / flat) * k * radiusY
+  const lift = Math.max(-10 * S, Math.min(10 * S, (_point.dot(_up) / distance) * 20 * S))
+  const my = py - lift
+  if (Math.abs(lift) > S) line(ctx, px, py, px, my, HUD_COLORS.DIM)
+
+  // Метка домашней галактики — крестик (совпадает с крестом-монументом в 3D) + ИМЯ галактики.
+  const r = 3 * S
+  line(ctx, px - r, my, px + r, my, HUD_COLORS.TARGET, 2)
+  line(ctx, px, my - r, px, my + r, HUD_COLORS.TARGET, 2)
+  ctx.font = hudFont(9 * S)
+  text(ctx, torusHomeName, px + r + 2 * S, my - 4 * S, HUD_COLORS.TARGET)
+}
+
 function drawRadar(frame: HudFrame): void {
   const { ctx, camera, world, width, height } = frame
   const radiusX = 47 * 1.5 * S // ширина эллипса локатора (прежняя, ~70): читается на скорости
@@ -1350,7 +1424,7 @@ function bigValue(
   ctx.font = entryFont
 }
 
-function drawReadouts({ ctx, world, height }: HudFrame): void {
+function drawReadouts({ ctx, world, height, bush, torusThrust }: HudFrame): void {
   const player: ShipEntity = world.player
   const x = 10 * S
   const labelWidth = 34 * S
@@ -1418,10 +1492,14 @@ function drawReadouts({ ctx, world, height }: HudFrame): void {
   const jump = player.spec.jumpRange > 0 ? player.jumpCharge / player.spec.jumpRange : 0
   const jumpColor = player.spec.jumpRange <= 0 ? HUD_COLORS.DIM : scooping(player) ? HUD_COLORS.TARGET : HUD_COLORS.PRIMARY
 
+  // В комнате тора тяга идёт не в физику (борт стоит), а в поток S³ — берём её из кадра. Это тот
+  // же сектор газа 0..1, что у пилота, поэтому шкала ведёт себя ровно как в мире.
+  const throttleShown = bush ? Math.abs(torusThrust) : Math.abs(player.controls.throttle)
+
   const rows: [string, number, string][] = [
     // Тяга — первой строкой, сразу под цифрами скорости: главный орган хода на виду.
     // Жёлтая шкала; задний ход — тот же цвет, по модулю.
-    [t('hud.throttle'), Math.abs(player.controls.throttle), HUD_COLORS.WARN],
+    [t('hud.throttle'), throttleShown, HUD_COLORS.WARN],
     [t('hud.shield'), shield, HUD_COLORS.PRIMARY],
     [t('hud.hull'), hull, hull < 0.3 ? HUD_COLORS.DANGER : HUD_COLORS.PRIMARY],
     // Главной батареи (БАТ) на HUD больше нет: её ничто не расходовало (полёт/форсаж/оружие

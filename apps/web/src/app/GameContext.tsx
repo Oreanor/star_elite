@@ -32,6 +32,7 @@ import {
 } from '@elite/sim'
 import { createIntent, createPlayerController, type PlayerIntent } from './control/playerController'
 import { createBushController } from './control/bushController'
+import { resetTorusFlight } from './control/torusFlight'
 import { online } from './net/firebase'
 import { loadSave } from './save/saveStore'
 
@@ -138,6 +139,13 @@ function createSession(initialSave?: PlayerSave | null): Session {
   // что дали снаружи: онлайн уже загрузил серверный сейв (null = новичок без прогресса).
   const save = initialSave !== undefined ? initialSave : loadSave()
   const world = createWorld()
+
+  // DEV/ВРЕМЕННО: старт в КОМНАТЕ тора — ОТДЕЛЬНЫЙ ПУСТОЙ мир (ни системы, ни тел, ни трафика,
+  // ни звезды). Систему не строим вовсе: корабль летает в пустоте, вокруг только решётка
+  // галактик. Это НЕ звёздная система и нигде ею не рендерится. Снять флаг — обычный старт.
+  const TORUS_START = true
+
+  if (!TORUS_START) {
   // Повторный вход — в СВОЮ сохранённую систему своим сидом. Новичок: в сети — ОБЩАЯ
   // точка сбора, офлайн — случайная. Систему строим по (сид, индекс).
   const index = save
@@ -193,6 +201,7 @@ function createSession(initialSave?: PlayerSave | null): Session {
   // несколько «Атласов», чтобы облететь и рассмотреть модели. Снять флаг перед релизом.
   const SHOWCASE_FLEET = false
   if (SHOWCASE_FLEET) placeShowcaseFleet(world)
+  } // конец обычного старта; в комнате тора система не строится
 
   const intent = createIntent()
   const pilot = createPlayerController(intent)
@@ -203,15 +212,43 @@ function createSession(initialSave?: PlayerSave | null): Session {
   // Все боты делят один контроллер: он не хранит состояния, оно живёт в ship.ai.
   for (const ship of world.ships) controllers.set(ship.id, aiController)
 
+  const bush = createBushTravel()
+  if (TORUS_START) {
+    bush.active = true
+    // ПУСТАЯ КОМНАТА: `createWorld` насыпал стартер-систему (звезда, планеты, патрули) —
+    // вычищаем всё сталкиваемое и рендерящееся. Иначе корабль врезается в невидимые тела.
+    world.bodies = []
+    world.ships = []
+    world.asteroids = []
+    world.pods = []
+    world.missiles = []
+    world.bolts = []
+    world.titans = []
+    world.monoliths = []
+    world.figurines = []
+    world.scenicRocks = []
+    world.platforms = []
+    // Пусто НАВСЕГДА: `desolate` глушит спавн трафика (traffic.ts), иначе пираты налетят
+    // в пустоту и начнут стрелять. Комната математическая — в ней никого, кроме игрока.
+    world.desolate = true
+    // Корабль в центре проекции: стоит и вертится мышью, полёт — поток S³ сквозь него.
+    world.player.state.pos.set(0, 0, 0)
+    world.player.state.vel.set(0, 0, 0)
+    world.player.controls.throttle = 0
+    resetTorusFlight()
+  }
+
   return {
     world,
     controllers,
     pilot,
     bushPilot,
     isNewGame: save === null,
-    mode: 'manual',
+    // В торе штурвал — bushPilot: мышь вертит корабль, тяга в физику ноль (борт стоит в центре).
+    // Полёт — поток S³ сквозь игрока (torusFlight). `bush.active` включает рендер решётки.
+    mode: TORUS_START ? 'bush' : 'manual',
     universe: generateUniverse(GALAXY.WORD),
-    bush: createBushTravel(),
+    bush,
     monumentCross: null,
     intent,
     running: false,

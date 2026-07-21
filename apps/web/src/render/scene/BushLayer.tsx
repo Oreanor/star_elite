@@ -8,13 +8,13 @@ import {
   Group,
   InstancedBufferAttribute,
   InstancedMesh,
-  LineSegments,
   Mesh,
   MeshBasicMaterial,
   Object3D,
   PlaneGeometry,
   SphereGeometry,
   Texture,
+  Vector3,
 } from 'three'
 import {
   UNIVERSE,
@@ -60,16 +60,60 @@ import { makeBushProjection, projectBush } from './bushView'
 const COUNT = UNIVERSE.COUNT
 const MONUMENT = UNIVERSE.MONUMENT_NODE
 const SEG = BUSH.EDGE_SEGMENTS
-/** Каждое ребро — SEG отрезков = SEG·2 вершин; рёбер не больше числа узлов минус корень. */
-const MAX_EDGE_VERTS = COUNT * SEG * 2
+/**
+ * Ребро — лента: SEG отрезков, каждый = квад из 2 треугольников = 6 вершин. Рёбер не больше
+ * числа узлов (у каждого узла один родитель, корень — без).
+ */
+const MAX_EDGE_VERTS = COUNT * SEG * 6
 
 const _dummy = new Object3D()
 const _mid: Vec4 = vec4()
 const _bm = { x: 0, y: 0, z: 0 }
 const _base = new Color(BUSH.BUBBLE_COLOR)
 
+// Скретч ленты-ребра: спайн (SEG+1 точек) с туманом, локальная позиция камеры и рабочие
+// векторы для камеро-ориентированной полуширины. Наружу не отдаются — только в буфер.
+const _spx = new Float32Array(SEG + 1)
+const _spy = new Float32Array(SEG + 1)
+const _spz = new Float32Array(SEG + 1)
+const _spf = new Float32Array(SEG + 1)
+const _camLocal = new Vector3()
+const _tan = new Vector3()
+const _view = new Vector3()
+const _side = new Vector3()
+// Боковые рельсы ленты (спайн ± полуширина, развёрнутая к камере).
+const _lx = new Float32Array(SEG + 1)
+const _ly = new Float32Array(SEG + 1)
+const _lz = new Float32Array(SEG + 1)
+const _rx = new Float32Array(SEG + 1)
+const _ry = new Float32Array(SEG + 1)
+const _rz = new Float32Array(SEG + 1)
+
 function easeInOutCubic(t: number): number {
   return smoothstep(0, 1, t)
+}
+
+/** Одна вершина ленты-ребра в буфер: позиция, вершинный цвет (с туманом), `aAcross` −1..+1. */
+function emitEdgeVert(
+  pos: Float32Array,
+  col: Float32Array,
+  acr: Float32Array,
+  v: number,
+  x: number,
+  y: number,
+  z: number,
+  cr: number,
+  cg: number,
+  cb: number,
+  across: number,
+): void {
+  pos[v * 3] = x
+  pos[v * 3 + 1] = y
+  pos[v * 3 + 2] = z
+  col[v * 3] = cr
+  col[v * 3 + 1] = cg
+  col[v * 3 + 2] = cb
+  acr[v] = across
 }
 
 export function BushLayer() {
@@ -78,7 +122,7 @@ export function BushLayer() {
 
   const groupRef = useRef<Group>(null)
   const bubbleRef = useRef<InstancedMesh>(null)
-  const edgeRef = useRef<LineSegments>(null)
+  const edgeRef = useRef<Mesh>(null)
   const backdropRef = useRef<Mesh>(null)
   const crossRef = useRef<Group>(null)
 
@@ -98,7 +142,8 @@ export function BushLayer() {
   const edgeGeo = useMemo(() => {
     const g = new BufferGeometry()
     g.setAttribute('position', new BufferAttribute(new Float32Array(MAX_EDGE_VERTS * 3), 3))
-    g.setAttribute('color', new BufferAttribute(new Float32Array(MAX_EDGE_VERTS * 3), 3))
+    g.setAttribute('aColor', new BufferAttribute(new Float32Array(MAX_EDGE_VERTS * 3), 3))
+    g.setAttribute('aAcross', new BufferAttribute(new Float32Array(MAX_EDGE_VERTS), 1))
     g.setDrawRange(0, 0)
     return g
   }, [])
@@ -215,12 +260,16 @@ export function BushLayer() {
     tintAttr.needsUpdate = true
     fogAttr.needsUpdate = true
 
-    // РЁБРА. Каждое — дуга-геодезическая ≈ квадратичная Безье через середину геодезической.
+    // РЁБРА-ЛЕНТЫ. Каждое — дуга-геодезическая ≈ квадратичная Безье, раздутая в неоновую
+    // трубку: спайн ± полуширина, развёрнутая перпендикулярно взгляду. Камера в локали слоя
+    // (слой сдвинут на ship.pos, повёрнут по миру) — из неё же строится билборд-полуширина.
     const posArr = edges.geometry.getAttribute('position').array as Float32Array
-    const colArr = edges.geometry.getAttribute('color').array as Float32Array
+    const colArr = edges.geometry.getAttribute('aColor').array as Float32Array
+    const acrArr = edges.geometry.getAttribute('aAcross').array as Float32Array
     const er = BUSH_EDGE_RGB.r
     const eg = BUSH_EDGE_RGB.g
     const eb = BUSH_EDGE_RGB.b
+    _camLocal.copy(camera.position).sub(group.position)
     let v = 0
     for (let i = 0; i < COUNT; i++) {
       const p = universe.nodes[i]!.parent
@@ -238,54 +287,78 @@ export function BushLayer() {
       // Контрольная точка Безье через середину геодезической в шаре (см. bezier §6).
       geodesicMidpoint(proj.hPoints[i]!, proj.hPoints[p]!, _mid)
       toBall(_mid, _bm)
-      const cx = 2 * _bm.x - 0.5 * (ax + bx)
-      const cy = 2 * _bm.y - 0.5 * (ay + by)
-      const cz = 2 * _bm.z - 0.5 * (az + bz)
+      let cx = 2 * _bm.x - 0.5 * (ax + bx)
+      let cy = 2 * _bm.y - 0.5 * (ay + by)
+      let cz = 2 * _bm.z - 0.5 * (az + bz)
+      // ВЫГИБ НАРУЖУ от центра кроны (начала координат): у самого игрока геодезические почти
+      // прямые, оттого куст казался «жёстким». Толкаем контрольную точку по радиусу середины
+      // на долю длины ребра — рёбра читаются живыми дугами. Чистая эстетика поверх геометрии.
+      const mx = 0.5 * (ax + bx)
+      const my = 0.5 * (ay + by)
+      const mz = 0.5 * (az + bz)
+      const mr = Math.hypot(mx, my, mz)
+      if (mr > 1e-6) {
+        const elen = Math.hypot(bx - ax, by - ay, bz - az)
+        const push = (BUSH.EDGE_BULGE * elen) / mr
+        cx += mx * push
+        cy += my * push
+        cz += mz * push
+      }
 
-      let px = 0
-      let py = 0
-      let pz = 0
-      let pr = 0
-      let pg = 0
-      let pb = 0
+      // Спайн: SEG+1 точек Безье (в метрах кадра) с интерполированным туманом.
       for (let k = 0; k <= SEG; k++) {
         const u = k / SEG
         const w0 = (1 - u) * (1 - u)
         const w1 = 2 * (1 - u) * u
         const w2 = u * u
-        const x = (w0 * ax + w1 * cx + w2 * bx) * scaleM
-        const y = (w0 * ay + w1 * cy + w2 * by) * scaleM
-        const z = (w0 * az + w1 * cz + w2 * bz) * scaleM
-        const ff = lerp(fa, fb, u)
-        const cr = er * ff
-        const cg = eg * ff
-        const cb = eb * ff
-        if (k > 0 && v + 2 <= MAX_EDGE_VERTS) {
-          posArr[v * 3] = px
-          posArr[v * 3 + 1] = py
-          posArr[v * 3 + 2] = pz
-          colArr[v * 3] = pr
-          colArr[v * 3 + 1] = pg
-          colArr[v * 3 + 2] = pb
-          v++
-          posArr[v * 3] = x
-          posArr[v * 3 + 1] = y
-          posArr[v * 3 + 2] = z
-          colArr[v * 3] = cr
-          colArr[v * 3 + 1] = cg
-          colArr[v * 3 + 2] = cb
-          v++
-        }
-        px = x
-        py = y
-        pz = z
-        pr = cr
-        pg = cg
-        pb = cb
+        _spx[k] = (w0 * ax + w1 * cx + w2 * bx) * scaleM
+        _spy[k] = (w0 * ay + w1 * cy + w2 * by) * scaleM
+        _spz[k] = (w0 * az + w1 * cz + w2 * bz) * scaleM
+        _spf[k] = lerp(fa, fb, u)
+      }
+
+      // Рельсы: касательная спайна × взгляд = поперечная ось ленты, полуширина ∝ туман (даль
+      // тоньше, как и пузыри). Билборд к камере — трубка не «схлопывается» под любым углом.
+      for (let k = 0; k <= SEG; k++) {
+        const kp = k > 0 ? k - 1 : 0
+        const kn = k < SEG ? k + 1 : SEG
+        _tan.set(_spx[kn]! - _spx[kp]!, _spy[kn]! - _spy[kp]!, _spz[kn]! - _spz[kp]!)
+        _view.set(_spx[k]! - _camLocal.x, _spy[k]! - _camLocal.y, _spz[k]! - _camLocal.z)
+        _side.crossVectors(_tan, _view)
+        const sl = _side.length()
+        const halfW = Math.max(0.4, BUSH.EDGE_WIDTH_M * _spf[k]!)
+        if (sl > 1e-6) _side.multiplyScalar(halfW / sl)
+        else _side.set(halfW, 0, 0)
+        _lx[k] = _spx[k]! - _side.x
+        _ly[k] = _spy[k]! - _side.y
+        _lz[k] = _spz[k]! - _side.z
+        _rx[k] = _spx[k]! + _side.x
+        _ry[k] = _spy[k]! + _side.y
+        _rz[k] = _spz[k]! + _side.z
+      }
+
+      // Квады между соседними точками: два треугольника, `aAcross` −1 (левый рельс) / +1 (правый).
+      for (let k = 0; k < SEG; k++) {
+        if (v + 6 > MAX_EDGE_VERTS) break
+        const f0 = _spf[k]!
+        const f1 = _spf[k + 1]!
+        const cr0 = er * f0
+        const cg0 = eg * f0
+        const cb0 = eb * f0
+        const cr1 = er * f1
+        const cg1 = eg * f1
+        const cb1 = eb * f1
+        emitEdgeVert(posArr, colArr, acrArr, v++, _lx[k]!, _ly[k]!, _lz[k]!, cr0, cg0, cb0, -1)
+        emitEdgeVert(posArr, colArr, acrArr, v++, _rx[k]!, _ry[k]!, _rz[k]!, cr0, cg0, cb0, 1)
+        emitEdgeVert(posArr, colArr, acrArr, v++, _lx[k + 1]!, _ly[k + 1]!, _lz[k + 1]!, cr1, cg1, cb1, -1)
+        emitEdgeVert(posArr, colArr, acrArr, v++, _rx[k]!, _ry[k]!, _rz[k]!, cr0, cg0, cb0, 1)
+        emitEdgeVert(posArr, colArr, acrArr, v++, _rx[k + 1]!, _ry[k + 1]!, _rz[k + 1]!, cr1, cg1, cb1, 1)
+        emitEdgeVert(posArr, colArr, acrArr, v++, _lx[k + 1]!, _ly[k + 1]!, _lz[k + 1]!, cr1, cg1, cb1, -1)
       }
     }
     edges.geometry.getAttribute('position').needsUpdate = true
-    edges.geometry.getAttribute('color').needsUpdate = true
+    edges.geometry.getAttribute('aColor').needsUpdate = true
+    edges.geometry.getAttribute('aAcross').needsUpdate = true
     edges.geometry.setDrawRange(0, v)
 
     // МОНУМЕНТ — крест в корне куста как маяк, виден издалека.
@@ -321,7 +394,7 @@ export function BushLayer() {
           args={[bubbleGeo, bubbleMat, COUNT]}
           frustumCulled={false}
         />
-        <lineSegments ref={edgeRef} geometry={edgeGeo} material={edgeMat} frustumCulled={false} />
+        <mesh ref={edgeRef} geometry={edgeGeo} material={edgeMat} frustumCulled={false} />
         <group ref={crossRef} frustumCulled={false} visible={false}>
           <mesh geometry={crossStationGeometry()} material={crossBodyMaterial()} frustumCulled={false} />
           <mesh geometry={crossPortalPanelsGeometry()} material={crossPortalMat} frustumCulled={false} />

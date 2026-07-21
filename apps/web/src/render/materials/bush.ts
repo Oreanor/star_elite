@@ -1,4 +1,4 @@
-import { AdditiveBlending, Color, DoubleSide, LineBasicMaterial, ShaderMaterial } from 'three'
+import { AdditiveBlending, Color, DoubleSide, ShaderMaterial } from 'three'
 import { BUSH } from '../config'
 
 /**
@@ -84,18 +84,64 @@ export function bushBubbleMaterial(): ShaderMaterial {
 }
 
 /**
- * Неоновое ребро. Толщину линии WebGL игнорирует (всегда 1px), но аддитивный ярко-голубой
- * выше порога bloom растекается в свечение — дуга читается неоновой трубкой, а не ниткой.
- * Цвет ВЕРШИННЫЙ: в него зашит туман, и дальние рёбра гаснут вместе с пузырями.
+ * Неоновое ребро-ЛЕНТА. Линия в WebGL всегда 1px — толщины не имеет, оттого куст казался
+ * начерченным иголкой. Потому ребро строится как камеро-ориентированная лента (два ряда
+ * вершин по бокам спайна): `aAcross` = −1..+1 поперёк, ядро добела, спад к краям, аддитивно —
+ * получается неоновая трубка. `aColor` — вершинный цвет с зашитым туманом: дальние рёбра
+ * гаснут вместе с пузырями.
  */
-export function bushEdgeMaterial(): LineBasicMaterial {
-  return new LineBasicMaterial({
-    color: new Color(0xffffff),
-    vertexColors: true,
+const EDGE_VERT = /* glsl */ `
+#include <common>
+#include <logdepthbuf_pars_vertex>
+
+attribute vec3 aColor;
+attribute float aAcross;
+
+varying vec3 vCol;
+varying float vAcross;
+
+void main() {
+  vCol = aColor;
+  vAcross = aAcross;
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+  #include <logdepthbuf_vertex>
+}
+`
+
+const EDGE_FRAG = /* glsl */ `
+#include <common>
+#include <logdepthbuf_pars_fragment>
+
+uniform float uGain;
+
+varying vec3 vCol;
+varying float vAcross;
+
+void main() {
+  #include <logdepthbuf_fragment>
+  // Профиль лампы поперёк ленты: ядро ярче, к краям спадает в ноль.
+  float a = abs(vAcross);
+  float glow = 1.0 - smoothstep(0.15, 1.0, a);
+  vec3 col = mix(vec3(1.0), vCol, smoothstep(0.0, 0.7, a));
+  // uGain гасит ВЕСЬ фрагмент, включая белое ядро: иначе аддитив множества трубок и bloom
+  // раздувают сердцевину в засвет, а покраска краёв (vCol) на ядро не влияет.
+  float alpha = glow * uGain;
+  if (alpha < 0.003) discard;
+  gl_FragColor = vec4(col, alpha);
+}
+`
+
+export function bushEdgeMaterial(): ShaderMaterial {
+  return new ShaderMaterial({
+    uniforms: { uGain: { value: 1 } },
+    vertexShader: EDGE_VERT,
+    fragmentShader: EDGE_FRAG,
     transparent: true,
     blending: AdditiveBlending,
     depthWrite: false,
     depthTest: true,
+    side: DoubleSide,
+    fog: false,
     toneMapped: false,
   })
 }

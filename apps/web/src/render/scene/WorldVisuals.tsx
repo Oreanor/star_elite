@@ -4,7 +4,7 @@ import { Group } from 'three'
 import { AsteroidField } from './Asteroids'
 import { Bodies } from './Bodies'
 import { GalaxyLayer } from './GalaxyLayer'
-import { BushLayer } from './BushLayer'
+import { HypertorusLayer } from './HypertorusLayer'
 import { Titans } from './Titans'
 import { Platforms } from './Platforms'
 import { DockingCorridor } from './DockingCorridor'
@@ -63,7 +63,7 @@ export function WorldVisuals() {
   return (
     <>
       <Lighting />
-      <BushLayer />
+      <HypertorusLayer />
       <PlayerShip />
 
       <group ref={worldRef}>

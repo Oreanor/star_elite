@@ -25,6 +25,13 @@ export interface PreparedJumpWorld {
   camera: PerspectiveCamera
   world: World
   session: Session
+  /**
+   * Поза дальнего устья в абсолютных координатах целевой системы. Хранится ОТДЕЛЬНО, чтобы
+   * переустановить её при кеш-хите: `openPortal` сбрасывает `destReady` на каждом открытии,
+   * а ранний возврат кеша пропускал бы `setDestPortal` — дырка смотрела бы в старое место.
+   */
+  destFrom: Vector3
+  destQuat: Quaternion
 }
 
 let prepared: PreparedJumpWorld | null = null
@@ -61,7 +68,13 @@ function syncPreparedControllers(target: PreparedJumpWorld): void {
 export function prepareJumpPortalWorld(source: Session): PreparedJumpWorld {
   const p = jumpPortal()
   const key = `${source.world.galaxySeed}:${p.index}:${p.arrival ? JSON.stringify(p.arrival) : 'n'}`
-  if (prepared?.key === key) return prepared
+  if (prepared?.key === key) {
+    // Кеш готового мира переиспользуем, НО дальнее устье переустанавливаем: свежий
+    // `openPortal` сбросил `destReady`, и без этого дырка второго-третьего открытия
+    // смотрела бы в старую точку — «просто кольцо без портала».
+    if (!p.destReady) setDestPortal(prepared.destFrom, prepared.destQuat)
+    return prepared
+  }
 
   const sourceWorld = source.world
   const destIndex = isCore(p.index) ? CORE_INDEX : p.index
@@ -101,6 +114,10 @@ export function prepareJumpPortalWorld(source: Session): PreparedJumpWorld {
     // перецентрован `enterSystem`, чтобы GPU не получал координаты порядка 1e11.
     setDestPortal(_from, _destQuat)
   }
+  // Сохраняем позу устья на самом prepared: при повторном открытии того же портала кеш
+  // вернётся рано, а `openPortal` к тому времени сбросит `destReady` — восстановим отсюда.
+  const savedFrom = _from.clone()
+  const savedQuat = _destQuat.clone()
 
   const camera = new PerspectiveCamera(70, 1, 0.5, 2e12)
   camera.matrixAutoUpdate = false
@@ -114,7 +131,15 @@ export function prepareJumpPortalWorld(source: Session): PreparedJumpWorld {
     onDockChange: null,
     onSystemChange: null,
   }
-  prepared = { key, scene: new Scene(), camera, world: layoutWorld, session }
+  prepared = {
+    key,
+    scene: new Scene(),
+    camera,
+    world: layoutWorld,
+    session,
+    destFrom: savedFrom,
+    destQuat: savedQuat,
+  }
   return prepared
 }
 
@@ -239,6 +264,10 @@ export function prepareReverseJumpPortalWorld(source: Session, reverseWorld: Wor
     camera,
     world: reverseWorld,
     session,
+    // Обратная сторона: дальнее устье уже развёрнуто `completePortalTransit`. Храним его,
+    // чтобы при повторном открытии назад восстановить, если `destReady` сброшен.
+    destFrom: p.destPos.clone(),
+    destQuat: p.destQuat.clone(),
   }
 }
 

@@ -91,6 +91,13 @@ export function Dust() {
     const world = session.world
     const player = world.player
 
+    // КОМНАТА ТОРА — математическая пустота: пыли нет вовсе.
+    if (session.bush.active) {
+      mesh.visible = false
+      ribbon.visible = false
+      return
+    }
+
     // Гаснем вместе с гигант-скрытием борта — раньше на CAP (4000) пыль пропадала слишком рано.
     const dead = player.state.scale >= DUST.HIDE_SCALE
     mesh.visible = !dead
