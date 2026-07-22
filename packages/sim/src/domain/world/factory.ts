@@ -1,7 +1,7 @@
 import { Euler, Quaternion, Vector3 } from 'three'
 import { GRAVITY, MOON } from '../../config/bodies'
 import { orbitSec } from '../../config/time'
-import { pirateLeaderLoadout, pirateLoadout, playerStartLoadout } from '../../config/loadouts'
+import { godLoadout, pirateLeaderLoadout, pirateLoadout, playerStartLoadout } from '../../config/loadouts'
 import { ARRIVAL, GALAXY, HUMAN_SPECIES } from '../../config/galaxy'
 import { FIGURINE } from '../../config/figurines'
 import { ASTEROID, TRAFFIC, WORLD } from '../../config/world'
@@ -157,7 +157,13 @@ const _slovoQuat = /* @__PURE__ */ new Quaternion()
  * Идемпотентно ПО СТАНЦИИ: повторный вызов не плодит двойников у того же причала.
  */
 export function spawnSlovo(world: World): void {
-  const stations = world.bodies.filter((b) => b.kind === 'station')
+  /**
+   * ТОЛЬКО КРЕСТЫ. Бог сидел у КАЖДОГО причала галактики — и переставал быть богом: тот, кого
+   * встречаешь на любой заправке, это не божество, а вахтёр. Его место — монумент-храм
+   * (`stationStyle: 'cross'`), а по мирам он ходит трафиком, изредка и в своём масштабе
+   * (см. `spawnSlovoTraffic`).
+   */
+  const stations = world.bodies.filter((b) => b.kind === 'station' && b.stationStyle === 'cross')
   if (stations.length === 0) return
 
   // Уже знакомы? Все экземпляры цепляем к СУЩЕСТВУЮЩЕЙ записи — не плодим двойника и не даём
@@ -168,7 +174,7 @@ export function spawnSlovo(world: World): void {
     // Бог у ЭТОГО причала уже сидит — второго не заводим.
     if (world.ships.some((s) => s.divine && s.state.pos.distanceToSquared(station.pos) < 1)) continue
 
-    const ship = makeShip(world.ids, 'neutral', SLOVO_NAME, playerStartLoadout(), station.pos.clone(), _slovoQuat.identity())
+    const ship = makeShip(world.ids, 'neutral', SLOVO_NAME, godLoadout(), station.pos.clone(), _slovoQuat.identity())
     ship.pilotName = SLOVO_NAME
     ship.persona = { ...SLOVO_PERSONA }
     ship.originKind = SLOVO_KIND

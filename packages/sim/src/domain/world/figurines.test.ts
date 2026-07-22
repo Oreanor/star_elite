@@ -85,7 +85,13 @@ describe('коллекционные статуэтки', () => {
   })
 
   it('Слово — главный коллекционер: полный каталог в трюме', () => {
-    const world = createWorld({ ...STARTER_SYSTEM, patrols: [], belt: null })
+    // Бог сидит ТОЛЬКО на Крестах — стартовая система с обычным причалом его не заводит.
+    const world = createWorld({
+      ...STARTER_SYSTEM,
+      patrols: [],
+      belt: null,
+      extraStations: [{ name: 'Крест', pos: [0, 0, -40_000], radius: 6_000, style: 'cross' }],
+    })
     const slovo = world.ships.find((s) => s.divine)
     expect(slovo).toBeDefined()
     expect(slovo!.persona.figurineHobby?.zeal).toBe(1)

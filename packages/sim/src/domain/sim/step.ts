@@ -72,7 +72,7 @@ import { stepOrbits } from '../world/orbits'
 import { maybeShiftOrigin } from '../world/origin'
 import { markContactLost } from '../world/acquaintance'
 import { stepWarpEmergence } from '../world/warp'
-import { stepTraffic } from '../world/traffic'
+import { stepDivineScale, stepTraffic } from '../world/traffic'
 import { stepTitans } from '../world/titans'
 import { stepPlatforms } from '../world/platforms'
 import { stepGrievances } from '../combat/grievance'
@@ -155,6 +155,9 @@ export function stepWorld(world: World, frameDt: number, controllers: Controller
   // появлялись бы и двигались вдвое чаще на 120 Гц, чем на 60.
   const frame = Math.min(frameDt, PHYSICS.MAX_FRAME_DT)
   stepTraffic(world, frame)
+  // Бог, идущий к причалу, ужимается до обычного борта: масштаб — свойство облика,
+  // поэтому и живёт в такте трафика, а не в физике.
+  stepDivineScale(world, frame)
   stepTitans(world, frame)
   stepPlatforms(world, frame)
   // Претензии за случайные попадания гаснут по секундам, а не по шагам физики.

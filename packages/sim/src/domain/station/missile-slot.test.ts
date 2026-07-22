@@ -27,7 +27,7 @@ function pylonTypes(world: ReturnType<typeof createWorld>): Set<string> {
   return ids
 }
 
-/** Операции ракетного слота проверяем на серийной «Авроре» с пилонами, не на безракетном Spiritus. */
+/** Операции слота — на серийной «Авроре» С УЖЕ ВСТАВЛЕННЫМИ ракетами: стартовая идёт с пустыми пилонами. */
 function missileWorld(): ReturnType<typeof createWorld> {
   const world = createWorld()
   world.player.loadout = auroraOneLoadout()
@@ -36,9 +36,9 @@ function missileWorld(): ReturnType<typeof createWorld> {
 }
 
 describe('ракетный (мунишн) слот', () => {
-  it('у стартового Spiritus Sanctus вообще нет ракетных пилонов', () => {
+  it('у стартовой Авроры пилоны ЕСТЬ, но пустые: ракеты покупаются', () => {
     const world = createWorld()
-    expect(missilePylonIndices(world.player)).toHaveLength(0)
+    expect(missilePylonIndices(world.player).length).toBeGreaterThan(0)
     expect(installedMissile(world.player)).toBeNull()
     expect(world.player.loadout.weapons.some((w) => w != null && isMissile(w))).toBe(false)
     expect(world.player.loadout.weapons.some((w) => w != null && isDrone(w))).toBe(false)

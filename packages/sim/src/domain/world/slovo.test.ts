@@ -33,14 +33,15 @@ const CROSS_SYS: SystemDef = {
  *  и до полей борта (имя, ИИ, поза) было бы не добраться. */
 const divineShips = (ships: readonly ShipEntity[]): ShipEntity[] => ships.filter((s) => s.divine)
 
-describe('Слово (бог у причалов)', () => {
-  it('сидит у КАЖДОЙ станции, кинематический и без ИИ', () => {
+describe('Слово (бог на Крестах)', () => {
+  it('сидит ТОЛЬКО на Кресте, кинематический и без ИИ', () => {
     const world = createWorld(CROSS_SYS)
     const gods = divineShips(world.ships)
     const stations = world.bodies.filter((b) => b.kind === 'station')
-    // Вездесущ: по одному у каждого причала (в этой системе — «Веер» и Крест).
+    const crosses = stations.filter((b) => b.stationStyle === 'cross')
+    // В системе два причала — обычный «Веер» и Крест, — а бог один, и он на Кресте.
     expect(stations.length).toBeGreaterThan(1)
-    expect(gods).toHaveLength(stations.length)
+    expect(gods).toHaveLength(crosses.length)
 
     for (const slovo of gods) {
       expect(slovo.name).toBe(SLOVO_NAME)
@@ -48,13 +49,9 @@ describe('Слово (бог у причалов)', () => {
       expect(slovo.ai).toBeNull() // не думает и не рулит
       expect(slovo.kinematic).toBe(true) // не летает, вне физики/рендера/столкновений
       expect(slovo.clearance).toBe(true) // под защитой станции
-      // Каждый сидит ИМЕННО в станции, а не рядом.
-      const nearest = Math.min(...stations.map((s) => slovo.state.pos.distanceTo(s.pos)))
+      // Сидит ИМЕННО в Кресте, а не рядом и не у соседнего причала.
+      const nearest = Math.min(...crosses.map((s) => slovo.state.pos.distanceTo(s.pos)))
       expect(nearest).toBeLessThan(1)
-    }
-    // И ни один причал не остался без него.
-    for (const station of stations) {
-      expect(gods.some((g) => g.state.pos.distanceTo(station.pos) < 1)).toBe(true)
     }
   })
 
@@ -63,19 +60,19 @@ describe('Слово (бог у причалов)', () => {
     expect(divineShips(world.ships)).toHaveLength(0)
   })
 
-  it('в обычной системе он тоже есть — у её причала', () => {
+  it('в обычной системе с простым причалом бога НЕТ — он не вахтёр', () => {
     const world = createWorld(STARTER_SYSTEM)
-    const stations = world.bodies.filter((b) => b.kind === 'station')
-    expect(divineShips(world.ships)).toHaveLength(stations.length)
+    expect(world.bodies.some((b) => b.kind === 'station')).toBe(true)
+    expect(divineShips(world.ships)).toHaveLength(0)
   })
 
-  it('повторный спавн не плодит двойников у тех же причалов', () => {
+  it('повторный спавн не плодит двойников', () => {
     const world = createWorld(CROSS_SYS)
-    const stations = world.bodies.filter((b) => b.kind === 'station').length
+    const crosses = world.bodies.filter((b) => b.kind === 'station' && b.stationStyle === 'cross').length
     spawnSlovo(world)
     spawnSlovo(world)
-    // Идемпотентность ПО СТАНЦИИ: сколько причалов — столько богов, сколько ни зови.
-    expect(divineShips(world.ships)).toHaveLength(stations)
+    // Идемпотентность ПО КРЕСТУ: сколько монументов — столько богов, сколько ни зови.
+    expect(divineShips(world.ships)).toHaveLength(crosses)
   })
 
   it('знакомство создаёт ОДНУ запись-бога: он вездесущ, но существо одно', () => {
@@ -121,7 +118,7 @@ describe('Слово (бог у причалов)', () => {
     expect(gods.length).toBeGreaterThan(0)
     for (const g of gods) expect(g.acquaintanceId).toBe(record.id)
     // И двойников не наплодили.
-    expect(gods).toHaveLength(world.bodies.filter((b) => b.kind === 'station').length)
+    expect(gods).toHaveLength(world.bodies.filter((b) => b.kind === 'station' && b.stationStyle === 'cross').length)
   })
 
   it('трафик резидентов не воскрешает бога случайным бортом', () => {

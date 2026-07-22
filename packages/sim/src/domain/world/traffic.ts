@@ -1,5 +1,5 @@
 import { Quaternion, Vector3 } from 'three'
-import { freighterLoadout, pirateLeaderLoadout, pirateLoadout, traderLoadout } from '../../config/loadouts'
+import { freighterLoadout, godLoadout, pirateLeaderLoadout, pirateLoadout, traderLoadout } from '../../config/loadouts'
 import { NPC_DOCK } from '../../config/station'
 import { TITAN } from '../../config/titans'
 import { PLATFORM } from '../../config/platform'
@@ -11,7 +11,7 @@ import { signed, type Rng } from '../../core/math'
 import type { Loadout } from '../loadout'
 import { createAIState } from '../ai/types'
 import { residentAcquaintances } from './acquaintance'
-import { SLOVO_KIND } from './slovo'
+import { SLOVO_KIND, SLOVO_NAME, SLOVO_PERSONA } from './slovo'
 import { rehydrateContactShip } from './plan'
 import { spawnPlatform } from './platforms'
 import { beginWarpArrival } from './warp'
@@ -19,6 +19,7 @@ import { addCommodity } from '../cargo/hold'
 import { COMMODITIES } from '../cargo/items'
 import { isDroneShip } from '../combat/drones'
 import { makeShip, refreshSpec } from './factory'
+import { stockSlovoCollection } from './figurines'
 import { pickTrafficVariant } from './trafficVariants'
 import { spawnTrafficTitan, titanCount } from './titans'
 import type { BodyEntity, Faction, ShipEntity, World } from './entities'
@@ -224,6 +225,62 @@ function spawnOne(world: World, kind: EncounterKind, pos: Vector3, home: Vector3
 
   world.ships.push(ship)
   return ship
+}
+
+/**
+ * СЛОВО ПРОЛЁТОМ. Не житель системы, а гость: приходит трафиком, летит своим делом, с ним
+ * можно заговорить. Отличия от того, что сидит на Крестах: он ЛЕТИТ (не кинематический,
+ * с ИИ) и приходит В СЛУЧАЙНОМ МАСШТАБЕ — от обычного борта до стократной громады.
+ *
+ * Масштаб — не свойство божества, а ПРИБОР: у него миелофон (`godLoadout`), тот самый, что
+ * растит игрока. Поле то же (`state.scale`), поэтому рендер, радиус столкновений и метки уже
+ * умеют его читать.
+ *
+ * Отсюда и вся сцена: он приходит громадой, а у станции на глазах ужимается до обычного борта
+ * (`stepDivineScale`). Это и есть приглашение к разговору — необычный корабль, который нельзя
+ * не заметить, а подойдя ближе, видишь, что он вовсе не такой, каким казался.
+ *
+ * Неуязвим и безоружен: бог не дерётся, но и сбить его нельзя.
+ */
+function spawnTravellingSlovo(world: World): ShipEntity | null {
+  const anchor = residentAnchor(world)
+  spawnFromRadarEdge(world, _scratch, _offset, true)
+  const quat = new Quaternion().setFromUnitVectors(
+    new Vector3(0, 0, -1),
+    _offset.copy(anchor).sub(_scratch).normalize(),
+  )
+  const ship = makeShip(world.ids, 'neutral', SLOVO_NAME, godLoadout(), _scratch.clone(), quat)
+  ship.pilotName = SLOVO_NAME
+  ship.persona = { ...SLOVO_PERSONA }
+  ship.originKind = SLOVO_KIND
+  ship.divine = true
+  ship.clearance = true
+  ship.ai = createAIState(anchor.clone(), world.rng)
+  ship.controls.throttle = 0.5
+  ship.state.scale = TRAFFIC.GOD_SCALE_MIN + world.rng() * (TRAFFIC.GOD_SCALE_MAX - TRAFFIC.GOD_SCALE_MIN)
+  stockSlovoCollection(ship.hold, world.rng)
+  const known = world.acquaintances.find((a) => a.kindId === SLOVO_KIND)
+  if (known) ship.acquaintanceId = known.id
+  world.ships.push(ship)
+  return ship
+}
+
+/**
+ * ПЕРЕД СТЫКОВКОЙ БОГ УМЕНЬШАЕТСЯ. Стометровая громада в шлюз не входит — да и причал
+ * рассчитан на корабли, а не на явления. Ужимается плавно, за секунды подхода, а не
+ * щелчком: подлетающий на глазах становится обычным бортом.
+ *
+ * Живёт в такте трафика, а не в физике: масштаб — свойство облика, а не движения.
+ */
+export function stepDivineScale(world: World, dt: number): void {
+  for (const ship of world.ships) {
+    if (!ship.divine || !ship.alive) continue
+    if (ship.ai?.dock == null) continue
+    if (ship.state.scale <= 1) continue
+    const k = Math.exp(-TRAFFIC.GOD_SHRINK_RATE * dt)
+    ship.state.scale = 1 + (ship.state.scale - 1) * k
+    if (ship.state.scale < 1.02) ship.state.scale = 1
+  }
 }
 
 /**
@@ -452,6 +509,18 @@ function stepStationApproach(world: World): ShipEntity[] {
   if (stationRegulars(world) >= TRAFFIC.STATION_REGULARS) return []
   if (trafficCount(world) >= TRAFFIC.MAX) return []
 
+  /**
+   * ПИРАТ У ПРИЧАЛА. Раньше у станции водились только те, кто швартуется (торговец, караван),
+   * и патруль ходил кругами без единого противника. Изредка вместо очередного гостя приходит
+   * ПИРАТ: он не стыкуется, а кружит поодаль — кормится у оживлённого места. Это и оживляет
+   * станцию, и даёт заказам на охоту, кого называть поимённо.
+   *
+   * Бросок ДО обычного, чтобы не отбирать долю у швартующихся: у причала свой поток.
+   */
+  if (world.rng() < TRAFFIC.STATION_PIRATE_SHARE) {
+    return [spawnStationLurker(world, station)]
+  }
+
   const kind = weightedPick(world.rng, DOCKABLE_KINDS, remoteness(world))
   if (world.rng() >= TRAFFIC.DOCK_SHARE) return []
 
@@ -465,6 +534,27 @@ function stepStationApproach(world: World): ShipEntity[] {
   _offset.copy(station.pos).sub(_scratch)
   beginWarpArrival(world, ship, _scratch, _offset)
   return [ship]
+}
+
+/**
+ * ПИРАТ, КОРМЯЩИЙСЯ У ПРИЧАЛА. Приходит как обычная встреча, но домой ему — станция:
+ * патрульный круг ИИ вьётся вокруг неё, и он остаётся поблизости, а не уходит транзитом.
+ * Не швартуется (`ai.dock` не ставим): пирата к причалу не пустят.
+ *
+ * Отдельной функцией, а не веткой в общем спавне: у станции своя жизнь и свой поток, и
+ * заказ на охоту будет называть цели именно отсюда.
+ */
+function spawnStationLurker(world: World, station: BodyEntity): ShipEntity {
+  const kind = ENCOUNTERS.find((k) => k.id === 'pirate') ?? ENCOUNTERS[0]!
+  const centre = new Vector3()
+  const transitHome = new Vector3()
+  spawnFromRadarEdge(world, centre, transitHome, true)
+  randomDirection(world, _offset).multiplyScalar(world.rng() * TRAFFIC.GROUP_SPREAD)
+  _scratch.copy(centre).add(_offset)
+  const ship = spawnOne(world, kind, _scratch, _site.copy(station.pos))
+  _offset.copy(station.pos).sub(_scratch)
+  beginWarpArrival(world, ship, _scratch, _offset)
+  return ship
 }
 
 /**
@@ -554,7 +644,7 @@ function despawnDistant(world: World): void {
   const limitSq = TRAFFIC.DESPAWN_RANGE * TRAFFIC.DESPAWN_RANGE
   world.ships = world.ships.filter((s) => {
     if (!s.alive || isDroneShip(s)) return true
-    // Слово — вписанный в мир бог, а не трафик: он всегда у своего Креста, его не убираем.
+    // Слово не убираем по дальности: у Крестов он вписан в мир, а пролётом уходит сам.
     if (s.divine) return true
     if (s.id === world.lockedTargetId) return true
     if (s.ai?.escortOf != null) return true
@@ -650,6 +740,16 @@ export function stepTraffic(world: World, dt: number): ShipEntity[] {
   }
 
   if (trafficCount(world) >= TRAFFIC.MAX) return born
+
+  /**
+   * БОГ В ТРАФИКЕ. Живёт он на Крестах, но по мирам ходит — изредка и, в отличие от всех,
+   * В СВОЁМ МАСШТАБЕ: от обычного борта до стометровой громады. Один на систему: двух Слов
+   * в одном небе быть не может.
+   */
+  if (world.rng() < TRAFFIC.GOD_SHARE && !world.ships.some((s) => s.divine)) {
+    const god = spawnTravellingSlovo(world)
+    if (god) return born.concat([god])
+  }
 
   // В глуши рядовую встречу изредка подменяет ЧУЖОЙ БОЙ. Только вдали от жилья:
   // короткое замыкание по `&&` бережёт поток RNG у станции — там ветка не бросается.
