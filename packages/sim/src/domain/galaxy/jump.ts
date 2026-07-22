@@ -6,7 +6,7 @@ import type { World } from '../world/entities'
 import { arrivalPointAt, scatterArrival, type Arrival } from './arrival'
 import { systemDefOf } from './bridge'
 import { driftContacts } from './contacts'
-import { syncLiveContactsFromShips } from '../world/plan'
+import { carryFollowersOnJump, syncLiveContactsFromShips } from '../world/plan'
 import { spawnResidentContacts } from '../world/traffic'
 import { generateSystem } from './generate'
 import { applySharedStartWorld } from './sharedStart'
@@ -165,6 +165,9 @@ export function jump(
   // сместить (`boundFor`/странствие), потом заселить — иначе только что прибывший
   // контакт был бы выставлен и тут же уведён собственным дрейфом. Оба шага — от
   // `world.rng`, сброшенного `enterSystem` к зерну системы: детерминизм для сети/реплея.
+  // Сопровождение переезжает С ТОБОЙ, и обязательно ДО дрейфа: иначе оно осталось бы
+  // в покинутой системе, а дрейф увёл бы его ещё дальше (см. `carryFollowersOnJump`).
+  carryFollowersOnJump(world)
   driftContacts(world)
   spawnResidentContacts(world)
   return true

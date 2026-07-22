@@ -5,6 +5,7 @@ import {
   applyPlayerSave,
   arrivalPointAt,
   createWorld,
+  carryFollowersOnJump,
   driftContacts,
   enterSystem,
   isCore,
@@ -95,6 +96,9 @@ export function prepareJumpPortalWorld(source: Session): PreparedJumpWorld {
   })
   // Это не декорация за маской, а тот самый World, который затем будет принят без
   // перестройки. Поэтому постоянные жители обязаны появиться до первого видимого кадра.
+  // Сопровождение едет с игроком и через ПОРТАЛ — тем же правилом и в том же порядке,
+  // что и в обычном прыжке: переезд до дрейфа (см. `carryFollowersOnJump`).
+  carryFollowersOnJump(layoutWorld)
   driftContacts(layoutWorld)
   spawnResidentContacts(layoutWorld)
 

@@ -4,7 +4,9 @@ import { CORE_INDEX, GALAXY } from '../../config/galaxy'
 import { WORLD } from '../../config/world'
 import { isHyperdrive } from '../loadout'
 import { COMMODITIES, addCommodity } from '../cargo'
-import { refreshSpec, createWorld, type World } from '../world'
+import { refreshSpec, createWorld, rememberPilot, STARTER_SYSTEM, type World } from '../world'
+import { emptyPlan } from '../world/contactPlan'
+import type { Acquaintance } from '../world/acquaintance'
 import { generateGalaxy, generateSystem } from './generate'
 import { commitPreparedJump, jump, jumpBlock, jumpDistance, systemDefFor } from './jump'
 import { placeSystem, distanceLy } from './shape'
@@ -323,5 +325,46 @@ describe('прыжок', () => {
     const b = placeSystem(7, GALAXY.SEED)
     expect(jumpDistance(world, 7)).toBeCloseTo(distanceLy(a, b))
     expect(distanceLy(a, b)).toBeCloseTo(distanceLy(b, a))
+  })
+})
+
+/**
+ * СОПРОВОЖДЕНИЕ ЛЕТИТ С ТОБОЙ. Борт физически не переносится — `enterSystem` пересобирает
+ * окружение целиком, — поэтому за игроком едет ЗАПИСЬ знакомства, а борт ему выставляет
+ * `spawnResidentContacts` уже на месте.
+ *
+ * Раньше `syncLiveContactsFromShips` записывала контакту ПОКИНУТУЮ систему, и нанятый эскорт
+ * молча оставался позади (а дрейф уводил его ещё дальше). С контрактами это ломало всё, где
+ * кого-то надо КУДА-ТО ДОВЕЗТИ: клиент терялся на первом же прыжке.
+ */
+describe('попутчики', () => {
+  it('сопровождение переезжает в систему прибытия, а посторонний знакомый — нет', () => {
+    // Стартовая система населена одним богом, а его трафик нарочно не воскрешает — берём
+    // мир с обычным патрульным бортом, из которого и выйдет попутчик.
+    const world = createWorld({
+      ...STARTER_SYSTEM,
+      patrols: [{ count: 1, at: [0, 0, -200], spread: 0, faction: 'neutral', name: 'Кто-то' }],
+    })
+    const home = world.systemIndex
+    const target = neighbourWithin(world, world.player.spec.jumpRange)
+
+    // Бог Слово не годится: трафик его нарочно не воскрешает (его сажает `spawnSlovo`).
+    const ship = world.ships.find((s) => s.originKind !== 'god')
+    if (!ship) throw new Error('в стартовой системе некого взять в сопровождение')
+    rememberPilot(world, ship)
+    const escortRec = world.acquaintances[world.acquaintances.length - 1]!
+    escortRec.plan.posture = 'escort'
+    escortRec.plan.patronId = world.player.id
+
+    // Второй знакомый — сам по себе, в другой системе: он ехать с тобой не обязан.
+    const stranger: Acquaintance = { ...escortRec, id: world.ids.next(), plan: emptyPlan() }
+    stranger.systemIndex = home
+    world.acquaintances.push(stranger)
+
+    expect(jump(world, target)).toBe(true)
+    expect(escortRec.systemIndex).toBe(target)
+    // Приехал не только записью: на месте он снова живой борт рядом с игроком.
+    expect(world.ships.some((s) => s.acquaintanceId === escortRec.id)).toBe(true)
+    expect(stranger.systemIndex).not.toBe(target)
   })
 })

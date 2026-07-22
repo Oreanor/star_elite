@@ -74,6 +74,7 @@ export {
   compileRawPlan,
   rehydrateContactShip,
   resolveModuleId,
+  carryFollowersOnJump,
   syncLiveContactsFromShips,
   stepContactPlanOffScreen,
   contactEtaHops,

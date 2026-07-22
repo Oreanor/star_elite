@@ -56,6 +56,30 @@ export function syncLiveContactsFromShips(world: World): void {
   }
 }
 
+/**
+ * ПОПУТЧИКИ ЕДУТ С ТОБОЙ. Знакомые, что идут в твоём сопровождении, после прыжка обязаны
+ * оказаться там же, где ты, — иначе нанятый эскорт (а с ним и всякий, кого ты взялся куда-то
+ * ДОВЕЗТИ) молча остаётся в покинутой системе, и его ещё уводит дрейф.
+ *
+ * Борт за тобой не летит физически: `enterSystem` пересобирает окружение целиком. Летит
+ * ЗАПИСЬ — она и есть правда о том, где человек; борт ему потом выставит `spawnResidentContacts`
+ * там же, где ты. Ровно так же контакт «переезжает» и во всех прочих случаях.
+ *
+ * Звать СРАЗУ после `enterSystem` и ДО `driftContacts`: тот пропускает всех, кто уже в твоей
+ * системе, — значит переехавший попутчик за кулисами в этот ход не бродит и не гибнет.
+ *
+ * `boundFor` гасим: он летел куда-то по своим делам, но теперь он с тобой, и старая цель
+ * потащила бы его прочь на первом же ходу дрейфа.
+ */
+export function carryFollowersOnJump(world: World): void {
+  for (const rec of world.acquaintances) {
+    if (!rec.alive) continue
+    if (rec.plan.posture === 'idle' || rec.plan.patronId !== world.player.id) continue
+    rec.systemIndex = world.systemIndex
+    rec.boundFor = null
+  }
+}
+
 /** Наложить сохранённую сборку и posture на воссозданный борт. */
 export function rehydrateContactShip(world: World, record: Acquaintance, ship: ShipEntity): void {
   if (record.savedLoadout) {
