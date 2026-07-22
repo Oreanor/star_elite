@@ -8,11 +8,7 @@ import {
 } from '../../render/scene/hypertorus'
 import { TORUS } from '../../render/config'
 import { isHeld } from '../../platform/input/input'
-import {
-  setTorusAutopilotTarget,
-  torusAutopilotActive,
-  torusNav,
-} from './torusAutopilot'
+import { finishTorusApproach, torusAutopilotActive, torusNav } from './torusAutopilot'
 
 /**
  * ПОЛЁТ ПО ГИПЕРТОРУ. Корабль стоит в центре стереопроекции и вертится мышью (это делает
@@ -36,10 +32,33 @@ const _zBack = new Vector3(0, 0, -1)
 /** Сектор газа 0..1, как в мире: W плавно наращивает, S убавляет, держится сам. */
 let throttle = 0
 
-/** Сбросить вид в единицу — узел под игроком (вход в комнату / новая сессия). */
+/** Сбросить вид в единицу. Игрок оказывается в точке (0,0,0,−1) — центре проекции. */
 export function resetTorusFlight(): void {
   identity4(view)
   throttle = 0
+}
+
+/**
+ * ВСТАТЬ В УЗЕЛ: подобрать позу так, чтобы точка S³ `v` пришла в центр проекции (0,0,0,−1),
+ * то есть оказалась ровно под игроком.
+ *
+ * Нужно на входе в комнату: влетел в дыру своей галактики — стоишь в СВОЁМ узле, а соседи
+ * вокруг тебя действительно соседи. При единичной позе игрок стоял в точке, которая узлом
+ * не является вовсе, и «дом» болтался в стороне без всякой причины.
+ *
+ * Поворот берём в плоскости (пространственное направление v, w): он переводит пару
+ * (|v_xyz|, v_w) из её угла α в −π/2, то есть ровно в антипод полюса.
+ */
+export function placeTorusAt(x: number, y: number, z: number, w: number): void {
+  throttle = 0
+  const s = Math.hypot(x, y, z)
+  if (s < 1e-9) {
+    // Точка на самой оси w: направление поворота произвольно, важен только угол.
+    identity4(view)
+    if (w > 0) rotPlaneW(0, 0, -1, Math.PI, view)
+    return
+  }
+  rotPlaneW(x / s, y / s, z / s, Math.atan2(w, s) + Math.PI / 2, view)
 }
 
 export function torusView(): Pose4 {
@@ -67,7 +86,8 @@ export function stepTorusFlight(shipQuat: Quaternion, dt: number): void {
       throttle -= TORUS.THROTTLE_RATE * dt
       if (throttle <= 0) {
         throttle = 0
-        setTorusAutopilotTarget(null)
+        // Штурвал — мыши, а вершина уходит на выдачу: `stepBush` выбросит из дыры в галактику.
+        finishTorusApproach()
       }
     } else if (nav.valid && _fwd.x * nav.dx + _fwd.y * nav.dy + _fwd.z * nav.dz > TORUS.AUTOPILOT_AIM_DOT) {
       throttle += TORUS.THROTTLE_RATE * dt

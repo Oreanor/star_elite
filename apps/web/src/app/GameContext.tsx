@@ -32,7 +32,8 @@ import {
 } from '@elite/sim'
 import { createIntent, createPlayerController, type PlayerIntent } from './control/playerController'
 import { createBushController } from './control/bushController'
-import { resetTorusFlight } from './control/torusFlight'
+import { placeTorusAtVertex } from '../render/scene/HypertorusLayer'
+import { vertexOfNode } from '../render/scene/torusNodes'
 import { online } from './net/firebase'
 import { loadSave } from './save/saveStore'
 
@@ -215,6 +216,9 @@ function createSession(initialSave?: PlayerSave | null): Session {
   const bush = createBushTravel()
   if (TORUS_START) {
     bush.active = true
+    // Домой — в узел своей галактики: `createBushTravel` ставит корень куста (монумент), а
+    // мы стартуем не с креста. Отсюда же берётся имя дома на HUD.
+    bush.node = GALAXY.HOME_NODE
     // ПУСТАЯ КОМНАТА: `createWorld` насыпал стартер-систему (звезда, планеты, патрули) —
     // вычищаем всё сталкиваемое и рендерящееся. Иначе корабль врезается в невидимые тела.
     world.bodies = []
@@ -235,7 +239,8 @@ function createSession(initialSave?: PlayerSave | null): Session {
     world.player.state.pos.set(0, 0, 0)
     world.player.state.vel.set(0, 0, 0)
     world.player.controls.throttle = 0
-    resetTorusFlight()
+    // Стоим В СВОЁМ узле, а не в безымянной точке между узлами: соседи вокруг — настоящие соседи.
+    placeTorusAtVertex(vertexOfNode(bush.node))
   }
 
   return {

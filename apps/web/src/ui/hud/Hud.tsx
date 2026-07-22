@@ -6,8 +6,13 @@ import { PIXEL_SCALE, TORUS } from '../../render/config'
 import { jumpPortal, portalActive } from '../../app/control/jumpPortal'
 import { preparedJumpPortalWorld, syncDestCamera } from '../../render/scene/jumpPortalWorld'
 import { torusThrust } from '../../app/control/torusFlight'
-import { torusAutopilotTarget } from '../../app/control/torusAutopilot'
-import { torusHomeMarker, torusLabels, torusMonumentMarker } from '../../render/scene/HypertorusLayer'
+import {
+  torusHomeMarker,
+  torusLabels,
+  torusMonumentMarker,
+  torusTargetMarker,
+} from '../../render/scene/HypertorusLayer'
+import { nameOfVertex } from '../../render/scene/torusNodes'
 import { drawHud } from './drawHud'
 import type { PortalAperture } from './aperture'
 
@@ -125,8 +130,17 @@ export function Hud() {
         session.bush.active && torusMonumentMarker.visible
           ? { x: torusMonumentMarker.x, y: torusMonumentMarker.y, z: torusMonumentMarker.z }
           : null,
-      torusHomeName: session.universe.nodes[TORUS.HOME_NODE]?.name ?? 'ДОМ',
-      torusTarget: session.bush.active ? torusAutopilotTarget() : null,
+      torusHomeName: session.universe.nodes[session.bush.node]?.name ?? 'ДОМ',
+      torusMonumentName: nameOfVertex(session.universe, TORUS.MONUMENT_NODE),
+      torusTarget:
+        session.bush.active && torusTargetMarker.visible
+          ? {
+              x: torusTargetMarker.x,
+              y: torusTargetMarker.y,
+              z: torusTargetMarker.z,
+              name: torusTargetMarker.name,
+            }
+          : null,
       torusLabels: session.bush.active ? torusLabels : null,
       fps: fpsRef.current,
       aperture,

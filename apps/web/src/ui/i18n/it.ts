@@ -179,6 +179,8 @@ export const IT: Record<keyof typeof RU, string> = {
   'hud.noAux': 'NESSUN DISPOSITIVO',
   'hud.noTarget': 'NESSUN BERSAGLIO',
   'hud.noJumpTarget': 'NESSUN SISTEMA DI DESTINAZIONE SELEZIONATO',
+
+  'hud.noJumpInRoom': 'NESSUN SALTO DALLA STANZA',
   'hud.bushEnter': 'UNIVERSO',
   'hud.bushArrive': 'GALASSIA',
   'hud.portalClosed': 'PORTALE CHIUSO',

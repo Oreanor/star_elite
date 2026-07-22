@@ -182,6 +182,8 @@ export const RU = {
   'hud.noAux': 'ПРИБОР НЕ УСТАНОВЛЕН',
   'hud.noTarget': 'НЕТ ЦЕЛИ',
   'hud.noJumpTarget': 'ЦЕЛЕВАЯ СИСТЕМА НЕ ВЫБРАНА',
+
+  'hud.noJumpInRoom': 'ИЗ КОМНАТЫ ПРЫЖКА НЕТ',
   'hud.bushEnter': 'ВСЕЛЕННАЯ',
   'hud.bushArrive': 'ГАЛАКТИКА',
   'hud.portalClosed': 'ПОРТАЛ ЗАКРЫТ',

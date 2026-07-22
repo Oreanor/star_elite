@@ -185,6 +185,8 @@ export const PT: Record<keyof typeof RU, string> = {
   'hud.noAux': 'SEM DISPOSITIVO',
   'hud.noTarget': 'SEM ALVO TRAVADO',
   'hud.noJumpTarget': 'NENHUM SISTEMA DE DESTINO SELECIONADO',
+
+  'hud.noJumpInRoom': 'SEM SALTO A PARTIR DA SALA',
   'hud.bushEnter': 'UNIVERSO',
   'hud.bushArrive': 'GALÁXIA',
   'hud.portalClosed': 'PORTAL FECHADO',

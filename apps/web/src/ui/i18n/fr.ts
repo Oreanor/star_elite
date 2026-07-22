@@ -178,6 +178,8 @@ export const FR: Record<keyof typeof RU, string> = {
   'hud.noAux': 'AUCUN MODULE MONTÉ',
   'hud.noTarget': 'AUCUNE CIBLE VERROUILLÉE',
   'hud.noJumpTarget': 'AUCUN SYSTÈME CIBLE SÉLECTIONNÉ',
+
+  'hud.noJumpInRoom': 'PAS DE SAUT DEPUIS LA SALLE',
   'hud.bushEnter': 'UNIVERS',
   'hud.bushArrive': 'GALAXIE',
   'hud.portalClosed': 'PORTAIL FERMÉ',

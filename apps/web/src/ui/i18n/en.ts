@@ -177,6 +177,8 @@ export const EN: Record<keyof typeof RU, string> = {
   'hud.noAux': 'NO DEVICE FITTED',
   'hud.noTarget': 'NO TARGET',
   'hud.noJumpTarget': 'NO TARGET SYSTEM SELECTED',
+
+  'hud.noJumpInRoom': 'NO JUMP FROM THE ROOM',
   'hud.bushEnter': 'UNIVERSE',
   'hud.bushArrive': 'GALAXY',
   'hud.portalClosed': 'PORTAL CLOSED',

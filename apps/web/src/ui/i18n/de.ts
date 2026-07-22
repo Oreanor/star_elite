@@ -180,6 +180,8 @@ export const DE: Record<keyof typeof RU, string> = {
   'hud.noAux': 'KEIN GERÄT VERBAUT',
   'hud.noTarget': 'KEIN ZIEL ERFASST',
   'hud.noJumpTarget': 'KEIN ZIELSYSTEM AUSGEWÄHLT',
+
+  'hud.noJumpInRoom': 'AUS DEM RAUM GIBT ES KEINEN SPRUNG',
   'hud.bushEnter': 'UNIVERSUM',
   'hud.bushArrive': 'GALAXIE',
   'hud.portalClosed': 'PORTAL GESCHLOSSEN',

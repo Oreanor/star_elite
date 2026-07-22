@@ -110,10 +110,11 @@ export interface HudFrame {
    */
   torusHome: { x: number; y: number; z: number } | null
   torusMonument: { x: number; y: number; z: number } | null
-  /** Имя домашней галактики — подпись под её маркером. */
+  /** Имена дома и монумента — подписи под их маркерами. Берутся из узлов вселенной. */
   torusHomeName: string
-  /** Активная цель автопилота в комнате (подсвечивается ярче), либо null. */
-  torusTarget: 'home' | 'cross' | null
+  torusMonumentName: string
+  /** Выбранная Tab галактика: положение и имя. Помечается жёлтым, к ней и ведёт автопилот. */
+  torusTarget: { x: number; y: number; z: number; name: string } | null
   /** Подписи ближайших галактик (узлы решётки = именованные галактики), либо null вне комнаты. */
   torusLabels: { count: number; items: { x: number; y: number; z: number; name: string }[] } | null
   /** Сглаженная частота кадров. Ни на что в игре не влияет — только показывается. */
@@ -146,6 +147,9 @@ export function drawHud(frame: HudFrame): void {
   // станциями и планетами скрытого мира). Остаётся полётная суть: показания и тревоги.
   if (frame.bush) {
     drawReadouts(frame)
+    // Перекрестье по НОСУ. В комнате оно не прицел, а КУРС: поток S³ идёт туда, куда смотрит
+    // нос, и без этой метки «куда я лечу» приходится угадывать по тому, как поехала решётка.
+    drawGunsight(frame)
     drawTorusLabels(frame)
     drawTorusMarkers(frame)
     drawBushLocator(frame)
@@ -986,11 +990,12 @@ function drawTorusLabels(frame: HudFrame): void {
 }
 
 function drawTorusMarkers(frame: HudFrame): void {
-  const { torusHome, torusMonument, torusHomeName, torusTarget } = frame
-  const homeColor = torusTarget === 'home' ? HUD_COLORS.TARGET : '#66e0ff'
-  const crossColor = torusTarget === 'cross' ? HUD_COLORS.TARGET : '#66e0ff'
-  if (torusHome) markOne(frame, torusHome, torusHomeName, homeColor)
-  if (torusMonument) markOne(frame, torusMonument, 'Кресты', crossColor)
+  const { torusHome, torusMonument, torusHomeName, torusMonumentName, torusTarget } = frame
+  if (torusHome) markOne(frame, torusHome, torusHomeName, '#66e0ff')
+  if (torusMonument) markOne(frame, torusMonument, torusMonumentName, '#66e0ff')
+  // Выбранная Tab галактика — поверх и жёлтым: она может совпасть с домом или крестом,
+  // и тогда важнее показать, что ведём именно туда.
+  if (torusTarget) markOne(frame, torusTarget, torusTarget.name, HUD_COLORS.TARGET)
 }
 
 /**
@@ -1029,7 +1034,7 @@ function bushBlip(
 }
 
 function drawBushLocator(frame: HudFrame): void {
-  const { ctx, world, width, height, torusHome, torusMonument, torusHomeName, torusTarget } = frame
+  const { ctx, world, width, height, torusHome, torusMonument, torusHomeName, torusMonumentName, torusTarget } = frame
   const radiusX = 47 * 1.5 * S
   const radiusY = 47 * 0.75 * S
   const cx = width - radiusX - 12 * S
@@ -1042,8 +1047,9 @@ function drawBushLocator(frame: HudFrame): void {
   line(ctx, cx - 3 * S, cy, cx + 3 * S, cy, HUD_COLORS.DIM, FRAME_W)
 
   shipAxes(world.player.state.quat, _fwd, _right, _up)
-  if (torusHome) bushBlip(frame, torusHome, cx, cy, radiusX, radiusY, torusHomeName, torusTarget === 'home')
-  if (torusMonument) bushBlip(frame, torusMonument, cx, cy, radiusX, radiusY, 'Кресты', torusTarget === 'cross')
+  if (torusHome) bushBlip(frame, torusHome, cx, cy, radiusX, radiusY, torusHomeName, false)
+  if (torusMonument) bushBlip(frame, torusMonument, cx, cy, radiusX, radiusY, torusMonumentName, false)
+  if (torusTarget) bushBlip(frame, torusTarget, cx, cy, radiusX, radiusY, torusTarget.name, true)
 }
 
 function drawRadar(frame: HudFrame): void {

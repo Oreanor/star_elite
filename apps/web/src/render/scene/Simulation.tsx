@@ -22,6 +22,11 @@ import {
   stepWorld,
   enterBush,
   leaveBush,
+  enterSystem,
+  systemDefFor,
+  emptyDelta,
+  CORE_INDEX,
+  UNIVERSE,
   GALAXY,
   type Controller,
   type World,
@@ -31,7 +36,22 @@ import { syncControllers, useSession, type Session } from '../../app/GameContext
 import { coastController } from '../../app/control/playerController'
 import { stepCameraView } from '../../app/control/cameraView'
 import { resetTorusFlight } from '../../app/control/torusFlight'
-import { cycleTorusAutopilot, resetTorusAutopilot } from '../../app/control/torusAutopilot'
+import {
+  consumeTorusArrival,
+  cycleTorusTarget,
+  resetTorusAutopilot,
+  toggleTorusAutopilot,
+} from '../../app/control/torusAutopilot'
+import {
+  beginBushExit,
+  bushExitActive,
+  bushExitVertex,
+  resetBushExit,
+  stepBushExit,
+} from '../../app/control/bushExit'
+import { placeTorusAtVertex, torusNearest } from './HypertorusLayer'
+import { nodeOfVertex, vertexOfNode } from './torusNodes'
+import { TORUS } from '../config'
 import { persistSave } from '../../app/save/saveStore'
 import { clearPresses, consumePress, input, isHeld, releaseLock } from '../../platform/input/input'
 import { gameTimeSec } from '../../app/net/worldClock'
@@ -90,7 +110,11 @@ function setPilot(session: Session, mode: Session['mode']): void {
  */
 function touchedDoor(world: World): boolean {
   for (const body of world.bodies) {
-    if (body.kind !== 'blackhole') continue
+    // Дверь — всякая чёрная дыра, а В ЯДРЕ ею работает само светило: система `CORE_INDEX`
+    // строится из класса «H», но `SystemDef` класса не носит, и в мире дыра ядра приезжает
+    // обычной звездой. Без этой оговорки выход в новую галактику был бы билетом в один конец.
+    const isDoor = body.kind === 'blackhole' || (body.kind === 'star' && world.systemIndex === CORE_INDEX)
+    if (!isDoor) continue
     if (world.player.state.pos.distanceTo(body.pos) <= body.radius) return true
   }
   return false
@@ -109,12 +133,17 @@ function stepBush(session: Session): void {
 
   if (!bush.active) {
     if (session.mode === 'bush' || !touchedDoor(world)) return
-    // Дом — узел `GALAXY.HOME_NODE`: влетев в дыру своей галактики, оказываемся на её
-    // месте в кусте, а не в случайной точке вселенной.
-    enterBush(bush, GALAXY.HOME_NODE)
+    // Влетев в дыру, оказываемся В СВОЁМ узле, а не в случайной точке вселенной: галактику
+    // узнаём по зерну мира (оно и есть её удостоверение), а поза полёта ставит этот узел
+    // ровно под игрока. Не нашли (чужое зерно, дев-старт) — считаем домом узел из конфига.
+    const homeNode = universe.nodes.findIndex((n) => n.seed === world.galaxySeed)
+    enterBush(bush, homeNode >= 0 ? homeNode : GALAXY.HOME_NODE)
     session.monumentCross = null
-    resetTorusFlight()
+    placeTorusAtVertex(vertexOfNode(bush.node))
     resetTorusAutopilot()
+    // Влетели снова, не досмотрев прошлый выход (успел долететь до дыры за полторы секунды) —
+    // старый переход не должен доигрывать поверх новой комнаты.
+    resetBushExit()
     world.player.state.pos.set(0, 0, 0)
     world.player.state.vel.set(0, 0, 0)
     world.player.state.angVel.set(0, 0, 0)
@@ -126,6 +155,17 @@ function stepBush(session: Session): void {
     return
   }
 
+  // ПРИБЫЛИ в узел — выпадаем из комнаты в ту самую галактику. Прыжка отсюда нет и быть не
+  // может: комната — внутренность дыры, а выход — та же дыра с другой стороны. Поэтому
+  // появляемся в ЯДРЕ (`CORE_INDEX`) — системе с чёрной дырой в центре, в её окрестностях.
+  // Прибыли — не подменяем мир на месте, а ЗАПУСКАЕМ ПЕРЕХОД (`bushExit`): тор разлетается,
+  // экран гаснет, и уже под чернотой меняется мир. Подмену делает шаг перехода ниже.
+  const arrivedVertex = consumeTorusArrival()
+  if (arrivedVertex !== null && !bushExitActive()) {
+    // К кресту переход не заводим: монумент — не галактика, выходить в него некуда.
+    if (nodeOfVertex(arrivedVertex) !== UNIVERSE.MONUMENT_NODE) beginBushExit(arrivedVertex)
+  }
+
   // Корабль СТОИТ В ЦЕНТРЕ проекции и только вертится мышью (bushPilot глушит тягу). Полёт —
   // это поток S³ сквозь него (`stepTorusFlight` в слое), а не перемещение борта. Держим борт в
   // начале координат: любой снос сдвинул бы центр проекции и «уронил» бы выворот.
@@ -133,6 +173,55 @@ function stepBush(session: Session): void {
   s.pos.set(0, 0, 0)
   s.vel.set(0, 0, 0)
 }
+
+/**
+ * ВЫХОД ИЗ ДЫРЫ В ГАЛАКТИКУ, к которой привёл навигатор.
+ *
+ * Галактика — это ЗЕРНО (`GalaxyNode.seed`): подменяем его миру, и все 2500 систем выводятся
+ * заново, ничего не храня. Выходим в ядро — единственную систему, которая есть у КАЖДОЙ
+ * галактики и в которой стоит дыра-дверь; так дорога симметрична: влетел в дыру одной,
+ * вылетел из дыры другой.
+ *
+ * Крест — не галактика (корень куста, монумент): в него «влететь» некуда, там автопилот
+ * просто отдаёт штурвал. Возвращает: вышли ли на самом деле.
+ */
+function exitBushInto(session: Session, vertex: number): boolean {
+  const { world, universe, bush } = session
+  const node = nodeOfVertex(vertex)
+  if (node === UNIVERSE.MONUMENT_NODE) return false
+  const galaxy = universe.nodes[node]
+  if (!galaxy) return false
+
+  world.galaxySeed = galaxy.seed
+  // Правки бога принадлежали ТОЙ галактике: перенести их в новую значило бы переставить
+  // звёзды у чужого зерна. Уходим — забываем, вернёмся по сейву.
+  world.galaxyDelta = emptyDelta()
+  world.galaxyEpoch += 1
+
+  const def = systemDefFor(CORE_INDEX, galaxy.seed)
+  /**
+   * ОКРЕСТНОСТИ ДЫРЫ, а не стандартная точка выхода в двух астроединицах: вылетел — она
+   * перед носом. Ближе нельзя честно: дыра ядра — 12 солнечных масс при радиусе 152 000 км,
+   * и её тяга падает как 1/d². На сотне радиусов это ~7 м/с² — заметный тянущий фон, из
+   * которого корабль (шестнадцать g) выгребает. На десятке было бы 690 м/с² — падение без
+   * шансов, каким бы ни был двигатель.
+   */
+  const holeR = def.star.radius
+  enterSystem(world, def, CORE_INDEX, [0, 0, -holeR * BUSH_EXIT_RADII])
+  // Дыра — единственный ориентир в ядре: делаем её нав-целью, чтобы стрелка вела назад к двери.
+  world.navTargetId = world.bodies.find((b) => b.kind === 'star' || b.kind === 'blackhole')?.id ?? null
+
+  leaveBush(bush)
+  resetTorusFlight()
+  resetTorusAutopilot()
+  setPilot(session, 'manual')
+  session.onSystemChange?.(world.epoch)
+  pushWarning('bushArrive', world.time, { label: galaxy.name, repeat: 0 })
+  return true
+}
+
+/** Во скольких радиусах дыры выпадает корабль. Обоснование — в `exitBushInto`. */
+const BUSH_EXIT_RADII = 100
 
 export function Simulation() {
   const session = useSession()
@@ -242,7 +331,8 @@ export function Simulation() {
     // достаётся обычному кругу. Иначе Tab вдали от галактики не делал ровно ничего.
     if (consumePress('Tab')) {
       // В комнате тора Tab переключает цель автопилота: выкл → дом → крест → выкл.
-      if (session.bush.active) cycleTorusAutopilot()
+      // В комнате тора Tab листает БЛИЖАЙШИЕ галактики (те, что подписаны), затем крест, затем выкл.
+      if (session.bush.active) cycleTorusTarget(torusNearest, TORUS.MONUMENT_NODE)
       else if (!galaxyRadar().active || !cycleGalaxyStar(world)) {
         if (isHeld('ShiftLeft') || isHeld('ShiftRight')) cycleCelestial(world)
         else cycleContact(world)
@@ -276,8 +366,13 @@ export function Simulation() {
     }
 
     // J — автопилот НА ЦЕЛЬ: контакт / нав / звезда галактики (jumpTarget). Нет цели — плашка.
+    // В комнате тора та же клавиша ведёт к выбранной галактике: Tab и карта только ВЫБИРАЮТ,
+    // ход даёт J. Иначе выбор цели means немедленный старт, а дорога сквозь S³ идёт по чужим
+    // узлам — выбрасывало бы у первой встречной галактики вместо конца пути.
     if (consumePress('KeyJ')) {
-      if (session.mode === 'flyto') setPilot(session, 'manual')
+      if (session.bush.active) {
+        if (!toggleTorusAutopilot()) pushWarning('noTarget', world.time)
+      } else if (session.mode === 'flyto') setPilot(session, 'manual')
       else if (canEngageFlyTo(world)) setPilot(session, 'flyto')
       else pushWarning('noTarget', world.time)
     }
@@ -285,6 +380,11 @@ export function Simulation() {
     if (session.mode === 'flyto' && flyToArrived(world)) setPilot(session, 'manual')
 
     stepBush(session)
+
+    // ПЕРЕХОД ВЫХОДА: сам считает время, а нам сообщает единственный важный миг — «пора
+    // менять мир». Экран в этот кадр чёрный, поэтому шва не видно. Идёт по реальному `dt`,
+    // а не по времени мира: мир под ним как раз и пересобирается.
+    if (stepBushExit(dt)) exitBushInto(session, bushExitVertex())
 
     // Отсюда и до конца кадра мир живёт: камера может догонять, факелы — дышать.
     session.running = true

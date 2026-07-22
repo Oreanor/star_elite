@@ -13,6 +13,7 @@ import { clearPresence, publishPresence, selfPresence } from './net/presence'
 import { clearSave, persistSave } from './save/saveStore'
 import { input, releaseLock, requestLock } from '../platform/input/input'
 import { AuthScreen } from '../ui/auth/AuthScreen'
+import { BushExitVeil } from '../ui/BushExitVeil'
 import { Console, type ConsoleTab } from '../ui/console/Console'
 import { CharacterCreation } from '../ui/create/CharacterCreation'
 import { Dialogue } from '../ui/dialogue/Dialogue'
@@ -599,6 +600,13 @@ function Shell({ onRestart }: { onRestart: () => void }) {
         // создавал тот же портал с нулевого радиуса — визуально H иногда «не реагировала».
         if (!freshPortalKeyDown(e.repeat)) return
         if (docked || talking || dispatching) return
+        // Из КОМНАТЫ прыжка нет: она внутренность дыры, и выход из неё один — долететь
+        // навигатором до галактики. Карта галактики там открыта как обзор, и без этой
+        // проверки намеченная на ней цель уводила бы порталом мимо всей дороги.
+        if (session.bush.active) {
+          pushWarning('noJump', session.world.time, { label: t('hud.noJumpInRoom'), repeat: 0 })
+          return
+        }
         const target = session.world.jumpTargetIndex
         const active = portalActive()
         if (active) {
@@ -745,6 +753,10 @@ function Shell({ onRestart }: { onRestart: () => void }) {
       {chatWith && <PlayerChat player={chatWith} onClose={closeChat} />}
       {/* Второй вызов пока занят — баннер поверх текущего окна. Заверши текущий, чтобы перейти. */}
       {waiting && <IncomingCall caller={waiting} />}
+
+      {/* Выход из комнаты вселенной: тор разлетается, экран гаснет, и из растущей круглой
+          прорези проявляется галактика. Мир под пеленой подменяется в самой её черноте. */}
+      <BushExitVeil />
 
       {/* Чёрная пелена перехода из титула в игру — ПОВЕРХ всего. Под ней меняется дерево
           (титул → станция), сам шов не виден. Клики пропускает: живёт лишь 0.8с. */}
