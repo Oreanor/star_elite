@@ -19,7 +19,7 @@ import { t, useLang } from '../i18n'
 import { chassisName, occupationName, properName } from '../i18n/dataNames'
 import { formatDistance } from '../hud/project'
 import { useWheelZoom } from './useWheelZoom'
-import { MapCard, MapFrame, MapPin, MapRow } from './MapFrame'
+import { discProject, MapCard, MapFrame, MapPin, MapRow } from './MapFrame'
 
 /**
  * Локатор — большой круглый радар консоли: вид сверху, нос корабля ВВЕРХ.
@@ -30,8 +30,8 @@ import { MapCard, MapFrame, MapPin, MapRow } from './MapFrame'
  * `targetFocus`). HUD и J/P читают их сразу. Наведение показывает карточку; клик —
  * захват.
  *
- * Наклон превращает круг в ЭЛЛИПС: все координаты пересчитываются проекцией
- * `project` — поворот в плоскости (yaw), затем наклон (tilt) сжимает ось «вперёд»
+ * Наклон превращает круг в ЭЛЛИПС: все координаты пересчитываются общей проекцией
+ * `discProject` — поворот в плоскости (yaw), затем наклон (tilt) сжимает ось «вперёд»
  * и поднимает высоту над плоскостью. Диск, сетка, конус обзора и метки — всё через неё.
  */
 
@@ -96,12 +96,6 @@ interface Blip {
   selectKind: SelectKind
 }
 
-/** Проекция точки диска на экран: сперва поворот в плоскости, затем наклон и зум. */
-function project(rt: number, fwd: number, h: number, yaw: number, tilt: number, zoom: number): { x: number; y: number; depth: number } {
-  const rc = (rt * Math.cos(yaw) - fwd * Math.sin(yaw)) * zoom
-  const fc = (rt * Math.sin(yaw) + fwd * Math.cos(yaw)) * zoom
-  return { x: rc, y: -(fc * Math.cos(tilt) + h * zoom * Math.sin(tilt)), depth: fc }
-}
 
 /** Проекция мировой точки на плоскость диска (right/forward/height), null — в самом центре. */
 function toDisc(world: World, pos: Vector3): { rt: number; fwd: number; h: number; dist: number } | null {
@@ -293,7 +287,7 @@ export function Locator({ world }: { world: World }) {
   const dragged = useRef(false)
   useWheelZoom(box, (dy) => setZoom((z) => Math.min(3, Math.max(0.6, z * (dy > 0 ? 0.9 : 1.1)))))
 
-  const proj = (rt: number, fwd: number, h: number) => project(rt, fwd, h, yaw, tilt, zoom)
+  const proj = (rt: number, fwd: number, h: number) => discProject(rt, fwd, h, yaw, tilt, zoom)
   const cos = Math.cos(tilt)
 
   const marks = blips(world)

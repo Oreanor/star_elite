@@ -15,14 +15,14 @@ import { t, useLang } from '../i18n'
 import { properName } from '../i18n/dataNames'
 import { formatDistance } from '../hud/project'
 import { useWheelZoom } from './useWheelZoom'
-import { MapCard, MapFrame, MapPin, MapRow } from './MapFrame'
+import { discProject, MapCard, MapFrame, MapPin, MapRow } from './MapFrame'
 
 /**
  * Карта системы — голограмма над консолью.
  *
  * По умолчанию — вид сверху, плоскость XZ, оси МИРОВЫЕ (карта не крутится вместе с
  * носом). Но её можно КРУТИТЬ и НАКЛОНЯТЬ драгом, как локатор: yaw поворачивает диск,
- * tilt кладёт его в эллипс. Зум — колесом. Всё через ту же проекцию `project`.
+ * tilt кладёт его в эллипс. Зум — колесом. Всё через общую проекцию `discProject`.
  *
  * Центр — ЗВЕЗДА, а карта показывает СИСТЕМУ целиком: звезда, планеты, луны,
  * причал — все на своих орбитах, а игрок отмечен там, где он в системе есть.
@@ -107,17 +107,6 @@ interface Marker {
   isStar: boolean
   /** Цвет метки: у знакомых — по отношению, иначе `colourOf(kind)`. */
   tint?: string
-}
-
-/**
- * Проекция точки диска на экран — та же, что у локатора: поворот в плоскости (yaw),
- * затем наклон (tilt) сжимает ось «от звезды» и поднимает высоту, зум множит. Плоский
- * вид сверху при tilt=0; драгом превращаем диск в наклонный эллипс, как радар.
- */
-function project(x: number, y: number, h: number, yaw: number, tilt: number, zoom: number): { x: number; y: number; depth: number } {
-  const rx = (x * Math.cos(yaw) - y * Math.sin(yaw)) * zoom
-  const fy = (x * Math.sin(yaw) + y * Math.cos(yaw)) * zoom
-  return { x: rx, y: -(fy * Math.cos(tilt) + h * zoom * Math.sin(tilt)), depth: fy }
 }
 
 /** Логарифм отношения орбиты к внутренней сжимает разброс орбит в радиус диска. */
@@ -410,7 +399,7 @@ export function SystemMap({
         {/* Карточка — булавкой у самой метки, поверх голограммы: клик по списку слева
             подсвечивает не строку, а МЕСТО в системе. Точку берём той же проекцией. */}
         {shown && (() => {
-          const p = project(shown.x, shown.y, shown.lift, yaw, tilt, zoom)
+          const p = discProject(shown.x, shown.y, shown.lift, yaw, tilt, zoom)
           return (
             <MapPin x={(p.x + VIEW / 2) / VIEW} y={(p.y + VIEW / 2) / VIEW}>
               <MapCard
@@ -474,7 +463,7 @@ function Hologram({
 }) {
   const ships = points.find((m) => m.kind === 'ship')
   const cos = Math.cos(tilt)
-  const proj = (x: number, y: number, h: number) => project(x, y, h, yaw, tilt, zoom)
+  const proj = (x: number, y: number, h: number) => discProject(x, y, h, yaw, tilt, zoom)
 
   // Проецируем каждую метку: плоскость (base) и вершина штриха высоты (tip). Дальние
   // (по глубине после поворота) рисуем первыми — ближние лягут поверх, как на локаторе.

@@ -10,7 +10,6 @@ import type { RU } from './ru'
  */
 export const PT: Record<keyof typeof RU, string> = {
   // ─── Menu ───────────────────────────────────────────────────────────────────
-  'menu.start': 'DECOLAR',
   'menu.resume': 'VOLTAR AO JOGO',
   'menu.continue': 'CONTINUAR',
   'menu.wait': 'UM SEGUNDINHO…',
@@ -23,7 +22,6 @@ export const PT: Record<keyof typeof RU, string> = {
   'menu.yes': 'SIM',
   'menu.no': 'NÃO',
   'menu.keys': 'CONTROLES',
-  'menu.howto': 'COMO JOGAR',
   'menu.settings': 'AJUSTES',
   'menu.back': 'VOLTAR',
   'menu.language': 'IDIOMA',
@@ -123,53 +121,14 @@ export const PT: Record<keyof typeof RU, string> = {
   'key.pause.what': 'pausa e cursor',
 
   // ─── Seções da tabela de teclas ──────────────────────────────────────────────
-  'keys.group.guide': 'COMO JOGAR',
   'keys.group.flight': 'VOO',
   'keys.group.combat': 'COMBATE',
   'keys.group.ship': 'NAVE E MUNDO',
 
-  // ─── "Como jogar": não é tabela de teclas, e sim cenas do que dá para fazer ───
-  'guide.intro':
-    'Você é piloto numa galáxia viva de milhares de sistemas estelares: física honesta, ' +
-    'controles arcade, sem enredo rígido. Aqui vão algumas cenas do que dá para aprontar.',
-  'guide.flight':
-    'Você deixa o cais, empurra o acelerador e vira o nariz com o mouse — a inércia leva a nave ' +
-    'de lado até você virar para dentro dela e matar a deriva; o marcador do HUD mostra para onde ' +
-    'você realmente vai. Um planeta distante fica a meia hora em ritmo de combate, então você entra ' +
-    'em cruzeiro e voa supersônico, aliviando perto de uma estrela antes que a atração te arraste ao calor.',
-  'guide.combat':
-    'Um pirata ronda o cinturão de asteroides. Você o trava no Tab, o mantém na mira e abre fogo ' +
-    'com o laser; sem tempo para enrolar — aciona o autocombate e finaliza com um míssil. O escudo ' +
-    'dele estoura e o casco solta faíscas de dano — mas uma estação é intocável: um campo de força ' +
-    'a protege, você a chama, você nunca atira nela.',
-  'guide.salvage':
-    'O pirata abatido deixa uma nuvem de contêineres. Você mira o raio trator, os recolhe — e o ' +
-    'próprio canhão dele cai no seu porão, um que você nunca precisou comprar.',
-  'guide.nav':
-    'Precisa de uma estação — Shift+Tab percorre corpos e cais por distância, você marca o que quer, ' +
-    'entrega ao piloto automático e ele te traz e te atraca. Cansou do sistema — abre o mapa da ' +
-    'galáxia, escolhe uma estrela e salta em hiperespaço até os vizinhos.',
-  'guide.station':
-    'No cais você descarrega minério comprado barato num mundo agrícola e gasta o lucro num escudo ' +
-    'mais pesado — se o seu casco aguentar. Também remenda a blindagem furada e reforça o laser uma ' +
-    'vez com uma cópia do mesmo módulo do porão.',
-  'guide.people':
-    'Você abre canal com um cargueiro de passagem — o tradutor repassa a fala dele com falhas ' +
-    'engraçadas. Converse o bastante e ele lembra de você (confira o diário de conhecidos depois), ' +
-    'talvez até vá de escolta. Atire num civil ou leve contrabando e a fama corre — as pessoas passam a te encarar.',
-  'guide.growth':
-    'Você liga o mielofone e a nave cresce até o sistema lá embaixo encolher a um ponto e todo o ' +
-    'campo estelar da galáxia surgir à sua volta; você percorre as estrelas e salta a qualquer uma. E em ' +
-    'algum lugar esperam raras ferramentas que comandam as próprias estrelas.',
-
   // ─── HUD ─────────────────────────────────────────────────────────────────────
   'hud.shield': 'ESCU',
   'hud.hull': 'CASC',
-  'hud.energy': 'ENRG',
-  'hud.battery': 'BAT',
   'hud.aux': 'AUX',
-  'hud.bomb': 'BOMBA',
-  'hud.heat': 'CALOR',
   'hud.laser': 'LASER',
   'hud.temp': 'TEMP',
   'hud.jump': 'SALTO',
@@ -181,7 +140,6 @@ export const PT: Record<keyof typeof RU, string> = {
   'hud.noRockets': 'SEM MÍSSEIS',
   'hud.noLaser': 'SEM ARMA INSTALADA',
   'hud.noJump': 'SEM HIPERPROPULSOR',
-  'hud.hyperScale': 'HIPERSALTO IMPOSSÍVEL · VOLTE À ESCALA 1×',
   'hud.noAux': 'SEM DISPOSITIVO',
   'hud.noTarget': 'SEM ALVO TRAVADO',
   'hud.noJumpTarget': 'NENHUM SISTEMA DE DESTINO SELECIONADO',
@@ -202,10 +160,8 @@ export const PT: Record<keyof typeof RU, string> = {
   'hud.refuel': 'COLETANDO',
   'hud.throttle': 'ACEL',
   'hud.rockets': 'MSL',
-  'hud.missiles': 'MSL {ammo}',
   'hud.assistOff': 'ASSIST DESL',
   'hud.massLock': 'TRAVA DE MASSA',
-  'hud.cruise': 'CRUZEIRO ×{factor}',
   'hud.gravityBrake': 'FREIO GRAVITACIONAL',
   'hud.autofightPlate': 'AUTOCOMBATE',
   'hud.autopilotPlate': 'PILOTO AUTOMÁTICO',
@@ -279,9 +235,6 @@ export const PT: Record<keyof typeof RU, string> = {
   'kind.scoop': 'coletor de combustível',
 
   // ─── Estação: geral ──────────────────────────────────────────────────────────
-  'station.tab.service': 'REPARO',
-  'station.tab.upgrade': 'EQUIPAR',
-  'station.tab.trade': 'COMÉRCIO',
   'station.title': 'ESTAÇÃO',
   'station.system': 'SISTEMA',
   'station.credits': 'CRÉDITOS',
@@ -295,21 +248,13 @@ export const PT: Record<keyof typeof RU, string> = {
   'station.col.market': 'MERCADO',
   'station.col.value': 'RECEITA',
   'station.col.profit': 'LUCRO',
-  'station.col.benefit': 'EFEITO',
-  'station.col.class': 'CLASSE',
-  'station.col.kind': 'TIPO',
 
   // ─── Mercado ─────────────────────────────────────────────────────────────────
   'station.market.title': 'MERCADORIAS',
   'station.buy': 'COMPRAR',
-  'station.buyN': 'COMPRAR {n}',
   'station.noFunds': 'SEM FUNDOS',
-  'station.holdFull': 'PORÃO CHEIO',
   'station.cheap': 'barato',
   'station.dear': 'caro',
-  'station.qty': 'QTD',
-  'station.total': 'TOTAL',
-  'station.max': 'MÁX',
   'station.trade.buy': 'COMPRAR',
   'station.trade.sell': 'VENDER',
   'station.trade.stock': 'em estoque {n}',
@@ -326,24 +271,11 @@ export const PT: Record<keyof typeof RU, string> = {
 
   // ─── Estaleiro ───────────────────────────────────────────────────────────────
   'station.shipyard.title': 'ESTALEIRO',
-  'station.catalogue': 'CATÁLOGO',
-  'station.shipyard.hint':
-    'Massa {mass} t · empuxo {thrust} kN · giro {turn} rad/s. Equipamento pesado corta a agilidade — é calculado, não atribuído.',
   'station.fit': 'INSTALAR',
-  'station.cost': 'CUSTO',
-  'station.improvement': 'VS ATUAL',
-  'station.repair': 'REPARAR',
   'station.repairHull': 'REPARAR CASCO',
   'station.repairModule': 'REPARAR',
   'station.rearm': 'REARMAR',
-  'station.replace': 'SUBSTITUIR',
   'station.upgrade': 'MELHORAR',
-  'station.installed': 'INSTALADO',
-  'station.slot': 'SLOT',
-  'station.condition': 'ESTADO',
-  'station.fromHold': 'DO PORÃO',
-  'station.noOptions': 'NENHUMA',
-  'station.empty': 'vazio',
   // Erros de instalação (FitError / PurchaseError) — no botão, no lugar da ação.
   'station.wontFit': 'NÃO CABE',
   'station.fitted': 'JÁ INSTALADO',
@@ -352,15 +284,10 @@ export const PT: Record<keyof typeof RU, string> = {
   'station.wrongSlot': 'SLOT ERRADO',
 
   // ─── Reparo e munição ────────────────────────────────────────────────────────
-  'station.service.title': 'REPARO E MUNIÇÃO',
   'station.service.hullOk': 'Casco {cur} / {max} · sem dano',
   'station.service.hullDmg': 'Casco {cur} / {max} · reparo {cost} cr',
-  'station.service.rearmNeed': 'Faltam mísseis: {n} · reabastecer {cost} cr',
-  'station.service.rearmOk': 'Pilones armados',
   'station.service.repair': 'REPARAR CASCO',
   'station.service.hullWhole': 'CASCO INTACTO',
-  'station.service.rearm': 'REABASTECER MÍSSEIS',
-  'station.service.armed': 'MÍSSEIS PRONTOS',
 
   // ─── Melhoria de módulo ──────────────────────────────────────────────────────
   'station.upgradeCopy': 'MELHORAR (CÓPIA) +50%',
@@ -376,15 +303,9 @@ export const PT: Record<keyof typeof RU, string> = {
   'station.popUnit': '{n} mi',
   // Navegação a partir da tela inicial da estação.
   'station.nav.planet': 'PLANETA',
-  'station.nav.station': 'ESTAÇÃO',
-  'station.you': 'VOCÊ',
-  'station.nav.ship': 'ESTALEIRO',
   'station.nav.shop': 'MERCADO',
-  'station.nav.cargo': 'CARGA',
   'station.nav.people': 'PESSOAS',
   'station.nav.map': 'MAPA',
-  'station.nav.system': 'MAPA DO SISTEMA',
-  'station.nav.galaxy': 'MAPA DA GALÁXIA',
   // Três botões dentro da aba MAPA.
   'map.view.locator': 'LOCALIZADOR',
   'map.view.system': 'SISTEMA',
@@ -395,8 +316,6 @@ export const PT: Record<keyof typeof RU, string> = {
   // ─── Localizador: grande radar redondo do console ────────────────────────────
   'locator.title': 'LOCALIZADOR',
   'locator.nose': 'NARIZ',
-  'locator.hint': 'Passe sobre um ponto para ver quem é.',
-  'locator.controls': 'Arraste para girar e inclinar. Roda para zoom.',
   'locator.count': 'no localizador: {n}',
   'locator.kind.star': 'estrela',
   'locator.kind.planet': 'planeta',
@@ -422,7 +341,6 @@ export const PT: Record<keyof typeof RU, string> = {
   'people.docked.empty': 'O cais está vazio — só você. As naves chegam com o tempo.',
   'people.acquaintances': 'CONHECIDOS',
   'people.subtitle': 'Aqueles com quem você falou e que ainda vivem. A posição deles é sempre conhecida.',
-  'people.here': 'aqui, por perto',
   'people.at.near': 'perto de {place}',
   'people.at.dock': 'atracado em {place}',
   'people.at.here': 'neste sistema',
@@ -430,11 +348,6 @@ export const PT: Record<keyof typeof RU, string> = {
   'people.bound': 'rumo a {system}',
   'people.eta': '~{hops} saltos',
   'people.talk': 'CHAMAR',
-  'people.locate': 'RASTREAR',
-  'people.summon': 'CHAMAR ATÉ MIM',
-  'people.route': 'TRAÇAR ROTA',
-  'people.hold': 'MANDAR ESPERAR',
-  'people.roam': 'LIBERAR',
   'people.online': 'ONLINE',
   'people.online.sys': 'em {sys}',
   'people.online.dock': 'atracado em {place} · {sys}',
@@ -502,10 +415,7 @@ export const PT: Record<keyof typeof RU, string> = {
   // ─── Tela da nave ────────────────────────────────────────────────────────────
   'ship.title': 'NAVE',
   'ship.close': 'FECHAR',
-  'ship.tab.outfit': 'EQUIPAR',
-  'ship.tab.stats': 'ATRIBUTOS',
   'ship.tab.modules': 'MÓDULOS',
-  'ship.tab.cargo': 'CARGA',
   'ship.slotEmpty': 'nada',
   'ship.cargoTotal': 'porão {tons}',
   'ship.broken': 'QUEBRADO {pct}%',
@@ -519,13 +429,8 @@ export const PT: Record<keyof typeof RU, string> = {
   'ship.repair.nothing': 'Nada para reparar.',
   'ship.repair.rearmed': 'Mísseis reabastecidos.',
   'ship.repair.tooComplex': 'Não aceitam um casco dessa classe aqui — complexo demais para o estaleiro local.',
-  'ship.hulls': 'CASCOS',
-  'ship.free': 'grátis',
-  'ship.current': 'atual',
-  'ship.take': 'PEGAR CASCO',
   'ship.owned': 'JÁ É SEU',
   'ship.buyHull': 'COMPRAR · {price}',
-  'ship.hullNoRoom': 'Não dá para trocar tudo: falta capacidade de carga. Venda algo desnecessário primeiro.',
   'ship.hullBuy.title': 'COMPRAR CASCO',
   'ship.hullBuy.tradeIn': 'aceito automaticamente, estado {pct}%',
   'ship.hullBuy.overflow': 'O equipamento que não couber ({n}) vai para o porão',
@@ -540,12 +445,6 @@ export const PT: Record<keyof typeof RU, string> = {
   'hud.scalePlate': 'RECALIBRAÇÃO ESPACIAL',
   'hud.growPlate': 'Cada vez mais curiosíssimo!',
   'hud.shrinkPlate': 'Fechando feito um telescópio!',
-  'ship.hulls.hint': 'escolha um casco à direita → "PEGAR"',
-  'ship.selectSlot': 'Escolha um módulo à esquerda para reparar, substituir ou melhorar.',
-  'ship.modules.internal': 'INTERNOS',
-  'ship.modules.weapons': 'ARMAS',
-  'ship.modules.noWeapons': 'Sem armas.',
-  'ship.cargo.empty': 'Vazio.',
   'ship.cargo.used': '{used} DE {cap} T USADOS',
   'ship.jettison': 'EJETAR',
   'ship.jettisonAll': 'EJETAR TUDO',
@@ -562,7 +461,6 @@ export const PT: Record<keyof typeof RU, string> = {
   'ship.cancel': 'CANCELAR',
   'ship.ok': 'OK',
 
-  'unit.au': 'UA',
   'unit.pc': 'pc',
   'unit.kg': 'kg',
 
@@ -575,7 +473,6 @@ export const PT: Record<keyof typeof RU, string> = {
   'map.count.stations': 'estações',
   'map.galaxy': 'GALÁXIA',
   'map.starsCount': '{n} ESTRELAS',
-  'map.star': 'ASTRO',
   'map.class': 'CLASSE',
   'map.size': 'TAMANHO',
   'map.starSize': '{n} R☉',
@@ -587,17 +484,7 @@ export const PT: Record<keyof typeof RU, string> = {
   'map.life.primitive': 'primitiva',
   'map.life.developed': 'desenvolvida',
   'map.life.advanced': 'avançada',
-  'map.security': 'SEGURANÇA',
-  'map.capital': 'CAPITAL',
-  'map.government': 'REGIME',
-  'map.fuel': 'COMBUSTÍVEL',
-  'map.megastructure': 'MEGAESTRUTURA',
   'map.binary': 'binária',
-  'map.techShort': 'NT',
-  'map.scoopYes': 'coletável',
-  'map.scoopNo': 'não coletável',
-  'map.dyson': 'esfera de Dyson',
-  'map.dysonRuined': 'esfera de Dyson · ruínas',
   'map.core': 'NÚCLEO DA GALÁXIA. Além do horizonte de eventos fica a saída do buraco negro de outra galáxia.',
   'map.block.noDrive': 'SEM HIPERPROPULSOR',
   'map.block.range': 'FORA DO ALCANCE',
@@ -629,17 +516,10 @@ export const PT: Record<keyof typeof RU, string> = {
   'map.label.stance': 'POSTURA',
   'map.label.hull': 'CASCO',
   'map.search': 'BUSCAR SISTEMA…',
-  'map.pickSystem': 'Escolha um sistema no mapa',
   'map.searchNone': 'não encontrado',
   'map.filter.all': 'TODOS',
   'map.filter.stations': 'ESTAÇÕES',
   'map.filter.primitive': 'FAUNA',
   'map.filter.empty': 'VAZIOS',
   'map.showContacts': 'CONHECIDOS',
-  'map.belt': 'Cinturão de saída: {min} — {max}',
-  'map.arrive.noPlanets': 'Saída junto à estrela: não há planetas aqui.',
-  'map.arrive.pick': 'A cruz no mapa é o ponto de saída. Espaço vazio ou um mundo; a estrela cancela a escolha.',
-  'map.arrive.berth': 'Saída a {km} mil km do cais: um minuto de cruzeiro.',
-  'map.arrive.world': 'Saída junto a {name}, a {km} mil km acima da superfície.',
-  'map.arrive.void': 'Saída no vazio, {orbit} da estrela. O resto voe você mesmo.',
 }

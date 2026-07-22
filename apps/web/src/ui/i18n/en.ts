@@ -7,7 +7,6 @@ import type { RU } from './ru'
  * Английские надписи поэтому не «перевод», а СВОИ короткие фразы того же смысла.
  */
 export const EN: Record<keyof typeof RU, string> = {
-  'menu.start': 'LAUNCH',
   'menu.resume': 'RESUME',
   'menu.continue': 'CONTINUE',
   'menu.wait': 'JUST A SEC…',
@@ -20,7 +19,6 @@ export const EN: Record<keyof typeof RU, string> = {
   'menu.yes': 'YES',
   'menu.no': 'NO',
   'menu.keys': 'CONTROLS',
-  'menu.howto': 'HOW TO PLAY',
   'menu.settings': 'SETTINGS',
   'menu.back': 'BACK',
   'menu.language': 'LANGUAGE',
@@ -116,52 +114,14 @@ export const EN: Record<keyof typeof RU, string> = {
   'key.pause': 'Esc',
   'key.pause.what': 'pause and cursor',
 
-  'keys.group.guide': 'HOW TO PLAY',
   'keys.group.flight': 'FLIGHT',
   'keys.group.combat': 'COMBAT',
   'keys.group.ship': 'SHIP & WORLD',
 
-  // ─── "How to play": not a key table, but vignettes of what you can do ─────────
-  'guide.intro':
-    "You're a pilot in a living galaxy of thousands of star systems: honest physics, arcade " +
-    'controls, no rigid story. Here are a few snapshots of what you can get up to.',
-  'guide.flight':
-    'You leave the dock, push the throttle and swing the nose with the mouse — inertia carries ' +
-    'the ship sideways until you turn into it and kill the drift; the HUD marker shows where ' +
-    "you're really heading. A far planet is half an hour at combat speed, so you engage cruise " +
-    'and run supersonic, easing off near a star before its pull drags you into the heat.',
-  'guide.combat':
-    'A pirate hangs by the asteroid belt. You lock him with Tab, hold him in the sights and open ' +
-    'up with the laser; no time to fuss — hit autofight and finish with a missile. His shield ' +
-    'bursts and his hull throws sparks of damage — but a station is off-limits: a force field ' +
-    'guards it, you hail it, you never shoot it.',
-  'guide.salvage':
-    'The downed pirate leaves a cloud of canisters. You aim the tractor beam, reel them in — and ' +
-    'his own cannon drops into your hold, one you never had to buy.',
-  'guide.nav':
-    'Need a station — Shift+Tab cycles bodies and docks by distance, you mark the one you want, ' +
-    'hand it to the autopilot and it brings you in and berths you. Bored of the system — open the ' +
-    'galaxy map, pick a star and hyperjump to the neighbours.',
-  'guide.station':
-    'At the dock you offload ore bought cheap on a farming world, and spend the take on a heavier ' +
-    'shield — if your hull can carry it. You patch the punctured plating too, and upgrade the laser ' +
-    'once with a spare of the same module from your hold.',
-  'guide.people':
-    'You open a channel to a passing freighter — the translator relays his speech with amusing ' +
-    'glitches. Talk long enough and he remembers you (check the acquaintance journal later), maybe ' +
-    'even flies escort. Fire on a civilian or run contraband and word spreads — people start to eye you.',
-  'guide.growth':
-    'You switch on the mielophone and the ship grows until the system below shrinks to a dot and the ' +
-    "galaxy's whole star field emerges around you; you cycle the stars and jump to any. And somewhere " +
-    'wait rare tools that command the stars themselves.',
 
   'hud.shield': 'SHLD',
   'hud.hull': 'HULL',
-  'hud.energy': 'ENRG',
-  'hud.battery': 'BAT',
   'hud.aux': 'AUX',
-  'hud.bomb': 'BOMB',
-  'hud.heat': 'HEAT',
   'hud.laser': 'LASER',
   'hud.temp': 'TEMP',
   'hud.jump': 'JUMP',
@@ -173,7 +133,6 @@ export const EN: Record<keyof typeof RU, string> = {
   'hud.noRockets': 'NO MISSILES',
   'hud.noLaser': 'NO WEAPON FITTED',
   'hud.noJump': 'NO HYPERDRIVE FITTED',
-  'hud.hyperScale': 'HYPERJUMP IMPOSSIBLE · RETURN TO 1× SCALE',
   'hud.noAux': 'NO DEVICE FITTED',
   'hud.noTarget': 'NO TARGET',
   'hud.noJumpTarget': 'NO TARGET SYSTEM SELECTED',
@@ -194,10 +153,8 @@ export const EN: Record<keyof typeof RU, string> = {
   'hud.refuel': 'SCOOPING',
   'hud.throttle': 'THRT',
   'hud.rockets': 'MSL',
-  'hud.missiles': 'MSL {ammo}',
   'hud.assistOff': 'ASSIST OFF',
   'hud.massLock': 'MASS LOCK',
-  'hud.cruise': 'CRUISE ×{factor}',
   'hud.gravityBrake': 'GRAVITY BRAKE',
   'hud.autofightPlate': 'AUTO COMBAT',
   'hud.autopilotPlate': 'AUTOPILOT',
@@ -266,9 +223,6 @@ export const EN: Record<keyof typeof RU, string> = {
   'kind.bomb': 'energy bomb',
   'kind.scoop': 'fuel scoop',
 
-  'station.tab.service': 'REPAIR',
-  'station.tab.upgrade': 'OUTFIT',
-  'station.tab.trade': 'TRADE',
   'station.title': 'STATION',
   'station.system': 'SYSTEM',
   'station.credits': 'CREDITS',
@@ -281,20 +235,12 @@ export const EN: Record<keyof typeof RU, string> = {
   'station.col.market': 'MARKET',
   'station.col.value': 'VALUE',
   'station.col.profit': 'PROFIT',
-  'station.col.benefit': 'EFFECT',
-  'station.col.class': 'CLASS',
-  'station.col.kind': 'TYPE',
 
   'station.market.title': 'GOODS',
   'station.buy': 'BUY',
-  'station.buyN': 'BUY {n}',
   'station.noFunds': 'NO FUNDS',
-  'station.holdFull': 'HOLD FULL',
   'station.cheap': 'cheap',
   'station.dear': 'pricey',
-  'station.qty': 'QTY',
-  'station.total': 'TOTAL',
-  'station.max': 'MAX',
   'station.trade.buy': 'BUY',
   'station.trade.sell': 'SELL',
   'station.trade.stock': 'in stock {n}',
@@ -309,39 +255,21 @@ export const EN: Record<keyof typeof RU, string> = {
   'station.salvage': 'salvage',
 
   'station.shipyard.title': 'SHIPYARD',
-  'station.catalogue': 'CATALOGUE',
-  'station.shipyard.hint':
-    'Mass {mass} t · thrust {thrust} kN · turn {turn} rad/s. Heavy gear cuts agility — computed, not assigned.',
   'station.fit': 'FIT',
-  'station.cost': 'COST',
-  'station.improvement': 'VS CURRENT',
-  'station.repair': 'REPAIR',
   'station.repairHull': 'REPAIR HULL',
   'station.repairModule': 'REPAIR',
   'station.rearm': 'REARM',
-  'station.replace': 'REPLACE',
   'station.upgrade': 'UPGRADE',
-  'station.installed': 'INSTALLED',
-  'station.slot': 'SLOT',
-  'station.condition': 'CONDITION',
-  'station.fromHold': 'FROM HOLD',
-  'station.noOptions': 'NONE',
-  'station.empty': 'empty',
   'station.wontFit': "WON'T FIT",
   'station.fitted': 'FITTED',
   'station.noRoom': 'NO ROOM',
   'station.noHardpoint': 'NO MOUNT',
   'station.wrongSlot': 'WRONG SLOT',
 
-  'station.service.title': 'REPAIR & REARM',
   'station.service.hullOk': 'Hull {cur} / {max} · no damage',
   'station.service.hullDmg': 'Hull {cur} / {max} · repair {cost} cr',
-  'station.service.rearmNeed': 'Missiles short: {n} · rearm {cost} cr',
-  'station.service.rearmOk': 'Pylons armed',
   'station.service.repair': 'REPAIR HULL',
   'station.service.hullWhole': 'HULL INTACT',
-  'station.service.rearm': 'REARM MISSILES',
-  'station.service.armed': 'MISSILES SET',
 
   'station.upgradeCopy': 'UPGRADE (COPY) +50%',
   'station.upgradeCash': 'UPGRADE +25%',
@@ -354,15 +282,9 @@ export const EN: Record<keyof typeof RU, string> = {
   'station.species': 'INHABITANTS',
   'station.popUnit': '{n}M',
   'station.nav.planet': 'PLANET',
-  'station.nav.station': 'STATION',
-  'station.you': 'YOU',
-  'station.nav.ship': 'SHIPYARD',
   'station.nav.shop': 'MARKET',
-  'station.nav.cargo': 'CARGO',
   'station.nav.people': 'PEOPLE',
   'station.nav.map': 'MAP',
-  'station.nav.system': 'SYSTEM MAP',
-  'station.nav.galaxy': 'GALAXY MAP',
   // Three buttons inside the MAP tab.
   'map.view.locator': 'LOCATOR',
   'map.view.system': 'SYSTEM',
@@ -373,8 +295,6 @@ export const EN: Record<keyof typeof RU, string> = {
   // ─── Locator: big round console radar ────────────────────────────────────────
   'locator.title': 'LOCATOR',
   'locator.nose': 'NOSE',
-  'locator.hint': 'Click a blip to lock it. Hover to read who it is.',
-  'locator.controls': 'Click to lock. Drag to rotate and tilt. Wheel to zoom.',
   'locator.count': 'on locator: {n}',
   'locator.kind.star': 'star',
   'locator.kind.planet': 'planet',
@@ -402,7 +322,6 @@ export const EN: Record<keyof typeof RU, string> = {
   'people.docked.empty': "Berth is empty — just you. Ships arrive over time.",
   'people.acquaintances': 'ACQUAINTANCES',
   'people.subtitle': "Those you've talked to and who are still alive. Their whereabouts are always known.",
-  'people.here': 'here, nearby',
   'people.at.near': 'near {place}',
   'people.at.dock': 'docked at {place}',
   'people.at.here': 'in this system',
@@ -410,11 +329,6 @@ export const EN: Record<keyof typeof RU, string> = {
   'people.bound': 'bound for {system}',
   'people.eta': '~{hops} jumps',
   'people.talk': 'HAIL',
-  'people.locate': 'TRACK',
-  'people.summon': 'CALL TO ME',
-  'people.route': 'PLOT COURSE',
-  'people.hold': 'HAVE THEM WAIT',
-  'people.roam': 'LET GO',
   'people.online': 'ONLINE',
   'people.online.sys': 'in {sys}',
   'people.online.dock': 'docked at {place} · {sys}',
@@ -478,10 +392,7 @@ export const EN: Record<keyof typeof RU, string> = {
 
   'ship.title': 'SHIP',
   'ship.close': 'CLOSE',
-  'ship.tab.outfit': 'OUTFIT',
-  'ship.tab.stats': 'STATS',
   'ship.tab.modules': 'MODULES',
-  'ship.tab.cargo': 'CARGO',
   'ship.slotEmpty': 'none',
   'ship.cargoTotal': 'hold {tons}',
   'ship.broken': 'BROKEN {pct}%',
@@ -495,13 +406,8 @@ export const EN: Record<keyof typeof RU, string> = {
   'ship.repair.nothing': 'Nothing to repair.',
   'ship.repair.rearmed': 'Missiles restocked.',
   'ship.repair.tooComplex': "They won't take a hull of this class here — too complex for the local yard.",
-  'ship.hulls': 'HULLS',
-  'ship.free': 'free',
-  'ship.current': 'current',
-  'ship.take': 'TAKE HULL',
   'ship.owned': 'ALREADY YOURS',
   'ship.buyHull': 'BUY · {price}',
-  'ship.hullNoRoom': "Can't swap it all: not enough cargo capacity. Sell something you don't need first.",
   'ship.hullBuy.title': 'BUY HULL',
   'ship.hullBuy.tradeIn': 'taken automatically, condition {pct}%',
   'ship.hullBuy.overflow': "Gear that doesn't fit ({n}) goes to the cargo bay",
@@ -516,12 +422,6 @@ export const EN: Record<keyof typeof RU, string> = {
   'hud.scalePlate': 'SPATIAL RECALIBRATION',
   'hud.growPlate': 'Curiouser and curiouser!',
   'hud.shrinkPlate': 'Shutting up like a telescope!',
-  'ship.hulls.hint': 'pick a hull on the right → “TAKE”',
-  'ship.selectSlot': 'Pick a module on the left to repair, replace or upgrade it.',
-  'ship.modules.internal': 'INTERNALS',
-  'ship.modules.weapons': 'WEAPONS',
-  'ship.modules.noWeapons': 'No weapons.',
-  'ship.cargo.empty': 'Empty.',
   'ship.cargo.used': '{used} OF {cap} T USED',
   'ship.jettison': 'JETTISON',
   'ship.jettisonAll': 'JETTISON ALL',
@@ -538,7 +438,6 @@ export const EN: Record<keyof typeof RU, string> = {
   'ship.cancel': 'CANCEL',
   'ship.ok': 'OK',
 
-  'unit.au': 'AU',
   'unit.pc': 'pc',
   'unit.kg': 'kg',
 
@@ -551,7 +450,6 @@ export const EN: Record<keyof typeof RU, string> = {
   'map.count.stations': 'stations',
   'map.galaxy': 'GALAXY',
   'map.starsCount': '{n} STARS',
-  'map.star': 'LUMINARY',
   'map.class': 'CLASS',
   'map.size': 'SIZE',
   'map.starSize': '{n} R☉',
@@ -563,17 +461,7 @@ export const EN: Record<keyof typeof RU, string> = {
   'map.life.primitive': 'primitive',
   'map.life.developed': 'developed',
   'map.life.advanced': 'advanced',
-  'map.security': 'SECURITY',
-  'map.capital': 'CAPITAL',
-  'map.government': 'GOVERNMENT',
-  'map.fuel': 'FUEL',
-  'map.megastructure': 'MEGASTRUCTURE',
   'map.binary': 'binary',
-  'map.techShort': 'TL',
-  'map.scoopYes': 'scoopable',
-  'map.scoopNo': 'not scoopable',
-  'map.dyson': 'Dyson sphere',
-  'map.dysonRuined': 'Dyson sphere · ruins',
   'map.core': 'GALACTIC CORE. Beyond the event horizon lies the exit from another galaxy’s black hole.',
   'map.block.noDrive': 'NO HYPERDRIVE FITTED',
   'map.block.range': 'BEYOND DRIVE RANGE',
@@ -605,17 +493,10 @@ export const EN: Record<keyof typeof RU, string> = {
   'map.label.stance': 'STANCE',
   'map.label.hull': 'HULL',
   'map.search': 'FIND SYSTEM…',
-  'map.pickSystem': 'Pick a system on the map',
   'map.searchNone': 'not found',
   'map.filter.all': 'ALL',
   'map.filter.stations': 'STATIONS',
   'map.filter.primitive': 'FAUNA',
   'map.filter.empty': 'EMPTY',
   'map.showContacts': 'CONTACTS',
-  'map.belt': 'Exit belt: {min} — {max}',
-  'map.arrive.noPlanets': 'Exit by the star: no planets here.',
-  'map.arrive.pick': 'The cross on the chart is the exit point. Empty space or a world; the star clears the choice.',
-  'map.arrive.berth': 'Exit {km} thousand km from the berth: a minute of cruise.',
-  'map.arrive.world': 'Exit by {name}, {km} thousand km above the surface.',
-  'map.arrive.void': 'Exit in the void, {orbit} from the star. Fly the rest yourself.',
 }

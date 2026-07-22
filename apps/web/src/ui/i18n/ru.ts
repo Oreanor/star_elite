@@ -8,7 +8,6 @@
  */
 export const RU = {
   // ─── Меню ─────────────────────────────────────────────────────────────────
-  'menu.start': 'СТАРТ',
   'menu.resume': 'В ИГРУ',
   'menu.continue': 'ПРОДОЛЖИТЬ',
   'menu.wait': 'СЕКУНДОЧКУ…',
@@ -21,7 +20,6 @@ export const RU = {
   'menu.yes': 'ДА',
   'menu.no': 'НЕТ',
   'menu.keys': 'КЛАВИШИ',
-  'menu.howto': 'КАК ИГРАТЬ',
   'menu.settings': 'НАСТРОЙКИ',
   'menu.back': 'НАЗАД',
   'menu.language': 'ЯЗЫК',
@@ -121,52 +119,14 @@ export const RU = {
   'key.pause.what': 'пауза и курсор',
 
   // ─── Разделы таблицы клавиш ─────────────────────────────────────────────────
-  'keys.group.guide': 'КАК ИГРАТЬ',
   'keys.group.flight': 'ПИЛОТИРОВАНИЕ',
   'keys.group.combat': 'БОЙ',
   'keys.group.ship': 'КОРАБЛЬ И МИР',
 
-  // ─── «Как играть»: не таблица клавиш, а картинки-примеры того, чем можно заняться ──
-  'guide.intro':
-    'Ты — пилот в живой галактике из тысяч звёздных систем: физика честная, управление ' +
-    'аркадное, жёсткого сюжета нет. Вот несколько картинок того, чем тут можно заняться.',
-  'guide.flight':
-    'Отходишь от причала, толкаешь тягу и уводишь нос мышью — корабль по инерции скользит ' +
-    'боком, пока не довернёшь и не погасишь снос; маркер на HUD честно показывает, куда ты ' +
-    'на самом деле летишь. До дальней планеты полчаса боевым ходом — включаешь форсаж и идёшь ' +
-    'крейсером, а у звезды сбрасываешь ход, пока её притяжение не утянуло тебя в жар.',
-  'guide.combat':
-    'У пояса астероидов — пират. Ловишь его на Tab, держишь в прицеле и бьёшь лазером; некогда ' +
-    'возиться — жмёшь автобой и добавляешь ракетой. Его щит лопается, с корпуса сыплются искры ' +
-    'поломок — а станцию так не взять: её прикрывает силовое поле, по ней не стреляют, с ней говорят.',
-  'guide.salvage':
-    'От сбитого пирата остаётся облако контейнеров. Наводишь тяговый луч, подтягиваешь их к себе — ' +
-    'и в трюм падает его же пушка, которую не пришлось покупать.',
-  'guide.nav':
-    'Надо на станцию — Shift+Tab перебирает тела и причалы по удалению, ставишь метку на нужный, ' +
-    'даёшь автопилот, а он подводит и сажает в док. Наскучила система — открываешь карту галактики, ' +
-    'выбираешь звезду и уходишь в гиперпрыжок к соседям.',
-  'guide.station':
-    'На причале сбываешь руду, взятую по дешёвке на аграрном мире, и на выручку ставишь щит ' +
-    'потолще — если его тянет твой корпус. Заодно латаешь пробитую обшивку и один раз усиливаешь ' +
-    'лазер копией такого же модуля из трюма.',
-  'guide.people':
-    'Стыкуешь эфир со встречным грузовиком — переводчик доносит его речь с забавными огрехами. ' +
-    'Разговоритесь — он тебя запомнит (загляни потом в журнал знакомств), а то и пойдёт в эскорт. ' +
-    'Пальнёшь по мирному или повезёшь контрабанду — молва разнесётся, и на тебя начнут коситься.',
-  'guide.growth':
-    'Включаешь миелофон — и корабль растёт, пока система под тобой не съёжится в точку, а вокруг ' +
-    'не проступит всё звёздное поле галактики; листаешь звёзды и прыгаешь к любой. А где-то ждут ' +
-    'редкие инструменты, которыми правят самими звёздами.',
-
   // ─── HUD ──────────────────────────────────────────────────────────────────
   'hud.shield': 'ЩИТ',
   'hud.hull': 'КОРП',
-  'hud.energy': 'ЭНРГ',
-  'hud.battery': 'БАТ',
   'hud.aux': 'АУКС',
-  'hud.bomb': 'БОМБА',
-  'hud.heat': 'ТЕПЛО',
   'hud.laser': 'ЛАЗЕР',
   'hud.temp': 'ТЕМП',
   'hud.jump': 'ГИПЕР',
@@ -178,7 +138,6 @@ export const RU = {
   'hud.noRockets': 'НЕТ РАКЕТ',
   'hud.noLaser': 'ЛАЗЕР НЕ УСТАНОВЛЕН',
   'hud.noJump': 'ГИПЕРПРИВОД НЕ УСТАНОВЛЕН',
-  'hud.hyperScale': 'ГИПЕРПРЫЖОК НЕВОЗМОЖЕН · ВЕРНИТЕ МАСШТАБ 1×',
   'hud.noAux': 'ПРИБОР НЕ УСТАНОВЛЕН',
   'hud.noTarget': 'НЕТ ЦЕЛИ',
   'hud.noJumpTarget': 'ЦЕЛЕВАЯ СИСТЕМА НЕ ВЫБРАНА',
@@ -199,10 +158,8 @@ export const RU = {
   'hud.refuel': 'ЗАПРАВКА',
   'hud.throttle': 'ТЯГА',
   'hud.rockets': 'РАКЕТ',
-  'hud.missiles': 'РАКЕТ {ammo}',
   'hud.assistOff': 'АССИСТ ВЫКЛ',
   'hud.massLock': 'МАССОВАЯ БЛОКИРОВКА',
-  'hud.cruise': 'КРЕЙСЕР ×{factor}',
   'hud.gravityBrake': 'ТОРМОЖЕНИЕ У ТЕЛА',
   'hud.autofightPlate': 'АВТОБОЙ',
   'hud.autopilotPlate': 'АВТОПИЛОТ',
@@ -276,9 +233,6 @@ export const RU = {
   'kind.scoop': 'топливозабор',
 
   // ─── Станция: общее ─────────────────────────────────────────────────────────
-  'station.tab.service': 'РЕМОНТ',
-  'station.tab.upgrade': 'АПГРЕЙД',
-  'station.tab.trade': 'ТОРГОВЛЯ',
   'station.title': 'СТАНЦИЯ',
   'station.system': 'СИСТЕМА',
   'station.credits': 'КРЕДИТОВ',
@@ -292,21 +246,13 @@ export const RU = {
   'station.col.market': 'РЫНОК',
   'station.col.value': 'ВЫРУЧКА',
   'station.col.profit': 'ВЫГОДА',
-  'station.col.benefit': 'ЭФФЕКТ',
-  'station.col.class': 'КЛАСС',
-  'station.col.kind': 'ВИД',
 
   // ─── Рынок ──────────────────────────────────────────────────────────────────
   'station.market.title': 'ТОВАРЫ',
   'station.buy': 'КУПИТЬ',
-  'station.buyN': 'КУПИТЬ {n}',
   'station.noFunds': 'НЕТ ДЕНЕГ',
-  'station.holdFull': 'ГРУЗОВОЙ ОТСЕК ПОЛОН',
   'station.cheap': 'дёшево',
   'station.dear': 'дорого',
-  'station.qty': 'КОЛ-ВО',
-  'station.total': 'ИТОГО',
-  'station.max': 'МАКС',
   'station.trade.buy': 'КУПИТЬ',
   'station.trade.sell': 'ПРОДАТЬ',
   'station.trade.stock': 'на складе {n}',
@@ -323,24 +269,11 @@ export const RU = {
 
   // ─── Верфь ──────────────────────────────────────────────────────────────────
   'station.shipyard.title': 'ВЕРФЬ',
-  'station.catalogue': 'КАТАЛОГ',
-  'station.shipyard.hint':
-    'Масса {mass} т · тяга {thrust} кН · разворот {turn} рад/с. Тяжёлое железо режет манёвренность — это считается, а не назначается.',
   'station.fit': 'УСТАНОВИТЬ',
-  'station.cost': 'СТОИМОСТЬ',
-  'station.improvement': 'ОТ ТЕКУЩЕГО',
-  'station.repair': 'ПОЧИНИТЬ',
   'station.repairHull': 'РЕМОНТ КОРПУСА',
   'station.repairModule': 'ПОЧИНИТЬ',
   'station.rearm': 'ЗАРЯДИТЬ',
-  'station.replace': 'ЗАМЕНИТЬ',
   'station.upgrade': 'УЛУЧШИТЬ',
-  'station.installed': 'УСТАНОВЛЕНО',
-  'station.slot': 'СЛОТ',
-  'station.condition': 'СОСТОЯНИЕ',
-  'station.fromHold': 'ИЗ ГРУЗОВОГО ОТСЕКА',
-  'station.noOptions': 'НЕТ ВАРИАНТОВ',
-  'station.empty': 'пусто',
   // Ошибки установки (FitError / PurchaseError) — на кнопке вместо действия.
   'station.wontFit': 'НЕ ВЛЕЗЕТ',
   'station.fitted': 'УЖЕ СТОИТ',
@@ -349,15 +282,10 @@ export const RU = {
   'station.wrongSlot': 'НЕ ТОТ СЛОТ',
 
   // ─── Ремонт и боезапас ──────────────────────────────────────────────────────
-  'station.service.title': 'РЕМОНТ И БОЕЗАПАС',
   'station.service.hullOk': 'Корпус {cur} / {max} · повреждений нет',
   'station.service.hullDmg': 'Корпус {cur} / {max} · починка {cost} кр.',
-  'station.service.rearmNeed': 'Не хватает ракет: {n} · пополнить {cost} кр.',
-  'station.service.rearmOk': 'Пилоны снаряжены',
   'station.service.repair': 'ПОЧИНИТЬ КОРПУС',
   'station.service.hullWhole': 'КОРПУС ЦЕЛ',
-  'station.service.rearm': 'ПОПОЛНИТЬ РАКЕТЫ',
-  'station.service.armed': 'РАКЕТЫ НА МЕСТЕ',
 
   // ─── Улучшение модуля ───────────────────────────────────────────────────────
   'station.upgradeCopy': 'УЛУЧШИТЬ КОПИЕЙ +50%',
@@ -373,15 +301,9 @@ export const RU = {
   'station.popUnit': '{n} млн',
   // Навигация со стартового экрана станции.
   'station.nav.planet': 'ПЛАНЕТА',
-  'station.nav.station': 'СТАНЦИЯ',
-  'station.you': 'ТЫ',
-  'station.nav.ship': 'ВЕРФЬ',
-  'station.nav.cargo': 'ГРУЗ',
   'station.nav.shop': 'МАГАЗИН',
   'station.nav.people': 'ЛЮДИ',
   'station.nav.map': 'КАРТА',
-  'station.nav.system': 'КАРТА СИСТЕМЫ',
-  'station.nav.galaxy': 'КАРТА ГАЛАКТИКИ',
   // Три кнопки внутри вкладки КАРТА.
   'map.view.locator': 'ЛОКАТОР',
   'map.view.system': 'СИСТЕМА',
@@ -392,8 +314,6 @@ export const RU = {
   // ─── Локатор: большой круглый радар консоли ──────────────────────────────────
   'locator.title': 'ЛОКАТОР',
   'locator.nose': 'НОС',
-  'locator.hint': 'Кликни отметку — станет целью. Наведи — прочитай, кто это.',
-  'locator.controls': 'Клик — захват. Перетаскивай — поворот и наклон. Колесо — приближение.',
   'locator.count': 'на локаторе: {n}',
   'locator.kind.star': 'звезда',
   'locator.kind.planet': 'планета',
@@ -421,7 +341,6 @@ export const RU = {
   'people.docked.empty': 'Причал пуст — ты один. Борта заходят со временем.',
   'people.acquaintances': 'ЗНАКОМЫЕ',
   'people.subtitle': 'С кем ты говорил и кто ещё жив. Их положение известно всегда.',
-  'people.here': 'здесь, рядом',
   'people.at.near': 'у {place}',
   'people.at.dock': 'в доке {place}',
   'people.at.here': 'в этой системе',
@@ -429,11 +348,6 @@ export const RU = {
   'people.bound': 'летит в {system}',
   'people.eta': '~{hops} прыжков',
   'people.talk': 'СВЯЗАТЬСЯ',
-  'people.locate': 'НАВЕСТИ',
-  'people.summon': 'ПОЗВАТЬ К СЕБЕ',
-  'people.route': 'ПРОЛОЖИТЬ КУРС',
-  'people.hold': 'ПУСТЬ ЖДЁТ',
-  'people.roam': 'ОТПУСТИТЬ',
   'people.online': 'В СЕТИ',
   'people.online.sys': 'в системе {sys}',
   'people.online.dock': 'в доке {place} · {sys}',
@@ -501,10 +415,7 @@ export const RU = {
   // ─── Экран корабля ──────────────────────────────────────────────────────────
   'ship.title': 'КОРАБЛЬ',
   'ship.close': 'ЗАКРЫТЬ',
-  'ship.tab.outfit': 'СНАРЯЖЕНИЕ',
-  'ship.tab.stats': 'ХАРАКТЕРИСТИКИ',
   'ship.tab.modules': 'МОДУЛИ',
-  'ship.tab.cargo': 'ГРУЗ',
   'ship.slotEmpty': 'нет',
   'ship.cargoTotal': 'грузовой отсек {tons}',
   'ship.broken': 'СЛОМАНО {pct}%',
@@ -518,14 +429,8 @@ export const RU = {
   'ship.repair.nothing': 'Чинить нечего.',
   'ship.repair.rearmed': 'Ракеты пополнены.',
   'ship.repair.tooComplex': 'Тут за такой корпус не берутся — слишком сложно для местной мастерской.',
-  'ship.hulls': 'КОРПУСА',
-  'ship.hulls.hint': 'выбери корпус справа → «ВЗЯТЬ»',
-  'ship.free': 'даром',
-  'ship.current': 'вы на нём',
-  'ship.take': 'ВЗЯТЬ КОРПУС',
   'ship.owned': 'УЖЕ У ВАС',
   'ship.buyHull': 'КУПИТЬ · {price}',
-  'ship.hullNoRoom': 'Не удастся всё поменять: не хватает грузоподъёмности. Сперва продайте что-нибудь ненужное.',
   'ship.hullBuy.title': 'ПОКУПКА КОРПУСА',
   'ship.hullBuy.tradeIn': 'примут автоматически, состояние {pct}%',
   'ship.hullBuy.overflow': 'Не подошедшее оборудование ({n}) уедет в грузовой отсек',
@@ -540,11 +445,6 @@ export const RU = {
   'hud.scalePlate': 'ПРОСТРАНСТВЕННАЯ РЕКАЛИБРОВКА',
   'hud.growPlate': 'Всё чудесатее и чудесатее!',
   'hud.shrinkPlate': 'Складываюсь, как подзорная труба!',
-  'ship.selectSlot': 'Выбери модуль слева — почини, замени или улучши его.',
-  'ship.modules.internal': 'ВНУТРЕННИЕ МОДУЛИ',
-  'ship.modules.weapons': 'ОРУДИЯ',
-  'ship.modules.noWeapons': 'Пилоны пусты.',
-  'ship.cargo.empty': 'Пусто.',
   'ship.cargo.used': 'ЗАНЯТО {used} ИЗ {cap} Т',
   'ship.jettison': 'ВЫБРОСИТЬ',
   'ship.jettisonAll': 'ВЫБРОСИТЬ ВСЁ',
@@ -561,7 +461,6 @@ export const RU = {
   'ship.cancel': 'ОТМЕНА',
   'ship.ok': 'ОК',
 
-  'unit.au': 'а.е.',
   'unit.pc': 'пк',
   'unit.kg': 'кг',
 
@@ -574,7 +473,6 @@ export const RU = {
   'map.count.stations': 'станций',
   'map.galaxy': 'ГАЛАКТИКА',
   'map.starsCount': '{n} ЗВЁЗД',
-  'map.star': 'СВЕТИЛО',
   'map.class': 'КЛАСС',
   'map.size': 'РАЗМЕР',
   'map.starSize': '{n} R☉',
@@ -586,17 +484,7 @@ export const RU = {
   'map.life.primitive': 'примитивная',
   'map.life.developed': 'развитая',
   'map.life.advanced': 'высокоразвитая',
-  'map.security': 'ОХРАНА',
-  'map.capital': 'СТОЛИЦА',
-  'map.government': 'СТРОЙ',
-  'map.fuel': 'ТОПЛИВО',
-  'map.megastructure': 'МЕГАСТРУКТУРА',
   'map.binary': 'двойная',
-  'map.techShort': 'ТУ',
-  'map.scoopYes': 'зачерпнуть можно',
-  'map.scoopNo': 'не зачерпнуть',
-  'map.dyson': 'сфера Дайсона',
-  'map.dysonRuined': 'сфера Дайсона · руины',
   'map.core': 'ЯДРО ГАЛАКТИКИ. За горизонтом событий — выход из чёрной дыры другой галактики.',
   'map.block.noDrive': 'ГИПЕРПРИВОД НЕ УСТАНОВЛЕН',
   'map.block.range': 'ВНЕ ДАЛЬНОСТИ ПРИВОДА',
@@ -628,17 +516,10 @@ export const RU = {
   'map.label.stance': 'ОТНОШЕНИЕ',
   'map.label.hull': 'КОРПУС',
   'map.search': 'ПОИСК СИСТЕМЫ…',
-  'map.pickSystem': 'Выбери систему на карте',
   'map.searchNone': 'не найдено',
   'map.filter.all': 'ВСЕ',
   'map.filter.stations': 'СТАНЦИИ',
   'map.filter.primitive': 'ФАУНА',
   'map.filter.empty': 'ПУСТЫЕ',
   'map.showContacts': 'ЗНАКОМЫЕ',
-  'map.belt': 'Пояс выхода: {min} — {max}',
-  'map.arrive.noPlanets': 'Выход у звезды: планет здесь нет.',
-  'map.arrive.pick': 'Крестик на схеме — точка выхода. Пустое место или мир; звезда снимает выбор.',
-  'map.arrive.berth': 'Выход в {km} тыс. км от причала: минута крейсерского хода.',
-  'map.arrive.world': 'Выход у мира {name}, в {km} тыс. км над поверхностью.',
-  'map.arrive.void': 'Выход в пустоте, {orbit} от светила. Оттуда лететь самому.',
 }

@@ -9,7 +9,6 @@ import type { RU } from './ru'
  * Wendungen desselben Sinns.
  */
 export const DE: Record<keyof typeof RU, string> = {
-  'menu.start': 'START',
   'menu.resume': 'WEITER',
   'menu.continue': 'FORTSETZEN',
   'menu.wait': 'MOMENT…',
@@ -22,7 +21,6 @@ export const DE: Record<keyof typeof RU, string> = {
   'menu.yes': 'JA',
   'menu.no': 'NEIN',
   'menu.keys': 'STEUERUNG',
-  'menu.howto': 'SO SPIELT MAN',
   'menu.settings': 'OPTIONEN',
   'menu.back': 'ZURÜCK',
   'menu.language': 'SPRACHE',
@@ -118,53 +116,14 @@ export const DE: Record<keyof typeof RU, string> = {
   'key.pause': 'Esc',
   'key.pause.what': 'Pause und Zeiger',
 
-  'keys.group.guide': 'SO SPIELT MAN',
   'keys.group.flight': 'FLUG',
   'keys.group.combat': 'KAMPF',
   'keys.group.ship': 'SCHIFF & WELT',
 
-  // ─── "How to play": not a key table, but vignettes of what you can do ─────────
-  'guide.intro':
-    'Du bist Pilot in einer lebendigen Galaxie aus Tausenden Sternsystemen: ehrliche Physik, ' +
-    'Arcade-Steuerung, keine feste Story. Hier ein paar Bilder davon, was du hier treiben kannst.',
-  'guide.flight':
-    'Du legst vom Dock ab, gibst Schub und schwenkst die Nase mit der Maus — die Trägheit trägt ' +
-    'das Schiff seitwärts, bis du eindrehst und die Drift tilgst; der HUD-Marker zeigt, wohin du ' +
-    'wirklich fliegst. Ein ferner Planet ist eine halbe Stunde bei Kampftempo, also zündest du den ' +
-    'Reiseschub und fliegst Überschall, drosselst nah am Stern, eh dessen Sog dich in die Hitze zieht.',
-  'guide.combat':
-    'Ein Pirat lauert am Asteroidengürtel. Du erfasst ihn mit Tab, hältst ihn im Visier und feuerst ' +
-    'den Laser; keine Zeit zum Trödeln — Autokampf an und mit einer Rakete beenden. Sein Schild ' +
-    'birst, sein Rumpf sprüht Schadensfunken — doch eine Station ist tabu: ein Kraftfeld schützt sie, ' +
-    'du funkst sie an, du schießt nie auf sie.',
-  'guide.salvage':
-    'Der abgeschossene Pirat lässt eine Wolke aus Kanistern zurück. Du richtest den Traktorstrahl aus, ' +
-    'holst sie ein — und seine eigene Kanone fällt in deinen Laderaum, ganz ohne Kauf.',
-  'guide.nav':
-    'Brauchst du eine Station — Shift+Tab durchläuft Körper und Docks nach Distanz, du markierst das ' +
-    'gewünschte, gibst es dem Autopiloten und er bringt dich rein und legt an. Genug vom System — öffne ' +
-    'die Galaxiekarte, wähle einen Stern und springe zu den Nachbarn.',
-  'guide.station':
-    'Am Dock lädst du Erz ab, billig auf einer Agrarwelt gekauft, und steckst den Erlös in einen ' +
-    'stärkeren Schild — wenn dein Rumpf ihn trägt. Du flickst auch die durchlöcherte Panzerung und rüstest ' +
-    'den Laser einmal mit einem baugleichen Modul aus dem Laderaum auf.',
-  'guide.people':
-    'Du öffnest einen Kanal zu einem vorbeiziehenden Frachter — der Übersetzer gibt seine Rede mit ' +
-    'drolligen Aussetzern wieder. Redet ihr lange genug, merkt er sich dich (sieh später ins ' +
-    'Bekanntschaftsbuch), fliegt vielleicht sogar Eskorte. Feuer auf einen Zivilisten oder Schmuggel spricht ' +
-    'sich herum — man beäugt dich.',
-  'guide.growth':
-    'Du schaltest das Mielophon ein und das Schiff wächst, bis das System darunter zum Punkt schrumpft und ' +
-    'das ganze Sternenfeld der Galaxie um dich erscheint; du blätterst durch die Sterne und springst zu ' +
-    'jedem. Und irgendwo warten seltene Werkzeuge, die über die Sterne selbst gebieten.',
 
   'hud.shield': 'SCHLD',
   'hud.hull': 'RUMPF',
-  'hud.energy': 'ENRG',
-  'hud.battery': 'BAT',
   'hud.aux': 'ZUS',
-  'hud.bomb': 'BOMBE',
-  'hud.heat': 'HITZE',
   'hud.laser': 'LASER',
   'hud.temp': 'TEMP',
   'hud.jump': 'SPRUNG',
@@ -176,7 +135,6 @@ export const DE: Record<keyof typeof RU, string> = {
   'hud.noRockets': 'KEINE RAKETEN',
   'hud.noLaser': 'KEINE WAFFE VERBAUT',
   'hud.noJump': 'KEIN HYPERANTRIEB VERBAUT',
-  'hud.hyperScale': 'HYPERSPRUNG UNMÖGLICH · AUF MASSSTAB 1× ZURÜCKKEHREN',
   'hud.noAux': 'KEIN GERÄT VERBAUT',
   'hud.noTarget': 'KEIN ZIEL ERFASST',
   'hud.noJumpTarget': 'KEIN ZIELSYSTEM AUSGEWÄHLT',
@@ -197,10 +155,8 @@ export const DE: Record<keyof typeof RU, string> = {
   'hud.refuel': 'SCHÖPFEN',
   'hud.throttle': 'SCHUB',
   'hud.rockets': 'RKT',
-  'hud.missiles': 'RKT {ammo}',
   'hud.assistOff': 'ASSIST AUS',
   'hud.massLock': 'MASSENSPERRE',
-  'hud.cruise': 'REISE ×{factor}',
   'hud.gravityBrake': 'GRAVITATIONSBREMSE',
   'hud.autofightPlate': 'AUTOKAMPF',
   'hud.autopilotPlate': 'AUTOPILOT',
@@ -269,9 +225,6 @@ export const DE: Record<keyof typeof RU, string> = {
   'kind.bomb': 'Energiebombe',
   'kind.scoop': 'Treibstoffsammler',
 
-  'station.tab.service': 'REPARATUR',
-  'station.tab.upgrade': 'AUSRÜSTEN',
-  'station.tab.trade': 'HANDEL',
   'station.title': 'STATION',
   'station.system': 'SYSTEM',
   'station.credits': 'CREDITS',
@@ -284,20 +237,12 @@ export const DE: Record<keyof typeof RU, string> = {
   'station.col.market': 'MARKT',
   'station.col.value': 'ERLÖS',
   'station.col.profit': 'GEWINN',
-  'station.col.benefit': 'EFFEKT',
-  'station.col.class': 'KLASSE',
-  'station.col.kind': 'ART',
 
   'station.market.title': 'WAREN',
   'station.buy': 'KAUFEN',
-  'station.buyN': 'KAUFEN {n}',
   'station.noFunds': 'KEIN GELD',
-  'station.holdFull': 'LADERAUM VOLL',
   'station.cheap': 'billig',
   'station.dear': 'teuer',
-  'station.qty': 'MENGE',
-  'station.total': 'GESAMT',
-  'station.max': 'MAX',
   'station.trade.buy': 'KAUFEN',
   'station.trade.sell': 'VERKAUFEN',
   'station.trade.stock': 'auf Lager {n}',
@@ -312,39 +257,21 @@ export const DE: Record<keyof typeof RU, string> = {
   'station.salvage': 'Fund',
 
   'station.shipyard.title': 'WERFT',
-  'station.catalogue': 'KATALOG',
-  'station.shipyard.hint':
-    'Masse {mass} t · Schub {thrust} kN · Wendung {turn} rad/s. Schweres Gerät senkt die Wendigkeit — berechnet, nicht zugewiesen.',
   'station.fit': 'EINBAUEN',
-  'station.cost': 'KOSTEN',
-  'station.improvement': 'GG. AKTUELL',
-  'station.repair': 'REPARIEREN',
   'station.repairHull': 'RUMPF REPARIEREN',
   'station.repairModule': 'REPARIEREN',
   'station.rearm': 'AUFMUNITIONIEREN',
-  'station.replace': 'ERSETZEN',
   'station.upgrade': 'AUFRÜSTEN',
-  'station.installed': 'VERBAUT',
-  'station.slot': 'SLOT',
-  'station.condition': 'ZUSTAND',
-  'station.fromHold': 'AUS LADERAUM',
-  'station.noOptions': 'KEINE',
-  'station.empty': 'leer',
   'station.wontFit': 'PASST NICHT',
   'station.fitted': 'VERBAUT',
   'station.noRoom': 'KEIN PLATZ',
   'station.noHardpoint': 'KEINE HALTERUNG',
   'station.wrongSlot': 'FALSCHER SLOT',
 
-  'station.service.title': 'REPARATUR & MUNITION',
   'station.service.hullOk': 'Rumpf {cur} / {max} · kein Schaden',
   'station.service.hullDmg': 'Rumpf {cur} / {max} · Reparatur {cost} Cr',
-  'station.service.rearmNeed': 'Raketen fehlen: {n} · aufmunitionieren {cost} Cr',
-  'station.service.rearmOk': 'Pylone bestückt',
   'station.service.repair': 'RUMPF REPARIEREN',
   'station.service.hullWhole': 'RUMPF INTAKT',
-  'station.service.rearm': 'RAKETEN LADEN',
-  'station.service.armed': 'RAKETEN BESTÜCKT',
 
   'station.upgradeCopy': 'AUFRÜSTEN (KOPIE) +50%',
   'station.upgradeCash': 'AUFRÜSTEN +25%',
@@ -357,15 +284,9 @@ export const DE: Record<keyof typeof RU, string> = {
   'station.species': 'BEWOHNER',
   'station.popUnit': '{n} Mio.',
   'station.nav.planet': 'PLANET',
-  'station.nav.station': 'STATION',
-  'station.you': 'DU',
-  'station.nav.ship': 'WERFT',
   'station.nav.shop': 'MARKT',
-  'station.nav.cargo': 'FRACHT',
   'station.nav.people': 'LEUTE',
   'station.nav.map': 'KARTE',
-  'station.nav.system': 'SYSTEMKARTE',
-  'station.nav.galaxy': 'GALAXIEKARTE',
   // Three buttons inside the MAP tab.
   'map.view.locator': 'ORTER',
   'map.view.system': 'SYSTEM',
@@ -376,8 +297,6 @@ export const DE: Record<keyof typeof RU, string> = {
   // ─── Locator: big round console radar ────────────────────────────────────────
   'locator.title': 'ORTER',
   'locator.nose': 'NASE',
-  'locator.hint': 'Zeig auf einen Punkt, um zu sehen, wer es ist.',
-  'locator.controls': 'Ziehen zum Drehen und Neigen. Rad zum Zoomen.',
   'locator.count': 'am Orter: {n}',
   'locator.kind.star': 'Stern',
   'locator.kind.planet': 'Planet',
@@ -403,7 +322,6 @@ export const DE: Record<keyof typeof RU, string> = {
   'people.docked.empty': 'Der Liegeplatz ist leer — nur du. Schiffe treffen mit der Zeit ein.',
   'people.acquaintances': 'BEKANNTE',
   'people.subtitle': 'Wen du gesprochen hast und wer noch lebt. Ihr Aufenthalt ist stets bekannt.',
-  'people.here': 'hier, in der Nähe',
   'people.at.near': 'bei {place}',
   'people.at.dock': 'angedockt an {place}',
   'people.at.here': 'in diesem System',
@@ -411,11 +329,6 @@ export const DE: Record<keyof typeof RU, string> = {
   'people.bound': 'unterwegs nach {system}',
   'people.eta': '~{hops} Sprünge',
   'people.talk': 'ANFUNKEN',
-  'people.locate': 'ANPEILEN',
-  'people.summon': 'ZU MIR RUFEN',
-  'people.route': 'KURS SETZEN',
-  'people.hold': 'WARTEN LASSEN',
-  'people.roam': 'ZIEHEN LASSEN',
   'people.online': 'ONLINE',
   'people.online.sys': 'in {sys}',
   'people.online.dock': 'angedockt an {place} · {sys}',
@@ -479,10 +392,7 @@ export const DE: Record<keyof typeof RU, string> = {
 
   'ship.title': 'SCHIFF',
   'ship.close': 'SCHLIESSEN',
-  'ship.tab.outfit': 'AUSRÜSTUNG',
-  'ship.tab.stats': 'WERTE',
   'ship.tab.modules': 'MODULE',
-  'ship.tab.cargo': 'FRACHT',
   'ship.slotEmpty': 'keins',
   'ship.cargoTotal': 'Laderaum {tons}',
   'ship.broken': 'DEFEKT {pct}%',
@@ -496,13 +406,8 @@ export const DE: Record<keyof typeof RU, string> = {
   'ship.repair.nothing': 'Nichts zu reparieren.',
   'ship.repair.rearmed': 'Raketen aufgefüllt.',
   'ship.repair.tooComplex': 'Einen Rumpf dieser Klasse nehmen sie hier nicht — zu komplex für die lokale Werft.',
-  'ship.hulls': 'RÜMPFE',
-  'ship.free': 'gratis',
-  'ship.current': 'aktuell',
-  'ship.take': 'RUMPF NEHMEN',
   'ship.owned': 'SCHON DEINS',
   'ship.buyHull': 'KAUFEN · {price}',
-  'ship.hullNoRoom': 'Nicht alles umsetzbar: zu wenig Frachtkapazität. Verkauf zuerst Überflüssiges.',
   'ship.hullBuy.title': 'RUMPF KAUFEN',
   'ship.hullBuy.tradeIn': 'automatisch in Zahlung genommen, Zustand {pct}%',
   'ship.hullBuy.overflow': 'Gerät, das nicht passt ({n}), wandert in den Laderaum',
@@ -517,12 +422,6 @@ export const DE: Record<keyof typeof RU, string> = {
   'hud.scalePlate': 'RÄUMLICHE NEUKALIBRIERUNG',
   'hud.growPlate': 'Kurioser und kurioser!',
   'hud.shrinkPlate': 'Ich falte mich wie ein Fernrohr!',
-  'ship.hulls.hint': 'wähl rechts einen Rumpf → „NEHMEN“',
-  'ship.selectSlot': 'Wähl links ein Modul, um es zu reparieren, zu ersetzen oder aufzurüsten.',
-  'ship.modules.internal': 'INNENMODULE',
-  'ship.modules.weapons': 'WAFFEN',
-  'ship.modules.noWeapons': 'Keine Waffen.',
-  'ship.cargo.empty': 'Leer.',
   'ship.cargo.used': '{used} VON {cap} T BELEGT',
   'ship.jettison': 'ABWERFEN',
   'ship.jettisonAll': 'ALLES ABWERFEN',
@@ -539,7 +438,6 @@ export const DE: Record<keyof typeof RU, string> = {
   'ship.cancel': 'ABBRECHEN',
   'ship.ok': 'OK',
 
-  'unit.au': 'AE',
   'unit.pc': 'pc',
   'unit.kg': 'kg',
 
@@ -552,7 +450,6 @@ export const DE: Record<keyof typeof RU, string> = {
   'map.count.stations': 'Stationen',
   'map.galaxy': 'GALAXIE',
   'map.starsCount': '{n} STERNE',
-  'map.star': 'GESTIRN',
   'map.class': 'KLASSE',
   'map.size': 'GRÖSSE',
   'map.starSize': '{n} R☉',
@@ -564,17 +461,7 @@ export const DE: Record<keyof typeof RU, string> = {
   'map.life.primitive': 'primitiv',
   'map.life.developed': 'entwickelt',
   'map.life.advanced': 'fortgeschritten',
-  'map.security': 'SICHERHEIT',
-  'map.capital': 'HAUPTWELT',
-  'map.government': 'REGIERUNG',
-  'map.fuel': 'TREIBSTOFF',
-  'map.megastructure': 'MEGASTRUKTUR',
   'map.binary': 'Doppelstern',
-  'map.techShort': 'TS',
-  'map.scoopYes': 'schöpfbar',
-  'map.scoopNo': 'nicht schöpfbar',
-  'map.dyson': 'Dyson-Sphäre',
-  'map.dysonRuined': 'Dyson-Sphäre · Ruinen',
   'map.core': 'GALAXIEKERN. Hinter dem Ereignishorizont liegt der Ausgang aus dem Schwarzen Loch einer anderen Galaxie.',
   'map.block.noDrive': 'KEIN HYPERANTRIEB VERBAUT',
   'map.block.range': 'AUSSER REICHWEITE',
@@ -606,17 +493,10 @@ export const DE: Record<keyof typeof RU, string> = {
   'map.label.stance': 'HALTUNG',
   'map.label.hull': 'RUMPF',
   'map.search': 'SYSTEM SUCHEN…',
-  'map.pickSystem': 'Wähl ein System auf der Karte',
   'map.searchNone': 'nicht gefunden',
   'map.filter.all': 'ALLE',
   'map.filter.stations': 'STATIONEN',
   'map.filter.primitive': 'FAUNA',
   'map.filter.empty': 'LEER',
   'map.showContacts': 'BEKANNTE',
-  'map.belt': 'Austrittsgürtel: {min} — {max}',
-  'map.arrive.noPlanets': 'Austritt am Stern: hier gibt es keine Planeten.',
-  'map.arrive.pick': 'Das Kreuz auf der Karte ist der Austrittspunkt. Leerer Raum oder eine Welt; der Stern hebt die Wahl auf.',
-  'map.arrive.berth': 'Austritt {km} Tausend km vom Liegeplatz: eine Minute Reiseschub.',
-  'map.arrive.world': 'Austritt bei {name}, {km} Tausend km über der Oberfläche.',
-  'map.arrive.void': 'Austritt in der Leere, {orbit} vom Gestirn. Den Rest fliegst du selbst.',
 }

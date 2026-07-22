@@ -2,6 +2,28 @@ import type { ReactNode } from 'react'
 import { UI } from '../theme'
 
 /**
+ * Проекция точки диска на экран для КРУГЛЫХ карт (локатор и система): поворот в
+ * плоскости (yaw), затем наклон (tilt) сжимает ось «вперёд» и поднимает высоту, зум
+ * множит. Плоский вид сверху при tilt=0; драгом круг превращается в наклонный эллипс.
+ *
+ * Один источник на обе карты: раньше эта же математика жила отдельной копией в каждой,
+ * и правка наклона в одной не доезжала до другой. `depth` — глубина после поворота, по
+ * ней метки сортируются (дальние рисуются первыми, ближние ложатся поверх).
+ */
+export function discProject(
+  side: number,
+  fwd: number,
+  h: number,
+  yaw: number,
+  tilt: number,
+  zoom: number,
+): { x: number; y: number; depth: number } {
+  const rx = (side * Math.cos(yaw) - fwd * Math.sin(yaw)) * zoom
+  const fy = (side * Math.sin(yaw) + fwd * Math.cos(yaw)) * zoom
+  return { x: rx, y: -(fy * Math.cos(tilt) + h * zoom * Math.sin(tilt)), depth: fy }
+}
+
+/**
  * Единая рамка ВСЕХ карт консоли: слева треть — колонка сведений, справа две трети —
  * само поле (локатор, система, галактика, мир).
  *
