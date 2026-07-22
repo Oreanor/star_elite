@@ -371,6 +371,8 @@ export const ES: Record<keyof typeof RU, string> = {
   'map.view.system': 'SISTEMA',
   'map.view.galaxy': 'GALAXIA',
 
+  'map.view.universe': 'MUNDO',
+
   // ─── Localizador: gran radar redondo de consola ──────────────────────────────
   'locator.title': 'LOCALIZADOR',
   'locator.nose': 'MORRO',

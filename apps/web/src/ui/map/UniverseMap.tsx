@@ -401,12 +401,6 @@ export function UniverseMap({ onClose }: { onClose: () => void }) {
             onPick={pick}
           />
         </Canvas>
-        <div
-          className="pointer-events-none absolute bottom-3 left-3 text-[11px] tracking-widest"
-          style={{ color: UI.DIM }}
-        >
-          ТЯНИ МЫШЬЮ · ЖЁЛТЫЙ ЛУЧ — НОС КОРАБЛЯ · ЦЕНТР — ТЫ
-        </div>
       </div>
 
       <div className="flex w-72 min-w-[16rem] flex-col">

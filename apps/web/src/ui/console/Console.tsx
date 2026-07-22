@@ -58,13 +58,33 @@ export type ConsoleTab =
   | 'universe'
 
 /**
- * Вкладка КАРТА — одна кнопка в шапке, а внутри три вида: локатор, система, галактика.
+ * Вкладка КАРТА — одна кнопка в шапке, а внутри ЧЕТЫРЕ вида: локатор, система, галактика, мир.
  * Внешние адресаты (клавиши M/G, «проложить курс») по-прежнему метят конкретный вид
  * из этого набора — он и открывается активным. Первый — вид по умолчанию для кнопки.
  */
-const MAP_VIEWS = ['locator', 'system', 'galaxy'] as const
+const MAP_VIEWS = ['locator', 'system', 'galaxy', 'universe'] as const
 type MapView = (typeof MAP_VIEWS)[number]
 const isMapView = (tab: ConsoleTab): tab is MapView => (MAP_VIEWS as readonly string[]).includes(tab)
+
+/**
+ * Какие виды карты сейчас имеют смысл. Ряд ВСЕГДА показывает все четыре — так видно, что
+ * вообще бывает, — а неподходящие гаснут и не нажимаются:
+ *
+ *  • в комнате вселенной локатор и карта системы мерить нечего (мир вокруг спрятан);
+ *  • снаружи, наоборот, нечего показывать МИРУ: ты внутри галактики, а не между ними;
+ *  • за масштабом (миелофон) единичная система растворилась — её карта неактивна.
+ */
+function mapViewEnabled(view: MapView, bush: boolean, giant: boolean): boolean {
+  if (bush) return view === 'galaxy' || view === 'universe'
+  if (view === 'universe') return false
+  return !(view === 'system' && giant)
+}
+
+/** Что показать, если выбранный вид сейчас погашен: ближайший осмысленный сосед. */
+function fallbackView(bush: boolean, giant: boolean): MapView {
+  if (bush) return 'universe'
+  return giant ? 'galaxy' : 'locator'
+}
 
 export function Console({
   world,
@@ -121,13 +141,12 @@ export function Console({
     { id: 'cargo', label: t('station.nav.cargo') },
     // ЛЮДИ — знакомые пилоты: где они и как с ними связаться. Есть и у причала, и в полёте.
     { id: 'people', label: t('station.nav.people') },
-    // КАРТА — одна кнопка на три вида (локатор/система/галактика). Подсвечена, пока
-    // открыт любой из них; клик ведёт на локатор, если сейчас не в карте.
-    // В комнате у карты свои два вида; первым идёт ГАЛАКТИКА, на неё кнопка и ведёт.
+    // КАРТА — одна кнопка на ЧЕТЫРЕ вида (локатор/система/галактика/мир). Подсвечена, пока
+    // открыт любой из них; клик ведёт на первый осмысленный в текущей обстановке.
     {
-      id: bushActive ? 'galaxy' : 'locator',
+      id: fallbackView(bushActive, world.player.state.scale >= MIELOPHONE.PHASE_START),
       label: t('station.nav.map'),
-      active: isMapView(tab) || tab === 'universe',
+      active: isMapView(tab),
     },
   ]
 
@@ -208,56 +227,19 @@ export function Console({
           {tab === 'people' && (
             <PeopleTab key={peopleRefresh} world={world} docked={docked} onTalk={onTalk} onChat={onChat} />
           )}
-          {/* На КУСТЕ любой вид карты — карта куста: система и локатор завязаны на текущий
-              мир, который на рельсах заморожен, а показать надо галактику узла (или пустоту
-              между узлами). Ряд переключателей тут не нужен. */}
-          {/* В КОМНАТЕ у карты два вида: ГАЛАКТИКА — обычная карта галактики (та же самая, не
-              обрезанная; прыжок из комнаты запрещён отдельно), МИР — шар галактик вселенной:
-              выбор цели и поиск по имени, ведёт потом J. Локатор и карта системы сюда не
-              годятся: мир вокруг спрятан, мерить им нечего. */}
-          {(isMapView(tab) || tab === 'universe') && bushActive && (
-            <div className="flex min-h-0 flex-1 flex-col">
-              <div className="mb-4 flex gap-2">
-                {([['galaxy', 'ГАЛАКТИКА'], ['universe', 'МИР']] as const).map(([id, label]) => {
-                  const on = id === 'universe' ? tab === 'universe' : tab !== 'universe'
-                  return (
-                    <button
-                      key={id}
-                      type="button"
-                      onClick={() => onTab(id)}
-                      className="cursor-pointer border px-4 py-1.5 text-[11px] tracking-[0.25em] transition-colors hover:bg-[#7fd6ff] hover:text-black"
-                      style={{
-                        borderColor: on ? ACCENT : DIM,
-                        backgroundColor: on ? ACCENT : 'transparent',
-                        color: on ? '#000' : DIM,
-                      }}
-                    >
-                      {label}
-                    </button>
-                  )
-                })}
-              </div>
-              {tab === 'universe' ? (
-                <UniverseMap onClose={onClose} />
-              ) : (
-                <GalaxyMap embedded onClose={onClose} />
-              )}
-            </div>
-          )}
-
-          {/* КАРТА — три вида под одной вкладкой: ряд переключателей и выбранный вид. */}
-          {isMapView(tab) && !bushActive && (() => {
-            // За масштабом (миелофон) единичная система растворилась — её карта неактивна.
-            // Вид системы подменяется галактическим, а его кнопка гаснет. Локатор при этом
-            // работает: он переключается на галактические звёзды (см. drawRadar).
+          {isMapView(tab) && (() => {
+            // Выбранный вид мог погаснуть от обстановки (влетел в комнату, вырос миелофоном) —
+            // тогда показываем ближайший осмысленный, а кнопка гаснет.
             const giant = world.player.state.scale >= MIELOPHONE.PHASE_START
-            const view: MapView = giant && tab === 'system' ? 'galaxy' : (tab as MapView)
+            const view: MapView = mapViewEnabled(tab, bushActive, giant)
+              ? tab
+              : fallbackView(bushActive, giant)
             return (
             <div className="flex min-h-0 flex-1 flex-col">
               <div className="mb-4 flex gap-2">
                 {MAP_VIEWS.map((v) => {
                   const on = v === view
-                  const disabled = v === 'system' && giant
+                  const disabled = !mapViewEnabled(v, bushActive, giant)
                   return (
                     <button
                       key={v}
@@ -283,6 +265,7 @@ export function Console({
               {/* onClose у карты галактики срабатывает только при старте прыжка — тогда
                   консоль закрывается целиком и мир оживает под кино, а не переходит на вкладку. */}
               {view === 'galaxy' && <GalaxyMap embedded onClose={onClose} />}
+              {view === 'universe' && <UniverseMap onClose={onClose} />}
             </div>
             )
           })()}

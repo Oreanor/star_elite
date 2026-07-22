@@ -387,6 +387,8 @@ export const RU = {
   'map.view.system': 'СИСТЕМА',
   'map.view.galaxy': 'ГАЛАКТИКА',
 
+  'map.view.universe': 'МИР',
+
   // ─── Локатор: большой круглый радар консоли ──────────────────────────────────
   'locator.title': 'ЛОКАТОР',
   'locator.nose': 'НОС',
