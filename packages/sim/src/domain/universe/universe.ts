@@ -42,6 +42,8 @@ export const UNIVERSE = {
    * лететь одну минуту, перестаёт быть монументом.
    */
   MONUMENT_NODE: 0,
+  /** Имя монумента. Не выводится из зерна: он один на вселенную и зовётся всегда так. */
+  MONUMENT_NAME: 'Кресты',
   /** Ветвление куста: сколько ДЕТЕЙ у узла. Корню достаётся на одного больше. */
   BRANCH_MIN: 2,
   BRANCH_MAX: 4,
@@ -135,7 +137,11 @@ export function generateUniverse(word: string): Universe {
 
   const makeNode = (index: number, parent: number, depth: number, transform: Mat4): GalaxyNode => ({
     index,
-    name: galaxyName(galaxySeedAt(seed, index)),
+    // Корень — не галактика, а монумент, и зовут его КРЕСТАМИ. Имя записано в самом узле, а не
+    // подставляется теми, кто его рисует: показывают монумент трое (HUD, карта мира, карта
+    // куста), и каждый звал его по-своему — на карте он стоял под случайным именем галактики
+    // и не находился поиском, а на HUD рядом подписывался «Кресты».
+    name: isMonument(index) ? UNIVERSE.MONUMENT_NAME : galaxyName(galaxySeedAt(seed, index)),
     seed: galaxySeedAt(seed, index),
     parent,
     children: [],
