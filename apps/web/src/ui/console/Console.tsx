@@ -27,7 +27,7 @@ import { Market } from '../station/Market'
 import { ShipScreen } from '../ship/ShipScreen'
 import { SystemMap } from '../map/SystemMap'
 import { GalaxyMap } from '../map/GalaxyMap'
-import { BushMap } from '../map/BushMap'
+import { UniverseMap } from '../map/UniverseMap'
 import { useSession } from '../../app/GameContext'
 import { Locator } from '../map/Locator'
 
@@ -45,7 +45,17 @@ import { Locator } from '../map/Locator'
  * Здесь только композиция. Правила панели не знают друг о друге; мир мутируют лишь
  * через домен, а `bump` перерисовывает то, что от мира зависит (кредиты после сделки).
  */
-export type ConsoleTab = 'planet' | 'ship' | 'shop' | 'cargo' | 'people' | 'locator' | 'system' | 'galaxy'
+export type ConsoleTab =
+  | 'planet'
+  | 'ship'
+  | 'shop'
+  | 'cargo'
+  | 'people'
+  | 'locator'
+  | 'system'
+  | 'galaxy'
+  /** МИР — вид карты вселенной. Только в комнате: снаружи ты внутри галактики, а не между ними. */
+  | 'universe'
 
 /**
  * Вкладка КАРТА — одна кнопка в шапке, а внутри три вида: локатор, система, галактика.
@@ -113,7 +123,12 @@ export function Console({
     { id: 'people', label: t('station.nav.people') },
     // КАРТА — одна кнопка на три вида (локатор/система/галактика). Подсвечена, пока
     // открыт любой из них; клик ведёт на локатор, если сейчас не в карте.
-    { id: 'locator', label: t('station.nav.map'), active: isMapView(tab) },
+    // В комнате у карты свои два вида; первым идёт ГАЛАКТИКА, на неё кнопка и ведёт.
+    {
+      id: bushActive ? 'galaxy' : 'locator',
+      label: t('station.nav.map'),
+      active: isMapView(tab) || tab === 'universe',
+    },
   ]
 
   return (
@@ -196,7 +211,39 @@ export function Console({
           {/* На КУСТЕ любой вид карты — карта куста: система и локатор завязаны на текущий
               мир, который на рельсах заморожен, а показать надо галактику узла (или пустоту
               между узлами). Ряд переключателей тут не нужен. */}
-          {isMapView(tab) && bushActive && <BushMap embedded onClose={onClose} />}
+          {/* В КОМНАТЕ у карты два вида: ГАЛАКТИКА — обычная карта галактики (та же самая, не
+              обрезанная; прыжок из комнаты запрещён отдельно), МИР — шар галактик вселенной:
+              выбор цели и поиск по имени, ведёт потом J. Локатор и карта системы сюда не
+              годятся: мир вокруг спрятан, мерить им нечего. */}
+          {(isMapView(tab) || tab === 'universe') && bushActive && (
+            <div className="flex min-h-0 flex-1 flex-col">
+              <div className="mb-4 flex gap-2">
+                {([['galaxy', 'ГАЛАКТИКА'], ['universe', 'МИР']] as const).map(([id, label]) => {
+                  const on = id === 'universe' ? tab === 'universe' : tab !== 'universe'
+                  return (
+                    <button
+                      key={id}
+                      type="button"
+                      onClick={() => onTab(id)}
+                      className="cursor-pointer border px-4 py-1.5 text-[11px] tracking-[0.25em] transition-colors hover:bg-[#7fd6ff] hover:text-black"
+                      style={{
+                        borderColor: on ? ACCENT : DIM,
+                        backgroundColor: on ? ACCENT : 'transparent',
+                        color: on ? '#000' : DIM,
+                      }}
+                    >
+                      {label}
+                    </button>
+                  )
+                })}
+              </div>
+              {tab === 'universe' ? (
+                <UniverseMap onClose={onClose} />
+              ) : (
+                <GalaxyMap embedded onClose={onClose} />
+              )}
+            </div>
+          )}
 
           {/* КАРТА — три вида под одной вкладкой: ряд переключателей и выбранный вид. */}
           {isMapView(tab) && !bushActive && (() => {

@@ -37,7 +37,6 @@ import {
   type World,
 } from '@elite/sim'
 import { useSession } from '../../app/GameContext'
-import { BushMap } from './BushMap'
 import { useOnlinePlayers } from '../../app/net/presence'
 import { UI } from '../theme'
 import { t, useLang } from '../i18n'
@@ -686,12 +685,12 @@ function blockLabel(reason: NonNullable<ReturnType<typeof jumpBlock>>): string {
 }
 
 /**
- * Тонкая обёртка: на КУСТЕ карта галактики — другая (`BushMap`, чужая галактика узла без
- * привязки к текущему миру). Один хук здесь, тяжёлая карта живёт в `GalaxyMapImpl` и на
- * кусте вовсе не монтируется — её мировые хуки (прыжок, знакомые) не спорят с чужим зерном.
+ * В КОМНАТЕ вселенной карта галактики — та же самая, не урезанная копия. Здесь стояла
+ * подмена на самодельный `BushMap` (звёздное поле да имя), и это было лишним: зерно
+ * галактики у мира то же, поиск, фильтры и разбор системы работают как обычно. Разница
+ * ровно одна и живёт не тут: прыжок из комнаты запрещён (см. `App`, клавиша H).
  */
 export function GalaxyMap(props: { onClose: () => void; embedded?: boolean }) {
-  if (useSession().bush.active) return <BushMap embedded={props.embedded} onClose={props.onClose} />
   return <GalaxyMapImpl {...props} />
 }
 
