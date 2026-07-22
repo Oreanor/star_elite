@@ -3,6 +3,7 @@ import { createWorld, STARTER_SYSTEM, rememberPilot, type World } from '../world
 import type { ShipEntity } from '../world/entities'
 import { applyCommand, registerCommand } from './commandBus'
 import { escortFee } from './dialogue'
+import { addCommodity, COMMODITIES } from '../cargo'
 
 /**
  * Шина команд боту. Проверяем без окна: команда — данные {action, payload}, а её
@@ -252,5 +253,43 @@ describe('шина команд боту', () => {
 
     expect(out?.line).toBe('эхо')
     expect(seen).toEqual({ n: 42 })
+  })
+})
+
+/**
+ * ДОВЕРЕННЫЙ ГРУЗ. «Отвези моё» отличается от «продал» ровно тем, что денег навстречу
+ * не пришло, — по этому и судим. Обязательство висит отдельным полем, а не строкой в
+ * журнале: журнал показывается модели хвостом и уходит из окна, а долг обязан жить,
+ * пока не закрыт, — иначе на станции бот честно не помнит, что везёт твоё.
+ */
+describe('доверенный груз', () => {
+  it('отдал без денег — числится за ним; вернул — списалось', () => {
+    const { world, ship } = withAcquaintance()
+    addCommodity(world.player.hold, COMMODITIES.MINERALS, 10)
+    const record = world.acquaintances[0]!
+
+    applyCommand(world, ship, {
+      action: 'transfer',
+      payload: { direction: 'toThem', commodityId: 'minerals', units: 6 },
+    })
+    expect(record.entrusted).toEqual([{ commodityId: 'minerals', units: 6 }])
+
+    applyCommand(world, ship, {
+      action: 'transfer',
+      payload: { direction: 'toYou', commodityId: 'minerals', units: 6 },
+    })
+    expect(record.entrusted).toEqual([])
+  })
+
+  it('продажа за деньги долгом НЕ считается — товар стал его', () => {
+    const { world, ship } = withAcquaintance()
+    addCommodity(world.player.hold, COMMODITIES.MINERALS, 4)
+    const record = world.acquaintances[0]!
+
+    applyCommand(world, ship, {
+      action: 'transfer',
+      payload: { direction: 'toThem', commodityId: 'minerals', units: 4, credits: 700 },
+    })
+    expect(record.entrusted).toEqual([])
   })
 })

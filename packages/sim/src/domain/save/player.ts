@@ -156,6 +156,7 @@ export function serializePlayer(world: World): PlayerSave {
       ...a,
       history: [...a.history],
       plan: { ...a.plan, queue: [...a.plan.queue] },
+      entrusted: a.entrusted.map((e) => ({ ...e })),
     })),
     loadout: serializeLoadout(p.loadout),
     hullUp: { ...p.hullUp },
@@ -191,6 +192,8 @@ export function applyPlayerSave(world: World, save: PlayerSave): void {
     credits: a.credits ?? 5_000,
     savedLoadout: a.savedLoadout ?? null,
     plan: a.plan ?? emptyPlan(),
+    // Сейвы до доверенного груза о нём не знали — пустой список, а не падение на чтении.
+    entrusted: a.entrusted ? a.entrusted.map((e) => ({ ...e })) : [],
   }))
 
   const p = world.player

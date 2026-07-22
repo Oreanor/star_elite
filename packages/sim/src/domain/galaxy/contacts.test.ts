@@ -33,6 +33,7 @@ function withContact(at: number, over: Partial<Acquaintance> = {}): { world: Wor
     credits: 50_000,
     savedLoadout: null,
     plan: emptyPlan(),
+    entrusted: [],
     ...over,
   }
   world.acquaintances.push(rec)

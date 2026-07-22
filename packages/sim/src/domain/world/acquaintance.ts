@@ -110,6 +110,46 @@ export interface Acquaintance {
   savedLoadout: SavedLoadout | null
   /** Исполняемый план: очередь шагов и долгоживущая поза. */
   plan: ContactPlan
+  /**
+   * ТВОЁ ДОБРО У НЕГО НА БОРТУ. Отдал груз без денег — значит не продал, а доверил везти;
+   * запись держит, СКОЛЬКО и ЧЕГО за ним числится, пока не вернёт.
+   *
+   * Отдельным полем, а не «где-то в журнале»: журнал показывается моделью хвостом
+   * последних событий и уходит из окна, а обязательство обязано висеть, пока не закрыто.
+   * Оттого и «отвези мой груз» раньше работало лишь до тех пор, пока сделка не уехала
+   * из хвоста, — дальше он честно ничего не помнил.
+   *
+   * Это ПАМЯТЬ, а не замок: вернуть добро он должен сам, живой передачей в разговоре.
+   * Отобрать силой нечем — и не должно быть, иначе доверие ничего не стоит.
+   */
+  entrusted: EntrustedCargo[]
+}
+
+/** Партия доверенного груза: что и сколько. Цену не храним — она не его дело. */
+export interface EntrustedCargo {
+  commodityId: string
+  units: number
+}
+
+/** Записать, что игрок отдал ему груз на хранение/перевозку. Одинаковый товар сливаем. */
+export function entrustCargo(record: Acquaintance, commodityId: string, units: number): void {
+  if (units <= 0) return
+  const slot = record.entrusted.find((e) => e.commodityId === commodityId)
+  if (slot) slot.units += units
+  else record.entrusted.push({ commodityId, units })
+}
+
+/**
+ * Списать вернувшееся. Отдал больше, чем брал (свой довесок) — уходим в ноль, а не в минус:
+ * долг закрыт, а лишнее — это уже подарок, и числиться за ним оно не должно.
+ */
+export function releaseCargo(record: Acquaintance, commodityId: string, units: number): void {
+  if (units <= 0) return
+  const i = record.entrusted.findIndex((e) => e.commodityId === commodityId)
+  if (i < 0) return
+  const slot = record.entrusted[i]!
+  slot.units -= units
+  if (slot.units <= 0) record.entrusted.splice(i, 1)
 }
 
 /**
@@ -146,6 +186,7 @@ export function rememberPilot(world: World, ship: ShipEntity): void {
     credits: 4_000 + Math.floor(world.rng() * 10_000),
     savedLoadout: serializeLoadout(ship.loadout),
     plan: emptyPlan(),
+    entrusted: [],
   }
   world.acquaintances.push(record)
   ship.acquaintanceId = record.id

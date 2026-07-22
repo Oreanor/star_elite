@@ -58,6 +58,22 @@ function cargoLine(
     .join(', ')
 }
 
+/**
+ * ЧТО ВЕЗЁШЬ ЧУЖОГО. Строка стоит рядом с собственным трюмом и держится, пока долг не
+ * закрыт: журнал уезжает хвостом, а обязательство обязано быть перед глазами — иначе на
+ * станции бот не помнит, что часть груза не его, и «продадим вместе» разваливается.
+ *
+ * Прямо сказано, что вернуть — его дело: механики принуждения нет и не будет, доверие
+ * держится на характере и отношении, а не на замке.
+ */
+function entrustedLine(ctx: NegotiationContext, lang: 'ru' | 'en'): string {
+  if (ctx.entrusted.length === 0) return ''
+  const list = ctx.entrusted.join(', ')
+  return lang === 'ru'
+    ? `ИЗ ЭТОГО ТВОЁ НЕ ВСЁ: командир доверил тебе довезти ${list}. Помни об этом и верни по первой просьбе (передача груза ему).`
+    : `PART OF IT IS NOT YOURS: the commander entrusted you with ${list}. Remember it and hand it back when asked (cargo transfer to them).`
+}
+
 function figurineFactLine(
   t: { figurines: { collects: boolean; units: number; names: string[] } },
   lang: 'ru' | 'en',
@@ -441,6 +457,7 @@ function makeRu(): NegotiatorLocale {
         '',
         `Перед тобой ${y.name}, ${y.species}, «${y.ship}».`,
         `Твой трюм: ${cargoLine(t.cargoList, locale.cargoEmpty)}.`,
+        entrustedLine(ctx, 'ru'),
         figurineFactLine(t, 'ru'),
         '',
         locale.moneyBlock(ctx),
@@ -785,6 +802,7 @@ function makeEn(): NegotiatorLocale {
         '',
         `Facing ${y.name}, ${y.species}, "${y.ship}".`,
         `Your hold: ${cargoLine(t.cargoList, locale.cargoEmpty)}.`,
+        entrustedLine(ctx, 'en'),
         figurineFactLine(t, 'en'),
         '',
         locale.moneyBlock(ctx),

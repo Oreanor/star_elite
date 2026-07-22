@@ -414,6 +414,7 @@ describe('знакомые при входе в систему', () => {
       credits: 20_000,
       savedLoadout: null,
       plan: emptyPlan(),
+      entrusted: [],
     })
     return world
   }

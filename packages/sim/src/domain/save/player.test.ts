@@ -69,6 +69,7 @@ function playedWorld(): World {
     credits: 12_000,
     savedLoadout: null,
     plan: emptyPlan(),
+    entrusted: [],
   }
   w.acquaintances.push(met)
 

@@ -1,9 +1,16 @@
 import { applyOrder, commandableByPlayer, type AIOrder } from '../ai/commands'
 import { assignApproach, assignCollectRun, assignRendezvous, clearTasks } from '../ai/tasks'
-import { applyStance, NOTE_MAX_CHARS, recordEvent, rememberPilot } from '../world/acquaintance'
+import {
+  applyStance,
+  entrustCargo,
+  NOTE_MAX_CHARS,
+  recordEvent,
+  releaseCargo,
+  rememberPilot,
+} from '../world/acquaintance'
 import { pushEdit, type GalaxyEdit } from '../galaxy/delta'
 import type { RawPlanStep } from '../world/contactPlan'
-import { applyContactPlan } from '../world/plan'
+import { acquaintanceOf, applyContactPlan } from '../world/plan'
 import type { ShipEntity, World } from '../world/entities'
 import { beginWarpDeparture } from '../world/warp'
 import { WARP } from '../../config/ai'
@@ -228,6 +235,21 @@ function transferCommand(world: World, ship: ShipEntity, payload: unknown): Comm
   if (!t) return null
   const r = applyTransfer(world, ship, t)
   if (r.credits <= 0 && r.units <= 0) return null
+
+  /**
+   * УЧЁТ ДОВЕРЕННОГО. Груз ушёл к нему и НИ КРЕДИТА не пришло навстречу — это не продажа,
+   * а «повези моё»: записываем за ним. Пришёл груз обратно — списываем.
+   *
+   * Различение по деньгам, а не по словам: сделка «товар за кредиты» атомарна и деньги в
+   * ней идут навстречу грузу (см. `applyTransfer`), поэтому нулевая встречная сумма —
+   * надёжный признак, что вещь отдана без расчёта. Никакой отдельной команды «на хранение»
+   * модели знать не нужно.
+   */
+  const record = acquaintanceOf(world, ship)
+  if (record && r.units > 0 && t.commodityId) {
+    if (r.direction === 'toThem' && r.credits <= 0) entrustCargo(record, t.commodityId, r.units)
+    else if (r.direction === 'toYou') releaseCargo(record, t.commodityId, r.units)
+  }
   recordEvent(world, ship, {
     kind: 'deal',
     toPlayer: r.direction === 'toYou',

@@ -3,6 +3,7 @@ import {
   capitalOf,
   type Command,
   commandableByPlayer,
+  COMMODITIES,
   commodityBuyPrice,
   commoditySellPrice,
   commodityStock,
@@ -193,6 +194,13 @@ export interface NegotiationContext {
    * сверху. Бот обязан это помнить: без журнала он «забывал» только что данные деньги.
    */
   history: string[]
+  /**
+   * ЧТО ТЫ ЕМУ ДОВЕРИЛ и он ещё не вернул: «Руда ×6». Отдельно от журнала нарочно — журнал
+   * показывается хвостом последних событий и уходит из окна, а обязательство обязано висеть
+   * перед глазами, пока не закрыто. Без этой строки бот на станции честно не помнил, что
+   * везёт твоё, и «продадим вместе» разваливалось на полпути.
+   */
+  entrusted: string[]
   /** Деньги и услуги — цифры из домена, чтобы не путать «кто кому платит». */
   economy: EconomySnapshot
   /** Станция системы: что можно у причала и кто сейчас у дока. */
@@ -538,6 +546,14 @@ function eventPhrase(ev: AcquaintanceEvent): string {
   }
 }
 
+/** Доверенное готовыми строками: «Руда ×6». Имя товара — из каталога, не из id. */
+function entrustedLines(entrusted: readonly { commodityId: string; units: number }[]): string[] {
+  return entrusted.map((e) => {
+    const c = Object.values(COMMODITIES).find((x) => x.id === e.commodityId)
+    return `${c?.name ?? e.commodityId} ×${e.units}`
+  })
+}
+
 function historyLines(history: AcquaintanceEvent[]): string[] {
   return history.slice(-HISTORY_SHOWN).map((ev) => {
     const date = formatGameDate(TIME.EPOCH_MS + ev.at * 1000 * TIME.SCALE)
@@ -827,6 +843,7 @@ export function buildContext(
     // сверх самого знакомства (сделка, просьба, факт) — тогда встреча памятная.
     metBefore: (record?.meetings ?? 0) > 1 || (record?.history.length ?? 0) > 1,
     history: record ? historyLines(record.history) : [],
+    entrusted: record ? entrustedLines(record.entrusted) : [],
     economy: {
       commanderCredits: world.credits,
       escortFee: fee,
