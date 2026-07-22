@@ -100,10 +100,25 @@ describe('стыковка', () => {
     undock(world)
 
     expect(world.docked).toBe(false)
-    expect(stationRange(world.player, station)).toBeCloseTo(DOCKING.RELEASE_GAP, 0)
+    // ВНЕ защитного поля (1.15·R): твердь у станции — это ПОЛЕ, а не кольцо. Внутри поля
+    // первый же шаг отпружинил бы корабль и слал ложный пуш «КРУШЕНИЕ · станция».
+    expect(station.pos.distanceTo(world.player.state.pos)).toBeGreaterThan(station.radius * SHIELD.RADIUS_FACTOR)
     // Скорость направлена ОТ станции: иначе первый же кадр — столкновение.
     const outward = world.player.state.pos.clone().sub(station.pos).normalize()
     expect(world.player.state.vel.dot(outward)).toBeGreaterThan(0)
+  })
+
+  it('после вылета игрок стоит СНАРУЖИ защитного поля — без ложного «КРУШЕНИЕ»', () => {
+    // Регрессия: выпуск отмерялся от кольца (`radius + GAP`), а поле стоит на 1.15·R.
+    // Для любой станции крупнее ~800 м это лежало ВНУТРИ поля → отскок + жёлтый пуш.
+    const world = quiet()
+    const station = findStation(world)!
+    atDock(world)
+    dock(world)
+    undock(world)
+
+    const shieldR = station.radius * SHIELD.RADIUS_FACTOR
+    expect(station.pos.distanceTo(world.player.state.pos)).toBeGreaterThan(shieldR)
   })
 
   it('после долгой стоянки выпускает у текущей позиции станции, а не в старой точке', () => {
@@ -114,11 +129,14 @@ describe('стыковка', () => {
 
     world.calendarTime += 12_345
     undock(world)
+    const rightAfter = station.pos.distanceTo(world.player.state.pos)
     // Повторная раскладка на тот же момент ничего не должна менять. Без обновления
     // внутри undock станция прыгнет сюда только сейчас, оставив корабль далеко.
     stepOrbits(world)
 
-    expect(stationRange(world.player, station)).toBeCloseTo(DOCKING.RELEASE_GAP, 0)
+    // Станция не «прыгнула»: дистанция та же, что сразу после вылета (и всё ещё за полем).
+    expect(station.pos.distanceTo(world.player.state.pos)).toBeCloseTo(rightAfter, 0)
+    expect(rightAfter).toBeGreaterThan(station.radius * SHIELD.RADIUS_FACTOR)
   })
 
   it('станция не убегает после вылета на ускоренной календарной орбите', () => {

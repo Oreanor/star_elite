@@ -1,5 +1,5 @@
 import { Vector3 } from 'three'
-import { DOCKING } from '../../config/station'
+import { DOCKING, SHIELD } from '../../config/station'
 import type { BodyEntity, ShipEntity, World } from '../world/entities'
 import { startAtStation } from '../world/factory'
 import { stepOrbits } from '../world/orbits'
@@ -129,7 +129,12 @@ export function undock(world: World): void {
   if (_toStation.lengthSq() < 1e-6) _toStation.set(0, 0, 1)
   _toStation.normalize()
 
-  player.state.pos.copy(station.pos).addScaledVector(_toStation, station.radius + DOCKING.RELEASE_GAP)
+  // Выпускаем ЗА защитным полем (1.15·R), а не над кольцом. Твердь у станции — это поле,
+  // и старая точка `radius + GAP` для любой станции крупнее ~800 м лежала ВНУТРИ него:
+  // первый же шаг отпружинивал корабль и слал ложный пуш «КРУШЕНИЕ · станция».
+  player.state.pos
+    .copy(station.pos)
+    .addScaledVector(_toStation, station.radius * SHIELD.RADIUS_FACTOR + DOCKING.RELEASE_GAP)
   player.state.vel.copy(_toStation).multiplyScalar(DOCKING.RELEASE_SPEED)
 
   // Разворачиваем носом наружу: смотреть в станцию при отчаливании незачем.

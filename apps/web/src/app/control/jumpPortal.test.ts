@@ -71,12 +71,26 @@ describe('linked jump portal frame sync', () => {
     expect(portal.clipThere.distanceToPoint(thereAfter)).toBeGreaterThan(0)
   })
 
-  it('treats an explicitly selected old endpoint as a new portal command', () => {
+  it('ignores repeated H toward the target the portal already points at (pre-transit)', () => {
+    // РЕГРЕССИЯ: `jumpTargetIndex` не очищается на openPortal, значит цель на карте
+    // остаётся выбранной. Раньше повторное H к ней считалось retarget'ом → close+dispose+
+    // open → готовый дальний мир сносился, и второе-третье кольцо смотрело «на просвет»,
+    // пока React заново не смонтирует сцену. Повтор к той же НЕПРОЙДЕННОЙ цели — не приказ.
     const world = createWorld()
     openPortal(world, 17, null, 0)
 
-    // После перехода null продолжает управлять оставшейся парой. Повторный выбор
-    // её дальнего индекса уже явный: старое кольцо надо заменить новым перед носом.
+    expect(portalRetargetRequested(null)).toBe(false)
+    expect(portalRetargetRequested(jumpPortal().index)).toBe(false) // та же цель — рост, не пересборка
+    expect(portalRetargetRequested(17 === world.systemIndex ? 18 : 5)).toBe(true) // другая — приказ
+  })
+
+  it('treats the selected far endpoint as a new command AFTER a transit', () => {
+    // После прохода (`paid`) устья меняются ролями. Выбор дальней системы — уже честный
+    // обратный прыжок, а не лишний тап: кольцо надо заменить новым перед носом.
+    const world = createWorld()
+    openPortal(world, 17, null, 0)
+    jumpPortal().paid = true
+
     expect(portalRetargetRequested(null)).toBe(false)
     expect(portalRetargetRequested(jumpPortal().index)).toBe(true)
   })
