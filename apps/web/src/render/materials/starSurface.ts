@@ -42,7 +42,7 @@ export function starSurfaceUrl(
 ): string | null {
   const id = CLASS_BY_COLOR.get(color)
   if (!id || !TEXTURED.has(id)) return null
-  return quality === 'lo' ? `/stars/lo/star-${id}.webp` : `/stars/star-${id}.webp`
+  return quality === 'lo' ? `/textures/stars/lo/star-${id}.webp` : `/textures/stars/star-${id}.webp`
 }
 
 function cacheKey(color: number, quality: StarSurfaceQuality): string {

@@ -38,7 +38,7 @@ import { galaxyRadar, resetGalaxyRadar } from './galaxyRadar'
  * совпадают с телами — двойная проявляется двойной, подмена без шва.
  *
  * Дальние — мягкие точки; близкие (diamPx ≥ MESH_PX) — сфера+корона (до MESH_MAX);
- * самые крупные (TEXTURE_PX) — lo-карта класса (`/stars/lo/star-*.webp`, 512×256).
+ * самые крупные (TEXTURE_PX) — lo-карта класса (`/textures/stars/lo/star-*.webp`, 512×256).
  *
  * Буфер: сначала главные (индекс = systemIndex), затем спутники двойных.
  */
@@ -175,7 +175,7 @@ function sizeLy(radiusUnits: number): number {
 type StarBuffers = {
   positions: Float32Array
   colors: Float32Array
-  /** Цвет класса (hex) — ключ lo-карты `/stars/lo/star-*.webp`. */
+  /** Цвет класса (hex) — ключ lo-карты `/textures/stars/lo/star-*.webp`. */
   colorHex: Uint32Array
   /** Каталожный radius — из него sizeLy (HMR конфига без пересборки геометрии). */
   radiusUnits: Float32Array

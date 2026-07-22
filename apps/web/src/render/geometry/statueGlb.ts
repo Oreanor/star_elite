@@ -17,9 +17,9 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
  * Гигабайт таких «про запас» уже стоил нам половины кадров (см. шапку `GLB_HULLS` в `ships.ts`).
  */
 const STATUE_URLS: readonly string[] = [
-  '/models/lucifer.glb',
-  '/models/shiva.glb',
-  '/models/tut.glb',
+  '/models/statues/lucifer.glb',
+  '/models/statues/shiva.glb',
+  '/models/statues/tut.glb',
 ]
 
 /** Сколько обликов статуй. Домен берёт индекс по модулю этого числа. */

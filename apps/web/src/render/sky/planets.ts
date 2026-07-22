@@ -14,7 +14,7 @@ import type { PlanetLook } from '../geometry/bodies'
  * Файла нет — остаёмся на покраске по вершинам. Это не аварийный режим:
  * процедурная планета выглядит прилично и грузится мгновенно.
  *
- * Файлы: `public/planets/<тип>/<номер>.jpg`.
+ * Файлы: `public/textures/planets/<тип>/<номер>.jpg`.
  */
 
 /** Что за мир — говорит домен (`body.surface`), во что красить — знает рендер. */
@@ -50,7 +50,7 @@ export function pickVariant(look: PlanetLook, seed: number): number {
 
 /** URL карты поверхности — тот же путь, что грузит TextureLoader в сцене. */
 export function planetTextureUrl(look: PlanetLook, variant: number): string {
-  return `/planets/${look}/${variant}.jpg`
+  return `/textures/planets/${look}/${variant}.jpg`
 }
 
 const cache = new Map<string, Texture>()

@@ -13,11 +13,11 @@ import { MATERIAL } from '../config'
  */
 
 const STATION_URLS: readonly string[] = [
-  '/models/station_1.glb',
-  '/models/station_2.glb',
-  '/models/station_3.glb',
-  '/models/station_4.glb',
-  '/models/station_5.glb',
+  '/models/stations/station_1.glb',
+  '/models/stations/station_2.glb',
+  '/models/stations/station_3.glb',
+  '/models/stations/station_4.glb',
+  '/models/stations/station_5.glb',
 ]
 
 /** Сколько обликов станций. Домен берёт индекс по модулю этого числа. */
@@ -98,7 +98,7 @@ function requestStation(index: number): void {
  * раскалённые кромки), а не текстуры Meshy — оттого `prepareStation` тут нужен лишь ради
  * центровки и нормировки в единичный размер (внешний scale = радиус станции).
  */
-const CROSS_URL = '/models/station_cross.glb'
+const CROSS_URL = '/models/stations/station_cross.glb'
 let crossCache: LoadedStation | null = null
 new GLTFLoader().load(CROSS_URL, (gltf) => {
   const loaded = prepareStation(gltf.scene)
