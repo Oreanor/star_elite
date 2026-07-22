@@ -17,12 +17,10 @@ import {
 } from 'three'
 import { smoothstep } from '@elite/sim'
 import { useSession } from '../../app/GameContext'
-import { stepTorusFlight, torusView } from '../../app/control/torusFlight'
-import {
-  setTorusNav,
-  torusAutopilotActive,
-  torusAutopilotTarget,
-} from '../../app/control/torusAutopilot'
+import { placeTorusAt, stepTorusFlight, torusView } from '../../app/control/torusFlight'
+import { setTorusNav, torusAutopilotActive, torusTargetVertex } from '../../app/control/torusAutopilot'
+import { bushExitScale } from '../../app/control/bushExit'
+import { nameOfVertex, vertexOfNode } from './torusNodes'
 import { TORUS } from '../config'
 import { crossNeonTubesGeometry } from '../geometry/props'
 import { crossNeonLampMaterial, tickCrossPortal } from '../materials/crossPortal'
@@ -40,6 +38,8 @@ import {
  */
 export const torusHomeMarker = { x: 0, y: 0, z: 0, visible: false }
 export const torusMonumentMarker = { x: 0, y: 0, z: 0, visible: false }
+/** Выбранная Tab галактика: маркер + имя. `visible=false`, когда цели нет или она за полюсом. */
+export const torusTargetMarker = { x: 0, y: 0, z: 0, visible: false, name: '' }
 
 /**
  * Подписи БЛИЖАЙШИХ галактик для HUD: имя узла + мировая позиция. Узел решётки = именованная
@@ -51,11 +51,19 @@ export interface TorusLabel {
   y: number
   z: number
   name: string
+  /** Вершина решётки — по ней Tab выбирает цель, а прибытие ищет галактику. */
+  vertex: number
 }
 export const torusLabels: { count: number; items: TorusLabel[] } = {
   count: 0,
-  items: Array.from({ length: TORUS.LABEL_COUNT }, () => ({ x: 0, y: 0, z: 0, name: '' })),
+  items: Array.from({ length: TORUS.LABEL_COUNT }, () => ({ x: 0, y: 0, z: 0, name: '', vertex: -1 })),
 }
+
+/**
+ * Ближайшие галактики по возрастанию дальности — круг листания Tab. Заполняется тем же
+ * отбором, что и подписи: что подписано на экране, то и выбирается, без второго списка.
+ */
+export const torusNearest: number[] = []
 
 /**
  * СЛОЙ ГИПЕРТОРА — замкнутая вселенная-решётка на 3-сфере S³, снесённая СТЕРЕОГРАФИЧЕСКОЙ
@@ -69,7 +77,12 @@ export const torusLabels: { count: number; items: TorusLabel[] } = {
  * корабле (группа едет за ним), поэтому в пустой комнате она всегда вокруг тебя.
  */
 
-const GRID = buildHypertorusGrid(TORUS.NXI, TORUS.NTHETA, TORUS.NPHI)
+/**
+ * Решётка одна на игру и строится один раз. Наружу отдаётся картой мира: та считает по тем же
+ * вершинам направления и дальности, поэтому «где галактика на карте» и «куда лететь в комнате»
+ * не могут разойтись — источник один.
+ */
+export const GRID = buildHypertorusGrid(TORUS.NXI, TORUS.NTHETA, TORUS.NPHI)
 const DPE = TORUS.DOTS_PER_EDGE
 const MAX_DOTS = GRID.edgeCount * DPE
 
@@ -78,14 +91,61 @@ const _base = new Color(TORUS.PUFF_COLOR)
 const _p = { x: 0, y: 0, z: 0, depth: 0 }
 const _rot = new Float64Array(GRID.vertCount * 4)
 const _s4 = new Float64Array(4)
-/** Яркость занятых слотов подписей за кадр (−1 = пусто) — отбор ближайших LABEL_COUNT. */
-const _labelFog = new Float32Array(TORUS.LABEL_COUNT)
+/**
+ * Поставить игрока В УКАЗАННУЮ ВЕРШИНУ решётки (вход в комнату из своей галактики).
+ * Сетка живёт здесь, поэтому и перевод «номер вершины → точка S³» тоже здесь.
+ */
+export function placeTorusAtVertex(vertex: number): void {
+  const o = vertex * 4
+  if (o < 0 || o + 3 >= GRID.verts.length) return
+  placeTorusAt(GRID.verts[o]!, GRID.verts[o + 1]!, GRID.verts[o + 2]!, GRID.verts[o + 3]!)
+}
 
-/** Яркость по глубине S³ — дальняя половина (у полюса/антипода) тонет во тьму. */
-function brightnessOf(dist: number, depth: number): number {
-  const far = 1 - smoothstep(TORUS.FOG_NEAR_M, TORUS.FOG_FAR_M, dist)
-  const antipode = 1 - smoothstep(TORUS.ANTIPODE_NEAR, TORUS.ANTIPODE_FAR, depth)
-  return far * antipode
+/**
+ * Ключ близости занятых слотов подписей за кадр — координата w узла (−1 = под игроком).
+ * Пустой слот помечен двойкой: она больше любого возможного w, поэтому вытесняется первой.
+ */
+const _labelKey = new Float32Array(TORUS.LABEL_COUNT)
+const LABEL_EMPTY = 2
+/** Буферы упорядочивания подписей по близости. Выделены раз: в кадре аллокаций нет. */
+const _order: number[] = []
+const _sorted: TorusLabel[] = Array.from({ length: TORUS.LABEL_COUNT }, () => ({
+  x: 0,
+  y: 0,
+  z: 0,
+  name: '',
+  vertex: -1,
+}))
+
+/**
+ * Яркость — ТОЛЬКО по дальности проекции: она монотонна по настоящему расстоянию в S³
+ * (r = SCALE·tg(γ/2), γ — угол от игрока), значит ближнее ярко, дальнее тонет.
+ *
+ * Здесь было ещё гашение по `depth=(1−w)/2` «в сторону антипода», и оно било в обратную
+ * сторону: depth→1 — это НЕ дальняя половина, а точка, в которой стоишь сам. Оно выжигало
+ * всё ближе ~37 м, так что вокруг корабля зияла чёрная дыра, а автопилот привозил в пустоту.
+ */
+function brightnessOf(dist: number): number {
+  return 1 - smoothstep(TORUS.FOG_NEAR_M, TORUS.FOG_FAR_M, dist)
+}
+
+/**
+ * Масштаб стереопроекции на этот кадр. Обычно константа, но на ВЫХОДЕ из комнаты растёт
+ * (`bushExitScale`): решётка раздувается относительно точки выхода и уносится мимо камеры,
+ * а дальний туман её доедает — комната пустеет ровно к тому мигу, когда экран станет чёрным.
+ */
+function projScale(): number {
+  return TORUS.SCALE * bushExitScale()
+}
+
+/**
+ * Радиус билборда галактики в метрах: угловой размер на S³, умноженный на множитель
+ * стереопроекции k = SCALE/(1−w). Растёт при подлёте (у антипода k→SCALE/2, а дальность→0),
+ * поэтому цель становится больше, а не меньше. Потолок — против взрыва размера у полюса.
+ */
+function puffRadius(w: number): number {
+  const k = projScale() / Math.max(1e-4, 1 - w)
+  return Math.min(TORUS.PUFF_MAX_R_M, TORUS.PUFF_ANGULAR_R * k)
 }
 
 /** Спроецировать узел `idx` (из `_rot`) в мировую позицию маркера HUD. Ушёл за полюс — скрыт. */
@@ -100,7 +160,7 @@ function updateNodeMarker(
     marker.visible = false
     return
   }
-  stereoProject(_rot[o]!, _rot[o + 1]!, _rot[o + 2]!, w, TORUS.SCALE, _p)
+  stereoProject(_rot[o]!, _rot[o + 1]!, _rot[o + 2]!, w, projScale(), _p)
   marker.x = _p.x + groupPos.x
   marker.y = _p.y + groupPos.y
   marker.z = _p.z + groupPos.z
@@ -187,7 +247,7 @@ export function HypertorusLayer() {
 
     // ПУФЫ-галактики в узлах. Заодно отбираем ближайшие (самые яркие) под подписи имён.
     const universe = session.universe
-    _labelFog.fill(-1)
+    _labelKey.fill(LABEL_EMPTY)
     const gx = group.position.x
     const gy = group.position.y
     const gz = group.position.z
@@ -200,12 +260,12 @@ export function HypertorusLayer() {
       const o = i * 4
       const w = _rot[o + 3]!
       if (w > TORUS.POLE_CULL) continue
-      stereoProject(_rot[o]!, _rot[o + 1]!, _rot[o + 2]!, w, TORUS.SCALE, _p)
+      stereoProject(_rot[o]!, _rot[o + 1]!, _rot[o + 2]!, w, projScale(), _p)
       const dist = Math.hypot(_p.x, _p.y, _p.z)
-      const fog = brightnessOf(dist, _p.depth)
+      const fog = brightnessOf(dist)
       if (fog < 0.02) continue
       _dummy.position.set(_p.x, _p.y, _p.z)
-      _dummy.scale.setScalar(Math.max(TORUS.PUFF_MIN_R_M, TORUS.PUFF_RADIUS_M * fog))
+      _dummy.scale.setScalar(puffRadius(w))
       _dummy.quaternion.copy(camera.quaternion)
       _dummy.updateMatrix()
       puffs.setMatrixAt(count, _dummy.matrix)
@@ -215,26 +275,54 @@ export function HypertorusLayer() {
       fogArr[count] = fog
       count++
 
-      // Подпись: узел = именованная галактика. Держим топ-LABEL_COUNT по яркости; дом/крест
-      // не дублируем (у них своя рамка). Заменяем самый тусклый занятый слот.
-      if (i !== TORUS.HOME_NODE && i !== TORUS.MONUMENT_NODE) {
-        let minSlot = 0
-        for (let s = 1; s < _labelFog.length; s++) if (_labelFog[s]! < _labelFog[minSlot]!) minSlot = s
-        if (fog > _labelFog[minSlot]!) {
-          _labelFog[minSlot] = fog
-          const lab = torusLabels.items[minSlot]!
+      // Подпись: вершина = именованная галактика. Держим топ-LABEL_COUNT БЛИЖАЙШИХ, а
+      // близость меряем координатой w: у игрока w=−1, у противоположного края S³ w=+1, и
+      // между ними она монотонна по настоящему расстоянию (γ = acos(−w)). Яркость на эту
+      // роль не годится — туман насыщается в единицу ближе сорока метров, а там лежит
+      // десятая часть решётки: восемь десятков узлов получали ОДИН ключ, и «ближайшие»
+      // выходили случайной выборкой из них. Крест не подписываем — у него своя рамка.
+      if (i !== TORUS.MONUMENT_NODE) {
+        let farSlot = 0
+        for (let s = 1; s < _labelKey.length; s++) if (_labelKey[s]! > _labelKey[farSlot]!) farSlot = s
+        if (w < _labelKey[farSlot]!) {
+          _labelKey[farSlot] = w
+          const lab = torusLabels.items[farSlot]!
           lab.x = _p.x + gx
           lab.y = _p.y + gy
           lab.z = _p.z + gz
-          lab.name = universe.nodes[i]?.name ?? ''
+          lab.name = nameOfVertex(universe, i)
+          lab.vertex = i
         }
       }
     }
     puffs.count = count
-    // Сколько слотов подписей реально заняты (яркость > −1).
-    let labeled = 0
-    for (let s = 0; s < _labelFog.length; s++) if (_labelFog[s]! > -1) labeled++
-    torusLabels.count = labeled
+    // Слоты заполнялись в произвольном порядке — упорядочиваем по возрастанию w, то есть от
+    // ближней галактики к дальней: в этом порядке Tab их и листает.
+    const slots = _order
+    slots.length = 0
+    for (let s = 0; s < _labelKey.length; s++) if (_labelKey[s]! < LABEL_EMPTY) slots.push(s)
+    slots.sort((a, b) => _labelKey[a]! - _labelKey[b]!)
+    torusNearest.length = 0
+    for (let k = 0; k < slots.length; k++) {
+      const src = torusLabels.items[slots[k]!]!
+      const dst = _sorted[k]!
+      dst.x = src.x
+      dst.y = src.y
+      dst.z = src.z
+      dst.name = src.name
+      dst.vertex = src.vertex
+      torusNearest.push(src.vertex)
+    }
+    for (let k = 0; k < slots.length; k++) {
+      const src = _sorted[k]!
+      const dst = torusLabels.items[k]!
+      dst.x = src.x
+      dst.y = src.y
+      dst.z = src.z
+      dst.name = src.name
+      dst.vertex = src.vertex
+    }
+    torusLabels.count = slots.length
     puffs.instanceMatrix.needsUpdate = true
     tintAttr.needsUpdate = true
     fogAttr.needsUpdate = true
@@ -251,9 +339,8 @@ export function HypertorusLayer() {
         slerpS3(_rot, i, j, t, _s4)
         const w = _s4[3]!
         if (w > TORUS.POLE_CULL) continue
-        stereoProject(_s4[0]!, _s4[1]!, _s4[2]!, w, TORUS.SCALE, _p)
-        const dist = Math.hypot(_p.x, _p.y, _p.z)
-        const b = brightnessOf(dist, _p.depth)
+        stereoProject(_s4[0]!, _s4[1]!, _s4[2]!, w, projScale(), _p)
+        const b = brightnessOf(Math.hypot(_p.x, _p.y, _p.z))
         if (b < 0.02) continue
         posArr[d * 3] = _p.x
         posArr[d * 3 + 1] = _p.y
@@ -266,8 +353,9 @@ export function HypertorusLayer() {
     dots.geometry.getAttribute('aBright').needsUpdate = true
     dots.geometry.setDrawRange(0, d)
 
-    // ДОМ (твоя галактика) — маркер для HUD-рамки и локатора. Без креста: крест у монумента.
-    updateNodeMarker(TORUS.HOME_NODE, group.position, torusHomeMarker)
+    // ДОМ — узел, ИЗ КОТОРОГО влетел (его записал `enterBush`), а не постоянный номер:
+    // вылетев в другую галактику и войдя в её дыру, домом становится она.
+    updateNodeMarker(vertexOfNode(bush.node), group.position, torusHomeMarker)
 
     // КРЕСТ-МОНУМЕНТ — отдельный узел, помечен неоновым крестом (якорь + цель автопилота №2).
     const cross = crossRef.current
@@ -278,26 +366,32 @@ export function HypertorusLayer() {
       if (mw > TORUS.POLE_CULL) {
         cross.visible = false
       } else {
-        stereoProject(_rot[mo]!, _rot[mo + 1]!, _rot[mo + 2]!, mw, TORUS.SCALE, _p)
-        const fog = brightnessOf(Math.hypot(_p.x, _p.y, _p.z), _p.depth)
+        stereoProject(_rot[mo]!, _rot[mo + 1]!, _rot[mo + 2]!, mw, projScale(), _p)
         cross.visible = true
         cross.position.set(_p.x, _p.y, _p.z)
-        cross.scale.setScalar(Math.max(TORUS.PUFF_MIN_R_M, TORUS.PUFF_RADIUS_M * fog) * TORUS.CROSS_SCALE)
+        cross.scale.setScalar(puffRadius(mw) * TORUS.CROSS_SCALE)
         cross.quaternion.copy(camera.quaternion)
         tickCrossPortal(crossMat, world.time)
       }
     }
 
-    // АВТОПИЛОТ: направление на активную цель-узел + «прибыл» (её w у −1 = в центре проекции).
-    if (torusAutopilotActive()) {
-      const idx = torusAutopilotTarget() === 'home' ? TORUS.HOME_NODE : TORUS.MONUMENT_NODE
-      const o = idx * 4
+    // ВЫБРАННАЯ ЦЕЛЬ: своя рамка на HUD (по ней и рулишь) + направление для автопилота.
+    // «Прибыл» — когда w у −1: узел пришёл в центр проекции, то есть ты внутри него.
+    const targetVertex = torusTargetVertex()
+    if (targetVertex === null) {
+      torusTargetMarker.visible = false
+    } else {
+      const o = targetVertex * 4
       const w = _rot[o + 3]!
-      stereoProject(_rot[o]!, _rot[o + 1]!, _rot[o + 2]!, w, TORUS.SCALE, _p)
-      const len = Math.hypot(_p.x, _p.y, _p.z)
-      const arrived = w < TORUS.AUTOPILOT_ARRIVE_W
-      if (len > 1e-3) setTorusNav(_p.x / len, _p.y / len, _p.z / len, true, arrived)
-      else setTorusNav(0, 0, 0, false, arrived)
+      updateNodeMarker(targetVertex, group.position, torusTargetMarker)
+      torusTargetMarker.name = nameOfVertex(universe, targetVertex)
+      if (torusAutopilotActive()) {
+        stereoProject(_rot[o]!, _rot[o + 1]!, _rot[o + 2]!, w, projScale(), _p)
+        const len = Math.hypot(_p.x, _p.y, _p.z)
+        const arrived = w < TORUS.AUTOPILOT_ARRIVE_W
+        if (len > 1e-3) setTorusNav(_p.x / len, _p.y / len, _p.z / len, true, arrived)
+        else setTorusNav(0, 0, 0, false, arrived)
+      }
     }
   })
 
