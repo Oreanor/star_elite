@@ -13,7 +13,7 @@ import {
   placeShowcaseFleet,
   spawnResidentContacts,
   spawnSlovo,
-  startAtStation,
+  startDocked,
   jump,
   commitPreparedJump,
   systemDefFor,
@@ -174,9 +174,10 @@ function createSession(initialSave?: PlayerSave | null): Session {
     }
     if (idx >= 0) fitFromHold(world.player, idx)
   }
-  // Рядом с причалом, в полёте, носом на станцию — сразу видна (не меню дока).
-  // Зазор побольше: крест крупный, с 2.5 км балки забивают кадр чёрным.
-  startAtStation(world, 12_000)
+  // Старт В ДОКЕ: игра открывается консолью станции, а не километром пустоты рядом с ней.
+  // Это и точка возврата (там же оказываешься после стыковки), и безопасное начало — мир
+  // на паузе, пока не отчалишь. `startDocked` ставит борт вплотную и стыкует общим путём.
+  startDocked(world)
 
   /**
    * ЗНАКОМЫЕ живут в системе с первого кадра — как и после прыжка.
@@ -185,7 +186,7 @@ function createSession(initialSave?: PlayerSave | null): Session {
    * приезжает из сейва (`applyPlayerSave`) уже ПОСЛЕ `enterSystem`, и жители системы не
    * заводились вовсе. Оттого встреченный борт выглядел знакомым (тот же сид — то же имя и
    * лицо), но памяти о тебе не имел: это был ДРУГОЙ корабль, свежий трафик без записи.
-   * Зовём после `startAtStation` — игрок уже у причала, и знакомые заходят от него, а не от
+   * Зовём после `startDocked` — игрок уже у причала, и знакомые заходят от него, а не от
    * точки выхода из гипера. Контроллеры им раздаст сборка ниже: она идёт по `world.ships`.
    */
   spawnResidentContacts(world)

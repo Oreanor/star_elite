@@ -6,7 +6,6 @@ import {
   findStation,
   generateSystem,
   livingContacts,
-  localSettlement,
   stepDockTraffic,
   stanceTo,
   type BodyEntity,
@@ -19,10 +18,9 @@ import { useOnlinePlayers, type OnlinePlayer } from '../../app/net/presence'
 import { currentLang, t, useLang, type Key } from '../i18n'
 import { UI } from '../theme'
 import { currentGameDate } from '../clock'
-import { chassisName, economyName, governmentName, occupationName, professionName, properName, speciesName } from '../i18n/dataNames'
-import { ACCENT, Button, Column, DIM, PilotPortrait, Table } from '../station/chrome'
+import { chassisName, occupationName, professionName, properName } from '../i18n/dataNames'
+import { ACCENT, Button, DIM, PilotPortrait } from '../station/chrome'
 import { GLASS_PANEL, screenBackground } from '../station/backdrop'
-import { Hold } from '../station/Hold'
 import { Market } from '../station/Market'
 import { ShipScreen } from '../ship/ShipScreen'
 import { SystemMap } from '../map/SystemMap'
@@ -30,6 +28,7 @@ import { GalaxyMap } from '../map/GalaxyMap'
 import { UniverseMap } from '../map/UniverseMap'
 import { useSession } from '../../app/GameContext'
 import { Locator } from '../map/Locator'
+import { PlanetScreen } from '../planet/PlanetScreen'
 
 /**
  * Консоль — ОДНА стеклянная панель с вкладками, общая для причала и полёта.
@@ -49,7 +48,6 @@ export type ConsoleTab =
   | 'planet'
   | 'ship'
   | 'shop'
-  | 'cargo'
   | 'people'
   | 'locator'
   | 'system'
@@ -133,12 +131,13 @@ export function Console({
   const tabs: { id: ConsoleTab; label: string; active?: boolean }[] = [
     // У причала первая вкладка — СТАНЦИЯ (шапка места + кто пристыкован); в полёте
     // станции под тобой нет, и та же вкладка показывает паспорт мира — ПЛАНЕТА.
-    { id: 'planet', label: docked ? t('station.nav.station') : t('station.nav.planet') },
+    { id: 'planet', label: t('station.nav.planet') },
     // КОРАБЛЬ — и твой борт, и витрина корпусов: у причала под моделью стрелки листают
     // каталог и кнопка покупки. Отдельной «ВЕРФИ» больше нет.
     { id: 'ship', label: t('ship.title') },
     ...(docked ? [{ id: 'shop' as const, label: t('station.nav.shop') }] : []),
-    { id: 'cargo', label: t('station.nav.cargo') },
+    // ГРУЗ отдельной вкладкой больше не живёт: трюм — плашка под модулями во вкладке
+    // КОРАБЛЬ. Он часть корабля, а не самостоятельный прибор.
     // ЛЮДИ — знакомые пилоты: где они и как с ними связаться. Есть и у причала, и в полёте.
     { id: 'people', label: t('station.nav.people') },
     // КАРТА — одна кнопка на ЧЕТЫРЕ вида (локатор/система/галактика/мир). Подсвечена, пока
@@ -215,15 +214,11 @@ export function Console({
 
         {/* Содержимое вкладки скроллится внутри панели — длинный список не распирает её. */}
         <div className="mt-5 flex min-h-0 flex-1 flex-col overflow-y-auto pr-1">
-          {tab === 'planet' &&
-            (docked ? (
-              <StationReadout world={world} station={station} planet={planet} />
-            ) : (
-              <LocationReadout world={world} planet={planet} />
-            ))}
+          {/* ПЛАНЕТА — одна и та же и у причала, и в полёте: станция не отдельная сущность
+              для пилота, а постройка на орбите этого мира. Паспортов-таблиц больше нет. */}
+          {tab === 'planet' && <PlanetScreen world={world} planet={planet} />}
           {tab === 'ship' && <ShipScreen world={world} docked={docked} embedded onChange={bump} onClose={() => onTab('planet')} />}
           {tab === 'shop' && docked && <Market world={world} onChange={bump} />}
-          {tab === 'cargo' && <Hold world={world} onChange={bump} atStation={docked} />}
           {tab === 'people' && (
             <PeopleTab key={peopleRefresh} world={world} docked={docked} onTalk={onTalk} onChat={onChat} />
           )}
@@ -235,7 +230,10 @@ export function Console({
               ? tab
               : fallbackView(bushActive, giant)
             return (
-            <div className="flex min-h-0 flex-1 flex-col">
+            // Карта прокруткой не пользуется — она сама вписана в панель. `overflow-hidden`
+            // отрезает её от общего скролла вкладок: иначе драг по полю иногда «пробивал»
+            // вертикальную прокрутку консоли, и карта уезжала под шапку.
+            <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
               <div className="mb-4 flex gap-2">
                 {MAP_VIEWS.map((v) => {
                   const on = v === view
@@ -273,12 +271,6 @@ export function Console({
       </div>
     </div>
   )
-}
-
-interface Fact {
-  key: string
-  label: string
-  value: string
 }
 
 /** Единая плашка человека: портрет слева, справа имя/роль/деталь и кнопка «Связаться». */
@@ -563,49 +555,21 @@ function capitalWorld(world: World): BodyEntity | null {
   for (const b of world.bodies) {
     if (b.population > 0 && (!best || b.population > best.population)) best = b
   }
-  return best
+  if (best) return best
+  // Необитаемая система: столицы нет, но мир под тобой есть — берём БЛИЖАЙШУЮ планету.
+  // Иначе вкладка ПЛАНЕТА пустовала бы там, где смотреть как раз интереснее всего.
+  let near: BodyEntity | null = null
+  let dist = Infinity
+  for (const b of world.bodies) {
+    if (b.kind !== 'planet' && b.kind !== 'moon') continue
+    const d = b.pos.distanceTo(world.player.state.pos)
+    if (d < dist) {
+      dist = d
+      near = b
+    }
+  }
+  return near
 }
-
-/**
- * Паспорт МИРА, а не станции: заголовком — планета, под ней мельче её система, ниже
- * без рамки — строй, экономика, тех-уровень, население. Имя причала сюда не идёт: оно
- * ушло в заголовок модалки. Экономику и строй переводит слой данных.
- */
-function LocationReadout({ world, planet }: { world: World; planet: BodyEntity | null }) {
-  const s = localSettlement(world)
-  const population = Math.round(s.population * 10) / 10
-
-  const rows: Fact[] = [
-    { key: 'government', label: t('station.government'), value: governmentName(s.government) },
-    { key: 'economy', label: t('station.economy'), value: economyName(s.economy) },
-    { key: 'tech', label: t('station.tech'), value: String(s.techLevel) },
-    { key: 'population', label: t('station.population'), value: t('station.popUnit', { n: population }) },
-    { key: 'species', label: t('station.species'), value: speciesName(s.species) },
-  ]
-
-  const columns: Column<Fact>[] = [
-    { key: 'label', header: '', width: '9rem', cell: (r) => <span style={{ color: DIM }}>{r.label}</span> },
-    { key: 'value', header: '', cell: (r) => r.value },
-  ]
-
-  return (
-    <div>
-      <h1 className="text-2xl tracking-[0.2em]">{properName(planet ? planet.name : world.systemName)}</h1>
-      <p className="mt-1 text-xs tracking-widest" style={{ color: DIM }}>
-        {t('station.system')} {properName(world.systemName).toUpperCase()}
-      </p>
-      <div className="mt-6 max-w-md text-sm">
-        <Table columns={columns} rows={rows} rowKey={(r) => r.key} />
-      </div>
-    </div>
-  )
-}
-
-/** Двухколоночная раскладка «подпись → значение» для шапки паспорта. */
-const FACT_COLUMNS: Column<Fact>[] = [
-  { key: 'label', header: '', width: '9rem', cell: (r) => <span style={{ color: DIM }}>{r.label}</span> },
-  { key: 'value', header: '', cell: (r) => r.value },
-]
 
 /**
  * Кто сейчас пристыкован. Игрок — всегда первым (он же и стоит у причала), следом
@@ -618,40 +582,3 @@ function dockedPilots(world: World): ShipEntity[] {
   return [world.player, ...here]
 }
 
-/**
- * Паспорт СТАНЦИИ у причала: заголовком её имя, ниже строки «станция / планета /
- * система» и далее строй-экономика-население, а под ними плашки пристыкованных
- * пилотов с местом под портрет. В полёте вместо этого — паспорт мира (`LocationReadout`).
- */
-function StationReadout({
-  world,
-  station,
-  planet,
-}: {
-  world: World
-  station: BodyEntity | null
-  planet: BodyEntity | null
-}) {
-  const s = localSettlement(world)
-  const population = Math.round(s.population * 10) / 10
-
-  const rows: Fact[] = [
-    { key: 'station', label: t('station.title'), value: station ? properName(station.name) : '—' },
-    { key: 'planet', label: t('station.nav.planet'), value: planet ? properName(planet.name) : '—' },
-    { key: 'system', label: t('station.system'), value: properName(world.systemName) },
-    { key: 'government', label: t('station.government'), value: governmentName(s.government) },
-    { key: 'economy', label: t('station.economy'), value: economyName(s.economy) },
-    { key: 'tech', label: t('station.tech'), value: String(s.techLevel) },
-    { key: 'population', label: t('station.population'), value: t('station.popUnit', { n: population }) },
-    { key: 'species', label: t('station.species'), value: speciesName(s.species) },
-  ]
-
-  return (
-    // Крупный заголовок с именем станции убран: причал уже подписан в шапке модалки, а имя
-    // повторяется первой строкой таблицы — большой дубль над ней был лишним.
-    <div className="max-w-md text-sm">
-      <Table columns={FACT_COLUMNS} rows={rows} rowKey={(r) => r.key} />
-      {/* Кто пристыкован — теперь во вкладке ЛЮДИ (раздел ПРИСТЫКОВАНЫ), рядом со знакомыми. */}
-    </div>
-  )
-}

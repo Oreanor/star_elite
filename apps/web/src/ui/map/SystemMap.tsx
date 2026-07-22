@@ -15,6 +15,7 @@ import { t, useLang } from '../i18n'
 import { properName } from '../i18n/dataNames'
 import { formatDistance } from '../hud/project'
 import { useWheelZoom } from './useWheelZoom'
+import { MapCard, MapFrame, MapPin, MapRow } from './MapFrame'
 
 /**
  * Карта системы — голограмма над консолью.
@@ -235,6 +236,16 @@ function markers(world: World): Marker[] {
 const selectable = (m: Marker) =>
   m.kind !== 'ship' && m.kind !== 'contact' && m.kind !== 'player'
 
+/**
+ * Род объекта словом — он пишется перед именем и в списке, и в карточке. Имя без рода
+ * не читается: «Церера» может быть и спутником, и причалом, а цвет метки виден лишь
+ * на диске. Слова берём из общего словаря локатора — прибор разный, а мир один.
+ */
+const kindWord = (kind: MarkerKind): string =>
+  kind === 'contact' || kind === 'player'
+    ? t('locator.kind.ship')
+    : t(`locator.kind.${kind}` as 'locator.kind.planet')
+
 /** Состав системы одной строкой: сколько чего в ней есть. */
 function census(world: World): string {
   const count = (kind: BodyEntity['kind']) => world.bodies.filter((b) => b.kind === kind).length
@@ -264,6 +275,8 @@ export function SystemMap({
 
   // Масштаб голограммы: 1 — вся система в поле, больше — ближе. Колесо его крутит.
   const [zoom, setZoom] = useState(1)
+  /** Наведение — ОДНО на карту: строка списка и метка на диске подсвечивают друг друга. */
+  const [hover, setHover] = useState<number | null>(null)
   const holoRef = useRef<HTMLDivElement>(null)
   const listRef = useRef<HTMLUListElement>(null)
   useWheelZoom(holoRef, (dy) => setZoom((z) => Math.min(6, Math.max(0.6, z * (dy > 0 ? 0.9 : 1.1)))))
@@ -331,69 +344,90 @@ export function SystemMap({
     listRef.current?.querySelector('[data-active="true"]')?.scrollIntoView({ block: 'nearest' })
   }, [world.navTargetId])
 
+  // Карточка показывает захваченное, а нет захвата — то, на что смотрит курсор: тот же
+  // порядок, что на локаторе (выбор важнее наведения).
+  const shown = points.find((m) => m.id === world.navTargetId) ?? points.find((m) => m.id === hover) ?? null
+
   const content = (
-    <>
-      {/* Единый расклад всех трёх карт: диск в левых 2/3 (центрован), инфо — в правой 1/3. */}
-      <div className="flex w-2/3 justify-center">
+    <MapFrame
+      square
+      title={properName(world.systemName).toUpperCase()}
+      // Состав системы: сколько звёзд, планет, лун и причалов — видно, что тут есть.
+      subtitle={census(world)}
+      aside={
+        <>
+          {/* Длинный список объектов не должен распирать карточку — он скроллится сам. */}
+          <ul ref={listRef} className="min-h-0 flex-1 space-y-1 overflow-y-auto pr-1">
+            {points.filter(selectable).map((m) => (
+              <li key={m.id}>
+                <MapRow
+                  kind={kindWord(m.kind)}
+                  name={properName(m.name)}
+                  meta={formatDistance(m.range)}
+                  color={m.tint ?? colourOf(m.kind)}
+                  active={m.id === world.navTargetId}
+                  hover={m.id === hover}
+                  onHover={(on) => setHover((h) => (on ? m.id : h === m.id ? null : h))}
+                  onClick={() => applySelect(m.id)}
+                />
+              </li>
+            ))}
+          </ul>
+
+          {!embedded && (
+            <button
+              type="button"
+              onClick={onClose}
+              className="shrink-0 cursor-pointer rounded border py-2 text-sm tracking-[0.3em] transition-colors hover:bg-white/10"
+              style={{ borderColor: CHROME }}
+            >
+              {t('map.close')}
+            </button>
+          )}
+        </>
+      }
+    >
       <div
         ref={holoRef}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerUp}
-        className="relative aspect-square w-full min-w-0 max-w-[min(31rem,calc(100vh-17rem))] shrink cursor-grab touch-none select-none active:cursor-grabbing"
+        className="absolute inset-0 cursor-grab touch-none select-none active:cursor-grabbing"
       >
-        <Hologram points={points} heading={headingOf(world)} navTargetId={world.navTargetId} zoom={zoom} yaw={yaw} tilt={tilt} onSelect={selectFromMap} />
-      </div>
-      </div>
+        <Hologram
+          points={points}
+          heading={headingOf(world)}
+          navTargetId={world.navTargetId}
+          hoverId={hover}
+          zoom={zoom}
+          yaw={yaw}
+          tilt={tilt}
+          onSelect={selectFromMap}
+          onHover={setHover}
+        />
 
-      <div className="flex w-1/3 shrink-0 flex-col" style={{ color: CHROME }}>
-        <h1 className="text-xl tracking-[0.3em]">{properName(world.systemName).toUpperCase()}</h1>
-        {/* Состав системы: сколько звёзд, планет, лун и причалов — видно, что тут есть. */}
-        <p className="mb-6 mt-1 text-[11px] tracking-widest opacity-50">{census(world)}</p>
-
-        {/* Длинный список объектов не должен распирать карточку — он скроллится сам. */}
-        <ul ref={listRef} className="min-h-0 flex-1 space-y-1 overflow-y-auto pr-1">
-          {points.filter(selectable).map((m) => {
-            const active = m.id === world.navTargetId
-            return (
-              <li key={m.id}>
-                <button
-                  type="button"
-                  data-active={active}
-                  onClick={() => applySelect(m.id)}
-                  className="flex w-full cursor-pointer items-baseline gap-3 rounded border px-3 py-2 text-left text-sm transition-colors"
-                  style={{
-                    borderColor: active ? CHROME : 'rgba(124,196,255,0.16)',
-                    background: active ? 'rgba(124,196,255,0.12)' : 'transparent',
-                    color: m.tint ?? colourOf(m.kind),
-                  }}
-                >
-                  <span className="flex-1 truncate">{properName(m.name)}</span>
-                  <span className="text-xs opacity-60">{formatDistance(m.range)}</span>
-                </button>
-              </li>
-            )
-          })}
-        </ul>
-
-        {!embedded && (
-          <button
-            type="button"
-            onClick={onClose}
-            className="mt-auto w-full cursor-pointer rounded border py-2 text-sm tracking-[0.3em] transition-colors hover:bg-white/10"
-            style={{ borderColor: CHROME }}
-          >
-            {t('map.close')}
-          </button>
-        )}
+        {/* Карточка — булавкой у самой метки, поверх голограммы: клик по списку слева
+            подсвечивает не строку, а МЕСТО в системе. Точку берём той же проекцией. */}
+        {shown && (() => {
+          const p = project(shown.x, shown.y, shown.lift, yaw, tilt, zoom)
+          return (
+            <MapPin x={(p.x + VIEW / 2) / VIEW} y={(p.y + VIEW / 2) / VIEW}>
+              <MapCard
+                kind={kindWord(shown.kind)}
+                name={properName(shown.name)}
+                color={shown.tint ?? colourOf(shown.kind)}
+                locked={shown.id === world.navTargetId}
+                lines={[`${t('map.distance')}: ${formatDistance(shown.range)}`]}
+              />
+            </MapPin>
+          )
+        })()}
       </div>
-    </>
+    </MapFrame>
   )
 
-  if (embedded) {
-    return <div className="flex w-full items-start gap-6 py-2 font-mono">{content}</div>
-  }
+  if (embedded) return content
 
   return (
     <div
@@ -401,7 +435,7 @@ export function SystemMap({
       style={{ background: 'radial-gradient(ellipse at center, rgba(12,34,60,0.66), rgba(0,3,8,0.93))' }}
     >
       <div
-        className="flex max-h-[calc(100vh-3rem)] items-stretch gap-6 rounded-2xl border p-7 font-mono"
+        className="flex h-[calc(100vh-3rem)] w-[calc(100vw-3rem)] max-w-6xl items-stretch gap-6 rounded-2xl border p-7 font-mono"
         style={{
           borderColor: 'rgba(124,196,255,0.3)',
           background: 'linear-gradient(150deg, rgba(40,95,150,0.18), rgba(8,22,42,0.4))',
@@ -418,14 +452,19 @@ function Hologram({
   points,
   heading,
   navTargetId,
+  hoverId,
   zoom,
   yaw,
   tilt,
   onSelect,
+  onHover,
 }: {
   points: Marker[]
   heading: { x: number; y: number }
   navTargetId: number | null
+  /** Что подсвечено курсором — здесь или в списке слева. */
+  hoverId: number | null
+  onHover: (id: number | null) => void
   /** Масштаб: множит разлёт орбит. Больше — ближе. Значки не растут. */
   zoom: number
   /** Поворот диска в плоскости и наклон «на себя» — как у локатора. */
@@ -485,6 +524,8 @@ function Hologram({
           <g
             key={m.id}
             onClick={clickable ? () => onSelect(m.id) : undefined}
+            onMouseEnter={clickable ? () => onHover(m.id) : undefined}
+            onMouseLeave={clickable ? () => onHover(null) : undefined}
             style={{ cursor: clickable ? 'pointer' : 'default' }}
           >
             {/* Штрих высоты: от плоскости эклиптики (base) к телу (tip) — виден при наклоне. */}
@@ -522,6 +563,8 @@ function Hologram({
               )}
 
               {active && <circle r={16} fill="none" stroke={colour} strokeDasharray="3 4" />}
+              {/* Наведение из списка — сплошное кольцо: видно, о какой строке речь. */}
+              {!active && m.id === hoverId && <circle r={14} fill="none" stroke={colour} strokeOpacity={0.7} />}
 
               <text
                 x={13}
@@ -531,7 +574,7 @@ function Hologram({
                 fillOpacity={0.85}
                 style={{ pointerEvents: 'none', userSelect: 'none' }}
               >
-                {properName(m.name)}
+                {kindWord(m.kind).toUpperCase()}: {properName(m.name)}
               </text>
             </g>
           </g>

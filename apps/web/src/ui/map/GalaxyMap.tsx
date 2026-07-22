@@ -1,6 +1,7 @@
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import { useWheelZoom } from './useWheelZoom'
+import { MapFrame, MapRow } from './MapFrame'
 import {
   BufferAttribute,
   BufferGeometry,
@@ -437,6 +438,47 @@ function StarLabel({ at, box }: { at: Vector3 | null; box: React.RefObject<HTMLD
 }
 
 /**
+ * Булавка карточки: держит плашку выбранной системы У ЕЁ ЗВЕЗДЫ. Позицию пишет кадр
+ * прямо в стиль — как подписи имён рядом. React в этом не участвует: карта вращается
+ * драгом, и пересобирать дерево ради движения плашки было бы самоубийством для частоты.
+ *
+ * У правого края плашка перекидывается влево, а по вертикали зажимается в поле: карточка
+ * высокая (в ней схема выхода), и у нижней звезды она иначе уезжала бы за край.
+ */
+function CardPin({ at, box }: { at: Vector3 | null; box: React.RefObject<HTMLDivElement | null> }) {
+  const { camera, size } = useThree()
+
+  useFrame(() => {
+    const el = box.current
+    if (!el) return
+    if (!at) {
+      el.style.opacity = '0'
+      el.style.pointerEvents = 'none'
+      return
+    }
+
+    _screen.copy(at).project(camera)
+    if (_screen.z > 1) {
+      el.style.opacity = '0'
+      el.style.pointerEvents = 'none'
+      return
+    }
+
+    const x = (_screen.x * 0.5 + 0.5) * size.width
+    const y = (-_screen.y * 0.5 + 0.5) * size.height
+    const w = el.offsetWidth
+    const h = el.offsetHeight
+    const left = x > size.width * 0.55 ? x - w - 12 : x + 12
+    const top = Math.max(4, Math.min(size.height - h - 4, y - h / 2))
+    el.style.opacity = '1'
+    el.style.pointerEvents = 'auto'
+    el.style.transform = `translate(${Math.round(left)}px, ${Math.round(top)}px)`
+  })
+
+  return null
+}
+
+/**
  * Камера-орбита вокруг центра галактики. Своя, а не библиотечная: нужны ровно
  * три жеста, и тащить ради них зависимость незачем.
  */
@@ -752,6 +794,29 @@ function GalaxyMapImpl({ onClose, embedded = false }: { onClose: () => void; emb
     return null
   }, [search, systems])
 
+  /**
+   * Список звёзд для левой колонки: то же, что видно на поле (фильтр) и что нашёл поиск,
+   * ближние первыми. Обрезан двумя сотнями — колонка не читальный зал на 2500 строк, а
+   * длинный список всё равно разбирают поиском.
+   */
+  const listed = useMemo(() => {
+    const hit = (name: string) => properName(name).toLowerCase().includes(search)
+    const out: { index: number; name: string; distance: number }[] = []
+    for (let i = 0; i < systems.length; i++) {
+      if (!visible[i]) continue
+      const s = systems[i]!
+      if (
+        search.length >= 2 &&
+        !hit(s.name) &&
+        !s.planets.some((p) => hit(p.name) || (p.station != null && hit(p.station.name)))
+      )
+        continue
+      out.push({ index: i, name: s.name, distance: jumpDistance(world, i) })
+    }
+    out.sort((a, b) => a.distance - b.distance)
+    return out.slice(0, 200)
+  }, [systems, visible, search, world.systemIndex, world.galaxySeed])
+
   const chooseSystem = (index: number) => {
     setSelected(index)
     // Затаргетились: выбор переживёт закрытие карты и отчаливание. Точку выхода по
@@ -765,6 +830,7 @@ function GalaxyMapImpl({ onClose, embedded = false }: { onClose: () => void; emb
   const control = useRef({ yaw: 0.6, pitch: 0.5, distance: GALAXY.RADIUS_LY * 2.6, target: new Vector3() })
   const dragging = useRef(false)
   const label = useRef<HTMLDivElement>(null)
+  const card = useRef<HTMLDivElement>(null)
   const you = useRef<HTMLDivElement>(null)
   const viewport = useRef<HTMLDivElement>(null)
   // Метки знакомых: где живые контакты по системам. Div'ы подписей собираем в карту по
@@ -809,12 +875,86 @@ function GalaxyMapImpl({ onClose, embedded = false }: { onClose: () => void; emb
   }, [onClose, embedded])
 
   const content = (
-    <>
-      {/* Поле галактики занимает левые 2/3, но только 60% высоты: широкий Canvas сам
-          пересчитывает проекцию, поэтому диск читается эллипсом, а точки остаются круглыми. */}
+    <MapFrame
+      title={`${t('map.galaxy')} ${properName(galaxy.name).toUpperCase()}`}
+      subtitle={`${galaxyShapeName(galaxy.shape).toUpperCase()} · ${t('map.starsCount', { n: systems.length })}`}
+      aside={
+        <>
+          {/* Поиск, фильтры и список звёзд — в колонке, как у остальных карт. Раньше они
+              висели плашкой поверх поля: пульт закрывал те самые звёзды, среди которых
+              искали, а колонка справа при этом пустовала. */}
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder={t('map.search')}
+            className="w-full shrink-0 rounded border bg-black/40 px-3 py-1.5 text-xs tracking-widest outline-none placeholder:opacity-40"
+            style={{
+              borderColor: search.length >= 2 && searchIndex == null ? UI.WARN : 'rgba(124,196,255,0.35)',
+              color: UI.PRIMARY,
+            }}
+          />
+
+          <div className="flex shrink-0 flex-wrap gap-1">
+            {(['all', 'stations', 'primitive', 'empty'] as const).map((f) => {
+              const on = filter === f
+              return (
+                <button
+                  key={f}
+                  type="button"
+                  onClick={() => setFilter(f)}
+                  className="cursor-pointer border px-2 py-1 text-[11px] tracking-widest transition-colors"
+                  style={{
+                    borderColor: on ? UI.PRIMARY : UI.DIM,
+                    backgroundColor: on ? UI.PRIMARY : 'transparent',
+                    color: on ? '#000' : UI.DIM,
+                  }}
+                >
+                  {t(`map.filter.${f}` as 'map.filter.all')}
+                </button>
+              )
+            })}
+          </div>
+
+          <label className="flex shrink-0 cursor-pointer items-center gap-2 text-[11px] tracking-widest" style={{ color: UI.DIM }}>
+            <input
+              type="checkbox"
+              checked={showContacts}
+              onChange={(e) => setShowContacts(e.target.checked)}
+              className="cursor-pointer accent-[#7fd6ff]"
+            />
+            {t('map.showContacts')}
+          </label>
+
+          {search.length >= 2 && searchIndex == null && (
+            <span className="shrink-0 text-[11px] tracking-widest" style={{ color: UI.WARN }}>{t('map.searchNone')}</span>
+          )}
+
+          {/* Список звёзд: наведение зажигает точку на поле, клик выбирает цель прыжка —
+              ровно то же, что клик по самой точке. */}
+          <ul className="min-h-0 flex-1 space-y-1 overflow-y-auto pr-1">
+            {listed.map((s) => (
+              <li key={s.index}>
+                <MapRow
+                  kind={t('map.view.system')}
+                  name={properName(s.name).toUpperCase()}
+                  meta={`${s.distance.toFixed(1)} ${t('unit.ly')}`}
+                  color={UI.PRIMARY}
+                  active={s.index === selected}
+                  hover={s.index === hovered}
+                  onHover={(on) => setHovered((h) => (on ? s.index : h === s.index ? null : h))}
+                  onClick={() => chooseSystem(s.index)}
+                />
+              </li>
+            ))}
+          </ul>
+        </>
+      }
+    >
       <div
         ref={viewport}
-        className="relative h-[60%] w-2/3 self-center cursor-grab active:cursor-grabbing"
+        // `select-none` здесь не косметика: без него драг по полю ВЫДЕЛЯЕТ текст подписей, а
+        // выделение тянет за собой автопрокрутку панели — карта крутится, а консоль едет.
+        className="absolute inset-0 cursor-grab touch-none select-none active:cursor-grabbing"
         onPointerDown={() => (dragging.current = true)}
         onPointerUp={() => (dragging.current = false)}
         onPointerLeave={() => (dragging.current = false)}
@@ -854,63 +994,9 @@ function GalaxyMapImpl({ onClose, embedded = false }: { onClose: () => void; emb
           )}
           <Route from={here} to={picked ? positionOf(picked.system) : null} />
           <StarLabel at={picked ? positionOf(picked.system) : null} box={label} />
+          {/* Плашка выбранной системы едет за своей звездой — её место считает кадр. */}
+          <CardPin at={selected != null && systems[selected] ? positionOf(systems[selected]!) : null} box={card} />
         </Canvas>
-
-        {/* Управление картой живёт над самим звёздным полем: правая колонка остаётся
-            маршрутной карточкой и больше не требует внутреннего скролла. */}
-        <div
-          className="absolute left-3 top-3 z-20 w-[min(28rem,calc(100%-1.5rem))] space-y-2 rounded-lg border p-3 backdrop-blur-md"
-          style={{
-            borderColor: 'rgba(124,196,255,0.28)',
-            background: 'rgba(8,22,42,0.72)',
-          }}
-          onPointerDown={(e) => e.stopPropagation()}
-        >
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder={t('map.search')}
-            className="w-full rounded border bg-black/40 px-3 py-1.5 tracking-widest outline-none placeholder:opacity-40"
-            style={{
-              borderColor: search.length >= 2 && searchIndex == null ? UI.WARN : 'rgba(124,196,255,0.35)',
-              color: UI.PRIMARY,
-            }}
-          />
-          {search.length >= 2 && searchIndex == null && (
-            <span className="block" style={{ color: UI.WARN }}>{t('map.searchNone')}</span>
-          )}
-
-          <div className="flex flex-wrap gap-1">
-            {(['all', 'stations', 'primitive', 'empty'] as const).map((f) => {
-              const on = filter === f
-              return (
-                <button
-                  key={f}
-                  type="button"
-                  onClick={() => setFilter(f)}
-                  className="cursor-pointer border px-2 py-1 tracking-widest transition-colors"
-                  style={{
-                    borderColor: on ? UI.PRIMARY : UI.DIM,
-                    backgroundColor: on ? UI.PRIMARY : 'transparent',
-                    color: on ? '#000' : UI.DIM,
-                  }}
-                >
-                  {t(`map.filter.${f}` as 'map.filter.all')}
-                </button>
-              )
-            })}
-          </div>
-
-          <label className="flex cursor-pointer items-center gap-2 tracking-widest" style={{ color: UI.DIM }}>
-            <input
-              type="checkbox"
-              checked={showContacts}
-              onChange={(e) => setShowContacts(e.target.checked)}
-              className="cursor-pointer accent-[#7fd6ff]"
-            />
-            {t('map.showContacts')}
-          </label>
-        </div>
 
         {/* Подпись «ВЫ» и имя под курсором живут всегда: их двигает кадр, а не React. */}
         <div
@@ -968,57 +1054,37 @@ function GalaxyMapImpl({ onClose, embedded = false }: { onClose: () => void; emb
           </div>
         ))}
 
-      </div>
-
-      {/* Правая 1/3: только заголовок галактики и выбранная система. Управление
-          перенесено на поле слева, поэтому здесь нет ни скролла, ни тесного пульта. */}
-      <div
-        className="flex w-1/3 shrink-0 flex-col gap-3 overflow-hidden pl-1 text-xs"
-        onPointerDown={(e) => e.stopPropagation()}
-      >
-        <div>
-          <div className="text-xl tracking-[0.3em]">
-            {t('map.galaxy')} {properName(galaxy.name).toUpperCase()}
-          </div>
-          <div className="mt-1 tracking-widest" style={{ color: UI.DIM }}>
-            {galaxyShapeName(galaxy.shape).toUpperCase()} · {t('map.starsCount', { n: systems.length })}
-          </div>
-        </div>
-
-        {/* Выбранная система — карточка прямо в колонке (раньше плашка у курсора).
-            Ничего не выбрано — столбец пуст, без подсказок. */}
+        {/* Выбранная система — плашка У СВОЕЙ ЗВЕЗДЫ, поверх поля (позицию двигает
+            `CardPin` в кадре). Не часть вёрстки: колонку слева заняли поиск, фильтры и
+            список, а появление карточки ничего не должно двигать. */}
         {selected != null && systems[selected] && (
-          <SystemPopup
-            key={selected}
-            inline
-            system={systems[selected]!}
-            world={world}
-            index={selected}
-            docked={world.docked}
-            onArrival={(planet) => {
-              world.jumpArrivalPlanet = planet
-              bump()
-            }}
-            onClose={() => {
-              setSelected(null)
-              world.jumpTargetIndex = null
-              world.jumpArrivalPlanet = null
-              bump()
-            }}
-          />
+          <div ref={card} className="absolute left-0 top-0 z-30 w-96 max-w-[80%] opacity-0" style={{ willChange: 'transform' }}>
+            <SystemPopup
+              key={selected}
+              inline
+              system={systems[selected]!}
+              world={world}
+              index={selected}
+              docked={world.docked}
+              onArrival={(planet) => {
+                world.jumpArrivalPlanet = planet
+                bump()
+              }}
+              onClose={() => {
+                setSelected(null)
+                world.jumpTargetIndex = null
+                world.jumpArrivalPlanet = null
+                bump()
+              }}
+            />
+          </div>
         )}
       </div>
-    </>
+    </MapFrame>
   )
 
   // Встроена в консоль: рамку и фон даёт стеклянная панель, карте — заполнить её.
-  if (embedded) {
-    return (
-      <div className="flex h-full min-h-[30rem] items-stretch gap-6 overflow-hidden font-mono" style={{ color: UI.PRIMARY }}>
-        {content}
-      </div>
-    )
-  }
+  if (embedded) return content
 
   return (
     <div

@@ -19,7 +19,6 @@ import {
   freeCapacity,
   isEssential,
   minTechForClass,
-  missingRounds,
   moduleFault,
   moduleResaleValue,
   moduleStat,
@@ -59,6 +58,7 @@ import { t, useLang, type Key } from '../i18n'
 import { UI } from '../theme'
 import { ACCENT, Button, Column, DIM, Modal, Panel, Table } from '../station/chrome'
 import { StatId, credits, formatStat, statLabel } from '../station/format'
+import { Hold } from '../station/Hold'
 import { displayName, headlineCompare, headlineNumber, weaponSlot } from '../station/Equipment'
 import { chassisName, properName } from '../i18n/dataNames'
 
@@ -140,13 +140,10 @@ export function ShipScreen({
     setOpenKey(null) // открытый слот своего борта не должен «переехать» на чужой корпус
   }
 
-  // Апгрейд СВОЕГО корпуса — по осям: HP, грузоподъёмность, аукс. Каждую можно усилить
-  // РОВНО раз на +25%; дальше кнопка гаснет. Цена одна на ось (доля цены рамы). Кнопки —
-  // под статами, только у своего борта (owned) у причала. Дельту в потолок даёт домен.
-  const hullStatCost = hullStatUpgradeCost(player)
-  const doUpgradeStat = (stat: HullStat) => {
-    if (upgradeHullStat(world, player, stat) === null) refresh()
-  }
+  // МАСТЕРСКАЯ КОРПУСА — ремонт и усиление осей — открывается кликом по самому кораблю.
+  // Только у своего борта на верфи: чужой корпус не чинят, а в полёте мастерской нет.
+  const hullWorkshop = docked && owned
+  const [hullOpen, setHullOpen] = useState(false)
 
   // Escape закрывает экран — как на карте галактики. Клавишу I гасит App.
   // Встроенным в станцию клавишами заведует сама станция — второго слушателя не вешаем.
@@ -180,39 +177,40 @@ export function ShipScreen({
         </div>
       )}
 
-      {docked && <StationService world={world} onChange={refresh} />}
-
       {/* Слева паспорт (чертёж + характеристики), справа — оснастка ПЛИТКОЙ, а не в
           три колонки таблиц. Столбца «класс» больше нет: класс жил лишь в имени
           модуля, отдельной осью пилоту он ни к чему. */}
       <div className="mt-1 grid gap-5 lg:grid-cols-[minmax(0,18rem)_1fr]">
         <div className="space-y-3">
+          {/* Клик по вращающемуся кораблю открывает МАСТЕРСКУЮ КОРПУСА: ремонт и усиление
+              осей. Раньше это был ряд кнопок под характеристиками — он занимал полколонки
+              и висел там даже тогда, когда чинить и качать нечего. Корабль сам себе кнопка. */}
           <div
-            className="aspect-[15/8] w-full border"
+            className={`relative aspect-[15/8] w-full border ${hullWorkshop ? 'cursor-pointer' : ''}`}
+            onClick={hullWorkshop ? () => setHullOpen(true) : undefined}
             style={{
               borderColor: DIM,
               background: 'radial-gradient(ellipse at center, rgba(20,44,74,0.35), rgba(2,6,12,0.6))',
             }}
           >
             <Blueprint chassisId={shownId} />
-          </div>
 
-          {/* Имя корпуса в обрамлении стрелок — ими и листаем каталог. В полёте стрелок
-              нет (корпус не сменить), просто имя своего корабля по центру. */}
-          {docked ? (
-            <>
-              <div className="flex items-center gap-2">
-                <ArrowButton dir="left" onClick={() => cycle(-1)} />
-                <span className="flex-1 text-center text-sm tracking-[0.2em]">{chassisName(offer.chassis.name)}</span>
-                <ArrowButton dir="right" onClick={() => cycle(1)} />
-              </div>
-              <p className="text-center text-xs tracking-widest" style={{ color: DIM }}>
-                {t('ship.hulls.hint')}
-              </p>
-            </>
-          ) : (
-            <div className="text-center text-sm tracking-[0.2em]">{chassisName(player.loadout.chassis.name)}</div>
-          )}
+            {/* Стрелки каталога — на самом контейнере, по бокам и по центру высоты: они
+                листают то, что в нём показано, и отдельной строки под ним не заслуживают.
+                Имя корпуса не дублируем — оно заголовком в карточке характеристик ниже.
+                В полёте стрелок нет вовсе: корпус в пустоте не сменить. */}
+            {docked && (
+              <>
+                <div className="absolute left-1.5 top-1/2 -translate-y-1/2">
+                  {/* Клик по стрелке не должен открывать мастерскую корпуса под ней. */}
+                  <ArrowButton dir="left" onClick={(e) => { e.stopPropagation(); cycle(-1) }} />
+                </div>
+                <div className="absolute right-1.5 top-1/2 -translate-y-1/2">
+                  <ArrowButton dir="right" onClick={(e) => { e.stopPropagation(); cycle(1) }} />
+                </div>
+              </>
+            )}
+          </div>
 
           {/* Цена внутри кнопки покупки, либо «уже у вас». Клик открывает модалку сделки:
               зачёт старого корпуса, что уедет в грузовой отсек и сколько доплатить. */}
@@ -241,45 +239,26 @@ export function ShipScreen({
             baseline={docked && !owned ? player.spec : null}
           />
 
-          {/* Апгрейд корпуса — только у своего борта на верфи: три оси (HP / грузоподъёмность /
-              аукс), каждую усиливаем РОВНО раз на +25%. Усиленная ось помечена галкой, кнопка
-              гаснет; прочие гаснут лишь без денег. Свежий потолок по оси даёт домен. */}
-          {docked && owned && (
-            <div className="space-y-1">
-              <div className="text-xs tracking-[0.15em]" style={{ color: DIM }}>
-                {t('ship.hullUpgradeHint')}
-              </div>
-              {HULL_STATS.map((stat) => {
-                const done = player.hullUp[stat]
-                const err = canUpgradeHullStat(world, player, stat)
-                const active = err === null
-                return (
-                  <button
-                    key={stat}
-                    type="button"
-                    disabled={!active}
-                    onClick={() => doUpgradeStat(stat)}
-                    className={`flex w-full items-center justify-between border px-4 py-2 text-sm tracking-[0.15em] transition-colors ${
-                      active ? 'cursor-pointer hover:bg-[#7fd6ff] hover:text-black' : 'cursor-not-allowed opacity-40'
-                    }`}
-                    style={{ borderColor: done ? DIM : ACCENT, color: done ? DIM : ACCENT }}
-                  >
-                    <span>{done ? `${statLabel(stat)} ✓` : t('ship.hullStat', { stat: statLabel(stat) })}</span>
-                    <span>{done ? '+25%' : credits(hullStatCost)}</span>
-                  </button>
-                )
-              })}
-            </div>
-          )}
         </div>
 
-        <SlotGrid slots={slots} onOpen={setOpenKey} interactive={slotsInteractive} />
+        <div className="space-y-5">
+          <SlotGrid slots={slots} onOpen={setOpenKey} interactive={slotsInteractive} />
+          {/* ГРУЗ у причала уехал в МАГАЗИН, под товары: там торгуют, и трюм нужен рядом с
+              прилавком. В полёте магазина нет, а трюм есть — и он остаётся здесь, под
+              модулями, в режиме «выбросить за борт». Компонент один и тот же. */}
+          {!docked && <Hold world={world} onChange={refresh} atStation={false} />}
+        </div>
       </div>
 
       {/* Модалка — ТОЛЬКО у причала: там она мастерская (варианты + действия). В полёте
           карточки самодостаточны (харка и вес прямо на них), и клик ничего не открывает. */}
       {docked && openSlot && (
         <SlotModal world={world} docked={docked} slot={openSlot} onChange={refresh} onClose={() => setOpenKey(null)} />
+      )}
+
+      {/* Мастерская корпуса по клику на корабль: починить раму, усилить оси. */}
+      {hullWorkshop && hullOpen && (
+        <HullModal world={world} onChange={refresh} onClose={() => setHullOpen(false)} />
       )}
 
       {/* Подтверждение покупки корпуса: зачёт старого, груз-осадок, доплата, перегруз. */}
@@ -492,6 +471,95 @@ function SlotGrid({
         })}
       </div>
     </section>
+  )
+}
+
+/**
+ * МАСТЕРСКАЯ КОРПУСА — по клику на корабль. Здесь всё, что делают с самой рамой:
+ * чинят её и усиливают оси. Раньше это жило двумя блоками в колонке под моделью и
+ * занимало полэкрана даже тогда, когда корпус цел и всё уже усилено.
+ *
+ * Ремонт — БРОСОК: криворукий мастер может доломать. Исход приходит ключом из домена,
+ * здесь только слова к нему. Усиление оси — ровно раз на +25%, дальше кнопка гаснет
+ * галкой; потолок и цену считает домен, не интерфейс.
+ */
+function HullModal({
+  world,
+  onChange,
+  onClose,
+}: {
+  world: World
+  onChange: () => void
+  onClose: () => void
+}) {
+  useLang()
+  const [note, setNote] = useState<string | null>(null)
+  const player = world.player
+  const hullMax = player.spec.hull.hull
+  const hullCur = Math.round(player.hull)
+  const dmg = hullDamage(player)
+  const quote = repairQuote(world, player)
+  const cost = hullStatUpgradeCost(player)
+
+  const doRepair = () => {
+    const out = repair(world, player)
+    if (out === 'nothing') return
+    setNote(t(('ship.repair.' + out) as Key))
+    onChange()
+  }
+  const doUpgrade = (stat: HullStat) => {
+    if (upgradeHullStat(world, player, stat) === null) {
+      setNote(null)
+      onChange()
+    }
+  }
+
+  return (
+    <Modal onClose={onClose}>
+      <h3 className="mb-3 text-base tracking-[0.2em]">{chassisName(player.loadout.chassis.name)}</h3>
+
+      <p className="text-sm" style={{ color: DIM }}>
+        {dmg <= 0
+          ? t('station.service.hullOk', { cur: hullCur, max: hullMax })
+          : t('station.service.hullDmg', { cur: hullCur, max: hullMax, cost: quote.price })}
+      </p>
+      <div className="mt-3">
+        <Button small disabled={dmg <= 0 || quote.chance <= 0 || world.credits < quote.price} onClick={doRepair}>
+          {dmg <= 0 ? t('station.service.hullWhole') : t('station.service.repair')}
+        </Button>
+      </div>
+
+      <div className="mt-5 space-y-1">
+        <div className="text-xs tracking-[0.15em]" style={{ color: DIM }}>
+          {t('ship.hullUpgradeHint')}
+        </div>
+        {HULL_STATS.map((stat) => {
+          const done = player.hullUp[stat]
+          const active = canUpgradeHullStat(world, player, stat) === null
+          return (
+            <button
+              key={stat}
+              type="button"
+              disabled={!active}
+              onClick={() => doUpgrade(stat)}
+              className={`flex w-full items-center justify-between border px-4 py-2 text-sm tracking-[0.15em] transition-colors ${
+                active ? 'cursor-pointer hover:bg-[#7fd6ff] hover:text-black' : 'cursor-not-allowed opacity-40'
+              }`}
+              style={{ borderColor: done ? DIM : ACCENT, color: done ? DIM : ACCENT }}
+            >
+              <span>{done ? `${statLabel(stat)} ✓` : t('ship.hullStat', { stat: statLabel(stat) })}</span>
+              <span>{done ? '+25%' : credits(cost)}</span>
+            </button>
+          )
+        })}
+      </div>
+
+      {note && (
+        <p className="mt-3 text-xs tracking-widest" style={{ color: ACCENT }}>
+          {note}
+        </p>
+      )}
+    </Modal>
   )
 }
 
@@ -885,69 +953,6 @@ function ConfirmBox({
  * грузовой отсек, а внизу — доплата. Если перенесённое не влезает в новую раму по массе —
  * сделку не даём и говорим, сколько тонн лишку: сперва продай.
  */
-function StationService({ world, onChange }: { world: World; onChange: () => void }) {
-  useLang()
-  const [note, setNote] = useState<string | null>(null)
-  const player = world.player
-  const hullMax = player.spec.hull.hull
-  const hullCur = Math.round(player.hull)
-  const dmg = hullDamage(player)
-  const quote = repairQuote(world, player)
-  const missing = missingRounds(player)
-  const missilesCost = rearmCost(player)
-
-  const hullLine =
-    dmg <= 0
-      ? t('station.service.hullOk', { cur: hullCur, max: hullMax })
-      : t('station.service.hullDmg', { cur: hullCur, max: hullMax, cost: quote.price })
-
-  const missileLine =
-    missing <= 0
-      ? t('station.service.rearmOk')
-      : t('station.service.rearmNeed', { n: missing, cost: missilesCost })
-
-  const doHullRepair = () => {
-    const out = repair(world, player)
-    if (out === 'nothing') return
-    setNote(t(('ship.repair.' + out) as Key))
-    onChange()
-  }
-
-  const doRearm = () => {
-    if (missing <= 0) return
-    if (rearm(world, player)) {
-      setNote(t('ship.repair.rearmed'))
-      onChange()
-    } else {
-      setNote(t('ship.repair.no-money'))
-    }
-  }
-
-  return (
-    <Panel title={t('station.service.title')}>
-      <p className="text-sm" style={{ color: DIM }}>
-        {hullLine}
-      </p>
-      <p className="mt-1 text-sm" style={{ color: DIM }}>
-        {missileLine}
-      </p>
-      <div className="mt-3 flex flex-wrap gap-2">
-        <Button small disabled={dmg <= 0 || quote.chance <= 0 || world.credits < quote.price} onClick={doHullRepair}>
-          {dmg <= 0 ? t('station.service.hullWhole') : t('station.service.repair')}
-        </Button>
-        <Button small disabled={missing <= 0 || world.credits < missilesCost} onClick={doRearm}>
-          {missing <= 0 ? t('station.service.armed') : t('station.service.rearm')}
-        </Button>
-      </div>
-      {note && (
-        <p className="mt-2 text-xs tracking-widest" style={{ color: ACCENT }}>
-          {note}
-        </p>
-      )}
-    </Panel>
-  )
-}
-
 function HullBuyModal({
   world,
   chassis,
@@ -1139,12 +1144,20 @@ function Stats({ spec, name, baseline }: { spec: ShipSpec; name: string; baselin
 }
 
 /** Стрелка-кнопка листания каталога корпусов под моделью. */
-function ArrowButton({ dir, onClick }: { dir: 'left' | 'right'; onClick: () => void }) {
+function ArrowButton({
+  dir,
+  onClick,
+}: {
+  dir: 'left' | 'right'
+  onClick: (e: React.MouseEvent) => void
+}) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className="cursor-pointer border px-3 py-1 text-sm transition-colors hover:bg-[#7fd6ff] hover:text-black"
+      // Полупрозрачный фон: стрелка лежит ПОВЕРХ корабля, и без подложки её грань
+      // теряется на светлом борту.
+      className="cursor-pointer border bg-black/40 px-3 py-1 text-sm backdrop-blur-sm transition-colors hover:bg-[#7fd6ff] hover:text-black"
       style={{ borderColor: DIM, color: ACCENT }}
     >
       {dir === 'left' ? '◄' : '►'}

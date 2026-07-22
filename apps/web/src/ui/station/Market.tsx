@@ -14,6 +14,7 @@ import {
 import { UI } from '../theme'
 import { t, useLang } from '../i18n'
 import { ACCENT, Button, Column, DIM, Modal, Panel, Table } from './chrome'
+import { Hold } from './Hold'
 import { credits, formatStat } from './format'
 import { commodityDesc, commodityName } from '../i18n/dataNames'
 
@@ -64,23 +65,30 @@ export function Market({ world, onChange }: { world: World; onChange: () => void
   ]
 
   return (
-    <Panel title={t('station.market.title')}>
-      {/* Список — ВСЕ товары, чтобы видеть цену даже на то, чего ни у кого нет. Но строка,
-          в которой сейчас ни купить, ни продать, — неактивна: делать в ней нечего. */}
-      <Table
-        columns={columns}
-        rows={commodityStock()}
-        rowKey={(c) => c.id}
-        onRowClick={(c) => setTrading(c)}
-        rowDisabled={(c) => {
-          const { buyMax, held } = tradeLimits(world, c)
-          return buyMax < 1 && held < 1
-        }}
-      />
-      {trading && (
-        <TradeModal world={world} commodity={trading} onChange={onChange} onClose={() => setTrading(null)} />
-      )}
-    </Panel>
+    <div className="space-y-5">
+      <Panel title={t('station.market.title')}>
+        {/* Список — ВСЕ товары, чтобы видеть цену даже на то, чего ни у кого нет. Но строка,
+            в которой сейчас ни купить, ни продать, — неактивна: делать в ней нечего. */}
+        <Table
+          columns={columns}
+          rows={commodityStock()}
+          rowKey={(c) => c.id}
+          onRowClick={(c) => setTrading(c)}
+          rowDisabled={(c) => {
+            const { buyMax, held } = tradeLimits(world, c)
+            return buyMax < 1 && held < 1
+          }}
+        />
+        {trading && (
+          <TradeModal world={world} commodity={trading} onChange={onChange} onClose={() => setTrading(null)} />
+        )}
+      </Panel>
+
+      {/* ТРЮМ — сразу под товарами: торговля это разговор двух списков, «что продают» и
+          «что у меня». Ходить за вторым в другую вкладку значит считать выгоду по памяти.
+          Компонент тот же, что был вкладкой ГРУЗ; здесь он всегда в режиме продажи. */}
+      <Hold world={world} onChange={onChange} atStation />
+    </div>
   )
 }
 

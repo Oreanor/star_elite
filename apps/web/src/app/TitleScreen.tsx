@@ -711,12 +711,20 @@ export function Paused({
    */
   const launch = () => {
     setWaiting(true)
+    /**
+     * У ПРИЧАЛА захват НЕ БЕРЁМ. Игра открывается консолью станции — там кнопки, списки и
+     * карты, и мышь нужна курсором, а не ручкой управления. Раньше запрос летел всегда, и
+     * старт в доке начинался с отобранного курсора: Simulation отпускала его первым кадром,
+     * а `poll` тут же забирал обратно. Мышь пилоту вернёт отчаливание (`advanceUndock`).
+     */
+    const docked = session.world.docked
+
     if (resuming) {
       // Пауза: захват СРАЗУ в том же тике, что клик — иначе user activation сгорает
       // в setTimeout, и браузер молчит, пока не кликнешь ещё раз по канвасу.
-      void requestLock()
+      if (!docked) void requestLock()
       onBoot()
-      poll(performance.now() + LOCK_GIVE_UP_MS)
+      if (!docked) poll(performance.now() + LOCK_GIVE_UP_MS)
       return
     }
     // С МОМЕНТА нажатия START: захват в том же жесте клика (после флориша браузер
@@ -724,8 +732,10 @@ export function Paused({
     // Вернётся мышь пилоту сама, когда кончится кино вылета (advanceUndock), либо
     // сразу в swap, если старт в полёте без undock-кино.
     setStickSuspended(true)
-    void requestLock()
-    poll(performance.now() + LOCK_GIVE_UP_MS)
+    if (!docked) {
+      void requestLock()
+      poll(performance.now() + LOCK_GIVE_UP_MS)
+    }
     // Титул: пока строится сцена, корабль дрожит; станции не даём накрыть его панелью
     // (flourishRef). «Вжух» и переход — по сигналу готовности (`ready`), не по таймеру.
     flourishRef.current = true

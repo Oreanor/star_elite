@@ -23,6 +23,8 @@ import { GRID } from '../../render/scene/HypertorusLayer'
 import { nameOfVertex, vertexOfNode } from '../../render/scene/torusNodes'
 import { UI } from '../theme'
 import { properName } from '../i18n/dataNames'
+import { t } from '../i18n'
+import { MapCard, MapFrame, MapRow } from './MapFrame'
 
 /**
  * КАРТА МИРА — вселенная как ОБЫЧНЫЙ ШАР вокруг корабля, который вертят мышью.
@@ -104,12 +106,15 @@ function Field({
   homeVertex,
   nose,
   onPick,
+  pin,
 }: {
   items: Item[]
   selected: number | null
   homeVertex: number
   nose: Vector3
   onPick: (vertex: number) => void
+  /** Плашка выбранной галактики: её двигает кадр, как подписи на карте галактики. */
+  pin: React.RefObject<HTMLDivElement | null>
 }) {
   const camera = useThree((s) => s.camera)
   const canvas = useThree((s) => s.gl.domElement)
@@ -295,12 +300,36 @@ function Field({
     }
   }, [canvas])
 
-  useFrame(() => {
+  useFrame(({ size }) => {
     const g = group.current
     if (!g) return
     g.rotation.set(drag.current.pitch, drag.current.yaw, 0)
     camera.position.copy(CAM_DIR).multiplyScalar(dist.current)
     camera.lookAt(0, 0, 0)
+
+    // Карточка цели — булавкой у её точки. Место считает кадр: шар вертится драгом, и
+    // перерисовывать дерево ради движения плашки нельзя. Точку берём ПОСЛЕ поворота
+    // группы (`updateMatrixWorld`), иначе плашка отставала бы от точки на кадр.
+    const el = pin.current
+    if (!el) return
+    const item = selected != null ? items.find((it) => it.vertex === selected) : undefined
+    if (!item) {
+      el.style.opacity = '0'
+      return
+    }
+    g.updateMatrixWorld()
+    place(item, _v).applyMatrix4(g.matrixWorld).project(camera)
+    if (_v.z > 1) {
+      el.style.opacity = '0'
+      return
+    }
+    const x = (_v.x * 0.5 + 0.5) * size.width
+    const y = (-_v.y * 0.5 + 0.5) * size.height
+    const w = el.offsetWidth
+    const h = el.offsetHeight
+    const left = x > size.width * 0.55 ? x - w - 12 : x + 12
+    el.style.opacity = '1'
+    el.style.transform = `translate(${Math.round(left)}px, ${Math.round(Math.max(4, Math.min(size.height - h - 4, y - h / 2)))}px)`
   })
 
   return (
@@ -366,11 +395,61 @@ export function UniverseMap({ onClose }: { onClose: () => void }) {
   }, [items, query])
 
   const target = items.find((it) => it.vertex === selected) ?? null
+  /** Плашка цели поверх поля: позицию ей пишет кадр внутри `Field`, а не React. */
+  const pin = useRef<HTMLDivElement>(null)
 
   return (
-    <div className="flex min-h-[30rem] flex-1 gap-4 font-mono" style={{ color: UI.PRIMARY }}>
+    <MapFrame
+      title={t('map.view.universe')}
+      subtitle={`${items.length} ${t('map.view.galaxy')}`}
+      aside={
+        <>
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="ПОИСК ГАЛАКТИКИ"
+            className="w-full shrink-0 border bg-transparent px-3 py-2 text-xs tracking-widest outline-none"
+            style={{ borderColor: 'rgba(124,196,255,0.35)', color: UI.PRIMARY }}
+          />
+
+          <div className="min-h-0 flex-1 space-y-1 overflow-y-auto pr-1">
+            {found.map((it) => (
+              <MapRow
+                key={it.vertex}
+                kind={t('map.view.galaxy')}
+                name={
+                  properName(it.name).toUpperCase() +
+                  (it.vertex === homeVertex ? ' ·ДОМ' : '') +
+                  (it.vertex === TORUS.MONUMENT_NODE ? ' ·КРЕСТ' : '')
+                }
+                meta={`${Math.round((it.gamma * 180) / Math.PI)}°`}
+                color={UI.PRIMARY}
+                active={it.vertex === selected}
+                onClick={() => pick(it.vertex)}
+              />
+            ))}
+          </div>
+
+          {/* Отдельной кнопки «ЦЕЛЬ» нет: выбор применяется сразу по клику — и на карте, и в
+              комнате. Здесь остаётся только тронуться, а закрыть карту — общий выход панели. */}
+          <button
+            type="button"
+            disabled={target === null}
+            onClick={() => {
+              if (!target) return
+              toggleTorusAutopilot()
+              onClose()
+            }}
+            className="shrink-0 cursor-pointer border px-4 py-2 text-xs tracking-widest disabled:opacity-40"
+            style={{ borderColor: 'rgba(124,196,255,0.35)' }}
+          >
+            ВЕСТИ
+          </button>
+        </>
+      }
+    >
       <div
-        className="relative min-h-0 flex-1 overflow-hidden rounded-lg border"
+        className="absolute inset-0 overflow-hidden rounded-lg border"
         style={{ borderColor: 'rgba(124,196,255,0.28)' }}
       >
         <Canvas
@@ -399,64 +478,30 @@ export function UniverseMap({ onClose }: { onClose: () => void }) {
             homeVertex={homeVertex}
             nose={nose}
             onPick={pick}
+            pin={pin}
           />
         </Canvas>
-      </div>
 
-      <div className="flex w-72 min-w-[16rem] flex-col">
-        <input
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="ПОИСК ГАЛАКТИКИ"
-          className="w-full border bg-transparent px-3 py-2 text-xs tracking-widest outline-none"
-          style={{ borderColor: 'rgba(124,196,255,0.35)', color: UI.PRIMARY }}
-        />
-        <div className="mt-2 min-h-0 flex-1 overflow-y-auto pr-1">
-          {found.map((it) => {
-            const on = it.vertex === selected
-            return (
-              <button
-                key={it.vertex}
-                type="button"
-                onClick={() => pick(it.vertex)}
-                className="flex w-full cursor-pointer items-baseline justify-between gap-2 px-2 py-1 text-left text-xs tracking-widest hover:bg-[rgba(124,196,255,0.12)]"
-                style={{ color: on ? '#000' : UI.PRIMARY, background: on ? UI.PRIMARY : 'transparent' }}
-              >
-                <span className="truncate">
-                  {properName(it.name).toUpperCase()}
-                  {it.vertex === homeVertex ? ' ·ДОМ' : ''}
-                  {it.vertex === TORUS.MONUMENT_NODE ? ' ·КРЕСТ' : ''}
-                </span>
-                {/* Дальность — в градусах дуги: 0° под ногами, 180° край мира. Единственная
-                    честная мера в замкнутой вселенной, где «километров до» не существует. */}
-                <span style={{ color: on ? '#000' : UI.DIM }}>
-                  {Math.round((it.gamma * 180) / Math.PI)}°
-                </span>
-              </button>
-            )
-          })}
-        </div>
-        {/* Отдельной кнопки «ЦЕЛЬ» нет: выбор применяется сразу по клику — и на карте, и в
-            комнате. Здесь остаётся только тронуться, а закрыть карту — общий выход панели. */}
-        <div className="mt-3 flex items-center gap-3">
-          <span className="min-w-0 flex-1 truncate text-xs tracking-widest" style={{ color: UI.DIM }}>
-            {target ? `ЦЕЛЬ: ${properName(target.name).toUpperCase()}` : 'ЦЕЛЬ НЕ ВЫБРАНА'}
-          </span>
-          <button
-            type="button"
-            disabled={target === null}
-            onClick={() => {
-              if (!target) return
-              toggleTorusAutopilot()
-              onClose()
-            }}
-            className="cursor-pointer border px-4 py-2 text-xs tracking-widest disabled:opacity-40"
-            style={{ borderColor: 'rgba(124,196,255,0.35)' }}
-          >
-            ВЕСТИ
-          </button>
-        </div>
+        {/* Карточка цели — поверх поля, у самой точки. Не часть вёрстки: её появление
+            ничего не двигает, а место ей каждый кадр считает `Field`. */}
+        {target && (
+          <div ref={pin} className="pointer-events-none absolute left-0 top-0 z-30 w-64 max-w-[80%] opacity-0" style={{ willChange: 'transform' }}>
+            <MapCard
+              kind={t('map.view.galaxy')}
+              name={properName(target.name).toUpperCase()}
+              color={UI.PRIMARY}
+              locked
+              lines={[
+                // Дальность — в градусах дуги: 0° под ногами, 180° край мира. Единственная
+                // честная мера в замкнутой вселенной, где «километров до» не существует.
+                `${t('map.distance')}: ${Math.round((target.gamma * 180) / Math.PI)}°`,
+                target.vertex === homeVertex ? 'ДОМ' : null,
+                target.vertex === TORUS.MONUMENT_NODE ? 'КРЕСТЫ' : null,
+              ]}
+            />
+          </div>
+        )}
       </div>
-    </div>
+    </MapFrame>
   )
 }

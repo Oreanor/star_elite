@@ -214,6 +214,25 @@ export function lifeName(level: LifeLevel): string {
 }
 
 /**
+ * Тип поверхности мира. Домен называет его по-русски («Скалистая»), как и экономику
+ * со строем, — и по той же причине: симуляции язык не нужен. Здесь тип превращается
+ * в слово интерфейса; рендер по этому же типу выбирает текстуру (`render/sky/planets`).
+ */
+const SURFACE_KEY: Record<string, Key> = {
+  'Скалистая': 'planet.surface.rocky',
+  'Ледяная': 'planet.surface.ice',
+  'Газовый гигант': 'planet.surface.gas',
+  'Океаническая': 'planet.surface.ocean',
+  'Земного типа': 'planet.surface.terra',
+}
+
+export function planetTypeName(surface: string | null | undefined): string {
+  if (!surface) return t('planet.none')
+  const key = SURFACE_KEY[surface]
+  return key ? t(key) : surface
+}
+
+/**
  * Экономика и строй генератор пишет по-русски («Промышленная», «Демократия»).
  * Переводятся по словарю UI (ключи `econ.*`/`gov.*`), общие для паспорта станции и
  * карты галактики: домену язык знать незачем.

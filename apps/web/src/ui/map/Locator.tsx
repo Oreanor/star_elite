@@ -1,4 +1,4 @@
-import { useReducer, useRef, useState } from 'react'
+import { useEffect, useReducer, useRef, useState } from 'react'
 import { Vector3 } from 'three'
 import {
   clearContactLock,
@@ -17,7 +17,9 @@ import {
 import { UI } from '../theme'
 import { t, useLang } from '../i18n'
 import { chassisName, occupationName, properName } from '../i18n/dataNames'
+import { formatDistance } from '../hud/project'
 import { useWheelZoom } from './useWheelZoom'
+import { MapCard, MapFrame, MapPin, MapRow } from './MapFrame'
 
 /**
  * Локатор — большой круглый радар консоли: вид сверху, нос корабля ВВЕРХ.
@@ -82,8 +84,13 @@ interface Blip {
   shape: Shape
   size: number
   ring: boolean
+  /** Род объекта словом: ПЛАНЕТА, ПРИЧАЛ, КОРАБЛЬ. Пишется перед именем и на поле, и в списке. */
+  kind: string
   title: string
-  subtitle: string
+  /** Строки карточки: у борта — пилот, профессия, отношение, корпус. */
+  lines: string[]
+  /** До игрока, метры: по нему выстроен список — ближнее сверху. */
+  dist: number
   /** Клик пишет захват в мир — тот же id, что у тела/борта/статуи. */
   selectId: number
   selectKind: SelectKind
@@ -97,7 +104,7 @@ function project(rt: number, fwd: number, h: number, yaw: number, tilt: number, 
 }
 
 /** Проекция мировой точки на плоскость диска (right/forward/height), null — в самом центре. */
-function toDisc(world: World, pos: Vector3): { rt: number; fwd: number; h: number } | null {
+function toDisc(world: World, pos: Vector3): { rt: number; fwd: number; h: number; dist: number } | null {
   _rel.copy(pos).sub(world.player.state.pos)
   const dist = _rel.length()
   if (dist < 1) return null
@@ -110,6 +117,7 @@ function toDisc(world: World, pos: Vector3): { rt: number; fwd: number; h: numbe
     rt: (x / flat) * k * R,
     fwd: (z / flat) * k * R,
     h: Math.max(-1, Math.min(1, _rel.dot(_up) / dist)) * LIFT,
+    dist,
   }
 }
 
@@ -137,8 +145,9 @@ function blips(world: World): Blip[] {
       shape: body.kind === 'station' ? 'diamond' : 'round',
       size: body.kind === 'star' || body.kind === 'blackhole' ? 11 : 7,
       ring: body.id === world.navTargetId && world.targetFocus === 'nav',
+      kind: t(`locator.kind.${body.kind}` as 'locator.kind.planet'),
       title: properName(body.name),
-      subtitle: t(`locator.kind.${body.kind}` as 'locator.kind.planet'),
+      lines: [],
       selectId: body.id,
       selectKind: 'body',
     })
@@ -158,8 +167,9 @@ function blips(world: World): Blip[] {
       shape: 'round',
       size: 9,
       ring: m.id === world.navTargetId && world.targetFocus === 'nav',
+      kind: t('locator.kind.monolith'),
       title: properName(MONOLITH_NAMES[m.variant] ?? 'Монолит'),
-      subtitle: t('locator.kind.monolith'),
+      lines: [],
       selectId: m.id,
       selectKind: 'monolith',
     })
@@ -176,8 +186,9 @@ function blips(world: World): Blip[] {
       shape: 'round',
       size: 9,
       ring: f.id === world.navTargetId && world.targetFocus === 'nav',
+      kind: t('locator.kind.figurine'),
       title: figurineDisplayName(f),
-      subtitle: t('locator.kind.figurine'),
+      lines: [],
       selectId: f.id,
       selectKind: 'figurine',
     })
@@ -194,8 +205,9 @@ function blips(world: World): Blip[] {
       shape: 'round',
       size: 7,
       ring: rock.id === world.navTargetId && world.targetFocus === 'nav',
+      kind: t('locator.kind.asteroid'),
       title: properName(NAV_ASTEROID_NAME),
-      subtitle: t('locator.kind.asteroid'),
+      lines: [],
       selectId: rock.id,
       selectKind: 'asteroid',
     })
@@ -205,6 +217,7 @@ function blips(world: World): Blip[] {
     if (!isVisible(ship) || ship.divine) continue
     const d = toDisc(world, ship.state.pos)
     if (!d) continue
+    const stance = stanceTo(world, ship)
     out.push({
       key: `ship-${ship.id}`,
       ...d,
@@ -213,8 +226,16 @@ function blips(world: World): Blip[] {
       size: 7,
       // Кольцо только у активного Tab-захвата — не у знакомых.
       ring: ship.id === world.lockedTargetId && world.targetFocus === 'contact',
-      title: ship.pilotName,
-      subtitle: `${occupationName(ship.originKind, ship.faction)} · ${chassisName(ship.loadout.chassis.name)}`,
+      kind: t('locator.kind.ship'),
+      // Имя БОРТА, а не пилота: род объекта на локаторе — корабль, человек внутри идёт
+      // строкой ниже. Раньше здесь стояло имя пилота, и «корабль: Джон» читалось враньём.
+      title: properName(ship.name),
+      lines: [
+        `${t('map.label.pilot')}: ${ship.pilotName}`,
+        `${t('map.label.profession')}: ${occupationName(ship.originKind, ship.faction)}`,
+        `${t('map.label.stance')}: ${t(`dialogue.stance.${stance}` as 'dialogue.stance.neutral')}`,
+        `${t('map.label.hull')}: ${chassisName(ship.loadout.chassis.name)}`,
+      ],
       selectId: ship.id,
       selectKind: 'ship',
     })
@@ -266,6 +287,7 @@ export function Locator({ world }: { world: World }) {
   const [tilt, setTilt] = useState(0.5)
   const [zoom, setZoom] = useState(1)
   const box = useRef<HTMLDivElement>(null)
+  const listRef = useRef<HTMLUListElement>(null)
   const drag = useRef<{ x: number; y: number } | null>(null)
   /** После драга pointerup на метке не должен считаться кликом. */
   const dragged = useRef(false)
@@ -278,8 +300,9 @@ export function Locator({ world }: { world: World }) {
     .map((b) => ({ b, base: proj(b.rt, b.fwd, 0), tip: proj(b.rt, b.fwd, b.h) }))
     // Дальние (больше «вперёд» после поворота) рисуем первыми — ближние лягут поверх.
     .sort((a, b) => b.base.depth - a.base.depth)
-  // Карточка: выбранная цель важнее наведения — пилот видит, что захватил.
-  const active = marks.find((m) => m.b.ring)?.b ?? marks.find((m) => m.b.key === hover)?.b ?? null
+  // Карточка: выбранная цель важнее наведения — пилот видит, что захватил. Держим и место
+  // отметки на экране: карточка висит булавкой У НЕЁ, а не в колонке.
+  const active = marks.find((m) => m.b.ring) ?? marks.find((m) => m.b.key === hover) ?? null
 
   // Обод, сетка и конус — через ту же проекцию. Кольца сетки: эллипсы rx=r·zoom, ry=r·cos·zoom.
   const gridRings = [0.25, 0.5, 0.75, 1]
@@ -287,10 +310,40 @@ export function Locator({ world }: { world: World }) {
   const fovA = proj(Math.sin(HALF_FOV) * R, Math.cos(HALF_FOV) * R, 0)
   const fovB = proj(Math.sin(-HALF_FOV) * R, Math.cos(-HALF_FOV) * R, 0)
 
+  // Захват с ДИСКА подтягивает строку в видимую часть списка: выбрал отметку — видно, кто
+  // это, не листая. Обратное направление (строка → диск) листать нечего.
+  useEffect(() => {
+    listRef.current?.querySelector('[data-active="true"]')?.scrollIntoView({ block: 'nearest' })
+  }, [world.navTargetId, world.lockedTargetId, world.targetFocus])
+
+  // Список слева: ближнее сверху. Выделение двустороннее — наведение на строку зажигает
+  // отметку на диске, наведение на отметку подсвечивает строку.
+  const listed = [...marks].sort((a, b) => a.b.dist - b.b.dist)
+
   return (
-    <div className="flex w-full items-start gap-6 py-1 font-mono">
-      {/* Единый расклад всех трёх карт: диск в левых 2/3 (центрован), инфо — в правой 1/3. */}
-      <div className="flex w-2/3 justify-center">
+    <MapFrame square title={t('locator.title')} subtitle={t('locator.count', { n: marks.length })} aside={
+      <>
+        <ul ref={listRef} className="min-h-0 flex-1 space-y-1 overflow-y-auto pr-1">
+          {listed.map(({ b }) => (
+            <li key={b.key}>
+              <MapRow
+                kind={b.kind}
+                name={b.title}
+                meta={formatDistance(b.dist)}
+                color={b.color}
+                active={b.ring}
+                hover={b.key === hover}
+                onHover={(on) => setHover((h) => (on ? b.key : h === b.key ? null : h))}
+                onClick={() => {
+                  applySelect(world, b.selectKind, b.selectId)
+                  bump()
+                }}
+              />
+            </li>
+          ))}
+        </ul>
+      </>
+    }>
       <div
         ref={box}
         onPointerDown={(e) => {
@@ -308,10 +361,9 @@ export function Locator({ world }: { world: World }) {
         }}
         onPointerUp={() => (drag.current = null)}
         onPointerCancel={() => (drag.current = null)}
-        // Круг обязан влезать в высоту панели, иначе появляется скролл: сторона квадрата
-        // ограничена и шириной колонки, и оставшейся высотой экрана. Хром консоли над
-        // картой (шапка + вкладки + ряд видов) ≈16rem — вычитаем с запасом, чтоб не скроллило.
-        className="relative aspect-square w-full max-w-[min(31rem,calc(100vh-17rem))] shrink cursor-grab touch-none select-none active:cursor-grabbing"
+        // Размер круга держит рамка (`MapFrame square`): квадрат по высоте панели. Здесь
+        // осталось только поведение — драг крутит и наклоняет диск.
+        className="absolute inset-0 cursor-grab touch-none select-none active:cursor-grabbing"
       >
         <svg className="absolute inset-0 h-full w-full" viewBox={`${-VIEW / 2} ${-VIEW / 2} ${VIEW} ${VIEW}`}>
           {/* Конус обзора — сектор от центра между лучами FOV, залит еле-еле. */}
@@ -376,38 +428,29 @@ export function Locator({ world }: { world: World }) {
                 )}
                 {(on || b.ring) && (
                   <text x={tip.x + b.size + 8} y={tip.y + 4} fontSize={13} fill={b.color} style={{ pointerEvents: 'none', userSelect: 'none' }}>
-                    {b.title}
+                    {b.kind.toUpperCase()}: {b.title}
                   </text>
                 )}
               </g>
             )
           })}
         </svg>
-      </div>
-      </div>
 
-      <div className="flex w-1/3 shrink-0 flex-col" style={{ color: UI.PRIMARY }}>
-        <h1 className="text-xl tracking-[0.3em]">{t('locator.title')}</h1>
-        <p className="mb-6 mt-1 text-[11px] tracking-widest opacity-50">{t('locator.count', { n: marks.length })}</p>
-        {active ? (
-          <div
-            className="rounded border p-4"
-            style={{
-              borderColor: active.ring ? active.color : 'rgba(124,196,255,0.24)',
-              background: active.ring ? 'rgba(124,196,255,0.08)' : 'transparent',
-            }}
-          >
-            <div className="text-base tracking-widest" style={{ color: active.color }}>
-              {active.title}
-            </div>
-            <div className="mt-1 text-xs tracking-widest opacity-70">{active.subtitle}</div>
-          </div>
-        ) : (
-          <p className="text-sm opacity-60">{t('locator.hint')}</p>
+        {/* Карточка — булавкой у самой отметки, поверх диска. Координаты `viewBox`
+            переводим в доли поля: SVG растянут на весь квадрат, значит доля та же. */}
+        {active && (
+          <MapPin x={(active.tip.x + VIEW / 2) / VIEW} y={(active.tip.y + VIEW / 2) / VIEW}>
+            <MapCard
+              kind={active.b.kind}
+              name={active.b.title}
+              color={active.b.color}
+              locked={active.b.ring}
+              lines={[...active.b.lines, `${t('map.distance')}: ${formatDistance(active.b.dist)}`]}
+            />
+          </MapPin>
         )}
-        <p className="mt-4 text-[11px] leading-relaxed opacity-40">{t('locator.controls')}</p>
       </div>
-    </div>
+    </MapFrame>
   )
 }
 
