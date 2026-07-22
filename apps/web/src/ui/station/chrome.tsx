@@ -155,7 +155,7 @@ export function PilotPortrait({
 }) {
   const label = (ship?.name ?? name ?? '?').trim()
   const initial = label.charAt(0).toUpperCase() || '?'
-  // СЛОВО (divine) несёт СВОЙ аватар (dude.jpg, 8 эмоций в ряд) — он показывается ВЕЗДЕ, где
+  // СЛОВО (divine) несёт СВОЙ аватар (portraits/dude.webp, 8 эмоций в ряд) — он показывается ВЕЗДЕ, где
   // рисуется его лицо (диалог, контакты), а не только в разговоре. Мимику задаёт `divineEmotion`.
   const divine = ship?.divine === true
   const emo: Emotion | null = ship && !divine ? emotion ?? (world ? pilotEmotion(ship, world) : 'neutral') : null

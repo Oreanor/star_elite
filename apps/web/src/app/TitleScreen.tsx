@@ -233,7 +233,7 @@ function TitleLogo({
   return (
     <div className="pointer-events-none absolute inset-x-0 top-[6vh] mx-auto w-full max-w-[54rem] px-8">
       <div className="relative">
-        <img ref={imgRef} src="/logo.png" alt="STAR ELITE" onLoad={onReady} className="block w-full" />
+        <img ref={imgRef} src="/logo.webp" alt="STAR ELITE" onLoad={onReady} className="block w-full" />
         {/* Вспышка старта — БЕЛАЯ НАКЛАДКА по форме букв с анимацией OPACITY (не filter):
             opacity идёт на композиторе и НЕ замирает под блокирующей сборкой сцены — иначе
             вспышка застывала на полусвете. Гаснет в ноль (`forwards`). */}
@@ -241,8 +241,8 @@ function TitleLogo({
           aria-hidden
           className="pointer-events-none absolute inset-0"
           style={{
-            WebkitMaskImage: 'url(/logo.png)',
-            maskImage: 'url(/logo.png)',
+            WebkitMaskImage: 'url(/logo.webp)',
+            maskImage: 'url(/logo.webp)',
             WebkitMaskSize: '100% 100%',
             maskSize: '100% 100%',
             WebkitMaskRepeat: 'no-repeat',
@@ -520,36 +520,36 @@ function TitleShip({ trembling, launched }: { trembling: boolean; launched: bool
             Центральная струя возвращена на осевую линию арта (left-1/2, привязана к носу корабля,
             а не к боковым), поэтому расклад — тот же, что и на боевом корабле: центр + две крыльевые. */}
         <img
-          src="/flame_left.png"
+          src="/flame_left.webp"
           alt=""
           aria-hidden
           className="absolute bottom-[82%] left-[calc(39.8%_+_8px)] w-[13%] origin-bottom mix-blend-screen"
           style={{ animation: 'title-flame-left 1.5s ease-in-out infinite, flame-flicker 0.42s linear infinite' }}
         />
         <img
-          src="/flame_right.png"
+          src="/flame_right.webp"
           alt=""
           aria-hidden
           className="absolute bottom-[82%] left-[calc(60.2%_-_8px)] w-[13%] origin-bottom mix-blend-screen"
           style={{ animation: 'title-flame-right 1.5s ease-in-out infinite, flame-flicker 0.35s linear infinite' }}
         />
         <img
-          src="/flame_center.png"
+          src="/flame_center.webp"
           alt=""
           aria-hidden
           className="absolute bottom-[80%] left-1/2 w-[9%] origin-bottom mix-blend-screen"
           style={{ animation: 'title-flame-center 0.8s ease-in-out infinite, flame-flicker 0.3s linear infinite' }}
         />
           <div className="relative w-full">
-            <img src="/ship.png" alt="" aria-hidden className="block w-full" />
+            <img src="/ship.webp" alt="" aria-hidden className="block w-full" />
             {/* Вертикальная растушёвка корпуса: верх чуть темнее, низ чуть светлее — пара
                 процентов объёма. Режим overlay: над чёрным даёт чёрное (тени целы), а средние
                 тона гнёт — тёмный верх гасит, светлый низ поднимает. Статична, маска по силуэту. */}
             <div
               className="pointer-events-none absolute inset-0 mix-blend-overlay"
               style={{
-                WebkitMaskImage: 'url(/ship.png)',
-                maskImage: 'url(/ship.png)',
+                WebkitMaskImage: 'url(/ship.webp)',
+                maskImage: 'url(/ship.webp)',
                 WebkitMaskSize: '100% 100%',
                 maskSize: '100% 100%',
                 WebkitMaskRepeat: 'no-repeat',
@@ -567,8 +567,8 @@ function TitleShip({ trembling, launched }: { trembling: boolean; launched: bool
               ref={shineRef}
               className="pointer-events-none absolute inset-0 mix-blend-overlay"
               style={{
-                WebkitMaskImage: 'url(/ship.png)',
-                maskImage: 'url(/ship.png)',
+                WebkitMaskImage: 'url(/ship.webp)',
+                maskImage: 'url(/ship.webp)',
                 WebkitMaskSize: '100% 100%',
                 maskSize: '100% 100%',
                 WebkitMaskRepeat: 'no-repeat',
@@ -802,12 +802,12 @@ export function Paused({
         <div
           className="absolute inset-0 cursor-default overflow-hidden bg-black bg-cover bg-center"
           style={{
-            backgroundImage: 'url(/bg.png)',
+            backgroundImage: 'url(/bg.webp)',
             animation: 'title-fade-in 0.35s ease-out both',
           }}
         >
-      {/* Затемнение ради читаемости фосфорного текста поверх звёзд bg.png.
-          Слабее прежнего: bg.png сам тёмный, топить его в черноте незачем. */}
+      {/* Затемнение ради читаемости фосфорного текста поверх звёзд bg.webp.
+          Слабее прежнего: bg.webp сам тёмный, топить его в черноте незачем. */}
       <div className="absolute inset-0 bg-black/45" />
 
       {/* Мерцание неба — ПОВЕРХ затемнения, иначе scrim гасит его в невидимость. Точки
@@ -815,7 +815,7 @@ export function Paused({
       <TitleStars />
 
       {/* Корабль с дюзами — часть фона, но ПОВЕРХ звёзд: по центру, чуть ниже, ловит провал
-          звёздного поля в bg.png и заслоняет собой мерцание. Курсор не трогает, кнопки поверх.
+          звёздного поля в bg.webp и заслоняет собой мерцание. Курсор не трогает, кнопки поверх.
           Пламя — ДВЕ струи ПОД корпусом (в DOM раньше корабля → он их перекрывает): базы
           прячутся за кормой, плюмажи торчат сверху. Режим screen делает чёрный фон струи
           прозрачным и превращает её в свечение над тёмным небом. Позиции в % от корабля —

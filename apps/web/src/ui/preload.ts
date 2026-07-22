@@ -2,12 +2,12 @@ import { loadSheet, sheetReady } from './portrait'
 
 /** PNG титульной заставки: фон, лого, корабль и три струи. */
 export const TITLE_ASSETS = [
-  '/bg.png',
-  '/logo.png',
-  '/ship.png',
-  '/flame_left.png',
-  '/flame_right.png',
-  '/flame_center.png',
+  '/bg.webp',
+  '/logo.webp',
+  '/ship.webp',
+  '/flame_left.webp',
+  '/flame_right.webp',
+  '/flame_center.webp',
 ] as const
 
 let titlePreload: Promise<void> | null = null

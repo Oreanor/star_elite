@@ -46,10 +46,14 @@ export function speciesAsset(species: string): string {
 
 /**
  * URL листа эмоции для вида. Раскладка как в `docs/pilots/`: папка на расу, файл на
- * эмоцию по номеру — `public/portraits/<раса>/<номер>.png`, напр. `human/3.png` (страх).
+ * эмоцию по номеру — `public/portraits/<раса>/<номер>.webp`, напр. `human/3.webp` (страх).
+ *
+ * WEBP, а не PNG: листы грузятся ВСЕ и сразу (`preloadPortraits`), а 24 файла в PNG —
+ * это 65 МБ по сети на старте. Тот же лист в webp весит 0.3 МБ при неотличимом лице:
+ * это фотографические портреты, им сжатие с потерями показано.
  */
 export function portraitSheet(species: string, emotion: Emotion): string {
-  return `/portraits/${speciesAsset(species)}/${EMOTION_FILE[emotion]}.png`
+  return `/portraits/${speciesAsset(species)}/${EMOTION_FILE[emotion]}.webp`
 }
 
 /** Хеш строки в 32 бита: разные имена — разные лица, но детерминированно. */
@@ -137,7 +141,7 @@ export function portraitStyle(species: string, index: number, emotion: Emotion):
 
 /**
  * СЛОВО — особый бог, и аватар у него СВОЙ, вне сетки рас: один и тот же космонавт (похожий
- * на Большого Лебовски) в ВОСЬМИ эмоциях, выложенных В ОДИН РЯД на листе `dude.jpg`. Порядок
+ * на Большого Лебовски) в ВОСЬМИ эмоциях, выложенных В ОДИН РЯД на листе `dude.webp`. Порядок
  * кадров слева направо задан ТЗ. Своя восьмёрка эмоций (не 6 расовых): бог мимике богаче.
  */
 export type DivineEmotion =
@@ -155,8 +159,8 @@ export function emotionToDivine(e: Emotion): DivineEmotion {
   return EMOTION_TO_DIVINE[e]
 }
 
-/** Лист бога: 8 кадров в ряд, `public/dude.jpg`. */
-export const DUDE_SHEET = '/dude.jpg'
+/** Лист бога: 8 кадров в ряд, `public/portraits/dude.webp`. */
+export const DUDE_SHEET = '/portraits/dude.webp'
 const DUDE_COLS = 8
 const DUDE_ORDER: readonly DivineEmotion[] = [
   'neutral', 'smile', 'laugh', 'tired', 'confusion', 'surprise', 'frown', 'angry',
@@ -202,10 +206,10 @@ export function preloadPortraits(): void {
   const assets = [...new Set(Object.values(SPECIES_ASSET))]
   // Нейтральные — первым проходом: это лицо по умолчанию в списках, контактах и на
   // создании персонажа. Эмоции нужны лишь в разговоре, их догружаем следом.
-  for (const asset of assets) loadSheet(`/portraits/${asset}/${EMOTION_FILE.neutral}.png`)
+  for (const asset of assets) loadSheet(`/portraits/${asset}/${EMOTION_FILE.neutral}.webp`)
   for (const asset of assets) {
     for (const num of Object.values(EMOTION_FILE)) {
-      if (num !== EMOTION_FILE.neutral) loadSheet(`/portraits/${asset}/${num}.png`)
+      if (num !== EMOTION_FILE.neutral) loadSheet(`/portraits/${asset}/${num}.webp`)
     }
   }
 }

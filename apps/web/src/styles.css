@@ -277,15 +277,15 @@ canvas {
   100% { filter: brightness(1) drop-shadow(0 0 0 rgba(255, 255, 255, 0)); }
 }
 
-/* БЛИК — маскированная по форме logo.png белая полоса бежит ПО БУКВАМ (а не по рамке).
+/* БЛИК — маскированная по форме logo.webp белая полоса бежит ПО БУКВАМ (а не по рамке).
    Накладка поверх раста; БЕЗ `mix-blend-mode` (он тут ничего не рисовал — потому блик и был
    невидим, как раньше вспышка): просто яркая белая полоса, обрезанная маской по буквам.
    В покое скрыта (opacity 0); JS назначает анимацию на один проход ~0.7с. */
 .title-logo-glint {
   position: absolute;
   inset: 0;
-  -webkit-mask-image: url(/logo.png);
-  mask-image: url(/logo.png);
+  -webkit-mask-image: url(/logo.webp);
+  mask-image: url(/logo.webp);
   -webkit-mask-size: 100% 100%;
   mask-size: 100% 100%;
   -webkit-mask-repeat: no-repeat;

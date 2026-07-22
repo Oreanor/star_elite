@@ -41,7 +41,7 @@ export function AuthScreen() {
   return (
     <div
       className="absolute inset-0 overflow-y-auto bg-black bg-cover bg-center font-mono text-[#7fd6ff]"
-      style={{ backgroundImage: 'url(/bg.png)' }}
+      style={{ backgroundImage: 'url(/bg.webp)' }}
     >
       <div className="absolute inset-0 bg-black/60" />
 

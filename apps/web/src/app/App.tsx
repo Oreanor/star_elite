@@ -61,7 +61,7 @@ function BootSplash({ label }: { label: string }) {
   return (
     <div
       className="absolute inset-0 flex items-center justify-center bg-black bg-cover bg-center font-mono text-[#7fd6ff]"
-      style={{ backgroundImage: 'url(/bg.png)' }}
+      style={{ backgroundImage: 'url(/bg.webp)' }}
     >
       <div className="absolute inset-0 bg-black/60" />
       <div className="relative text-sm tracking-[0.3em]">{label}</div>
