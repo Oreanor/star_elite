@@ -847,12 +847,27 @@ function drawTargetPanels(frame: HudFrame): void {
   // Чуть выше локатора: место под 3 строки подписи (занятие · отношение · корпус).
   const y = radarTop - size - 36 * S
 
-  const cell = (color: string, lines: [string, string?, string?, string?], body: (x: number, y: number) => void): void => {
+  const cell = (
+    color: string,
+    lines: [string, string?, string?, string?],
+    body: (x: number, y: number) => void,
+    /** Состояние захваченного борта. Метки в космосе мелки и уезжают за кадр — читать
+     *  «добивать или уходить» пилот должен здесь, под портретом. */
+    bars?: { shield: number; hull: number },
+  ): void => {
     body(x, y)
     ctx.strokeStyle = color
     ctx.lineWidth = 1
     ctx.strokeRect(Math.round(x) + 0.5, Math.round(y) + 0.5, Math.round(size), Math.round(size))
-    cellCaption(ctx, x + size / 2, y + size + 2 * S, lines)
+    let captionY = y + size + 2 * S
+    if (bars) {
+      // Порядок и цвета — как у собственных полосок слева: щит голубой сверху, корпус
+      // красный под ним. Пилот не переучивается, переводя взгляд с борта на цель.
+      bar(ctx, x, captionY, size, 2 * S, bars.shield, HUD_COLORS.PRIMARY)
+      bar(ctx, x, captionY + 3 * S, size, 2 * S, bars.hull, HUD_COLORS.DANGER)
+      captionY += 8 * S
+    }
+    cellCaption(ctx, x + size / 2, captionY, lines)
   }
 
   // Перебор звёзд галактики (Tab при активном слое) — не контакт и не нав системы.
@@ -903,6 +918,11 @@ function drawTargetPanels(frame: HudFrame): void {
         } else {
           text(ctx, (ship.name.trim().charAt(0) || '?').toUpperCase(), cx + size / 2, cy + size / 2 - 5 * S, HUD_COLORS.DIM, 'center')
         }
+      }, {
+        // У бога щит бесконечный — полоска и должна стоять полной: это не «цел пока»,
+        // а свойство. Пилот видит, что бить бесполезно, ещё до первого выстрела.
+        shield: ship.divine ? 1 : ship.spec.hull.shield > 0 ? ship.shield / ship.spec.hull.shield : 0,
+        hull: ship.divine ? 1 : ship.hull / ship.spec.hull.hull,
       })
       return
     }

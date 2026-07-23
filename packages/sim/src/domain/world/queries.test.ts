@@ -116,3 +116,21 @@ describe('бог Слово: собеседник в станции против
     if (parked) expect(ids).not.toContain(parked.id)
   })
 })
+
+describe('пристыкованный борт — внутри станции', () => {
+  /**
+   * Причал ведёт ВНУТРЬ станции, как и у игрока. Стоящий там борт раньше висел у ворот
+   * всё время стоянки: его метили, захватывали и по нему стреляли, хотя по смыслу его
+   * там нет. Отойдя (`dock: 'done'`), он появляется снова — это и есть вылет из шлюза.
+   */
+  it('его не захватить, пока он у причала, и снова можно, когда отошёл', () => {
+    const world = withPirateAndNeutral()
+    const ship = world.ships.find((s) => s.faction === 'neutral')!
+    ship.ai!.dock = 'berthed'
+
+    expect(targetablesOf(world).map((s) => s.id)).not.toContain(ship.id)
+
+    ship.ai!.dock = 'done'
+    expect(targetablesOf(world).map((s) => s.id)).toContain(ship.id)
+  })
+})

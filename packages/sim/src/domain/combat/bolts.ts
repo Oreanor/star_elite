@@ -33,6 +33,15 @@ const _shooter = { id: 0, cloaked: false }
 
 function resolveHit(world: World, bolt: BoltEntity, hitPos: Vector3, hit: ReturnType<typeof castLaser>): void {
   if (hit.ship) {
+    /**
+     * БОГ НЕУЯЗВИМ, и это должно быть ВИДНО. Болт гаснет о бесконечное поле голубой
+     * вспышкой — тем же приёмом, что у станции: ни урона, ни поломок, ни обиды. Раньше
+     * луч уходил сквозь него в пустоту, и выстрел в упор читался как поломка игры.
+     */
+    if (hit.ship.divine) {
+      spawnShieldFlash(world, hitPos, hit.ship.state.pos, 1)
+      return
+    }
     spawnExplosion(world, hitPos, hit.ship.state.vel, 0.6)
     if (hit.ship.kinematic) {
       // HP кинематического (чужого) борта живёт на ЕГО клиенте — локально урон не наносим,

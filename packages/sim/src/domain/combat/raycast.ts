@@ -2,6 +2,7 @@ import { Vector3 } from 'three'
 import { GUNNERY } from '../../config/weapons'
 import { SHIELD } from '../../config/station'
 import { raySphere } from '../../core/math'
+import { isStationBot } from '../world/queries'
 import type {
   AsteroidEntity,
   BodyEntity,
@@ -85,11 +86,15 @@ export function castLaser(
   for (const target of world.ships) {
     if (!target.alive || target.id === shooter.id) continue
     /**
-     * БОГ (Слово) для луча не существует. Он сидит В станции у каждого причала и физическим
-     * телом не является: иначе стрельба у причала била бы в невидимку — болт съедался, а по
+     * Бог, СИДЯЩИЙ в станции, для луча не существует: он там собеседник, а не тело, и
+     * стрельба у причала била бы в невидимку — болт съедался бы ни обо что, а по
      * кинематическому борту ещё и уходил `remoteHits`, будто это удалённый игрок.
+     *
+     * ВСТРЕЧНЫЙ бог — тело: болт в него попадает и гаснет о бесконечный щит (см.
+     * `resolveHit`). Пропускать луч сквозь него нельзя — выстрел в упор, уходящий в
+     * пустоту, читается как поломка игры, а не как неуязвимость.
      */
-    if (target.divine) continue
+    if (isStationBot(target)) continue
     if (cloaked && !target.ai?.dormant) continue
     // Дешёвая отбраковка до точного теста, как у астероидов/ракет: болт заметает
     // отрезок в 1/120 с (~200 м), большинство кораблей дальше — их не проверяем лучом.

@@ -614,3 +614,30 @@ describe('наведение ракеты', () => {
     expect(missile.targetId).toBe(enemy.id)
   })
 })
+
+describe('бог неуязвим, но телесен', () => {
+  /**
+   * Раньше луч уходил СКВОЗЬ бога: выстрел в упор пропадал в пустоте и читался как
+   * поломка игры. Неуязвимость должна быть видимой — болт гаснет о бесконечное поле,
+   * как о щит станции: ни урона, ни поломок, ни обиды.
+   */
+  it('болт гаснет о его поле вспышкой, а не пролетает насквозь', () => {
+    const world = createWorld({
+      ...STARTER_SYSTEM,
+      belt: null,
+      patrols: [{ count: 1, at: [0, 0, -300], spread: 0, faction: 'neutral', name: 'Слово' }],
+    })
+    const god = enemyAhead(world, 300)
+    god.divine = true
+    const hullBefore = god.hull
+    const shieldBefore = god.shield
+    const flashesBefore = world.shieldFlashes.length
+
+    fireLasers(world, world.player, false)
+    settleBolts(world)
+
+    expect(god.hull).toBe(hullBefore)
+    expect(god.shield).toBe(shieldBefore)
+    expect(world.shieldFlashes.length).toBeGreaterThan(flashesBefore)
+  })
+})
