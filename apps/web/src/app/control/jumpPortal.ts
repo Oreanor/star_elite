@@ -30,8 +30,13 @@ export interface JumpPortal {
   ringNormal: Vector3
   ringRadius: number
   targetRadius: number
-  growDir: 1 | -1
-  growWasHeld: boolean
+  /**
+   * H удерживают ПРЯМО СЕЙЧАС. Кольцо только раскрывается — обратного хода у него нет:
+   * повторное нажатие схлопывает пару мгновенно и ставит новую перед носом, а плавное
+   * сжатие лишь путало (жмёшь H, ожидая новое кольцо, а старое медленно уезжает в ноль).
+   * Флаг нужен HUD: пока держат — голубая плашка «открытие гиперкольца».
+   */
+  growHeld: boolean
   openedAt: number
   /** Точка выхода в целевой системе (без scatter — превью совпадает с «окном»). */
   destPos: Vector3
@@ -73,8 +78,7 @@ const portal: JumpPortal = {
   ringNormal: new Vector3(0, 0, -1),
   ringRadius: 0,
   targetRadius: 0,
-  growDir: 1,
-  growWasHeld: false,
+  growHeld: false,
   openedAt: 0,
   destPos: new Vector3(),
   destQuat: new Quaternion(),
@@ -106,26 +110,6 @@ export function portalOpen(): boolean {
 
 export function portalActive(): boolean {
   return portal.open || portal.committing
-}
-
-/**
- * Настоящий ли это приказ сменить цель портала — или лишний тап по уже открытому кольцу.
- *
- * `openPortal` НЕ очищает `jumpTargetIndex` (в отличие от `enterSystem` при реальном прыжке),
- * поэтому выбранная на карте система остаётся выбранной, пока кольцо растёт. Раньше любой
- * индекс считался новым приказом — и каждое повторное H к ТОЙ ЖЕ цели закрывало пару,
- * `disposeJumpPortalWorld` сносил готовый дальний мир, а `openPortal` строил его с нуля.
- * React не успевал заново смонтировать сцену за кольцом — второе-третье кольцо смотрело
- * «на просвет», пока пара кадров не достроит мир («полетал вокруг — починилось»).
- *
- * Пока портал РАСКРЫТ к этой самой цели, повторное H — рост того же кольца, не приказ.
- * Пройденный портал закрывается сам, поэтому выбор дальней системы после прохода —
- * обычное новое открытие.
- */
-export function portalRetargetRequested(target: number | null): target is number {
-  if (target === null) return false
-  if (portal.open && target === portal.index) return false
-  return true
 }
 
 /** Удержание растит портал через isHeld; автоповтор keydown не является новой командой. */
@@ -191,8 +175,7 @@ export function openPortal(world: World, index: number, arrival: Arrival | null,
   // Чистый диаметр в пределе задаётся числом диаметров открывшего портал корпуса.
   portal.targetRadius = linkedPortalTargetRadius(world.player)
   portal.ringRadius = 0
-  portal.growDir = 1
-  portal.growWasHeld = true
+  portal.growHeld = true
   portal.openedAt = realTime
   portal.hereIndex = world.systemIndex
   portal.index = index
@@ -321,18 +304,11 @@ export function tickPortal(world: World, dt: number, growHeld: boolean, realTime
     syncClipPlanes()
   }
 
-  // Отпускание только фиксирует достигнутый размер. Направление меняется на НОВОМ
-  // нажатии: так keyup не может ни схлопнуть портал, ни дать кадр обратного движения.
-  // Первое нажатие уже записано openPortal через growWasHeld=true, поэтому оно раскрывает.
-  //
-  // Но переворачивать можно только СУЩЕСТВУЮЩЕЕ кольцо. У нулевого второе нажатие — это
-  // всё та же команда «открой»: иначе тап по H оставлял портал нераскрытым, а следующий
-  // тап молча его закрывал, и клавиша выглядела сломанной через раз.
-  if (!portal.growWasHeld && growHeld && portal.ringRadius > 0) {
-    portal.growDir = portal.growDir === 1 ? -1 : 1
-    hlog('новое удержание H — направление роста меняется', { growDir: portal.growDir })
-  }
-  portal.growWasHeld = growHeld
+  // Отпускание только фиксирует достигнутый размер: кольцо не умеет уменьшаться. Раньше
+  // повторное удержание разворачивало рост в сжатие — и пилот, ждавший НОВОЕ кольцо перед
+  // носом, вместо этого смотрел, как медленно уезжает в ноль старое. Теперь повторное
+  // нажатие схлопывает пару мгновенно и ставит новую (см. обработчик H).
+  portal.growHeld = growHeld
 
   hstate(
     'состояние кольца',
@@ -352,19 +328,8 @@ export function tickPortal(world: World, dt: number, growHeld: boolean, realTime
    * успевает пройти под невидимым кольцом.
    */
   if (growHeld) {
-    portal.ringRadius = stepLinkedPortalRadius(
-      portal.ringRadius,
-      portal.targetRadius,
-      portal.growDir,
-      true,
-      dt,
-    )
+    portal.ringRadius = stepLinkedPortalRadius(portal.ringRadius, portal.targetRadius, 1, true, dt)
     syncGateShape()
-    if (portal.ringRadius <= 0 && portal.growDir < 0) {
-      hlog('ЗАКРЫТ: кольцо сжали в ноль')
-      closePortal()
-      return 'close'
-    }
   }
 
   // Коррекция масштаба несовместима уже с СУЩЕСТВУЮЩИМ тоннелем, а не только

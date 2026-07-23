@@ -143,6 +143,7 @@ export const DE: Record<keyof typeof RU, string> = {
   'hud.bushEnter': 'UNIVERSUM',
   'hud.bushArrive': 'GALAXIE',
   'hud.portalClosed': 'PORTAL GESCHLOSSEN',
+  'hud.portalOpening': 'HYPERRING ÖFFNET',
   'hud.landApproach': 'HOVER-VORBEREITUNG · {alt}',
   'hud.landPrompt': 'L DRÜCKEN · {alt}',
   'hud.landDetach': 'BOOST ×1000 — LOS · L — LÖSEN',

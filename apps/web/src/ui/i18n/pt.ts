@@ -148,6 +148,7 @@ export const PT: Record<keyof typeof RU, string> = {
   'hud.bushEnter': 'UNIVERSO',
   'hud.bushArrive': 'GALÁXIA',
   'hud.portalClosed': 'PORTAL FECHADO',
+  'hud.portalOpening': 'ABRINDO ANEL HIPER',
   'hud.landApproach': 'PREPARANDO HOVER · {alt}',
   'hud.landPrompt': 'PRESSIONE L · {alt}',
   'hud.landDetach': 'BOOST ×1000 — SOLTAR · L — LIBERAR',

@@ -32,6 +32,7 @@ export type WarnCode =
   | 'noLaser'
   | 'noJump'
   | 'portalClosed'
+  | 'portalOpening'
   | 'noAux'
   | 'noTarget'
   | 'landPrompt'
@@ -75,6 +76,9 @@ const DEFS: Record<WarnCode, Def> = {
   noLaser: { color: UI.WARN, hz: 0, rank: 84, key: 'hud.noLaser' },
   noJump: { color: UI.WARN, hz: 0, rank: 84, key: 'hud.noJump' },
   portalClosed: { color: UI.PRIMARY, hz: 0, rank: 43, key: 'hud.portalClosed' },
+  // Пока держат H — состояние, а не отказ: голубая, ровная, без мигания. Рангом выше
+  // закрытия: раскрытие идёт прямо сейчас и перебивает сообщение о прошлом кольце.
+  portalOpening: { color: UI.PRIMARY, hz: 0, rank: 44, key: 'hud.portalOpening' },
   noAux: { color: UI.WARN, hz: 0, rank: 84, key: 'hud.noAux' },
   noTarget: { color: UI.WARN, hz: 0, rank: 84, key: 'hud.noTarget' },
   // Окно стоянки: голубое — «нажмите L». Выше стыковки.

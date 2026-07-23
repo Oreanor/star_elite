@@ -141,6 +141,7 @@ export const EN: Record<keyof typeof RU, string> = {
   'hud.bushEnter': 'UNIVERSE',
   'hud.bushArrive': 'GALAXY',
   'hud.portalClosed': 'PORTAL CLOSED',
+  'hud.portalOpening': 'HYPER RING OPENING',
   'hud.landApproach': 'HOVER PREP · {alt}',
   'hud.landPrompt': 'PRESS L · {alt}',
   'hud.landDetach': 'BOOST ×1000 — BREAK · L — RELEASE',

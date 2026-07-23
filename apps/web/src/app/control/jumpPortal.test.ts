@@ -21,7 +21,6 @@ import {
   openPortal,
   portalActive,
   portalOpen,
-  portalRetargetRequested,
   setDestPortal,
   tickPortal,
 } from './jumpPortal'
@@ -70,30 +69,26 @@ describe('linked jump portal frame sync', () => {
     expect(portal.clipThere.distanceToPoint(thereAfter)).toBeGreaterThan(0)
   })
 
-  it('ignores repeated H toward the target the portal already points at (pre-transit)', () => {
-    // РЕГРЕССИЯ: `jumpTargetIndex` не очищается на openPortal, значит цель на карте
-    // остаётся выбранной. Раньше повторное H к ней считалось retarget'ом → close+dispose+
-    // open → готовый дальний мир сносился, и второе-третье кольцо смотрело «на просвет»,
-    // пока React заново не смонтирует сцену. Повтор к той же НЕПРОЙДЕННОЙ цели — не приказ.
+  it('reopening to the same target starts a fresh ring that waits for its own world', () => {
+    // Любое свежее H ставит НОВОЕ кольцо перед носом — этого пилот и ждёт от клавиши
+    // прыжка. Значит старая пара сносится начисто, а новая начинает с нуля и НЕ ПОКАЗЫВАЕТСЯ,
+    // пока её собственный мир не готов. Именно на неполном сносе прошлый раз ломалось
+    // второе-третье кольцо: в дырке не было ничего, «просто дырка».
     const world = createWorld()
-    openPortal(world, 17, null, 0)
+    const index = reachableTarget(world)
+    openPortal(world, index, null, 0)
+    markPortalDestinationDrawn()
+    tickPortal(world, LINKED_PORTAL.OPEN_SECONDS, true, LINKED_PORTAL.OPEN_SECONDS)
+    expect(jumpPortal().ringRadius).toBeCloseTo(jumpPortal().targetRadius)
 
-    expect(portalRetargetRequested(null)).toBe(false)
-    expect(portalRetargetRequested(jumpPortal().index)).toBe(false) // та же цель — рост, не пересборка
-    expect(portalRetargetRequested(17 === world.systemIndex ? 18 : 5)).toBe(true) // другая — приказ
-  })
+    closePortal()
+    openPortal(world, index, null, 5)
 
-  it('treats the selected far endpoint as a new command AFTER a transit', () => {
-    // Пройденный тоннель кончается: кольца за спиной нет. Значит выбор ТОЙ ЖЕ системы,
-    // из которой только что вышел, — обычный новый прыжок, а не лишний тап по кольцу.
-    const world = createWorld()
-    openPortal(world, 17, null, 0)
-    const back = jumpPortal().index
-
-    completePortalTransit(world)
-
-    expect(portalRetargetRequested(null)).toBe(false)
-    expect(portalRetargetRequested(back)).toBe(true)
+    const p = jumpPortal()
+    expect(p.ringRadius).toBe(0)
+    expect(p.destWarm).toBe(false)
+    expect(p.destReady).toBe(false)
+    expect(world.jumpGates[0]!.tube).toBe(0)
   })
 
   it('does not restart an opening portal on keyboard auto-repeat', () => {
@@ -139,17 +134,23 @@ describe('linked jump portal frame sync', () => {
     expect(world.jumpGates[0]!.tube).toBe(LINKED_PORTAL.TUBE)
   })
 
-  it('treats a second press on a zero ring as "open", not as "shrink"', () => {
-    // Тап по H, отпустил, нажал снова: переворот направления у ещё не выросшего кольца
-    // закрывал портал в ноль, и H выглядела сломанной через раз. Переворачивать можно
-    // только СУЩЕСТВУЮЩЕЕ кольцо.
+  it('never shrinks the ring: releasing H only freezes it', () => {
+    // Раньше повторное удержание разворачивало рост в сжатие, и пилот, ждавший НОВОЕ
+    // кольцо, смотрел, как медленно уезжает в ноль старое. Кольцо только раскрывается;
+    // «передумал» — это мгновенный снос (Escape или новое H), а не обратный ход.
     const world = createWorld()
     openPortal(world, reachableTarget(world), null, 0)
+    markPortalDestinationDrawn()
     const p = jumpPortal()
 
-    tickPortal(world, 1 / 60, false, 1 / 60) // отпустил, не успев вырасти
-    expect(tickPortal(world, 1 / 60, true, 2 / 60)).not.toBe('close')
-    expect(p.growDir).toBe(1)
+    tickPortal(world, 0.2, true, 0.2)
+    const grown = p.ringRadius
+    expect(grown).toBeGreaterThan(0)
+
+    tickPortal(world, 0.2, false, 0.4) // отпустил — размер замер
+    expect(p.ringRadius).toBe(grown)
+    tickPortal(world, 0.2, true, 0.6) // нажал снова — растёт дальше, а не сжимается
+    expect(p.ringRadius).toBeGreaterThan(grown)
     expect(portalOpen()).toBe(true)
   })
 

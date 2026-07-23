@@ -146,6 +146,7 @@ export const RU = {
   'hud.bushEnter': 'ВСЕЛЕННАЯ',
   'hud.bushArrive': 'ГАЛАКТИКА',
   'hud.portalClosed': 'ПОРТАЛ ЗАКРЫТ',
+  'hud.portalOpening': 'ОТКРЫТИЕ ГИПЕРКОЛЬЦА',
   'hud.landApproach': 'ПОДГОТОВКА К ХОВЕР-РЕЖИМУ · {alt}',
   'hud.landPrompt': 'НАЖМИТЕ L · {alt}',
   'hud.landDetach': 'ФОРСАЖ ×1000 — ОТРЫВ · L — ОТПУСТИТЬ',

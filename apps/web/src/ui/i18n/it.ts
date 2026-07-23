@@ -143,6 +143,7 @@ export const IT: Record<keyof typeof RU, string> = {
   'hud.bushEnter': 'UNIVERSO',
   'hud.bushArrive': 'GALASSIA',
   'hud.portalClosed': 'PORTALE CHIUSO',
+  'hud.portalOpening': 'APERTURA ANELLO IPER',
   'hud.landApproach': 'PREPARAZIONE HOVER · {alt}',
   'hud.landPrompt': 'PREMI L · {alt}',
   'hud.landDetach': 'BOOST ×1000 — STACCO · L — RILASCIA',

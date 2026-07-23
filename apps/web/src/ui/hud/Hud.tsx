@@ -3,7 +3,7 @@ import { useEffect, useRef } from 'react'
 import { Quaternion, Vector3 } from 'three'
 import { useSession } from '../../app/GameContext'
 import { PIXEL_SCALE, TORUS } from '../../render/config'
-import { jumpPortal, portalActive } from '../../app/control/jumpPortal'
+import { jumpPortal, portalActive, portalOpen } from '../../app/control/jumpPortal'
 import { preparedJumpPortalWorld, syncDestCamera } from '../../render/scene/jumpPortalWorld'
 import { torusThrust } from '../../app/control/torusFlight'
 import {
@@ -144,6 +144,9 @@ export function Hud() {
       torusLabels: session.bush.active ? torusLabels : null,
       fps: fpsRef.current,
       aperture,
+      // Держат H и кольцо ещё не в полный размер — идёт раскрытие. Признак берём у самого
+      // портала (`growHeld` пишет его такт), а не у клавиатуры: HUD ввод не читает.
+      portalGrowing: portalOpen() && p.growHeld && p.ringRadius < p.targetRadius,
     })
   })
 

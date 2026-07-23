@@ -124,6 +124,8 @@ export interface HudFrame {
    * назначения рисуются ТОЛЬКО в ней: stencil-маска портала на 2D-канвас не действует.
    */
   aperture: PortalAperture | null
+  /** Кольцо раскрывается прямо сейчас (H держат) — голубая плашка состояния. */
+  portalGrowing: boolean
 }
 
 export function drawHud(frame: HudFrame): void {
@@ -1682,6 +1684,9 @@ function gatherWarnings(frame: HudFrame): Plate | null {
   if (player.cruise.block === 'mass-lock') pushWarning('massLock', now)
   else if (player.cruise.block === 'proximity') pushWarning('gravityBrake', now)
   if (scooping(player)) pushWarning('refuel', now)
+  // Раскрытие гиперкольца — состояние: держат H, кольцо растёт. Отпустил — плашка гаснет
+  // сама, как всякий пуш без подтверждения. `repeat: 0` — не приглушать повтором.
+  if (frame.portalGrowing) pushWarning('portalOpening', now, { repeat: 0 })
 
   // Посадка на поверхность важнее стыковки: у двора Люцифера Кориолис иначе
   // перебивал пуш глыбы. Сначала куе посадки — стыковку тогда не предлагаем.

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { applyPilotProfile, interlocutor, jumpBlock, pendingHail, serializePlayer, stationInterlocutor, undock, type JumpBlock, type PilotProfile, type PlayerSave, type World } from '@elite/sim'
 import { GameProvider, useSession } from './GameContext'
-import { closePortal, freshPortalKeyDown, jumpPortal, openPortal, portalActive, portalOpen, portalRetargetRequested } from './control/jumpPortal'
+import { closePortal, freshPortalKeyDown, jumpPortal, openPortal, portalActive, portalOpen } from './control/jumpPortal'
 import { disposeJumpPortalWorld, resetJumpPortalWorlds } from '../render/scene/jumpPortalWorld'
 import { hlog, hreset } from './control/hyperLog'
 import { startUndock } from './control/undockFx'
@@ -651,22 +651,10 @@ function Shell({ onRestart }: { onRestart: () => void }) {
         }
         const target = session.world.jumpTargetIndex
         const active = portalActive()
-        if (active) {
-          if (jumpPortal().committing) {
-            hlog('ВЫХОД: переход уже идёт (committing)')
-            return
-          }
-          // Повтор H к УЖЕ ВЫБРАННОЙ цели — не приказ, а продолжение раскрытия того же
-          // кольца: `openPortal` не чистит `jumpTargetIndex`, и без этой проверки каждое
-          // нажатие пересобирало бы готовую пару заново. Любая ДРУГАЯ цель — приказ.
-          if (!portalRetargetRequested(target)) {
-            hlog('ВЫХОД: та же цель у открытого кольца — это рост, не приказ', {
-              target,
-              portalIndex: p.index,
-              ringRadius: p.ringRadius,
-            })
-            return
-          }
+        // Переход уже начался — его не отменяют нажатием: мир вот-вот подменится.
+        if (active && jumpPortal().committing) {
+          hlog('ВЫХОД: переход уже идёт (committing)')
+          return
         }
         if (target == null) {
           hlog('ВЫХОД: цель не выбрана')
@@ -692,8 +680,19 @@ function Shell({ onRestart }: { onRestart: () => void }) {
           })
           return
         }
+        /*
+         * ЛЮБОЕ свежее нажатие H ставит НОВОЕ кольцо перед носом — этого пилот и ждёт,
+         * когда жмёт клавишу прыжка. Значит старую пару надо сперва снести, и снести
+         * НАЧИСТО: `closePortal` убирает коллайдер и гасит признак готовности, а
+         * `disposeJumpPortalWorld` выбрасывает собранный дальний мир вместе со сценой.
+         *
+         * Именно на неполном сносе прошлый раз ломалось второе-третье кольцо: старый мир
+         * оставался под ссылкой, новый не успевал смонтироваться, и в дырке не было
+         * ничего — «просто дырка». Теперь показ кольца ждёт своего мира (`destWarm`),
+         * поэтому пустой дырки не бывает в принципе: нет мира — нет и кольца.
+         */
         if (active) {
-          hlog('старую пару сносим (смена цели)')
+          hlog('сносим старую пару начисто и ставим новую перед носом')
           closePortal()
           disposeJumpPortalWorld()
         }
