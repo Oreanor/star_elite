@@ -61,10 +61,8 @@ describe('точка выхода из прыжка', () => {
   })
 
   /**
-   * У планеты со станцией отсчёт идёт ОТ СТАНЦИИ: лететь пилот будет к причалу,
-   * и дорога должна остаться до него, а не до планеты, вокруг которой он висит.
-   * Иначе выход «в миллионе километров от планеты» ставит корабль вплотную к
-   * причалу, потому что тот сам висит в полутысяче километров над ней.
+   * У планеты со станцией дорога считается ДО ПРИЧАЛА: лететь пилот будет к нему, и
+   * минута пути должна остаться до причала, а не до планеты, вокруг которой он висит.
    */
   it('к обитаемому миру выходим на дороге до ПРИЧАЛА, а не до планеты', () => {
     const seat = stationSeat(STARTER_SYSTEM)
@@ -75,6 +73,26 @@ describe('точка выхода из прыжка', () => {
     const range = at(point).distanceTo(at(station.pos)) - station.radius
 
     expect(range).toBeCloseTo(ARRIVAL.STANDOFF, 0)
+  })
+
+  /**
+   * РЕГРЕССИЯ: отход отсчитывался ОТ СТАНЦИИ и вёл «наружу от звезды». Станция же висит
+   * в двух-девяти сотнях километров над поверхностью, и эта тысяча километров приводила
+   * НА ТУ ЖЕ ОРБИТУ: замер (`scratch/arrival-drift.ts`) показал выход в 267-347 км над
+   * поверхностью — планетой в полнеба, и корабль цеплял её первым же манёвром.
+   *
+   * Инвариант: точка выхода лежит ВНЕ сферы, где живут и планета, и её причал.
+   */
+  it('к обитаемому миру не выходим на орбите причала — только за ней', () => {
+    const seat = stationSeat(STARTER_SYSTEM)
+    const planet = STARTER_SYSTEM.planets[seat]!
+    const station = STARTER_SYSTEM.station!
+    const point = arrivalPoint(STARTER_SYSTEM, { kind: 'body', planet: seat })
+
+    const fromCentre = at(point).distanceTo(at(planet.pos))
+    const orbit = at(station.pos).distanceTo(at(planet.pos))
+    expect(fromCentre - planet.radius).toBeGreaterThanOrEqual(ARRIVAL.STANDOFF)
+    expect(fromCentre).toBeGreaterThan(orbit)
   })
 
   /** Выход не внутри тела и не между ним и звездой: планета не должна закрыть кадр. */

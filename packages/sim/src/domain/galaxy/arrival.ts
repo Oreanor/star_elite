@@ -112,11 +112,40 @@ export function arrivalPointAt(def: SystemDef, arrival: Arrival | null, calendar
   const planet = planets[arrival.planet]
   if (!planet) return def.playerStart
 
+  /*
+   * Отсчёт всегда от ПЛАНЕТЫ и наружу ЗА ОРБИТУ ПРИЧАЛА.
+   *
+   * Раньше у планеты со станцией отход считался от самой станции — с виду разумно
+   * («лететь пилот будет к причалу»), но геометрия рушилась: станция висит в двух-девяти
+   * сотнях километров над поверхностью, и тысяча километров «наружу от звезды» от неё
+   * приводила НА ТУ ЖЕ ОРБИТУ. Замер (`scratch/arrival-drift.ts`): корабль выходил в
+   * 267-347 км над поверхностью, планетой в полнеба, и цеплял её на первом же манёвре.
+   *
+   * Теперь точка выхода лежит вне сферы, в которой живут и планета, и её причал: до
+   * поверхности гарантированно STANDOFF, до станции — примерно столько же в худшем
+   * случае (когда она стоит ровно под точкой) и больше в остальных. Лететь есть куда,
+   * а врезаться не во что.
+   */
   const station = bodies.find((b) => b.kind === 'station')
+  const planetPos: Point3 = [planet.pos.x, planet.pos.y, planet.pos.z]
   if (station && stationSeat(def) === arrival.planet) {
-    return standoff([station.pos.x, station.pos.y, station.pos.z], station.radius, starPos, ARRIVAL.STANDOFF)
+    // Направление — НА ПРИЧАЛ (от центра планеты через станцию), а не вслепую от звезды:
+    // иначе точка выхода попадала на другую сторону орбиты, и до причала выходило
+    // пятнадцать-двадцать тысяч километров — по замерам это уже «пилот успевает
+    // заскучать». Так же остаётся минута пути, но с чистой геометрией.
+    const orbitRadius = station.pos.distanceTo(planet.pos) + station.radius
+    return standoff(
+      planetPos,
+      Math.max(planet.radius, orbitRadius),
+      [
+        planetPos[0] - (station.pos.x - planet.pos.x),
+        planetPos[1] - (station.pos.y - planet.pos.y),
+        planetPos[2] - (station.pos.z - planet.pos.z),
+      ],
+      ARRIVAL.STANDOFF,
+    )
   }
-  return standoff([planet.pos.x, planet.pos.y, planet.pos.z], planet.radius, starPos, ARRIVAL.STANDOFF)
+  return standoff(planetPos, planet.radius, starPos, ARRIVAL.STANDOFF)
 }
 
 /**
