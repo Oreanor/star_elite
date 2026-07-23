@@ -1,6 +1,7 @@
+import { Quaternion, Vector3 } from 'three'
 import { describe, expect, it } from 'vitest'
 import { MIELOPHONE } from '../../config/mielophone'
-import { createWorld, STARTER_SYSTEM, type World } from '.'
+import { createWorld, makeShip, STARTER_SYSTEM, type World } from '.'
 import { cycleCelestial, cycleTarget, pruneGiantScaleLocks, targetablesOf } from './queries'
 
 /** Мир с пиратом и нейтралом перед носом игрока. */
@@ -93,5 +94,25 @@ describe('гигантский масштаб гасит системный на
       expect(world.navTargetId).toBe(star!.id)
       expect(world.targetFocus).toBe('nav')
     }
+  })
+})
+
+describe('бог Слово: собеседник в станции против встречного борта', () => {
+  /**
+   * РЕГРЕССИЯ: захват отсекал ЛЮБОЙ `divine`, поэтому прилетевший бог — тот самый
+   * корабль-голубь, который приходит громадой и ужимается у причала, — был виден, но
+   * недоступен для Tab. А весь смысл его прилёта в том, чтобы к нему подошли и заговорили:
+   * без захвата не поговорить. Сидящий же в Крестах бог борта в космосе не имеет.
+   */
+  it('сидящего в станции не захватить, а встречного — можно', () => {
+    const world = createWorld()
+    const parked = world.ships.find((s) => s.divine && s.kinematic)
+    const flying = makeShip(world.ids, 'neutral', 'Слово', world.player.loadout, new Vector3(500, 0, 0), new Quaternion())
+    flying.divine = true
+    world.ships.push(flying)
+
+    const ids = targetablesOf(world).map((s) => s.id)
+    expect(ids).toContain(flying.id)
+    if (parked) expect(ids).not.toContain(parked.id)
   })
 })

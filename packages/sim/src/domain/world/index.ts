@@ -98,6 +98,7 @@ export {
   findBody,
   findShip,
   hostilesOf,
+  isStationBot,
   incomingMissile,
   nearestPod,
   navTarget,

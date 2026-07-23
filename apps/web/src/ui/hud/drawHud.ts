@@ -31,6 +31,7 @@ import {
   peakHeat,
   pendingHail,
   scooping,
+  isStationBot,
   isVisible,
   scoopReadiness,
   shipAxes,
@@ -373,7 +374,9 @@ function shipDistance(world: World, pos: Vector3): number {
  */
 function drawTargets({ ctx, camera, world, width, height }: HudFrame): void {
   for (const ship of world.ships) {
-    if (!ship.alive || ship.divine) continue // бог Слово в космосе не рисуется — он бот в станции
+    // Бог, СИДЯЩИЙ в станции, — собеседник, а не борт: в космосе его нет. Встречный бог
+    // (приходит громадой и ужимается у причала) — обычный корабль и метится как все.
+    if (!ship.alive || isStationBot(ship)) continue
 
     const p = projectPoint(ship.state.pos, camera, width, height)
     if (p.behind || !isOnScreen(p.x, p.y, width, height, 20 * S)) continue
@@ -419,7 +422,7 @@ function drawOffscreenArrows(frame: HudFrame): void {
    * не новость, а стрелка на каждого встречного превратила бы край кадра в частокол.
    */
   for (const ship of world.ships) {
-    if (!ship.alive || !isVisible(ship) || ship.divine) continue // бог Слово — не цель в космосе
+    if (!ship.alive || !isVisible(ship) || isStationBot(ship)) continue
     const locked = ship.id === world.lockedTargetId
     if (ship.faction !== 'hostile' && !locked) continue
     // Цвет = отношение; заливка = активный, контур = прочие. Иначе за кадром
@@ -514,7 +517,7 @@ function drawTargetLock(frame: HudFrame): void {
   if (world.targetFocus === 'contact') {
     if (stellarOnly) return
     const locked = world.lockedTargetId != null ? world.ships.find((s) => s.id === world.lockedTargetId) : null
-    if (locked && locked.alive && isVisible(locked) && !locked.divine) {
+    if (locked && locked.alive && isVisible(locked) && !isStationBot(locked)) {
       mark(locked.state.pos, radarColor(locked, world), locked.acquaintanceId != null ? `◈ ${locked.name}` : null)
     }
     const pod = world.lockedPodId != null ? world.pods.find((p) => p.id === world.lockedPodId) : null
@@ -1365,7 +1368,7 @@ function drawRadar(frame: HudFrame): void {
   }
 
   for (const ship of world.ships) {
-    if (!isVisible(ship) || ship.divine) continue
+    if (!isVisible(ship) || isStationBot(ship)) continue
     plot(ship.state.pos, radarColor(ship, world), Math.round(2 * S), ship.id === world.lockedTargetId)
   }
 }
