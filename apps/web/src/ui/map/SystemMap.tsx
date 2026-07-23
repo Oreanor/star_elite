@@ -70,24 +70,21 @@ const CONTACT = '#b98bff'
 const PLAYER = UI.PLAYER
 const MONOLITH = UI.MONOLITH
 
-const colourOf = (kind: MarkerKind): string =>
-  kind === 'star'
-    ? STAR
-    : kind === 'blackhole'
-      ? BLACK_HOLE
-      : kind === 'station'
-      ? STATION
-      : kind === 'monolith' || kind === 'figurine'
-        ? MONOLITH
-        : kind === 'ship'
-          ? SHIP
-          : kind === 'contact'
-            ? CONTACT
-            : kind === 'player'
-              ? PLAYER
-              : BODY
-
 type MarkerKind = BodyEntity['kind'] | 'monolith' | 'figurine' | 'ship' | 'contact' | 'player'
+
+/** Цвет отметки по роду. Таблица, а не лестница тернарников: новый род — строка, не ветка. */
+const MARKER_COLOUR: Partial<Record<MarkerKind, string>> = {
+  star: STAR,
+  blackhole: BLACK_HOLE,
+  station: STATION,
+  monolith: MONOLITH,
+  figurine: MONOLITH,
+  ship: SHIP,
+  contact: CONTACT,
+  player: PLAYER,
+}
+/** Всё прочее (планета/луна/астероид/база…) — общий тон тела. */
+const colourOf = (kind: MarkerKind): string => MARKER_COLOUR[kind] ?? BODY
 
 interface Marker {
   /** У корабля своего id нет: он не тело. Отрицательный — значит, не выбирается. */

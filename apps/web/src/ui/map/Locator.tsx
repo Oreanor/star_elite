@@ -62,11 +62,14 @@ function shipColor(ship: ShipEntity, world: World): string {
   return UI.NEUTRAL
 }
 
+/** Цвет тела по роду; планета/луна/база — общий фосфор. Таблица, а не лестница if. */
+const BODY_COLOR: Partial<Record<BodyEntity['kind'], string>> = {
+  star: UI.STAR,
+  blackhole: UI.BLACKHOLE,
+  station: UI.STATION,
+}
 function bodyColor(body: BodyEntity): string {
-  if (body.kind === 'star') return UI.STAR
-  if (body.kind === 'blackhole') return UI.BLACKHOLE
-  if (body.kind === 'station') return UI.STATION
-  return UI.PLANET
+  return BODY_COLOR[body.kind] ?? UI.PLANET
 }
 
 type Shape = 'square' | 'round' | 'diamond'

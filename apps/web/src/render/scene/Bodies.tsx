@@ -402,16 +402,24 @@ export function Bodies() {
     <>
       {bodies.map((body) => {
         if (isDecor(body)) return null
-        if (body.kind === 'star') return <Star key={body.id} body={body} />
-        if (body.kind === 'blackhole') return null
-        // Крупная луна рисуется тем же компонентом, что и планета, и это не лень:
-        // она и ЕСТЬ маленькая скалистая планета. Ни воздуха, ни огней у неё не
-        // будет — не потому, что для луны написана отдельная ветка, а потому, что
-        // у голой скалы нет цвета атмосферы, а у ноля жителей — городов.
-        if (body.kind === 'planet' || body.kind === 'moon') return <Planet key={body.id} body={body} />
-        // Крест-храм — свой компонент (живой шейдер + лучи); прочие станции — общий Station.
-        if (body.stationStyle === 'cross') return <CrossStation key={body.id} body={body} />
-        return <Station key={body.id} body={body} />
+        switch (body.kind) {
+          case 'star':
+            return <Star key={body.id} body={body} />
+          case 'blackhole':
+            return null // рисует отдельный слой BlackHole
+          // Крупная луна рисуется тем же компонентом, что и планета, и это не лень: она
+          // и ЕСТЬ маленькая скалистая планета. Ни воздуха, ни огней у неё не будет — не
+          // из-за отдельной ветки, а потому что у голой скалы нет цвета атмосферы, а у
+          // ноля жителей — городов.
+          case 'planet':
+          case 'moon':
+            return <Planet key={body.id} body={body} />
+          case 'station':
+            // Крест-храм — свой компонент (живой шейдер + лучи); прочие — общий Station.
+            return body.stationStyle === 'cross'
+              ? <CrossStation key={body.id} body={body} />
+              : <Station key={body.id} body={body} />
+        }
       })}
       <MoonSwarm moons={swarm} />
     </>

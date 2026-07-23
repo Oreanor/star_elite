@@ -1451,26 +1451,32 @@ const RADAR_RANGE = 20_000
 /** Ближе этого камни рисуются, м. Дальше они — не препятствие, а пейзаж. */
 const ROCK_RANGE = 4_000
 
-/** Звезда жёлтая, дыра фиолетовая, причал белый, планета/луна — голубые. */
+/** Звезда жёлтая, дыра фиолетовая, причал белый, планета/луна — голубые. Таблица, не if. */
+const BODY_COLOR: Partial<Record<BodyEntity['kind'], string>> = {
+  star: HUD_COLORS.STAR,
+  blackhole: HUD_COLORS.BLACKHOLE,
+  station: HUD_COLORS.STATION,
+}
 function bodyColor(body: BodyEntity): string {
-  if (body.kind === 'star') return HUD_COLORS.STAR
-  if (body.kind === 'blackhole') return HUD_COLORS.BLACKHOLE
-  if (body.kind === 'station') return HUD_COLORS.STATION
-  return HUD_COLORS.PLANET
+  return BODY_COLOR[body.kind] ?? HUD_COLORS.PLANET
 }
 
-/** Цвет нав-цели = цвет значка на локаторе. */
+/**
+ * Цвет нав-цели = цвет значка на локаторе. Таблица по роду:
+ * база белая (рукотворная сфера), камень/статуя коричневые (пилот не учит второй тон),
+ * прочее — по телу. Новый род — строка, а не очередной if.
+ */
+const NAV_COLOR: Record<string, string> = {
+  warbase: HUD_COLORS.STATION,
+  monolith: HUD_COLORS.MONOLITH,
+  figurine: HUD_COLORS.MONOLITH,
+  asteroid: HUD_COLORS.MONOLITH,
+  star: HUD_COLORS.STAR,
+  blackhole: HUD_COLORS.BLACKHOLE,
+  station: HUD_COLORS.STATION,
+}
 function navMarkerColor(nav: { kind: string }): string {
-  // Военная база — белая: рукотворная сфера, а не бурый камень. Отдельный тон, свой значок.
-  if (nav.kind === 'warbase') return HUD_COLORS.STATION
-  // Астероид — тот же коричневый, что статуя: пилот не учит второй тон «камня».
-  if (nav.kind === 'monolith' || nav.kind === 'figurine' || nav.kind === 'asteroid') {
-    return HUD_COLORS.MONOLITH
-  }
-  if (nav.kind === 'star') return HUD_COLORS.STAR
-  if (nav.kind === 'blackhole') return HUD_COLORS.BLACKHOLE
-  if (nav.kind === 'station') return HUD_COLORS.STATION
-  return HUD_COLORS.PLANET
+  return NAV_COLOR[nav.kind] ?? HUD_COLORS.PLANET
 }
 
 /** Враг красный, друг/свой зелёный, нейтрал серый, живой игрок — розовый. */
