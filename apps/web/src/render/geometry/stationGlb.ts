@@ -92,24 +92,6 @@ function requestStation(index: number): void {
   })
 }
 
-/**
- * КРЕСТ «Вечность» — особый: он монумент-храм, а не рядовой причал, и облик у него не из общей
- * пятёрки. Берём только ГЕОМЕТРИЮ: материал ему рисует божественный шейдер (плывущий силуэт,
- * раскалённые кромки), а не текстуры Meshy — оттого `prepareStation` тут нужен лишь ради
- * центровки и нормировки в единичный размер (внешний scale = радиус станции).
- */
-const CROSS_URL = '/models/stations/station_cross.glb'
-let crossCache: LoadedStation | null = null
-new GLTFLoader().load(CROSS_URL, (gltf) => {
-  const loaded = prepareStation(gltf.scene)
-  if (loaded) crossCache = loaded
-})
-
-/** Геометрия Креста. null — ещё грузится (вызывающий держит процедурную заглушку). */
-export function crossGlbGeometry(): BufferGeometry | null {
-  return crossCache?.geometry ?? null
-}
-
 const wrap = (index: number): number =>
   ((index % STATION_MODEL_COUNT) + STATION_MODEL_COUNT) % STATION_MODEL_COUNT
 

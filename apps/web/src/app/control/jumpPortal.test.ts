@@ -1,13 +1,12 @@
 import { Quaternion, Scene, Vector3 } from 'three'
 import { afterEach, describe, expect, it } from 'vitest'
-import { commitPreparedJump, createWorld, GALAXY, jumpDistance, type World } from '@elite/sim'
+import { commitPreparedJump, createWorld, GALAXY, jumpDistance, LINKED_PORTAL, type World } from '@elite/sim'
 import type { Session } from '../GameContext'
 import {
   destPortalScene,
   disposeJumpPortalWorld,
   activeWorldRenderScene,
   prepareJumpPortalWorld,
-  prepareReverseJumpPortalWorld,
   promotePreparedJumpPortalScene,
   promotedJumpPortalWorld,
   resetJumpPortalWorlds,
@@ -16,9 +15,9 @@ import {
 import {
   closePortal,
   completePortalTransit,
-  establishedPortalCloseRequested,
   freshPortalKeyDown,
   jumpPortal,
+  markPortalDestinationDrawn,
   openPortal,
   portalActive,
   portalOpen,
@@ -85,14 +84,16 @@ describe('linked jump portal frame sync', () => {
   })
 
   it('treats the selected far endpoint as a new command AFTER a transit', () => {
-    // После прохода (`paid`) устья меняются ролями. Выбор дальней системы — уже честный
-    // обратный прыжок, а не лишний тап: кольцо надо заменить новым перед носом.
+    // Пройденный тоннель кончается: кольца за спиной нет. Значит выбор ТОЙ ЖЕ системы,
+    // из которой только что вышел, — обычный новый прыжок, а не лишний тап по кольцу.
     const world = createWorld()
     openPortal(world, 17, null, 0)
-    jumpPortal().paid = true
+    const back = jumpPortal().index
+
+    completePortalTransit(world)
 
     expect(portalRetargetRequested(null)).toBe(false)
-    expect(portalRetargetRequested(jumpPortal().index)).toBe(true)
+    expect(portalRetargetRequested(back)).toBe(true)
   })
 
   it('does not restart an opening portal on keyboard auto-repeat', () => {
@@ -102,17 +103,11 @@ describe('linked jump portal frame sync', () => {
     expect(freshPortalKeyDown(true)).toBe(false)
   })
 
-  it('closes the established pair when H has no newly selected target', () => {
-    expect(establishedPortalCloseRequested(null, true)).toBe(true)
-    expect(establishedPortalCloseRequested(7, true)).toBe(false)
-    expect(establishedPortalCloseRequested(null, false)).toBe(false)
-  })
-
   it('makes the portal immediately available for a second command after transit', () => {
     const world = createWorld()
     openPortal(world, 17, null, 0)
 
-    completePortalTransit(world, new Vector3(), false)
+    completePortalTransit(world)
 
     expect(portalOpen()).toBe(false)
     expect(portalActive()).toBe(false)
@@ -120,6 +115,28 @@ describe('linked jump portal frame sync', () => {
     openPortal(world, 23, null, 1)
     expect(portalOpen()).toBe(true)
     expect(jumpPortal().index).toBe(23)
+  })
+
+  it('holds the ring back until the far side exists, then opens it normally', () => {
+    // Сборка второго мира — десятки миллисекунд, и раньше она приходилась ровно на кадр
+    // начала раскрытия: кольцо стартовало рывком. Теперь оно РОЖДАЕТСЯ парой кадров позже,
+    // когда мир за ним готов. Твёрдого обода до этого тоже нет — иначе на месте ещё не
+    // открывшегося портала висел бы невидимый бампер.
+    const world = createWorld()
+    openPortal(world, reachableTarget(world), null, 0)
+    const p = jumpPortal()
+
+    tickPortal(world, LINKED_PORTAL.OPEN_SECONDS, true, LINKED_PORTAL.OPEN_SECONDS)
+    expect(p.ringRadius).toBe(0)
+    expect(world.jumpGates[0]!.tube).toBe(0)
+
+    markPortalDestinationDrawn()
+    const dt = LINKED_PORTAL.OPEN_SECONDS * 0.1
+    tickPortal(world, dt, true, LINKED_PORTAL.OPEN_SECONDS + dt)
+
+    // Ожидание не копится: раскрытие начинается с нуля и идёт штатной скоростью.
+    expect(p.ringRadius).toBeCloseTo(p.targetRadius * 0.1)
+    expect(world.jumpGates[0]!.tube).toBe(LINKED_PORTAL.TUBE)
   })
 
   it('does not spend hyper charge when a portal is opened and closed without transit', () => {
@@ -137,6 +154,9 @@ describe('linked jump portal frame sync', () => {
   it('detects a moving ship crossing while H is still held', () => {
     const world = createWorld()
     openPortal(world, reachableTarget(world), null, 0)
+    // Пока дальняя сторона не нарисована, устья не существует — есть только рипл.
+    // Кольцо и пересечение начинаются с этого сигнала.
+    markPortalDestinationDrawn()
 
     // Первый кадр запоминает подходную сторону и полностью раскрывает отверстие.
     expect(tickPortal(world, 2.5, true, 2.5)).toBeNull()
@@ -192,14 +212,12 @@ describe('linked jump portal frame sync', () => {
     const source = createWorld()
     const firstIndex = reachableTarget(source)
     const session = { world: source, running: false } as Session
-    const sourceOrigin = source.originOffset.clone()
 
     openPortal(source, firstIndex, null, 0)
     const first = prepareJumpPortalWorld(session)
     expect(commitPreparedJump(source, first.world, firstIndex)).toBe(true)
     session.world = first.world
-    completePortalTransit(session.world, sourceOrigin)
-    prepareReverseJumpPortalWorld(session, source)
+    completePortalTransit(session.world)
 
     const secondIndex = reachableTarget(session.world, source.systemIndex)
     session.world.jumpTargetIndex = secondIndex

@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { applyPilotProfile, interlocutor, jumpBlock, pendingHail, serializePlayer, stationInterlocutor, undock, type JumpBlock, type PilotProfile, type PlayerSave, type World } from '@elite/sim'
 import { GameProvider, useSession } from './GameContext'
-import { closePortal, establishedPortalCloseRequested, freshPortalKeyDown, jumpPortal, openPortal, portalActive, portalOpen, portalRetargetRequested } from './control/jumpPortal'
-import { disposeJumpPortalWorld } from '../render/scene/jumpPortalWorld'
+import { closePortal, freshPortalKeyDown, jumpPortal, openPortal, portalActive, portalOpen, portalRetargetRequested } from './control/jumpPortal'
+import { disposeJumpPortalWorld, resetJumpPortalWorlds } from '../render/scene/jumpPortalWorld'
 import { startUndock } from './control/undockFx'
 import { negotiate, negotiatorAvailable } from './control/negotiator'
 import { Game } from './Game'
@@ -42,7 +42,13 @@ export function App() {
   // Перезапуск — новая сессия целиком. `key` пересоздаёт мир, контроллеры и сцену:
   // ни одно поле не переживёт смерть, а значит, и не привезёт с собой баг.
   const [run, setRun] = useState(0)
-  const restart = () => setRun((n) => n + 1)
+  const restart = () => {
+    // Прогретые миры портала живут в модульных переменных и `key` их не сносит: без
+    // сброса принятая после прыжка комната (World + Scene) осталась бы под ссылкой
+    // навсегда, а новая сессия — с чужим прошлым за спиной.
+    resetJumpPortalWorlds()
+    setRun((n) => n + 1)
+  }
 
   // Офлайн (Supabase не настроен) — сразу в игру, сейв из localStorage. Онлайн — через
   // гейт входа: сперва аккаунт, потом серверный сейв, и лишь затем мир.
@@ -172,6 +178,12 @@ function Shell({ onRestart }: { onRestart: () => void }) {
    * (отпускает курсор), поэтому одно состояние на всю панель.
    */
   const [tab, setTab] = useState<ConsoleTab | null>(null)
+  /**
+   * Меню паузы раскрыто ЯВНО. В полёте оно не нужно как состояние: Escape отбирает у
+   * браузера захват курсора, и меню всплывает по `locked`. У ПРИЧАЛА захвата нет —
+   * отпускать нечего, и без этого флага Escape на станции не делал ничего.
+   */
+  const [menu, setMenu] = useState(false)
   /** Открыт ли канал связи. Отдельный оверлей: ни вкладок, ни причала у него нет. */
   const [talking, setTalking] = useState(false)
   /** Сбрасывает вкладку «Люди» после разговора — знакомство и фильтр дублей. */
@@ -560,9 +572,16 @@ function Shell({ onRestart }: { onRestart: () => void }) {
         if (chatWith) closeChat()
         else if (dispatching) closeDispatch()
         else if (talking) closeTalk()
-        else if (!docked && tab !== null) closeConsole()
+        else if (menu) setMenu(false)
+        // У ПРИЧАЛА консоль закрывать некуда (она и есть станция), поэтому Escape там
+        // означает ровно то же, что в полёте, — меню паузы. Второй Escape его закроет.
+        else if (docked) setMenu(true)
+        else if (tab !== null) closeConsole()
         return
       }
+      // Под раскрытым меню паузы горячие клавиши молчат: игра стоит, и M/G/I/T/H не должны
+      // менять её из-под заставки. Escape выше — единственный выход, он уже обработан.
+      if (menu) return
 
       if (e.code === 'KeyT') {
         if (docked || tab !== null || talking || chatWith || dispatching) return
@@ -610,18 +629,10 @@ function Shell({ onRestart }: { onRestart: () => void }) {
         const target = session.world.jumpTargetIndex
         const active = portalActive()
         if (active) {
-          const current = jumpPortal()
-          if (current.committing) return
-          if (establishedPortalCloseRequested(target, current.paid)) {
-            closePortal()
-            disposeJumpPortalWorld()
-            pushWarning('portalClosed', session.world.time)
-            return
-          }
-          // enterSystem очищает jumpTargetIndex. Поэтому null означает «управлять старой
-          // парой», а ЛЮБОЙ выбранный индекс — новый явный приказ, в том числе прежняя
-          // система за спиной. Сравнение с current.index оставляло H привязанной к старому
-          // кольцу и делало второй переход в только что покинутую систему невозможным.
+          if (jumpPortal().committing) return
+          // Повтор H к УЖЕ ВЫБРАННОЙ цели — не приказ, а продолжение раскрытия того же
+          // кольца: `openPortal` не чистит `jumpTargetIndex`, и без этой проверки каждое
+          // нажатие пересобирало бы готовую пару заново. Любая ДРУГАЯ цель — приказ.
           if (!portalRetargetRequested(target)) return
         }
         if (target == null) {
@@ -677,7 +688,51 @@ function Shell({ onRestart }: { onRestart: () => void }) {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [session, over, docked, tab, talking, dispatching, chatWith, openConsole, closeConsole, closeTalk, closeChat, closeDispatch])
+  }, [session, over, docked, menu, tab, talking, dispatching, chatWith, openConsole, closeConsole, closeTalk, closeChat, closeDispatch])
+
+  /**
+   * Меню паузы — ОДНА панель на три случая: титул, пауза в полёте (курсор отпущен) и
+   * пауза у причала (`menu`). Собрано в переменную, а не написано дважды: два экземпляра
+   * с разными пропсами однажды разъехались бы по поведению кнопок.
+   *
+   * «Продолжить» у причала возвращает в консоль станции — сцена уже построена, захват
+   * курсора там не нужен, поэтому весь возврат и есть закрытие меню в `onBoot`.
+   */
+  const pauseMenu = (
+    <Paused
+      resuming={started}
+      auto={launching}
+      ready={sceneReady}
+      flourishRef={flourishRef}
+      onFade={fadeIntoGame}
+      onBoot={() => {
+        setBooted(true)
+        setMenu(false)
+      }}
+      onDock={() => {
+        setDocked(true)
+        // Как при обычной стыковке: консоль на вкладке станции (не null — иначе M/G
+        // сравнивают с пустым tab и ведут себя непредсказуемо).
+        setTab('planet')
+        setLaunching(false)
+        setEnterPlay(false) // док уже на экране — подавлять титул больше нечем
+      }}
+      onLockFailed={() => {
+        // Сдались, пока титул ещё на экране. Уже в enterPlay — Shell.poll / клик.
+        if (enterPlayRef.current) return
+        setEnterPlay(false)
+        setStarted(false)
+      }}
+      onNewGame={newGame}
+      onSignOut={
+        online
+          ? () => {
+              void signOut().then(onRestart).catch((e) => console.warn('Выход не удался:', e))
+            }
+          : undefined
+      }
+    />
+  )
 
   return (
     <div className="relative h-screen w-screen overflow-hidden bg-black">
@@ -688,6 +743,10 @@ function Shell({ onRestart }: { onRestart: () => void }) {
       {online && <PresencePublisher />}
       {over ? (
         <GameOver score={session.world.score} onRestart={onRestart} />
+      ) : menu ? (
+        // Пауза, вызванная Escape (у причала — единственный способ её увидеть): меню
+        // накрывает станцию целиком, как накрывает полёт отпущенный курсор.
+        pauseMenu
       ) : talking ? (
         <Dialogue onClose={closeTalk} negotiate={negotiate} chatAvailable={negotiatorAvailable()} />
       ) : dispatching ? (
@@ -715,38 +774,7 @@ function Shell({ onRestart }: { onRestart: () => void }) {
         // Первый клик берёт pointer lock до конца титульного флориша. Сам по себе lock
         // не должен размонтировать Paused: его эффект ещё ждёт ready и запускает fade.
         // После интро enterPlay скрывает титул, если lock так и не пришёл.
-        (!locked || flourishRef.current) && !enterPlay && (
-          <Paused
-            resuming={started}
-            auto={launching}
-            ready={sceneReady}
-            flourishRef={flourishRef}
-            onFade={fadeIntoGame}
-            onBoot={() => setBooted(true)}
-            onDock={() => {
-              setDocked(true)
-              // Как при обычной стыковке: консоль на вкладке станции (не null — иначе M/G
-              // сравнивают с пустым tab и ведут себя непредсказуемо).
-              setTab('planet')
-              setLaunching(false)
-              setEnterPlay(false) // док уже на экране — подавлять титул больше нечем
-            }}
-            onLockFailed={() => {
-              // Сдались, пока титул ещё на экране. Уже в enterPlay — Shell.poll / клик.
-              if (enterPlayRef.current) return
-              setEnterPlay(false)
-              setStarted(false)
-            }}
-            onNewGame={newGame}
-            onSignOut={
-              online
-                ? () => {
-                    void signOut().then(onRestart).catch((e) => console.warn('Выход не удался:', e))
-                  }
-                : undefined
-            }
-          />
-        )
+        (!locked || flourishRef.current) && !enterPlay && pauseMenu
       )}
       {/* Чат с живым игроком — поверх всего (консоли или разговора). Один за раз; закрыл —
           вернулся туда, откуда открыл, либо сразу поднялся ждущий входящий. */}

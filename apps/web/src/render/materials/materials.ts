@@ -10,7 +10,6 @@ import {
   MeshStandardMaterial,
   PointsMaterial,
   ShaderMaterial,
-  SpriteMaterial,
   type Texture,
 } from 'three'
 import { MATERIAL, PALETTE } from '../config'
@@ -204,30 +203,6 @@ export function stationMaterial(): MeshStandardMaterial {
     roughness: MATERIAL.STATION_ROUGHNESS,
   })
   return station
-}
-
-const coronas = new Map<number, SpriteMaterial>()
-
-/**
- * Корона звезды. Аддитивная и без записи глубины: свечение ничего не заслоняет,
- * оно складывается с тем, что за ним. Цвет берётся от самой звезды.
- */
-export function coronaMaterial(map: Texture, color: number): SpriteMaterial {
-  let material = coronas.get(color)
-  if (!material) {
-    material = new SpriteMaterial({
-      map,
-      color: new Color(color),
-      transparent: true,
-      blending: AdditiveBlending,
-      // Глубину не пишет, но проверяет: планета, вставшая между тобой и звездой,
-      // обязана закрыть ореол — иначе он читается как наклейка на объективе.
-      depthWrite: false,
-      fog: false,
-    })
-    coronas.set(color, material)
-  }
-  return material
 }
 
 const starDiscs = new Map<number, MeshBasicMaterial>()
@@ -601,21 +576,6 @@ export function crossRayMaterial(): MeshBasicMaterial {
     fog: false,
   })
   return crossRays
-}
-
-let crossWire: LineBasicMaterial | null = null
-
-/** Каркас креста (неон). Портал-грани — `crossPortal.ts`. */
-export function crossWireMaterial(): LineBasicMaterial {
-  crossWire ??= new LineBasicMaterial({
-    color: 0xa8f4ff,
-    transparent: true,
-    opacity: 1,
-    blending: AdditiveBlending,
-    depthWrite: false,
-    fog: false,
-  })
-  return crossWire
 }
 
 let stars: PointsMaterial | null = null

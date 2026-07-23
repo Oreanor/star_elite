@@ -822,63 +822,6 @@ export const GALAXY_SHAPE_L: LangTable = {
   },
 }
 
-export const SHIP_TYPE_L: LangTable = {
-  en: {
-    "Торговец": "Trader",
-    "Караван": "Convoy",
-    "Пират": "Pirate",
-    "Стая": "Pack",
-    "Налётчик": "Raider",
-    "Патруль": "Patrol",
-    "Грузовик": "Freighter",
-  },
-  pt: {
-    "Торговец": "Mercador",
-    "Караван": "Comboio",
-    "Пират": "Pirata",
-    "Стая": "Matilha",
-    "Налётчик": "Saqueador",
-    "Патруль": "Patrulha",
-    "Грузовик": "Cargueiro",
-  },
-  fr: {
-    "Торговец": "Marchand",
-    "Караван": "Convoi",
-    "Пират": "Pirate",
-    "Стая": "Meute",
-    "Налётчик": "Pillard",
-    "Патруль": "Patrouille",
-    "Грузовик": "Cargo",
-  },
-  de: {
-    "Торговец": "Händler",
-    "Караван": "Konvoi",
-    "Пират": "Pirat",
-    "Стая": "Rudel",
-    "Налётчик": "Angreifer",
-    "Патруль": "Patrouille",
-    "Грузовик": "Frachter",
-  },
-  es: {
-    "Торговец": "Comerciante",
-    "Караван": "Caravana",
-    "Пират": "Pirata",
-    "Стая": "Manada",
-    "Налётчик": "Asaltante",
-    "Патруль": "Patrulla",
-    "Грузовик": "Carguero",
-  },
-  it: {
-    "Торговец": "Mercante",
-    "Караван": "Convoglio",
-    "Пират": "Pirata",
-    "Стая": "Branco",
-    "Налётчик": "Predone",
-    "Патруль": "Pattuglia",
-    "Грузовик": "Cargo",
-  },
-}
-
 export const OCCUPATION_L: LangTable = {
   ru: {
     "trader": "Торговец",
@@ -1081,45 +1024,6 @@ export const PROFESSION_L: LangTable = {
     "businessman": "Uomo d'affari",
     "military": "Militare",
     "pirate": "Pirata",
-  },
-}
-
-export const SECURITY_L: LangTable = {
-  en: {
-    "Нет": "None",
-    "Низкая": "Low",
-    "Средняя": "Medium",
-    "Высокая": "High",
-  },
-  pt: {
-    "Нет": "Nenhuma",
-    "Низкая": "Baixa",
-    "Средняя": "Média",
-    "Высокая": "Alta",
-  },
-  fr: {
-    "Нет": "Aucune",
-    "Низкая": "Faible",
-    "Средняя": "Moyenne",
-    "Высокая": "Élevée",
-  },
-  de: {
-    "Нет": "Keine",
-    "Низкая": "Niedrig",
-    "Средняя": "Mittel",
-    "Высокая": "Hoch",
-  },
-  es: {
-    "Нет": "Nula",
-    "Низкая": "Baja",
-    "Средняя": "Media",
-    "Высокая": "Alta",
-  },
-  it: {
-    "Нет": "Nessuna",
-    "Низкая": "Bassa",
-    "Средняя": "Media",
-    "Высокая": "Alta",
   },
 }
 

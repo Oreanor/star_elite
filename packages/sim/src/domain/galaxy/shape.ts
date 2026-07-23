@@ -5,7 +5,6 @@ import {
   HOME_SHAPE,
   SHAPE,
   type GalaxyShapeId,
-  type StarClassId,
 } from '../../config/galaxy'
 import { WORLD } from '../../config/world'
 import { makeRng, type Rng } from '../../core/math'
@@ -302,11 +301,6 @@ function carvedPositions(seed: number): Spot3[] {
 export function placeSystem(index: number, seed: number): Spot3 {
   if (index === CORE_INDEX) return { x: 0, y: 0, z: 0 }
   return carvedPositions(seed)[index]!
-}
-
-/** Есть ли у класса пустота (для тестов и UI). */
-export function hasGiantVoid(classId: StarClassId): boolean {
-  return voidLyOf(classId) > 0
 }
 
 /** Евклидово расстояние, св. годы. Диск не заворачивается — метрика прямая. */

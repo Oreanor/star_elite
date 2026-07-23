@@ -19,7 +19,7 @@ import {
 } from 'three'
 import type { World } from '@elite/sim'
 import { portalOpen } from '../../app/control/jumpPortal'
-import { jumpPortal } from '../../app/control/jumpPortal'
+import { jumpPortal, markPortalDestinationDrawn } from '../../app/control/jumpPortal'
 import { WARP_PORTAL } from '../config'
 import {
   destPortalScene,
@@ -260,7 +260,8 @@ export function renderJumpPortalOverlay(
   if (!portalOpen()) return
 
   ensure()
-  const r = jumpPortal().ringRadius
+  const p = jumpPortal()
+  const r = p.ringRadius
   // Маска заканчивается у внутренней кромки тора. Поэтому целевой мир не может
   // перерисовать неоновую трубу, уже проверенную по глубине исходной сцены.
   // Круг destination-маски заходит под центр тора. Морфинг сдвигает шнур наружу,
@@ -280,42 +281,57 @@ export function renderJumpPortalOverlay(
 
   const destCam = syncDestCamera(camera)
   const dest = destPortalScene()
+  // Дальний мир строится не в кадре нажатия H, поэтому первые кадры за устьем ПУСТО.
+  // Рисовать пустую сцену в маску нельзя — вышла бы чёрная дыра вместо просвета космоса.
+  // Кольца в это время и нет: оно рождается ровно тогда, когда за ним появляется мир.
+  const destLive = dest.children.length > 0
   const st = renderer.state
   const prevAutoClear = renderer.autoClear
   const prevLocalClipping = renderer.localClippingEnabled
   renderer.autoClear = false
   renderer.localClippingEnabled = true
   try {
-    // 1) stencil = 1 в видимой части овала. Stencil-настройки принадлежат материалу:
-    // renderer.setMaterial иначе затёр бы ручные значения перед самым draw call.
-    st.buffers.stencil.setMask(0xff)
-    st.buffers.stencil.setClear(0)
-    renderer.clear(false, false, true)
-    renderer.render(maskScene!, camera)
+    if (r > 0) {
+      // 1) stencil = 1 в видимой части овала. Stencil-настройки принадлежат материалу:
+      // renderer.setMaterial иначе затёр бы ручные значения перед самым draw call.
+      st.buffers.stencil.setMask(0xff)
+      st.buffers.stencil.setClear(0)
+      renderer.clear(false, false, true)
+      renderer.render(maskScene!, camera)
 
-    // 2) Обод рисуется пока depth ещё принадлежит исходному миру: корабль и тела
-    // честно закрывают его. После подмены глубины сравнивать две камеры уже нельзя.
-    st.buffers.stencil.setTest(false)
-    renderer.render(ringScene!, camera)
+      // 2) Обод рисуется пока depth ещё принадлежит исходному миру: корабль и тела
+      // честно закрывают его. После подмены глубины сравнивать две камеры уже нельзя.
+      st.buffers.stencil.setTest(false)
+      renderer.render(ringScene!, camera)
+    }
 
-    // 3) внутри маски записываем ДАЛЬНЮЮ глубину. Обычный круг на плоскости портала
-    // записывал бы глубину самого кольца и затем отбрасывал почти всю целевую сцену.
-    renderer.render(depthScene!, camera)
+    if (destLive && r > 0) {
+      // 3) внутри маски записываем ДАЛЬНЮЮ глубину. Обычный круг на плоскости портала
+      // записывал бы глубину самого кольца и затем отбрасывал почти всю целевую сцену.
+      renderer.render(depthScene!, camera)
 
-    // 4) Вторая комната целиком под stencil. Блокировка обязательна: материалы сцены
-    // по умолчанию имеют stencilWrite=false и без lock молча выключают тест.
-    st.buffers.stencil.setTest(true)
-    st.buffers.stencil.setMask(0x00)
-    st.buffers.stencil.setFunc(EqualStencilFunc, 1, 0xff)
-    st.buffers.stencil.setOp(KeepStencilOp, KeepStencilOp, KeepStencilOp)
-    st.buffers.stencil.setLocked(true)
-    renderer.render(dest, destCam)
-    st.buffers.stencil.setLocked(false)
+      // 4) Вторая комната целиком под stencil. Блокировка обязательна: материалы сцены
+      // по умолчанию имеют stencilWrite=false и без lock молча выключают тест.
+      st.buffers.stencil.setTest(true)
+      st.buffers.stencil.setMask(0x00)
+      st.buffers.stencil.setFunc(EqualStencilFunc, 1, 0xff)
+      st.buffers.stencil.setOp(KeepStencilOp, KeepStencilOp, KeepStencilOp)
+      st.buffers.stencil.setLocked(true)
+      renderer.render(dest, destCam)
+      st.buffers.stencil.setLocked(false)
+    } else if (destLive && !p.destWarm) {
+      // Сцена дальнего мира смонтирована, но кольца ещё нет — рисовать её некуда: без
+      // маски она залила бы весь кадр. Зато можно СКОМПИЛИРОВАТЬ: самый дорогой остаток
+      // (программы шейдеров, загрузка текстур) снимается здесь, в кадре ДО раскрытия.
+      // Дальше кольцо рождается на прогретой сцене и растёт без единого рывка.
+      renderer.compile(dest, destCam)
+      markPortalDestinationDrawn()
+    }
 
     // 5) Свет плазмы заходит поверх внутренней кромки destination-маски. Это именно
     // additive halo, не второе твёрдое кольцо; общий bloom обработает его следом.
     st.buffers.stencil.setTest(false)
-    renderer.render(haloScene!, camera)
+    if (r > 0) renderer.render(haloScene!, camera)
   } finally {
     st.buffers.stencil.setLocked(false)
     st.buffers.stencil.setTest(false)

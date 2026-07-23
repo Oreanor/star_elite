@@ -1,4 +1,4 @@
-import { BufferAttribute, BufferGeometry, Color, Vector3 } from 'three'
+import { BufferAttribute, BufferGeometry, Color } from 'three'
 
 /**
  * Сборка низкополигональных мешей из треугольников с покраской по вершинам.
@@ -65,17 +65,3 @@ export function symmetric(halfTriangles: Triangle[]): Triangle[] {
   return [...halfTriangles, ...mirrorX(halfTriangles)]
 }
 
-const _ab = new Vector3()
-const _ac = new Vector3()
-const _n = new Vector3()
-
-/** Смотрит ли грань наружу от точки. Отладочная проверка обхода вершин. */
-export function facesAwayFrom(t: Triangle, origin: Vec3): boolean {
-  _ab.set(t.b[0] - t.a[0], t.b[1] - t.a[1], t.b[2] - t.a[2])
-  _ac.set(t.c[0] - t.a[0], t.c[1] - t.a[1], t.c[2] - t.a[2])
-  _n.crossVectors(_ab, _ac)
-  const cx = (t.a[0] + t.b[0] + t.c[0]) / 3 - origin[0]
-  const cy = (t.a[1] + t.b[1] + t.c[1]) / 3 - origin[1]
-  const cz = (t.a[2] + t.b[2] + t.c[2]) / 3 - origin[2]
-  return _n.x * cx + _n.y * cy + _n.z * cz > 0
-}

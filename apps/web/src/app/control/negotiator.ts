@@ -119,10 +119,6 @@ function buildMessages(ctx: NegotiationContext, history: ChatTurn[], userText: s
   return { messages: msgs, chars }
 }
 
-export function negotiationPayloadChars(ctx: NegotiationContext, history: ChatTurn[], userText: string): number {
-  return buildMessages(ctx, history, userText).chars
-}
-
 function staticNoise(history: ChatTurn[]): NegotiatorReply {
   const lines = locale().staticNoise
   return { text: lines[history.length % lines.length]!, commands: [], hangup: false, source: 'fallback' }

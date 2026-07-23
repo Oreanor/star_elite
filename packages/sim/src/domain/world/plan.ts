@@ -32,11 +32,6 @@ export function acquaintanceOf(world: World, ship: ShipEntity): Acquaintance | n
   return world.acquaintances.find((a) => a.id === ship.acquaintanceId) ?? null
 }
 
-/** Стартовый кошелёк при первом знакомстве. */
-export function initialContactCredits(world: World): number {
-  return 4_000 + Math.floor(world.rng() * 10_000)
-}
-
 function firstGunOnLoadout(loadout: ShipEntity['loadout']): number | undefined {
   const hp = loadout.chassis.hardpoints
   for (let i = 0; i < hp.length; i++) if (hp[i]?.kind === 'gun') return i

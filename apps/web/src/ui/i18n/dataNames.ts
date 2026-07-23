@@ -12,8 +12,6 @@ import {
   PLACE_L,
   PROFESSION_FALLBACK_L,
   PROFESSION_L,
-  SECURITY_L,
-  SHIP_TYPE_L,
   SPECIES_L,
   STAR_CLASS_L,
   STATION_TYPE_L,
@@ -135,14 +133,6 @@ export function galaxyShapeName(shape: { id: string; name: string }): string {
   return pick(GALAXY_SHAPE_L, shape.id, shape.name)
 }
 
-/** Типы кораблей трафика — это слова («Пират», «Торговец»), а не собственные имена:
- *  переводятся, а не романизируются. Нет в таблице (напр. имя шасси) — откат на properName. */
-export function shipTypeName(name: string): string {
-  const lang = currentLang()
-  if (lang === 'ru') return name
-  return SHIP_TYPE_L[lang]?.[name] ?? properName(name)
-}
-
 /**
  * Род занятий по ТИПУ ВСТРЕЧИ (`originKind`), а не по имени борта: имя после знакомства
  * становится личным, а занятие остаётся. Внешне читаемое — показываем в диалоге сразу,
@@ -195,10 +185,6 @@ export function chassisName(name: string): string {
   const lang = currentLang()
   if (lang === 'ru') return name
   return CHASSIS_EN[name] ?? translit(name)
-}
-
-export function securityName(security: string): string {
-  return pick(SECURITY_L, security, security)
 }
 
 /** Ступень жизни в системе — доменное перечисление, переводится по ключу UI. */

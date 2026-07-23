@@ -26,11 +26,6 @@ export function nodeOfVertex(vertex: number): number {
  */
 export const vertexOfNode = nodeOfVertex
 
-/** Монумент — не галактика: влететь в него как в звёздную систему нельзя. */
-export function isMonumentVertex(vertex: number): boolean {
-  return vertex === TORUS.MONUMENT_NODE
-}
-
 /**
  * Имя того, что стоит в вершине. Монумент назван в самих данных (`UNIVERSE.MONUMENT_NAME`),
  * поэтому здесь ни одной оговорки: и HUD, и карта берут имя из узла и не могут разойтись.

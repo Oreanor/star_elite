@@ -64,11 +64,6 @@ export function currentUserId(): string | null {
   return requireAuth().currentUser?.uid ?? null
 }
 
-/** e-mail текущего пользователя — для подписи в интерфейсе. */
-export function currentEmail(): string | null {
-  return requireAuth().currentUser?.email ?? null
-}
-
 /**
  * Подписка на вход/выход. Возвращает отписку. Первым событием Firebase отдаёт текущее
  * состояние (восстановленную из хранилища сессию), так что начальный uid прилетит сам.

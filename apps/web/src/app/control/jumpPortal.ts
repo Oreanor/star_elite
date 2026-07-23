@@ -37,8 +37,13 @@ export interface JumpPortal {
   destQuat: Quaternion
   destNormal: Vector3
   destReady: boolean
-  /** Первый проход уже списал заряд; дальше тоннель существует сам. */
-  paid: boolean
+  /**
+   * Дальняя сторона построена, смонтирована и прогрета (см. `markPortalDestinationDrawn`).
+   * До этого кольца НЕТ вовсе: сборка второго мира и компиляция его шейдеров занимают
+   * пару кадров, и раньше они приходились ровно на начало раскрытия — оттого каждое H
+   * начиналось рывком. Теперь кольцо рождается уже после них и растёт гладко.
+   */
+  destWarm: boolean
   prevSide: number | null
   committing: boolean
   /** Клип «этой» стороны (отсекает кусок за плоскостью кольца). */
@@ -74,7 +79,7 @@ const portal: JumpPortal = {
   destQuat: new Quaternion(),
   destNormal: new Vector3(0, 0, -1),
   destReady: false,
-  paid: false,
+  destWarm: false,
   prevSide: null,
   committing: false,
   clipHere: new Plane(),
@@ -82,7 +87,6 @@ const portal: JumpPortal = {
 }
 
 const _fwd = new Vector3()
-const _rel = new Vector3()
 const _matA = new Matrix4()
 const _matB = new Matrix4()
 const _invA = new Matrix4()
@@ -90,7 +94,6 @@ const _link = new Matrix4()
 const _scale = new Vector3()
 const _linkQuat = new Quaternion()
 const _invQuat = new Quaternion()
-const _flip = new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), Math.PI)
 
 export function jumpPortal(): JumpPortal {
   return portal
@@ -114,19 +117,14 @@ export function portalActive(): boolean {
  * React не успевал заново смонтировать сцену за кольцом — второе-третье кольцо смотрело
  * «на просвет», пока пара кадров не достроит мир («полетал вокруг — починилось»).
  *
- * Различаем по паре (index, paid): пока портал раскрыт К ЭТОЙ цели и ещё НЕ пройден
- * (`!paid`), повторное H — не смена цели, а рост того же кольца. После прохода роли устьев
- * меняются, `paid` становится истинным, и выбор дальней системы — уже честный обратный прыжок.
+ * Пока портал РАСКРЫТ к этой самой цели, повторное H — рост того же кольца, не приказ.
+ * Пройденный портал закрывается сам, поэтому выбор дальней системы после прохода —
+ * обычное новое открытие.
  */
 export function portalRetargetRequested(target: number | null): target is number {
   if (target === null) return false
-  if (portal.open && !portal.paid && target === portal.index) return false
+  if (portal.open && target === portal.index) return false
   return true
-}
-
-/** После прохода H без новой цели закрывает невидимую за спиной оплаченную пару. */
-export function establishedPortalCloseRequested(target: number | null, paid: boolean): boolean {
-  return paid && target === null
 }
 
 /** Удержание растит портал через isHeld; автоповтор keydown не является новой командой. */
@@ -167,14 +165,19 @@ function syncGate(world: World): void {
   if (!world.jumpGates.includes(localGate)) world.jumpGates.push(localGate)
   localGate.pos.copy(portal.ringPos)
   localGate.normal.copy(portal.ringNormal)
-  localGate.radius = portal.ringRadius
-  localGate.tube = LINKED_PORTAL.TUBE
+  syncGateShape()
 }
 
-/** Во время роста позой владеет уже сдвинутый симуляцией collider; меняется только форма. */
+/**
+ * Во время роста позой владеет уже сдвинутый симуляцией collider; меняется только форма.
+ *
+ * Пока кольцо не родилось, обода физически НЕТ: труба нулевая, задевать нечего. Иначе на
+ * месте ещё не открывшегося устья висел бы невидимый бампер. Коллайдер при этом остаётся
+ * в мире — он же переносит позу устья через сдвиги плавающего начала отсчёта.
+ */
 function syncGateShape(): void {
   localGate.radius = portal.ringRadius
-  localGate.tube = LINKED_PORTAL.TUBE
+  localGate.tube = portal.destWarm ? LINKED_PORTAL.TUBE : 0
 }
 
 export function openPortal(world: World, index: number, arrival: Arrival | null, realTime: number): void {
@@ -196,7 +199,7 @@ export function openPortal(world: World, index: number, arrival: Arrival | null,
   portal.prevSide = null
   portal.committing = false
   portal.destReady = false
-  portal.paid = false
+  portal.destWarm = false
   portal.open = true
   syncClipPlanes()
   syncGate(world)
@@ -204,6 +207,15 @@ export function openPortal(world: World, index: number, arrival: Arrival | null,
 }
 
 /** Поза «того» кольца в целевой системе (зовёт превью-мир при сборке). */
+/**
+ * Дальняя сторона готова к показу — с этого момента кольцо и рождается. Зовёт
+ * stencil-проход, а не React: только он знает, что сцена не пуста и её шейдеры уже
+ * скомпилированы. Пара кадров задержки взамен рывка на первом же кадре раскрытия.
+ */
+export function markPortalDestinationDrawn(): void {
+  portal.destWarm = true
+}
+
 export function setDestPortal(pos: Vector3, quat: Quaternion): void {
   portal.destPos.copy(pos)
   portal.destQuat.copy(quat)
@@ -222,7 +234,7 @@ export function closePortal(): void {
   portal.committing = false
   portal.prevSide = null
   portal.destReady = false
-  portal.paid = false
+  portal.destWarm = false
   notifyPortalChanged()
 }
 
@@ -250,47 +262,26 @@ export function linkThroughPortal(
   _matA.decompose(outPos, outQuat, _scale)
 }
 
-/** После успешного пролёта локальная и дальняя стороны меняются ролями, но не исчезают. */
-export function completePortalTransit(
-  world: World,
-  sourceOriginOffset: Vector3,
-  keepOpen = true,
-): void {
+/**
+ * Успешный пролёт. Тоннель на этом кончается: кольца за спиной не остаётся, обратный
+ * прыжок — это новое открытие портала.
+ *
+ * Логический портал закрываем СРАЗУ, не дожидаясь React: прогретая destination Scene
+ * доживает до handoff отдельно, а блокирующий управление `committing` при пропущенном
+ * или задержавшемся layout-эффекте оставлял следующий H немым.
+ */
+export function completePortalTransit(world: World): void {
+  // Коллайдер устья остался в ПОКИНУТОМ мире — снимаем его оттуда, а не из нового.
   if (activeWorld && activeWorld !== world) {
     const gateIndex = activeWorld.jumpGates.indexOf(localGate)
     if (gateIndex >= 0) activeWorld.jumpGates.splice(gateIndex, 1)
   }
-  activeWorld = world
-
-  const hereIndex = portal.hereIndex
-  portal.hereIndex = portal.index
-  portal.index = hereIndex
-
-  // Ближнее устье локально, дальнее абсолютно. Старое переводим в абсолютный
-  // кадр, новое — в плавающее начало отсчёта только что построенной системы.
-  _rel.copy(portal.ringPos).add(sourceOriginOffset)
-  portal.ringPos.copy(portal.destPos).sub(world.originOffset)
-  portal.destPos.copy(_rel)
-
-  _invQuat.copy(portal.ringQuat)
-  portal.ringQuat.copy(portal.destQuat).multiply(_flip)
-  portal.destQuat.copy(_invQuat).multiply(_flip)
-
-  portal.ringNormal.set(0, 0, -1).applyQuaternion(portal.ringQuat)
-  portal.destNormal.set(0, 0, -1).applyQuaternion(portal.destQuat)
-  portal.arrival = null
-  portal.prevSide = null
-  // Успешный переход завершает ЛОГИЧЕСКИЙ портал сразу. Прогретая destination Scene
-  // доживает до React-handoff отдельно, без блокирующего управление `committing`.
-  // Иначе пропущенный/задержавшийся layout effect оставлял следующий H немым.
+  activeWorld = null
+  portal.open = false
   portal.committing = false
-  portal.open = keepOpen
-  portal.paid = true
-  syncClipPlanes()
-  if (keepOpen) {
-    syncGate(world)
-    notifyPortalChanged()
-  }
+  portal.prevSide = null
+  portal.destReady = false
+  portal.destWarm = false
 }
 
 /** Неудачный переход не уничтожает уже открытый тоннель. */
@@ -329,7 +320,10 @@ export function tickPortal(world: World, dt: number, growHeld: boolean, realTime
   // Первое нажатие уже записано openPortal через growWasHeld=true, поэтому оно раскрывает.
   if (!portal.growWasHeld && growHeld) portal.growDir = portal.growDir === 1 ? -1 : 1
   portal.growWasHeld = growHeld
-  if (growHeld) {
+  // Кольцо не рождается, пока не готова дальняя сторона: её сборка занимает пару кадров,
+  // и раньше они выпадали ровно на начало раскрытия. Удержание H в это время не копится —
+  // раскрытие честно начинается с нуля с того кадра, когда за кольцом уже есть мир.
+  if (growHeld && portal.destWarm) {
     portal.ringRadius = stepLinkedPortalRadius(
       portal.ringRadius,
       portal.targetRadius,
@@ -360,7 +354,9 @@ export function tickPortal(world: World, dt: number, growHeld: boolean, realTime
   // Сторону отслеживаем и во время удержания H. Иначе корабль с уже набранной скоростью
   // успевал пройти плоскость за время раскрытия, а после отпускания оказывался по ту
   // сторону без события. Неподвижный пилот по-прежнему может стоять и рассматривать окно.
-  if (crossedJumpGate(portal.prevSide, side, fitsInsideJumpGate(world.player, localGate))) {
+  // Пока кольца нет, перехода не бывает ни при каких позах: второй системы ещё не
+  // существует, и «пролёт» через нулевое устье уводил бы в несобранный мир.
+  if (portal.destWarm && crossedJumpGate(portal.prevSide, side, fitsInsideJumpGate(world.player, localGate))) {
     beginPortalCommit()
     return 'cross'
   }

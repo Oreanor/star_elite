@@ -862,7 +862,7 @@ export function Paused({
           </div>
         ) : (
           <div className="flex flex-col items-center gap-4">
-            {/* Порядок: НОВАЯ ИГРА · ПРОДОЛЖИТЬ (если есть сейв/пауза) · КЛАВИШИ · НАСТРОЙКИ.
+            {/* Порядок: НОВАЯ ИГРА · ПРОДОЛЖИТЬ (если есть сейв/пауза) · КЛАВИШИ · НАСТРОЙКИ · ВЫЙТИ.
                 Отдельной «СТАРТ» нет: новичок идёт через создание перса → сразу на станцию,
                 а вход в существующую игру — это «Продолжить». */}
             {/* «Новая игра» стирает прогресс. Есть сейв — спрашиваем МОДАЛКОЙ (Да/Нет);
@@ -881,6 +881,9 @@ export function Paused({
             <MenuButton onClick={() => { setConfirmNew(false); setScreen('settings') }}>
               {t('menu.settings')}
             </MenuButton>
+            {/* Выход из аккаунта — это выход ИЗ ИГРЫ, а не настройка: место ему в меню
+                последним пунктом, а не в панели, где меняют язык и лётный компьютер. */}
+            {onSignOut && <MenuButton onClick={onSignOut}>{t('auth.signout')}</MenuButton>}
           </div>
         )}
       </div>
@@ -927,14 +930,7 @@ export function Paused({
             <MenuPanel
               title={t(screen === 'keys' ? 'menu.keys' : 'menu.settings')}
               footer={
-                screen === 'keys' ? (
-                  <MenuButton onClick={() => setScreen('main')}>{t('menu.back')}</MenuButton>
-                ) : (
-                  <>
-                    {onSignOut && <MenuButton onClick={onSignOut}>{t('auth.signout')}</MenuButton>}
-                    <MenuButton onClick={() => setScreen('main')}>{t('menu.back')}</MenuButton>
-                  </>
-                )
+                <MenuButton onClick={() => setScreen('main')}>{t('menu.back')}</MenuButton>
               }
             >
               {screen === 'keys' ? (

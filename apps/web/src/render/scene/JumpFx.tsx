@@ -24,7 +24,6 @@ const _destPos = new Vector3()
 const _destQuat = new Quaternion()
 const _destVel = new Vector3()
 const _angVel = new Vector3()
-const _sourceOrigin = new Vector3()
 const _destCameraPos = new Vector3()
 const _destCameraQuat = new Quaternion()
 const _cameraSourceInv = new Quaternion()
@@ -58,13 +57,12 @@ export function JumpDirector() {
     _cameraSourceInv.copy(camera.quaternion).invert()
     _cameraFrameRotation.multiplyQuaternions(_destCameraQuat, _cameraSourceInv)
     _angVel.copy(state.angVel)
-    _sourceOrigin.copy(session.world.originOffset)
 
     const p = jumpPortal()
     const prepared = preparedJumpPortalWorld()
     if (
       prepared?.world.systemIndex === p.index
-      && adoptPreparedJumpWorld(session, prepared.world, p.index, { establishedPortal: p.paid })
+      && adoptPreparedJumpWorld(session, prepared.world, p.index)
     ) {
       const next = session.world.player.state
       // `destPos` живёт в абсолютных координатах системы, а симуляция — в локальных
@@ -78,9 +76,9 @@ export function JumpDirector() {
       camera.updateMatrixWorld(true)
       queueCameraFrameRotation(_cameraFrameRotation)
       promotePreparedJumpPortalScene(prepared)
-      // Успешный пролёт автоматически закрывает кольцо. Prepared Scene остаётся только
-      // на короткий handoff до монтажа основного WorldVisuals новой системы.
-      completePortalTransit(session.world, _sourceOrigin, false)
+      // Успешный пролёт закрывает кольцо. Prepared Scene остаётся только на короткий
+      // handoff до монтажа основного WorldVisuals новой системы.
+      completePortalTransit(session.world)
     } else {
       cancelPortalCommit()
     }

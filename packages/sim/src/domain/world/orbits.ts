@@ -34,11 +34,6 @@ export function keplerRate(centralMass: number, orbitRadius: number): number {
   return Math.sqrt((GRAVITY.G * centralMass) / orbitRadius ** 3)
 }
 
-/** Масса звезды из радиуса (старый путь: ∝ R³). Для дыр и тестов без massSolar. */
-export function starMass(radius: number): number {
-  return GRAVITY.STAR_DENSITY * (4 / 3) * Math.PI * radius ** 3
-}
-
 /** Масса звезды из каталожной massSolar — честная, не раздутая гигантом. */
 export function starMassSolar(massSolar: number): number {
   return massSolar * SCALE.SOLAR_MASS

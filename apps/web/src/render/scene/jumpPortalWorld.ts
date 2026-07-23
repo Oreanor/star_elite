@@ -242,39 +242,6 @@ export function activeWorldRenderScene(fallback: Scene, world: World): Scene {
   return promotedJumpPortalWorld(world)?.scene ?? fallback
 }
 
-/**
- * После прохода прежний основной World уже является готовой обратной стороной тоннеля.
- * Сохраняем именно его, а не генерируем ту же систему повторно ради открытого портала назад.
- */
-export function prepareReverseJumpPortalWorld(source: Session, reverseWorld: World): void {
-  const p = jumpPortal()
-  const camera = new PerspectiveCamera(70, 1, 0.5, 2e12)
-  camera.matrixAutoUpdate = false
-  const session: Session = {
-    ...source,
-    world: reverseWorld,
-    controllers: new Map(),
-    running: false,
-    menuFlying: false,
-    onOver: null,
-    onDockChange: null,
-    onSystemChange: null,
-  }
-  prepared = {
-    // Совпадает с ключом prepareJumpPortalWorld: следующий React-тик обязан принять
-    // сохранённый обратный World, а не решить, что цель новая, и вызвать enterSystem.
-    key: `${source.world.galaxySeed}:${p.index}:${p.arrival ? JSON.stringify(p.arrival) : 'n'}`,
-    scene: new Scene(),
-    camera,
-    world: reverseWorld,
-    session,
-    // Обратная сторона: дальнее устье уже развёрнуто `completePortalTransit`. Храним его,
-    // чтобы при повторном открытии назад восстановить, если `destReady` сброшен.
-    destFrom: p.destPos.clone(),
-    destQuat: p.destQuat.clone(),
-  }
-}
-
 export function disposeJumpPortalWorld(): void {
   // Закрытие непройденного портала уничтожает только дальнюю комнату. Уже принятая
   // комната остаётся основным визуальным миром: повторный mount возвращал pop объектов.
