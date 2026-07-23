@@ -1,5 +1,6 @@
 import {
   FrontSide,
+  Matrix4,
   ShaderMaterial,
   Vector3,
   type Texture,
@@ -33,9 +34,13 @@ export const BLACK_HOLE_DEFAULTS = {
   // «отдельно». Тесно к тени — «ушей» и зазора нет разом.
   diskInner: 2.99,
   diskOuter: 10.5,
-  // Вертикальная полутолщина диска в Rs. Диск копится как слой с гауссовым профилем по
-  // высоте, а не как лист: тонкий лист аляйсит в зубцы на дискретном шаге, слой — гладкий.
-  diskThickness: 0.34,
+  // Вертикальная ПОЛУШИРИНА диска в Rs (высота, где плотность падает вчетверо). Диск
+  // копится как слой, а не как лист: тонкий лист аляйсит в зубцы на дискретном шаге.
+  // Ядро тонкое, но профиль тяжелохвостый, поэтому кромка уходит в свечение, а не в срез.
+  diskThickness: 0.22,
+  // Плотность слоя: во сколько раз набирается оптическая толщина на радиус Шварцшильда
+  // пути сквозь ядро. Больше — плотнее и резче край, меньше — прозрачнее и мягче.
+  diskDensity: 5.0,
   coronaIntensity: 0.2,
   diskIntensity: 1.25,
   rotationSpeed: 0.28,
@@ -68,6 +73,7 @@ uniform float uVisibleShadow;
 uniform float uDiskInner;
 uniform float uDiskOuter;
 uniform float uDiskThickness;
+uniform float uDiskDensity;
 uniform float uCoronaIntensity;
 uniform float uDiskIntensity;
 uniform float uRotationSpeed;
@@ -77,6 +83,9 @@ uniform vec3 uDiskAxis;
 uniform sampler2D uSkyMap;
 uniform bool uHasSky;
 uniform float uSkyIntensity;
+uniform sampler2D uSceneMap;
+uniform bool uHasScene;
+uniform mat4 uProj;
 
 varying vec3 vWorldPos;
 
@@ -90,6 +99,29 @@ vec3 sampleSky(vec3 dir) {
   float theta = acos(clamp(dir.y, -1.0, 1.0));
   vec2 uv = vec2(phi / (2.0 * PI) + 0.5, theta / PI);
   return texture2D(uSkyMap, uv).rgb * uSkyIntensity;
+}
+
+/*
+ * Что видно в отклонённом луче. Небо — лишь запасной вариант; сперва спрашиваем УЖЕ
+ * НАРИСОВАННЫЙ КАДР: в нём планета, станции, трафик — всё, чего нет в текстуре фона.
+ * Пока линза читала только scene.background, пузырь пробивал в планете круглую дыру
+ * со звёздами.
+ *
+ * Луч — направление, поэтому проецируем его как точку на бесконечности (w = 0): сдвиг
+ * камеры не участвует, только поворот. Ушло за край экрана — там пикселей нет ни у кого,
+ * берём небо; сшиваем мягкой каймой, чтобы граница кадра не читалась линией.
+ */
+vec3 sampleBackdrop(vec3 dir) {
+  vec3 sky = sampleSky(dir);
+  if (!uHasScene) return sky;
+  vec4 clip = uProj * viewMatrix * vec4(normalize(dir), 0.0);
+  if (clip.w <= 0.0) return sky;
+  vec2 uv = clip.xy / clip.w * 0.5 + 0.5;
+  vec2 outside = max(vec2(0.0) - uv, uv - vec2(1.0));
+  float off = max(outside.x, outside.y);
+  float inScreen = 1.0 - smoothstep(0.0, 0.04, off);
+  if (inScreen <= 0.0) return sky;
+  return mix(sky, texture2D(uSceneMap, clamp(uv, 0.0, 1.0)).rgb, inScreen);
 }
 
 void diskBasis(vec3 nIn, out vec3 n, out vec3 tangent, out vec3 bitangent) {
@@ -153,11 +185,24 @@ void main() {
   vec3 bitangent;
   diskBasis(uDiskAxis, n, tangent, bitangent);
 
-  // Прицельный параметр луча (перпендикуляр от центра до луча). У силуэта сферы
-  // влияния b→uInfluence; по нему сводим ВСЁ искажение к нулю у самой кромки, чтобы
-  // сфера-«пузырь» растворялась в фон без чёткой границы, а не врезалась мылом.
+  /*
+   * Прицельный параметр луча (перпендикуляр от центра до луча): у силуэта сферы влияния
+   * b → uInfluence. По нему пузырь и растворяется в фон.
+   *
+   * Гасим им САМ ИЗГИБ, а не непрозрачность. Прежде альфа кадра равнялась edgeFade, то
+   * есть в кольце у кромки линзированное небо ПОДМЕШИВАЛОСЬ к нелинзированному фону —
+   * двойная экспозиция, призрак: одна и та же звезда видна дважды, смещённой на величину
+   * отклонения. Теперь к кромке к нулю сходит отклонение: луч выходит параллельно тому,
+   * каким вошёл, и шейдер сам отдаёт РОВНО фоновое небо. Смешивать нечего, шва нет.
+   *
+   * Даром: edgeFade и так считался, а изгиб и так умножался на скаляр.
+   */
   float b = length(cross(ro, rd));
-  float edgeFade = 1.0 - smoothstep(uInfluence * 0.70, uInfluence * 0.97, b);
+  float bendFade = 1.0 - smoothstep(uInfluence * 0.62, uInfluence * 0.95, b);
+  // Узкая полоска прозрачности у самого силуэта остаётся страховкой: развёртка sampleSky
+  // и развёртка фона могут разойтись на доли пикселя, и кромка сферы иначе читалась бы
+  // тонким контуром. Гасим на последних процентах, где искажения уже нет.
+  float rim = 1.0 - smoothstep(uInfluence * 0.94, uInfluence * 0.995, b);
 
   vec3 glow = vec3(0.0);
   vec3 disk = vec3(0.0);
@@ -169,7 +214,7 @@ void main() {
     float r = length(p);
     if (r < uVisibleShadow * uRs) {
       // Внутри тени — чистый чёрный, без свечения: горизонт ничего не излучает.
-      gl_FragColor = vec4(0.0, 0.0, 0.0, edgeFade);
+      gl_FragColor = vec4(0.0, 0.0, 0.0, rim);
       return;
     }
     if (i > 0 && r >= uInfluence) break;
@@ -179,17 +224,33 @@ void main() {
     float radialP = length(onPlane);
 
     float stepSize = clamp((r - uRs) * 0.16, 0.025 * uRs, 0.75 * uRs);
-    // Мельче у ПЛОСКОСТИ диска — ровнее ложится слой; и мельче у ФОТОННОГО КОЛЬЦА
-    // (сфера r≈2.83 Rs) — иначе издали редкие шаги режут узкое кольцо на КУСКИ.
+
+    /*
+     * Мельчить шаг надо там, где луч ПРОТЫКАЕТ тонкую деталь и крупным шагом её
+     * перепрыгнет, — а не «везде рядом с ней». Прежнее правило («в полосе у плоскости
+     * диска шаг ≤0.06 Rs») зажимало шаг и для лучей, идущих ВДОЛЬ диска: при взгляде
+     * с ребра такой луч не выходит из полосы десятки Rs, ему нужны сотни шагов, а их
+     * всего uSteps. Бюджет кончался на полпути, луч брал небо по недокрученному
+     * направлению — и на экране появлялась прямоугольная БАЛКА чужого неба с резаными
+     * кромками ровно по границе полосы. Мельчим по СКОРОСТИ пересечения: шаг вдоль луча,
+     * меняющий высоту над плоскостью не больше чем на полтолщины, равен h/|rd·n|.
+     * Для луча вдоль плоскости знаменатель мал — ограничения фактически нет, и он
+     * спокойно доходит до конца сферы влияния.
+     */
+    float pierce = abs(dot(rd, n));
     if (
-      abs(planeH) < uDiskThickness * 3.0 * uRs &&
+      abs(planeH) < uDiskThickness * 5.0 * uRs &&
       radialP > uDiskInner - 0.6 * uRs &&
       radialP < uDiskOuter + 0.6 * uRs
     ) {
-      stepSize = min(stepSize, 0.06 * uRs);
+      stepSize = min(stepSize, uDiskThickness * 0.6 * uRs / max(pierce, 0.02));
     }
+    // Фотонное кольцо — то же самое по радиусу: важна скорость, с которой луч проходит
+    // сквозь его тонкую сферу. Касательный луч и так идёт по ней долго и наберёт интеграл
+    // крупными шагами; дробить его нечем и незачем.
+    float radialRate = abs(dot(rd, p / max(r, 1e-4)));
     if (abs(r - 2.96 * uRs) < 0.45 * uRs) {
-      stepSize = min(stepSize, 0.05 * uRs);
+      stepSize = min(stepSize, 0.10 * uRs / max(radialRate, 0.05));
     }
 
     // Фотонное кольцо СИДИТ НА КРОМКЕ ТЕНИ (2.96 Rs). Копим каждый шаг по гауссу от
@@ -197,23 +258,33 @@ void main() {
     float photon = exp(-pow((r - 2.96 * uRs) / (0.15 * uRs), 2.0));
     glow += vec3(1.0, 0.88, 0.60) * photon * uCoronaIntensity * 0.9 * stepSize / uRs;
 
-    // ДИСК — не бесконечно тонкий лист (он аляйсит в зубцы на дискретном шаге), а СЛОЙ
-    // с мягким вертикальным профилем: на каждом шаге у плоскости копим немного свечения
-    // по гауссу от высоты. Интеграл вдоль луча выходит гладким — внутренний край не
-    // дробится, а издали слой ровно тускнеет (вклад ∝ длине шага), а не рвётся на куски.
-    // Луч продолжает идти сквозь слой — дальняя сторона сама загибается над и под тенью
-    // (никакого «Сатурна»), а высшие образы гаснут: альфа насыщается, вклад обрезан.
+    // ДИСК — не бесконечно тонкий лист (он аляйсит в зубцы на дискретном шаге), а СЛОЙ:
+    // на каждом шаге у плоскости копим немного свечения по профилю от высоты. Интеграл
+    // вдоль луча выходит гладким — внутренний край не дробится, а издали слой ровно
+    // тускнеет (вклад ∝ длине шага), а не рвётся на куски. Луч продолжает идти сквозь
+    // слой — дальняя сторона сама загибается над и под тенью (никакого «Сатурна»),
+    // а высшие образы гаснут: прозрачность к тому времени уже съедена.
     if (radialP >= uDiskInner && radialP <= uDiskOuter && diskAlpha < 0.995) {
-      float vfall = exp(-pow(planeH / (uDiskThickness * uRs), 2.0));
-      if (vfall > 0.003) {
+      // Профиль по высоте — НЕ гаусс: его хвост обрывается так круто, что при взгляде
+      // с ребра переход «непрозрачно → ничего» укладывался в доли Rs, и слой читался
+      // бруском толстого стекла. Квадрат лоренциана спадает как h^-4: ядро такое же
+      // плотное, но кромка растворяется в свечение, а не обрубается.
+      float hn = planeH / (uDiskThickness * uRs);
+      float vshape = 1.0 / (1.0 + hn * hn);
+      float vfall = vshape * vshape;
+      if (vfall > 0.002) {
         float span = max(uDiskOuter - uDiskInner, 0.001);
         float tt = (radialP - uDiskInner) / span;
         float innerEdge = smoothstep(0.0, 0.14, tt);
         float outerEdge = 1.0 - smoothstep(0.45, 1.0, tt);
         outerEdge *= outerEdge;
-        // Насыщается по альфе: на косом (краевом) обзоре слой оптически толстый, но не
-        // взрывается в белое — видим ЦВЕТ диска на полной непрозрачности, а не пересвет.
-        float dens = min(vfall * innerEdge * outerEdge * (stepSize / uRs) * 3.4, 1.0 - diskAlpha);
+        // Поглощение по Бугеру, а не линейное накопление с обрезкой. Прежнее min(x, 1-alpha)
+        // ЗАЩЁЛКИВАЛО альфу в единицу везде, где луч шёл вдоль слоя: мягкость профиля
+        // пропадала, и наружу выходил геометрический силуэт слоя — брусок с кромкой.
+        // Экспонента подходит к единице асимптотически: плотное ядро по-прежнему укрывает
+        // небо и не пересвечивается (цвет идёт с весом dens), а разрежённый край просвечивает.
+        float tau = vfall * innerEdge * outerEdge * (stepSize / uRs) * uDiskDensity;
+        float dens = (1.0 - diskAlpha) * (1.0 - exp(-tau));
         disk += diskColor(onPlane, n, tangent, bitangent, rd, radialP) * dens;
         diskAlpha += dens;
       }
@@ -222,17 +293,18 @@ void main() {
     // Изгиб луча к центру. Коэффициент 1.0 даёт ТОЧНОЕ отклонение α = 2·Rs/b (интеграл
     // 1/r³ по прямой). Было 1.25 — перегиб на 25%. Тень и кольцо моделируем отдельно.
     vec3 perpendicular = p - rd * dot(p, rd);
-    vec3 bending = -1.0 * uRs * perpendicular / max(r * r * r, 0.0001);
+    vec3 bending = -1.0 * uRs * perpendicular / max(r * r * r, 0.0001) * bendFade;
     rd = normalize(rd + bending * stepSize);
     p = p + rd * stepSize;
   }
 
   // Композитинг предумноженный: небо просвечивает на (1 − diskAlpha), диск уже накоплен
-  // с весом, кольцо-glow — аддитивно поверх. Альфа кадра = edgeFade: у кромки пузыря
-  // искажение сходит к нулю и сквозь неё виден настоящий фон, без шва.
-  vec3 warpedSky = sampleSky(rd);
+  // с весом, кольцо-glow — аддитивно поверх. Непрозрачность полная везде, кроме последних
+  // процентов силуэта: искажение к кромке уже сведено к нулю (bendFade), и пузырь
+  // отдаёт то же небо, что и фон за ним, — растворяется без подмешивания и без шва.
+  vec3 warpedSky = sampleBackdrop(rd);
   vec3 color = warpedSky * (1.0 - diskAlpha) + disk + glow;
-  gl_FragColor = vec4(color, edgeFade);
+  gl_FragColor = vec4(color, rim);
 }
 `
 
@@ -247,6 +319,7 @@ export function createBlackHoleMaterial(params: BlackHoleParams, sky: Texture | 
       uVisibleShadow: { value: BLACK_HOLE_DEFAULTS.visibleShadow },
       uDiskInner: { value: params.diskInnerRadius * params.radius },
       uDiskThickness: { value: BLACK_HOLE_DEFAULTS.diskThickness },
+      uDiskDensity: { value: BLACK_HOLE_DEFAULTS.diskDensity },
       uDiskOuter: { value: params.diskOuterRadius * params.radius },
       uCoronaIntensity: { value: params.coronaIntensity },
       uDiskIntensity: { value: params.diskIntensity },
@@ -257,6 +330,10 @@ export function createBlackHoleMaterial(params: BlackHoleParams, sky: Texture | 
       uSkyMap: { value: sky },
       uHasSky: { value: sky != null },
       uSkyIntensity: { value: 1 },
+      // Кадр до линзы и матрица проекции — их ставит проход, а не React.
+      uSceneMap: { value: null as Texture | null },
+      uHasScene: { value: false },
+      uProj: { value: new Matrix4() },
     },
     vertexShader: lensVertex,
     fragmentShader: lensFragment,

@@ -10,6 +10,7 @@ import { BLOOM, ZOOM_BLUR, ZOOM_FX, ZOOM_RIPPLE } from '../config'
 import { ZoomBlurShader } from './zoomBlur'
 import { ZoomRippleShader } from './zoomRipple'
 import { JumpPortalPass } from './portalPass'
+import { BlackHolePass } from './blackHolePass'
 import { activeWorldRenderScene } from '../scene/jumpPortalWorld'
 
 /**
@@ -35,6 +36,10 @@ export function Post() {
 
     const render = new RenderPass(scene, camera)
     c.addPass(render)
+
+    // Линзы дыр — сразу после кадра: им нужен готовый кадр со всеми телами, который они
+    // и искажают. До портала: окно прыжка рисуется поверх, как и всё остальное.
+    c.addPass(new BlackHolePass(() => camera) as never)
 
     const portal = new JumpPortalPass(
       () => session.world,

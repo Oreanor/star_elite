@@ -15,10 +15,17 @@ import {
   type BlackHoleParams,
 } from '../materials/blackHole'
 import { worldShrink } from '../worldShrink'
+import { addBlackHoleLens, blackHoleFrame } from './blackHoleOverlay'
+import { usePortalRenderSide } from './portalRenderContext'
 
 /**
- * Чёрная дыра: чёрный горизонт + аккреционный диск + линза неба (шейдер на сфере снаружи).
+ * Чёрная дыра: чёрный горизонт + аккреционный диск + линза (шейдер на сфере снаружи).
  * Без звёздного билборда — он превращал объект в красный шар.
+ *
+ * Линза искажает УЖЕ НАРИСОВАННЫЙ КАДР, поэтому живёт не в сцене, а в проходе после неё
+ * (`blackHoleOverlay`). Иначе ей доступна только текстура фона, и всё нарисованное
+ * геометрией — планета, станции, трафик — в искажение не попадает: пузырь пробивает
+ * в планете круглую дыру со звёздами.
  */
 
 export type { BlackHoleParams }
@@ -44,10 +51,14 @@ function paramsFromHorizon(horizon: number, body: BodyEntity): BlackHoleParams {
 
 function BlackHoleInstance({ body }: { body: BodyEntity }) {
   const session = useSession()
-  const lensRef = useRef<Mesh>(null)
   const coreRef = useRef<Mesh>(null)
   const scene = useThree((s) => s.scene)
   const camera = useThree((s) => s.camera)
+  // В КОМНАТЕ портала кадра со «своими» телами нет — там своя сцена за stencil-маской.
+  // Поэтому дальняя дыра остаётся обычным мешем со звёздным фоном, а линзу-в-проход
+  // получает только основной мир. Ради углового случая двух дыр разом городить второй
+  // проход незачем.
+  const overlaid = usePortalRenderSide() === 'source'
 
   const horizon = body.radius
 
@@ -62,6 +73,21 @@ function BlackHoleInstance({ body }: { body: BodyEntity }) {
   const lensMat = useMemo(() => createBlackHoleMaterial(params, skyTex), [params, skyTex])
   const coreGeo = useMemo(() => new IcosahedronGeometry(1, 4), [])
   const coreMat = useMemo(() => new MeshBasicMaterial({ color: 0x000000 }), [])
+  // Линза — свой объект, не JSX: в основном мире она живёт в проходе после кадра
+  // (см. `blackHoleOverlay`), а не в дереве сцены. Мешем в сцене остаётся только ядро.
+  const lens = useMemo(() => {
+    const mesh = new Mesh(lensGeo, lensMat)
+    mesh.frustumCulled = false
+    mesh.renderOrder = 2
+    mesh.visible = false
+    return mesh
+  }, [lensGeo, lensMat])
+
+  useEffect(() => {
+    if (overlaid) return addBlackHoleLens(lens)
+    scene.add(lens)
+    return () => void scene.remove(lens)
+  }, [overlaid, lens, scene])
 
   useEffect(() => () => {
     lensGeo.dispose()
@@ -74,7 +100,7 @@ function BlackHoleInstance({ body }: { body: BodyEntity }) {
     const shrink = worldShrink(session.world.player.state.scale)
     if (shrink <= 0) {
       if (coreRef.current) coreRef.current.visible = false
-      if (lensRef.current) lensRef.current.visible = false
+      lens.visible = false
       return
     }
     const rs = horizon * shrink
@@ -95,38 +121,38 @@ function BlackHoleInstance({ body }: { body: BodyEntity }) {
       coreRef.current.scale.setScalar(rs * 1.02)
     }
 
-    const lens = lensRef.current
-    if (lens) {
-      lens.visible = lensOn
-      if (lensOn) {
-        lens.position.copy(body.pos)
-        lens.scale.setScalar(influence)
-        const u = lensMat.uniforms
-        u.uBhCenter!.value.copy(body.pos)
-        u.uCameraPos!.value.copy(camera.position)
-        // Аккреционный диск имеет фазу времени мира, а не возраст React-компонента.
-        // Поэтому ремоунт после портала не запускает чёрную дыру заново с нуля.
-        u.uTime!.value = session.world.time
-        u.uRs!.value = rs
-        u.uInfluence!.value = influence
-        u.uDiskInner!.value = params.diskInnerRadius * rs
-        u.uDiskOuter!.value = params.diskOuterRadius * rs
-        u.uSkyIntensity!.value = scene.backgroundIntensity
-        const bg = scene.background
-        if (bg instanceof Texture && u.uSkyMap!.value !== bg) {
-          u.uSkyMap!.value = bg
-          u.uHasSky!.value = true
-        }
+    lens.visible = lensOn
+    if (lensOn) {
+      lens.position.copy(body.pos)
+      lens.scale.setScalar(influence)
+      lens.updateMatrixWorld()
+      const u = lensMat.uniforms
+      u.uBhCenter!.value.copy(body.pos)
+      u.uCameraPos!.value.copy(camera.position)
+      // Кадр до линзы: он есть только у основного мира, в комнате портала — одно небо.
+      const frame = overlaid ? blackHoleFrame() : null
+      u.uSceneMap!.value = frame
+      u.uHasScene!.value = frame != null
+      u.uProj!.value = camera.projectionMatrix
+      // Аккреционный диск имеет фазу времени мира, а не возраст React-компонента.
+      // Поэтому ремоунт после портала не запускает чёрную дыру заново с нуля.
+      u.uTime!.value = session.world.time
+      u.uRs!.value = rs
+      u.uInfluence!.value = influence
+      u.uDiskInner!.value = params.diskInnerRadius * rs
+      u.uDiskOuter!.value = params.diskOuterRadius * rs
+      u.uSkyIntensity!.value = scene.backgroundIntensity
+      const bg = scene.background
+      if (bg instanceof Texture && u.uSkyMap!.value !== bg) {
+        u.uSkyMap!.value = bg
+        u.uHasSky!.value = true
       }
     }
   })
 
-  return (
-    <>
-      <mesh ref={coreRef} geometry={coreGeo} material={coreMat} frustumCulled={false} renderOrder={0} />
-      <mesh ref={lensRef} geometry={lensGeo} material={lensMat} frustumCulled={false} renderOrder={2} />
-    </>
-  )
+  // Ядро — обычный меш сцены: оно твёрдое и обязано честно закрывать собой всё, что
+  // за ним, по буферу глубины. Линза добавляется отдельно (см. эффект выше).
+  return <mesh ref={coreRef} geometry={coreGeo} material={coreMat} frustumCulled={false} renderOrder={0} />
 }
 
 export function BlackHole() {
