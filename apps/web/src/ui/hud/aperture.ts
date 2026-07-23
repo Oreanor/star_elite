@@ -87,13 +87,19 @@ export function apertureEllipse(
 }
 
 /**
- * Точка внутри дырки? Раскладываем смещение по полуосям и меряем единичный круг:
- * для проекции окружности это точно, а не «вписанным квадратом».
+ * Насколько точка удалена от центра дырки в долях её радиуса: 0 — центр, 1 — кромка.
+ * Раскладываем смещение по полуосям и меряем единичный круг — для проекции окружности
+ * это точно, а не «вписанным квадратом».
  */
-export function insideAperture(e: ApertureEllipse, x: number, y: number): boolean {
+export function apertureRadius(e: ApertureEllipse, x: number, y: number): number {
   const dx = x - e.cx
   const dy = y - e.cy
   const u = (e.by * dx - e.bx * dy) / e.det
   const v = (e.ax * dy - e.ay * dx) / e.det
-  return u * u + v * v <= 1
+  return Math.hypot(u, v)
+}
+
+/** Точка внутри дырки? */
+export function insideAperture(e: ApertureEllipse, x: number, y: number): boolean {
+  return apertureRadius(e, x, y) <= 1
 }

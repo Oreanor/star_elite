@@ -2,6 +2,7 @@ import { PerspectiveCamera, Vector3, type Camera } from 'three'
 import type { BodyEntity, World } from '@elite/sim'
 import { FLARE, GALAXY_LAYER } from '../../render/config'
 import { galaxyRadar } from '../../render/scene/galaxyRadar'
+import { apertureRadius, type ApertureEllipse } from './aperture'
 import { projectPoint } from './project'
 
 /**
@@ -18,6 +19,28 @@ import { projectPoint } from './project'
  */
 
 const _galPos = new Vector3()
+
+/**
+ * Отбор по окну портала. Свет проходит либо СКВОЗЬ кольцо (звезда мира за ним), либо
+ * МИМО него (своя звезда) — но не оба разом: окно непрозрачно, за ним чужое небо.
+ * Поэтому у каждого блика своя половина кадра, и на кромке они плавно меняются местами,
+ * а не хлопают. Блик при этом не режется по кольцу: он рождается в объективе, а не в мире,
+ * и физически размазан по всему кадру — обрезать его кружком значило бы сделать наклейкой.
+ */
+export interface FlareGate {
+  ellipse: ApertureEllipse
+  /** true — звезда обязана быть В дырке (мир за кольцом), false — снаружи (свой мир). */
+  inside: boolean
+}
+
+function gateFactor(gate: FlareGate | undefined, x: number, y: number): number {
+  if (!gate) return 1
+  const r = apertureRadius(gate.ellipse, x, y)
+  // Полоса перехода — последние 18% радиуса кольца.
+  const t = Math.max(0, Math.min(1, (r - 0.82) / 0.18))
+  const edge = t * t * (3 - 2 * t)
+  return gate.inside ? 1 - edge : edge
+}
 
 /** Экранный радиус тела в пикселях внутреннего буфера. */
 function screenRadius(body: BodyEntity, camera: Camera, distance: number, height: number): number {
@@ -331,10 +354,11 @@ export function drawFlare(
   world: World,
   width: number,
   height: number,
+  gate?: FlareGate,
 ): void {
   // Галактический слой: блик только у активной цели; системное солнце здесь молчит.
   if (galaxyRadar().active) {
-    drawGalaxyTargetFlare(ctx, camera, world, width, height)
+    if (!gate) drawGalaxyTargetFlare(ctx, camera, world, width, height)
     return
   }
 
@@ -370,7 +394,10 @@ export function drawFlare(
   const light = occlusion(star, starX, starY, starDistance, world, camera, width, height)
   if (light <= 0) return
 
-  const power = FLARE.INTENSITY * light * framing
+  const through = gateFactor(gate, starX, starY)
+  if (through <= 0) return
+
+  const power = FLARE.INTENSITY * light * framing * through
   const disc = screenRadius(star, camera, starDistance, height)
   paintLensFlare(ctx, starX, starY, star.color, disc, power, width, height)
 }

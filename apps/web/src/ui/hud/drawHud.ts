@@ -133,7 +133,19 @@ export function drawHud(frame: HudFrame): void {
   ctx.font = `${Math.round(9 * S)}px "Consolas", "DejaVu Sans Mono", monospace`
 
   // Блик объектива — первым: он лежит на кадре, а приборы лежат на нём.
-  drawFlare(ctx, frame.camera, world, width, height)
+  //
+  // Миров может быть ДВА: свой и тот, что виден в кольце портала. Звезда за кольцом
+  // светит в объектив не хуже своей, но живёт в другом мире и со своей камерой, поэтому
+  // блик ей нужно рисовать отдельно — иначе система за кольцом стоит без засвета, а он
+  // и есть главный признак, что там солнце. Окно непрозрачно, значит источник ровно один:
+  // своя звезда светит, пока не заслонена дыркой, чужая — пока видна В дырке.
+  const flareHole = apertureEllipse(frame.aperture, frame.camera, width, height)
+  drawFlare(ctx, frame.camera, world, width, height, flareHole ? { ellipse: flareHole, inside: false } : undefined)
+  const flareWorld = frame.aperture?.world
+  const flareCamera = frame.aperture?.camera
+  if (flareHole && flareWorld && flareCamera) {
+    drawFlare(ctx, flareCamera, flareWorld, width, height, { ellipse: flareHole, inside: true })
+  }
 
   // Счётчик кадров рисуется ДО проверки на гибель: узнать, во что превратилась
   // частота, важнее всего именно тогда, когда на экране взрыв.
