@@ -172,6 +172,24 @@ export function moonMaterial(): MeshLambertMaterial {
   return moon
 }
 
+const texturedMoons = new Map<Texture, MeshLambertMaterial>()
+
+/**
+ * Луна с картой КАМНЯ (те же снимки, что у астероидов). Материал на текстуру, а не на
+ * луну: свита рисуется инстансами, и одна картинка обслуживает всю свою группу разом.
+ *
+ * Белый `color` обязателен: оттенок каждой луны приходит инстансным цветом и домножается
+ * на него. Без этого текстура пришла бы уже подкрашенной дважды.
+ */
+export function moonTexturedMaterial(map: Texture): MeshLambertMaterial {
+  let material = texturedMoons.get(map)
+  if (!material) {
+    material = new MeshLambertMaterial({ map, color: 0xffffff })
+    texturedMoons.set(map, material)
+  }
+  return material
+}
+
 const texturedPlanets = new Map<Texture, MeshLambertMaterial>()
 
 /** Планета с картой. Материал на текстуру, а не на планету: их единицы. */

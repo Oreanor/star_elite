@@ -1,11 +1,12 @@
 import { useFrame } from '@react-three/fiber'
-import { useMemo, useRef } from 'react'
-import { Color, InstancedMesh, Object3D, Quaternion, Vector3 } from 'three'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { Color, InstancedMesh, Object3D, Quaternion, Vector3, type Texture } from 'three'
 import type { BodyEntity } from '@elite/sim'
 import { useSession } from '../../app/GameContext'
 import { MOON_DECOR } from '../config'
 import { moonGeometry } from '../geometry/bodies'
-import { moonMaterial } from '../materials/materials'
+import { moonMaterial, moonTexturedMaterial } from '../materials/materials'
+import { loadRockTexture, rockTextureOf } from '../materials/rockTextures'
 import { worldShrink } from '../worldShrink'
 
 /**
@@ -37,12 +38,43 @@ function tintOf(body: BodyEntity, out: Color): Color {
   return out.setHex(body.color).offsetHSL(0, 0, wobble * MOON_DECOR.TINT_SPREAD)
 }
 
+/**
+ * Свита кроется теми же снимками камня, что и астероиды: спутник — это камень, только
+ * крупный, и планетная карта на нём читалась бы как ошибка. Картинок пять, поэтому свита
+ * разбита на группы по номеру текстуры — по одному вызову отрисовки на группу вместо
+ * одного на всю свиту. Лун в системе единицы, так что цена невелика, а лица у них разные.
+ */
 export function MoonSwarm({ moons }: { moons: readonly BodyEntity[] }) {
+  const groups = useMemo(() => {
+    const out = new Map<number, BodyEntity[]>()
+    for (const moon of moons) {
+      const shape = rockTextureOf(moon.id)
+      const list = out.get(shape)
+      if (list) list.push(moon)
+      else out.set(shape, [moon])
+    }
+    return [...out.entries()]
+  }, [moons])
+
+  return (
+    <>
+      {groups.map(([shape, list]) => (
+        <MoonGroup key={shape} shape={shape} moons={list} />
+      ))}
+    </>
+  )
+}
+
+function MoonGroup({ shape, moons }: { shape: number; moons: readonly BodyEntity[] }) {
   const session = useSession()
   const ref = useRef<InstancedMesh>(null)
 
   const geometry = useMemo(() => moonGeometry(MOON_DECOR.SEGMENTS), [])
-  const material = useMemo(moonMaterial, [])
+  // Картинка приходит поздно или не приходит вовсе: до неё луна живёт покраской
+  // инстансным цветом — это не аварийный режим, а прежний облик.
+  const [texture, setTexture] = useState<Texture | null>(null)
+  useEffect(() => loadRockTexture(shape, setTexture), [shape])
+  const material = texture ? moonTexturedMaterial(texture) : moonMaterial()
 
   /**
    * Цвета пишутся один раз на систему, а не в кадре: свита меняется только

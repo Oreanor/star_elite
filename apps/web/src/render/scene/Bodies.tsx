@@ -32,6 +32,7 @@ import { createAtmosphereMaterial } from '../materials/atmosphere'
 import { createCityLightsMaterial } from '../materials/cityLights'
 import { createCoronaMaterial } from '../materials/starCorona'
 import { createStarSurfaceMaterial, loadStarSurface } from '../materials/starSurface'
+import { loadRockTexture, rockTextureOf } from '../materials/rockTextures'
 import { loadPlanetTexture, pickVariant, planetLook } from '../sky/planets'
 import { MoonSwarm } from './Moons'
 
@@ -95,8 +96,17 @@ function Planet({ body }: { body: BodyEntity }) {
 
   // Текстура приходит поздно или не приходит вовсе. Одна перерисовка React
   // на планету за всю игру — не игровой кадр, здесь это допустимо.
+  //
+  // КРУПНАЯ ЛУНА кроется снимком КАМНЯ, а не планетной картой: спутник — это камень,
+  // только большой, и материки с облаками на нём читались как ошибка. Картинка та же,
+  // что у астероидов, и выбирается по id — то же тело, то же лицо.
   const [texture, setTexture] = useState<Texture | null>(null)
-  useEffect(() => loadPlanetTexture(look, pickVariant(look, seed), setTexture), [look, seed])
+  useEffect(
+    () => body.kind === 'moon'
+      ? loadRockTexture(rockTextureOf(body.id), setTexture)
+      : loadPlanetTexture(look, pickVariant(look, seed), setTexture),
+    [body.kind, body.id, look, seed],
+  )
 
   const material = texture ? planetTexturedMaterial(texture) : planetMaterial()
 

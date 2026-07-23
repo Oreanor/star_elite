@@ -16,6 +16,19 @@ import { SRGBColorSpace, TextureLoader, type Texture } from 'three'
  * прежние 512×256 мутнели вблизи).
  */
 
+/**
+ * Сколько картинок камня лежит в `public/textures/asteroids`. Ими кроются не только
+ * астероиды, но и ЛУНЫ: спутник — тот же камень, только крупный, и планетная карта
+ * (материки, облака) на нём читалась как ошибка. Номер выводится из id тела, а не
+ * бросается костью: луна, меняющая лицо при каждом входе в систему, выглядит поломкой.
+ */
+export const ROCK_TEXTURE_COUNT = 5
+
+/** Какая картинка достаётся телу. Детерминировано от id — то же тело, то же лицо. */
+export function rockTextureOf(id: number): number {
+  return ((id % ROCK_TEXTURE_COUNT) + ROCK_TEXTURE_COUNT) % ROCK_TEXTURE_COUNT
+}
+
 const cache = new Map<number, Texture>()
 
 /**
