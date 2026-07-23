@@ -1,4 +1,4 @@
-import { useFrame } from '@react-three/fiber'
+import { useFrame, useThree } from '@react-three/fiber'
 import { Fragment, useEffect, useMemo, useRef } from 'react'
 import {
   BufferAttribute,
@@ -27,6 +27,7 @@ import {
 } from '../materials/materials'
 import { missileGeometry } from '../geometry/ships'
 import { boltGeometry, podGeometry } from '../geometry/props'
+import { explosionSheetMaterial } from '../materials/explosionSheet'
 
 /**
  * Эфемерные объекты: трассы, взрывы, контейнеры, ракеты.
@@ -251,16 +252,19 @@ function explosionTint(age: number, out: Color): Color {
 
 export function Explosions() {
   const session = useSession()
+  const camera = useThree((s) => s.camera)
   const ref = useRef<InstancedMesh>(null)
 
-  const geometry = useMemo(() => new IcosahedronGeometry(1, 0), [])
-  const material = useMemo(explosionMaterial, [])
-  const colors = useMemo(() => new InstancedBufferAttribute(new Float32Array(MAX_EXPLOSIONS * 3), 3), [])
+  // Билборд-квад: огненный шар — это спрайт, повёрнутый к камере, а не гранёный шар.
+  const geometry = useMemo(() => new PlaneGeometry(2, 2), [])
+  const material = useMemo(explosionSheetMaterial, [])
+  // instanceTint = vec4: rgb — тон и затухание, a — ФАЗА 0..1 (по ней шейдер листает кадры).
+  const tints = useMemo(() => new InstancedBufferAttribute(new Float32Array(MAX_EXPLOSIONS * 4), 4), [])
 
   useEffect(() => {
     const mesh = ref.current
-    if (mesh) mesh.instanceColor = colors
-  }, [colors])
+    if (mesh) mesh.geometry.setAttribute('instanceTint', tints)
+  }, [tints])
 
   useFrame(() => {
     const mesh = ref.current
@@ -277,17 +281,26 @@ export function Explosions() {
       _dummy.position.copy(blast.pos)
       // Разлетается и наследует скорость того, что взорвалось.
       _dummy.position.addScaledVector(blast.vel, dt)
+      // К камере: квад всегда лицом к глазу — спрайт не должен показывать ребро.
+      _dummy.quaternion.copy(camera.quaternion)
       _dummy.scale.setScalar(blast.scale * (1 + age * EXPLOSION.CORE_GROWTH))
-      _dummy.rotation.set(age * 3, age * 2, 0)
       _dummy.updateMatrix()
       mesh.setMatrixAt(count, _dummy.matrix)
-      mesh.setColorAt(count, explosionTint(age, _expTint))
+      // Флипбук САМ несёт цвет огня — тон лишь слегка подкрашиваем к концу и приглушаем
+      // яркость по возрасту, чтобы хвост дыма темнел, а не гас скачком.
+      explosionTint(age, _expTint)
+      const o = count * 4
+      const tintArr = tints.array as Float32Array
+      tintArr[o] = 0.6 + 0.4 * _expTint.r
+      tintArr[o + 1] = 0.6 + 0.4 * _expTint.g
+      tintArr[o + 2] = 0.6 + 0.4 * _expTint.b
+      tintArr[o + 3] = age
       count++
     }
 
     mesh.count = count
     mesh.instanceMatrix.needsUpdate = true
-    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true
+    tints.needsUpdate = true
   })
 
   return <instancedMesh ref={ref} args={[geometry, material, MAX_EXPLOSIONS]} frustumCulled={false} />
