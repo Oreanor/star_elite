@@ -358,10 +358,6 @@ export function releaseLanding(ship: ShipEntity, _world: World): boolean {
   return true
 }
 
-/** Высота ховера с покачиванием, м. Базу несёт сам борт — её ведут ручки. */
-function hoverAltitude(base: number, time: number): number {
-  return base + LANDING.HOVER_BOB_AMP * Math.sin(time * LANDING.HOVER_BOB_OMEGA)
-}
 
 /**
  * Набор и снижение в ховере: `strafeUp` (у игрока — Shift+W/S) ведёт САМУ ВЫСОТУ, а не
@@ -371,8 +367,8 @@ function hoverAltitude(base: number, time: number): number {
  * держит. Толкать маневровыми против притяжения значило бы бороться с ним каждую секунду
  * — ровно то, из-за чего низкий полёт превращался в биение о поверхность.
  *
- * Потолок — тот же, с которого прибор перестаёт быть высотомером; пол — чтобы не втереться
- * брюхом в грунт на покачивании.
+ * Потолок — тот же, с которого прибор перестаёт быть высотомером; пол — чтобы борт не
+ * втёрся брюхом в грунт.
  */
 function stepHoverAltitude(binding: SurfaceBinding, controls: ShipControls, dt: number): void {
   if (Math.abs(controls.strafeUp) < 1e-3) return
@@ -381,25 +377,34 @@ function stepHoverAltitude(binding: SurfaceBinding, controls: ShipControls, dt: 
 }
 
 /**
- * Прижать к сфере ховера: позиция на (R + er + alt), скорость только касательная.
- * Без этого обычная физика уносит с планеты при любом тангаже вверх.
+ * Прижать к сфере ховера: позиция на (R + er + alt), движение — только вдоль поверхности.
+ *
+ * Радиальную составляющую скорости не ВЫБРАСЫВАЕМ, а КЛАДЁМ в касательную, сохраняя
+ * величину. Раньше её просто срезали, и наклон носа съедал ход: пилот целился чуть вниз
+ * (естественное движение, когда летишь низко) и терял почти всю тягу — «вперёд лечу
+ * плохо». Над поверхностью тяга работает ВДОЛЬ неё, а нос лишь задаёт направление;
+ * потерянного хода при этом не появляется и лишнего не берётся.
  */
 function constrainToHoverSphere(
   ship: ShipEntity,
   surface: LandableSurface,
   binding: SurfaceBinding,
-  time: number,
 ): void {
   _normal.copy(ship.state.pos).sub(surface.pos)
   if (_normal.lengthSq() < 1e-9) _normal.set(0, 1, 0)
   else _normal.normalize()
   binding.normal.copy(_normal)
 
+  const speed = ship.state.vel.length()
   const vn = ship.state.vel.dot(_normal)
-  if (Math.abs(vn) > 1e-12) ship.state.vel.addScaledVector(_normal, -vn)
+  if (Math.abs(vn) > 1e-12) {
+    ship.state.vel.addScaledVector(_normal, -vn)
+    const tangential = ship.state.vel.length()
+    // Ход строго вверх/вниз касательной не имеет — направлять нечего, гасим.
+    if (tangential > 1e-6) ship.state.vel.multiplyScalar(speed / tangential)
+  }
 
-  const radius =
-    surface.radius + effectiveRadius(ship) + hoverAltitude(binding.altitude, time)
+  const radius = surface.radius + effectiveRadius(ship) + binding.altitude
   ship.state.pos.copy(surface.pos).addScaledVector(_normal, radius)
 }
 
@@ -438,10 +443,22 @@ export function stepLanding(ship: ShipEntity, world: World, dt: number): boolean
     ship.state.vel.applyQuaternion(_spinQ)
   }
 
-  // Тяга/ручки — как в вакууме; радиальную составляющую потом срежем снапом на сферу.
+  /*
+   * Корпус ДЕРЖИТ БРЮХО к поверхности всё время полёта, а не только на входе.
+   *
+   * Иначе тангаж носа уводил из касательной и тягу, и лётный компьютер: тот гасит снос
+   * ПОПЕРЁК НОСА, а над поверхностью «поперёк носа» — это как раз ход вдоль неё. Пилот
+   * целился чуть вниз (естественное движение на низком полёте) и терял почти всю
+   * скорость: «вперёд лечу плохо». Мышь здесь и задумана как взгляд и рыскание — высоту
+   * ведут Shift+W/S, так что тангажу в этом режиме уводить корабль из плоскости нечего.
+   *
+   * Заодно горизонт перестаёт заваливаться, а это ровно то, что делает низкий полёт
+   * читаемым: земля внизу, небо вверху, поворот — рысканием.
+   */
   stepShip(ship.state, ship.controls, ship.spec.tuning, dt)
+  orientBelly(ship, binding.normal)
   stepHoverAltitude(binding, ship.controls, dt)
-  constrainToHoverSphere(ship, surface, binding, world.time)
+  constrainToHoverSphere(ship, surface, binding)
 
   return true
 }

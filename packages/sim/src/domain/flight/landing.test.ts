@@ -97,8 +97,7 @@ describe('посадка на поверхность', () => {
     expect(world.player.landedOn?.bodyId).toBe(moon.id)
     const altitude =
       world.player.state.pos.distanceTo(moon.pos) - moon.radius - effectiveRadius(world.player)
-    expect(altitude).toBeGreaterThan(LANDING.HOVER_ALT - LANDING.HOVER_BOB_AMP - 1)
-    expect(altitude).toBeLessThan(LANDING.HOVER_ALT + LANDING.HOVER_BOB_AMP + 1)
+    expect(altitude).toBeCloseTo(LANDING.HOVER_ALT, 0)
   })
 
   it('после отрыва L ближайшее тело не уносит орбитальной скоростью', () => {
@@ -330,9 +329,9 @@ describe('посадка на поверхность', () => {
       minAlt = Math.min(minAlt, alt)
       maxAlt = Math.max(maxAlt, alt)
     }
-    expect(maxAlt - minAlt).toBeGreaterThan(LANDING.HOVER_BOB_AMP * 0.5)
-    expect(minAlt).toBeGreaterThan(LANDING.HOVER_ALT - LANDING.HOVER_BOB_AMP - 2)
-    expect(maxAlt).toBeLessThan(LANDING.HOVER_ALT + LANDING.HOVER_BOB_AMP + 2)
+    // Высота ДЕРЖИТСЯ ровно: качка убрана — корабль над поверхностью не должно болтать.
+    expect(maxAlt - minAlt).toBeLessThan(1)
+    expect(minAlt).toBeCloseTo(LANDING.HOVER_ALT, 0)
   })
 
   it('на ховере тяга ведёт вдоль сферы и не отрывает без ×ESCAPE', () => {
@@ -359,8 +358,7 @@ describe('посадка на поверхность', () => {
     expect(player.landedOn).not.toBeNull()
     expect(player.state.pos.distanceTo(before)).toBeGreaterThan(5)
     const alt = player.state.pos.distanceTo(rock.pos) - solid - er
-    expect(alt).toBeGreaterThan(LANDING.HOVER_ALT - LANDING.HOVER_BOB_AMP - 1)
-    expect(alt).toBeLessThan(LANDING.HOVER_ALT + LANDING.HOVER_BOB_AMP + 1)
+    expect(alt).toBeCloseTo(LANDING.HOVER_ALT, 0)
 
     // updateCruise без удержания клавиши успел бы сбросить factor ниже порога —
     // проверяем отрыв напрямую в шаге ховера.
@@ -396,5 +394,32 @@ describe('высота ховера — своя координата', () => {
     ship.controls.strafeUp = -1
     for (let i = 0; i < 600; i++) stepLanding(ship, world, 1 / 60)
     expect(ship.landedOn!.altitude).toBe(LANDING.ALT_MIN)
+  })
+})
+
+describe('ход над поверхностью не съедается наклоном носа', () => {
+  /**
+   * РЕГРЕССИЯ: рельс сферы просто СРЕЗАЛ радиальную составляющую скорости. Пилот целился
+   * чуть вниз — естественное движение, когда летишь низко, — и терял почти всю тягу:
+   * «вперёд лечу плохо». Над поверхностью тяга работает ВДОЛЬ неё, а нос лишь задаёт
+   * направление, поэтому потерянная часть кладётся в касательную, а не выбрасывается.
+   */
+  it('с задранным носом борт разгоняется вдоль сферы не хуже, чем с ровным', () => {
+    const run = (pitch: number): number => {
+      const world = quiet()
+      const moon = world.bodies.filter((b) => b.kind === 'moon')[0]!
+      const ship = world.player
+      ship.state.pos.copy(moon.pos).add(new Vector3(0, moon.radius + LANDING.HOVER_ALT, 0))
+      landShip(ship, moon)
+      ship.controls.throttle = 1
+      ship.state.quat.multiply(new Quaternion().setFromEuler(new Euler(pitch, 0, 0)))
+      for (let i = 0; i < 120; i++) stepLanding(ship, world, PHYSICS.FIXED_DT)
+      return ship.state.vel.length()
+    }
+
+    const level = run(0)
+    const nosedUp = run(0.6) // ~35° вверх
+    expect(level).toBeGreaterThan(1)
+    expect(nosedUp).toBeGreaterThan(level * 0.9)
   })
 })
