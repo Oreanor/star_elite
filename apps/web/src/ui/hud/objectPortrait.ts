@@ -186,6 +186,52 @@ export function drawStationWheel(
   }
 }
 
+/**
+ * Иконка ВОЕННОЙ БАЗЫ: шар с параллелями-меридианами (глобус) + башенка на полюсе.
+ * Читается «рукотворная сфера на снос», а не камень и не станция-колесо.
+ */
+export function drawWarBaseIcon(
+  ctx: CanvasRenderingContext2D,
+  cx: number,
+  cy: number,
+  cell: number,
+  color: string,
+  time: number,
+): void {
+  const R = cell * 0.36
+  const rot = time * 0.25
+
+  ctx.strokeStyle = color
+  ctx.fillStyle = color
+  ctx.lineWidth = 1.5
+
+  // Силуэт сферы.
+  ctx.beginPath()
+  ctx.arc(cx, cy, R, 0, TAU)
+  ctx.stroke()
+
+  // Три параллели (эллипсы разной высоты) — читаются как широты глобуса.
+  for (const f of [0.35, 0.7, 0.95]) {
+    ctx.beginPath()
+    ctx.ellipse(cx, cy, R * f, R * f * 0.34, 0, 0, TAU)
+    ctx.stroke()
+  }
+  // Меридиан, слегка «крутящийся» по времени — база вращается.
+  const mw = Math.abs(Math.cos(rot)) * R
+  ctx.beginPath()
+  ctx.ellipse(cx, cy, mw, R, 0, 0, TAU)
+  ctx.stroke()
+
+  // Башня на «северном» полюсе: коротышка-штырёк наружу.
+  ctx.beginPath()
+  ctx.moveTo(cx, cy - R)
+  ctx.lineTo(cx, cy - R - cell * 0.14)
+  ctx.stroke()
+  ctx.beginPath()
+  ctx.arc(cx, cy - R - cell * 0.14, cell * 0.04, 0, TAU)
+  ctx.fill()
+}
+
 /** `shade` 1 = как есть; <1 темнее; >1 светлее (зажим 0..255). */
 function shadeHex(hex: string, shade: number): string {
   const n = parseInt(hex.replace('#', ''), 16)

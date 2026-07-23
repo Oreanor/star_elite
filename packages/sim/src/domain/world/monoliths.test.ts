@@ -143,7 +143,8 @@ describe('монолиты у причала', () => {
         hit = true
         const nav = navTarget(world)
         expect(nav).not.toBeNull()
-        expect(nav!.kind).toBe('asteroid')
+        expect(nav!.kind).toBe('warbase')
+        expect(nav!.name).toBe('База')
         expect(nav!.radius).toBe(1_500)
         break
       }

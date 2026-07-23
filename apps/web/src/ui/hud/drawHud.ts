@@ -68,7 +68,7 @@ import {
 } from '../portrait'
 import { drawStarBall } from './starPortrait'
 import { drawPlanetBall } from './planetPortrait'
-import { drawAsteroidChunk, drawPodCrate, drawStationWheel } from './objectPortrait'
+import { drawAsteroidChunk, drawPodCrate, drawStationWheel, drawWarBaseIcon } from './objectPortrait'
 
 /**
  * Вся отрисовка HUD. Императивная, в кадре, без React.
@@ -698,17 +698,17 @@ function collectMarkers(world: World, ships = false): Marker[] {
       surfaceR: f.radius,
     })
   }
-  // Глыбы двора — тот же коричневый ориентир, что статуи: иначе Shift+Tab выбирает
-  // невидимую для маркеров точку.
-  for (const rock of world.warBases) {
-    if (!rock.alive) continue
+  // Военные базы — белый ориентир со своим ИМЕНЕМ: рукотворная сфера на снос, а не камень.
+  // Всегда подписаны (primary): крупная цель, её видно с полсистемы.
+  for (const base of world.warBases) {
+    if (!base.alive) continue
     out.push({
-      pos: rock.pos,
-      name: NAV_ASTEROID_NAME,
-      color: HUD_COLORS.MONOLITH,
-      nav: rock.id === world.navTargetId,
-      primary: rock.id === world.navTargetId,
-      surfaceR: rock.radius,
+      pos: base.pos,
+      name: properName(base.name),
+      color: HUD_COLORS.STATION,
+      nav: base.id === world.navTargetId,
+      primary: true,
+      surfaceR: base.radius,
     })
   }
   if (ships) {
@@ -969,28 +969,27 @@ function drawTargetPanels(frame: HudFrame): void {
     const px = cx + size / 2
     const py = cy + size / 2
     const ballR = size / 2 - 8 * S
-    if (nav.kind === 'planet' || nav.kind === 'moon') {
-      const body = findBody(world, nav.id)
-      if (body) {
-        drawPlanetBall(ctx, px, py, ballR, color, body, world.time)
-        return
+    switch (nav.kind) {
+      case 'planet':
+      case 'moon': {
+        const body = findBody(world, nav.id)
+        if (body) return drawPlanetBall(ctx, px, py, ballR, color, body, world.time)
+        break
       }
-    }
-    if (nav.kind === 'star') {
-      const body = findBody(world, nav.id)
-      if (body) {
-        const classId = STAR_CLASSES.find((c) => c.color === body.color)?.id ?? ''
-        drawStarBall(ctx, px, py, ballR, color, classId, world.time)
-        return
+      case 'star': {
+        const body = findBody(world, nav.id)
+        if (body) {
+          const classId = STAR_CLASSES.find((c) => c.color === body.color)?.id ?? ''
+          return drawStarBall(ctx, px, py, ballR, color, classId, world.time)
+        }
+        break
       }
-    }
-    if (nav.kind === 'station') {
-      drawStationWheel(ctx, px, py, size, color, world.time)
-      return
-    }
-    if (nav.kind === 'asteroid') {
-      drawAsteroidChunk(ctx, px, py, size, color, nav.id, world.time)
-      return
+      case 'station':
+        return drawStationWheel(ctx, px, py, size, color, world.time)
+      case 'warbase':
+        return drawWarBaseIcon(ctx, px, py, size, color, world.time)
+      case 'asteroid':
+        return drawAsteroidChunk(ctx, px, py, size, color, nav.id, world.time)
     }
     cellIcon(ctx, cx, cy, color)
   })
@@ -1317,7 +1316,7 @@ function drawRadar(frame: HudFrame): void {
     color: string,
     size: number,
     ring = false,
-    shape: 'square' | 'round' | 'diamond' = 'square',
+    shape: 'square' | 'round' | 'diamond' | 'ring' = 'square',
     /** Подпись у отметки — даём ТОЛЬКО выбранной нав-цели: подписать все значит не подписать
      *  ни одной (на логарифмической шкале отметки жмутся к ободу и надписи слипнутся). */
     label?: string,
@@ -1349,7 +1348,11 @@ function drawRadar(frame: HudFrame): void {
     if (Math.abs(lift) > S) line(ctx, px, py, px, py - lift, HUD_COLORS.DIM)
 
     const my = py - lift
-    if (shape === 'round') {
+    if (shape === 'ring') {
+      // Кольцо: полая окружность с точкой в центре — рукотворная сфера-база.
+      circle(ctx, px, my, Math.max(2, size), color)
+      dot(ctx, px, my, Math.max(1, size * 0.3), color)
+    } else if (shape === 'round') {
       dot(ctx, px, my, Math.max(1, size / 2), color)
     } else if (shape === 'diamond') {
       // Ромб КОНТУРОМ с точкой внутри (а не залитый): станция — «место, куда летят».
@@ -1408,10 +1411,11 @@ function drawRadar(frame: HudFrame): void {
     plot(f.pos, HUD_COLORS.MONOLITH, Math.round((nav ? 3 : 2) * S), nav, 'round', nav ? figurineDisplayName(f) : undefined)
   }
 
-  for (const rock of world.warBases) {
-    if (!rock.alive) continue
-    const nav = rock.id === world.navTargetId
-    plot(rock.pos, HUD_COLORS.MONOLITH, Math.round((nav ? 3 : 2) * S), nav, 'round', nav ? NAV_ASTEROID_NAME : undefined)
+  for (const base of world.warBases) {
+    if (!base.alive) continue
+    const nav = base.id === world.navTargetId
+    // Белым и КОЛЕЧКОМ: рукотворная сфера, а не бурая точка камня.
+    plot(base.pos, HUD_COLORS.STATION, Math.round((nav ? 3 : 2) * S), true, 'ring', nav ? properName(base.name) : undefined)
   }
 
   for (const rock of world.asteroids) {
@@ -1457,6 +1461,8 @@ function bodyColor(body: BodyEntity): string {
 
 /** Цвет нав-цели = цвет значка на локаторе. */
 function navMarkerColor(nav: { kind: string }): string {
+  // Военная база — белая: рукотворная сфера, а не бурый камень. Отдельный тон, свой значок.
+  if (nav.kind === 'warbase') return HUD_COLORS.STATION
   // Астероид — тот же коричневый, что статуя: пилот не учит второй тон «камня».
   if (nav.kind === 'monolith' || nav.kind === 'figurine' || nav.kind === 'asteroid') {
     return HUD_COLORS.MONOLITH

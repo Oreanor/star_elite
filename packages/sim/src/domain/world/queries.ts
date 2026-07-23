@@ -400,8 +400,8 @@ export interface NavTarget {
   pos: Vector3
   radius: number
   name: string
-  /** Небесное тело, статуя, статуэтка или астероид — HUD решает метку и подпись. */
-  kind: BodyEntity['kind'] | 'monolith' | 'figurine' | 'asteroid'
+  /** Небесное тело, статуя, статуэтка, астероид или военная база — HUD решает метку. */
+  kind: BodyEntity['kind'] | 'monolith' | 'figurine' | 'asteroid' | 'warbase'
 }
 
 /** Имя нав-глыбы: у двора и у гиганта пояса одно — приборы не плодят «камень / глыба / руда». */
@@ -426,7 +426,7 @@ export function navTarget(world: World): NavTarget | null {
     }
   }
   const warBase = world.warBases.find((r) => r.id === id && r.alive)
-  if (warBase) return { id, pos: warBase.pos, radius: warBase.radius, name: NAV_ASTEROID_NAME, kind: 'asteroid' }
+  if (warBase) return { id, pos: warBase.pos, radius: warBase.radius, name: warBase.name, kind: 'warbase' }
   const giant = world.asteroids.find((a) => a.id === id && isNavBeltAsteroid(a))
   if (giant) return { id, pos: giant.pos, radius: giant.radius, name: NAV_ASTEROID_NAME, kind: 'asteroid' }
   return null

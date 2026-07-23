@@ -34,7 +34,7 @@ function farFromOrigin(): World {
  * же приходят из данных `def` независимо от индекса.
  */
 function withYard(): World {
-  const def = {
+  const def: typeof STARTER_SYSTEM = {
     ...STARTER_SYSTEM,
     warBases: [
       { name: 'База-1', radius: 1_000, stationOffset: [8_000, 0, 0], model: 0 },
