@@ -14,6 +14,7 @@ import {
   Scene,
   ShaderMaterial,
   TorusGeometry,
+  Vector3,
   type Camera,
   type WebGLRenderer,
 } from 'three'
@@ -245,6 +246,10 @@ function ensure(): void {
   haloScene.add(haloGroup)
 }
 
+const _toRing = new Vector3()
+const _camFwd = new Vector3()
+const _probe = new Vector3()
+
 function place(obj: Mesh | Group, radius: number): void {
   const p = jumpPortal()
   obj.position.copy(p.ringPos)
@@ -289,11 +294,29 @@ export function renderJumpPortalOverlay(
   // Рисовать пустую сцену в маску нельзя — вышла бы чёрная дыра вместо просвета космоса.
   // Кольца в это время и нет: оно рождается ровно тогда, когда за ним появляется мир.
   const destLive = dest.children.length > 0
-  hstate('проход портала', `кольцо ${r > 0 ? 'есть' : 'нулевое'}, сцена за ним ${destLive ? 'смонтирована' : 'ПУСТА'}`, {
-    ringRadius: r,
-    children: dest.children.length,
-    destWarm: p.destWarm,
-  })
+  // Где кольцо ОТНОСИТЕЛЬНО ГЛАЗА: за спиной оно невидимо при любом радиусе, и это
+  // единственное, чего не видно из состояния портала.
+  _toRing.copy(p.ringPos).sub(camera.position)
+  const distance = _toRing.length()
+  camera.getWorldDirection(_camFwd)
+  const ahead = _toRing.dot(_camFwd) > 0
+  // Проекция центра кольца: она и отделяет «поставили не туда» от «поставили туда,
+  // но не рисуется». |x|<1 и |y|<1 при z<1 — центр кольца буквально в кадре.
+  _probe.copy(p.ringPos).project(camera)
+  const onScreen = ahead && Math.abs(_probe.x) < 1 && Math.abs(_probe.y) < 1
+  hstate(
+    'проход портала',
+    `кольцо ${r > 0 ? 'есть' : 'нулевое'}, ${ahead ? 'ПЕРЕД камерой' : 'ЗА СПИНОЙ'}, центр ${onScreen ? 'В КАДРЕ' : 'вне кадра'}, сцена ${destLive ? 'смонтирована' : 'ПУСТА'}`,
+    {
+      экран: `${_probe.x.toFixed(2)} ${_probe.y.toFixed(2)} z=${_probe.z.toFixed(3)}`,
+      ringRadius: r,
+      доКольца_м: distance.toFixed(0),
+      кольцо: `${p.ringPos.x.toFixed(0)} ${p.ringPos.y.toFixed(0)} ${p.ringPos.z.toFixed(0)}`,
+      камера: `${camera.position.x.toFixed(0)} ${camera.position.y.toFixed(0)} ${camera.position.z.toFixed(0)}`,
+      children: dest.children.length,
+      destWarm: p.destWarm,
+    },
+  )
   const st = renderer.state
   const prevAutoClear = renderer.autoClear
   const prevLocalClipping = renderer.localClippingEnabled

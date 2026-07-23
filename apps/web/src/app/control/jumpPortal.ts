@@ -187,6 +187,19 @@ export function openPortal(world: World, index: number, arrival: Arrival | null,
   portal.open = true
   syncClipPlanes()
   syncGate(world)
+  const v = (p: Vector3) => `${p.x.toFixed(0)} ${p.y.toFixed(0)} ${p.z.toFixed(0)}`
+  hlog('ГДЕ открыли', {
+    systemIndex: world.systemIndex,
+    цель: index,
+    игрок: v(s.pos),
+    скорость: s.vel.length().toFixed(1),
+    носВперёд: v(_fwd),
+    впереди_м: linkedPortalAhead(world.player).toFixed(0),
+    кольцо: v(portal.ringPos),
+    предельныйРадиус: portal.targetRadius.toFixed(1),
+    originOffset: v(world.originOffset),
+    гейтовВМире: world.jumpGates.length,
+  })
   notifyPortalChanged()
 }
 
