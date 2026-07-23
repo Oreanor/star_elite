@@ -86,6 +86,9 @@ uniform float uSkyIntensity;
 uniform sampler2D uSceneMap;
 uniform bool uHasScene;
 uniform mat4 uProj;
+uniform sampler2D uDepthMap;
+uniform bool uHasDepth;
+uniform float uFar;
 
 varying vec3 vWorldPos;
 
@@ -121,6 +124,19 @@ vec3 sampleBackdrop(vec3 dir) {
   float off = max(outside.x, outside.y);
   float inScreen = 1.0 - smoothstep(0.0, 0.04, off);
   if (inScreen <= 0.0) return sky;
+
+  if (uHasDepth) {
+    // Кадр плоский, и сам по себе не отличает фон от переднего плана: линза хватала
+    // пиксели СОБСТВЕННОГО корпуса — он ведь стоит ровно перед дырой — и размазывала
+    // их в кольцо вторым силуэтом. Свет корпуса мимо дыры не проходил, искажать его
+    // нельзя. Логарифмический буфер хранит log2(1+w)/log2(far+1); обращаем и получаем
+    // расстояние по оси взгляда до нарисованного в этом пикселе.
+    float d = texture2D(uDepthMap, clamp(uv, 0.0, 1.0)).x;
+    float pixelDist = exp2(d * log2(uFar + 1.0)) - 1.0;
+    float holeDist = -(viewMatrix * vec4(uBhCenter, 1.0)).z;
+    if (pixelDist < holeDist) return sky;
+  }
+
   return mix(sky, texture2D(uSceneMap, clamp(uv, 0.0, 1.0)).rgb, inScreen);
 }
 
@@ -330,10 +346,13 @@ export function createBlackHoleMaterial(params: BlackHoleParams, sky: Texture | 
       uSkyMap: { value: sky },
       uHasSky: { value: sky != null },
       uSkyIntensity: { value: 1 },
-      // Кадр до линзы и матрица проекции — их ставит проход, а не React.
+      // Кадр до линзы, его глубина и проекция — их ставит проход, а не React.
       uSceneMap: { value: null as Texture | null },
       uHasScene: { value: false },
       uProj: { value: new Matrix4() },
+      uDepthMap: { value: null as Texture | null },
+      uHasDepth: { value: false },
+      uFar: { value: 1 },
     },
     vertexShader: lensVertex,
     fragmentShader: lensFragment,

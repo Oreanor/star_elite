@@ -15,7 +15,7 @@ import {
   type BlackHoleParams,
 } from '../materials/blackHole'
 import { worldShrink } from '../worldShrink'
-import { addBlackHoleLens, blackHoleFrame } from './blackHoleOverlay'
+import { addBlackHoleLens } from './blackHoleOverlay'
 import { usePortalRenderSide } from './portalRenderContext'
 
 /**
@@ -129,11 +129,6 @@ function BlackHoleInstance({ body }: { body: BodyEntity }) {
       const u = lensMat.uniforms
       u.uBhCenter!.value.copy(body.pos)
       u.uCameraPos!.value.copy(camera.position)
-      // Кадр до линзы: он есть только у основного мира, в комнате портала — одно небо.
-      const frame = overlaid ? blackHoleFrame() : null
-      u.uSceneMap!.value = frame
-      u.uHasScene!.value = frame != null
-      u.uProj!.value = camera.projectionMatrix
       // Аккреционный диск имеет фазу времени мира, а не возраст React-компонента.
       // Поэтому ремоунт после портала не запускает чёрную дыру заново с нуля.
       u.uTime!.value = session.world.time

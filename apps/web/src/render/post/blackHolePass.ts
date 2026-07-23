@@ -24,7 +24,9 @@ export class BlackHolePass {
   ): void {
     if (!blackHoleOverlayActive()) return
     // После RenderPass (needsSwap) картинка в readBuffer — в него же и дорисовываем.
+    // Его же depthTexture несёт глубину сцены: по ней линза отличает фон от переднего плана.
+    const depth = readBuffer.depthTexture ?? null
     renderer.setRenderTarget(this.renderToScreen ? null : readBuffer)
-    renderBlackHoleOverlay(renderer, this.getCamera())
+    renderBlackHoleOverlay(renderer, this.getCamera(), depth)
   }
 }

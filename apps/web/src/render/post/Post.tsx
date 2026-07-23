@@ -1,6 +1,6 @@
 import { useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef } from 'react'
-import { Vector2, WebGLRenderTarget } from 'three'
+import { DepthStencilFormat, DepthTexture, UnsignedInt248Type, Vector2, WebGLRenderTarget } from 'three'
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js'
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js'
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js'
@@ -29,7 +29,12 @@ export function Post() {
 
   const { composer, renderPass, blurPass, ripplePass } = useMemo(() => {
     const sz = gl.getDrawingBufferSize(new Vector2())
-    const rt = new WebGLRenderTarget(sz.x, sz.y, { stencilBuffer: true })
+    // Глубина кадра нужна ЛИНЗЕ чёрной дыры: без неё она искажает и передний план —
+    // собственный корпус игрока размазывался в кольцо вторым силуэтом. Формат со
+    // стенсилем, потому что маска портала прыжка живёт в том же буфере.
+    const depth = new DepthTexture(sz.x, sz.y, UnsignedInt248Type)
+    depth.format = DepthStencilFormat
+    const rt = new WebGLRenderTarget(sz.x, sz.y, { stencilBuffer: true, depthTexture: depth })
     const c = new EffectComposer(gl, rt)
     // Второй буфер композера тоже со stencil (EffectComposer клонирует параметры).
     c.renderTarget2.stencilBuffer = true
@@ -69,7 +74,17 @@ export function Post() {
   useEffect(() => {
     composer.setSize(size.width, size.height)
     composer.setPixelRatio(dpr)
-  }, [composer, size, dpr])
+    // `RenderTarget.setSize` не трогает depthTexture — размер ему правим сами, иначе
+    // после ресайза линза читала бы глубину прежнего кадра.
+    const sz = gl.getDrawingBufferSize(new Vector2())
+    for (const target of [composer.renderTarget1, composer.renderTarget2]) {
+      const depth = target.depthTexture
+      if (!depth || (depth.image.width === sz.x && depth.image.height === sz.y)) continue
+      depth.image.width = sz.x
+      depth.image.height = sz.y
+      depth.needsUpdate = true
+    }
+  }, [composer, size, dpr, gl])
 
   useEffect(() => () => composer.dispose(), [composer])
 
