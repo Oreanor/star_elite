@@ -6,7 +6,7 @@ import { itemMass } from '../cargo/items'
 import { createWorld } from '../world'
 import { STARTER_SYSTEM } from '../world/system'
 import { castLaser } from './raycast'
-import { damageWarBase } from './warBase'
+import { damageWarBase, damageWarBaseFixture, warBaseFixtureWorldPos } from './warBase'
 
 /** Мир с двумя базами у причала: километровой и трёхкилометровой. */
 function withBases(): ReturnType<typeof createWorld> {
@@ -75,5 +75,52 @@ describe('военная база', () => {
     const large = world.warBases.reduce((a, b) => (a.radius >= b.radius ? a : b))
     expect(large.hull).toBeGreaterThan(small.hull)
     expect(small.hull).toBeCloseTo(WARBASE.HULL_PER_KM * (small.radius / 1000), 5)
+  })
+})
+
+describe('отстрел деталей базы', () => {
+  it('база рождается с башней и разбросом деталей', () => {
+    const world = withBases()
+    const base = world.warBases[0]!
+    expect(base.fixtures.length).toBeGreaterThanOrEqual(WARBASE.FIXTURES_MIN)
+    expect(base.fixtures.length).toBeLessThanOrEqual(WARBASE.FIXTURES_MAX)
+    // Ровно одна башня (model 0), и она на полюсе.
+    const towers = base.fixtures.filter((f) => f.model === 0)
+    expect(towers).toHaveLength(1)
+    expect(towers[0]!.dir.y).toBeCloseTo(1, 5)
+  })
+
+  it('луч бьёт по ДЕТАЛИ, а не по корпусу, целясь в неё', () => {
+    const world = withBases()
+    const base = world.warBases[0]!
+    const fix = base.fixtures.find((f) => f.model !== 0)!
+    const _p = new Vector3()
+    warBaseFixtureWorldPos(base, fix, world.time, _p)
+    // Стреляем в деталь снаружи, по радиали к центру базы.
+    const dir = _p.clone().sub(base.pos).normalize()
+    const origin = _p.clone().addScaledVector(dir, fix.size + 500)
+    const hit = castLaser(world, origin, dir.clone().negate(), world.player, 5_000)
+    expect(hit.warBaseFixture?.fixture.id).toBe(fix.id)
+    expect(hit.warBase).toBeNull()
+  })
+
+  it('отстрел детали не трогает корпус базы', () => {
+    const world = withBases()
+    const base = world.warBases[0]!
+    const fix = base.fixtures.find((f) => f.model !== 0)!
+    const hullBefore = base.hull
+
+    damageWarBaseFixture(world, base, fix, fix.hull)
+
+    expect(fix.alive).toBe(false)
+    expect(base.alive).toBe(true)
+    expect(base.hull).toBe(hullBefore)
+    // Мёртвую деталь луч больше не ловит.
+    const _p = new Vector3()
+    warBaseFixtureWorldPos(base, fix, world.time, _p)
+    const dir = _p.clone().sub(base.pos).normalize()
+    const origin = _p.clone().addScaledVector(dir, fix.size + 500)
+    const hit = castLaser(world, origin, dir.clone().negate(), world.player, 5_000)
+    expect(hit.warBaseFixture?.fixture.id).not.toBe(fix.id)
   })
 })

@@ -3,12 +3,14 @@ import { GUNNERY } from '../../config/weapons'
 import { SHIELD } from '../../config/station'
 import { raySphere } from '../../core/math'
 import { isStationBot } from '../world/queries'
+import { warBaseFixtureWorldPos } from './warBase'
 import type {
   AsteroidEntity,
   BodyEntity,
   MissileEntity,
   PlatformEntity,
   WarBaseEntity,
+  WarBaseFixture,
   ShipEntity,
   World,
 } from '../world/entities'
@@ -19,8 +21,10 @@ export interface LaserHit {
   distance: number
   ship: ShipEntity | null
   asteroid: AsteroidEntity | null
-  /** Глыба двора статуи — взрывается, руды не даёт. */
+  /** Военная база — луч бьёт по корпусу; hull ∝ радиусу. */
   warBase: WarBaseEntity | null
+  /** Навесная деталь базы: отстреливается ОТДЕЛЬНО от корпуса (своя прочность). */
+  warBaseFixture: { base: WarBaseEntity; fixture: WarBaseFixture } | null
   missile: MissileEntity | null
   platform: PlatformEntity | null
   /** Станция, о ЩИТ которой погас луч. Урона не наносит — станция неуязвима. */
@@ -38,6 +42,9 @@ export interface ShotSource {
   id: number
   cloaked: boolean
 }
+
+/** Мировая точка детали базы — считается со спином; scratch, наружу не отдаётся. */
+const _fixPos = /* @__PURE__ */ new Vector3()
 
 /**
  * Луч против сфер столкновений: находит ПЕРВОЕ пересечение в пределах `range`.
@@ -59,6 +66,7 @@ export function castLaser(
     ship: null,
     asteroid: null,
     warBase: null,
+    warBaseFixture: null,
     missile: null,
     platform: null,
     station: null,
@@ -69,6 +77,7 @@ export function castLaser(
     hit.ship = next.ship ?? null
     hit.asteroid = next.asteroid ?? null
     hit.warBase = next.warBase ?? null
+    hit.warBaseFixture = next.warBaseFixture ?? null
     hit.missile = next.missile ?? null
     hit.platform = next.platform ?? null
     hit.station = next.station ?? null
@@ -139,12 +148,19 @@ export function castLaser(
       if (closer(t)) set(t, { asteroid: a })
     }
 
-    // Глыбы двора статуи: километровые мишени, взрываются без руды.
-    for (const rock of world.warBases) {
-      if (!rock.alive) continue
-      if (rock.pos.distanceToSquared(origin) > (range + rock.radius) ** 2) continue
-      const t = raySphere(origin, dir, rock.pos, rock.radius)
-      if (closer(t)) set(t, { warBase: rock })
+    // Военные базы: сперва навесные ДЕТАЛИ (торчат наружу, потому и попадают первыми),
+    // затем корпус. Деталь бьётся отдельно — своя прочность, свой снос.
+    for (const base of world.warBases) {
+      if (!base.alive) continue
+      if (base.pos.distanceToSquared(origin) > (range + base.radius) ** 2) continue
+      for (const fix of base.fixtures) {
+        if (!fix.alive) continue
+        warBaseFixtureWorldPos(base, fix, world.time, _fixPos)
+        const tf = raySphere(origin, dir, _fixPos, fix.size)
+        if (closer(tf)) set(tf, { warBaseFixture: { base, fixture: fix } })
+      }
+      const t = raySphere(origin, dir, base.pos, base.radius)
+      if (closer(t)) set(t, { warBase: base })
     }
 
     // Ракету можно сбить — и свою, и чужую. Кроме собственной: она уходит прямо

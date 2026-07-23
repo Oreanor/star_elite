@@ -1,8 +1,8 @@
 import { Vector3 } from 'three'
 import { MONOLITH } from '../../config/monoliths'
 import { WARBASE } from '../../config/warbase'
-import { makeRng } from '../../core/math'
-import type { BodyEntity, World } from './entities'
+import { makeRng, type Rng } from '../../core/math'
+import type { BodyEntity, WarBaseFixture, World } from './entities'
 import type { SystemDef } from './system'
 
 /**
@@ -27,12 +27,38 @@ function anchorStation(world: World): BodyEntity | null {
 }
 
 /**
+ * Навесные детали базы: башня на «северном» полюсе + вразброс по сфере (спираль Фибоначчи —
+ * равномерно, без комков). Тип и калибр из `rng`, поэтому расстановка у всех игроков одна.
+ * Детали — в ДОМЕНЕ (а не в рендере), потому что они отстреливаются: у каждой своя прочность.
+ */
+function layoutFixtures(ids: World['ids'], radius: number, rng: Rng): WarBaseFixture[] {
+  const out: WarBaseFixture[] = []
+  const n = WARBASE.FIXTURES_MIN + Math.floor(rng() * (WARBASE.FIXTURES_MAX - WARBASE.FIXTURES_MIN + 1))
+  const push = (model: number, dir: Vector3, size: number): void => {
+    out.push({ id: ids.next(), model, dir, size, roll: rng() * Math.PI * 2, hull: WARBASE.FIXTURE_HULL_PER_M * size, alive: true })
+  }
+  // Башня (model 0) на полюсе.
+  push(0, new Vector3(0, 1, 0), radius * WARBASE.TOWER_SIZE)
+  // Прочие — спираль Фибоначчи.
+  const golden = Math.PI * (3 - Math.sqrt(5))
+  for (let i = 0; i < n - 1; i++) {
+    const t = (i + 0.5) / (n - 1)
+    const y = 1 - 2 * t
+    const r = Math.sqrt(Math.max(0, 1 - y * y))
+    const phi = i * golden + rng() * 0.6
+    const dir = new Vector3(Math.cos(phi) * r, y, Math.sin(phi) * r).normalize()
+    const model = 1 + Math.floor(rng() * WARBASE.FIXTURE_MODELS)
+    const size = radius * (WARBASE.FIXTURE_SIZE_MIN + rng() * (WARBASE.FIXTURE_SIZE_MAX - WARBASE.FIXTURE_SIZE_MIN))
+    push(model, dir, size)
+  }
+  return out
+}
+
+/**
  * Военные базы на снос — из ДАННЫХ системы (`def.warBases`), а не спавн-хардкодом.
  * Смещение отсчитывается от станции (как у «Двери»): базы стоят у причала, но телами не
  * являются — своего списка, без гравитации и орбиты. Прочность корки растёт с радиусом.
- *
- * Навесные детали (башня на полюсе, пушки/глаза вразброс) считает РЕНДЕР по `seed` базы —
- * это визуал, домену их знать незачем, пока они не станут отдельно отстреливаемыми.
+ * Навесные детали отстреливаются поштучно, расставлены детерминированно по сиду базы.
  */
 export function placeWarBases(world: World, def: SystemDef): void {
   world.warBases = []
@@ -44,6 +70,8 @@ export function placeWarBases(world: World, def: SystemDef): void {
     const pos = station
       ? station.pos.clone().add(offset)
       : new Vector3(...def.star.pos).add(offset)
+    // Сид детерминирован по номеру базы в системе — расстановка деталей у всех одна.
+    const seed = ((world.systemIndex * 131 + i * 977) ^ 0x7761726b) >>> 0
     world.warBases.push({
       id: world.ids.next(),
       kind: 'warbase',
@@ -56,8 +84,7 @@ export function placeWarBases(world: World, def: SystemDef): void {
       hull: WARBASE.HULL_PER_KM * (b.radius / 1000),
       hullMax: WARBASE.HULL_PER_KM * (b.radius / 1000),
       alive: true,
-      // Сид детерминирован по номеру базы в системе — расстановка деталей у всех одна.
-      seed: ((world.systemIndex * 131 + i * 977) ^ 0x7761726b) >>> 0,
+      fixtures: layoutFixtures(world.ids, b.radius, makeRng(seed)),
     })
   }
 }

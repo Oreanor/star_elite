@@ -19,6 +19,7 @@ export {
   type MonolithEntity,
   type FigurineEntity,
   type WarBaseEntity,
+  type WarBaseFixture,
   type Tracer,
   type WarpFlash,
   type WarpPortal,
