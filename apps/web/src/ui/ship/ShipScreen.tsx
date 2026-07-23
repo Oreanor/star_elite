@@ -1177,11 +1177,17 @@ interface DragState {
   pitch: number
   /** Холостое вращение — копится, пока не тянут. */
   base: number
+  /** Приближение колесом: множитель дистанции камеры. 1 — как кадрировали, меньше — ближе. */
+  zoom: number
 }
+
+/** Пределы зума колеса: ближе половины кадрирующей дистанции корабль упрётся в near. */
+const ZOOM_MIN = 0.45
+const ZOOM_MAX = 2.6
 
 function Blueprint({ chassisId }: { chassisId: string }) {
   const geometry = useMemo(() => chassisGeometry(chassisId), [chassisId])
-  const drag = useRef<DragState>({ dragging: false, lastX: 0, lastY: 0, yaw: 0, pitch: 0, base: 0 })
+  const drag = useRef<DragState>({ dragging: false, lastX: 0, lastY: 0, yaw: 0, pitch: 0, base: 0, zoom: 1 })
 
   // Кадрируем по сфере столкновений геометрии: корабль любого размера влезает
   // целиком. d = R / sin(fov/2) — сфера радиуса R вписывается по вертикали; 1.35 — поля.
@@ -1218,6 +1224,12 @@ function Blueprint({ chassisId }: { chassisId: string }) {
       // указатель уже отпущен — не важно
     }
   }
+  // Колесо приближает и отдаляет борт. Множитель на «щелчок», зажат в пределах, чтобы
+  // не влететь внутрь модели и не потерять её вдали. Дистанцию ведёт кадр (SpinningShip).
+  const onWheel = (e: React.WheelEvent) => {
+    const d = drag.current
+    d.zoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, d.zoom * (e.deltaY > 0 ? 1.12 : 1 / 1.12)))
+  }
 
   return (
     <div
@@ -1226,6 +1238,7 @@ function Blueprint({ chassisId }: { chassisId: string }) {
       onPointerMove={onMove}
       onPointerUp={onUp}
       onPointerLeave={onUp}
+      onWheel={onWheel}
     >
       <Canvas
         gl={{ antialias: true, alpha: true }}
@@ -1235,7 +1248,7 @@ function Blueprint({ chassisId }: { chassisId: string }) {
         <directionalLight position={[-4, 6, 8]} intensity={1.9} color={0xfff2dd} />
         <directionalLight position={[6, 3, -6]} intensity={0.55} color={0xa8c4e6} />
         <hemisphereLight args={[0x4a6480, 0x141a22, 0.5]} />
-        <SpinningShip geometry={geometry} centre={centre} drag={drag} chassisId={chassisId} />
+        <SpinningShip geometry={geometry} centre={centre} drag={drag} chassisId={chassisId} camPos={camPos} />
       </Canvas>
     </div>
   )
@@ -1251,14 +1264,18 @@ function SpinningShip({
   centre,
   drag,
   chassisId,
+  camPos,
 }: {
   geometry: BufferGeometry
   centre: Vector3
   drag: React.RefObject<DragState>
   chassisId: string
+  camPos: [number, number, number]
 }) {
   const ref = useRef<Group>(null)
-  useFrame((_, dt) => {
+  // Базовое направление камеры от центра: зум лишь масштабирует эту дистанцию.
+  const base = useMemo(() => new Vector3(...camPos), [camPos])
+  useFrame((state, dt) => {
     const d = drag.current
     if (!d) return
     if (!d.dragging) {
@@ -1271,6 +1288,9 @@ function SpinningShip({
       ref.current.rotation.y = d.base + d.yaw
       ref.current.rotation.x = d.pitch
     }
+    // Камеру ведёт кадр, а не проп: зум живёт в ref, React о нём не знает.
+    state.camera.position.copy(base).multiplyScalar(d.zoom)
+    state.camera.lookAt(0, 0, 0)
   })
   return (
     <group ref={ref}>
