@@ -163,6 +163,15 @@ export function stepOrbits(world: World, time = orbitTime(world)): void {
   if (playerReference) {
     _playerReferenceShift.copy(playerReference.pos).sub(_playerReferenceBefore)
     world.player.state.pos.add(_playerReferenceShift)
+    /**
+     * Устье гиперпортала открывается В ОКРЕСТНОСТИ ИГРОКА (сотня метров перед носом) и
+     * ехать обязано С ЕГО ОПОРОЙ, а не со станцией. Пока оно ехало со станцией, у планеты
+     * или в открытом космосе опоры расходились, и кольцо уносило РАЗНОСТЬЮ орбитальных
+     * скоростей: время сжато, это десятки км/с, то есть сотни метров за кадр. Пилот стоял
+     * на месте и не находил кольца — оно было уже в километре, а через несколько секунд
+     * в сотнях километров.
+     */
+    for (const gate of world.jumpGates) gate.pos.add(_playerReferenceShift)
     // Игрок сдвинут НЕ своей скоростью, а орбитой опорного тела (десятки км/с у станции).
     // Камера живёт в мировых координатах и об этом сдвиге не знает — без поправки она
     // отстаёт на километры за кадр, и корабль уходит за кромку. Пишем сдвиг в тот же
@@ -200,10 +209,9 @@ export function stepOrbits(world: World, time = orbitTime(world)): void {
     for (const explosion of world.explosions) explosion.pos.add(_stationShift)
     for (const warp of world.warps) warp.pos.add(_stationShift)
     for (const portal of world.warpPortals) portal.pos.add(_stationShift)
-    // Связанный гиперпортал стоит в той же локальной окрестности, что игрок и станция.
-    // Если не унести collider этой же дельтой, визуал в следующем кадре скопирует
-    // его старую позицию и кольцо «улетит», хотя корабль относительно станции стоит.
-    for (const gate of world.jumpGates) gate.pos.add(_stationShift)
+    // Гиперпортала здесь НЕТ намеренно: он едет с опорой ИГРОКА (см. выше). У причала
+    // это та же станция, а у планеты и в открытом космосе — другое тело, и сдвиг станции
+    // уносил бы кольцо от корабля. Двух сдвигов подряд оно тоже не переживёт.
     for (const flash of world.shieldFlashes) {
       flash.pos.add(_stationShift)
       flash.center.add(_stationShift)

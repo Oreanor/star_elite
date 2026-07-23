@@ -50,6 +50,34 @@ describe('спутники', () => {
     expect(after.distanceTo(before)).toBeLessThan(1e-6)
   })
 
+  it('несёт его и ВДАЛИ ОТ ПРИЧАЛА, где опора игрока — не станция', () => {
+    /**
+     * РЕГРЕССИЯ. Кольцо ехало со сдвигом СТАНЦИИ, а игрок — со сдвигом СВОЕГО опорного
+     * тела. У причала это одно и то же, поэтому проверка выше бага не ловила. А у планеты
+     * опоры расходятся, и кольцо уносило РАЗНОСТЬЮ орбитальных скоростей: время сжато,
+     * это десятки км/с. Пилот стоял на ручнике и не находил открытого кольца — оно уже
+     * было в километре, а через несколько секунд в сотнях километров.
+     */
+    const world = quiet()
+    const planet = world.bodies.find((b) => b.kind === 'planet')
+    expect(planet).toBeTruthy()
+    world.player.state.pos.copy(planet!.pos).add(new Vector3(planet!.radius * 3, 0, 0))
+
+    const gate = {
+      pos: world.player.state.pos.clone().add(new Vector3(120, 0, 0)),
+      normal: new Vector3(1, 0, 0),
+      radius: 30,
+      tube: 2.4,
+    }
+    world.jumpGates.push(gate)
+    const before = gate.pos.clone().sub(world.player.state.pos)
+
+    wait(world, 1_000)
+
+    const after = gate.pos.clone().sub(world.player.state.pos)
+    expect(after.distanceTo(before)).toBeLessThan(1e-6)
+  })
+
   it('рождаются на орбите, а не в центре планеты', () => {
     const world = quiet()
     expect(moons(world).length).toBeGreaterThan(0)
