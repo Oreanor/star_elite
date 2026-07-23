@@ -18,8 +18,8 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
  */
 
 const ROCK_URLS: readonly string[] = [
-  '/models/asteroid_1.glb',
-  '/models/asteroid_2.glb',
+  '/models/balls/asteroid_1.glb',
+  '/models/balls/asteroid_2.glb',
 ]
 
 export const SCENIC_ROCK_COUNT = ROCK_URLS.length

@@ -235,19 +235,19 @@ const GLB_HULLS: readonly GlbHullDef[] = [
   // Сопел у него НЕТ вовсе — пустой список, а не отсутствующее поле: `?? tailNozzles(...)`
   // иначе развёл бы автоматическую пару по габаритам, и корпус получил бы факелы обратно.
   // Тангаж: прямой угол (меш экспортирован носом вверх) минус 20° — подобрано глазами.
-  { id: 'spiritus_sanctus', url: '/models/spiritus.glb', scale: GLB_SCALE,
+  { id: 'spiritus_sanctus', url: '/models/ships/spiritus.glb', scale: GLB_SCALE,
     yaw: GLB_YAW - Math.PI / 2, pitch: GLB_PITCH + Math.PI / 2 - Math.PI / 9, roll: GLB_ROLL,
     nozzles: [] },
   // «Аврора One»: выхлоп из ДВУХ центральных движков (тёмные тубусы). Сопла придвинуты ВПЕРЁД
   // к устьям движков (z 8.5, не 11 — иначе плюмаж отрывался от кормы) и опущены на ось тубусов.
-  { id: 'aurora_one', url: '/models/aurora_one.glb', scale: GLB_SCALE, yaw: GLB_YAW, pitch: GLB_PITCH, roll: GLB_ROLL,
+  { id: 'aurora_one', url: '/models/ships/aurora_one.glb', scale: GLB_SCALE, yaw: GLB_YAW, pitch: GLB_PITCH, roll: GLB_ROLL,
     nozzles: [{ offset: [-1.5, -0.7, 7.5], radius: 1 }, { offset: [1.5, -0.7, 7.5], radius: 1 }] },
-  { id: 'hermes', url: '/models/hermes.glb', scale: GLB_SCALE, yaw: GLB_YAW, pitch: GLB_PITCH, roll: GLB_ROLL },
-  { id: 'perseus', url: '/models/perseus.glb', scale: GLB_SCALE, yaw: GLB_YAW, pitch: GLB_PITCH, roll: GLB_ROLL },
-  { id: 'pegasus', url: '/models/pegasus.glb', scale: GLB_SCALE, yaw: GLB_YAW, pitch: GLB_PITCH, roll: GLB_ROLL },
-  { id: 'orion', url: '/models/orion.glb', scale: GLB_SCALE, yaw: GLB_YAW, pitch: GLB_PITCH, roll: GLB_ROLL },
+  { id: 'hermes', url: '/models/ships/hermes.glb', scale: GLB_SCALE, yaw: GLB_YAW, pitch: GLB_PITCH, roll: GLB_ROLL },
+  { id: 'perseus', url: '/models/ships/perseus.glb', scale: GLB_SCALE, yaw: GLB_YAW, pitch: GLB_PITCH, roll: GLB_ROLL },
+  { id: 'pegasus', url: '/models/ships/pegasus.glb', scale: GLB_SCALE, yaw: GLB_YAW, pitch: GLB_PITCH, roll: GLB_ROLL },
+  { id: 'orion', url: '/models/ships/orion.glb', scale: GLB_SCALE, yaw: GLB_YAW, pitch: GLB_PITCH, roll: GLB_ROLL },
   // «Тесей» — лёгкий истребитель (933 тришки).
-  { id: 'theseus', url: '/models/theseus.glb', scale: GLB_SCALE, yaw: GLB_YAW, pitch: GLB_PITCH, roll: GLB_ROLL },
+  { id: 'theseus', url: '/models/ships/theseus.glb', scale: GLB_SCALE, yaw: GLB_YAW, pitch: GLB_PITCH, roll: GLB_ROLL },
   /**
    * «Атлас» — КОРАБЛЬ ПОКОЛЕНИЙ, и масштаб у него не «побольше прочих», а другого порядка:
    * 120 против 16 у истребителя. Это ковчег, в нём живут, — рядом с ним истребитель обязан
@@ -256,7 +256,7 @@ const GLB_HULLS: readonly GlbHullDef[] = [
    * Число ходит В ПАРЕ с `radius` его шасси (`chassis.ts`): им ловят попадания, и разъедься
    * они — лучи пойдут сквозь борт, не задев. Растишь одно — расти и второе.
    */
-  { id: 'atlas', url: '/models/atlas.glb', scale: 120, yaw: GLB_YAW, pitch: GLB_PITCH, roll: GLB_ROLL },
+  { id: 'atlas', url: '/models/ships/atlas.glb', scale: 120, yaw: GLB_YAW, pitch: GLB_PITCH, roll: GLB_ROLL },
 ]
 
 const _rotY = new Matrix4()
