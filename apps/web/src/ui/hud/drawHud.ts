@@ -2,6 +2,7 @@ import { Vector3, type Camera, type PerspectiveCamera } from 'three'
 import {
   AUTODOCK,
   CRUISE,
+  LANDING,
   GUNNERY,
   MIELOPHONE,
   STAR_CLASSES,
@@ -23,6 +24,7 @@ import {
   generateGalaxy,
   incomingMissile,
   landingCue,
+  nearestLandable,
   itemMass,
   itemName,
   missileAmmo,
@@ -1113,6 +1115,50 @@ function drawBushLocator(frame: HudFrame): void {
   if (torusTarget) bushBlip(frame, torusTarget, cx, cy, radiusX, radiusY, torusTarget.name, true)
 }
 
+/**
+ * ВЫСОТОМЕР: вертикальная лента слева от локатора. Молчит, пока под кораблём нет
+ * поверхности, — это прибор режима «полёт над телом», а не постоянная строка.
+ *
+ * Он понадобился, когда выяснилось, что у крупной луны притяжение около 0.4 g и без тяги
+ * борт проседает метра по три в секунду: летишь, маневрируешь, а высота уходит незаметно,
+ * и касание выглядит беспричинным. Автоматически держать высоту было бы нечестно — значит
+ * пилот обязан её ВИДЕТЬ.
+ *
+ * Шкала корневая, а не линейная: у земли важен каждый десяток метров, на километрах —
+ * порядок. Метка ползёт снизу вверх, под лентой — число.
+ */
+function drawAltimeter(frame: HudFrame, cx: number, top: number, bottom: number): void {
+  const { ctx, world } = frame
+  const near = nearestLandable(world, world.player)
+  if (!near || near.altitude > LANDING.ALTIMETER_HI) return
+
+  const altitude = Math.max(0, near.altitude)
+  const t = Math.min(1, Math.sqrt(altitude / LANDING.ALTIMETER_HI))
+  const y = bottom - (bottom - top) * t
+  // Земля внизу — сплошная черта: от неё и отсчитывается всё остальное.
+  line(ctx, cx, top, cx, bottom, HUD_COLORS.DIM)
+  line(ctx, cx - 3 * S, bottom, cx + 3 * S, bottom, HUD_COLORS.DIM)
+  // Окно входа в ховер (400…600 м) — засечка: пилот видит, где нажимать L.
+  const promptY = bottom - (bottom - top) * Math.sqrt(LANDING.HOVER_ALT / LANDING.ALTIMETER_HI)
+  line(ctx, cx - 2 * S, promptY, cx + 2 * S, promptY, HUD_COLORS.DIM)
+
+  // Ниже окна посадки — жёлтая: это уже не «лечу», а «сейчас коснусь».
+  const color = altitude < LANDING.PROMPT_LO ? HUD_COLORS.WARN : HUD_COLORS.PRIMARY
+  line(ctx, cx, y, cx, bottom, color, 2)
+  ctx.beginPath()
+  ctx.moveTo(cx - 4 * S, y)
+  ctx.lineTo(cx, y - 3 * S)
+  ctx.lineTo(cx + 4 * S, y)
+  ctx.closePath()
+  ctx.fillStyle = color
+  ctx.fill()
+
+  const baseFont = ctx.font
+  ctx.font = hudFont(6 * S)
+  text(ctx, formatDistance(altitude), cx, bottom + 9 * S, color, 'center')
+  ctx.font = baseFont
+}
+
 function drawRadar(frame: HudFrame): void {
   const { ctx, camera, world, width, height } = frame
   const radiusX = 47 * 1.5 * S // ширина эллипса локатора (прежняя, ~70): читается на скорости
@@ -1120,6 +1166,9 @@ function drawRadar(frame: HudFrame): void {
   const cx = width - radiusX - 12 * S // снова в правом нижнем углу: по центру он мешал
   const cy = height - radiusY - 12 * S
   const FRAME_W = 2 // обод и лучи чуть толще одинарной линии — крупный локатор их держит
+
+  // Высотомер — слева вплотную к ободу локатора: приборы «где я» стоят рядом.
+  drawAltimeter(frame, cx - radiusX - 12 * S, cy - radiusY, cy + radiusY)
 
   ellipse(ctx, cx, cy, radiusX, radiusY, HUD_COLORS.DIM, FRAME_W)
   ellipse(ctx, cx, cy, radiusX / 2, radiusY / 2, HUD_COLORS.DIM, FRAME_W)

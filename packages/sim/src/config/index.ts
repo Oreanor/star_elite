@@ -23,6 +23,7 @@ export {
   type PlanetType,
 } from './galaxy'
 export { CHARACTER } from './character'
+export { LANDING } from './landing'
 export { AI, GRIEVANCE, MORALE, WARP } from './ai'
 export { CRUISE } from './cruise'
 export { TIME, calendarMs, calendarSec, orbitSec } from './time'
