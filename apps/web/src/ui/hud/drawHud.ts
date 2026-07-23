@@ -625,16 +625,24 @@ interface Marker {
   /** Радиус тела, м: дистанцию показываем до ПОВЕРХНОСТИ (минус радиус) — на неё садишься,
    *  а не в центр. 0 у точечных (станция, кит): у них центр и есть «поверхность». */
   surfaceR: number
+  /** Борт: подпись уступает любому месту навигации — их в кадре десяток, а мест единицы. */
+  minor?: boolean
 }
 
-/** Приоритет подписи: цель важнее ориентира, ориентир важнее спутника. */
+/** Приоритет подписи: цель важнее ориентира, ориентир важнее спутника, борт — последний. */
 function labelRank(m: Marker): number {
   if (m.nav) return 0
   if (m.primary) return 1
-  return 2
+  return m.minor ? 3 : 2
 }
 
-function collectMarkers(world: World): Marker[] {
+/**
+ * `ships` — брать ли БОРТА. В своём мире они не нужны: там их ведут локатор и захват по
+ * Tab. А сквозь кольцо портала нет ни того, ни другого — трафик за окном неотличим от
+ * звёзд, хотя именно он и решает, стоит ли туда лететь. Поэтому метки бортов включает
+ * только проход мира за кольцом.
+ */
+function collectMarkers(world: World, ships = false): Marker[] {
   const out: Marker[] = []
   for (const body of world.bodies) {
     out.push({
@@ -696,6 +704,22 @@ function collectMarkers(world: World): Marker[] {
       surfaceR: rock.radius,
     })
   }
+  if (ships) {
+    for (const ship of world.ships) {
+      if (!ship.alive || ship.cloaked) continue
+      out.push({
+        // Род занятий, а не имя: сквозь окно решают не «как зовут», а «кто это» —
+        // пират там ждёт или торговец. Цвет тот же, что на локаторе (`radarColor`).
+        pos: ship.state.pos,
+        name: occupationName(ship.originKind, ship.faction),
+        color: radarColor(ship, world),
+        nav: false,
+        primary: false,
+        surfaceR: 0,
+        minor: true,
+      })
+    }
+  }
   return out
 }
 
@@ -721,7 +745,7 @@ function drawBodyMarkers({ ctx, camera, world, width, height, aperture }: HudFra
   const destWorld = aperture?.world
   const destCamera = aperture?.camera
   if (hole && destWorld && destCamera) {
-    for (const m of collectMarkers(destWorld)) {
+    for (const m of collectMarkers(destWorld, true)) {
       const p = projectPoint(m.pos, destCamera, width, height)
       if (p.behind || !isOnScreen(p.x, p.y, width, height)) continue
       if (!insideAperture(hole, p.x, p.y)) continue
