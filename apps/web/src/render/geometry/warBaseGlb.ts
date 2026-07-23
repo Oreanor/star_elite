@@ -19,8 +19,8 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
  */
 
 const HULL_URLS: readonly string[] = [
-  '/models/balls/asteroid_1.glb',
-  '/models/balls/asteroid_2.glb',
+  '/models/warbase/hull_0.glb',
+  '/models/warbase/hull_1.glb',
 ]
 
 /** Ключи навесных деталей. `tower` — доминанта на полюсе; прочие разбросаны. */
