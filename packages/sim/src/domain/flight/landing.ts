@@ -6,8 +6,10 @@ import type {
   BodyEntity,
   ScenicRockEntity,
   ShipEntity,
+  SurfaceBinding,
   World,
 } from '../world/entities'
+import type { ShipControls } from './types'
 import { shipAxes } from './axes'
 import { stepShip } from './model'
 
@@ -322,7 +324,7 @@ export function enterSurfaceFlight(ship: ShipEntity, surface: LandableSurface): 
 
   orientBelly(ship, _normal)
 
-  ship.landedOn = { bodyId: surface.id, normal: _normal.clone() }
+  ship.landedOn = { bodyId: surface.id, normal: _normal.clone(), altitude: LANDING.HOVER_ALT }
   ship.state.pos
     .copy(surface.pos)
     .addScaledVector(_normal, surface.radius + effectiveRadius(ship) + LANDING.HOVER_ALT)
@@ -356,9 +358,26 @@ export function releaseLanding(ship: ShipEntity, _world: World): boolean {
   return true
 }
 
-/** Высота ховера с покачиванием, м. */
-function hoverAltitude(time: number): number {
-  return LANDING.HOVER_ALT + LANDING.HOVER_BOB_AMP * Math.sin(time * LANDING.HOVER_BOB_OMEGA)
+/** Высота ховера с покачиванием, м. Базу несёт сам борт — её ведут ручки. */
+function hoverAltitude(base: number, time: number): number {
+  return base + LANDING.HOVER_BOB_AMP * Math.sin(time * LANDING.HOVER_BOB_OMEGA)
+}
+
+/**
+ * Набор и снижение в ховере: `strafeUp` (у игрока — Shift+W/S) ведёт САМУ ВЫСОТУ, а не
+ * толкает корабль вверх тягой.
+ *
+ * Так и должно быть в полёте над поверхностью: пилот выбирает эшелон, а рельс сферы его
+ * держит. Толкать маневровыми против притяжения значило бы бороться с ним каждую секунду
+ * — ровно то, из-за чего низкий полёт превращался в биение о поверхность.
+ *
+ * Потолок — тот же, с которого прибор перестаёт быть высотомером; пол — чтобы не втереться
+ * брюхом в грунт на покачивании.
+ */
+function stepHoverAltitude(binding: SurfaceBinding, controls: ShipControls, dt: number): void {
+  if (Math.abs(controls.strafeUp) < 1e-3) return
+  const next = binding.altitude + controls.strafeUp * LANDING.ALT_RATE * dt
+  binding.altitude = Math.min(LANDING.ALT_MAX, Math.max(LANDING.ALT_MIN, next))
 }
 
 /**
@@ -368,7 +387,7 @@ function hoverAltitude(time: number): number {
 function constrainToHoverSphere(
   ship: ShipEntity,
   surface: LandableSurface,
-  binding: { normal: Vector3 },
+  binding: SurfaceBinding,
   time: number,
 ): void {
   _normal.copy(ship.state.pos).sub(surface.pos)
@@ -380,7 +399,7 @@ function constrainToHoverSphere(
   if (Math.abs(vn) > 1e-12) ship.state.vel.addScaledVector(_normal, -vn)
 
   const radius =
-    surface.radius + effectiveRadius(ship) + hoverAltitude(time)
+    surface.radius + effectiveRadius(ship) + hoverAltitude(binding.altitude, time)
   ship.state.pos.copy(surface.pos).addScaledVector(_normal, radius)
 }
 
@@ -421,6 +440,7 @@ export function stepLanding(ship: ShipEntity, world: World, dt: number): boolean
 
   // Тяга/ручки — как в вакууме; радиальную составляющую потом срежем снапом на сферу.
   stepShip(ship.state, ship.controls, ship.spec.tuning, dt)
+  stepHoverAltitude(binding, ship.controls, dt)
   constrainToHoverSphere(ship, surface, binding, world.time)
 
   return true

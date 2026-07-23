@@ -81,6 +81,8 @@ export const PT: Record<keyof typeof RU, string> = {
   'key.reversal.what': 'meia-volta',
   'key.retro': 'Ctrl',
   'key.retro.what': 'freio de mão: zera velocidade e solta o trava do pós-combustão',
+  'key.hoverAlt': 'Shift+W / S',
+  'key.hoverAlt.what': 'altitude sobre a superfície (hover)',
   'key.cruise': 'Espaço',
   'key.cruise.what': 'pós-combustão / cruzeiro',
   'key.cruiseLatch': 'Alt',

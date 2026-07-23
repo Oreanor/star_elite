@@ -77,6 +77,8 @@ export const ES: Record<keyof typeof RU, string> = {
   'key.reversal.what': 'giro de reversa',
   'key.retro': 'Ctrl',
   'key.retro.what': 'freno de mano: corta velocidad y suelta el traba de poscombustión',
+  'key.hoverAlt': 'Shift+W / S',
+  'key.hoverAlt.what': 'altitud sobre la superficie (vuelo estacionario)',
   'key.cruise': 'Espacio',
   'key.cruise.what': 'poscombustión / crucero',
   'key.cruiseLatch': 'Alt',

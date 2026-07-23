@@ -355,7 +355,15 @@ export function createPlayerController(intent: PlayerIntent): Controller {
        * успевала уехать на полный ход, петля раздувалась вдвое, а по выходе
        * корабль уносился прочь на форсажном режиме, которого пилот не просил.
        */
-      if (!manoeuvring(intent)) {
+      /**
+       * НАД ПОВЕРХНОСТЬЮ Shift+W/S — это ВЫСОТА, а не газ. Полёт над телом полярный по
+       * смыслу: мышь смотрит и рыскает, W/S ведут ход вдоль поверхности, а «вверх» —
+       * отдельная координата, которую держит рельс сферы (`stepHoverAltitude` в домене).
+       * Пилот выбирает эшелон, а не борется тягой с притяжением.
+       */
+      const hoverAltitudeKeys = ship.landedOn !== null && isHeld('ShiftLeft')
+
+      if (!manoeuvring(intent) && !hoverAltitudeKeys) {
         // W гонит рукоять вверх СКВОЗЬ ноль и дальше — из реверса в полный ход одним
         // движением, без ступеньки на нуле.
         if (confirmedHold('KeyW')) intent.throttle += THROTTLE_RATE * dt
@@ -419,6 +427,17 @@ export function createPlayerController(intent: PlayerIntent): Controller {
         c.roll = (bankLeft ? 1 : 0) - (bankRight ? 1 : 0)
         c.strafe = 0
         c.strafeUp = 0
+      }
+
+      /**
+       * НАД ПОВЕРХНОСТЬЮ высоту ведёт Shift+W/S, а не нос: мышь там только смотрит и
+       * рыскает. Полёт над телом — полярный по смыслу, и «вверх» у него не направление
+       * тяги, а отдельная координата (домен ведёт её `strafeUp`, см. `stepHoverAltitude`).
+       *
+       * Тем же нажатием рукоять газа НЕ двигаем — иначе набор высоты разгонял бы борт.
+       */
+      if (hoverAltitudeKeys) {
+        c.strafeUp = (isHeld('KeyW') ? 1 : 0) - (isHeld('KeyS') ? 1 : 0)
       }
 
       // Руль направления снят с клавиш: плоский разворот дублировал рыскание мышью,

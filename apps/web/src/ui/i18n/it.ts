@@ -77,6 +77,8 @@ export const IT: Record<keyof typeof RU, string> = {
   'key.reversal.what': 'virata a inversione',
   'key.retro': 'Ctrl',
   'key.retro.what': 'freno a mano: azzera velocità e sblocca il postbruciatore',
+  'key.hoverAlt': 'Shift+W / S',
+  'key.hoverAlt.what': 'quota sulla superficie (hover)',
   'key.cruise': 'Spazio',
   'key.cruise.what': 'postbruciatore / crociera',
   'key.cruiseLatch': 'Alt',

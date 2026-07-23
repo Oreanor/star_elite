@@ -77,6 +77,8 @@ export const DE: Record<keyof typeof RU, string> = {
   'key.reversal.what': 'Kehrtwende',
   'key.retro': 'Ctrl',
   'key.retro.what': 'Handbremse: Tempo null, Nachbrenner-Raste lösen',
+  'key.hoverAlt': 'Shift+W / S',
+  'key.hoverAlt.what': 'Höhe über Grund (Schwebeflug)',
   'key.cruise': 'Leer',
   'key.cruise.what': 'Nachbrenner / Reiseschub',
   'key.cruiseLatch': 'Alt',

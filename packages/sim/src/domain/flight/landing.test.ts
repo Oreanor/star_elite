@@ -11,6 +11,7 @@ import {
   canAutoland,
   landingCue,
   landingPromptTarget,
+  landShip,
   meshSolidRadius,
   releaseLanding,
   stepLanding,
@@ -366,5 +367,34 @@ describe('посадка на поверхность', () => {
     player.cruise.factor = LANDING.ESCAPE_CRUISE
     stepLanding(player, world, PHYSICS.FIXED_DT)
     expect(player.landedOn).toBeNull()
+  })
+})
+
+describe('высота ховера — своя координата', () => {
+  /**
+   * Над поверхностью летают на РАЗНОЙ высоте, а не на одной заводской. Ведёт её
+   * `strafeUp` (у игрока Shift+W/S), и ведёт САМУ ВЫСОТУ, а не толкает корабль тягой:
+   * бороться маневровыми с притяжением каждую секунду — это и есть то биение о
+   * поверхность, из-за которого низкий полёт был невозможен.
+   */
+  it('strafeUp поднимает и опускает эшелон, не разгоняя борт', () => {
+    const world = quiet()
+    const moon = world.bodies.filter((b) => b.kind === 'moon')[0]!
+    const ship = world.player
+    ship.state.pos.copy(moon.pos).add(new Vector3(0, moon.radius + LANDING.HOVER_ALT, 0))
+    expect(landShip(ship, moon)).toBe(true)
+    const start = ship.landedOn!.altitude
+
+    ship.controls.strafeUp = 1
+    for (let i = 0; i < 60; i++) stepLanding(ship, world, 1 / 60)
+    const climbed = ship.landedOn!.altitude
+    expect(climbed).toBeCloseTo(start + LANDING.ALT_RATE, 0)
+    // Высота — рельс, а не тяга: радиальной скорости у борта не появляется.
+    const up = ship.state.pos.clone().sub(moon.pos).normalize()
+    expect(Math.abs(ship.state.vel.dot(up))).toBeLessThan(1e-6)
+
+    ship.controls.strafeUp = -1
+    for (let i = 0; i < 600; i++) stepLanding(ship, world, 1 / 60)
+    expect(ship.landedOn!.altitude).toBe(LANDING.ALT_MIN)
   })
 })

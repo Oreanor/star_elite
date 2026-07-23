@@ -79,6 +79,8 @@ export const RU = {
   'key.reversal.what': 'разворот через петлю',
   'key.retro': 'Ctrl',
   'key.retro.what': 'ручник: гасит ход и снимает защёлку форсажа',
+  'key.hoverAlt': 'Shift+W / S',
+  'key.hoverAlt.what': 'высота над поверхностью (в ховере)',
   'key.cruise': 'Пробел',
   'key.cruise.what': 'форсаж / крейсерский ход',
   'key.cruiseLatch': 'Alt',

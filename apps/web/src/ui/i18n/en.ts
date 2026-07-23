@@ -75,6 +75,8 @@ export const EN: Record<keyof typeof RU, string> = {
   'key.reversal.what': 'reversal turn',
   'key.retro': 'Ctrl',
   'key.retro.what': 'handbrake: kill speed and clear afterburner latch',
+  'key.hoverAlt': 'Shift+W / S',
+  'key.hoverAlt.what': 'altitude over surface (hover)',
   'key.cruise': 'Space',
   'key.cruise.what': 'afterburner / cruise',
   'key.cruiseLatch': 'Alt',

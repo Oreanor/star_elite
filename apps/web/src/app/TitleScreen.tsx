@@ -30,6 +30,7 @@ const KEY_GROUPS: { title: Key; rows: [Key, Key][] }[] = [
       ['key.loop', 'key.loop.what'],
       ['key.reversal', 'key.reversal.what'],
       ['key.retro', 'key.retro.what'],
+      ['key.hoverAlt', 'key.hoverAlt.what'],
       ['key.cruise', 'key.cruise.what'],
       ['key.cruiseLatch', 'key.cruiseLatch.what'],
     ],
