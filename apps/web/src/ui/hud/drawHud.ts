@@ -700,7 +700,7 @@ function collectMarkers(world: World, ships = false): Marker[] {
   }
   // Глыбы двора — тот же коричневый ориентир, что статуи: иначе Shift+Tab выбирает
   // невидимую для маркеров точку.
-  for (const rock of world.scenicRocks) {
+  for (const rock of world.warBases) {
     if (!rock.alive) continue
     out.push({
       pos: rock.pos,
@@ -1408,7 +1408,7 @@ function drawRadar(frame: HudFrame): void {
     plot(f.pos, HUD_COLORS.MONOLITH, Math.round((nav ? 3 : 2) * S), nav, 'round', nav ? figurineDisplayName(f) : undefined)
   }
 
-  for (const rock of world.scenicRocks) {
+  for (const rock of world.warBases) {
     if (!rock.alive) continue
     const nav = rock.id === world.navTargetId
     plot(rock.pos, HUD_COLORS.MONOLITH, Math.round((nav ? 3 : 2) * S), nav, 'round', nav ? NAV_ASTEROID_NAME : undefined)

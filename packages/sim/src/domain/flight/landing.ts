@@ -4,7 +4,7 @@ import { effectiveRadius } from '../scale/scale'
 import type {
   AsteroidEntity,
   BodyEntity,
-  ScenicRockEntity,
+  WarBaseEntity,
   ShipEntity,
   SurfaceBinding,
   World,
@@ -59,7 +59,7 @@ export function isLandableAsteroid(rock: AsteroidEntity, ship: ShipEntity): bool
 }
 
 /** Глыба двора — те же ворота размера, что у астероида (к тверди меша). */
-export function isLandableScenic(rock: ScenicRockEntity, ship: ShipEntity): boolean {
+export function isLandableWarBase(rock: WarBaseEntity, ship: ShipEntity): boolean {
   return (
     rock.alive &&
     landingScaleOk(ship) &&
@@ -93,7 +93,7 @@ export function meshSolidRadius(radius: number): number {
   return radius * LANDING.MESH_SOLID
 }
 
-function scenicRockAsSurface(rock: ScenicRockEntity): LandableSurface {
+function warBaseAsSurface(rock: WarBaseEntity): LandableSurface {
   return {
     id: rock.id,
     pos: rock.pos,
@@ -136,8 +136,8 @@ export function findLandable(
   }
   const rock = world.asteroids.find((a) => a.id === id)
   if (rock && isLandableAsteroid(rock, ship)) return rockIntoSurface(rock, _rockSurface)
-  const scenic = world.scenicRocks.find((r) => r.id === id)
-  if (scenic && isLandableScenic(scenic, ship)) return scenicRockAsSurface(scenic)
+  const warBase = world.warBases.find((r) => r.id === id)
+  if (warBase && isLandableWarBase(warBase, ship)) return warBaseAsSurface(warBase)
   return null
 }
 
@@ -175,9 +175,9 @@ function nearestLandableWhere(
     consider(rock.id, { pos: rock.pos, radius: meshSolidRadius(rock.radius) })
   }
   // Статуи сознательно не здесь: сложный силуэт, стоянка только над шарами.
-  for (const scenic of world.scenicRocks) {
-    if (!isLandableScenic(scenic, ship)) continue
-    consider(scenic.id, { pos: scenic.pos, radius: meshSolidRadius(scenic.radius) })
+  for (const warBase of world.warBases) {
+    if (!isLandableWarBase(warBase, ship)) continue
+    consider(warBase.id, { pos: warBase.pos, radius: meshSolidRadius(warBase.radius) })
   }
   if (bestId < 0) return null
   return { id: bestId, altitude: bestAltitude }

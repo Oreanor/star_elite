@@ -30,7 +30,7 @@ import {
 import { SLOVO_KIND, SLOVO_NAME, SLOVO_PERSONA } from './slovo'
 import { makePilotName } from './names'
 import { placeFigurines, rollFigurineSpecimen, stockSlovoCollection } from './figurines'
-import { placeMonoliths } from './monoliths'
+import { placeMonoliths, placeWarBases } from './monoliths'
 import { maybeShiftOrigin } from './origin'
 import {
   keplerRate,
@@ -521,6 +521,7 @@ function makeBodies(ids: IdSource, def: SystemDef): BodyEntity[] {
     })
   }
 
+  // (военные базы — не тела, см. `placeWarBases`: у них ни гравитации, ни орбиты.)
   for (const hole of def.blackHoles ?? []) {
     const offset = new Vector3(...hole.stationOffset)
     const pos = station
@@ -696,6 +697,7 @@ export function enterSystem(
    * НАСТОЯЩЕГО места станции, а не от точки, где её нарисовала фабрика.
    */
   placeMonoliths(world)
+  placeWarBases(world, def)
   placeFigurines(world)
   world.lockedTargetId = null
   world.lockedPodId = null
@@ -785,7 +787,7 @@ export function createWorld(def: SystemDef = STARTER_SYSTEM, profile?: PilotProf
     titans: [],
     monoliths: [],
     figurines: [],
-    scenicRocks: [],
+    warBases: [],
     platforms: [],
     bodies,
     tracers: [],
@@ -845,6 +847,7 @@ export function createWorld(def: SystemDef = STARTER_SYSTEM, profile?: PilotProf
   // Если старт в системе с Крестом (Люцифер) — бог уже сидит на нём с первого кадра.
   spawnSlovo(world)
   placeMonoliths(world)
+  placeWarBases(world, def)
   placeFigurines(world)
   return world
 }

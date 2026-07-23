@@ -17,7 +17,7 @@ export {
   shatter,
   splittable,
 } from './mining'
-export { damageScenicRock, destroyScenicRock } from './scenicRocks'
+export { damageWarBase, destroyWarBase } from './warBase'
 export { stepMissiles } from './missiles'
 export { stepBolts } from './bolts'
 export { castLaser, type LaserHit, type ShotSource } from './raycast'

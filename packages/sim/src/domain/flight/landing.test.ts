@@ -24,8 +24,8 @@ function quiet(): World {
 }
 
 /**
- * Тихий мир в системе, где стоит Люцифер (облик 0) и лежит его двор глыб. Число статуй —
- * бросок 0..COUNT_MAX по сиду системы, ноль законен, поэтому систему ищем перебором.
+ * Тихий мир в системе, где стоит Люцифер (облик 0). Число статуй — бросок 0..COUNT_MAX по
+ * сиду системы, ноль законен, поэтому подходящую систему ищем перебором.
  */
 function quietWithYard(): World {
   // ОДИН мир, в который переходим системами: `createWorld` в цикле слишком дорог.
@@ -34,7 +34,17 @@ function quietWithYard(): World {
     enterSystem(world, { ...STARTER_SYSTEM, patrols: [], belt: null }, i)
     if (world.monoliths.some((m) => m.variant === 0)) return world
   }
-  throw new Error('не нашлось системы с двором Люцифера')
+  throw new Error('не нашлось системы со статуей Люцифера')
+}
+
+/** Тихий мир с одной военной базой у причала — для посадки на её корпус. */
+function quietWithBase(): World {
+  return createWorld({
+    ...STARTER_SYSTEM,
+    patrols: [],
+    belt: null,
+    warBases: [{ name: 'База', radius: 1_000, stationOffset: [8_000, 0, 0], model: 0 }],
+  })
 }
 
 function moonOf(world: World): BodyEntity {
@@ -187,7 +197,7 @@ describe('посадка на поверхность', () => {
         body.pos.add(new Vector3(1e9, 0, 0))
       }
     }
-    for (const rock of world.scenicRocks) rock.pos.add(new Vector3(1e9, 0, 0))
+    for (const rock of world.warBases) rock.pos.add(new Vector3(1e9, 0, 0))
     player.state.pos
       .copy(statue!.pos)
       .add(new Vector3(statue!.radius + effectiveRadius(player) + LANDING.HOVER_ALT, 0, 0))
@@ -196,9 +206,9 @@ describe('посадка на поверхность', () => {
     expect(armAutoland(world)).toBe(false)
   })
 
-  it('автопосадка сажает на глыбу двора Люцифера', () => {
-    const world = quietWithYard()
-    const rock = world.scenicRocks[0]
+  it('автопосадка сажает на корпус военной базы', () => {
+    const world = quietWithBase()
+    const rock = world.warBases[0]
     expect(rock).toBeDefined()
     const player = world.player
     const solid = meshSolidRadius(rock!.radius)

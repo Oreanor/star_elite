@@ -26,7 +26,7 @@ export type CrashHitKind =
   | 'moon'
   | 'station'
   | 'asteroid'
-  | 'scenicRock'
+  | 'warbase'
   | 'monolith'
   | 'figurine'
   | 'ship'
@@ -275,7 +275,7 @@ export interface CargoPodEntity {
    * с текстурой родительского облика, а не контейнер.
    */
   debris?: {
-    /** `ScenicRockEntity.shape` — какая текстура GLB. */
+    /** `WarBaseEntity.shape` — какая текстура GLB. */
     shape: number
     /** Визуальный радиус, м. */
     radius: number
@@ -467,22 +467,28 @@ export interface FigurineEntity {
 }
 
 /**
- * Камень у двора статуи. Не руда пояса: лазер взрывает целиком, осколки — контейнеры.
- * Живёт отдельным списком, чтобы не путаться с рудным поясом (`asteroids`). В нав-перебор
- * (Shift+Tab) входит наравне со статуями — иначе видимую глыбу нельзя выбрать.
+ * Военная база — большой сферический объект на снос. Отдельный список, а не тело: у неё
+ * ни гравитации, ни орбиты, зато корка бьётся, и на неё можно сесть. В нав-перебор
+ * (Shift+Tab) входит наравне со статуями — иначе видимую базу нельзя выбрать.
  */
-export interface ScenicRockEntity {
+export interface WarBaseEntity {
   id: number
-  kind: 'scenicRock'
-  /** Какой облик GLB. Данные: новый меш — строка реестра, не ветка в симе. */
+  kind: 'warbase'
+  /** Имя (для метки и подписи цели). */
+  name: string
+  /** Какой облик GLB корпуса. Данные: новый меш — строка реестра, не ветка в симе. */
   shape: number
   pos: Vector3
   spinAxis: Vector3
   spin: number
-  /** Габарит, м. Километровый класс — рядом со статуей читается галькой. */
+  /** Радиус корпуса, м. */
   radius: number
   hull: number
+  /** Максимум корпуса — для полоски прочности на HUD. */
+  hullMax: number
   alive: boolean
+  /** Сид расстановки навесных деталей: башня на полюсе, пушки/глаза вразброс (рендер). */
+  seed: number
 }
 
 export interface TitanEntity {
@@ -704,7 +710,7 @@ export interface World {
   /** Коллекционные статуэтки на орбитах системы (вне путей планет). */
   figurines: FigurineEntity[]
   /** Пояс декоративных глыб у Люцифера. Не руда: только масштаб двора статуи. */
-  scenicRocks: ScenicRockEntity[]
+  warBases: WarBaseEntity[]
   /** Пиратские платформы-гнёзда. Боевые: у ядра есть прочность, его можно расстрелять. */
   platforms: PlatformEntity[]
 

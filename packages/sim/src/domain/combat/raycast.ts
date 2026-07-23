@@ -8,7 +8,7 @@ import type {
   BodyEntity,
   MissileEntity,
   PlatformEntity,
-  ScenicRockEntity,
+  WarBaseEntity,
   ShipEntity,
   World,
 } from '../world/entities'
@@ -20,7 +20,7 @@ export interface LaserHit {
   ship: ShipEntity | null
   asteroid: AsteroidEntity | null
   /** Глыба двора статуи — взрывается, руды не даёт. */
-  scenicRock: ScenicRockEntity | null
+  warBase: WarBaseEntity | null
   missile: MissileEntity | null
   platform: PlatformEntity | null
   /** Станция, о ЩИТ которой погас луч. Урона не наносит — станция неуязвима. */
@@ -58,7 +58,7 @@ export function castLaser(
     distance: range,
     ship: null,
     asteroid: null,
-    scenicRock: null,
+    warBase: null,
     missile: null,
     platform: null,
     station: null,
@@ -68,7 +68,7 @@ export function castLaser(
     hit.distance = t
     hit.ship = next.ship ?? null
     hit.asteroid = next.asteroid ?? null
-    hit.scenicRock = next.scenicRock ?? null
+    hit.warBase = next.warBase ?? null
     hit.missile = next.missile ?? null
     hit.platform = next.platform ?? null
     hit.station = next.station ?? null
@@ -140,11 +140,11 @@ export function castLaser(
     }
 
     // Глыбы двора статуи: километровые мишени, взрываются без руды.
-    for (const rock of world.scenicRocks) {
+    for (const rock of world.warBases) {
       if (!rock.alive) continue
       if (rock.pos.distanceToSquared(origin) > (range + rock.radius) ** 2) continue
       const t = raySphere(origin, dir, rock.pos, rock.radius)
-      if (closer(t)) set(t, { scenicRock: rock })
+      if (closer(t)) set(t, { warBase: rock })
     }
 
     // Ракету можно сбить — и свою, и чужую. Кроме собственной: она уходит прямо

@@ -258,7 +258,7 @@ export function cycleCelestial(world: World): void {
               const rank = facingScore(from, f.pos)
               return { id: f.id, station: false, ...rank }
             }),
-          ...world.scenicRocks
+          ...world.warBases
             .filter((r) => r.alive)
             .map((r) => {
               const rank = facingScore(from, r.pos)
@@ -360,7 +360,7 @@ export function retargetNearestCelestial(world: World): void {
               const rank = facingScore(from, f.pos)
               return { id: f.id, station: false, ...rank }
             }),
-          ...world.scenicRocks
+          ...world.warBases
             .filter((r) => r.alive)
             .map((r) => {
               const rank = facingScore(from, r.pos)
@@ -425,8 +425,8 @@ export function navTarget(world: World): NavTarget | null {
       kind: 'figurine',
     }
   }
-  const scenic = world.scenicRocks.find((r) => r.id === id && r.alive)
-  if (scenic) return { id, pos: scenic.pos, radius: scenic.radius, name: NAV_ASTEROID_NAME, kind: 'asteroid' }
+  const warBase = world.warBases.find((r) => r.id === id && r.alive)
+  if (warBase) return { id, pos: warBase.pos, radius: warBase.radius, name: NAV_ASTEROID_NAME, kind: 'asteroid' }
   const giant = world.asteroids.find((a) => a.id === id && isNavBeltAsteroid(a))
   if (giant) return { id, pos: giant.pos, radius: giant.radius, name: NAV_ASTEROID_NAME, kind: 'asteroid' }
   return null

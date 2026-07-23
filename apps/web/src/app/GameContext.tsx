@@ -231,7 +231,7 @@ function createSession(initialSave?: PlayerSave | null): Session {
     world.titans = []
     world.monoliths = []
     world.figurines = []
-    world.scenicRocks = []
+    world.warBases = []
     world.platforms = []
     // Пусто НАВСЕГДА: `desolate` глушит спавн трафика (traffic.ts), иначе пираты налетят
     // в пустоту и начнут стрелять. Комната математическая — в ней никого, кроме игрока.

@@ -1,16 +1,17 @@
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useFrame } from '@react-three/fiber'
-import { useMemo, useRef } from 'react'
-import { InstancedMesh, MeshLambertMaterial, Object3D, type Material } from 'three'
+import { InstancedMesh, MeshLambertMaterial, Object3D, type Material, type Texture } from 'three'
 import { MONOLITH } from '@elite/sim'
 import { useSession } from '../../app/GameContext'
 import { PALETTE } from '../config'
 import { DEBRIS_CHUNK_VARIANTS, debrisChunkGeometries } from '../geometry/debrisChunks'
-import { scenicRockGlbMap } from '../geometry/scenicRockGlb'
+import { loadRockTexture } from '../materials/rockTextures'
 import { rockTexturedMaterial } from '../materials/materials'
 
 /**
- * Осколки взорванных глыб двора. Это те же `pods` с `debris`, только вид — простой
- * камень с albedo родительского GLB, а не ящик. Подбор/луч — доменные, здесь лишь меш.
+ * Осколки: высыпанная руда и обломки снесённой базы — те же `pods` с `debris`, только вид
+ * простой камень с КАМЕННОЙ текстурой (те же снимки, что у астероидов), а не ящик.
+ * Подбор/луч — доменные, здесь лишь меш.
  */
 
 const MAX_DEBRIS = 128
@@ -27,12 +28,13 @@ function DebrisBatch({ shapeIndex, meshIndex }: { shapeIndex: number; meshIndex:
   const ref = useRef<InstancedMesh>(null)
   const geometry = useMemo(() => debrisChunkGeometries()[meshIndex]!, [meshIndex])
   const fallback = useMemo(() => debrisFallback(), [])
+  const [map, setMap] = useState<Texture | null>(null)
+  useEffect(() => loadRockTexture(shapeIndex, setMap), [shapeIndex])
 
   useFrame(() => {
     const mesh = ref.current
     if (!mesh) return
 
-    const map = scenicRockGlbMap(shapeIndex)
     const material: Material = map ? rockTexturedMaterial(map) : fallback
     if (mesh.material !== material) mesh.material = material
 

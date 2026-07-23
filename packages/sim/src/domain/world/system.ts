@@ -61,6 +61,17 @@ export interface BlackHoleDef {
   diskAxis?: readonly [number, number, number]
 }
 
+/** Военная база — сферический объект на снос, привязана смещением к станции. */
+export interface WarBaseDef {
+  name: string
+  /** Радиус корпуса, м. */
+  radius: number
+  /** Смещение от основной станции, м. */
+  stationOffset: readonly [number, number, number]
+  /** Индекс облика корпуса (реестр GLB в рендере). */
+  model?: number
+}
+
 export interface SystemDef {
   name: string
   /** Одно число задаёт всю расстановку: пояс, патрули, разброс. */
@@ -80,6 +91,8 @@ export interface SystemDef {
   companion: StarCompanionDef | BlackHoleCompanionDef | null
   /** Отдельные чёрные дыры; не заменяют звёзды и не участвуют в барицентре пары. */
   blackHoles?: readonly BlackHoleDef[]
+  /** Военные базы на снос — сферы у станции. Данные, а не спавн-хардкод. */
+  warBases?: readonly WarBaseDef[]
   /** Сфера Дайсона вокруг светила, или `null`. Только декорация: облик и цела ли. */
   dyson: DysonSpec | null
   planets: readonly {

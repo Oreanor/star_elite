@@ -53,7 +53,7 @@ export function maybeShiftOrigin(world: World): void {
   for (const t of world.titans) t.pos.add(_shift)
   for (const m of world.monoliths) m.pos.add(_shift)
   for (const f of world.figurines) f.pos.add(_shift)
-  for (const r of world.scenicRocks) r.pos.add(_shift)
+  for (const r of world.warBases) r.pos.add(_shift)
   // Платформы-гнёзда стоят на месте — тем заметнее был бы их прыжок.
   for (const p of world.platforms) p.pos.add(_shift)
   for (const t of world.tracers) {

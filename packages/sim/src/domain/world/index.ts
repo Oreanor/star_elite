@@ -18,7 +18,7 @@ export {
   type TitanEntity,
   type MonolithEntity,
   type FigurineEntity,
-  type ScenicRockEntity,
+  type WarBaseEntity,
   type Tracer,
   type WarpFlash,
   type WarpPortal,
@@ -125,7 +125,7 @@ export {
   liveAsteroidCount,
 } from './asteroidEncounter'
 export { spawnTitan, spawnTrafficTitan, stepTitans, titanCount, placeShowcaseTitans } from './titans'
-export { placeMonoliths } from './monoliths'
+export { placeMonoliths, placeWarBases } from './monoliths'
 export {
   placeFigurines,
   placeFigurineFromHold,

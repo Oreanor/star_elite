@@ -29,16 +29,24 @@ function farFromOrigin(): World {
 }
 
 /**
- * Мир в системе, где статуи и их двор ЕСТЬ. Число статуй — бросок 0..COUNT_MAX по сиду
- * системы, ноль законен, поэтому подходящую систему ищем перебором в ОДНОМ мире.
+ * Мир со статуями у причала и двумя военными базами: всё это едет со сдвигами. Статуи —
+ * бросок по сиду системы (ноль законен), поэтому подходящую систему ищем перебором; базы
+ * же приходят из данных `def` независимо от индекса.
  */
 function withYard(): World {
+  const def = {
+    ...STARTER_SYSTEM,
+    warBases: [
+      { name: 'База-1', radius: 1_000, stationOffset: [8_000, 0, 0], model: 0 },
+      { name: 'База-2', radius: 2_000, stationOffset: [-9_000, 3_000, 0], model: 1 },
+    ],
+  }
   const world = createWorld()
   for (let i = 0; i < 200; i++) {
-    enterSystem(world, STARTER_SYSTEM, i)
-    if (world.monoliths.some((m) => m.variant === 0)) return world
+    enterSystem(world, def, i)
+    if (world.monoliths.length > 0) return world
   }
-  throw new Error('не нашлось системы с двором Люцифера')
+  throw new Error('не нашлось системы со статуями')
 }
 
 /** То же, но борт заведомо за порогом сдвига начала координат. */
@@ -78,7 +86,7 @@ describe('плавающее начало координат', () => {
       ...world.ships.map((s) => ({ what: `борт ${s.name}`, pos: s.state.pos })),
       ...world.asteroids.map((a) => ({ what: 'астероид', pos: a.pos })),
       ...world.monoliths.map((m) => ({ what: 'статуя', pos: m.pos })),
-      ...world.scenicRocks.map((r) => ({ what: 'глыба', pos: r.pos })),
+      ...world.warBases.map((r) => ({ what: 'база', pos: r.pos })),
       ...world.titans.map((t) => ({ what: 'кит', pos: t.pos })),
       ...world.platforms.map((p) => ({ what: 'платформа', pos: p.pos })),
       ...world.pods.map((p) => ({ what: 'контейнер', pos: p.pos })),
@@ -139,16 +147,16 @@ describe('окрестность едет вместе с причалом по 
     })
   })
 
-  it('пояс глыб едет вместе с причалом', () => {
+  it('военные базы едут вместе с причалом', () => {
     const world = withYard()
     const station = world.bodies.find((b) => b.kind === 'station')!
-    const before = world.scenicRocks.map((r) => r.pos.distanceTo(station.pos))
+    const before = world.warBases.map((r) => r.pos.distanceTo(station.pos))
     expect(before.length).toBeGreaterThan(0)
 
     stepOrbits(world, 1e6)
 
-    world.scenicRocks.forEach((r, i) => {
-      expect(r.pos.distanceTo(station.pos), 'глыба отстала от причала').toBeCloseTo(before[i]!, 3)
+    world.warBases.forEach((r, i) => {
+      expect(r.pos.distanceTo(station.pos), 'база отстала от причала').toBeCloseTo(before[i]!, 3)
     })
   })
 })

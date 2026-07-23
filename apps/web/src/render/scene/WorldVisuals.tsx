@@ -28,7 +28,7 @@ import { Lighting } from './Lighting'
 import { Figurines } from './Figurines'
 import { Monoliths } from './Monoliths'
 import { RockDebris } from './RockDebris'
-import { ScenicRocks } from './ScenicRocks'
+import { WarBases } from './WarBases'
 import { Drones, EnemyShips, PlayerShip } from './Ships'
 import { RemotePlayers } from './RemotePlayers'
 import { RemoteJumpPortals } from './RemoteJumpPortals'
@@ -83,7 +83,7 @@ export function WorldVisuals() {
         <EnemyShips />
         <Monoliths />
         <Figurines />
-        <ScenicRocks />
+        <WarBases />
         <RockDebris />
         <Drones />
         <RemotePlayers />

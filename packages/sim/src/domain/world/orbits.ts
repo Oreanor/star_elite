@@ -200,7 +200,7 @@ export function stepOrbits(world: World, time = orbitTime(world)): void {
     // Статуи стоят У ПРИЧАЛА — без этой строки они и отставали на пол-системы.
     for (const monolith of world.monoliths) monolith.pos.add(_stationShift)
     // Пояс глыб держится за Люцифера — едет вместе с причалом и статуями.
-    for (const rock of world.scenicRocks) rock.pos.add(_stationShift)
+    for (const rock of world.warBases) rock.pos.add(_stationShift)
     for (const platform of world.platforms) platform.pos.add(_stationShift)
     for (const tracer of world.tracers) {
       tracer.from.add(_stationShift)

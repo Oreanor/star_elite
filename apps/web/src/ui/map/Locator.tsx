@@ -188,7 +188,7 @@ function blips(world: World): Blip[] {
     })
   }
 
-  for (const rock of world.scenicRocks) {
+  for (const rock of world.warBases) {
     if (!rock.alive) continue
     const d = toDisc(world, rock.pos)
     if (!d) continue

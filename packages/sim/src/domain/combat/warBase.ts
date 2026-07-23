@@ -1,6 +1,6 @@
 import { Vector3 } from 'three'
 import { MONOLITH } from '../../config/monoliths'
-import type { ScenicRockEntity, World } from '../world/entities'
+import type { WarBaseEntity, World } from '../world/entities'
 import { spawnExplosion } from './effects'
 import { spawnRockDebrisPod } from './salvage'
 
@@ -18,7 +18,7 @@ function debrisCount(radius: number): number {
 }
 
 /** Взорвать глыбу и оставить подбираемые осколки с массой. */
-export function destroyScenicRock(world: World, rock: ScenicRockEntity): void {
+export function destroyWarBase(world: World, rock: WarBaseEntity): void {
   rock.alive = false
   spawnExplosion(world, rock.pos, _still, rock.radius * MONOLITH.ROCK_BLAST)
 
@@ -37,8 +37,8 @@ export function destroyScenicRock(world: World, rock: ScenicRockEntity): void {
 }
 
 /** Урон глыбе. Прочность кончилась — взрыв и осколки, а не раскол рудного пояса. */
-export function damageScenicRock(world: World, rock: ScenicRockEntity, amount: number): void {
+export function damageWarBase(world: World, rock: WarBaseEntity, amount: number): void {
   if (!rock.alive) return
   rock.hull -= amount
-  if (rock.hull <= 0) destroyScenicRock(world, rock)
+  if (rock.hull <= 0) destroyWarBase(world, rock)
 }

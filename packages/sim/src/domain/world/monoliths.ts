@@ -1,7 +1,9 @@
 import { Vector3 } from 'three'
 import { MONOLITH } from '../../config/monoliths'
-import { makeRng, range, type Rng } from '../../core/math'
+import { WARBASE } from '../../config/warbase'
+import { makeRng } from '../../core/math'
 import type { BodyEntity, World } from './entities'
+import type { SystemDef } from './system'
 
 /**
  * Статуи-исполины у причала.
@@ -25,42 +27,37 @@ function anchorStation(world: World): BodyEntity | null {
 }
 
 /**
- * Пояс глыб вокруг Люцифера. Тор, а не шар: внутри остаётся «двор», куда можно влететь,
- * и камни читаются кольцом у силуэта, а не облаком, закрывающим статую.
+ * Военные базы на снос — из ДАННЫХ системы (`def.warBases`), а не спавн-хардкодом.
+ * Смещение отсчитывается от станции (как у «Двери»): базы стоят у причала, но телами не
+ * являются — своего списка, без гравитации и орбиты. Прочность корки растёт с радиусом.
+ *
+ * Навесные детали (башня на полюсе, пушки/глаза вразброс) считает РЕНДЕР по `seed` базы —
+ * это визуал, домену их знать незачем, пока они не станут отдельно отстреливаемыми.
  */
-function placeScenicRocks(world: World, rng: Rng): void {
-  world.scenicRocks = []
-  // Пояс держится за Люцифера (variant 0). Нет его — не из чего строить двор.
-  const lucifer = world.monoliths.find((m) => m.variant === 0)
-  if (!lucifer) return
-
-  for (let i = 0; i < MONOLITH.ROCK_COUNT; i++) {
-    const angle = rng() * Math.PI * 2
-    const dist = lucifer.radius * range(rng, MONOLITH.ROCK_GAP_MIN, MONOLITH.ROCK_GAP_MAX)
-    const lift = (rng() - 0.5) * lucifer.radius * MONOLITH.ROCK_THICKNESS
-
-    const pos = lucifer.pos
-      .clone()
-      .addScaledVector(_out, Math.cos(angle) * dist)
-      .addScaledVector(_side, Math.sin(angle) * dist)
-      .addScaledVector(_up, lift)
-
-    const spinAxis = new Vector3(rng() - 0.5, rng() - 0.5, rng() - 0.5)
-    if (spinAxis.lengthSq() < 1e-6) spinAxis.set(0, 1, 0)
-    spinAxis.normalize()
-
-    const radius = range(rng, MONOLITH.ROCK_RADIUS_MIN, MONOLITH.ROCK_RADIUS_MAX)
-    world.scenicRocks.push({
+export function placeWarBases(world: World, def: SystemDef): void {
+  world.warBases = []
+  const station = anchorStation(world)
+  const bases = def.warBases ?? []
+  for (let i = 0; i < bases.length; i++) {
+    const b = bases[i]!
+    const offset = new Vector3(...b.stationOffset)
+    const pos = station
+      ? station.pos.clone().add(offset)
+      : new Vector3(...def.star.pos).add(offset)
+    world.warBases.push({
       id: world.ids.next(),
-      kind: 'scenicRock',
-      shape: Math.floor(rng() * MONOLITH.ROCK_SHAPES),
+      kind: 'warbase',
+      name: b.name,
+      shape: b.model ?? 0,
       pos,
-      spinAxis,
-      spin: MONOLITH.ROCK_SPIN * (0.6 + rng() * 0.8),
-      radius,
-      // Крупнее камень — толще корка: иначе километровый и мелкий гибли бы за один залп.
-      hull: MONOLITH.ROCK_HULL * (radius / MONOLITH.ROCK_RADIUS_MIN),
+      spinAxis: new Vector3(0, 1, 0),
+      spin: WARBASE.SPIN,
+      radius: b.radius,
+      hull: WARBASE.HULL_PER_KM * (b.radius / 1000),
+      hullMax: WARBASE.HULL_PER_KM * (b.radius / 1000),
       alive: true,
+      // Сид детерминирован по номеру базы в системе — расстановка деталей у всех одна.
+      seed: ((world.systemIndex * 131 + i * 977) ^ 0x7761726b) >>> 0,
     })
   }
 }
@@ -74,7 +71,6 @@ function placeScenicRocks(world: World, rng: Rng): void {
 export function placeMonoliths(world: World): void {
   const station = anchorStation(world)
   world.monoliths = []
-  world.scenicRocks = []
   if (!station) return
 
   // Сид системы + соль: расстановка своя у каждой системы, но повторяемая.
@@ -135,5 +131,4 @@ export function placeMonoliths(world: World): void {
     })
   }
 
-  placeScenicRocks(world, rng)
 }

@@ -144,7 +144,7 @@ function probeClearance(world: World, pos: Vector3, statueR: number): PlaceFigur
     if (d < a.radius + soft) return 'no-room'
   }
 
-  for (const r of world.scenicRocks) {
+  for (const r of world.warBases) {
     if (!r.alive) continue
     const d = pos.distanceTo(r.pos)
     if (d < r.radius + statueR) return 'blocked'

@@ -329,7 +329,7 @@ export const PT: Record<keyof typeof RU, string> = {
   'locator.kind.figurine': 'estatueta',
   'locator.kind.pod': 'contêiner',
   'locator.kind.asteroid': 'asteroide',
-  'locator.kind.scenicRock': 'bloco',
+  'locator.kind.warbase': 'base militar',
   'locator.kind.ship': 'nave',
   'locator.kind.heat': 'coroa',
   'locator.kind.laser': 'laser',

@@ -4,6 +4,7 @@ export { BODY_KINDS, GRAVITY, MOON, type BodyKind } from './bodies'
 export { ASTEROID, DEBRIS, SCORE, WORLD } from './world'
 export { TITAN } from './titans'
 export { MONOLITH } from './monoliths'
+export { WARBASE } from './warbase'
 export { FIGURINE, FIGURINE_TITLES, type FigurineTitleId } from './figurines'
 export { PLATFORM } from './platform'
 export {

@@ -518,7 +518,7 @@ function stepBodyCollisions(world: World, dt: number): void {
 
     // Глыбы двора — в Shift+Tab; сквозные только с GHOST_BODY (как планеты).
     if (ghostBody) continue
-    for (const rock of world.scenicRocks) {
+    for (const rock of world.warBases) {
       if (!rock.alive) continue
       const hitR = meshSolidRadius(rock.radius)
       if (!hitsBodySphere(ship, rock.pos, hitR, dt)) continue
@@ -528,7 +528,7 @@ function stepBodyCollisions(world: World, dt: number): void {
         if (surface) landOnSurface(ship, surface)
         ship.autoland = null
       } else {
-        crashBounce(world, ship, rock.pos, hitR, dt, { kind: 'scenicRock', name: '' })
+        crashBounce(world, ship, rock.pos, hitR, dt, { kind: 'warbase', name: '' })
       }
       break
     }
@@ -626,8 +626,8 @@ function cleanup(world: World): void {
   // Убитый камень уже раскололся в `damageAsteroid` — здесь только выметаем мёртвых.
   // Второе место, гасящее астероид по прочности, однажды забыло бы про осколки.
   world.asteroids = world.asteroids.filter((a) => a.alive)
-  // Глыбы двора: взорвались в `damageScenicRock` — тут только выметаем трупы.
-  world.scenicRocks = world.scenicRocks.filter((r) => r.alive)
+  // Глыбы двора: взорвались в `damageWarBase` — тут только выметаем трупы.
+  world.warBases = world.warBases.filter((r) => r.alive)
 
   expirePods(world)
 
@@ -649,7 +649,7 @@ function cleanup(world: World): void {
       world.bodies.some((b) => b.id === id) ||
       world.monoliths.some((m) => m.id === id) ||
       world.figurines.some((f) => f.id === id && f.alive) ||
-      world.scenicRocks.some((r) => r.id === id && r.alive) ||
+      world.warBases.some((r) => r.id === id && r.alive) ||
       world.asteroids.some((a) => a.id === id && a.alive)
     if (!stillThere) {
       world.navTargetId = null

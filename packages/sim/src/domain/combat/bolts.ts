@@ -6,7 +6,7 @@ import { spawnExplosion, spawnShieldFlash, spawnTracer } from './effects'
 import { registerPlayerHit } from './grievance'
 import { damageAsteroid } from './mining'
 import { castLaser } from './raycast'
-import { damageScenicRock } from './scenicRocks'
+import { damageWarBase } from './warBase'
 
 /**
  * Полёт лазерных болтов. Лазер больше НЕ мгновенный: болт летит снарядом и попадает
@@ -65,10 +65,10 @@ function resolveHit(world: World, bolt: BoltEntity, hitPos: Vector3, hit: Return
     spawnExplosion(world, hitPos, hit.asteroid.vel, 0.4)
     // Камень не исчезает — он раскалывается. Правило дробления живёт в одном месте.
     damageAsteroid(world, hit.asteroid, bolt.damage)
-  } else if (hit.scenicRock) {
-    // Искра в точке удара; гибель рождает свой крупный взрыв в `destroyScenicRock`.
+  } else if (hit.warBase) {
+    // Искра в точке удара; гибель рождает свой крупный взрыв в `destroyWarBase`.
     spawnExplosion(world, hitPos, _still, 0.8)
-    damageScenicRock(world, hit.scenicRock, bolt.damage)
+    damageWarBase(world, hit.warBase, bolt.damage)
   } else if (hit.missile) {
     // Ракета не «повреждается»: у неё нет прочности, только боевая часть.
     hit.missile.alive = false

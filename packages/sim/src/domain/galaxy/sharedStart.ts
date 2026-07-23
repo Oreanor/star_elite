@@ -48,5 +48,11 @@ export function applySharedStartWorld(def: SystemDef, index: number, galaxySeed:
     ...def,
     name: SYSTEM_NAME,
     blackHoles: [{ name: DOOR_NAME, radius: 300, stationOffset: [0, 0, 60_000] }],
+    // Две военные базы на снос у причала: километровая и трёхкилометровая. Разнесены в
+    // стороны от станции и от «Двери» (та в +Z на 60 км), чтобы не толпиться в одной точке.
+    warBases: [
+      { name: 'База «Редут»', radius: 1_000, stationOffset: [18_000, 0, -6_000], model: 0 },
+      { name: 'База «Бастион»', radius: 3_000, stationOffset: [-32_000, 4_000, -14_000], model: 1 },
+    ],
   }
 }

@@ -20,7 +20,7 @@ export {
   isLandable,
   isLandableAsteroid,
   isLandableBody,
-  isLandableScenic,
+  isLandableWarBase,
   isSurfaceLargeEnough,
   landingCue,
   landingScaleOk,

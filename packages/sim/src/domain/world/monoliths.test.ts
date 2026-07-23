@@ -26,8 +26,7 @@ function worldWith(has: (world: ReturnType<typeof createWorld>) => boolean): Ret
 }
 
 const withStatues = () => worldWith((w) => w.monoliths.length > 0)
-/** Пояс глыб держится за Люцифера (облик 0) — без него двора не бывает. */
-const withLucifer = () => worldWith((w) => w.monoliths.some((m) => m.variant === 0))
+
 
 describe('монолиты у причала', () => {
   /**
@@ -87,23 +86,22 @@ describe('монолиты у причала', () => {
   it('в системе БЕЗ причала статуй нет — им не у чего стоять', () => {
     const world = createWorld({ ...STARTER_SYSTEM, station: null, extraStations: [] })
     expect(world.monoliths).toHaveLength(0)
-    expect(world.scenicRocks).toHaveLength(0)
+    expect(world.warBases).toHaveLength(0)
   })
 
-  it('у Люцифера лежит пояс глыб километрового класса', () => {
-    const world = withLucifer()
-    const lucifer = world.monoliths.find((m) => m.variant === 0)
-    expect(lucifer).toBeDefined()
-    expect(world.scenicRocks).toHaveLength(MONOLITH.ROCK_COUNT)
-    for (const rock of world.scenicRocks) {
-      expect(rock.alive).toBe(true)
-      expect(rock.hull).toBeGreaterThan(0)
-      expect(rock.radius).toBeGreaterThanOrEqual(MONOLITH.ROCK_RADIUS_MIN)
-      expect(rock.radius).toBeLessThanOrEqual(MONOLITH.ROCK_RADIUS_MAX)
-      const d = rock.pos.distanceTo(lucifer!.pos)
-      expect(d).toBeGreaterThan(lucifer!.radius * MONOLITH.ROCK_GAP_MIN * 0.9)
-      expect(d).toBeLessThan(lucifer!.radius * MONOLITH.ROCK_GAP_MAX * 1.2)
-    }
+  it('военные базы встают из данных системы у причала', () => {
+    const world = createWorld({
+      ...STARTER_SYSTEM,
+      warBases: [{ name: 'База', radius: 1_500, stationOffset: [10_000, 0, 0], model: 0 }],
+    })
+    const station = world.bodies.find((b) => b.kind === 'station')!
+    expect(world.warBases).toHaveLength(1)
+    const base = world.warBases[0]!
+    expect(base.alive).toBe(true)
+    expect(base.radius).toBe(1_500)
+    expect(base.hull).toBeGreaterThan(0)
+    // Стоит у причала — на заданном смещении.
+    expect(base.pos.distanceTo(station.pos)).toBeCloseTo(10_000, 0)
   })
 
   /** Их надо МОЧЬ выбрать: Shift+Tab листает тела и статуи одним кругом. */
@@ -111,7 +109,7 @@ describe('монолиты у причала', () => {
     const world = withStatues()
     const ids = new Set(world.monoliths.map((m) => m.id))
     // Круг конечен — за число тел со статуями и глыбами он обязан пройти по всем.
-    const total = world.bodies.length + world.monoliths.length + world.scenicRocks.length
+    const total = world.bodies.length + world.monoliths.length + world.warBases.length
     let hitMonolith = false
     for (let i = 0; i < total + 2; i++) {
       cycleCelestial(world)
@@ -128,13 +126,16 @@ describe('монолиты у причала', () => {
     expect(hitMonolith).toBe(true)
   })
 
-  /** Глыбы двора — тоже нав-цели: иначе видимый камень нельзя выбрать Shift+Tab. */
-  it('глыбы двора выбираются нав-целью коричневым родом asteroid', () => {
-    const world = withLucifer()
-    const ids = new Set(world.scenicRocks.map((r) => r.id))
+  /** Военные базы — тоже нав-цели: иначе видимую базу нельзя выбрать Shift+Tab. */
+  it('военные базы выбираются нав-целью', () => {
+    const world = createWorld({
+      ...STARTER_SYSTEM,
+      warBases: [{ name: 'База', radius: 1_500, stationOffset: [10_000, 0, 0], model: 0 }],
+    })
+    const ids = new Set(world.warBases.map((r) => r.id))
     expect(ids.size).toBeGreaterThan(0)
     const total =
-      world.bodies.length + world.monoliths.length + world.scenicRocks.length + 1
+      world.bodies.length + world.monoliths.length + world.warBases.length + 1
     let hit = false
     for (let i = 0; i < total + 2; i++) {
       cycleCelestial(world)
@@ -143,7 +144,7 @@ describe('монолиты у причала', () => {
         const nav = navTarget(world)
         expect(nav).not.toBeNull()
         expect(nav!.kind).toBe('asteroid')
-        expect(nav!.radius).toBeGreaterThanOrEqual(MONOLITH.ROCK_RADIUS_MIN)
+        expect(nav!.radius).toBe(1_500)
         break
       }
     }
