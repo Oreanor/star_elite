@@ -2,6 +2,7 @@ import { createPortal, useFrame, useThree } from '@react-three/fiber'
 import { Fragment, useEffect, useState, useSyncExternalStore } from 'react'
 import { Quaternion, Vector3, type PerspectiveCamera } from 'three'
 import { SessionScope, useSession } from '../../app/GameContext'
+import { hlog } from '../../app/control/hyperLog'
 import {
   jumpPortalRevision,
   portalActive,
@@ -103,9 +104,17 @@ export function JumpPortalWorldView() {
     // Прежняя цель снимается сразу: смена цели обязана погасить старую комнату в тот же
     // кадр, иначе пара кадров рисовалась бы уже отвязанная от портала сцена.
     setTarget(null)
-    if (!portalActive()) return
+    if (!portalActive()) {
+      hlog('комната: портала нет, сборку не начинаем', { revision })
+      return
+    }
+    hlog('комната: сборка дальнего мира запланирована', { revision })
     let raf = requestAnimationFrame(() => {
-      raf = requestAnimationFrame(() => setTarget(prepareJumpPortalWorld(source)))
+      raf = requestAnimationFrame(() => {
+        const built = prepareJumpPortalWorld(source)
+        hlog('комната: дальний мир СОБРАН', { key: built.key, systemIndex: built.world.systemIndex })
+        setTarget(built)
+      })
     })
     return () => cancelAnimationFrame(raf)
   }, [revision, source])

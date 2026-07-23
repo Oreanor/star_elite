@@ -19,6 +19,7 @@ import {
 } from './jumpPortalWorld'
 import { clearSharedPortal, publishSharedPortal } from '../../app/net/portal'
 import { isHeld } from '../../platform/input/input'
+import { hlog } from '../../app/control/hyperLog'
 
 const _destPos = new Vector3()
 const _destQuat = new Quaternion()
@@ -40,6 +41,7 @@ export function JumpDirector() {
     if (!portalOpen()) return
     const ev = tickPortal(session.world, Math.min(dt, 0.1), isHeld('KeyH'), performance.now() / 1000)
     if (ev === 'close') {
+      hlog('пара устьев снята, дальний мир выброшен')
       disposeJumpPortalWorld()
       return
     }
@@ -60,9 +62,15 @@ export function JumpDirector() {
 
     const p = jumpPortal()
     const prepared = preparedJumpPortalWorld()
+    const matches = prepared?.world.systemIndex === p.index
+    hlog('переход: принимаем дальний мир', {
+      preparedIndex: prepared?.world.systemIndex ?? null,
+      portalIndex: p.index,
+      matches,
+    })
     if (
-      prepared?.world.systemIndex === p.index
-      && adoptPreparedJumpWorld(session, prepared.world, p.index)
+      matches
+      && adoptPreparedJumpWorld(session, prepared!.world, p.index)
     ) {
       const next = session.world.player.state
       // `destPos` живёт в абсолютных координатах системы, а симуляция — в локальных
@@ -75,11 +83,13 @@ export function JumpDirector() {
       camera.quaternion.copy(_destCameraQuat)
       camera.updateMatrixWorld(true)
       queueCameraFrameRotation(_cameraFrameRotation)
-      promotePreparedJumpPortalScene(prepared)
+      hlog('ПЕРЕХОД СОСТОЯЛСЯ', { systemIndex: session.world.systemIndex, epoch: session.world.epoch })
+      promotePreparedJumpPortalScene(prepared!)
       // Успешный пролёт закрывает кольцо. Prepared Scene остаётся только на короткий
       // handoff до монтажа основного WorldVisuals новой системы.
       completePortalTransit(session.world)
     } else {
+      hlog('ПЕРЕХОД ОТМЕНЁН: домен не принял прыжок (заряд/правила) или мир не тот')
       cancelPortalCommit()
     }
   }, -90)

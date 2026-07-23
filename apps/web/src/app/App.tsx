@@ -3,6 +3,7 @@ import { applyPilotProfile, interlocutor, jumpBlock, pendingHail, serializePlaye
 import { GameProvider, useSession } from './GameContext'
 import { closePortal, freshPortalKeyDown, jumpPortal, openPortal, portalActive, portalOpen, portalRetargetRequested } from './control/jumpPortal'
 import { disposeJumpPortalWorld, resetJumpPortalWorlds } from '../render/scene/jumpPortalWorld'
+import { hlog, hreset } from './control/hyperLog'
 import { startUndock } from './control/undockFx'
 import { negotiate, negotiatorAvailable } from './control/negotiator'
 import { Game } from './Game'
@@ -614,28 +615,61 @@ function Shell({ onRestart }: { onRestart: () => void }) {
       // H — удерживаемое раскрытие портала. Отпустил и удержал снова — сжатие;
       // другая цель заменяет прежнюю пару, Esc остаётся аварийным мгновенным закрытием.
       if (e.code === 'KeyH') {
+        const p = jumpPortal()
+        hreset()
+        hlog('нажата H', {
+          repeat: e.repeat,
+          docked,
+          talking,
+          dispatching,
+          bush: session.bush.active,
+          target: session.world.jumpTargetIndex,
+          open: p.open,
+          committing: p.committing,
+          ringRadius: p.ringRadius,
+          destReady: p.destReady,
+          destWarm: p.destWarm,
+        })
         // Размер читает покадровое состояние isHeld. Браузерный key-repeat здесь нельзя
         // считать новой командой: выбранная цель ещё не очищена, и каждый повтор заново
         // создавал тот же портал с нулевого радиуса — визуально H иногда «не реагировала».
-        if (!freshPortalKeyDown(e.repeat)) return
-        if (docked || talking || dispatching) return
+        if (!freshPortalKeyDown(e.repeat)) {
+          hlog('ВЫХОД: автоповтор клавиши')
+          return
+        }
+        if (docked || talking || dispatching) {
+          hlog('ВЫХОД: занят', { docked, talking, dispatching })
+          return
+        }
         // Из КОМНАТЫ прыжка нет: она внутренность дыры, и выход из неё один — долететь
         // навигатором до галактики. Карта галактики там открыта как обзор, и без этой
         // проверки намеченная на ней цель уводила бы порталом мимо всей дороги.
         if (session.bush.active) {
+          hlog('ВЫХОД: в комнате куста, прыжка отсюда нет')
           pushWarning('noJump', session.world.time, { label: t('hud.noJumpInRoom'), repeat: 0 })
           return
         }
         const target = session.world.jumpTargetIndex
         const active = portalActive()
         if (active) {
-          if (jumpPortal().committing) return
+          if (jumpPortal().committing) {
+            hlog('ВЫХОД: переход уже идёт (committing)')
+            return
+          }
           // Повтор H к УЖЕ ВЫБРАННОЙ цели — не приказ, а продолжение раскрытия того же
           // кольца: `openPortal` не чистит `jumpTargetIndex`, и без этой проверки каждое
           // нажатие пересобирало бы готовую пару заново. Любая ДРУГАЯ цель — приказ.
-          if (!portalRetargetRequested(target)) return
+          if (!portalRetargetRequested(target)) {
+            hlog('ВЫХОД: та же цель у открытого кольца — это рост, не приказ', {
+              target,
+              portalIndex: p.index,
+              ringRadius: p.ringRadius,
+            })
+            return
+          }
         }
         if (target == null) {
+          hlog('ВЫХОД: цель не выбрана')
           pushWarning('noTarget', session.world.time, {
             label: t('hud.noJumpTarget'),
             repeat: 0,
@@ -644,6 +678,12 @@ function Shell({ onRestart }: { onRestart: () => void }) {
         }
         const blocked = jumpBlock(session.world, target)
         if (blocked !== null) {
+          hlog('ВЫХОД: привод не пускает', {
+            blocked,
+            charge: session.world.player.jumpCharge,
+            range: session.world.player.spec.jumpRange,
+            scale: session.world.player.state.scale,
+          })
           // Явное нажатие обязано отвечать каждый раз: общий cooldown `noJump` не должен
           // превращать новую причину отказа после выбора системы в молчание.
           pushWarning('noJump', session.world.time, {
@@ -653,6 +693,7 @@ function Shell({ onRestart }: { onRestart: () => void }) {
           return
         }
         if (active) {
+          hlog('старую пару сносим (смена цели)')
           closePortal()
           disposeJumpPortalWorld()
         }
@@ -663,6 +704,7 @@ function Shell({ onRestart }: { onRestart: () => void }) {
           planet != null ? { kind: 'body', planet } : null,
           performance.now() / 1000,
         )
+        hlog('ОТКРЫЛИ портал', { target, planet, targetRadius: jumpPortal().targetRadius })
         if (tab !== null) closeConsole()
         return
       }

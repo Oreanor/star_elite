@@ -117,26 +117,40 @@ describe('linked jump portal frame sync', () => {
     expect(jumpPortal().index).toBe(23)
   })
 
-  it('holds the ring back until the far side exists, then opens it normally', () => {
-    // Сборка второго мира — десятки миллисекунд, и раньше она приходилась ровно на кадр
-    // начала раскрытия: кольцо стартовало рывком. Теперь оно РОЖДАЕТСЯ парой кадров позже,
-    // когда мир за ним готов. Твёрдого обода до этого тоже нет — иначе на месте ещё не
-    // открывшегося портала висел бы невидимый бампер.
+  it('grows from the first frame held, but stays intangible until the far side exists', () => {
+    // РЕГРЕССИЯ: рост был загейчен готовностью дальней стороны, а она приходит через
+    // два-четыре кадра. Удержание в это время пропадало впустую: тап по H оставлял портал
+    // открытым, но нулевым, и следующее H молчало (та же цель у открытого кольца — не
+    // приказ). Клавиша работала через раз. Растём с первого кадра; готовность гейтит
+    // только твёрдость обода (и показ) — влететь в невидимый бампер пилот не должен.
+    const world = createWorld()
+    openPortal(world, reachableTarget(world), null, 0)
+    const p = jumpPortal()
+    const dt = LINKED_PORTAL.OPEN_SECONDS * 0.1
+
+    tickPortal(world, dt, true, dt)
+    expect(p.ringRadius).toBeCloseTo(p.targetRadius * 0.1)
+    expect(world.jumpGates[0]!.tube).toBe(0)
+
+    markPortalDestinationDrawn()
+    tickPortal(world, dt, true, dt * 2)
+
+    expect(p.ringRadius).toBeCloseTo(p.targetRadius * 0.2)
+    expect(world.jumpGates[0]!.tube).toBe(LINKED_PORTAL.TUBE)
+  })
+
+  it('treats a second press on a zero ring as "open", not as "shrink"', () => {
+    // Тап по H, отпустил, нажал снова: переворот направления у ещё не выросшего кольца
+    // закрывал портал в ноль, и H выглядела сломанной через раз. Переворачивать можно
+    // только СУЩЕСТВУЮЩЕЕ кольцо.
     const world = createWorld()
     openPortal(world, reachableTarget(world), null, 0)
     const p = jumpPortal()
 
-    tickPortal(world, LINKED_PORTAL.OPEN_SECONDS, true, LINKED_PORTAL.OPEN_SECONDS)
-    expect(p.ringRadius).toBe(0)
-    expect(world.jumpGates[0]!.tube).toBe(0)
-
-    markPortalDestinationDrawn()
-    const dt = LINKED_PORTAL.OPEN_SECONDS * 0.1
-    tickPortal(world, dt, true, LINKED_PORTAL.OPEN_SECONDS + dt)
-
-    // Ожидание не копится: раскрытие начинается с нуля и идёт штатной скоростью.
-    expect(p.ringRadius).toBeCloseTo(p.targetRadius * 0.1)
-    expect(world.jumpGates[0]!.tube).toBe(LINKED_PORTAL.TUBE)
+    tickPortal(world, 1 / 60, false, 1 / 60) // отпустил, не успев вырасти
+    expect(tickPortal(world, 1 / 60, true, 2 / 60)).not.toBe('close')
+    expect(p.growDir).toBe(1)
+    expect(portalOpen()).toBe(true)
   })
 
   it('does not spend hyper charge when a portal is opened and closed without transit', () => {

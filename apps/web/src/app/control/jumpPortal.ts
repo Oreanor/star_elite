@@ -11,6 +11,7 @@ import {
   type JumpGate,
   type World,
 } from '@elite/sim'
+import { hlog, hstate } from './hyperLog'
 
 /**
  * Портал прыжка по H: неоновое кольцо, две сцены со stencil-маской.
@@ -213,6 +214,7 @@ export function openPortal(world: World, index: number, arrival: Arrival | null,
  * скомпилированы. Пара кадров задержки взамен рывка на первом же кадре раскрытия.
  */
 export function markPortalDestinationDrawn(): void {
+  if (!portal.destWarm) hlog('дальняя сторона ПРОГРЕТА — кольцу разрешено расти')
   portal.destWarm = true
 }
 
@@ -299,9 +301,13 @@ export function linkVectorThroughPortal(input: Vector3, out: Vector3): void {
 }
 
 export function tickPortal(world: World, dt: number, growHeld: boolean, realTime: number): 'cross' | 'close' | null {
-  if (!portal.open || portal.committing) return null
+  if (!portal.open || portal.committing) {
+    hstate('такт', portal.committing ? 'переход, такта нет' : 'портала нет')
+    return null
+  }
 
   if (realTime - portal.openedAt >= LINKED_PORTAL.LIFE_SECONDS) {
+    hlog('ЗАКРЫТ: истекла минута жизни пары')
     closePortal()
     return 'close'
   }
@@ -318,12 +324,34 @@ export function tickPortal(world: World, dt: number, growHeld: boolean, realTime
   // Отпускание только фиксирует достигнутый размер. Направление меняется на НОВОМ
   // нажатии: так keyup не может ни схлопнуть портал, ни дать кадр обратного движения.
   // Первое нажатие уже записано openPortal через growWasHeld=true, поэтому оно раскрывает.
-  if (!portal.growWasHeld && growHeld) portal.growDir = portal.growDir === 1 ? -1 : 1
+  //
+  // Но переворачивать можно только СУЩЕСТВУЮЩЕЕ кольцо. У нулевого второе нажатие — это
+  // всё та же команда «открой»: иначе тап по H оставлял портал нераскрытым, а следующий
+  // тап молча его закрывал, и клавиша выглядела сломанной через раз.
+  if (!portal.growWasHeld && growHeld && portal.ringRadius > 0) {
+    portal.growDir = portal.growDir === 1 ? -1 : 1
+    hlog('новое удержание H — направление роста меняется', { growDir: portal.growDir })
+  }
   portal.growWasHeld = growHeld
-  // Кольцо не рождается, пока не готова дальняя сторона: её сборка занимает пару кадров,
-  // и раньше они выпадали ровно на начало раскрытия. Удержание H в это время не копится —
-  // раскрытие честно начинается с нуля с того кадра, когда за кольцом уже есть мир.
-  if (growHeld && portal.destWarm) {
+
+  hstate(
+    'состояние кольца',
+    `${portal.destWarm ? 'дальняя сторона готова' : 'ЖДЁМ дальнюю сторону'}, H ${growHeld ? 'держат' : 'отпущена'}`,
+    { ringRadius: portal.ringRadius, targetRadius: portal.targetRadius, destReady: portal.destReady },
+  )
+
+  /*
+   * Кольцо растёт с ПЕРВОГО кадра удержания. Гейтить сам рост готовностью дальней стороны
+   * нельзя: она приходит через два-четыре кадра, и всё это время нажатие пропадало впустую.
+   * Тап по H оставлял портал открытым, но нулевым, а дальше клавиша молчала — та же цель у
+   * открытого кольца приказом не считается. Ровно это и выглядело как «то работает, то нет».
+   *
+   * Готовность гейтит только ПОКАЗ и ТВЁРДОСТЬ (`syncGateShape` и stencil-проход): первые
+   * кадры кольцо есть, но его не видно и сквозь него не пройти. Раскрытие идёт 2.5 с, так
+   * что показывается оно на паре процентов радиуса — глазу это ноль, а тяжёлая сборка
+   * успевает пройти под невидимым кольцом.
+   */
+  if (growHeld) {
     portal.ringRadius = stepLinkedPortalRadius(
       portal.ringRadius,
       portal.targetRadius,
@@ -333,6 +361,7 @@ export function tickPortal(world: World, dt: number, growHeld: boolean, realTime
     )
     syncGateShape()
     if (portal.ringRadius <= 0 && portal.growDir < 0) {
+      hlog('ЗАКРЫТ: кольцо сжали в ноль')
       closePortal()
       return 'close'
     }
@@ -341,11 +370,16 @@ export function tickPortal(world: World, dt: number, growHeld: boolean, realTime
   // Коррекция масштаба несовместима уже с СУЩЕСТВУЮЩИМ тоннелем, а не только
   // с его открытием: как только корабль покидает 1×, оба устья схлопываются.
   if (world.player.state.scale !== 1) {
+    hlog('ЗАКРЫТ: масштаб не единичный', { scale: world.player.state.scale })
     closePortal()
     return 'close'
   }
 
   if (world.systemIndex !== portal.hereIndex) {
+    hlog('ЗАКРЫТ: система сменилась под порталом', {
+      systemIndex: world.systemIndex,
+      hereIndex: portal.hereIndex,
+    })
     closePortal()
     return 'close'
   }
@@ -356,7 +390,20 @@ export function tickPortal(world: World, dt: number, growHeld: boolean, realTime
   // сторону без события. Неподвижный пилот по-прежнему может стоять и рассматривать окно.
   // Пока кольца нет, перехода не бывает ни при каких позах: второй системы ещё не
   // существует, и «пролёт» через нулевое устье уводил бы в несобранный мир.
-  if (portal.destWarm && crossedJumpGate(portal.prevSide, side, fitsInsideJumpGate(world.player, localGate))) {
+  const fits = fitsInsideJumpGate(world.player, localGate)
+  // Пилот у самой плоскости — самый интересный кадр: либо он сейчас пройдёт, либо
+  // отскочит от трубы. Пишем, ЧТО именно мешает: маленькое кольцо или мимо отверстия.
+  if (Math.abs(side) < localGate.radius + LINKED_PORTAL.TUBE) {
+    hstate('у плоскости кольца', fits ? 'корпус в отверстие проходит' : 'корпус в отверстие НЕ проходит', {
+      side,
+      ringRadius: localGate.radius,
+      tube: localGate.tube,
+      shipRadius: world.player.spec.hull.radius * world.player.state.scale,
+      destWarm: portal.destWarm,
+    })
+  }
+  if (portal.destWarm && crossedJumpGate(portal.prevSide, side, fits)) {
+    hlog('ПЕРЕСЕЧЕНИЕ плоскости — переход', { prevSide: portal.prevSide, side })
     beginPortalCommit()
     return 'cross'
   }

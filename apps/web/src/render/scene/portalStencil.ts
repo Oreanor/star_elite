@@ -20,6 +20,7 @@ import {
 import type { World } from '@elite/sim'
 import { portalOpen } from '../../app/control/jumpPortal'
 import { jumpPortal, markPortalDestinationDrawn } from '../../app/control/jumpPortal'
+import { hstate } from '../../app/control/hyperLog'
 import { WARP_PORTAL } from '../config'
 import {
   destPortalScene,
@@ -261,7 +262,10 @@ export function renderJumpPortalOverlay(
 
   ensure()
   const p = jumpPortal()
-  const r = p.ringRadius
+  // Кольцо РАСТЁТ с первого кадра, но показываем его только когда за ним уже есть мир:
+  // иначе первые кадры в кадре висел бы обод с пустотой внутри. Сборка дальней стороны
+  // проходит под невидимым кольцом, к этому времени оно набирает пару процентов радиуса.
+  const r = p.destWarm ? p.ringRadius : 0
   // Маска заканчивается у внутренней кромки тора. Поэтому целевой мир не может
   // перерисовать неоновую трубу, уже проверенную по глубине исходной сцены.
   // Круг destination-маски заходит под центр тора. Морфинг сдвигает шнур наружу,
@@ -285,6 +289,11 @@ export function renderJumpPortalOverlay(
   // Рисовать пустую сцену в маску нельзя — вышла бы чёрная дыра вместо просвета космоса.
   // Кольца в это время и нет: оно рождается ровно тогда, когда за ним появляется мир.
   const destLive = dest.children.length > 0
+  hstate('проход портала', `кольцо ${r > 0 ? 'есть' : 'нулевое'}, сцена за ним ${destLive ? 'смонтирована' : 'ПУСТА'}`, {
+    ringRadius: r,
+    children: dest.children.length,
+    destWarm: p.destWarm,
+  })
   const st = renderer.state
   const prevAutoClear = renderer.autoClear
   const prevLocalClipping = renderer.localClippingEnabled
