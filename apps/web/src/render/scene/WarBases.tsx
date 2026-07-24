@@ -1,6 +1,17 @@
 import { useFrame } from '@react-three/fiber'
-import { useMemo, useRef } from 'react'
-import { Euler, InstancedMesh, Mesh, Object3D, Quaternion, Vector3 } from 'three'
+import { useEffect, useMemo, useRef } from 'react'
+import {
+  Euler,
+  IcosahedronGeometry,
+  InstancedMesh,
+  Mesh,
+  MeshStandardMaterial,
+  Object3D,
+  Quaternion,
+  Vector3,
+  type BufferGeometry,
+  type Texture,
+} from 'three'
 import { warBaseFixtureWorldPos, type WarBaseEntity } from '@elite/sim'
 import { useSession } from '../../app/GameContext'
 import { WARBASE_FX } from '../config'
@@ -8,11 +19,25 @@ import {
   DETAIL_KEYS,
   warBaseDetailGeometry,
   warBaseDetailMaterial,
-  warBaseHullGeometry,
-  warBaseHullMaterial,
   type DetailKey,
 } from '../geometry/warBaseGlb'
+import { planetTexturedMaterial } from '../materials/materials'
+import { loadWarBaseTexture } from '../materials/warBaseTextures'
 import { worldShrink } from '../worldShrink'
+
+/** Единичная гладкая сфера базы — один раз на модуль. Детализация 6: ~40k тришек, кромок нет. */
+let hullSphere: BufferGeometry | null = null
+function warBaseHullSphere(): BufferGeometry {
+  hullSphere ??= new IcosahedronGeometry(1, 6)
+  return hullSphere
+}
+
+/** Матовый металл-заглушка, пока нет карты: гладкий тёмный шар лучше гранёного GLB. */
+let hullFallback: MeshStandardMaterial | null = null
+function warBaseHullFallback(): MeshStandardMaterial {
+  hullFallback ??= new MeshStandardMaterial({ color: 0x6b7079, metalness: 0.2, roughness: 0.82 })
+  return hullFallback
+}
 
 /**
  * Военные базы на снос: корпус-сфера + навесные детали (башня на полюсе, пушки/глаза
@@ -34,28 +59,40 @@ const _UP = new Vector3(0, 1, 0)
 const FIXTURE_MODELS: readonly DetailKey[] = ['tower', 'gun1', 'gun2', 'eye1', 'pod']
 const keyOf = (model: number): DetailKey => FIXTURE_MODELS[model % FIXTURE_MODELS.length]!
 
-/** Корпус одной базы — обычный меш (их единицы, инстансинг не нужен). */
+/**
+ * Корпус базы — ГЛАДКИЙ ШАР (сфера + equirect-карта, как планета), а не гранёный GLB.
+ *
+ * Гранёная модель давала «углы» и мыло, а её твердь не совпадала с видимой сферой — корабль
+ * проваливался под борт. Икосаэдр высокой детализации гладок и несёт сферическую UV без шва,
+ * так что карта ложится ровно, а радиус шара = радиусу коллизии (`warBaseSolidRadius`): над
+ * чем летишь, на то и садишься. Нет карты — матовый металл-заглушка, но всё так же гладкая.
+ *
+ * Их единицы — обычный меш на базу, инстансинг не нужен. Детали (башни, пушки) — отдельно.
+ */
 function Hull({ base }: { base: WarBaseEntity }) {
   const session = useSession()
   const ref = useRef<Mesh>(null)
+  const geometry = useMemo(warBaseHullSphere, [])
+  const texture = useRef<Texture | null>(null)
+
+  useEffect(() => loadWarBaseTexture(base.shape, (t) => (texture.current = t)), [base.shape])
+
   useFrame(() => {
     const mesh = ref.current
     if (!mesh) return
-    const g = warBaseHullGeometry(base.shape)
-    const m = warBaseHullMaterial(base.shape)
     const shrink = worldShrink(session.world.player.state.scale)
-    if (!g || !m || shrink <= 0 || !base.alive) {
+    if (shrink <= 0 || !base.alive) {
       mesh.visible = false
       return
     }
     mesh.visible = true
-    if (mesh.geometry !== g) mesh.geometry = g
-    if (mesh.material !== m) mesh.material = m
+    const material = texture.current ? planetTexturedMaterial(texture.current) : warBaseHullFallback()
+    if (mesh.material !== material) mesh.material = material
     mesh.position.copy(base.pos)
     mesh.quaternion.setFromAxisAngle(base.spinAxis, base.spin * session.world.time)
     mesh.scale.setScalar(base.radius * shrink)
   })
-  return <mesh ref={ref} frustumCulled={false} />
+  return <mesh ref={ref} geometry={geometry} frustumCulled={false} />
 }
 
 /** Все ЖИВЫЕ детали одного облика со всех баз — один InstancedMesh. */

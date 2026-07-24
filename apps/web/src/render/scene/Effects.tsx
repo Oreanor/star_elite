@@ -12,9 +12,9 @@ import {
   PlaneGeometry,
   Vector3,
 } from 'three'
-import { findModule, GUNNERY } from '@elite/sim'
+import { findModule, GUNNERY, type Tracer, type World } from '@elite/sim'
 import { useSession } from '../../app/GameContext'
-import { EXPLOSION, LASER, LASER_BEAM_SCALE, LASER_CLASS_GLOW, LASER_CLASS_WIDTH, LASER_GLOW_FALLBACK, MUZZLE, SHIELD_FLASH, WARP_FLASH } from '../config'
+import { EXPLOSION, LASER, LASER_CLASS_GLOW, LASER_CLASS_WIDTH, LASER_GLOW_FALLBACK, MUZZLE, SHIELD_FLASH, WARP_FLASH } from '../config'
 import {
   explosionMaterial,
   missileMaterial,
@@ -71,6 +71,8 @@ const _muzzlePos = /* @__PURE__ */ new Vector3()
 
 const _dir = new Vector3()
 const _mid = new Vector3()
+/** Живая точка дула для отрезка с привязкой. Наружу не отдаётся — только читается в кадре. */
+const _anchor = /* @__PURE__ */ new Vector3()
 const _zAxis = /* @__PURE__ */ new Vector3(0, 0, 1)
 
 /**
@@ -104,16 +106,22 @@ function TracerBatch({
     for (const tracer of session.world.tracers) {
       if (count >= MAX_TRACERS || !accepts(tracer.weapon)) continue
 
-      _dir.copy(tracer.to).sub(tracer.from)
+      // Хвост ПЕРВОГО отрезка держим у ствола: болт рождён в мировой точке, а корабль
+      // с тех пор уехал, и на ходу луч начинался позади дула (тем дальше, чем быстрее
+      // летишь). Домен несёт стрелка и связанное смещение — пересчитываем каждый кадр.
+      const from = anchoredFrom(session.world, tracer) ?? tracer.from
+
+      _dir.copy(tracer.to).sub(from)
       const length = _dir.length()
       if (length < 1e-3) continue
 
-      _mid.copy(tracer.from).addScaledVector(_dir, 0.5)
+      _mid.copy(from).addScaledVector(_dir, 0.5)
       _dummy.position.copy(_mid)
       _dummy.quaternion.setFromUnitVectors(_zAxis, _dir.divideScalar(length))
       // Цилиндр развёрнут вдоль Z и имеет единичную длину: масштаб задаёт и то, и другое.
-      // Толщину домножаем на `beamScale` ствола: тяжёлый «Столб» бьёт втрое толще при том же классе.
-      const r = radius * beamScaleOf(tracer.weapon)
+      // Толщину множит КАЛИБР ТОЧКИ (носовая — вдвое): она следует за МЕСТОМ, откуда
+      // стреляли, а не за конкретной покупкой — перевесил ствол в нос, и след толще.
+      const r = radius * (tracer.bore ?? 1)
       _dummy.scale.set(r, r, length)
       _dummy.updateMatrix()
       mesh.setMatrixAt(count, _dummy.matrix)
@@ -134,6 +142,19 @@ function TracerBatch({
 }
 
 /**
+ * Живая точка дула для отрезка с привязкой: `pos + quat·offset` у СТРЕЛКА в этом кадре
+ * (та же формула, что у дульных вспышек). Нет привязки или стрелок погиб — null, и
+ * отрезок рисуется от той точки, где родился.
+ */
+function anchoredFrom(world: World, tracer: Tracer): Vector3 | null {
+  const offset = tracer.anchorOffset
+  if (!offset || tracer.anchorId === undefined) return null
+  const ship = world.player.id === tracer.anchorId ? world.player : world.ships.find((s) => s.id === tracer.anchorId)
+  if (!ship || !ship.alive) return null
+  return _anchor.set(offset[0], offset[1], offset[2]).applyQuaternion(ship.state.quat).add(ship.state.pos)
+}
+
+/**
  * Класс ствола по id — рендер узнаёт его из каталога модулей (домен несёт на трассе
  * лишь id). Класс 4 (если появится) читаем как 3; неизвестный id — класс 1 (голубой).
  */
@@ -141,9 +162,6 @@ const classOf = (weapon: string): 1 | 2 | 3 => {
   const cls = findModule(weapon)?.class ?? 1
   return (cls >= 3 ? 3 : cls) as 1 | 2 | 3
 }
-
-/** Множитель толщины луча по id ствола (тяжёлый «Столб» — втрое; обычные — 1). Только визуал. */
-const beamScaleOf = (weapon: string): number => LASER_BEAM_SCALE[weapon] ?? 1
 
 /** Три класса лазеров: у каждого свой цвет ореола и своя толщина луча. */
 const LASER_CLASSES = [1, 2, 3] as const
@@ -218,7 +236,7 @@ export function MuzzleFlashes() {
       _muzzlePos.set(ox, oy, oz).applyQuaternion(ship.state.quat).add(ship.state.pos)
 
       const cls = classOf(flash.weapon)
-      const width = (LASER_CLASS_WIDTH[cls] ?? 1) * beamScaleOf(flash.weapon)
+      const width = (LASER_CLASS_WIDTH[cls] ?? 1) * flash.bore
       // Добела с лёгким тоном класса; вспыхивает и гаснет (аддитив над космосом → в ноль).
       // Кривая «удар»: мгновенный пик, спад ∝ (1−age)^1.5 — резкая молния, а не ровное тление.
       _muzzleTint.set(LASER_CLASS_GLOW[cls] ?? LASER_GLOW_FALLBACK).lerp(_white, MUZZLE.WHITEN)

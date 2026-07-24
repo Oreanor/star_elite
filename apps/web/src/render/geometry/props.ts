@@ -464,6 +464,19 @@ export function boltGeometry(): BufferGeometry {
   return boltCache
 }
 
+let plasmaCache: BufferGeometry | null = null
+
+/**
+ * Труба плазменной струи. Отличается от трассы болта числом колец вдоль оси: волну
+ * гонит вершинный шейдер, и на одном сегменте её просто не из чего построить —
+ * нужен ряд опорных колец (48) по длине. Гранёность по окружности (10) остаётся
+ * низкополигональной: труба светится, а не блестит рёбрами.
+ */
+export function plasmaBeamGeometry(): BufferGeometry {
+  plasmaCache ??= new CylinderGeometry(1, 1, 1, 10, 48, true).rotateX(Math.PI / 2)
+  return plasmaCache
+}
+
 let ringCache: BufferGeometry | null = null
 
 /**
