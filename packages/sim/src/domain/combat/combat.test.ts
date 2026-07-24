@@ -2,6 +2,7 @@ import { Quaternion, Vector3 } from 'three'
 import { describe, expect, it } from 'vitest'
 import { MISSILE_PYLON, MODULE_CATALOGUE } from '../../config/modules'
 import { ASTEROID } from '../../config/world'
+import { PHYSICS } from '../../config/physics'
 import { ECM, GUNNERY } from '../../config/weapons'
 import { raySphere } from '../../core/math'
 import { auroraOneLoadout } from '../../config/loadouts'
@@ -13,11 +14,8 @@ import { stepBolts } from './bolts'
 import { applyDamage, regenShield } from './damage'
 import { fireEcm, regenEnergy } from './ecm'
 import { stepMissiles } from './missiles'
-import { fireLasers, fireMissile, missileAmmo } from './weapons'
-
-function quiet(): World {
-  return createWorld({ ...STARTER_SYSTEM, patrols: [], belt: null })
-}
+import { coolGuns, fireLasers, fireMissile, missileAmmo } from './weapons'
+import { quietWorld } from '../../testkit'
 
 /**
  * Гонит выпущенные болты, пока они не разрешатся — попадут или уйдут за дальность.
@@ -26,6 +24,23 @@ function quiet(): World {
  */
 function settleBolts(world: World, steps = 120): void {
   for (let i = 0; i < steps && world.bolts.length > 0; i++) stepBolts(world, 1 / 120)
+}
+
+/**
+ * Сколько снимет ОДИН нажим гашетки со всех стволов борта.
+ *
+ * Считается по железу, а не константой: перевооружение не должно ронять тесты про
+ * геометрию и множители. Импульсный отдаёт паспортный урон за выстрел, НЕПРЕРЫВНЫЙ —
+ * порцию за тик (урон в секунду × `BEAM_TICK`): у струи «выстрела» нет вовсе.
+ */
+function expectedVolley(ship: ShipEntity, beamOnly = false): number {
+  return ship.spec.mounts.reduce((sum, m) => {
+    if (!isLaser(m.weapon)) return sum
+    // Калибр ТОЧКИ множит силу выстрела: носовая бьёт вдвое, откуда бы ствол ни взялся.
+    const bore = m.hardpoint.bore ?? 1
+    if (m.weapon.beam) return sum + m.weapon.damage * GUNNERY.BEAM_TICK * bore
+    return beamOnly ? sum : sum + m.weapon.damage * bore
+  }, 0)
 }
 
 /** Ставит врага ровно перед носом игрока на дистанции d. */
@@ -84,9 +99,13 @@ describe('лазер', () => {
     enemyAhead(world, 500)
     const before = enemy.shield
 
-    fireLasers(world, world.player, false)
-    // Болт ещё летит: в кадре выстрела урона нет — это и есть его снарядная природа.
-    expect(enemy.shield).toBe(before)
+    fireLasers(world, world.player, false, PHYSICS.FIXED_DT)
+    /**
+     * В кадре выстрела снял ровно НЕПРЕРЫВНЫЙ ствол — он не летит, а достаёт сразу.
+     * Импульсные в этот миг не сняли ничего: их болты ещё в пути, и это и есть их
+     * снарядная природа (по такому выстрелу можно увернуться, ИИ обязан упреждать).
+     */
+    expect(before - enemy.shield).toBeCloseTo(expectedVolley(world.player, true), 0)
     settleBolts(world)
     expect(enemy.shield).toBeLessThan(before)
     expect(world.tracers.length).toBeGreaterThan(0) // болт оставляет след, пока летит
@@ -107,7 +126,7 @@ describe('лазер', () => {
     world.player.state.quat.setFromAxisAngle(new Vector3(0, 1, 0), -lead)
 
     const before = enemy.shield
-    fireLasers(world, world.player, false)
+    fireLasers(world, world.player, false, PHYSICS.FIXED_DT)
     settleBolts(world)
     expect(enemy.shield).toBe(before) // ни одного попадания
   })
@@ -119,13 +138,10 @@ describe('лазер', () => {
 
     // Урон берём из установленных стволов, а не константой: перевооружение игрока
     // не должно ронять тест про ГЕОМЕТРИЮ сведения.
-    const expected = world.player.spec.mounts.reduce(
-      (sum, m) => sum + (isLaser(m.weapon) ? m.weapon.damage : 0),
-      0,
-    )
+    const expected = expectedVolley(world.player)
 
     const before = enemy.shield
-    fireLasers(world, world.player, false)
+    fireLasers(world, world.player, false, PHYSICS.FIXED_DT)
     settleBolts(world)
     expect(before - enemy.shield).toBeCloseTo(expected, 0)
   })
@@ -142,25 +158,75 @@ describe('лазер', () => {
     const p = world.player
     // Клон шасси с усилителем: каталог (общий синглтон) не мутируем.
     p.loadout = { ...p.loadout, chassis: { ...p.loadout.chassis, laserAmp: 5 } }
-    const base = p.spec.mounts.reduce((s, m) => s + (isLaser(m.weapon) ? m.weapon.damage : 0), 0)
+    const base = expectedVolley(p)
 
     const before = enemy.shield
-    fireLasers(world, p, false)
+    fireLasers(world, p, false, PHYSICS.FIXED_DT)
     settleBolts(world)
     expect(before - enemy.shield).toBeCloseTo(base * 5, 0)
+  })
+
+  /**
+   * НЕПРЕРЫВНЫЙ ЛУЧ НЕ ЗАВИСИТ ОТ ГЕРЦОВКИ. Струя льётся каждый шаг, поэтому наивное
+   * «урон за шаг» жгло бы вдвое быстрее на 240 Гц, чем на 120, — та же мина, что
+   * «вероятность в шагах вместо секунд». Урон идёт порциями через `BEAM_TICK`, и за
+   * одну секунду огня цель обязана получить одно и то же при любом шаге.
+   */
+  it('луч снимает одинаково при 120 и 240 Гц', () => {
+    const burn = (dt: number): number => {
+      const { world, enemy } = withOneEnemy()
+      enemyAhead(world, 700)
+      enemy.shield = 100000 // весь огонь ложится в щит: меряем чистое вычитание
+      const before = enemy.shield
+      for (let t = 0; t < 1 / dt; t++) {
+        coolGuns(world.player, world.time, dt)
+        fireLasers(world, world.player, false, dt)
+        world.time += dt
+      }
+      // Болты импульсных стволов долетают позже — их вклад в счёт не берём.
+      const beamOnly = before - enemy.shield
+      return beamOnly
+    }
+    const slow = burn(1 / 120)
+    const fast = burn(1 / 240)
+    expect(fast).toBeCloseTo(slow, 0)
+  })
+
+  /**
+   * КАЛИБР — свойство ТОЧКИ, не ствола. Носовая вдвое крупнее крыльевой, и любой лазер,
+   * поставленный в неё, бьёт вдвое больнее. Проверяем тем же стволом на той же раме,
+   * меняя ровно калибр: если сила уедет за модулем, а не за местом, тест это поймает.
+   */
+  it('носовая точка удваивает урон того же ствола', () => {
+    const burn = (bore: number): number => {
+      const { world, enemy } = withOneEnemy()
+      enemyAhead(world, 700)
+      enemy.shield = 5000
+      const p = world.player
+      // Клон рамы с заданным калибром носовой точки: каталог (общий синглтон) не трогаем.
+      const hardpoints = p.loadout.chassis.hardpoints.map((hp) => (hp.bore ? { ...hp, bore } : hp))
+      p.loadout = { ...p.loadout, chassis: { ...p.loadout.chassis, hardpoints } }
+      refreshSpec(p)
+
+      const before = enemy.shield
+      fireLasers(world, p, false, PHYSICS.FIXED_DT)
+      // Считаем только МГНОВЕННЫЙ вклад: носовой ствол лучевой, болты крыльев ещё в пути.
+      return before - enemy.shield
+    }
+    expect(burn(2)).toBeCloseTo(burn(1) * 2, 0)
   })
 
   it('перегрев блокирует стрельбу', () => {
     const { world } = withOneEnemy()
     enemyAhead(world, 500)
     for (const gun of world.player.guns) gun.heat = 1
-    expect(fireLasers(world, world.player, false)).toBe(false)
+    expect(fireLasers(world, world.player, false, PHYSICS.FIXED_DT)).toBe(false)
   })
 })
 
 describe('щит и корпус', () => {
   it('щит принимает урон первым', () => {
-    const world = quiet()
+    const world = quietWorld()
     const p = world.player
     applyDamage(p, 30, 0)
     expect(p.shield).toBe(p.spec.hull.shield - 30)
@@ -168,7 +234,7 @@ describe('щит и корпус', () => {
   })
 
   it('пробитие щита переносит остаток на корпус', () => {
-    const world = quiet()
+    const world = quietWorld()
     const p = world.player
     applyDamage(p, p.spec.hull.shield + 10, 0)
     expect(p.shield).toBe(0)
@@ -176,7 +242,7 @@ describe('щит и корпус', () => {
   })
 
   it('игрок при нулевом корпусе выживает: щиты полные и штамп причины', () => {
-    const world = quiet()
+    const world = quietWorld()
     const p = world.player
     applyDamage(p, 1e6, 0, { kind: 'laser', name: '' })
     expect(p.alive).toBe(true)
@@ -194,7 +260,7 @@ describe('щит и корпус', () => {
   })
 
   it('щит не восстанавливается сразу после попадания', () => {
-    const world = quiet()
+    const world = quietWorld()
     const p = world.player
     applyDamage(p, 30, 10)
 
@@ -288,12 +354,12 @@ describe('ракеты на пилонах', () => {
     mine.pos.set(0, 0, -300)
 
     // Свой залп проходит мимо неё: болт не бьёт по ракете своего же владельца.
-    fireLasers(world, world.player, false)
+    fireLasers(world, world.player, false, PHYSICS.FIXED_DT)
     settleBolts(world)
     expect(mine.alive).toBe(true)
 
     // Чужой — сбивает, когда болт долетит.
-    fireLasers(world, enemy, true)
+    fireLasers(world, enemy, true, PHYSICS.FIXED_DT)
     settleBolts(world)
     expect(mine.alive).toBe(false)
   })
@@ -364,7 +430,7 @@ describe('противоракетная система', () => {
 
   /** Как энергобомба: надвое floor(r/2), мелочь уничтожается. */
   it('ракета дробит камень надвое', () => {
-    const world = quiet()
+    const world = quietWorld()
     const rock: AsteroidEntity = {
       id: world.ids.next(),
       kind: 'asteroid',
@@ -633,7 +699,7 @@ describe('бог неуязвим, но телесен', () => {
     const shieldBefore = god.shield
     const flashesBefore = world.shieldFlashes.length
 
-    fireLasers(world, world.player, false)
+    fireLasers(world, world.player, false, PHYSICS.FIXED_DT)
     settleBolts(world)
 
     expect(god.hull).toBe(hullBefore)

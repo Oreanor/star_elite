@@ -9,6 +9,7 @@ import { shipAxes } from '../flight/axes'
 import { armAutoland, releaseLanding } from '../flight/landing'
 import { createWorld, STARTER_SYSTEM, type BodyEntity, type World } from '../world'
 import { stepWorld } from './step'
+import { quietWorld } from '../../testkit'
 
 /**
  * Контакт с крупным телом.
@@ -25,10 +26,6 @@ const NO_CONTROLLERS = new Map()
  * коре, ловил бы второй удар. Тест обязан видеть один контакт.
  */
 const oneStep = (world: World) => stepWorld(world, PHYSICS.FIXED_DT, NO_CONTROLLERS)
-
-function quiet(): World {
-  return createWorld({ ...STARTER_SYSTEM, patrols: [], belt: null })
-}
 
 function bodyOf(world: World, kind: BodyEntity['kind']): BodyEntity {
   const body = world.bodies.find((b) => b.kind === kind)
@@ -63,7 +60,7 @@ function landViaAutoland(world: World, body: BodyEntity): void {
 
 describe('удар о крупное тело', () => {
   it('неуправляемое касание планеты отбрасывает без урона — поверхность твёрдая', () => {
-    const world = quiet()
+    const world = quietWorld()
     const player = world.player
     const planet = bodyOf(world, 'planet')
     const before = player.hull + player.shield
@@ -88,7 +85,7 @@ describe('удар о крупное тело', () => {
    * на сторону подхода.
    */
   it('крейсер не прошивает планету насквозь за один шаг', () => {
-    const world = quiet()
+    const world = quietWorld()
     const player = world.player
     const planet = bodyOf(world, 'planet')
     const jump = planet.radius * 4
@@ -107,7 +104,7 @@ describe('удар о крупное тело', () => {
   })
 
   it('автопосадка сажает без урона щиту и корпусу', () => {
-    const world = quiet()
+    const world = quietWorld()
     const player = world.player
     player.shield = player.spec.hull.shield
     const before = player.shield + player.hull
@@ -126,7 +123,7 @@ describe('удар о крупное тело', () => {
    * скорости корабль отпружинивает, а не проходит внутрь к причалу (стыковка — по L).
    */
   it('поле станции не бьёт по корпусу — отталкивает без урона', () => {
-    const world = quiet()
+    const world = quietWorld()
     const player = world.player
     ram(world, bodyOf(world, 'station'), DOCKING.MAX_SPEED - 5)
     const before = player.hull + player.shield
@@ -142,7 +139,7 @@ describe('удар о крупное тело', () => {
    * урона корпусу. Проверяется отскок и целость, а не числа. Вспышка поля рождается.
    */
   it('на скорости корабль отпружинивает от поля без урона', () => {
-    const world = quiet()
+    const world = quietWorld()
     const player = world.player
     const station = bodyOf(world, 'station')
     ram(world, station, DOCKING.MAX_SPEED * 4)
@@ -161,7 +158,7 @@ describe('удар о крупное тело', () => {
   })
 
   it('станция не убивает: от поля отскакивают, а не разбиваются насмерть', () => {
-    const world = quiet()
+    const world = quietWorld()
     ram(world, bodyOf(world, 'station'), DOCKING.MAX_SPEED * 4)
 
     oneStep(world)
@@ -170,7 +167,7 @@ describe('удар о крупное тело', () => {
   })
 
   it('выросший миелофоном корабль НЕ проваливается — касание считается по раздутому габариту', () => {
-    const world = quiet()
+    const world = quietWorld()
     const player = world.player
     player.state.scale = 40
     const planet = bodyOf(world, 'planet')
@@ -189,7 +186,7 @@ describe('удар о крупное тело', () => {
   })
 
   it('автопосаженный корпус лежит в плоскости, перпендикулярной радиусу', () => {
-    const world = quiet()
+    const world = quietWorld()
     const player = world.player
     const planet = bodyOf(world, 'planet')
 
@@ -205,7 +202,7 @@ describe('удар о крупное тело', () => {
   })
 
   it('L отпускает стоянку без телепорта', () => {
-    const world = quiet()
+    const world = quietWorld()
     const player = world.player
     const planet = bodyOf(world, 'planet')
     landViaAutoland(world, planet)
@@ -221,7 +218,7 @@ describe('удар о крупное тело', () => {
    * красный «корабль потерян · звезда …». Боты по-прежнему сгорают.
    */
   it('касание звезды у игрока — потерян с причиной, игра дальше', () => {
-    const world = quiet()
+    const world = quietWorld()
     const player = world.player
     const star = bodyOf(world, 'star')
     ram(world, star, 40)
@@ -256,7 +253,7 @@ describe('удар о крупное тело', () => {
   })
 
   it('с ×10000 касание планеты не даёт крушения', () => {
-    const world = quiet()
+    const world = quietWorld()
     const player = world.player
     const planet = bodyOf(world, 'planet')
     player.state.scale = MIELOPHONE.GHOST_BODY_SCALE
@@ -271,7 +268,7 @@ describe('удар о крупное тело', () => {
   })
 
   it('чёрная дыра не имеет твёрдой сферы и пропускает центр', () => {
-    const world = quiet()
+    const world = quietWorld()
     const player = world.player
     const hole = bodyOf(world, 'star')
     hole.kind = 'blackhole'

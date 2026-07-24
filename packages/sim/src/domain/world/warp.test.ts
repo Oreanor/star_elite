@@ -4,9 +4,9 @@ import { pirateLeaderLoadout, pirateLoadout, traderLoadout } from '../../config/
 import { WARP } from '../../config/ai'
 import { aiController } from '../ai/pilot'
 import { createAIState } from '../ai/types'
-import { createWorld, STARTER_SYSTEM, type World } from '../world'
 import { makeShip } from './factory'
 import { beginWarpArrival, beginWarpDeparture, jumpOut, stepWarpEmergence } from './warp'
+import { quietWorld } from '../../testkit'
 
 /**
  * Побег из системы прыжком. Проверяем свойства, а не тайминги: уход — не гибель
@@ -14,13 +14,9 @@ import { beginWarpArrival, beginWarpDeparture, jumpOut, stepWarpEmergence } from
  * напуганный с приводом рано или поздно уходит — но это редкость, а не мгновенность.
  */
 
-function emptyWorld(): World {
-  return createWorld({ ...STARTER_SYSTEM, belt: null, patrols: [] })
-}
-
 describe('гиперпрыжок-побег', () => {
   it('уход прыжком — не гибель: без взрыва, трофеев и награды', () => {
-    const world = emptyWorld()
+    const world = quietWorld()
     const creditsBefore = world.credits
     const ship = makeShip(world.ids, 'hostile', 'Пират', pirateLoadout(), new Vector3(0, 0, -400), new Quaternion())
     world.ships.push(ship)
@@ -37,7 +33,7 @@ describe('гиперпрыжок-побег', () => {
   })
 
   it('без привода не уходит прыжком, сколько ни пугай', () => {
-    const world = emptyWorld()
+    const world = quietWorld()
     const pirate = makeShip(world.ids, 'hostile', 'Пират', pirateLoadout(), new Vector3(0, 0, -500), new Quaternion(), world.rng)
     pirate.ai = createAIState(new Vector3(0, 0, -500), world.rng)
     // У рядового пирата привода нет — уходить не на чем.
@@ -56,7 +52,7 @@ describe('гиперпрыжок-побег', () => {
   })
 
   it('напуганный главарь с приводом рано или поздно уходит через портал', () => {
-    const world = emptyWorld()
+    const world = quietWorld()
     const raider = makeShip(world.ids, 'hostile', 'Налётчик', pirateLeaderLoadout(), new Vector3(0, 0, -500), new Quaternion(), world.rng)
     raider.ai = createAIState(new Vector3(0, 0, -500), world.rng)
     // У главаря компактный привод стоит именно ради побега.
@@ -85,7 +81,7 @@ describe('гиперпрыжок-побег', () => {
 
 describe('гиперпортал прибытия', () => {
   it('портал ставит борт за дырой и гасит ход', () => {
-    const world = emptyWorld()
+    const world = quietWorld()
     const ship = makeShip(world.ids, 'neutral', 'Тест', traderLoadout(), new Vector3(0, 0, -5000), new Quaternion(), world.rng)
     ship.ai = createAIState(new Vector3(0, 0, 0), world.rng)
     world.ships.push(ship)
@@ -101,7 +97,7 @@ describe('гиперпортал прибытия', () => {
 
 describe('гиперпортал ухода', () => {
   it('разгоняет борт в кольцо и помечает warpedOut после прохода', () => {
-    const world = emptyWorld()
+    const world = quietWorld()
     const ship = makeShip(world.ids, 'neutral', 'Тест', traderLoadout(), new Vector3(0, 0, -500), new Quaternion(), world.rng)
     ship.state.quat.setFromAxisAngle(new Vector3(0, 1, 0), 0)
     world.ships.push(ship)

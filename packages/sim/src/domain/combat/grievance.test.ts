@@ -3,21 +3,18 @@ import { describe, expect, it } from 'vitest'
 import { GRIEVANCE } from '../../config/ai'
 import { traderLoadout } from '../../config/loadouts'
 import { createAIState } from '../ai/types'
-import { createWorld, STARTER_SYSTEM, type World } from '../world'
+import { type World } from '../world'
 import { makeShip } from '../world/factory'
 import type { ShipEntity } from '../world/entities'
 import { DIALOGUE } from '../../config/dialogue'
 import { defuseGrievance, hasGrievance, pendingHail, registerPlayerHit, stepGrievances } from './grievance'
+import { quietWorld } from '../../testkit'
 
 function neutral(world: World): ShipEntity {
   const s = makeShip(world.ids, 'neutral', 'Торговец', traderLoadout(), new Vector3(0, 0, -600), new Quaternion())
   s.ai = createAIState(s.state.pos, world.rng)
   world.ships.push(s)
   return s
-}
-
-function emptyWorld(): World {
-  return createWorld({ ...STARTER_SYSTEM, belt: null, patrols: [] })
 }
 
 function pokeApart(world: World, victim: ShipEntity, times: number): void {
@@ -29,7 +26,7 @@ function pokeApart(world: World, victim: ShipEntity, times: number): void {
 
 describe('обида', () => {
   it('первые два попадания прощаются — без претензии и без враждебности', () => {
-    const world = emptyWorld()
+    const world = quietWorld()
     const t = neutral(world)
     world.time = 10
 
@@ -42,7 +39,7 @@ describe('обида', () => {
   })
 
   it('третье попадание поднимает претензию и вызов по связи', () => {
-    const world = emptyWorld()
+    const world = quietWorld()
     const t = neutral(world)
     world.time = 10
 
@@ -54,7 +51,7 @@ describe('обида', () => {
   })
 
   it('непрерывный чирк лучом — одно событие, а не очередь попаданий', () => {
-    const world = emptyWorld()
+    const world = quietWorld()
     const t = neutral(world)
 
     for (let i = 0; i < 20; i++) {
@@ -68,7 +65,7 @@ describe('обида', () => {
   })
 
   it('упорная пальба после прощения переводит во враги', () => {
-    const world = emptyWorld()
+    const world = quietWorld()
     const t = neutral(world)
     world.time = 10
 
@@ -79,7 +76,7 @@ describe('обида', () => {
   })
 
   it('извинение разряжает претензию и счёт попаданий', () => {
-    const world = emptyWorld()
+    const world = quietWorld()
     const t = neutral(world)
     world.time = 10
     pokeApart(world, t, GRIEVANCE.FORGIVE_HITS + 1)
@@ -91,7 +88,7 @@ describe('обида', () => {
   })
 
   it('забытая серия гаснет сама через cooldown', () => {
-    const world = emptyWorld()
+    const world = quietWorld()
     const t = neutral(world)
     world.time = 10
     pokeApart(world, t, 1)
@@ -104,7 +101,7 @@ describe('обида', () => {
   })
 
   it('stepGrievances переводит в бой по таймеру', () => {
-    const world = emptyWorld()
+    const world = quietWorld()
     const t = neutral(world)
     const ai = t.ai!
     ai.grievance = 1
@@ -117,7 +114,7 @@ describe('обида', () => {
   })
 
   it('без извинения через несколько секунд после претензии — ответный огонь', () => {
-    const world = emptyWorld()
+    const world = quietWorld()
     const t = neutral(world)
     world.time = 10
     pokeApart(world, t, GRIEVANCE.FORGIVE_HITS + 1)
@@ -131,7 +128,7 @@ describe('обида', () => {
   })
 
   it('извинение до таймера ответного огня не переводит во враги', () => {
-    const world = emptyWorld()
+    const world = quietWorld()
     const t = neutral(world)
     world.time = 10
     pokeApart(world, t, GRIEVANCE.FORGIVE_HITS + 1)
@@ -144,7 +141,7 @@ describe('обида', () => {
   })
 
   it('счёт рвётся паузой: после cooldown серия начинается заново', () => {
-    const world = emptyWorld()
+    const world = quietWorld()
     const t = neutral(world)
     world.time = 10
     pokeApart(world, t, GRIEVANCE.FORGIVE_HITS + GRIEVANCE.HOSTILE_HITS - 1)
@@ -158,7 +155,7 @@ describe('обида', () => {
   })
 
   it('по уже-врагу претензий нет', () => {
-    const world = emptyWorld()
+    const world = quietWorld()
     const t = neutral(world)
     t.faction = 'hostile'
     world.time = 10
@@ -170,7 +167,7 @@ describe('обида', () => {
   })
 
   it('входящий вызов — ближайший обиженный в пределах слышимости', () => {
-    const world = emptyWorld()
+    const world = quietWorld()
     world.player.state.pos.set(0, 0, 0)
     world.time = 10
 
@@ -184,7 +181,7 @@ describe('обида', () => {
   })
 
   it('борт без ИИ не копит обиду', () => {
-    const world = emptyWorld()
+    const world = quietWorld()
     const s = makeShip(world.ids, 'neutral', 'Пустой', traderLoadout(), new Vector3(), new Quaternion())
     s.ai = null
 

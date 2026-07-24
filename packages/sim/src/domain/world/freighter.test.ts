@@ -4,18 +4,8 @@ import { freighterLoadout, pirateLeaderLoadout, pirateLoadout } from '../../conf
 import { aiController } from '../ai/pilot'
 import { createAIState } from '../ai/types'
 import { deriveShipSpec } from '../loadout'
-import { createWorld, makeShip, STARTER_SYSTEM, type World } from '../world'
-
-/**
- * Грузовик — не боевой корабль, а мишень с трюмом. Проверяем не числа баланса,
- * а СВОЙСТВА, которые переживут перебалансировку: он неповоротлив по физике,
- * возит тонны, а его полицейский эскорт защищает подопечного сам.
- */
-
-/** Пустой мир: чужие патрули и пояс тут только мешали бы выбору цели. */
-function emptyWorld(): World {
-  return createWorld({ ...STARTER_SYSTEM, patrols: [], belt: null })
-}
+import { makeShip } from '../world'
+import { quietWorld } from '../../testkit'
 
 describe('тяжёлый грузовик', () => {
   it('неповоротлив: угловое ускорение ниже истребительского', () => {
@@ -43,7 +33,7 @@ describe('тяжёлый грузовик', () => {
    * иначе автобой перестаёт слушаться захвата.
    */
   it('полицейский страж конвоя сам берёт на прицел налётчика', () => {
-    const world = emptyWorld()
+    const world = quietWorld()
     const at = new Vector3(2e9, 0, 0)
 
     const freighter = makeShip(world.ids, 'neutral', 'Грузовик', freighterLoadout(), at.clone(), world.player.state.quat.clone())
@@ -63,7 +53,7 @@ describe('тяжёлый грузовик', () => {
   })
 
   it('наёмник ИГРОКА без захвата сам защищает от врага рядом', () => {
-    const world = emptyWorld()
+    const world = quietWorld()
     const at = world.player.state.pos.clone()
 
     const raider = makeShip(world.ids, 'hostile', 'Налётчик', pirateLoadout(), at.clone().add(new Vector3(150, 0, 0)), world.player.state.quat.clone())

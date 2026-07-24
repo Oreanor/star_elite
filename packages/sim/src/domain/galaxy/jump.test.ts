@@ -10,6 +10,7 @@ import type { Acquaintance } from '../world/acquaintance'
 import { generateGalaxy, generateSystem } from './generate'
 import { commitPreparedJump, jump, jumpBlock, jumpDistance, systemDefFor } from './jump'
 import { placeSystem, distanceLy } from './shape'
+import { capitalOf } from './types'
 import { stepWorld } from '../sim'
 
 /**
@@ -272,11 +273,18 @@ describe('прыжок', () => {
     expect(catalogue.planets.map((p) => p.name)).toEqual(def.planets.map((p) => p.name))
     expect(catalogue.planets.map((p) => p.type)).toEqual(def.planets.map((p) => p.type))
 
-    const capital = catalogue.planets.find((p) => p.station)
-    // Имя причала не задаём — важно, что каталог и сцена называют его ОДИНАКОВО.
-    // Разойдись они, и карта показывала бы один причал, а сцена — другой.
+    // Причалов в системе может быть несколько (станция — свойство заселённой планеты),
+    // поэтому сверяем со СТОЛИЦЕЙ: именно её причал сцена ставит местом выхода. Раньше
+    // тут стояло «первая планета со станцией» — и это молча совпадало, пока причал был
+    // один; в системе с аванпостом на ближней орбите сравнение поехало не с тем миром.
+    const capital = capitalOf(catalogue)
     expect(capital?.station?.name).toBeDefined()
     expect(capital?.station?.name).toBe(def.station?.name)
+
+    // Остальные причалы каталога обязаны доехать до сцены телами, а не пропасть:
+    // иначе карта обещает три станции, а в системе стоит одна.
+    const catalogueStations = catalogue.planets.filter((p) => p.station).length
+    expect(1 + (def.extraStations?.length ?? 0)).toBe(catalogueStations)
     expect(catalogue.star.color).toBe(def.star.color)
   })
 

@@ -3,7 +3,10 @@ import { describe, expect, it } from 'vitest'
 import { MONOLITH } from '../../config/monoliths'
 import { WARBASE } from '../../config/warbase'
 import { itemMass } from '../cargo/items'
+import { PHYSICS } from '../../config/physics'
+import { stepWorld } from '../sim/step'
 import { createWorld } from '../world'
+import { cycleContact } from '../world/queries'
 import { STARTER_SYSTEM } from '../world/system'
 import { castLaser } from './raycast'
 import { damageWarBase, damageWarBaseFixture, warBaseFixtureWorldPos } from './warBase'
@@ -122,5 +125,34 @@ describe('отстрел деталей базы', () => {
     const origin = _p.clone().addScaledVector(dir, fix.size + 500)
     const hit = castLaser(world, origin, dir.clone().negate(), world.player, 5_000)
     expect(hit.warBaseFixture?.fixture.id).not.toBe(fix.id)
+  })
+
+  /**
+   * Деталь — ТАКАЯ ЖЕ ЦЕЛЬ, как борт: Tab её берёт, и захват ложится в своё поле. Раньше
+   * пушку можно было только расстрелять, водя прицелом, — навестись на неё было нечем.
+   */
+  it('Tab берёт деталь базы целью, разбитая — снимается', () => {
+    const world = withBases()
+    const base = world.warBases[0]!
+    const fix = base.fixtures.find((f) => f.model !== 0)!
+    const _p = new Vector3()
+    warBaseFixtureWorldPos(base, fix, world.time, _p)
+
+    // Игрок у самой детали и смотрит на неё: круг сортирует «перед носом, потом ближе».
+    world.player.state.pos.copy(_p).add(new Vector3(0, 0, 300))
+    world.ships.length = 0
+    world.asteroids.length = 0
+    world.pods.length = 0
+
+    cycleContact(world)
+    expect(world.lockedFixtureId).toBe(fix.id)
+    // Захват ровно один: борт/обломок/камень при этом пусты.
+    expect(world.lockedTargetId).toBeNull()
+    expect(world.lockedAsteroidId).toBeNull()
+
+    // Отстрелили — рамка не должна остаться висеть на том, чего нет.
+    damageWarBaseFixture(world, base, fix, fix.hull)
+    stepWorld(world, PHYSICS.FIXED_DT, new Map())
+    expect(world.lockedFixtureId).toBeNull()
   })
 })

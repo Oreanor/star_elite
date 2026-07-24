@@ -6,15 +6,12 @@ import { addCommodity, cargoMass } from '../cargo/hold'
 import { COMMODITIES } from '../cargo/items'
 import { applyDamage } from '../combat'
 import { stepWorld, type Controller, type ControllerMap } from '../sim'
-import { createWorld, STARTER_SYSTEM, type World } from '../world'
+import { type World } from '../world'
 import { stepOrbits } from '../world/orbits'
 import { autodockController, canEngageAutodock } from './autopilot'
 import { canDockAt, dock, dockThreshold, findStation, stationRange, undock } from './docking'
 import { buy, buyCommodity, canBuyCommodity, commodityBuyPrice, commoditySellPrice, masterClass, repair, repairChance, repairCost, sellItem } from './shop'
-
-function quiet(): World {
-  return createWorld({ ...STARTER_SYSTEM, patrols: [], belt: null })
-}
+import { quietWorld } from '../../testkit'
 
 /** Ставит игрока в метре от причального кольца и гасит скорость. */
 function atDock(world: World): void {
@@ -25,7 +22,7 @@ function atDock(world: World): void {
 
 describe('стыковка', () => {
   it('в стартовой системе игрок начинает рядом со станцией', () => {
-    const world = quiet()
+    const world = quietWorld()
     const station = findStation(world)!
     // Инвариант, а не число: игра начинается в зоне действия автопилота.
     expect(canEngageAutodock(world)).toBe(true)
@@ -33,7 +30,7 @@ describe('стыковка', () => {
   })
 
   it('на скорости стыковаться нельзя, как бы близко ты ни был', () => {
-    const world = quiet()
+    const world = quietWorld()
     const station = findStation(world)!
     atDock(world)
     expect(canDockAt(world.player, station)).toBe(true)
@@ -49,7 +46,7 @@ describe('стыковка', () => {
    * корабль без допуска. Стыковка теперь — только автопилотом по L (см. тест ниже).
    */
   it('шаг мира не стыкует по касанию — врезаться в станцию нельзя', () => {
-    const world = quiet()
+    const world = quietWorld()
     atDock(world)
     expect(world.docked).toBe(false)
 
@@ -59,7 +56,7 @@ describe('стыковка', () => {
 
   /** Разогнавшийся не таранит станцию, а отпружинивает от поля, ТЕРЯЯ скорость. */
   it('поле отбрасывает разогнавшийся корабль назад и гасит ход', () => {
-    const world = quiet()
+    const world = quietWorld()
     const station = findStation(world)!
     const shieldR = station.radius * SHIELD.RADIUS_FACTOR
 
@@ -83,7 +80,7 @@ describe('стыковка', () => {
 
   /** Регрессия: мир в доке обязан стоять, иначе пираты добьют тебя через витрину. */
   it('в доке мир не шагает', () => {
-    const world = quiet()
+    const world = quietWorld()
     atDock(world)
     expect(dock(world)).toBe(true)
 
@@ -93,7 +90,7 @@ describe('стыковка', () => {
   })
 
   it('отчаливание выносит корабль наружу и даёт ход от станции', () => {
-    const world = quiet()
+    const world = quietWorld()
     const station = findStation(world)!
     atDock(world)
     dock(world)
@@ -111,7 +108,7 @@ describe('стыковка', () => {
   it('после вылета игрок стоит СНАРУЖИ защитного поля — без ложного «КРУШЕНИЕ»', () => {
     // Регрессия: выпуск отмерялся от кольца (`radius + GAP`), а поле стоит на 1.15·R.
     // Для любой станции крупнее ~800 м это лежало ВНУТРИ поля → отскок + жёлтый пуш.
-    const world = quiet()
+    const world = quietWorld()
     const station = findStation(world)!
     atDock(world)
     dock(world)
@@ -122,7 +119,7 @@ describe('стыковка', () => {
   })
 
   it('после долгой стоянки выпускает у текущей позиции станции, а не в старой точке', () => {
-    const world = quiet()
+    const world = quietWorld()
     const station = findStation(world)!
     atDock(world)
     dock(world)
@@ -140,7 +137,7 @@ describe('стыковка', () => {
   })
 
   it('станция не убегает после вылета на ускоренной календарной орбите', () => {
-    const world = quiet()
+    const world = quietWorld()
     const station = findStation(world)!
     atDock(world)
     dock(world)
@@ -166,7 +163,7 @@ describe('стыковка', () => {
    * Проверяем свойство, а не числа: пока корабль не покинул зону, стыковки нет.
    */
   it('отчаливший не стыкуется обратно, пока не покинул зону причала', () => {
-    const world = quiet()
+    const world = quietWorld()
     const station = findStation(world)!
     atDock(world)
     dock(world)
@@ -183,7 +180,7 @@ describe('стыковка', () => {
 
   /** Но выйдя за зону, взвод возвращается: стыковка снова возможна, а не билет в один конец. */
   it('покинувший зону снова может стыковаться (взвод возвращается)', () => {
-    const world = quiet()
+    const world = quietWorld()
     atDock(world)
     dock(world)
     undock(world)
@@ -207,7 +204,7 @@ describe('стыковка', () => {
    * ни развернуться быстрее маневровых: физика у него та же, что у игрока.
    */
   it('автопилот доводит корабль до причала и стыкует', () => {
-    const world = quiet()
+    const world = quietWorld()
     const station = findStation(world)!
     const controllers: ControllerMap = new Map<number, Controller>([[world.player.id, autodockController]])
 
@@ -227,7 +224,7 @@ describe('магазин', () => {
   // успех — корпус в норму и деньги списаны; провал — денег не берут, корпус не лучше;
   // не берутся — ничего не изменилось. Щит за деньги не чинят никогда.
   it('ремонт корпуса: успех чинит и списывает, провал не берёт денег, отказ ничего не трогает', () => {
-    const world = quiet()
+    const world = quietWorld()
     const player = world.player
     applyDamage(player, player.spec.hull.shield + 40, 0)
     expect(repairCost(player)).toBeGreaterThan(0)
@@ -250,7 +247,7 @@ describe('магазин', () => {
   })
 
   it('нет денег — ремонт не списывает и корпус не чинит', () => {
-    const world = quiet()
+    const world = quietWorld()
     applyDamage(world.player, world.player.spec.hull.shield + 40, 0)
     world.credits = 0
     const out = repair(world, world.player)
@@ -284,7 +281,7 @@ describe('магазин', () => {
    * а не назначается, и потому переживёт любую перебалансировку.
    */
   it('тяжёлое железо режет манёвренность', () => {
-    const world = quiet()
+    const world = quietWorld()
     const player = world.player
     world.credits = 1_000_000
 
@@ -303,7 +300,7 @@ describe('магазин', () => {
    * апгрейд вытесняет старое железо, а станция забирает его с зачётом.
    */
   it('апгрейд вытесняет установленный модуль и возвращает часть цены', () => {
-    const world = quiet()
+    const world = quietWorld()
     world.credits = 1_000_000
     const player = world.player
 
@@ -318,7 +315,7 @@ describe('магазин', () => {
   })
 
   it('второй такой же модуль не продают и денег не списывают', () => {
-    const world = quiet()
+    const world = quietWorld()
     world.credits = 1_000_000
     const player = world.player
 
@@ -333,7 +330,7 @@ describe('торговля товаром', () => {
   const FOOD = COMMODITIES.FOOD
 
   it('купленный товар списывает деньги и ложится в трюм', () => {
-    const world = quiet()
+    const world = quietWorld()
     world.credits = 10_000
     const player = world.player
 
@@ -349,7 +346,7 @@ describe('торговля товаром', () => {
    * Берём столько, на сколько хватает денег и места.
    */
   it('денег хватает на часть — продают часть', () => {
-    const world = quiet()
+    const world = quietWorld()
     const player = world.player
     world.credits = commodityBuyPrice(world, FOOD) * 2
 
@@ -358,7 +355,7 @@ describe('торговля товаром', () => {
   })
 
   it('в полный трюм не грузят и денег не берут', () => {
-    const world = quiet()
+    const world = quietWorld()
     world.credits = 10_000
     world.player.hold.capacity = 0
 
@@ -373,7 +370,7 @@ describe('торговля товаром', () => {
    * ОТНОШЕНИЕ цен, а не числа: переживёт любую перебалансировку наценки.
    */
   it('купить и сразу продать — всегда в минус', () => {
-    const world = quiet()
+    const world = quietWorld()
     world.credits = 10_000
     const player = world.player
 
@@ -393,7 +390,7 @@ describe('торговля товаром', () => {
    * его вместимость под тест значило бы тестировать не то.
    */
   it('трофей из трюма продаётся по рыночной цене приёма', () => {
-    const world = quiet()
+    const world = quietWorld()
     const player = world.player
     const units = addCommodity(player.hold, FOOD, 5)
     expect(units).toBeGreaterThan(0)
@@ -406,7 +403,7 @@ describe('торговля товаром', () => {
 
   /** Проданный груз — минус тонны, значит плюс к ускорениям. Масса призрака недопустима. */
   it('продажа груза возвращает манёвренность', () => {
-    const world = quiet()
+    const world = quietWorld()
     world.credits = 10_000
     const player = world.player
 

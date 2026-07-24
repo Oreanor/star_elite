@@ -1,8 +1,9 @@
 import { Vector3 } from 'three'
 import { describe, expect, it } from 'vitest'
 import { STAR_HEAT } from '../../config/heat'
-import { createWorld, STARTER_SYSTEM, type World } from '../world'
+import { type World } from '../world'
 import { starExposure, stepStarHeat } from './starheat'
+import { quietWorld } from '../../testkit'
 
 /**
  * Нагрев корпуса звездой.
@@ -14,10 +15,6 @@ import { starExposure, stepStarHeat } from './starheat'
  */
 
 const DT = 1 / 120
-
-function quiet(): World {
-  return createWorld({ ...STARTER_SYSTEM, patrols: [], belt: null })
-}
 
 /** Ставит игрока на высоту `ratio` радиусов над поверхностью звезды. */
 function place(world: World, ratio: number): void {
@@ -34,7 +31,7 @@ function cook(world: World, seconds: number): void {
 
 describe('нагрев у звезды', () => {
   it('вдали от светила корпус не греется вовсе', () => {
-    const world = quiet() // старт — 150 млн км от звезды
+    const world = quietWorld() // старт — 150 млн км от звезды
     cook(world, 30)
     expect(world.player.hullHeat).toBeCloseTo(0, 2)
     expect(world.player.shield).toBe(world.player.spec.hull.shield)
@@ -42,7 +39,7 @@ describe('нагрев у звезды', () => {
   })
 
   it('облучение растёт по мере приближения к короне', () => {
-    const world = quiet()
+    const world = quietWorld()
     place(world, 2)
     const far = starExposure(world.player, world)
     place(world, 0.1)
@@ -55,7 +52,7 @@ describe('нагрев у звезды', () => {
   it('зона задана в РАДИУСАХ: у карлика и у гиганта опасная высота своя', () => {
     // Один и тот же корабль на одной доле радиуса облучён одинаково, каким бы ни
     // был размер звезды. Меняем радиус светила и проверяем, что облучение то же.
-    const world = quiet()
+    const world = quietWorld()
     const star = world.bodies.find((b) => b.kind === 'star')!
 
     place(world, 0.5)
@@ -71,7 +68,7 @@ describe('нагрев у звезды', () => {
   it('в масштабе (миелофон) опасная зона съёживается пропорционально росту', () => {
     // Гигант видит звезду в `scale` раз мельче, значит и жечь она должна с `scale` раз
     // меньшей дистанции — иначе корпус калится там, где светило уже далёкая точка.
-    const world = quiet()
+    const world = quietWorld()
 
     place(world, 0.1) // обычному кораблю тут почти максимум облучения
     expect(starExposure(world.player, world)).toBeGreaterThan(0.9)
@@ -85,7 +82,7 @@ describe('нагрев у звезды', () => {
   })
 
   it('до самого порога корпус ЦЕЛ, а на пороге — мгновенная «потеря» (не постепенная течь)', () => {
-    const world = quiet()
+    const world = quietWorld()
     place(world, 0.05) // глубоко в короне: облучение максимально, нагрев дойдёт до порога
     const p = world.player
     const star = world.bodies.find((b) => b.kind === 'star')!
@@ -112,7 +109,7 @@ describe('нагрев у звезды', () => {
   })
 
   it('отвернул — остыл, и потерь корпуса за короткий жар нет', () => {
-    const world = quiet()
+    const world = quietWorld()
     place(world, 0.1)
     cook(world, 7) // прогрелись выше половины, но до порога разрушения далеко
     const heated = world.player.hullHeat
@@ -130,7 +127,7 @@ describe('нагрев у звезды', () => {
    * Иначе «игрок и бот неотличимы для физики» перестало бы быть правдой.
    */
   it('греется любой корабль, а не только игрок', () => {
-    const world = quiet()
+    const world = quietWorld()
     const bot = world.ships[0]
     if (!bot) return // патрулей нет в тихом мире — тогда проверять нечего
     const star = world.bodies.find((b) => b.kind === 'star')!

@@ -6,6 +6,8 @@ import { PHYSICS } from '../../config/physics'
 import { effectiveRadius } from '../scale/scale'
 import { stepWorld } from '../sim/step'
 import { createWorld, enterSystem, STARTER_SYSTEM, type AsteroidEntity, type BodyEntity, type World } from '../world'
+import { shipAxes } from './axes'
+import { quietWorld } from '../../testkit'
 import {
   armAutoland,
   canAutoland,
@@ -15,13 +17,10 @@ import {
   meshSolidRadius,
   releaseLanding,
   stepLanding,
+  warBaseSolidRadius,
 } from './landing'
 
 const NO_CONTROLLERS = new Map()
-
-function quiet(): World {
-  return createWorld({ ...STARTER_SYSTEM, patrols: [], belt: null })
-}
 
 /**
  * Тихий мир в системе, где стоит Люцифер (облик 0). Число статуй — бросок 0..COUNT_MAX по
@@ -29,7 +28,7 @@ function quiet(): World {
  */
 function quietWithYard(): World {
   // ОДИН мир, в который переходим системами: `createWorld` в цикле слишком дорог.
-  const world = quiet()
+  const world = quietWorld()
   for (let i = 0; i < 200; i++) {
     enterSystem(world, { ...STARTER_SYSTEM, patrols: [], belt: null }, i)
     if (world.monoliths.some((m) => m.variant === 0)) return world
@@ -85,7 +84,7 @@ function landableRock(world: World): AsteroidEntity {
 
 describe('посадка на поверхность', () => {
   it('автопосадка на луну сажает так же, как на планету', () => {
-    const world = quiet()
+    const world = quietWorld()
     const moon = moonOf(world)
     landOn(world, moon)
 
@@ -94,7 +93,7 @@ describe('посадка на поверхность', () => {
   })
 
   it('на ховере высота держится у HOVER_ALT, пока луна уходит по орбите', () => {
-    const world = quiet()
+    const world = quietWorld()
     const moon = moonOf(world)
     landOn(world, moon)
     const parent = world.bodies.find((body) => body.id === moon.orbit?.parentId)!
@@ -111,7 +110,7 @@ describe('посадка на поверхность', () => {
   })
 
   it('после отрыва L ближайшее тело не уносит орбитальной скоростью', () => {
-    const world = quiet()
+    const world = quietWorld()
     const moon = moonOf(world)
     landOn(world, moon)
 
@@ -130,7 +129,7 @@ describe('посадка на поверхность', () => {
   })
 
   it('повторный L отлипает от поверхности', () => {
-    const world = quiet()
+    const world = quietWorld()
     const moon = moonOf(world)
     landOn(world, moon)
     expect(releaseLanding(world.player, world)).toBe(true)
@@ -138,7 +137,7 @@ describe('посадка на поверхность', () => {
   })
 
   it('автопосадка сажает на крупный астероид', () => {
-    const world = quiet()
+    const world = quietWorld()
     const rock = landableRock(world)
     const player = world.player
     const solid = meshSolidRadius(rock.radius)
@@ -160,7 +159,7 @@ describe('посадка на поверхность', () => {
   })
 
   it('мелкий астероид (меньше 10 корпусов) не притягивает к стоянке', () => {
-    const world = quiet()
+    const world = quietWorld()
     const player = world.player
     const er = effectiveRadius(player)
     const pebble: AsteroidEntity = {
@@ -211,7 +210,8 @@ describe('посадка на поверхность', () => {
     const rock = world.warBases[0]
     expect(rock).toBeDefined()
     const player = world.player
-    const solid = meshSolidRadius(rock!.radius)
+    // База — гладкий шар: твердь по её радиусу (warBaseSolidRadius), не по 0.75×R.
+    const solid = warBaseSolidRadius(rock!.radius)
     player.state.pos
       .copy(rock!.pos)
       .add(new Vector3(solid + effectiveRadius(player) + LANDING.HOVER_ALT, 0, 0))
@@ -230,7 +230,7 @@ describe('посадка на поверхность', () => {
    * подсказку/L на соседнем камне в полосе — пилот не видел голубой пуш вовсе.
    */
   it('окно посадки смотрит на камень в полосе высот, а не на ближайший вне её', () => {
-    const world = quiet()
+    const world = quietWorld()
     const player = world.player
     const close = landableRock(world)
     const inWindow = landableRock(world)
@@ -255,7 +255,7 @@ describe('посадка на поверхность', () => {
    * не загорался, пока не уйдёшь и не зайдёшь в окно заново.
    */
   it('после взлёта снова в окне посадки — можно сесть повторно', () => {
-    const world = quiet()
+    const world = quietWorld()
     const rock = landableRock(world)
     const player = world.player
     const solid = meshSolidRadius(rock.radius)
@@ -277,7 +277,7 @@ describe('посадка на поверхность', () => {
   })
 
   it('при scale > 1 стоянка не предлагается — окна высот не для миелофона', () => {
-    const world = quiet()
+    const world = quietWorld()
     const moon = moonOf(world)
     const player = world.player
     player.state.pos
@@ -293,7 +293,7 @@ describe('посадка на поверхность', () => {
   })
 
   it('на 1000…600 м — жёлтая подготовка, на 600…400 м — можно жать L', () => {
-    const world = quiet()
+    const world = quietWorld()
     const rock = landableRock(world)
     const player = world.player
     const er = effectiveRadius(player)
@@ -316,7 +316,7 @@ describe('посадка на поверхность', () => {
   })
 
   it('на ховере высота легко покачивается вокруг HOVER_ALT', () => {
-    const world = quiet()
+    const world = quietWorld()
     const rock = landableRock(world)
     const player = world.player
     const solid = meshSolidRadius(rock.radius)
@@ -345,7 +345,7 @@ describe('посадка на поверхность', () => {
   })
 
   it('на ховере тяга ведёт вдоль сферы и не отрывает без ×ESCAPE', () => {
-    const world = quiet()
+    const world = quietWorld()
     const rock = landableRock(world)
     const player = world.player
     const solid = meshSolidRadius(rock.radius)
@@ -386,7 +386,7 @@ describe('высота ховера — своя координата', () => {
    * поверхность, из-за которого низкий полёт был невозможен.
    */
   it('strafeUp поднимает и опускает эшелон, не разгоняя борт', () => {
-    const world = quiet()
+    const world = quietWorld()
     const moon = world.bodies.filter((b) => b.kind === 'moon')[0]!
     const ship = world.player
     ship.state.pos.copy(moon.pos).add(new Vector3(0, moon.radius + LANDING.HOVER_ALT, 0))
@@ -401,8 +401,9 @@ describe('высота ховера — своя координата', () => {
     const up = ship.state.pos.clone().sub(moon.pos).normalize()
     expect(Math.abs(ship.state.vel.dot(up))).toBeLessThan(1e-6)
 
+    // Спуск с 550 до пола ALT_MIN: с запасом шагов, чтобы гарантированно упереться.
     ship.controls.strafeUp = -1
-    for (let i = 0; i < 600; i++) stepLanding(ship, world, 1 / 60)
+    for (let i = 0; i < 900; i++) stepLanding(ship, world, 1 / 60)
     expect(ship.landedOn!.altitude).toBe(LANDING.ALT_MIN)
   })
 })
@@ -416,7 +417,7 @@ describe('ход над поверхностью не съедается нак�
    */
   it('с задранным носом борт разгоняется вдоль сферы не хуже, чем с ровным', () => {
     const run = (pitch: number): number => {
-      const world = quiet()
+      const world = quietWorld()
       const moon = world.bodies.filter((b) => b.kind === 'moon')[0]!
       const ship = world.player
       ship.state.pos.copy(moon.pos).add(new Vector3(0, moon.radius + LANDING.HOVER_ALT, 0))
@@ -431,5 +432,59 @@ describe('ход над поверхностью не съедается нак�
     const nosedUp = run(0.6) // ~35° вверх
     expect(level).toBeGreaterThan(1)
     expect(nosedUp).toBeGreaterThan(level * 0.9)
+  })
+
+  /**
+   * РЕГРЕССИЯ: в ховере нос выравнивается в касательную каждый шаг, но угловая скорость
+   * тангажа продолжала копиться — вращение разгонялось «под ковром». Видно этого не было
+   * (ориентацию тут же стирали), а наружу выходило дрожью и залпом не по прицелу:
+   * направление выстрела считается по кадру ЭТОГО шага, а показывают его уже по выровненному.
+   */
+  it('тангаж не копится в угловой скорости, рыскание и крен работают', () => {
+    const world = quietWorld()
+    const moon = world.bodies.filter((b) => b.kind === 'moon')[0]!
+    const ship = world.player
+    ship.state.pos.copy(moon.pos).add(new Vector3(0, moon.radius + LANDING.HOVER_ALT, 0))
+    landShip(ship, moon)
+
+    ship.controls.pitch = 1
+    ship.controls.roll = 1
+    ship.controls.yaw = 1
+    for (let i = 0; i < 240; i++) stepLanding(ship, world, PHYSICS.FIXED_DT)
+
+    expect(ship.state.angVel.x).toBe(0)
+    expect(Math.abs(ship.state.angVel.y)).toBeGreaterThan(0)
+    expect(Math.abs(ship.state.angVel.z)).toBeGreaterThan(0)
+  })
+
+  /**
+   * Режим ограничивает РОВНО ОДНУ степень свободы — тангаж, из-за которого проседает тяга.
+   * Крен остаётся пилоту: над поверхностью можно идти боком и вверх ногами, как в космосе.
+   * Раньше поза собиралась из базиса с мировой нормалью вместо «верха» борта, и A/D тут
+   * не делали ничего.
+   */
+  it('крен над поверхностью работает: борт переворачивается, нос остаётся в касательной', () => {
+    const world = quietWorld()
+    const moon = world.bodies.filter((b) => b.kind === 'moon')[0]!
+    const ship = world.player
+    ship.state.pos.copy(moon.pos).add(new Vector3(0, moon.radius + LANDING.HOVER_ALT, 0))
+    landShip(ship, moon)
+
+    const normal = ship.landedOn!.normal
+    const up = new Vector3()
+    const fwd = new Vector3()
+    const right = new Vector3()
+
+    shipAxes(ship.state.quat, fwd, right, up)
+    expect(up.dot(normal)).toBeGreaterThan(0.9) // сели брюхом вниз
+
+    ship.controls.roll = 1
+    for (let i = 0; i < 600; i++) stepLanding(ship, world, PHYSICS.FIXED_DT)
+
+    shipAxes(ship.state.quat, fwd, right, up)
+    // Успел провернуться заметно (не обязательно ровно вверх ногами — важно, что крен идёт).
+    expect(up.dot(normal)).toBeLessThan(0.5)
+    // А нос всё это время остаётся в касательной плоскости: тяга идёт вдоль сферы.
+    expect(Math.abs(fwd.dot(normal))).toBeLessThan(1e-6)
   })
 })

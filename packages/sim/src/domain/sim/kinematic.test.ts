@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { Quaternion, Vector3 } from 'three'
 import { PHYSICS } from '../../config/physics'
-import { createWorld, despawnRemotePlayer, spawnRemotePlayer, STARTER_SYSTEM, type World } from '../world'
+import { despawnRemotePlayer, spawnRemotePlayer, type World } from '../world'
 import { stepWorld } from './step'
+import { quietWorld } from '../../testkit'
 
 /**
  * Кинематический борт. Его состояние ставится ИЗВНЕ (на клиенте — интерполятор по
@@ -15,11 +16,6 @@ import { stepWorld } from './step'
 const NO_CONTROLLERS = new Map()
 const oneStep = (world: World) => stepWorld(world, PHYSICS.FIXED_DT, NO_CONTROLLERS)
 
-/** Тихий мир без патрулей и пояса: лишние борта и камни тесту ни к чему. */
-function quiet(): World {
-  return createWorld({ ...STARTER_SYSTEM, patrols: [], belt: null })
-}
-
 /** Истинная позиция игрока: pos + originOffset. Инвариант к сдвигу начала координат. */
 function truePos(world: World) {
   return world.player.state.pos.clone().add(world.originOffset)
@@ -27,7 +23,7 @@ function truePos(world: World) {
 
 describe('кинематический борт', () => {
   it('не движется шагом мира — позу задаёт внешний источник', () => {
-    const world = quiet()
+    const world = quietWorld()
     world.player.kinematic = true
     // Будь борт обычным — на 200 м/с он бы улетел; интегратор его пропустит.
     world.player.state.vel.set(200, 0, 0)
@@ -39,7 +35,7 @@ describe('кинематический борт', () => {
   })
 
   it('без флага тот же борт со скоростью движется (контроль)', () => {
-    const world = quiet()
+    const world = quietWorld()
     world.player.state.vel.set(200, 0, 0)
     const before = truePos(world)
 
@@ -58,7 +54,7 @@ describe('удалённый игрок как кинематический бо
   }
 
   it('спавнится в world.ships: кинематический, нейтральный, со своим видом/лицом/именем', () => {
-    const world = quiet()
+    const world = quietWorld()
     const before = world.ships.length
 
     const ship = spawnRemotePlayer(world, {
@@ -75,7 +71,7 @@ describe('удалённый игрок как кинематический бо
   })
 
   it('шаг мира его не двигает — позу ведёт интерполятор', () => {
-    const world = quiet()
+    const world = quietWorld()
     const ship = spawnRemotePlayer(world, {
       name: 'X', species: 'Земляне', portrait: 0, pos: new Vector3(0, 0, 0), quat: new Quaternion(),
     })
@@ -90,7 +86,7 @@ describe('удалённый игрок как кинематический бо
   })
 
   it('despawn убирает его из мира', () => {
-    const world = quiet()
+    const world = quietWorld()
     const ship = spawnRemotePlayer(world, {
       name: 'X', species: 'Земляне', portrait: 0, pos: new Vector3(), quat: new Quaternion(),
     })

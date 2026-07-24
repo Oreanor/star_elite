@@ -3,14 +3,11 @@ import { describe, expect, it } from 'vitest'
 import { CRUISE } from '../../config/cruise'
 import { PHYSICS } from '../../config/physics'
 import { stepWorld } from '../sim/step'
-import { createWorld, STARTER_SYSTEM, type BodyEntity, type World } from '../world'
+import { type BodyEntity, type World } from '../world'
 import { bodyMass, gravityAccel, gravityReach, stepGravity } from './gravity'
+import { quietWorld } from '../../testkit'
 
 const NO_CONTROLLERS = new Map()
-
-function quiet(): World {
-  return createWorld({ ...STARTER_SYSTEM, patrols: [], belt: null })
-}
 
 function bodyOf(world: World, kind: BodyEntity['kind']): BodyEntity {
   const body = world.bodies.find((b) => b.kind === kind)
@@ -32,7 +29,7 @@ function hover(world: World, body: BodyEntity, altitude: number): void {
 
 describe('притяжение к телам', () => {
   it('масса планеты выводится из радиуса и плотности', () => {
-    const world = quiet()
+    const world = quietWorld()
     const planet = bodyOf(world, 'planet')
     const mass = bodyMass(planet)
     expect(mass).toBeGreaterThan(1e22)
@@ -40,21 +37,21 @@ describe('притяжение к телам', () => {
   })
 
   it('дальность зоны — полтора радиуса над поверхностью', () => {
-    const world = quiet()
+    const world = quietWorld()
     const planet = bodyOf(world, 'planet')
     const reach = gravityReach(planet)
     expect(reach / planet.radius).toBeCloseTo(1.5, 5)
   })
 
   it('у звезды зона пропорциональна радиусу', () => {
-    const world = quiet()
+    const world = quietWorld()
     const planet = bodyOf(world, 'planet')
     const star = bodyOf(world, 'star')
     expect(gravityReach(star) / gravityReach(planet)).toBeCloseTo(star.radius / planet.radius, 2)
   })
 
   it('на километре над планетой g почти как у поверхности', () => {
-    const world = quiet()
+    const world = quietWorld()
     const planet = bodyOf(world, 'planet')
     hover(world, planet, 1_000)
 
@@ -64,7 +61,7 @@ describe('притяжение к телам', () => {
   })
 
   it('на орбите станции (~500 км) g всё ещё ощутима', () => {
-    const world = quiet()
+    const world = quietWorld()
     const planet = bodyOf(world, 'planet')
     hover(world, planet, 500_000)
 
@@ -74,7 +71,7 @@ describe('притяжение к телам', () => {
   })
 
   it('за границей зоны g обнуляется', () => {
-    const world = quiet()
+    const world = quietWorld()
     const planet = bodyOf(world, 'planet')
     hover(world, planet, gravityReach(planet) + 10_000)
 
@@ -83,7 +80,7 @@ describe('притяжение к телам', () => {
   })
 
   it('на границе зоны g следует закону обратных квадратов', () => {
-    const world = quiet()
+    const world = quietWorld()
     const planet = bodyOf(world, 'planet')
     hover(world, planet, gravityReach(planet) - 100)
 
@@ -94,7 +91,7 @@ describe('притяжение к телам', () => {
   })
 
   it('у станции не падает, пока не спустился ниже половины её орбиты', () => {
-    const world = quiet()
+    const world = quietWorld()
     const station = bodyOf(world, 'station')
     if (!station.orbit?.parentId) throw new Error('станция не обращается вокруг планеты')
     const planet = world.bodies.find((b) => b.id === station.orbit!.parentId)
@@ -113,7 +110,7 @@ describe('притяжение к телам', () => {
   })
 
   it('между планетами g нулевая', () => {
-    const world = quiet()
+    const world = quietWorld()
     const planet = bodyOf(world, 'planet')
     hover(world, planet, 75_000_000_000)
 
@@ -122,7 +119,7 @@ describe('притяжение к телам', () => {
   })
 
   it('без тяги корабль падает на планету и отскакивает — без L стоянки нет', () => {
-    const world = quiet()
+    const world = quietWorld()
     const planet = bodyOf(world, 'planet')
     // Выше окна ховера: падение не должно само включить стоянку.
     hover(world, planet, 2_000)
@@ -140,7 +137,7 @@ describe('притяжение к телам', () => {
   })
 
   it('на крейсерском ходу вне фазы гравитация не действует', () => {
-    const world = quiet()
+    const world = quietWorld()
     const planet = bodyOf(world, 'planet')
     hover(world, planet, 400)
     world.player.cruise.factor = CRUISE.PHASE_THRESHOLD + 1

@@ -8,15 +8,12 @@ import { emptyPlan } from './contactPlan'
 import { createWorld, STARTER_SYSTEM } from './index'
 import type { ShipEntity, World } from './entities'
 import { ENCOUNTERS, biasedWeight, remoteness, spawnResidentContacts, stepDockedBerth, stepDockTraffic, stepTraffic } from './traffic'
+import { quietWorld } from '../../testkit'
 
 /**
  * Встречи. Космос без них — тир, а не место, где живут; но и встреча по
  * расписанию перестаёт быть встречей.
  */
-
-function quiet(): World {
-  return createWorld({ ...STARTER_SYSTEM, patrols: [], belt: null })
-}
 
 /** Без станции: она рожает мирных у причала, и дистанция появления не проверяется. */
 function deepSpace(): World {
@@ -62,8 +59,8 @@ describe('встречи в космосе', () => {
    * и восьмикратная разница в частоте осталась бы незамеченной.
    */
   it('число встреченных не зависит от частоты кадров', () => {
-    const slow = quiet()
-    const fast = quiet()
+    const slow = quietWorld()
+    const fast = quietWorld()
 
     const seconds = TRAFFIC.FIRST_DELAY + TRAFFIC.INTERVAL * 1.5
     run(slow, seconds, 1 / 30)
@@ -73,7 +70,7 @@ describe('встречи в космосе', () => {
   })
 
   it('больше положенного в системе не летает', () => {
-    const world = quiet()
+    const world = quietWorld()
     run(world, TRAFFIC.INTERVAL * (TRAFFIC.MAX + 10))
     // Потолок считает ВСТРЕЧЕННЫХ, а прикрытие исключено намеренно (`escortOf`):
     // звено не бросают на полпути ради лимита. Поэтому инвариант — на не-эскортных
@@ -132,7 +129,7 @@ describe('встречи в космосе', () => {
 
   /** Иногда приходят пачкой: стая пиратов и караван — это одна встреча, а не три. */
   it('встреча бывает групповой', () => {
-    const world = quiet()
+    const world = quietWorld()
     let biggest = 0
 
     for (let i = 0; i < 200; i++) {
@@ -184,9 +181,9 @@ describe('встречи в космосе', () => {
       return count
     }
 
-    const near = born(quiet())
+    const near = born(quietWorld())
 
-    const far = quiet()
+    const far = quietWorld()
     // Далеко от всего: и от планет, и от причала. Звезда не в счёт — у неё не живут.
     far.player.state.pos.set(0, 3e9, 0)
     const void_ = born(far)
@@ -215,7 +212,7 @@ describe('встречи в космосе', () => {
    * и исчезновение читается как поломка, а не как уход за пределы радара.
    */
   it('захваченный не исчезает, даже улетев далеко', () => {
-    const world = quiet()
+    const world = quietWorld()
     const ship = runUntilShip(world)
 
     world.lockedTargetId = ship.id
@@ -232,7 +229,7 @@ describe('встречи в космосе', () => {
   })
 
   it('корабль рождается с пилотом и с курсом на своё назначение', () => {
-    const world = quiet()
+    const world = quietWorld()
     const ship = runUntilShip(world)
 
     expect(ship.ai).not.toBeNull()
@@ -243,8 +240,8 @@ describe('встречи в космосе', () => {
 
   /** Одно зерно — один трафик. Иначе ни сохранений, ни сети. */
   it('трафик детерминирован', () => {
-    const a = quiet()
-    const b = quiet()
+    const a = quietWorld()
+    const b = quietWorld()
     run(a, TRAFFIC.INTERVAL * 3)
     run(b, TRAFFIC.INTERVAL * 3)
 
@@ -257,7 +254,7 @@ describe('встречи в космосе', () => {
    * стыковки, а не декорация: у них есть пилот и фаза захода.
    */
   it('у причала постоянно держатся завсегдатаи-нейтралы', () => {
-    const world = quiet() // игрок в 2 км от станции
+    const world = quietWorld() // игрок в 2 км от станции
     run(world, 5) // ещё до первой встречи (FIRST_DELAY): это отдельная жизнь причала
 
     const regulars = met(world).filter((s) => s.ai?.dock === 'inbound' || s.ai?.dock === 'berthed')
@@ -275,7 +272,7 @@ describe('встречи в космосе', () => {
 
   /** Вдали от станции причал не оживляют: незачем плодить то, чего игрок не видит. */
   it('вдали от станции завсегдатаев не подсевают', () => {
-    const world = quiet()
+    const world = quietWorld()
     const station = world.bodies.find((b) => b.kind === 'station')!
     world.player.state.pos.copy(station.pos).setX(station.pos.x + TRAFFIC.STATION_LIFE_RANGE + 5000)
 
@@ -301,7 +298,7 @@ describe('встречи в космосе', () => {
 
   /** Удалённость 0..1 растёт по мере ухода от обитаемого мира и у причала близка к нулю. */
   it('удалённость растёт с уходом от жилья', () => {
-    const world = quiet()
+    const world = quietWorld()
     const station = world.bodies.find((b) => b.kind === 'station')!
 
     world.player.state.pos.copy(station.pos).setX(station.pos.x + 1000)
@@ -350,7 +347,7 @@ describe('жизнь причала в доке', () => {
     world.ships.filter((s) => s.alive && s.ai?.dock === 'berthed' && s.faction === 'neutral').length
 
   it('в доке на подлёте появляются заходящие с кромки радара, без мгновенного berthed', () => {
-    const world = quiet()
+    const world = quietWorld()
     let maxInbound = 0
     for (let t = 0; t < 600; t += 2) {
       stepDockTraffic(world, 2)
@@ -366,7 +363,7 @@ describe('жизнь причала в доке', () => {
   })
 
   it('отстоявшийся у причала отходит сам (dock=done)', () => {
-    const world = quiet()
+    const world = quietWorld()
     for (let t = 0; t < 120 && inboundCount(world) === 0; t += 2) stepDockTraffic(world, 2)
     const guest = world.ships.find((s) => s.ai?.dock === 'inbound')
     expect(guest).toBeTruthy()
@@ -377,7 +374,7 @@ describe('жизнь причала в доке', () => {
   })
 
   it('inbound в доке не швартуется без полёта — тот же борт ждёт на подлёте', () => {
-    const world = quiet()
+    const world = quietWorld()
     for (let t = 0; t < 120 && inboundCount(world) === 0; t += 2) stepDockTraffic(world, 2)
     const inbound = world.ships.find((s) => s.ai?.dock === 'inbound')
     expect(inbound).toBeTruthy()

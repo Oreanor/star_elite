@@ -5,21 +5,11 @@ import { PLATFORM } from '../../config/platform'
 import { createAIState } from '../ai/types'
 import { COMMODITIES } from '../cargo/items'
 import { castLaser } from '../combat/raycast'
-import { createWorld, STARTER_SYSTEM, type World } from '../world'
+import type { World } from '../world'
 import { makeShip } from './factory'
 import { spawnPlatform, stepPlatforms } from './platforms'
 import type { ShipEntity } from './entities'
-
-/**
- * Платформа-гнездо. Её суть — в том, ЧЕГО не происходит: под маскировкой звено
- * не просыпается, сколько по нему ни стреляй. Поэтому и проверяем прежде всего
- * молчание сенсоров, а уже потом — что открытого игрока гнездо слышит.
- */
-
-/** Пустая система без пояса и патрулей: в кадре только то, что ставит тест. */
-function emptyWorld(): World {
-  return createWorld({ ...STARTER_SYSTEM, belt: null, patrols: [] })
-}
+import { quietWorld } from '../../testkit'
 
 /** Все ли посаженные на палубу пираты ещё спят. */
 function allDormant(crew: ShipEntity[]): boolean {
@@ -28,7 +18,7 @@ function allDormant(crew: ShipEntity[]): boolean {
 
 describe('пиратская платформа-гнездо', () => {
   it('рождается со спящим экипажем на палубе', () => {
-    const world = emptyWorld()
+    const world = quietWorld()
     const crew = spawnPlatform(world)
 
     expect(world.platforms).toHaveLength(1)
@@ -40,7 +30,7 @@ describe('пиратская платформа-гнездо', () => {
   })
 
   it('под маскировкой гнездо не будится даже вплотную', () => {
-    const world = emptyWorld()
+    const world = quietWorld()
     const crew = spawnPlatform(world)
     const platform = world.platforms[0]!
 
@@ -54,7 +44,7 @@ describe('пиратская платформа-гнездо', () => {
   })
 
   it('под маскировкой обстрел корпуса не будит — спят, пока платформа цела', () => {
-    const world = emptyWorld()
+    const world = quietWorld()
     const crew = spawnPlatform(world)
     const platform = world.platforms[0]!
 
@@ -69,7 +59,7 @@ describe('пиратская платформа-гнездо', () => {
   })
 
   it('открытого игрока ближе WAKE_RANGE гнездо слышит и просыпается', () => {
-    const world = emptyWorld()
+    const world = quietWorld()
     const crew = spawnPlatform(world)
     const platform = world.platforms[0]!
 
@@ -83,7 +73,7 @@ describe('пиратская платформа-гнездо', () => {
   })
 
   it('повреждение корпуса поднимает гнездо и вдали (сигнал тревоги)', () => {
-    const world = emptyWorld()
+    const world = quietWorld()
     const crew = spawnPlatform(world)
     const platform = world.platforms[0]!
 
@@ -98,7 +88,7 @@ describe('пиратская платформа-гнездо', () => {
   })
 
   it('расстрелянная платформа гибнет, роняет металл ≈ три трюма и добивает спящих', () => {
-    const world = emptyWorld()
+    const world = quietWorld()
     const crew = spawnPlatform(world)
     const platform = world.platforms[0]!
     const expected = Math.round(PLATFORM.SCRAP_HOLDS * world.player.hold.capacity)
@@ -128,7 +118,7 @@ describe('маскировка бьёт только спящее гнездо',
   }
 
   it('замаскированный луч добивает спящего', () => {
-    const world = emptyWorld()
+    const world = quietWorld()
     const target = pirateAhead(world, true)
     world.player.cloaked = true
 
@@ -137,7 +127,7 @@ describe('маскировка бьёт только спящее гнездо',
   })
 
   it('замаскированный луч НЕ трогает бодрствующего', () => {
-    const world = emptyWorld()
+    const world = quietWorld()
     pirateAhead(world, false)
     world.player.cloaked = true
 
@@ -146,7 +136,7 @@ describe('маскировка бьёт только спящее гнездо',
   })
 
   it('без поля тот же выстрел бьёт бодрствующего — правило только про маскировку', () => {
-    const world = emptyWorld()
+    const world = quietWorld()
     const target = pirateAhead(world, false)
     world.player.cloaked = false
 
@@ -155,7 +145,7 @@ describe('маскировка бьёт только спящее гнездо',
   })
 
   it('ядро платформы — цель для луча и под полем', () => {
-    const world = emptyWorld()
+    const world = quietWorld()
     spawnPlatform(world)
     const platform = world.platforms[0]!
     // Ставим платформу перед носом, ближе экипажа.
