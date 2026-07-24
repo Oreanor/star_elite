@@ -12,13 +12,17 @@ import {
   type BufferGeometry,
   type Texture,
 } from 'three'
-import { warBaseFixtureWorldPos, type WarBaseEntity } from '@elite/sim'
+import { WARBASE, warBaseFixtureWorldPos, type WarBaseEntity } from '@elite/sim'
 import { useSession } from '../../session/GameContext'
 import { WARBASE_FX } from '../config'
 import {
   DETAIL_KEYS,
+  TRASH_VARIANTS,
+  trashVariantOf,
   warBaseDetailGeometry,
   warBaseDetailMaterial,
+  warBaseTrashGeometry,
+  warBaseTrashMaterial,
   type DetailKey,
 } from '../geometry/warBaseGlb'
 import { planetTexturedMaterial } from '../materials/materials'
@@ -95,6 +99,11 @@ function Hull({ base }: { base: WarBaseEntity }) {
   return <mesh ref={ref} geometry={geometry} frustumCulled={false} />
 }
 
+/** Обломок мельче целой детали: от неё остался огрызок, а не она сама. */
+const TRASH_SCALE = 0.62
+/** Пакеты обломков — по одному на облик. Список постоянный, считается один раз. */
+const TRASH_KEYS = Array.from({ length: TRASH_VARIANTS }, (_, i) => i)
+
 /** Все ЖИВЫЕ детали одного облика со всех баз — один InstancedMesh. */
 function DetailBatch({ dkey }: { dkey: DetailKey }) {
   const session = useSession()
@@ -144,6 +153,62 @@ function DetailBatch({ dkey }: { dkey: DetailKey }) {
   return <instancedMesh ref={ref} args={[undefined, undefined, MAX_DETAILS]} frustumCulled={false} />
 }
 
+/**
+ * ОСТАНКИ отстреленных деталей — по одному пакету на облик обломка.
+ *
+ * Сбитая пушка не исчезает бесследно: на её месте остаётся искорёженный обломок, вросший
+ * в обшивку. Так видно, что база уже потрёпана, а не «была такой всегда».
+ *
+ * Место и разворот — те же, что у целой детали (одна формула на луч, деталь и обломок),
+ * но обломок мельче и сидит ГЛУБЖЕ: центр опускаем на разницу выступов, иначе огрызок
+ * висел бы над обшивкой на высоте снесённой башни. Крен берём от той же `roll`, чтобы
+ * обломки не встали строем.
+ */
+function TrashBatch({ variant }: { variant: number }) {
+  const session = useSession()
+  const ref = useRef<InstancedMesh>(null)
+
+  useFrame(() => {
+    const mesh = ref.current
+    if (!mesh) return
+    const g = warBaseTrashGeometry(variant)
+    const m = warBaseTrashMaterial(variant)
+    const shrink = worldShrink(session.world.player.state.scale)
+    if (!g || !m || shrink <= 0) {
+      mesh.count = 0
+      return
+    }
+    if (mesh.geometry !== g) mesh.geometry = g
+    if (mesh.material !== m) mesh.material = m
+
+    const time = session.world.time
+    let count = 0
+    for (const base of session.world.warBases) {
+      if (!base.alive) continue
+      for (const fix of base.fixtures) {
+        if (fix.alive || trashVariantOf(fix.id) !== variant || count >= MAX_DETAILS) continue
+        const size = fix.size * TRASH_SCALE
+        warBaseFixtureWorldPos(base, fix, time, _pos)
+        _dir.copy(_pos).sub(base.pos).normalize()
+        // Осадка: центр обломка ниже центра детали ровно на разницу их выступов.
+        _pos.addScaledVector(_dir, -(fix.size - size) * WARBASE.FIXTURE_SIT_OUT)
+        _dummy.position.copy(_pos).sub(base.pos).multiplyScalar(shrink).add(base.pos)
+        _align.setFromUnitVectors(_UP, _dir)
+        _roll.setFromAxisAngle(_dir, fix.roll)
+        _dummy.quaternion.copy(_roll).multiply(_align)
+        _dummy.scale.setScalar(size * shrink)
+        _dummy.updateMatrix()
+        mesh.setMatrixAt(count, _dummy.matrix)
+        count++
+      }
+    }
+    mesh.count = count
+    mesh.instanceMatrix.needsUpdate = true
+  })
+
+  return <instancedMesh ref={ref} args={[undefined, undefined, MAX_DETAILS]} frustumCulled={false} />
+}
+
 export function WarBases() {
   const session = useSession()
   const bases = session.world.warBases
@@ -154,6 +219,9 @@ export function WarBases() {
       ))}
       {DETAIL_KEYS.map((k) => (
         <DetailBatch key={k} dkey={k} />
+      ))}
+      {TRASH_KEYS.map((v) => (
+        <TrashBatch key={v} variant={v} />
       ))}
     </>
   )

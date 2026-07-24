@@ -155,4 +155,23 @@ describe('отстрел деталей базы', () => {
     stepWorld(world, PHYSICS.FIXED_DT, new Map())
     expect(world.lockedFixtureId).toBeNull()
   })
+
+  /**
+   * Разбитая деталь ОСТАЁТСЯ в списке базы, лишь помеченная мёртвой. На этом держится
+   * картинка: рендер ставит на её место обломок и считает его место по тем же `dir` и
+   * `roll`, что были у целой. Вычисти мёртвых из `fixtures` «на всякий случай» — и следы
+   * обстрела пропадут вместе с ними.
+   */
+  it('отстреленная деталь остаётся в списке, помеченная мёртвой', () => {
+    const world = withBases()
+    const base = world.warBases[0]!
+    const fix = base.fixtures.find((f) => f.model !== 0)!
+    const before = base.fixtures.length
+
+    damageWarBaseFixture(world, base, fix, fix.hull)
+    stepWorld(world, PHYSICS.FIXED_DT, new Map())
+
+    expect(base.fixtures.length).toBe(before)
+    expect(base.fixtures.find((f) => f.id === fix.id)?.alive).toBe(false)
+  })
 })

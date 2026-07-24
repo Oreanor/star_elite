@@ -80,6 +80,42 @@ for (const key of DETAIL_KEYS) {
   })
 }
 
+/**
+ * ОСТАНКИ детали: искорёженный обломок на месте отстреленной пушки или глаза.
+ *
+ * Три облика, и какой куда — выводится из id детали, а не бросается костью. Причина та же,
+ * что у всей генерации: одна и та же разбитая пушка обязана выглядеть одинаково и после
+ * перезахода, и у соседа по сети. Новый облик — новая строка здесь, без правок сцены.
+ *
+ * Свечение гасим сильнее, чем у целой детали: обломок мёртв, ему незачем светиться.
+ */
+const TRASH_URLS = ['/models/warbase/trash/0.glb', '/models/warbase/trash/1.glb', '/models/warbase/trash/2.glb']
+
+export const TRASH_VARIANTS = TRASH_URLS.length
+
+const trashCache = new Map<number, Loaded>()
+
+TRASH_URLS.forEach((url, variant) => {
+  new GLTFLoader().load(url, (gltf) => {
+    const loaded = prepare(gltf.scene, 0.05)
+    if (loaded) trashCache.set(variant, loaded)
+  })
+})
+
+/** Какой обломок достаётся детали. Детерминировано от её id — то же место, тот же вид. */
+export function trashVariantOf(fixtureId: number): number {
+  return ((fixtureId % TRASH_VARIANTS) + TRASH_VARIANTS) % TRASH_VARIANTS
+}
+
+/** Геометрия обломка. null — ещё грузится. */
+export function warBaseTrashGeometry(variant: number): BufferGeometry | null {
+  return trashCache.get(variant)?.geometry ?? null
+}
+/** Материал обломка. null — ещё грузится. */
+export function warBaseTrashMaterial(variant: number): Material | null {
+  return trashCache.get(variant)?.material ?? null
+}
+
 /** Геометрия навесной детали. null — ещё грузится. */
 export function warBaseDetailGeometry(key: DetailKey): BufferGeometry | null {
   return detailCache.get(key)?.geometry ?? null
