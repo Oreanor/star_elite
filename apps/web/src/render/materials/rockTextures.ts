@@ -29,6 +29,16 @@ export function rockTextureOf(id: number): number {
   return ((id % ROCK_TEXTURE_COUNT) + ROCK_TEXTURE_COUNT) % ROCK_TEXTURE_COUNT
 }
 
+/**
+ * Путь к каменной карте — для тех, кто грузит по URL (портрет цели на HUD-канвасе).
+ *
+ * `lo` — уменьшенная копия 512×256 для портрета: кружок в полтора десятка пикселей не
+ * различает полную карту, а HUD её ещё и читает попиксельно (`textureBall`).
+ */
+export function rockTextureUrl(shape: number, quality: 'full' | 'lo' = 'full'): string {
+  return quality === 'lo' ? `/textures/asteroids/lo/${shape}.webp` : `/textures/asteroids/${shape}.webp`
+}
+
 const cache = new Map<number, Texture>()
 
 /**

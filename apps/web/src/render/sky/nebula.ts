@@ -13,7 +13,7 @@ import { makeRng } from '@elite/sim'
  *  2. Здесь она замыкается по горизонтали по построению: шва нет вообще.
  *
  * Чтобы подставить свою картинку: положи файл в `public/` и замени тело на
- * `new TextureLoader().load('/sky.jpg')` с той же настройкой mapping и colorSpace.
+ * `new TextureLoader().load('/sky.webp')` с той же настройкой mapping и colorSpace.
  */
 
 const WIDTH = 1024

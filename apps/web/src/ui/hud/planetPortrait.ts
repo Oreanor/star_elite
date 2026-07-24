@@ -6,6 +6,7 @@
 
 import type { BodyEntity } from '@elite/sim'
 import { planetLook, planetTextureUrl, pickVariant } from '../../render/sky/planets'
+import { rockTextureOf, rockTextureUrl } from '../../render/materials/rockTextures'
 import { drawSampledBall, drawTextureBall, hash2 } from './textureBall'
 
 /** Медленнее звезды: планета в портрете не должна мельтешить. */
@@ -50,7 +51,12 @@ export function drawPlanetBall(
   const look = planetLook(body.surface)
   const seed = planetPortraitSeed(body.id)
   const variant = pickVariant(look, seed)
-  const url = planetTextureUrl(look, variant)
+  // Луна — тот же КАМЕНЬ по id, что в мире и на вкладке ПЛАНЕТА: спутник это большой камень.
+  // Мелкая копия карты: клетка портрета — полтора десятка пикселей, и полновесные
+  // 2048×1024 здесь только съедали бы память (портрет ещё и читает пиксели попиксельно).
+  const url = body.kind === 'moon'
+    ? rockTextureUrl(rockTextureOf(body.id), 'lo')
+    : planetTextureUrl(look, variant, 'lo')
   if (drawTextureBall(ctx, cx, cy, ballR, rimColor, url, time, PLANET_PAINT)) return
   drawSampledBall(ctx, cx, cy, ballR, rimColor, time, PLANET_PAINT, proceduralSample(body.color, seed))
 }

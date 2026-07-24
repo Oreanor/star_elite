@@ -9,7 +9,7 @@ import { nebulaTexture } from './nebula'
  * полный оборот 360°, вертикаль — от полюса до полюса). Обычная фотография даст
  * шов за спиной и защемление на полюсах.
  *
- * Файлы: `public/textures/sky/0.jpg` … `public/textures/sky/9.jpg`.
+ * Файлы: `public/textures/sky/0.webp` … `public/textures/sky/9.webp`.
  * Файла нет — остаёмся на процедурной полосе. Пустого чёрного неба не бывает.
  */
 
@@ -21,7 +21,7 @@ function normalizedSkyIndex(galaxyIndex: number): number {
 }
 
 function skyUrl(index: number): string {
-  return `/textures/sky/${index}.jpg`
+  return `/textures/sky/${index}.webp`
 }
 
 function configure(texture: Texture): Texture {
