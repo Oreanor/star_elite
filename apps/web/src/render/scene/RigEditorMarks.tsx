@@ -1,8 +1,8 @@
 import { useFrame } from '@react-three/fiber'
 import { useEffect, useRef } from 'react'
 import { InstancedMesh, MeshBasicMaterial, Object3D, SphereGeometry } from 'three'
-import { groupPoints, rigEditor, type RigGroup } from '../../app/control/rigEditor'
-import { useSession } from '../../app/GameContext'
+import { groupPoints, rigEditor, type RigGroup } from '../dev/rigEditor'
+import { useSession } from '../../session/GameContext'
 
 /**
  * Маркеры оснастки и панель координат для единого редактора (клавиша K, логика —

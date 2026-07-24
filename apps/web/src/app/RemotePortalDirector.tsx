@@ -8,13 +8,13 @@ import {
   jumpGateSide,
   type JumpGate,
 } from '@elite/sim'
-import { jumpTo, useSession } from './GameContext'
+import { jumpTo, useSession } from '../session/GameContext'
 import {
   portalSnapshotActive,
   subscribeSharedPortals,
   type PortalMouthSnapshot,
   type SharedPortalSnapshot,
-} from './net/portal'
+} from '../session/net/portal'
 
 interface RemotePortal {
   snapshot: SharedPortalSnapshot

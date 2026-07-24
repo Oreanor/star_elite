@@ -10,7 +10,7 @@ import {
   type Relationship,
   type Topic,
 } from '@elite/sim'
-import { useSession } from '../../app/GameContext'
+import { useSession } from '../../session/GameContext'
 import { Button, PilotPortrait } from '../station/chrome'
 import { GLASS_PANEL, screenBackground } from '../station/backdrop'
 import { clearOutcomeEmotion, markOutcomeEmotion, type DivineEmotion, type Emotion } from '../portrait'

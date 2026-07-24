@@ -1,6 +1,6 @@
 import { onDisconnect, onValue, ref, serverTimestamp, update } from 'firebase/database'
 import { LINKED_PORTAL, type World } from '@elite/sim'
-import { jumpPortal, portalActive } from '../control/jumpPortal'
+import { jumpPortal, portalActive } from '../jumpPortal'
 import { currentUserId } from './account'
 import { rtdb, serverNow } from './firebase'
 

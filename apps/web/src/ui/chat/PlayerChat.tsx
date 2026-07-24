@@ -2,11 +2,11 @@ import { useEffect, useRef, useState } from 'react'
 import { Button, PilotPortrait } from '../station/chrome'
 import { UI } from '../theme'
 import { t, useLang } from '../i18n'
-import { professionName } from '../i18n/dataNames'
-import { useSession } from '../../app/GameContext'
-import { currentUserId } from '../../app/net/account'
-import { sendChat, useChat } from '../../app/net/chat'
-import { selfPresence, type OnlinePlayer } from '../../app/net/presence'
+import { properName, professionName } from '../i18n/dataNames'
+import { useSession } from '../../session/GameContext'
+import { currentUserId } from '../../session/net/account'
+import { sendChat, useChat } from '../../session/net/chat'
+import { selfPresence, type OnlinePlayer } from '../../session/net/presence'
 
 /**
  * Окно чата с живым игроком — то же, что разговор с ботом, но БЕЗ модели и БЕЗ механик:
@@ -37,9 +37,10 @@ export function PlayerChat({ player, onClose }: { player: OnlinePlayer; onClose:
     void sendChat(player.uid, text, selfPresence(session.world, true))
   }
 
+  // Имена приходят по сети КАНОНОМ домена — переводит их тот, кто показывает.
   const where = player.place
-    ? t('people.online.dock', { place: player.place, sys: player.systemName })
-    : t('people.online.sys', { sys: player.systemName })
+    ? t('people.online.dock', { place: properName(player.place), sys: properName(player.systemName) })
+    : t('people.online.sys', { sys: properName(player.systemName) })
 
   return (
     <div className="absolute inset-0 flex items-center justify-center bg-black/80 font-mono" style={{ color: UI.PRIMARY }}>

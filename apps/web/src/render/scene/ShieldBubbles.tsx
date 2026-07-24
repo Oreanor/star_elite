@@ -2,7 +2,7 @@ import { useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef } from 'react'
 import { Color, InstancedBufferAttribute, InstancedMesh, Object3D, PlaneGeometry, Vector3 } from 'three'
 import type { ShipEntity } from '@elite/sim'
-import { useSession } from '../../app/GameContext'
+import { useSession } from '../../session/GameContext'
 import { SHIELD_BUBBLE } from '../config'
 import { shieldBubbleMaterial } from '../materials/materials'
 

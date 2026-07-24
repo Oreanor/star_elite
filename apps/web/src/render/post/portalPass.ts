@@ -1,6 +1,6 @@
 import type { Camera, WebGLRenderer, WebGLRenderTarget } from 'three'
 import type { World } from '@elite/sim'
-import { portalOpen } from '../../app/control/jumpPortal'
+import { portalOpen } from '../../session/jumpPortal'
 import { renderJumpPortalOverlay } from '../scene/portalStencil'
 
 /**

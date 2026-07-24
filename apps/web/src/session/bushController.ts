@@ -6,7 +6,7 @@ import {
   type World,
 } from '@elite/sim'
 import { Vector3 } from 'three'
-import { input } from '../../platform/input/input'
+import { input } from '../platform/input/input'
 import { torusAutopilotActive, torusNav } from './torusAutopilot'
 import type { PlayerIntent } from './playerController'
 

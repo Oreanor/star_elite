@@ -37,8 +37,8 @@ import {
   type SystemDef,
   type World,
 } from '@elite/sim'
-import { useSession } from '../../app/GameContext'
-import { useOnlinePlayers } from '../../app/net/presence'
+import { useSession } from '../../session/GameContext'
+import { useOnlinePlayers } from '../../session/net/presence'
 import { UI } from '../theme'
 import { t, useLang } from '../i18n'
 import { galaxyShapeName, lifeName, properName, starClassName } from '../i18n/dataNames'

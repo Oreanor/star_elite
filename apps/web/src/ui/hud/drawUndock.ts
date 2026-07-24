@@ -5,7 +5,7 @@ import {
   RING_INTERVAL,
   UNDOCK_TOTAL,
   undockTime,
-} from '../../app/control/undockFx'
+} from '../../session/undockFx'
 import { HUD_COLORS } from './draw'
 
 /**

@@ -14,7 +14,7 @@ import {
   type ShipEntity,
   type World,
 } from '@elite/sim'
-import { useOnlinePlayers, type OnlinePlayer } from '../../app/net/presence'
+import { useOnlinePlayers, type OnlinePlayer } from '../../session/net/presence'
 import { currentLang, t, useLang, type Key } from '../i18n'
 import { UI } from '../theme'
 import { currentGameDate } from '../clock'
@@ -26,7 +26,7 @@ import { ShipScreen } from '../ship/ShipScreen'
 import { SystemMap } from '../map/SystemMap'
 import { GalaxyMap } from '../map/GalaxyMap'
 import { UniverseMap } from '../map/UniverseMap'
-import { useSession } from '../../app/GameContext'
+import { useSession } from '../../session/GameContext'
 import { Locator } from '../map/Locator'
 import { PlanetScreen } from '../planet/PlanetScreen'
 
@@ -449,8 +449,8 @@ function OnlineList({ onChat }: { onChat: (player: OnlinePlayer) => void }) {
       <div className="mt-3 flex flex-wrap gap-3">
         {players.map((p) => {
           const where = p.place
-            ? t('people.online.dock', { place: p.place, sys: p.systemName })
-            : t('people.online.sys', { sys: p.systemName })
+            ? t('people.online.dock', { place: properName(p.place), sys: properName(p.systemName) })
+            : t('people.online.sys', { sys: properName(p.systemName) })
           return (
             <PersonPlaque
               key={p.uid}

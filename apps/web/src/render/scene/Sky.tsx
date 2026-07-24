@@ -1,7 +1,7 @@
 import { useFrame, useThree } from '@react-three/fiber'
 import { useLayoutEffect } from 'react'
 import { clamp } from '@elite/sim'
-import { useSession } from '../../app/GameContext'
+import { useSession } from '../../session/GameContext'
 import { SKY } from '../config'
 import { loadSky } from '../sky/sky'
 

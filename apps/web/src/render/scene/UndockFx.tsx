@@ -1,5 +1,5 @@
 import { useFrame } from '@react-three/fiber'
-import { advanceUndock } from '../../app/control/undockFx'
+import { advanceUndock } from '../../session/undockFx'
 
 /**
  * Постановщик кино вылета: единственная забота — крутить время сцены. Мир при

@@ -32,31 +32,31 @@ import {
   type World,
 } from '@elite/sim'
 import { cycleGalaxyStar, galaxyRadar, retargetNearestGalaxyStar } from './galaxyRadar'
-import { syncControllers, useSession, type Session } from '../../app/GameContext'
-import { coastController } from '../../app/control/playerController'
-import { stepCameraView } from '../../app/control/cameraView'
-import { cycleHull, rigEditorActive, stepRigEditor, toggleRigEditor } from '../../app/control/rigEditor'
-import { resetTorusFlight } from '../../app/control/torusFlight'
+import { syncControllers, useSession, type Session } from '../../session/GameContext'
+import { coastController } from '../../session/playerController'
+import { stepCameraView } from '../../session/cameraView'
+import { cycleHull, rigEditorActive, stepRigEditor, toggleRigEditor } from '../dev/rigEditor'
+import { resetTorusFlight } from '../../session/torusFlight'
 import {
   consumeTorusArrival,
   cycleTorusTarget,
   resetTorusAutopilot,
   toggleTorusAutopilot,
-} from '../../app/control/torusAutopilot'
+} from '../../session/torusAutopilot'
 import {
   beginBushExit,
   bushExitActive,
   bushExitVertex,
   resetBushExit,
   stepBushExit,
-} from '../../app/control/bushExit'
+} from '../../session/bushExit'
 import { placeTorusAtVertex, torusNearest } from './HypertorusLayer'
 import { nodeOfVertex, vertexOfNode } from './torusNodes'
 import { TORUS } from '../config'
-import { persistSave } from '../../app/save/saveStore'
+import { persistSave } from '../../session/save/saveStore'
 import { clearPresses, consumePress, input, isHeld, releaseLock } from '../../platform/input/input'
-import { gameTimeSec } from '../../app/net/worldClock'
-import { pushWarning } from '../../ui/hud/warnings'
+import { gameTimeSec } from '../../session/net/worldClock'
+import { pushWarning } from '../../session/warnings'
 
 /** Миелофон «есть у игрока», если он в аукс-слоте ИЛИ лежит в трюме: дев-выдача кладёт
  *  его в ТРЮМ, а не в слот, поэтому проверка только по слоту давала ложное «прибор не

@@ -1,7 +1,7 @@
 import { useFrame } from '@react-three/fiber'
 import { useMemo, useRef } from 'react'
 import { Mesh, Object3D, Quaternion, Vector3 } from 'three'
-import { useSession } from '../../app/GameContext'
+import { useSession } from '../../session/GameContext'
 import { plasmaBeamGeometry } from '../geometry/props'
 import { beamCoreMaterial, beamShellMaterial, stepBeamMaterials } from '../materials/plasmaBeam'
 import { PLASMA } from '../config'

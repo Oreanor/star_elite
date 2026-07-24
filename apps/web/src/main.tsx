@@ -1,6 +1,6 @@
 import { createRoot } from 'react-dom/client'
 import { App } from './app/App'
-import { initWorldClock } from './app/net/worldClock'
+import { initWorldClock } from './session/net/worldClock'
 import { preloadHulls } from './render/geometry/ships'
 import { preloadPortraits } from './ui/portrait'
 import { preloadTitleAssets } from './ui/preload'

@@ -19,9 +19,9 @@ import {
   type WebGLRenderer,
 } from 'three'
 import type { World } from '@elite/sim'
-import { portalOpen } from '../../app/control/jumpPortal'
-import { jumpPortal, markPortalDestinationDrawn } from '../../app/control/jumpPortal'
-import { hstate } from '../../app/control/hyperLog'
+import { portalOpen } from '../../session/jumpPortal'
+import { jumpPortal, markPortalDestinationDrawn } from '../../session/jumpPortal'
+import { hstate } from '../../session/hyperLog'
 import { WARP_PORTAL } from '../config'
 import {
   destPortalScene,

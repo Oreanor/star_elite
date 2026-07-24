@@ -2,12 +2,12 @@ import { useFrame } from '@react-three/fiber'
 import { useMemo, useRef } from 'react'
 import { AdditiveBlending, InstancedMesh, MeshBasicMaterial, Object3D, Quaternion, Vector3 } from 'three'
 import { clamp, CRUISE, shipAxes, type ShipEntity } from '@elite/sim'
-import { useSession } from '../../app/GameContext'
+import { useSession } from '../../session/GameContext'
 import { EXHAUST, GIANT_RENDER_CAP } from '../config'
 import { flameGeometry } from '../geometry/flame'
 import { chassisNozzles, MISSILE_NOZZLE, type Nozzle } from '../geometry/ships'
 import { nearestStar, starTintHex } from '../starLight'
-import { rigEditorActive } from '../../app/control/rigEditor'
+import { rigEditorActive } from '../dev/rigEditor'
 
 /**
  * Струи из сопел — как у турбо-зажигалки: узкий белый керн внутри голубого факела.

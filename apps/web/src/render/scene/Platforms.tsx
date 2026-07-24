@@ -2,7 +2,7 @@ import { useFrame } from '@react-three/fiber'
 import { useMemo, useRef } from 'react'
 import { InstancedMesh, Object3D, Quaternion, Vector3 } from 'three'
 import { PLATFORM } from '@elite/sim'
-import { useSession } from '../../app/GameContext'
+import { useSession } from '../../session/GameContext'
 import { platformGeometry } from '../geometry/platform'
 import { hullMaterial } from '../materials/materials'
 

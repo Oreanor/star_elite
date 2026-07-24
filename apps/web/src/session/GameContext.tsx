@@ -29,8 +29,8 @@ import {
   type Universe,
   type World,
 } from '@elite/sim'
-import { createIntent, createPlayerController, type PlayerIntent } from './control/playerController'
-import { createBushController } from './control/bushController'
+import { createIntent, createPlayerController, type PlayerIntent } from './playerController'
+import { createBushController } from './bushController'
 import { online } from './net/firebase'
 import { loadSave } from './save/saveStore'
 

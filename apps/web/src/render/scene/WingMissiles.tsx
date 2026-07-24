@@ -2,7 +2,7 @@ import { useFrame } from '@react-three/fiber'
 import { useMemo, useRef } from 'react'
 import { InstancedMesh, Object3D, Vector3 } from 'three'
 import { hardpointIndices, isMissile, shipAxes } from '@elite/sim'
-import { useSession } from '../../app/GameContext'
+import { useSession } from '../../session/GameContext'
 import { missileGeometry } from '../geometry/ships'
 import { missileMaterial } from '../materials/materials'
 

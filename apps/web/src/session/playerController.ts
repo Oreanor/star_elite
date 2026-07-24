@@ -16,10 +16,10 @@ import {
   manoeuvring as busy,
   stepManoeuvre,
 } from '@elite/sim'
-import { consumePress, input, isHeld } from '../../platform/input/input'
-import { pushWarning } from '../../ui/hud/warnings'
+import { consumePress, input, isHeld } from '../platform/input/input'
+import { pushWarning } from './warnings'
 import { undocking } from './undockFx'
-import { rigEditorActive } from './rigEditor'
+import { inputCaptured } from './inputCapture'
 
 /**
  * Игрок. Реализует тот же `Controller`, что и бот: заполняет ShipControls.
@@ -490,7 +490,7 @@ export function createPlayerController(intent: PlayerIntent): Controller {
       c.boost = input.throttleUp ? boostMult(ship.loadout) : 1
       // В редакторе сопел Ctrl — модификатор сдвига вдоль корпуса, а не тормоз: иначе каждая
       // правка глубины дёргала бы корабль, и подстраивать устье приходилось бы на торможении.
-      c.retro = !rigEditorActive() && (isHeld('ControlLeft') || isHeld('ControlRight')) ? 1 : 0
+      c.retro = !inputCaptured() && (isHeld('ControlLeft') || isHeld('ControlRight')) ? 1 : 0
 
       // Крейсерский ход («форсаж») — удержание Пробела (разгон к MAX).
       // Alt — защёлка: множитель встаёт; пробел можно отпустить.

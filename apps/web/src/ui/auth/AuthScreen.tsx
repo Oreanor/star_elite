@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { signIn, signUp } from '../../app/net/account'
+import { signIn, signUp } from '../../session/net/account'
 import { t, useLang } from '../i18n'
 
 /**

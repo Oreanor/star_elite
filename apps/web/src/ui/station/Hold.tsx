@@ -16,7 +16,7 @@ import {
 } from '@elite/sim'
 import { UI } from '../theme'
 import { t, useLang } from '../i18n'
-import { pushWarning } from '../hud/warnings'
+import { pushWarning } from '../../session/warnings'
 import { Button, Column, DIM, Modal, Panel, Table } from './chrome'
 import { credits, formatStat } from './format'
 import { displayName, moduleBenefit } from './Equipment'

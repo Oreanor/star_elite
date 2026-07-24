@@ -14,7 +14,7 @@
  * поэтому состояние — простое: активна ли сцена и сколько её идёт.
  */
 
-import { setStickSuspended } from '../../platform/input/input'
+import { setStickSuspended } from '../platform/input/input'
 
 /** Вся сцена, с. За это время маска раскрывается, кольца уходят, корабль влетает в кадр. */
 export const UNDOCK_TOTAL = 3.0

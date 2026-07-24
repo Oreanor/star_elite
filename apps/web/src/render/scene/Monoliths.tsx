@@ -2,7 +2,7 @@ import { useFrame } from '@react-three/fiber'
 import { useRef } from 'react'
 import { Mesh, Quaternion } from 'three'
 import type { MonolithEntity } from '@elite/sim'
-import { useSession } from '../../app/GameContext'
+import { useSession } from '../../session/GameContext'
 import { statueGlbGeometry, statueGlbMaterial } from '../geometry/statueGlb'
 import { worldShrink } from '../worldShrink'
 

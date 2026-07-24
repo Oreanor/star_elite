@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { useSession } from './GameContext'
+import { useSession } from '../session/GameContext'
 import { TitleStars } from './TitleStars'
 import { requestLock, setStickSuspended } from '../platform/input/input'
 import { setLang, t, useLang, type Key, type Lang } from '../ui/i18n'

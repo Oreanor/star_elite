@@ -1,11 +1,11 @@
 import { useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useRef } from 'react'
 import { Quaternion, Vector3 } from 'three'
-import { useSession } from '../../app/GameContext'
+import { useSession } from '../../session/GameContext'
 import { PIXEL_SCALE, TORUS } from '../../render/config'
-import { jumpPortal, portalActive, portalOpen } from '../../app/control/jumpPortal'
+import { jumpPortal, portalActive, portalOpen } from '../../session/jumpPortal'
 import { preparedJumpPortalWorld, syncDestCamera } from '../../render/scene/jumpPortalWorld'
-import { torusThrust } from '../../app/control/torusFlight'
+import { torusThrust } from '../../session/torusFlight'
 import {
   torusHomeMarker,
   torusLabels,

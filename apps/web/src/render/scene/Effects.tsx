@@ -13,7 +13,7 @@ import {
   Vector3,
 } from 'three'
 import { findModule, GUNNERY, type Tracer, type World } from '@elite/sim'
-import { useSession } from '../../app/GameContext'
+import { useSession } from '../../session/GameContext'
 import { EXPLOSION, LASER, LASER_CLASS_GLOW, LASER_CLASS_WIDTH, LASER_GLOW_FALLBACK, MUZZLE, SHIELD_FLASH, WARP_FLASH } from '../config'
 import {
   explosionMaterial,

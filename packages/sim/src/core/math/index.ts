@@ -23,3 +23,18 @@ export {
   type Mat4,
   type Vec4,
 } from './hyperbolic'
+
+// S³ — сетка гипертора и стереографическая проекция. Рядом с H³ (`hyperbolic`) и по той
+// же причине: чистая математика, которую спрашивают и правила полёта, и рендер решётки.
+export {
+  applyPose,
+  buildHypertorusGrid,
+  identity4,
+  mul4,
+  orthonormalize4,
+  rotPlaneW,
+  slerpS3,
+  stereoProject,
+  type HypertorusGrid,
+  type Pose4,
+} from './hypertorus'

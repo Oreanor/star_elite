@@ -1,7 +1,7 @@
 import { useFrame, useThree } from '@react-three/fiber'
 import { useRef } from 'react'
 import { Color, DirectionalLight, Vector3 } from 'three'
-import { useSession } from '../../app/GameContext'
+import { useSession } from '../../session/GameContext'
 import { GALAXY_LAYER, LIGHT } from '../config'
 import { nearestStar, tintedSunColor } from '../starLight'
 

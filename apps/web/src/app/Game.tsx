@@ -1,6 +1,6 @@
 import { Canvas } from '@react-three/fiber'
 import { useEffect, useRef, useState } from 'react'
-import { useSession } from './GameContext'
+import { useSession } from '../session/GameContext'
 import { FlightCamera } from '../render/camera/FlightCamera'
 import { Post } from '../render/post/Post'
 import { Probe } from '../render/post/Probe'

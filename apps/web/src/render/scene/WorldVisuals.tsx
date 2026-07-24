@@ -37,7 +37,7 @@ import { RemoteJumpPortals } from './RemoteJumpPortals'
 import { Sky } from './Sky'
 import { Starfield } from './Starfield'
 import { WingMissiles } from './WingMissiles'
-import { useSession } from '../../app/GameContext'
+import { useSession } from '../../session/GameContext'
 
 /**
  * Полное визуальное содержимое одного World без симуляции, камеры, HUD и postprocess.

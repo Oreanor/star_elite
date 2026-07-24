@@ -15,7 +15,7 @@ import {
   Vector3,
 } from 'three'
 import { applyDelta, GALAXY, generateGalaxy, SCALE, type BodyEntity } from '@elite/sim'
-import { useSession } from '../../app/GameContext'
+import { useSession } from '../../session/GameContext'
 import { GALAXY_LAYER } from '../config'
 import {
   createGalaxyStarDiscMaterial,

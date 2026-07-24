@@ -1,8 +1,8 @@
 import { useFrame } from '@react-three/fiber'
 import { useEffect, useRef } from 'react'
 import { Quaternion, Vector3 } from 'three'
-import { adoptPreparedJumpWorld, useSession } from '../../app/GameContext'
-import { queueCameraFrameRotation } from '../../app/control/cameraView'
+import { adoptPreparedJumpWorld, useSession } from '../../session/GameContext'
+import { queueCameraFrameRotation } from '../../session/cameraView'
 import {
   cancelPortalCommit,
   completePortalTransit,
@@ -11,15 +11,15 @@ import {
   linkVectorThroughPortal,
   portalOpen,
   tickPortal,
-} from '../../app/control/jumpPortal'
+} from '../../session/jumpPortal'
 import {
   disposeJumpPortalWorld,
   preparedJumpPortalWorld,
   promotePreparedJumpPortalScene,
 } from './jumpPortalWorld'
-import { clearSharedPortal, publishSharedPortal } from '../../app/net/portal'
+import { clearSharedPortal, publishSharedPortal } from '../../session/net/portal'
 import { isHeld } from '../../platform/input/input'
-import { hlog } from '../../app/control/hyperLog'
+import { hlog } from '../../session/hyperLog'
 
 const _destPos = new Vector3()
 const _destQuat = new Quaternion()

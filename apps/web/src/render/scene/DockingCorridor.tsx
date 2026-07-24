@@ -1,7 +1,7 @@
 import { useFrame } from '@react-three/fiber'
 import { useEffect, useMemo, useRef } from 'react'
 import { Color, InstancedBufferAttribute, InstancedMesh, Object3D, Vector3 } from 'three'
-import { useSession } from '../../app/GameContext'
+import { useSession } from '../../session/GameContext'
 import { CORRIDOR } from '../config'
 import { corridorRingGeometry } from '../geometry/props'
 import { corridorMaterial } from '../materials/materials'

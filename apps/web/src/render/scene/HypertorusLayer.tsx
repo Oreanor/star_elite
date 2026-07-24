@@ -16,10 +16,10 @@ import {
   SphereGeometry,
 } from 'three'
 import { smoothstep } from '@elite/sim'
-import { useSession } from '../../app/GameContext'
-import { placeTorusAt, stepTorusFlight, torusView } from '../../app/control/torusFlight'
-import { setTorusNav, torusAutopilotActive, torusTargetVertex } from '../../app/control/torusAutopilot'
-import { bushExitScale } from '../../app/control/bushExit'
+import { useSession } from '../../session/GameContext'
+import { placeTorusAt, stepTorusFlight, torusView } from '../../session/torusFlight'
+import { setTorusNav, torusAutopilotActive, torusTargetVertex } from '../../session/torusAutopilot'
+import { bushExitScale } from '../../session/bushExit'
 import { nameOfVertex, vertexOfNode } from './torusNodes'
 import { TORUS } from '../config'
 import { crossNeonTubesGeometry } from '../geometry/props'
@@ -30,7 +30,7 @@ import {
   buildHypertorusGrid,
   slerpS3,
   stereoProject,
-} from './hypertorus'
+} from '@elite/sim'
 
 /**
  * Маркеры для HUD (локатор + рамка): мировые позиции ДОМА (твоя галактика) и КРЕСТА (монумент).

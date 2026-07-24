@@ -11,7 +11,7 @@ import {
   Vector3,
 } from 'three'
 import { WARP } from '@elite/sim'
-import { useSession } from '../../app/GameContext'
+import { useSession } from '../../session/GameContext'
 import { WARP_PORTAL } from '../config'
 
 const _quat = new Quaternion()

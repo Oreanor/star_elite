@@ -1,6 +1,6 @@
 import { clamp } from '@elite/sim'
 import { Quaternion } from 'three'
-import { consumePress, isHeld } from '../../platform/input/input'
+import { consumePress, isHeld } from '../platform/input/input'
 
 /**
  * Пользовательский ракурс камеры поверх обычной погони.

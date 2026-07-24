@@ -1,13 +1,13 @@
 import { createPortal, useFrame, useThree } from '@react-three/fiber'
 import { Fragment, useEffect, useState, useSyncExternalStore } from 'react'
 import { Quaternion, Vector3, type PerspectiveCamera } from 'three'
-import { SessionScope, useSession } from '../../app/GameContext'
-import { hlog } from '../../app/control/hyperLog'
+import { SessionScope, useSession } from '../../session/GameContext'
+import { hlog } from '../../session/hyperLog'
 import {
   jumpPortalRevision,
   portalActive,
   subscribeJumpPortal,
-} from '../../app/control/jumpPortal'
+} from '../../session/jumpPortal'
 import { Dust } from './Dust'
 import {
   prepareJumpPortalWorld,

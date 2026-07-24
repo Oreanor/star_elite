@@ -1,5 +1,5 @@
 import { formatGameDate } from './i18n/date'
-import { gameTimeMs, initWorldClock } from '../app/net/worldClock'
+import { gameTimeMs, initWorldClock } from '../session/net/worldClock'
 
 export { gameTimeMs, initWorldClock }
 

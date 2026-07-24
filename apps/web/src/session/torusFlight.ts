@@ -5,9 +5,9 @@ import {
   orthonormalize4,
   rotPlaneW,
   type Pose4,
-} from '../../render/scene/hypertorus'
-import { TORUS } from '../../render/config'
-import { isHeld } from '../../platform/input/input'
+} from '@elite/sim'
+import { TORUS_FLIGHT } from './config'
+import { isHeld } from '../platform/input/input'
 import { finishTorusApproach, torusAutopilotActive, torusNav } from './torusAutopilot'
 
 /**
@@ -83,28 +83,28 @@ export function stepTorusFlight(shipQuat: Quaternion, dt: number): void {
     // иначе даём ход, как только нос совпал с направлением на цель.
     const nav = torusNav()
     if (nav.arrived) {
-      throttle -= TORUS.THROTTLE_RATE * dt
+      throttle -= TORUS_FLIGHT.THROTTLE_RATE * dt
       if (throttle <= 0) {
         throttle = 0
         // Штурвал — мыши, а вершина уходит на выдачу: `stepBush` выбросит из дыры в галактику.
         finishTorusApproach()
       }
-    } else if (nav.valid && _fwd.x * nav.dx + _fwd.y * nav.dy + _fwd.z * nav.dz > TORUS.AUTOPILOT_AIM_DOT) {
-      throttle += TORUS.THROTTLE_RATE * dt
+    } else if (nav.valid && _fwd.x * nav.dx + _fwd.y * nav.dy + _fwd.z * nav.dz > TORUS_FLIGHT.AUTOPILOT_AIM_DOT) {
+      throttle += TORUS_FLIGHT.THROTTLE_RATE * dt
     } else {
       // Нос ещё доворачивается на цель — ход притормаживаем, чтобы не промахнуться.
-      throttle -= TORUS.THROTTLE_RATE * dt
+      throttle -= TORUS_FLIGHT.THROTTLE_RATE * dt
     }
   } else {
     // Газ — обычный СЕКТОР: W наращивает, S убавляет, отпустил — держится. Тот же темп, что у пилота.
-    if (isHeld('KeyW')) throttle += TORUS.THROTTLE_RATE * dt
-    if (isHeld('KeyS')) throttle -= TORUS.THROTTLE_RATE * dt
+    if (isHeld('KeyW')) throttle += TORUS_FLIGHT.THROTTLE_RATE * dt
+    if (isHeld('KeyS')) throttle -= TORUS_FLIGHT.THROTTLE_RATE * dt
   }
   throttle = throttle < 0 ? 0 : throttle > 1 ? 1 : throttle
 
   if (throttle > 1e-4) {
     // Знак проверен численно (signcheck): при +angle галактика ПО НОСУ приближается — летим В неё.
-    const angle = throttle * TORUS.FLY_RATE * dt
+    const angle = throttle * TORUS_FLIGHT.FLY_RATE * dt
     rotPlaneW(_fwd.x, _fwd.y, _fwd.z, angle, _step)
     mul4(_step, view, view)
     orthonormalize4(view)

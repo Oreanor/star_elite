@@ -7,8 +7,9 @@ import {
   setNozzleOverride,
   setSizeOverride,
   type Nozzle,
-} from '../../render/geometry/ships'
+} from '../geometry/ships'
 import { consumePress, isHeld } from '../../platform/input/input'
+import { setInputCaptured } from '../../session/inputCapture'
 
 /**
  * РЕДАКТОР ОСНАСТКИ (клавиша K). Дев-инструмент: за один обход правит у корпуса ВСЁ, что
@@ -93,6 +94,8 @@ export function rigEditorActive(): boolean {
 export function toggleRigEditor(world: World): void {
   if (editor.active) exitEditor(world)
   else enterEditor(world)
+  // Пока редактор жив, штурвал не должен трактовать Ctrl как ручник (см. inputCapture).
+  setInputCaptured(editor.active)
 }
 
 /**

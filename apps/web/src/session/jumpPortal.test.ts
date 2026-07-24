@@ -1,7 +1,7 @@
 import { Quaternion, Scene, Vector3 } from 'three'
 import { afterEach, describe, expect, it } from 'vitest'
 import { commitPreparedJump, createWorld, GALAXY, jumpDistance, LINKED_PORTAL, type World } from '@elite/sim'
-import type { Session } from '../GameContext'
+import type { Session } from './GameContext'
 import {
   destPortalScene,
   disposeJumpPortalWorld,
@@ -11,7 +11,7 @@ import {
   promotedJumpPortalWorld,
   resetJumpPortalWorlds,
   syncPreparedJumpWorld,
-} from '../../render/scene/jumpPortalWorld'
+} from '../render/scene/jumpPortalWorld'
 import {
   closePortal,
   completePortalTransit,

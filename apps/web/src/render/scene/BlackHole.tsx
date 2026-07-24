@@ -8,7 +8,7 @@ import {
   Vector3,
 } from 'three'
 import type { BodyEntity } from '@elite/sim'
-import { useSession } from '../../app/GameContext'
+import { useSession } from '../../session/GameContext'
 import {
   BLACK_HOLE_DEFAULTS,
   createBlackHoleMaterial,

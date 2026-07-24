@@ -13,7 +13,7 @@ import {
   type Texture,
 } from 'three'
 import { warBaseFixtureWorldPos, type WarBaseEntity } from '@elite/sim'
-import { useSession } from '../../app/GameContext'
+import { useSession } from '../../session/GameContext'
 import { WARBASE_FX } from '../config'
 import {
   DETAIL_KEYS,

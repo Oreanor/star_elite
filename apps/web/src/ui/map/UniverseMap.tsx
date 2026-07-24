@@ -11,13 +11,13 @@ import {
   SphereGeometry,
   Vector3,
 } from 'three'
-import { useSession } from '../../app/GameContext'
+import { useSession } from '../../session/GameContext'
 import {
   selectTorusTarget,
   toggleTorusAutopilot,
   torusTargetVertex,
-} from '../../app/control/torusAutopilot'
-import { torusView } from '../../app/control/torusFlight'
+} from '../../session/torusAutopilot'
+import { torusView } from '../../session/torusFlight'
 import { TORUS } from '../../render/config'
 import { GRID } from '../../render/scene/HypertorusLayer'
 import { nameOfVertex, vertexOfNode } from '../../render/scene/torusNodes'

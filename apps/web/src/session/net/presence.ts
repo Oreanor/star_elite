@@ -4,7 +4,6 @@ import type { World } from '@elite/sim'
 import { currentUserId } from './account'
 import { rtdb, serverNow } from './firebase'
 import { deadStamp, reapDead } from './reap'
-import { properName } from '../../ui/i18n/dataNames'
 
 /**
  * Присутствие: кто сейчас онлайн, в какой системе, ГДЕ в ней и пристыкован ли. Живёт в
@@ -59,8 +58,10 @@ export function selfPresence(world: World, paused: boolean): PresenceUpdate {
   return {
     name: world.player.pilotName,
     systemIndex: world.systemIndex,
-    systemName: properName(world.systemName),
-    place: station ? properName(station.name) : null,
+    // Имена шлём КАНОНОМ домена, без перевода: у получателя свой язык интерфейса, и
+    // переводить чужую строку обязан он. Заодно сеть перестаёт зависеть от словаря UI.
+    systemName: world.systemName,
+    place: station ? station.name : null,
     paused,
     species: world.player.persona.species,
     face: world.player.persona.portrait ?? 0,

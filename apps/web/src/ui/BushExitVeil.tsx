@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { bushExitVeil } from '../app/control/bushExit'
+import { bushExitVeil } from '../session/bushExit'
 
 /**
  * ПЕЛЕНА ВЫХОДА ИЗ КОМНАТЫ. Чёрный лист поверх кадра, из которого выедается растущая круглая

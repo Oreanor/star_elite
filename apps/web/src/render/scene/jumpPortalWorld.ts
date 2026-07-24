@@ -16,8 +16,8 @@ import {
   type Controller,
   type World,
 } from '@elite/sim'
-import type { Session } from '../../app/GameContext'
-import { jumpPortal, linkThroughPortal, linkVectorThroughPortal, setDestPortal } from '../../app/control/jumpPortal'
+import type { Session } from '../../session/GameContext'
+import { jumpPortal, linkThroughPortal, linkVectorThroughPortal, setDestPortal } from '../../session/jumpPortal'
 
 /** Полноценный второй World и его отдельная three-сцена. */
 export interface PreparedJumpWorld {

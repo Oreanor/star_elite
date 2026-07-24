@@ -49,7 +49,7 @@ import {
 import { bombFlash, bombRing } from '../../render/bombFeel'
 import { currentGameDate } from '../clock'
 import { HUD_SCALE, TORUS } from '../../render/config'
-import { undocking, consumePendingBonVoyage } from '../../app/control/undockFx'
+import { undocking, consumePendingBonVoyage } from '../../session/undockFx'
 import { drawUndockTunnel } from './drawUndock'
 import { galaxyRadar, galaxyRadarUsable } from '../../render/scene/galaxyRadar'
 import { HUD_COLORS, bar, circle, corners, dot, ellipse, line, text } from './draw'
@@ -58,7 +58,8 @@ import { figurineTitleLocal, chassisName, occupationName, properName, starClassN
 import { formatStat } from '../station/format'
 import { drawFlare } from './drawFlare'
 import { angularSize, formatDistance, formatScale, projectPoint, scaleParts, speedParts } from './project'
-import { activeWarning, pushWarning, WARN_LIFE, type Plate } from './warnings'
+import { activeWarning, pushWarning, WARN_LIFE } from '../../session/warnings'
+import { plateOf, type Plate } from './warningStyle'
 import { apertureEllipse, insideAperture, type PortalAperture } from './aperture'
 import {
   PORTRAIT_GRID,
@@ -1947,7 +1948,9 @@ function gatherWarnings(frame: HudFrame): Plate | null {
     : null
   // Реальные предупреждения важнее; из состояний масштаб и маскировка (важные режимы)
   // впереди форсажа.
-  return activeWarning(now) ?? autofightPlate ?? autopilotPlate ?? cloakPlate ?? scalePlate ?? boostPlate
+  // Живой сигнал одеваем в цвет и слова здесь: очередь знает только код и важность.
+  const warning = activeWarning(now)
+  return (warning ? plateOf(warning) : null) ?? autofightPlate ?? autopilotPlate ?? cloakPlate ?? scalePlate ?? boostPlate
 }
 
 function paintWarningPlate(frame: HudFrame, plate: Plate): void {

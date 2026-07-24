@@ -13,9 +13,9 @@ import {
   TorusGeometry,
   Vector3,
 } from 'three'
-import { useSession } from '../../app/GameContext'
-import { portalSnapshotActive, sharedPortalSnapshots, type PortalMouthSnapshot } from '../../app/net/portal'
-import { serverNow } from '../../app/net/firebase'
+import { useSession } from '../../session/GameContext'
+import { portalSnapshotActive, sharedPortalSnapshots, type PortalMouthSnapshot } from '../../session/net/portal'
+import { serverNow } from '../../session/net/firebase'
 import { WARP_PORTAL } from '../config'
 import { chassisGeometry } from '../geometry/ships'
 import { hullMaterial } from '../materials/materials'

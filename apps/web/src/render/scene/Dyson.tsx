@@ -2,7 +2,7 @@ import { useFrame } from '@react-three/fiber'
 import { useMemo, useRef } from 'react'
 import { LineSegments, Mesh, Quaternion, Vector3 } from 'three'
 import { DYSON } from '@elite/sim'
-import { useSession } from '../../app/GameContext'
+import { useSession } from '../../session/GameContext'
 import { dysonGeometry, dysonIsLines, ruinGeometry } from '../geometry/dyson'
 import { dysonLineMaterial, dysonPanelMaterial } from '../materials/materials'
 
