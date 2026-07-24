@@ -30,6 +30,8 @@ import { Monoliths } from './Monoliths'
 import { RockDebris } from './RockDebris'
 import { WarBases } from './WarBases'
 import { Drones, EnemyShips, PlayerShip } from './Ships'
+import { RigEditorMarks } from './RigEditorMarks'
+import { PlasmaBeams } from './PlasmaBeams'
 import { RemotePlayers } from './RemotePlayers'
 import { RemoteJumpPortals } from './RemoteJumpPortals'
 import { Sky } from './Sky'
@@ -65,6 +67,8 @@ export function WorldVisuals() {
       <Lighting />
       <HypertorusLayer />
       <PlayerShip />
+      {/* Маркеры оснастки (K). Вне группы мира — как и сам корабль: правку видно и на кусте. */}
+      <RigEditorMarks />
 
       <group ref={worldRef}>
         <Sky galaxyIndex={skyIndex} />
@@ -94,6 +98,7 @@ export function WorldVisuals() {
 
         <Exhaust />
         <Tracers />
+        <PlasmaBeams />
         <MuzzleFlashes />
         <Explosions />
         <ExplosionChunks />

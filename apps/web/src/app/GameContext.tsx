@@ -10,7 +10,6 @@ import {
   enterSystem,
   findModule,
   fitFromHold,
-  placeShowcaseFleet,
   spawnResidentContacts,
   spawnSlovo,
   startDocked,
@@ -32,8 +31,6 @@ import {
 } from '@elite/sim'
 import { createIntent, createPlayerController, type PlayerIntent } from './control/playerController'
 import { createBushController } from './control/bushController'
-import { placeTorusAtVertex } from '../render/scene/HypertorusLayer'
-import { vertexOfNode } from '../render/scene/torusNodes'
 import { online } from './net/firebase'
 import { loadSave } from './save/saveStore'
 
@@ -141,12 +138,6 @@ function createSession(initialSave?: PlayerSave | null): Session {
   const save = initialSave !== undefined ? initialSave : loadSave()
   const world = createWorld()
 
-  // DEV/ВРЕМЕННО: старт в КОМНАТЕ тора — ОТДЕЛЬНЫЙ ПУСТОЙ мир (ни системы, ни тел, ни трафика,
-  // ни звезды). Систему не строим вовсе: корабль летает в пустоте, вокруг только решётка
-  // галактик. Это НЕ звёздная система и нигде ею не рендерится. Снять флаг — обычный старт.
-  const TORUS_START = false
-
-  if (!TORUS_START) {
   // Повторный вход — в СВОЮ сохранённую систему своим сидом. Новичок: в сети — ОБЩАЯ
   // точка сбора, офлайн — случайная. Систему строим по (сид, индекс).
   const index = save
@@ -199,12 +190,6 @@ function createSession(initialSave?: PlayerSave | null): Session {
    */
   spawnSlovo(world)
 
-  // DEV/ВРЕМЕННО: смотровой парад у станции — пара десятков мелких бортов строем и
-  // несколько «Атласов», чтобы облететь и рассмотреть модели. Снять флаг перед релизом.
-  const SHOWCASE_FLEET = false
-  if (SHOWCASE_FLEET) placeShowcaseFleet(world)
-  } // конец обычного старта; в комнате тора система не строится
-
   const intent = createIntent()
   const pilot = createPlayerController(intent)
   const bushPilot = createBushController(intent)
@@ -215,34 +200,6 @@ function createSession(initialSave?: PlayerSave | null): Session {
   for (const ship of world.ships) controllers.set(ship.id, aiController)
 
   const bush = createBushTravel()
-  if (TORUS_START) {
-    bush.active = true
-    // Домой — в узел своей галактики: `createBushTravel` ставит корень куста (монумент), а
-    // мы стартуем не с креста. Отсюда же берётся имя дома на HUD.
-    bush.node = GALAXY.HOME_NODE
-    // ПУСТАЯ КОМНАТА: `createWorld` насыпал стартер-систему (звезда, планеты, патрули) —
-    // вычищаем всё сталкиваемое и рендерящееся. Иначе корабль врезается в невидимые тела.
-    world.bodies = []
-    world.ships = []
-    world.asteroids = []
-    world.pods = []
-    world.missiles = []
-    world.bolts = []
-    world.titans = []
-    world.monoliths = []
-    world.figurines = []
-    world.warBases = []
-    world.platforms = []
-    // Пусто НАВСЕГДА: `desolate` глушит спавн трафика (traffic.ts), иначе пираты налетят
-    // в пустоту и начнут стрелять. Комната математическая — в ней никого, кроме игрока.
-    world.desolate = true
-    // Корабль в центре проекции: стоит и вертится мышью, полёт — поток S³ сквозь него.
-    world.player.state.pos.set(0, 0, 0)
-    world.player.state.vel.set(0, 0, 0)
-    world.player.controls.throttle = 0
-    // Стоим В СВОЁМ узле, а не в безымянной точке между узлами: соседи вокруг — настоящие соседи.
-    placeTorusAtVertex(vertexOfNode(bush.node))
-  }
 
   return {
     world,
@@ -250,9 +207,7 @@ function createSession(initialSave?: PlayerSave | null): Session {
     pilot,
     bushPilot,
     isNewGame: save === null,
-    // В торе штурвал — bushPilot: мышь вертит корабль, тяга в физику ноль (борт стоит в центре).
-    // Полёт — поток S³ сквозь игрока (torusFlight). `bush.active` включает рендер решётки.
-    mode: TORUS_START ? 'bush' : 'manual',
+    mode: 'manual',
     universe: generateUniverse(GALAXY.WORD),
     bush,
     monumentCross: null,

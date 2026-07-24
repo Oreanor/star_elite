@@ -35,6 +35,7 @@ import { cycleGalaxyStar, galaxyRadar, retargetNearestGalaxyStar } from './galax
 import { syncControllers, useSession, type Session } from '../../app/GameContext'
 import { coastController } from '../../app/control/playerController'
 import { stepCameraView } from '../../app/control/cameraView'
+import { cycleHull, rigEditorActive, stepRigEditor, toggleRigEditor } from '../../app/control/rigEditor'
 import { resetTorusFlight } from '../../app/control/torusFlight'
 import {
   consumeTorusArrival,
@@ -252,6 +253,9 @@ export function Simulation() {
     if (world.docked !== session.dockedShown) {
       session.dockedShown = world.docked
       if (world.docked) {
+        // Редактор сопел держит правку выхлопа в реестре рендера — на стыковке закрываем его,
+        // чтобы дев-раскладка не пережила заход на станцию незамеченной.
+        if (rigEditorActive()) toggleRigEditor(world)
         if (session.mode === 'autodock') setPilot(session, 'manual')
         releaseLock()
         // Автосейв — ТОЛЬКО на станции, и это единственная его точка (ТЗ): пристыковался
@@ -344,9 +348,19 @@ export function Simulation() {
       else retargetNearestContact(world)
     }
 
+    // K — редактор ОСНАСТКИ: дула, сопла и размер корпуса за один обход. Двигаем модификатором
+    // со стрелками, лазер и факел показывают правку вживую. Дев-инструмент, поэтому здесь же,
+    // у прочих тумблеров, — без захваченного курсора править нечего.
+    if (consumePress('KeyK')) toggleRigEditor(world)
+    // 0 — следующий корпус из каталога: рама, габарит и меш меняются целиком.
+    // Дев-переключатель под редактор: обойти все модели за один заход, не летая на верфь.
+    if (consumePress('Digit0')) console.log('корпус:', cycleHull(world))
+
     // Пользовательский ракурс: облёт (←/→) и наезд (↑/↓), V — сброс. Чистая камера,
     // мир не трогает. Здесь, до clearPresses, чтобы тап V сработал.
-    stepCameraView(dt)
+    // Стрелки С МОДИФИКАТОРОМ забирает редактор оснастки — облёт остаётся на голых стрелках,
+    // иначе точки пришлось бы ставить, не видя их сбоку.
+    if (!stepRigEditor(dt)) stepCameraView(dt)
 
     if (consumePress('KeyL')) {
       /**

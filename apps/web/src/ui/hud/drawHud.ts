@@ -13,7 +13,6 @@ import {
   findStation,
   navTarget,
   MONOLITH_NAMES,
-  figurineDisplayName,
   NAV_ASTEROID_NAME,
   stanceTo,
   autofightActive,
@@ -30,14 +29,18 @@ import {
   missileAmmo,
   nearestPod,
   laserOverheated,
+  meanHeat,
   peakHeat,
   pendingHail,
   scooping,
   isStationBot,
+  aimDirection,
+  findWarBaseFixture,
   isVisible,
   scoopReadiness,
   shipAxes,
   stationRange,
+  warBaseFixtureWorldPos,
   type BodyEntity,
   type ShipEntity,
   type StarSystem,
@@ -51,7 +54,7 @@ import { drawUndockTunnel } from './drawUndock'
 import { galaxyRadar, galaxyRadarUsable } from '../../render/scene/galaxyRadar'
 import { HUD_COLORS, bar, circle, corners, dot, ellipse, line, text } from './draw'
 import { t, type Key } from '../i18n'
-import { chassisName, occupationName, properName, starClassName } from '../i18n/dataNames'
+import { figurineTitleLocal, chassisName, occupationName, properName, starClassName } from '../i18n/dataNames'
 import { formatStat } from '../station/format'
 import { drawFlare } from './drawFlare'
 import { angularSize, formatDistance, formatScale, projectPoint, scaleParts, speedParts } from './project'
@@ -81,6 +84,8 @@ const _fwd = new Vector3()
 const _right = new Vector3()
 const _up = new Vector3()
 const _point = new Vector3()
+/** Место детали базы в кадре: база вращается, точка считается на лету. */
+const _fixtureAt = new Vector3()
 const _velocityDir = new Vector3()
 const _gtar = new Vector3()
 
@@ -317,11 +322,15 @@ function dockState(world: World, station: BodyEntity, autodock: boolean): DockSt
 /**
  * Прицел — там, где СХОДЯТСЯ СТВОЛЫ, а не там, где мышь.
  * Мышь у нас виртуальная ручка: она задаёт угловую скорость, а не точку.
- * Луч летит по носу, значит и перекрестье стоит по носу.
+ *
+ * Обычно линия огня идёт по носу, и перекрестье стоит на нём. Над поверхностью корпус
+ * держат ровным (тяга обязана идти вдоль сферы), и целится ЛИНИЯ ОГНЯ: `aimDirection` —
+ * та же функция, по которой домен сводит стволы. Одна формула на прицел и на выстрел,
+ * иначе перекрестье перестанет означать «куда попадёт».
  */
 function drawGunsight({ ctx, camera, world, width, height }: HudFrame): void {
   const state = world.player.state
-  shipAxes(state.quat, _fwd, _right, _up)
+  aimDirection(state.quat, world.player.controls.aimPitch, _fwd)
   _point.copy(state.pos).addScaledVector(_fwd, GUNNERY.CONVERGENCE)
 
   const p = projectPoint(_point, camera, width, height)
@@ -399,7 +408,10 @@ function drawTargets({ ctx, camera, world, width, height }: HudFrame): void {
 
     // В космосе на борту — его название (◈ если уже знакомы).
     const known = ship.acquaintanceId != null
-    const label = known ? `◈ ${ship.name}` : ship.name
+    // Имя пилота домен пишет по-русски (это его канон) — на экран оно идёт через
+    // `properName`, иначе на нерусском языке в кадре висит кириллица.
+    const pilot = properName(ship.name)
+    const label = known ? `◈ ${pilot}` : pilot
     text(ctx, label, p.x, p.y + size / 2 + 13 * S, color, 'center')
 
     if (locked) {
@@ -520,7 +532,7 @@ function drawTargetLock(frame: HudFrame): void {
     if (stellarOnly) return
     const locked = world.lockedTargetId != null ? world.ships.find((s) => s.id === world.lockedTargetId) : null
     if (locked && locked.alive && isVisible(locked) && !isStationBot(locked)) {
-      mark(locked.state.pos, radarColor(locked, world), locked.acquaintanceId != null ? `◈ ${locked.name}` : null)
+      mark(locked.state.pos, radarColor(locked, world), locked.acquaintanceId != null ? `◈ ${properName(locked.name)}` : null)
     }
     const pod = world.lockedPodId != null ? world.pods.find((p) => p.id === world.lockedPodId) : null
     if (pod && pod.alive) mark(pod.pos, HUD_COLORS.WARN, null)
@@ -678,7 +690,7 @@ function collectMarkers(world: World, ships = false): Marker[] {
   for (const m of world.monoliths) {
     out.push({
       pos: m.pos,
-      name: MONOLITH_NAMES[m.variant] ?? 'Монолит',
+      name: properName(MONOLITH_NAMES[m.variant] ?? MONOLITH_NAMES[0]!),
       color: HUD_COLORS.MONOLITH,
       nav: m.id === world.navTargetId,
       primary: true,
@@ -691,7 +703,7 @@ function collectMarkers(world: World, ships = false): Marker[] {
     if (!f.alive) continue
     out.push({
       pos: f.pos,
-      name: figurineDisplayName(f),
+      name: figurineTitleLocal(f.titleId),
       color: HUD_COLORS.MONOLITH,
       nav: f.id === world.navTargetId,
       primary: true,
@@ -918,7 +930,7 @@ function drawTargetPanels(frame: HudFrame): void {
           ctx.imageSmoothingEnabled = false
           ctx.drawImage(sheet, col * c, row * c, c, c, Math.round(cx), Math.round(cy), Math.round(size), Math.round(size))
         } else {
-          text(ctx, (ship.name.trim().charAt(0) || '?').toUpperCase(), cx + size / 2, cy + size / 2 - 5 * S, HUD_COLORS.DIM, 'center')
+          text(ctx, (properName(ship.name).trim().charAt(0) || '?').toUpperCase(), cx + size / 2, cy + size / 2 - 5 * S, HUD_COLORS.DIM, 'center')
         }
       }, {
         // У бога щит бесконечный — полоска и должна стоять полной: это не «цел пока»,
@@ -933,6 +945,23 @@ function drawTargetPanels(frame: HudFrame): void {
       cell(HUD_COLORS.WARN, [t('locator.kind.pod'), formatDistance(shipDistance(world, pod.pos))], (cx, cy) => {
         drawPodCrate(ctx, cx + size / 2, cy + size / 2, size, HUD_COLORS.WARN, world.time)
       })
+      return
+    }
+    // Деталь базы — такая же цель, как борт: род, прочность и удаление в той же клетке.
+    const fixture = findWarBaseFixture(world.warBases, world.lockedFixtureId)
+    if (fixture) {
+      warBaseFixtureWorldPos(fixture.base, fixture.fixture, world.time, _fixtureAt)
+      cell(
+        HUD_COLORS.STATION,
+        [
+          t('locator.kind.fixture'),
+          properName(fixture.base.name),
+          formatDistance(shipDistance(world, _fixtureAt)),
+        ],
+        (cx, cy) => {
+          cellIcon(ctx, cx + size / 2, cy + size / 2, HUD_COLORS.STATION)
+        },
+      )
       return
     }
     const rock = world.lockedAsteroidId != null
@@ -1047,7 +1076,7 @@ function drawTorusLabels(frame: HudFrame): void {
     _gtar.set(lab.x, lab.y, lab.z)
     const p = projectPoint(_gtar, camera, width, height)
     if (p.behind || !isOnScreen(p.x, p.y, width, height, 0)) continue
-    text(ctx, lab.name, p.x, p.y + 6 * S, HUD_COLORS.DIM, 'center')
+    text(ctx, properName(lab.name), p.x, p.y + 6 * S, HUD_COLORS.DIM, 'center')
   }
 }
 
@@ -1057,7 +1086,7 @@ function drawTorusMarkers(frame: HudFrame): void {
   if (torusMonument) markOne(frame, torusMonument, torusMonumentName, '#66e0ff')
   // Выбранная Tab галактика — поверх и жёлтым: она может совпасть с домом или крестом,
   // и тогда важнее показать, что ведём именно туда.
-  if (torusTarget) markOne(frame, torusTarget, torusTarget.name, HUD_COLORS.TARGET)
+  if (torusTarget) markOne(frame, torusTarget, properName(torusTarget.name), HUD_COLORS.TARGET)
 }
 
 /**
@@ -1402,13 +1431,13 @@ function drawRadar(frame: HudFrame): void {
 
   for (const m of world.monoliths) {
     const nav = m.id === world.navTargetId
-    plot(m.pos, HUD_COLORS.MONOLITH, Math.round((nav ? 3 : 2) * S), nav, 'round', nav ? MONOLITH_NAMES[m.variant] : undefined)
+    plot(m.pos, HUD_COLORS.MONOLITH, Math.round((nav ? 3 : 2) * S), nav, 'round', nav ? properName(MONOLITH_NAMES[m.variant] ?? MONOLITH_NAMES[0]!) : undefined)
   }
 
   for (const f of world.figurines) {
     if (!f.alive) continue
     const nav = f.id === world.navTargetId
-    plot(f.pos, HUD_COLORS.MONOLITH, Math.round((nav ? 3 : 2) * S), nav, 'round', nav ? figurineDisplayName(f) : undefined)
+    plot(f.pos, HUD_COLORS.MONOLITH, Math.round((nav ? 3 : 2) * S), nav, 'round', nav ? figurineTitleLocal(f.titleId) : undefined)
   }
 
   for (const base of world.warBases) {
@@ -1416,6 +1445,15 @@ function drawRadar(frame: HudFrame): void {
     const nav = base.id === world.navTargetId
     // Белым и КОЛЕЧКОМ: рукотворная сфера, а не бурая точка камня.
     plot(base.pos, HUD_COLORS.STATION, Math.round((nav ? 3 : 2) * S), true, 'ring', nav ? properName(base.name) : undefined)
+
+    // Детали — отдельные отметки рядом с базой: по ним и наводятся, и бьют поштучно.
+    // Мельче корпуса и без кольца, пока не захвачены: иначе рой точек забьёт локатор.
+    for (const fix of base.fixtures) {
+      if (!fix.alive) continue
+      warBaseFixtureWorldPos(base, fix, world.time, _fixtureAt)
+      if (_fixtureAt.distanceToSquared(player.state.pos) > ROCK_RANGE * ROCK_RANGE) continue
+      plot(_fixtureAt, HUD_COLORS.STATION, Math.round(1.5 * S), fix.id === world.lockedFixtureId)
+    }
   }
 
   for (const rock of world.asteroids) {
@@ -1660,7 +1698,11 @@ function drawReadouts({ ctx, world, height, bush, torusThrust }: HudFrame): void
 
   const shield = player.spec.hull.shield > 0 ? player.shield / player.spec.hull.shield : 0
   const hull = player.hull / player.spec.hull.hull
-  const laser = peakHeat(player)
+  // Шкала — СРЕДНЕЕ по стволам: один перегретый из трёх не должен читаться как «нечем стрелять».
+  const laser = meanHeat(player)
+  // Мигание — от МИРОВОГО времени, а не от кадра: частота не должна зависеть от fps.
+  const laserLocked = laserOverheated(player, world.time)
+  const blink = Math.sin(world.time * 14) > 0
   const aux = auxFraction(player)
   const temp = player.hullHeat
   // Заряд привода как доля предела модели. Нет привода — шкала пустая и тусклая.
@@ -1682,8 +1724,9 @@ function drawReadouts({ ctx, world, height, bush, torusThrust }: HudFrame): void
     // Батарея ДОП-ОТСЕКА (аукс): общий запас бомбы, ПРО и маскировки. Голубая шкала;
     // на нуле красная — ни импульса, ни поля.
     [t('hud.aux'), aux, aux < 0.15 ? HUD_COLORS.DANGER : HUD_COLORS.PRIMARY],
-    // Нагрев СТВОЛА от стрельбы — отдельно от нагрева корпуса звездой.
-    [t('hud.laser'), laser, laser > 0.7 ? HUD_COLORS.DANGER : HUD_COLORS.WARN],
+    // Нагрев СТВОЛА от стрельбы — отдельно от нагрева корпуса звездой. В отключке перегрева
+    // полоса стоит на упоре (домен держит heat=1) и МИГАЕТ: не «почти остыл», а «ствол занят».
+    [t('hud.laser'), laser, laserLocked ? (blink ? HUD_COLORS.DANGER : HUD_COLORS.DIM) : laser > 0.7 ? HUD_COLORS.DANGER : HUD_COLORS.WARN],
     // Температура КОРПУСА от близкой звезды. На пороге разрушения корпус гибнет мгновенно;
     // жёлтая с WARN (пора отворачивать), красная с CRITICAL (последнее окно).
     [t('hud.temp'), temp, temp >= STAR_HEAT.CRITICAL ? HUD_COLORS.DANGER : temp >= STAR_HEAT.WARN ? HUD_COLORS.WARN : HUD_COLORS.DIM],
@@ -1857,13 +1900,13 @@ function gatherWarnings(frame: HudFrame): Plate | null {
 
   // Социальные вести — вызов по связи и гибель/уход знакомого — тем же каналом.
   const hail = pendingHail(world)
-  if (hail) pushWarning('hail', now, { label: t('hud.hail', { name: hail.name.toUpperCase() }) })
+  if (hail) pushWarning('hail', now, { label: t('hud.hail', { name: properName(hail.name).toUpperCase() }) })
 
   const notice = world.notices[world.notices.length - 1]
   if (notice) {
     const left = notice.kind === 'player-left'
     pushWarning(left ? 'playerLeft' : 'contactLost', now, {
-      label: t(left ? 'hud.playerLeft' : 'hud.contactLost', { name: notice.name.toUpperCase() }),
+      label: t(left ? 'hud.playerLeft' : 'hud.contactLost', { name: properName(notice.name).toUpperCase() }),
     })
   }
 

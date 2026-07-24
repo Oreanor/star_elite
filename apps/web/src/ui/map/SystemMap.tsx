@@ -5,14 +5,13 @@ import {
   clearContactLock,
   clearNavLock,
   MONOLITH_NAMES,
-  figurineDisplayName,
   shipAxes,
   stanceTo,
   type BodyEntity,
   type World,
 } from '@elite/sim'
 import { t, useLang } from '../i18n'
-import { properName } from '../i18n/dataNames'
+import { figurineTitleLocal, properName } from '../i18n/dataNames'
 import { formatDistance } from '../hud/project'
 import { useWheelZoom } from './useWheelZoom'
 import { discProject, MapCard, MapFrame, MapPin, MapRow } from './MapFrame'
@@ -165,7 +164,7 @@ function markers(world: World): Marker[] {
       .filter((f) => f.alive)
       .map((f) => ({
         id: f.id,
-        name: figurineDisplayName(f),
+        name: figurineTitleLocal(f.titleId),
         kind: 'figurine' as MarkerKind,
         pos: f.pos,
       })),

@@ -5,7 +5,7 @@ import { CHASSIS_CATALOGUE, clamp, isDroneShip, isVisible, warpDepartHidden, war
 import { useSession } from '../../app/GameContext'
 import { jumpPortal, portalOpen } from '../../app/control/jumpPortal'
 import { GIANT_HIDE, GIANT_RENDER_CAP } from '../config'
-import { chassisGeometry, droneGeometry, placeholderGeometry } from '../geometry/ships'
+import { chassisGeometry, chassisSizeMul, droneGeometry, placeholderGeometry } from '../geometry/ships'
 import { cloakMaterial, hullMaterial, hullMaterialFor } from '../materials/materials'
 import { usePortalRenderSide } from './portalRenderContext'
 
@@ -70,7 +70,8 @@ export function PlayerShip() {
     // Раньше уводили назад к камере — с pitch камеры это читалось как «уполз вниз
     // под камеру» на миллионных ×. Центр кадра и так освобождается, сдвиг не нужен.
     const hide = clamp((player.state.scale - GIANT_HIDE.START) / (GIANT_HIDE.FULL - GIANT_HIDE.START), 0, 1)
-    mesh.scale.setScalar(capped * (1 - hide))
+    // Живой множитель размера из редактора оснастки (клавиша K): дефолт 1, в игре не влияет.
+    mesh.scale.setScalar(capped * (1 - hide) * chassisSizeMul(player.loadout.chassis.id))
     // Корабль исчезает, канув в кольцо прыжка: с этого мига его в старой системе уже нет.
     // И в гигант-режиме на FULL — уже в ноль, снимаем с отрисовки.
     mesh.visible = player.alive && hide < 1

@@ -6,7 +6,6 @@ import {
   isVisible,
   MIELOPHONE,
   MONOLITH_NAMES,
-  figurineDisplayName,
   NAV_ASTEROID_NAME,
   shipAxes,
   stanceTo,
@@ -16,7 +15,7 @@ import {
 } from '@elite/sim'
 import { UI } from '../theme'
 import { t, useLang } from '../i18n'
-import { chassisName, occupationName, properName } from '../i18n/dataNames'
+import { figurineTitleLocal, chassisName, occupationName, properName } from '../i18n/dataNames'
 import { formatDistance } from '../hud/project'
 import { useWheelZoom } from './useWheelZoom'
 import { discProject, MapCard, MapFrame, MapPin, MapRow } from './MapFrame'
@@ -184,7 +183,7 @@ function blips(world: World): Blip[] {
       size: 9,
       ring: f.id === world.navTargetId && world.targetFocus === 'nav',
       kind: t('locator.kind.figurine'),
-      title: figurineDisplayName(f),
+      title: figurineTitleLocal(f.titleId),
       lines: [],
       selectId: f.id,
       selectKind: 'figurine',

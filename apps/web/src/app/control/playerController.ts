@@ -1,6 +1,7 @@
 import type { Controller, Manoeuvre, ManoeuvreKind, ShipEntity, World } from '@elite/sim'
 import {
   aiController,
+  approach,
   autofightActive,
   autofightSpent,
   beginManoeuvre,
@@ -18,6 +19,7 @@ import {
 import { consumePress, input, isHeld } from '../../platform/input/input'
 import { pushWarning } from '../../ui/hud/warnings'
 import { undocking } from './undockFx'
+import { rigEditorActive } from './rigEditor'
 
 /**
  * Игрок. Реализует тот же `Controller`, что и бот: заполняет ShipControls.
@@ -51,6 +53,19 @@ const REVERSE_FRAC = 0.15
  * больше дрожи руки и меньше осознанного движения.
  */
 const STICK_DEADZONE = 0.02
+
+/**
+ * ПРИЦЕЛ над поверхностью: мышь ведёт его вместо носа (корпус там держат ровным).
+ *
+ * `AIM_RATE` — рад/с при полностью отклонённой ручке, того же порядка, что и скорость
+ * рыскания: увод прицела должен ощущаться продолжением привычного движения мыши, а не
+ * отдельным механизмом. `AIM_LIMIT` — конус в 50°: ниже уже смотришь себе под брюхо,
+ * и стволы туда всё равно не достанут через корпус. `AIM_RETURN` возвращает линию огня
+ * к носу после отрыва — в космосе целятся кораблём.
+ */
+const AIM_RATE = 1.1
+const AIM_LIMIT = 0.87
+const AIM_RETURN = 2.5
 
 /**
  * Фигуры пилотажа — двойное нажатие клавиши.
@@ -413,6 +428,24 @@ export function createPlayerController(intent: PlayerIntent): Controller {
       c.pitch = input.stickY * scale
       c.yaw = input.stickX * scale
 
+      /**
+       * НАД ПОВЕРХНОСТЬЮ вертикаль мыши ведёт ПРИЦЕЛ, а не нос.
+       *
+       * Корпус там держится в касательной плоскости (иначе тяга уходит в радиаль и ход
+       * проседает), поэтому тангаж кораблю не отдаём вовсе — он уходит в `aimPitch`, по
+       * которому сводятся стволы, рисуется перекрестье и доворачивается камера. Мышь
+       * задаёт СКОРОСТЬ увода прицела (она и есть виртуальная ручка), поэтому угол
+       * интегрируем и зажимаем: за пределами конуса целиться уже нечем, там начинается
+       * «смотреть себе под ноги».
+       */
+      if (ship.landedOn !== null) {
+        c.aimPitch = clamp(c.aimPitch - c.pitch * AIM_RATE * dt, -AIM_LIMIT, AIM_LIMIT)
+        c.pitch = 0
+      } else if (c.aimPitch !== 0) {
+        // Оторвались — линия огня возвращается к носу: в космосе целятся кораблём.
+        c.aimPitch = approach(c.aimPitch, 0, AIM_RETURN * dt)
+      }
+
       if (stepManoeuvre(ship, intent.manoeuvre, dt)) {
         // Петлю фигура ведёт целиком: мышь не должна спорить с ней за тангаж
         // и уводить корабль с круга рысканием. В бочке ручка остаётся у пилота —
@@ -455,7 +488,9 @@ export function createPlayerController(intent: PlayerIntent): Controller {
       // выше. Сила наддува — свойство установленного двигателя, а не константа
       // игры: поставил военный — наддув стал мощнее, и это посчитано, а не назначено.
       c.boost = input.throttleUp ? boostMult(ship.loadout) : 1
-      c.retro = isHeld('ControlLeft') || isHeld('ControlRight') ? 1 : 0
+      // В редакторе сопел Ctrl — модификатор сдвига вдоль корпуса, а не тормоз: иначе каждая
+      // правка глубины дёргала бы корабль, и подстраивать устье приходилось бы на торможении.
+      c.retro = !rigEditorActive() && (isHeld('ControlLeft') || isHeld('ControlRight')) ? 1 : 0
 
       // Крейсерский ход («форсаж») — удержание Пробела (разгон к MAX).
       // Alt — защёлка: множитель встаёт; пробел можно отпустить.

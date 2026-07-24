@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { applyPilotProfile, interlocutor, jumpBlock, pendingHail, serializePlayer, stationInterlocutor, undock, type JumpBlock, type PilotProfile, type PlayerSave, type World } from '@elite/sim'
+import { applyPilotProfile, interlocutor, jumpBlock, lockShipContact, pendingHail, serializePlayer, stationInterlocutor, undock, type JumpBlock, type PilotProfile, type PlayerSave, type World } from '@elite/sim'
 import { GameProvider, useSession } from './GameContext'
 import { closePortal, freshPortalKeyDown, jumpPortal, openPortal, portalActive, portalOpen } from './control/jumpPortal'
 import { disposeJumpPortalWorld, resetJumpPortalWorlds } from '../render/scene/jumpPortalWorld'
@@ -485,12 +485,7 @@ function Shell({ onRestart }: { onRestart: () => void }) {
   // Курсор у причала уже свободен, мир стоит — только показать окно разговора.
   const talkTo = useCallback((shipId: number) => {
     const w = session.world
-    w.navTargetId = null
-    w.lockedStationId = null
-    w.lockedPodId = null
-    w.lockedAsteroidId = null
-    w.lockedTargetId = shipId
-    w.targetFocus = 'contact'
+    lockShipContact(w, shipId)
     setTalking(true)
   }, [session])
   // «Навести» из вкладки «Люди»: захватываем борт знакомого — стрелка HUD поведёт к
@@ -498,12 +493,7 @@ function Shell({ onRestart }: { onRestart: () => void }) {
   // лететь некуда, метку просто держим.
   const locateShip = useCallback((shipId: number) => {
     const w = session.world
-    w.navTargetId = null
-    w.lockedStationId = null
-    w.lockedPodId = null
-    w.lockedAsteroidId = null
-    w.lockedTargetId = shipId
-    w.targetFocus = 'contact'
+    lockShipContact(w, shipId)
     if (!w.docked) closeConsole()
   }, [session, closeConsole])
   // «Проложить курс» к знакомому в другой системе: метим её целью прыжка и переводим
@@ -600,12 +590,7 @@ function Shell({ onRestart }: { onRestart: () => void }) {
           const hail = pendingHail(session.world)
           if (!hail) return
           const w = session.world
-          w.navTargetId = null
-          w.lockedStationId = null
-          w.lockedPodId = null
-          w.lockedAsteroidId = null
-          w.lockedTargetId = hail.id
-          w.targetFocus = 'contact'
+          lockShipContact(w, hail.id)
         }
         setTalking(true)
         releaseLock()

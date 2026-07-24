@@ -445,7 +445,63 @@ function StarLabel({ at, box }: { at: Vector3 | null; box: React.RefObject<HTMLD
  * У правого края плашка перекидывается влево, а по вертикали зажимается в поле: карточка
  * высокая (в ней схема выхода), и у нижней звезды она иначе уезжала бы за край.
  */
-function CardPin({ at, box }: { at: Vector3 | null; box: React.RefObject<HTMLDivElement | null> }) {
+/** Прижать координату к полю с отступом. `limit` уже с вычтенным размером карточки. */
+function clampTo(value: number, limit: number): number {
+  return Math.max(4, Math.min(limit - 4, value))
+}
+
+/**
+ * Куда игрок ОТТАЩИЛ карточку. `null` — она сама держится у своей звезды.
+ *
+ * Оттащил — значит она мешала смотреть, и возвращать её к звезде при каждом повороте
+ * карты было бы издевательством: с этого момента плашка стоит там, куда положили, пока
+ * не выберешь другую систему. Живёт в ref: позицию пишет кадр, React в этом не участвует.
+ */
+export interface CardDrag {
+  pinned: { x: number; y: number } | null
+}
+
+/**
+ * Взять карточку и потащить. Ручка — вся плашка, кроме её органов управления: тянуть
+ * за кнопку «выйти сюда» игрок не станет, а вот промахнуться по ней, начав тащить, — легко.
+ *
+ * Ведём по `pointermove` на окне с захватом указателя: карточка узкая, курсор на быстром
+ * рывке уходит за её край, и без захвата перетаскивание рвалось бы на полпути.
+ */
+function beginCardDrag(e: React.PointerEvent, el: HTMLDivElement | null, drag: CardDrag): void {
+  if (!el || e.button !== 0) return
+  if ((e.target as HTMLElement).closest('button, a, input, select, textarea')) return
+
+  const field = el.offsetParent as HTMLElement | null
+  if (!field) return
+  const fieldBox = field.getBoundingClientRect()
+  const cardBox = el.getBoundingClientRect()
+  // Хват за ту же точку, за которую взяли: иначе плашка прыгает углом под курсор.
+  const grabX = e.clientX - cardBox.left
+  const grabY = e.clientY - cardBox.top
+
+  const move = (ev: PointerEvent): void => {
+    drag.pinned = { x: ev.clientX - fieldBox.left - grabX, y: ev.clientY - fieldBox.top - grabY }
+  }
+  const up = (): void => {
+    window.removeEventListener('pointermove', move)
+    window.removeEventListener('pointerup', up)
+  }
+  window.addEventListener('pointermove', move)
+  window.addEventListener('pointerup', up)
+  // Карта под плашкой не должна поехать следом: драг поля начинается с того же жеста.
+  e.stopPropagation()
+}
+
+function CardPin({
+  at,
+  box,
+  drag,
+}: {
+  at: Vector3 | null
+  box: React.RefObject<HTMLDivElement | null>
+  drag: React.RefObject<CardDrag>
+}) {
   const { camera, size } = useThree()
 
   useFrame(() => {
@@ -454,6 +510,19 @@ function CardPin({ at, box }: { at: Vector3 | null; box: React.RefObject<HTMLDiv
     if (!at) {
       el.style.opacity = '0'
       el.style.pointerEvents = 'none'
+      return
+    }
+
+    const w = el.offsetWidth
+    const h = el.offsetHeight
+
+    // Оттащили — плашка стоит где положили и за звездой больше не бегает. Зажим по полю
+    // тот же: перетащить её за обрез рамки нельзя, иначе она снова окажется срезанной.
+    const pinned = drag.current.pinned
+    if (pinned) {
+      el.style.opacity = '1'
+      el.style.pointerEvents = 'auto'
+      el.style.transform = `translate(${Math.round(clampTo(pinned.x, size.width - w))}px, ${Math.round(clampTo(pinned.y, size.height - h))}px)`
       return
     }
 
@@ -466,10 +535,11 @@ function CardPin({ at, box }: { at: Vector3 | null; box: React.RefObject<HTMLDiv
 
     const x = (_screen.x * 0.5 + 0.5) * size.width
     const y = (-_screen.y * 0.5 + 0.5) * size.height
-    const w = el.offsetWidth
-    const h = el.offsetHeight
-    const left = x > size.width * 0.55 ? x - w - 12 : x + 12
-    const top = Math.max(4, Math.min(size.height - h - 4, y - h / 2))
+    // Зажимаем В ПОЛЕ по обеим осям. Раньше по горизонтали был только переброс влево у
+    // правого края — и у звезды слева карточка вылезала за правый обрез поля, а рамка карты
+    // режет всё лишнее (`overflow-hidden`). Теперь край поля держит её с любой стороны.
+    const left = clampTo(x > size.width * 0.55 ? x - w - 12 : x + 12, size.width - w)
+    const top = clampTo(y - h / 2, size.height - h)
     el.style.opacity = '1'
     el.style.pointerEvents = 'auto'
     el.style.transform = `translate(${Math.round(left)}px, ${Math.round(top)}px)`
@@ -831,6 +901,13 @@ function GalaxyMapImpl({ onClose, embedded = false }: { onClose: () => void; emb
   const dragging = useRef(false)
   const label = useRef<HTMLDivElement>(null)
   const card = useRef<HTMLDivElement>(null)
+  /** Куда оттащили карточку. Пишет драг, читает кадр — React в этом не участвует. */
+  const cardDrag = useRef<CardDrag>({ pinned: null })
+  // Выбрал другую звезду — плашка возвращается к ней. Оттащенное место принадлежало
+  // прежней системе, и держать новую карточку там значило бы отвязать её от карты вовсе.
+  useEffect(() => {
+    cardDrag.current.pinned = null
+  }, [selected])
   const you = useRef<HTMLDivElement>(null)
   const viewport = useRef<HTMLDivElement>(null)
   // Метки знакомых: где живые контакты по системам. Div'ы подписей собираем в карту по
@@ -995,7 +1072,7 @@ function GalaxyMapImpl({ onClose, embedded = false }: { onClose: () => void; emb
           <Route from={here} to={picked ? positionOf(picked.system) : null} />
           <StarLabel at={picked ? positionOf(picked.system) : null} box={label} />
           {/* Плашка выбранной системы едет за своей звездой — её место считает кадр. */}
-          <CardPin at={selected != null && systems[selected] ? positionOf(systems[selected]!) : null} box={card} />
+          <CardPin at={selected != null && systems[selected] ? positionOf(systems[selected]!) : null} box={card} drag={cardDrag} />
         </Canvas>
 
         {/* Подпись «ВЫ» и имя под курсором живут всегда: их двигает кадр, а не React. */}
@@ -1057,8 +1134,16 @@ function GalaxyMapImpl({ onClose, embedded = false }: { onClose: () => void; emb
         {/* Выбранная система — плашка У СВОЕЙ ЗВЕЗДЫ, поверх поля (позицию двигает
             `CardPin` в кадре). Не часть вёрстки: колонку слева заняли поиск, фильтры и
             список, а появление карточки ничего не должно двигать. */}
+        {/* Высота ограничена полем карты, а лишнее прокручивается внутри: карточка с полной
+            схемой выхода выше поля, и без этого её низ уходил под обрез рамки (та с
+            `overflow-hidden`) — читать было нечего. */}
         {selected != null && systems[selected] && (
-          <div ref={card} className="absolute left-0 top-0 z-30 w-96 max-w-[80%] opacity-0" style={{ willChange: 'transform' }}>
+          <div
+            ref={card}
+            className="absolute left-0 top-0 z-30 flex max-h-full w-96 max-w-[80%] cursor-grab flex-col overflow-y-auto overscroll-contain opacity-0 active:cursor-grabbing"
+            style={{ willChange: 'transform' }}
+            onPointerDown={(e) => beginCardDrag(e, card.current, cardDrag.current)}
+          >
             <SystemPopup
               key={selected}
               inline

@@ -13,6 +13,7 @@ import {
 } from 'three'
 import { bodyMass, findStation, type BodyEntity, type World } from '@elite/sim'
 import { loadPlanetTexture, pickVariant, planetLook } from '../../render/sky/planets'
+import { loadRockTexture, rockTextureOf } from '../../render/materials/rockTextures'
 import { t, useLang } from '../i18n'
 import {
   economyName,
@@ -98,7 +99,14 @@ function Globe({ body, spin, radius }: { body: BodyEntity; spin: number; radius:
   // Зерно то же, что в сцене (`Bodies`): вкладка обязана показывать ТОТ ЖЕ мир, что за окном.
   const seed = body.id * 7919
   const [texture, setTexture] = useState<Texture | null>(null)
-  useEffect(() => loadPlanetTexture(look, pickVariant(look, seed), setTexture), [look, seed])
+  // Луна кроется КАМНЕМ по id — тем же снимком, что в мире (`Bodies`): спутник это большой
+  // камень, а не планета, и планетная карта на нём читалась бы как ошибка.
+  useEffect(
+    () => body.kind === 'moon'
+      ? loadRockTexture(rockTextureOf(body.id), setTexture)
+      : loadPlanetTexture(look, pickVariant(look, seed), setTexture),
+    [body.kind, body.id, look, seed],
+  )
 
   const material = useMemo(() => new MeshLambertMaterial({ color: body.color }), [body.color])
   useEffect(() => () => material.dispose(), [material])
@@ -178,6 +186,7 @@ function Satellite({
   phase,
   color,
   id,
+  rocky,
   boxes,
 }: {
   radius: number
@@ -188,12 +197,24 @@ function Satellite({
   color: number
   /** Кому принадлежит подпись — id тела: по нему она и лежит в общей карте ссылок. */
   id: number
+  /** Луна кроется камнем; причал — нет, он и в мире белая коробка, а не грунт. */
+  rocky: boolean
   /** Подписи всех спутников. Двигаются тем же кадром, что и сами шары. */
   boxes: React.RefObject<Map<number, HTMLDivElement>>
 }) {
   const ref = useRef<Group>(null)
   const material = useMemo(() => new MeshLambertMaterial({ color }), [color])
   useEffect(() => () => material.dispose(), [material])
+
+  // Тем же снимком, что и в мире (`Bodies`) и на шаре вкладки: луна на орбите не должна
+  // выглядеть иначе, чем та же луна вблизи. Без карты оставался плоский цвет — «не обёрнута».
+  const [texture, setTexture] = useState<Texture | null>(null)
+  useEffect(() => (rocky ? loadRockTexture(rockTextureOf(id), setTexture) : undefined), [rocky, id])
+  useEffect(() => {
+    material.map = texture
+    material.color.set(texture ? 0xffffff : color)
+    material.needsUpdate = true
+  }, [material, texture, color])
   /** Где спутник ПОКАЗАН. Его и тянет мышь. */
   const angle = useRef(phase)
   /** Где он ДОЛЖЕН быть по расписанию. Идёт своим ходом, что бы ни делала рука. */
@@ -430,6 +451,7 @@ export function PlanetScreen({ world, planet }: { world: World; planet: BodyEnti
               phase={m.orbit?.phase ?? 0}
               color={m.color}
               id={m.id}
+              rocky
               boxes={labels}
             />
           ))}
@@ -441,6 +463,7 @@ export function PlanetScreen({ world, planet }: { world: World; planet: BodyEnti
               phase={station.orbit?.phase ?? 0}
               color={0xffffff}
               id={station.id}
+              rocky={false}
               boxes={labels}
             />
           )}
