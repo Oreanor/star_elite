@@ -798,6 +798,7 @@ export function createWorld(def: SystemDef = STARTER_SYSTEM, profile?: PilotProf
     beams: [],
     explosions: [],
     shockwaves: [],
+    blastwaves: [],
     warps: [],
     warpPortals: [],
     jumpGates: [],

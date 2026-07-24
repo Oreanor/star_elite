@@ -30,6 +30,25 @@ export function warBaseFixtureWorldPos(
   return out.multiplyScalar(reach).add(base.pos)
 }
 
+/** Сколько деталей ещё стоит. Ноль — базе держаться не на чем. */
+export function livingFixtures(base: WarBaseEntity): number {
+  let n = 0
+  for (const f of base.fixtures) if (f.alive) n++
+  return n
+}
+
+/**
+ * ЖИВУЧЕСТЬ базы, 0..1 — доля уцелевших деталей.
+ *
+ * Своей копилки прочности у корпуса нет: база и есть её турели. Это же число рисует
+ * полоска цели, поэтому «сколько осталось» видно глазами, а не выводится из скрытого
+ * запаса: сбил турель — полоска шагнула на понятную величину.
+ */
+export function warBaseIntegrity(base: WarBaseEntity): number {
+  const total = base.fixtures.length
+  return total > 0 ? livingFixtures(base) / total : 0
+}
+
 /** Найти деталь по id среди живых баз — вместе с её базой: место считается от базы. */
 export function findWarBaseFixture(
   bases: readonly WarBaseEntity[],

@@ -7,6 +7,7 @@ import { GalaxyLayer } from './GalaxyLayer'
 import { HypertorusLayer } from './HypertorusLayer'
 import { Titans } from './Titans'
 import { Platforms } from './Platforms'
+import { Blastwaves } from './Blastwaves'
 import { DockingCorridor } from './DockingCorridor'
 import { Dyson } from './Dyson'
 import { BlackHole } from './BlackHole'
@@ -102,6 +103,7 @@ export function WorldVisuals() {
         <MuzzleFlashes />
         <Explosions />
         <ExplosionChunks />
+        <Blastwaves />
         <WarpFlashes />
         <WarpArrivalPortals />
         <StationShields />

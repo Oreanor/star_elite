@@ -21,9 +21,24 @@ export function spawnTracer(
   world.tracers.push({ from: from.clone(), to: to.clone(), born: world.time, hostile, weapon, life, bore, anchorId, anchorOffset })
 }
 
-/** Взрыв наследует скорость того, что взорвалось: осколки не висят в пустоте. */
-export function spawnExplosion(world: World, pos: Vector3, vel: Vector3, scale: number): void {
-  world.explosions.push({ pos: pos.clone(), vel: vel.clone(), born: world.time, scale })
+/**
+ * Взрыв наследует скорость того, что взорвалось: осколки не висят в пустоте.
+ *
+ * `startAt` — когда вспышка ЗАЖЖЁТСЯ (по умолчанию сейчас). Каскадной детонации нужны
+ * очаги в разных фазах: рождаем их разом, но с разным временем старта, а рендер пропускает
+ * то, чему ещё не время. Иначе десяток вспышек — это десяток одинаковых копий.
+ */
+export function spawnExplosion(world: World, pos: Vector3, vel: Vector3, scale: number, startAt?: number): void {
+  world.explosions.push({ pos: pos.clone(), vel: vel.clone(), born: startAt ?? world.time, scale })
+}
+
+/**
+ * СФЕРИЧЕСКАЯ ВОЛНА в мире: круг с градиентным краем, расходящийся из точки до `radius`.
+ * Не экранная вспышка бомбы (`Shockwave`) — у этой есть место, и вдали она мельче, как
+ * всякий объект сцены. `startAt` — момент «пуха»: он приходит уже после каскада вспышек.
+ */
+export function spawnBlastwave(world: World, pos: Vector3, radius: number, startAt?: number): void {
+  world.blastwaves.push({ pos: pos.clone(), born: startAt ?? world.time, radius })
 }
 
 /**

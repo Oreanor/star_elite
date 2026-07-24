@@ -35,7 +35,7 @@ function layoutFixtures(ids: World['ids'], radius: number, rng: Rng): WarBaseFix
   const out: WarBaseFixture[] = []
   const n = WARBASE.FIXTURES_MIN + Math.floor(rng() * (WARBASE.FIXTURES_MAX - WARBASE.FIXTURES_MIN + 1))
   const push = (model: number, dir: Vector3, size: number): void => {
-    out.push({ id: ids.next(), model, dir, size, roll: rng() * Math.PI * 2, hull: WARBASE.FIXTURE_HULL_PER_M * size, alive: true })
+    out.push({ id: ids.next(), model, dir, size, roll: rng() * Math.PI * 2, alive: true })
   }
   // ОБА полюса всегда прикрыты деталью. На полюсе equirect-карта стягивается в точку
   // («закрутка звёздочкой»), и башня/пушка маскируют этот артефакт — иначе на «макушке»
@@ -86,9 +86,9 @@ export function placeWarBases(world: World, def: SystemDef): void {
       spinAxis: new Vector3(0, 1, 0),
       spin: WARBASE.SPIN,
       radius: b.radius,
-      hull: WARBASE.HULL_PER_KM * (b.radius / 1000),
-      hullMax: WARBASE.HULL_PER_KM * (b.radius / 1000),
       alive: true,
+      wreckAt: null,
+      scattered: false,
       fixtures: layoutFixtures(world.ids, b.radius, makeRng(seed)),
     })
   }

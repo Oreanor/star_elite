@@ -99,7 +99,8 @@ describe('монолиты у причала', () => {
     const base = world.warBases[0]!
     expect(base.alive).toBe(true)
     expect(base.radius).toBe(1_500)
-    expect(base.hull).toBeGreaterThan(0)
+    // Живучесть базы — её детали: своей копилки прочности у корпуса нет.
+    expect(base.fixtures.length).toBeGreaterThan(0)
     // Стоит у причала — на заданном смещении.
     expect(base.pos.distanceTo(station.pos)).toBeCloseTo(10_000, 0)
   })

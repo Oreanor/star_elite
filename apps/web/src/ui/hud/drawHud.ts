@@ -41,6 +41,7 @@ import {
   shipAxes,
   stationRange,
   warBaseFixtureWorldPos,
+  warBaseIntegrity,
   type BodyEntity,
   type ShipEntity,
   type StarSystem,
@@ -868,7 +869,7 @@ function drawTargetPanels(frame: HudFrame): void {
     body: (x: number, y: number) => void,
     /** Состояние захваченного борта. Метки в космосе мелки и уезжают за кадр — читать
      *  «добивать или уходить» пилот должен здесь, под портретом. */
-    bars?: { shield: number; hull: number },
+    bars?: { shield?: number; hull: number },
   ): void => {
     body(x, y)
     ctx.strokeStyle = color
@@ -878,9 +879,13 @@ function drawTargetPanels(frame: HudFrame): void {
     if (bars) {
       // Порядок и цвета — как у собственных полосок слева: щит голубой сверху, корпус
       // красный под ним. Пилот не переучивается, переводя взгляд с борта на цель.
-      bar(ctx, x, captionY, size, 2 * S, bars.shield, HUD_COLORS.PRIMARY)
-      bar(ctx, x, captionY + 3 * S, size, 2 * S, bars.hull, HUD_COLORS.DANGER)
-      captionY += 8 * S
+      // У кого щита нет вовсе (военная база) — рисуем только живучесть, не пустую полосу.
+      if (bars.shield !== undefined) {
+        bar(ctx, x, captionY, size, 2 * S, bars.shield, HUD_COLORS.PRIMARY)
+        captionY += 3 * S
+      }
+      bar(ctx, x, captionY, size, 2 * S, bars.hull, HUD_COLORS.DANGER)
+      captionY += 5 * S
     }
     cellCaption(ctx, x + size / 2, captionY, lines)
   }
@@ -990,6 +995,9 @@ function drawTargetPanels(frame: HudFrame): void {
   const color = navMarkerColor(nav)
   const navMass =
     nav.kind === 'asteroid' ? formatStat('mass', asteroidMass(nav.radius)) : undefined
+  // Живучесть базы — доля уцелевших деталей: своей копилки прочности у неё нет, и полоска
+  // показывает ровно то, что видно глазами на её боках.
+  const navBase = nav.kind === 'warbase' ? world.warBases.find((b) => b.id === nav.id && b.alive) : undefined
   cell(color, [
     properName(nav.name),
     t(kindKey),
@@ -1022,7 +1030,7 @@ function drawTargetPanels(frame: HudFrame): void {
         return drawAsteroidChunk(ctx, px, py, size, color, nav.id, world.time)
     }
     cellIcon(ctx, cx, cy, color)
-  })
+  }, navBase ? { hull: warBaseIntegrity(navBase) } : undefined)
 }
 
 /**

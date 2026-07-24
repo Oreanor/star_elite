@@ -5,7 +5,7 @@ export { bounceOffShield, bounceOffSolid, resolveShipVsShip, resolveShipVsSphere
 export { applyDamage, healthFraction, regenShield, shieldFraction, surviveLethal } from './damage'
 export { defuseGrievance, hasGrievance, pendingHail, provoke, registerPlayerHit, stepGrievances } from './grievance'
 export { auxFraction, energyFraction, fireEcm, regenAux, regenEnergy } from './ecm'
-export { spawnExplosion, spawnShieldFlash, spawnShockwave, spawnTracer } from './effects'
+export { spawnBlastwave, spawnExplosion, spawnShieldFlash, spawnShockwave, spawnTracer } from './effects'
 export { chargeHyperdrive, scooping, starExposure, stepStarHeat } from './starheat'
 export {
   asteroidMass,
@@ -17,7 +17,7 @@ export {
   shatter,
   splittable,
 } from './mining'
-export { damageWarBase, destroyWarBase, damageWarBaseFixture } from './warBase'
+export { damageWarBase, destroyWarBase, damageWarBaseFixture, stepWarBaseWrecks, warBaseWreckDone } from './warBase'
 export { stepMissiles } from './missiles'
 export { stepBolts } from './bolts'
 export { castLaser, type LaserHit, type ShotSource } from './raycast'

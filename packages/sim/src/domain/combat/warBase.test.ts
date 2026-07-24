@@ -1,8 +1,6 @@
 import { Vector3 } from 'three'
 import { describe, expect, it } from 'vitest'
-import { MONOLITH } from '../../config/monoliths'
 import { WARBASE } from '../../config/warbase'
-import { itemMass } from '../cargo/items'
 import { PHYSICS } from '../../config/physics'
 import { stepWorld } from '../sim/step'
 import { createWorld } from '../world'
@@ -10,6 +8,7 @@ import { cycleContact } from '../world/queries'
 import { STARTER_SYSTEM } from '../world/system'
 import { castLaser } from './raycast'
 import { damageWarBase, damageWarBaseFixture, warBaseFixtureWorldPos } from './warBase'
+import { warBaseIntegrity } from '../world/warBase'
 
 /** Мир с двумя базами у причала: километровой и трёхкилометровой. */
 function withBases(): ReturnType<typeof createWorld> {
@@ -20,6 +19,16 @@ function withBases(): ReturnType<typeof createWorld> {
       { name: 'Большая', radius: 3_000, stationOffset: [-12_000, 0, 0], model: 1 },
     ],
   })
+}
+
+/** Снести базу — значит сбить ВСЕ её детали: своей прочности у корпуса нет. */
+function razeBase(world: ReturnType<typeof createWorld>, base: (typeof world.warBases)[number]): void {
+  for (const fix of [...base.fixtures]) damageWarBaseFixture(world, base, fix, 1)
+}
+
+/** Прокрутить мир до конца агонии: каскад вспышек, затем «пух» с разлётом лома. */
+function afterWreck(world: ReturnType<typeof createWorld>): void {
+  for (let i = 0; i < 600; i++) stepWorld(world, PHYSICS.FIXED_DT, new Map())
 }
 
 describe('военная база', () => {
@@ -36,23 +45,19 @@ describe('военная база', () => {
     expect(hit.asteroid).toBeNull()
   })
 
-  it('снос сыплет подбираемые осколки с массой', () => {
+  it('снос сыплет подбираемые осколки с массой — после «пуха», не сразу', () => {
     const world = withBases()
     const base = world.warBases[0]!
-    const beforePods = world.pods.length
 
-    damageWarBase(world, base, base.hull)
-
+    razeBase(world, base)
     expect(base.alive).toBe(false)
+    // Каскад ещё гремит: лом не должен лежать раньше времени.
+    expect(world.pods.filter((p) => p.debris).length).toBe(0)
+
+    afterWreck(world)
     const debris = world.pods.filter((p) => p.debris)
-    expect(debris.length).toBeGreaterThan(beforePods)
-    expect(debris.length).toBeGreaterThanOrEqual(MONOLITH.ROCK_DEBRIS_MIN)
-    expect(debris.length).toBeLessThanOrEqual(MONOLITH.ROCK_DEBRIS_MAX)
-    for (const pod of debris) {
-      expect(pod.debris!.shape).toBe(base.shape)
-      expect(itemMass(pod.item)).toBeGreaterThan(0)
-      expect(pod.item.kind).toBe('commodity')
-    }
+    expect(debris.length).toBeGreaterThanOrEqual(WARBASE.SCRAP_MIN)
+    expect(debris.length).toBeLessThanOrEqual(WARBASE.SCRAP_MAX)
   })
 
   it('крупная база сыплет не меньше осколков, чем малая', () => {
@@ -61,23 +66,46 @@ describe('военная база', () => {
     const large = world.warBases.reduce((a, b) => (a.radius >= b.radius ? a : b))
     expect(large.radius).toBeGreaterThan(small.radius)
 
-    damageWarBase(world, small, small.hull)
+    razeBase(world, small)
+    afterWreck(world)
     const smallN = world.pods.filter((p) => p.debris).length
     world.pods = []
 
     expect(large.alive).toBe(true)
-    damageWarBase(world, large, large.hull)
+    razeBase(world, large)
+    afterWreck(world)
     const largeN = world.pods.filter((p) => p.debris).length
 
     expect(largeN).toBeGreaterThanOrEqual(smallN)
   })
 
-  it('прочность корпуса растёт с радиусом', () => {
+  it('удар в обшивку не наносит урона: база держится на деталях', () => {
     const world = withBases()
-    const small = world.warBases.reduce((a, b) => (a.radius <= b.radius ? a : b))
-    const large = world.warBases.reduce((a, b) => (a.radius >= b.radius ? a : b))
-    expect(large.hull).toBeGreaterThan(small.hull)
-    expect(small.hull).toBeCloseTo(WARBASE.HULL_PER_KM * (small.radius / 1000), 5)
+    const base = world.warBases[0]!
+    const before = base.fixtures.filter((f) => f.alive).length
+
+    damageWarBase(world, base, 1e9)
+
+    expect(base.alive).toBe(true)
+    expect(base.fixtures.filter((f) => f.alive).length).toBe(before)
+  })
+
+  /**
+   * Полоска цели показывает ДОЛЮ живых деталей — это и есть живучесть базы. Скрытого
+   * запаса нет: сбил турель, полоска шагнула ровно на 1/N.
+   */
+  it('живучесть базы — доля уцелевших деталей', () => {
+    const world = withBases()
+    const base = world.warBases[0]!
+    const total = base.fixtures.length
+
+    expect(warBaseIntegrity(base)).toBe(1)
+    damageWarBaseFixture(world, base, base.fixtures[0]!, 1)
+    expect(warBaseIntegrity(base)).toBeCloseTo((total - 1) / total, 6)
+
+    razeBase(world, base)
+    expect(warBaseIntegrity(base)).toBe(0)
+    expect(base.alive).toBe(false)
   })
 })
 
@@ -111,13 +139,13 @@ describe('отстрел деталей базы', () => {
     const world = withBases()
     const base = world.warBases[0]!
     const fix = base.fixtures.find((f) => f.model !== 0)!
-    const hullBefore = base.hull
+    const before = base.fixtures.filter((f) => f.alive).length
 
-    damageWarBaseFixture(world, base, fix, fix.hull)
+    damageWarBaseFixture(world, base, fix, 1)
 
     expect(fix.alive).toBe(false)
     expect(base.alive).toBe(true)
-    expect(base.hull).toBe(hullBefore)
+    expect(base.fixtures.filter((f) => f.alive).length).toBe(before - 1)
     // Мёртвую деталь луч больше не ловит.
     const _p = new Vector3()
     warBaseFixtureWorldPos(base, fix, world.time, _p)
@@ -151,7 +179,7 @@ describe('отстрел деталей базы', () => {
     expect(world.lockedAsteroidId).toBeNull()
 
     // Отстрелили — рамка не должна остаться висеть на том, чего нет.
-    damageWarBaseFixture(world, base, fix, fix.hull)
+    damageWarBaseFixture(world, base, fix, 1)
     stepWorld(world, PHYSICS.FIXED_DT, new Map())
     expect(world.lockedFixtureId).toBeNull()
   })
@@ -168,10 +196,33 @@ describe('отстрел деталей базы', () => {
     const fix = base.fixtures.find((f) => f.model !== 0)!
     const before = base.fixtures.length
 
-    damageWarBaseFixture(world, base, fix, fix.hull)
+    damageWarBaseFixture(world, base, fix, 1)
     stepWorld(world, PHYSICS.FIXED_DT, new Map())
 
     expect(base.fixtures.length).toBe(before)
     expect(base.fixtures.find((f) => f.id === fix.id)?.alive).toBe(false)
+  })
+
+  /**
+   * ПОРЯДОК СНОСА: сперва каскад вспышек, и только когда он отгремит — «пух» ударной
+   * волны с разлётом лома. Сложи их в один кадр, и километровый шар просто исчезнет
+   * во вспышке; ради этой паузы у базы и появилась фаза агонии.
+   */
+  it('снос идёт по порядку: каскад вспышек, потом волна с ломом', () => {
+    const world = withBases()
+    const base = world.warBases[0]!
+    razeBase(world, base)
+
+    // Сразу после сноса: очаги уже заказаны, но волны и лома ещё нет.
+    expect(world.explosions.length).toBeGreaterThanOrEqual(WARBASE.BLASTS)
+    expect(world.blastwaves.length).toBe(0)
+    expect(world.pods.filter((p) => p.debris).length).toBe(0)
+    // Очаги зажигаются НЕ разом: у каждого свой момент старта.
+    const starts = new Set(world.explosions.map((e) => e.born))
+    expect(starts.size).toBeGreaterThan(1)
+
+    afterWreck(world)
+    expect(world.blastwaves.length + world.pods.filter((p) => p.debris).length).toBeGreaterThan(0)
+    expect(world.pods.filter((p) => p.debris).length).toBeGreaterThanOrEqual(WARBASE.SCRAP_MIN)
   })
 })

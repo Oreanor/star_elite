@@ -294,6 +294,9 @@ export function Explosions() {
     for (const blast of session.world.explosions) {
       if (count >= MAX_EXPLOSIONS) break
       const dt = now - blast.born
+      // Очаг каскада ещё не зажёгся: у него `born` в БУДУЩЕМ. Так десяток вспышек сноса
+      // раскатывается во времени, а не показывает десять одинаковых копий одной фазы.
+      if (dt < 0) continue
       const age = dt / EXPLOSION.LIFE
 
       _dummy.position.copy(blast.pos)
@@ -352,6 +355,8 @@ export function ExplosionChunks() {
     for (const blast of session.world.explosions) {
       if (blast.scale < EXPLOSION.CHUNK_MIN_SCALE) continue
       const dt = now - blast.born
+      // Не зажёгся — не сыплет: осколки идут вместе со своей вспышкой, не раньше неё.
+      if (dt < 0) continue
       const age = dt / EXPLOSION.LIFE
 
       const k = Math.min(EXPLOSION.CHUNK_MAX_PER, Math.round(blast.scale * EXPLOSION.CHUNK_PER_SCALE))

@@ -1,5 +1,6 @@
 import { Quaternion, Vector3 } from 'three'
 import { WARP } from '../../config/ai'
+import { WARBASE } from '../../config/warbase'
 import { CONTACTS } from '../../config/contacts'
 import { PHYSICS } from '../../config/physics'
 import { raySphere } from '../../core/math'
@@ -34,6 +35,8 @@ import {
   stepStarHeat,
   stepMissiles,
   stepBolts,
+  stepWarBaseWrecks,
+  warBaseWreckDone,
   surviveLethal,
   toggleCloak,
   tractorPods,
@@ -632,7 +635,11 @@ function cleanup(world: World): void {
   // Второе место, гасящее астероид по прочности, однажды забыло бы про осколки.
   world.asteroids = world.asteroids.filter((a) => a.alive)
   // Глыбы двора: взорвались в `damageWarBase` — тут только выметаем трупы.
-  world.warBases = world.warBases.filter((r) => r.alive)
+  // Снесённая база остаётся в мире, пока не отгремит её агония: каскад вспышек, затем
+  // "пух" волны с разлётом лома. Вынести раньше — оборвать зрелище на полуслове.
+  stepWarBaseWrecks(world)
+  world.warBases = world.warBases.filter((r) => !warBaseWreckDone(r, now))
+  world.blastwaves = world.blastwaves.filter((w) => now - w.born < WARBASE.WAVE_LIFE)
 
   expirePods(world)
 

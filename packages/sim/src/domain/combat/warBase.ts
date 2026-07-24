@@ -1,64 +1,120 @@
 import { Vector3 } from 'three'
 import { MONOLITH } from '../../config/monoliths'
+import { WARBASE } from '../../config/warbase'
+import { randomUnit } from '../../core/math'
 import type { WarBaseEntity, WarBaseFixture, World } from '../world/entities'
-import { warBaseFixtureWorldPos } from '../world/warBase'
+import { livingFixtures, warBaseFixtureWorldPos } from '../world/warBase'
+import { spawnBlastwave, spawnExplosion } from './effects'
+import { spawnRockDebrisPod } from './salvage'
 
 // Место детали — геометрия мира (`world/warBase`), но бой и его тесты привыкли брать её
 // отсюда: снаружи «деталь базы» одно понятие, а не два файла в соседних папках.
 export { warBaseFixtureWorldPos }
-import { spawnExplosion } from './effects'
-import { spawnRockDebrisPod } from './salvage'
 
-/** База не дрейфует — вспышка гибели без унаследованной скорости. */
+/** База не дрейфует — вспышки гибели без унаследованной скорости. */
 const _still = /* @__PURE__ */ new Vector3()
 const _fixWorld = /* @__PURE__ */ new Vector3()
+const _blastAt = /* @__PURE__ */ new Vector3()
+const _scrapDir = /* @__PURE__ */ new Vector3()
 
-
-/** Сколько осколков сыплется с базы: крупнее — гуще. */
-function debrisCount(radius: number): number {
-  const span = MONOLITH.ROCK_RADIUS_MAX - MONOLITH.ROCK_RADIUS_MIN
-  const t = span > 1e-6 ? (radius - MONOLITH.ROCK_RADIUS_MIN) / span : 0
-  return (
-    MONOLITH.ROCK_DEBRIS_MIN +
-    Math.round(Math.min(1, Math.max(0, t)) * (MONOLITH.ROCK_DEBRIS_MAX - MONOLITH.ROCK_DEBRIS_MIN))
-  )
+/**
+ * РАСКАТЫВАЮЩАЯСЯ ДЕТОНАЦИЯ: десятки очагов по объёму шара, зажигающихся не разом.
+ *
+ * Одна вспышка километрового масштаба — это плоская заливка экрана: билборд всегда
+ * развёрнут к камере, объёма в нём нет. Очаги же разнесены по глубине (при движении
+ * камеры расходятся параллаксом) и стартуют со сдвигом: `born` в БУДУЩЕМ, а рендер
+ * пропускает то, чему ещё не время. Оттого в кадре одновременно живут разные фазы
+ * флипбука, и снос читается как серия детонаций, а не как один хлопок.
+ */
+function detonate(world: World, base: WarBaseEntity): void {
+  for (let i = 0; i < WARBASE.BLASTS; i++) {
+    randomUnit(world.rng, _blastAt)
+    // Кубический корень равномерно набивает ОБЪЁМ шара: иначе очаги липнут к центру.
+    const depth = Math.cbrt(world.rng()) * WARBASE.BLAST_SPREAD
+    _blastAt.multiplyScalar(base.radius * depth).add(base.pos)
+    const scale =
+      base.radius * (WARBASE.BLAST_SCALE_MIN + world.rng() * (WARBASE.BLAST_SCALE_MAX - WARBASE.BLAST_SCALE_MIN))
+    spawnExplosion(world, _blastAt, _still, scale, world.time + i * WARBASE.BLAST_STEP)
+  }
 }
 
-/** Взорвать базу и оставить подбираемые осколки с массой. */
-export function destroyWarBase(world: World, base: WarBaseEntity): void {
-  base.alive = false
-  spawnExplosion(world, base.pos, _still, base.radius * MONOLITH.ROCK_BLAST)
-
-  const n = debrisCount(base.radius)
+/** Поле лома вокруг снесённой базы: подбирается трюмом, тараном не бьёт. */
+function scatterScrap(world: World, base: WarBaseEntity): void {
+  const n = WARBASE.SCRAP_MIN + Math.floor(world.rng() * (WARBASE.SCRAP_MAX - WARBASE.SCRAP_MIN + 1))
   for (let i = 0; i < n; i++) {
+    // Куски вылетают из объёма, а не из одной точки: иначе поле лома выглядит фонтаном.
+    randomUnit(world.rng, _scrapDir)
+    _blastAt.copy(_scrapDir).multiplyScalar(base.radius * Math.cbrt(world.rng())).add(base.pos)
     spawnRockDebrisPod(
       world,
-      base.pos,
+      _blastAt,
       _still,
       base.shape,
-      MONOLITH.ROCK_DEBRIS_RADIUS * (0.7 + world.rng() * 0.6),
-      MONOLITH.ROCK_DEBRIS_MASS,
-      MONOLITH.ROCK_DEBRIS_SPEED,
+      MONOLITH.ROCK_DEBRIS_RADIUS * (0.7 + world.rng() * 0.9),
+      WARBASE.SCRAP_MASS,
+      WARBASE.SCRAP_SPEED,
     )
   }
 }
 
-/** Урон корпусу базы. Прочность кончилась — взрыв и осколки. */
-export function damageWarBase(world: World, base: WarBaseEntity, amount: number): void {
+/**
+ * Снести базу. Гибнет она НЕ мгновенно: сперва по объёму раскатывается каскад детонаций
+ * (`detonate`), и лишь когда он отгремит — бьёт ударная волна и разлетается лом
+ * (`stepWarBaseWrecks`). Оттого снос читается как событие с началом и концом, а не как
+ * одна вспышка, после которой километровый шар просто исчез.
+ */
+export function destroyWarBase(world: World, base: WarBaseEntity): void {
   if (!base.alive) return
-  base.hull -= amount
-  if (base.hull <= 0) destroyWarBase(world, base)
+  base.alive = false
+  base.wreckAt = world.time
+  base.scattered = false
+  detonate(world, base)
+}
+
+/** Сколько длится каскад: последняя вспышка зажигается на этой секунде. */
+const cascadeTime = (): number => WARBASE.BLASTS * WARBASE.BLAST_STEP
+
+/**
+ * Агония снесённых баз: дождаться конца каскада и дать «пух» — сферическую волну и разлёт
+ * лома. Раз в кадр, по секундам, как трафик и киты: это не физика, а сценарий гибели.
+ *
+ * Флаг `scattered` нужен, потому что шаг зовётся каждый кадр, а высыпать лом надо однажды.
+ */
+export function stepWarBaseWrecks(world: World): void {
+  for (const base of world.warBases) {
+    if (base.alive || base.scattered || base.wreckAt === null) continue
+    if (world.time - base.wreckAt < cascadeTime()) continue
+    base.scattered = true
+    spawnBlastwave(world, base.pos, base.radius * WARBASE.WAVE_REACH)
+    scatterScrap(world, base)
+  }
+}
+
+/** Отгремело ли всё: волна прошла и лом разлетелся — базу можно вынести из мира. */
+export function warBaseWreckDone(base: WarBaseEntity, now: number): boolean {
+  if (base.alive) return false
+  if (base.wreckAt === null) return true
+  return base.scattered && now - base.wreckAt >= cascadeTime() + WARBASE.WAVE_LIFE
 }
 
 /**
- * Отстрел ДЕТАЛИ. Прочность кончилась — деталь гибнет отдельной вспышкой в своей точке,
- * корпус базы цел. Взрыв масштаба детали (не базы), без осколков-руды — это не снос базы.
+ * Удар в ОБШИВКУ базы урона не наносит: живучесть базы — это её детали.
+ *
+ * Так снос перестаёт быть измором невидимой копилки и становится счётом: полсотни турелей —
+ * полсотни точных выстрелов, и полоска цели показывает, сколько осталось. Стрелять по
+ * корпусу можно (искру рисует `bolts`), но толку нет — бей по тому, что торчит.
  */
-export function damageWarBaseFixture(world: World, base: WarBaseEntity, fix: WarBaseFixture, amount: number): void {
-  if (!fix.alive) return
-  fix.hull -= amount
-  if (fix.hull > 0) return
+export function damageWarBase(_world: World, _base: WarBaseEntity, _amount: number): void {}
+
+/**
+ * Отстрел ДЕТАЛИ. Сбивается ОДНИМ попаданием, какой бы слабой ни была пушка: у детали нет
+ * своей копилки прочности. Гибнет отдельной вспышкой в своей точке; сбитая последняя
+ * забирает с собой базу — держаться ей больше не на чем.
+ */
+export function damageWarBaseFixture(world: World, base: WarBaseEntity, fix: WarBaseFixture, _amount: number): void {
+  if (!fix.alive || !base.alive) return
   fix.alive = false
   warBaseFixtureWorldPos(base, fix, world.time, _fixWorld)
   spawnExplosion(world, _fixWorld, _still, fix.size * 1.2)
+  if (livingFixtures(base) === 0) destroyWarBase(world, base)
 }
