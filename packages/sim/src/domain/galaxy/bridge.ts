@@ -165,6 +165,31 @@ export function systemDefOf(system: StarSystem, galaxySeed: number, seatOverride
       }
     : null
 
+  /**
+   * ОСТАЛЬНЫЕ ПРИЧАЛЫ системы. Станция — свойство заселённой планеты, и обитаемых миров
+   * в системе бывает несколько; раньше в мир попадал только тот, к которому выходишь, и
+   * соседние причалы существовали лишь в каталоге. Теперь они стоят телами на своих
+   * орбитах: долететь можно до любого, а место выхода остаётся одно (`seat`).
+   *
+   * Облик выводим из того же сида, но со сдвигом по номеру планеты: два причала одной
+   * системы не должны оказаться близнецами, и при этом «какой где» обязано совпадать
+   * у всех клиентов — общий сид, никакого броска на месте.
+   */
+  const extraStations = system.planets.flatMap((p, i) => {
+    if (i === seat || !p.station) return []
+    const planet = planets[i]
+    if (!planet) return []
+    const altitude = p.station.orbit * SCALE.STATION_ORBIT
+    return [
+      {
+        name: p.station.name,
+        pos: [planet.pos[0] + planet.radius + altitude, planet.pos[1], planet.pos[2]] as [number, number, number],
+        radius: STATION_RADIUS,
+        model: Math.floor(makeRng(seed ^ (0x53_54_4e + i))() * 5),
+      },
+    ]
+  })
+
   return {
     name: system.name,
     seed,
@@ -179,6 +204,7 @@ export function systemDefOf(system: StarSystem, galaxySeed: number, seatOverride
     dyson: system.dyson,
     planets,
     station: stationDef,
+    extraStations,
     // Камни — встречи трафика, не хардкод-пояс у старта.
     belt: null,
     patrols: patrolsFor(system, start),

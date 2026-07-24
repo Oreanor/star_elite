@@ -20,7 +20,7 @@ import {
   type StationType,
 } from '../../config/galaxy'
 import { DYSON, type DysonSpec } from '../../config/dyson'
-import { clamp, makeRng, type Rng } from '../../core/math'
+import { clamp, makeRng, weightedPick, type Rng } from '../../core/math'
 import { moonName, planetName, systemName } from './names'
 import { placeSystem } from './shape'
 import { applySharedStartCatalog, SHARED_START_INDEX } from './sharedStart'
@@ -58,22 +58,10 @@ function pick<T>(rng: Rng, table: readonly T[], fallback: T): T {
   return table[Math.floor(rng() * table.length)] ?? fallback
 }
 
-/**
- * Взвешенный выбор. Природа неравномерна: красных карликов много,
- * голубых гигантов почти нет, землеподобных планет — единицы.
- */
-function weightedPick<T extends { readonly weight: number }>(rng: Rng, table: readonly T[]): T {
-  let total = 0
-  for (const item of table) total += item.weight
-  let roll = rng() * total
-  for (const item of table) {
-    roll -= item.weight
-    if (roll <= 0) return item
-  }
-  return table[table.length - 1]!
-}
+/** Вес записи каталога — то самое поле `weight`, ради которого таблицы и составлены. */
+const byWeight = (item: { readonly weight: number }): number => item.weight
 
-const pickStarClass = (rng: Rng) => weightedPick(rng, STAR_CLASSES)
+const pickStarClass = (rng: Rng) => weightedPick(rng, STAR_CLASSES, byWeight)
 
 function makeStar(rng: Rng): Star {
   const c = pickStarClass(rng)
@@ -254,14 +242,20 @@ function makeSettlement(rng: Rng, prominence: number): Settlement {
 /**
  * Шанс, что конкретный мир заселён. Землеподобный — почти наверняка;
  * на газовом гиганте живут разве что на орбитальной платформе.
+ *
+ * Шансы неродных миров подняты сознательно: причал — свойство ЗАСЕЛЁННОЙ планеты, и
+ * пока соседние миры почти никогда не колонизировались, система с двумя причалами
+ * выпадала в 4% случаев, а с тремя — в 0.4% (замер `scratch/stations-per-system.ts`).
+ * Система, где уже есть колония, — это волна освоения: аванпост на соседней скале
+ * куда правдоподобнее, чем одинокая столица посреди пустых планет.
  */
 function settlementChance(type: PlanetType): number {
   switch (type) {
     case 'Земного типа': return 0.9
-    case 'Океаническая': return 0.3
-    case 'Скалистая': return 0.12
-    case 'Ледяная': return 0.06
-    case 'Газовый гигант': return 0.03
+    case 'Океаническая': return 0.72
+    case 'Скалистая': return 0.55
+    case 'Ледяная': return 0.4
+    case 'Газовый гигант': return 0.22
   }
 }
 
@@ -292,7 +286,7 @@ function makePlanets(rng: Rng, system: string, habitable: boolean, starClass: St
 
   const planets: Planet[] = []
   for (let i = 0; i < count; i++) {
-    const type: PlanetType = i === seat ? 'Земного типа' : weightedPick(rng, table).id
+    const type: PlanetType = i === seat ? 'Земного типа' : weightedPick(rng, table, byWeight).id
 
     const settled = habitable && rng() < settlementChance(type)
     const settlement = settled ? makeSettlement(rng, i === seat ? 1 : 0.55) : null

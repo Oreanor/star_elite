@@ -3,7 +3,7 @@ import {
   STAR_CLASSES,
   type StarClassId,
 } from '../../config/galaxy'
-import { makeRng, type Rng } from '../../core/math'
+import { makeRng, weightedPick } from '../../core/math'
 import { systemName } from './names'
 
 /**
@@ -14,23 +14,14 @@ import { systemName } from './names'
  * начнёт толкать чужой пузырь. Полный generateSystem из placeSystem — рекурсия.
  */
 
-function weightedPick<T extends { readonly weight: number }>(rng: Rng, table: readonly T[]): T {
-  let total = 0
-  for (const item of table) total += item.weight
-  let roll = rng() * total
-  for (const item of table) {
-    roll -= item.weight
-    if (roll <= 0) return item
-  }
-  return table[table.length - 1]!
-}
+const byWeight = (item: { readonly weight: number }): number => item.weight
 
 /** Спектральный класс первичной звезды системы (без радиуса и массы). */
 export function primaryClassId(index: number, seed: number): StarClassId {
   if (index === CORE_INDEX) return 'H'
   const rng = makeRng(seed ^ Math.imul(index, 0x9e3779b1))
   systemName(rng) // тот же префикс, что в generateSystem — результат не нужен
-  return weightedPick(rng, STAR_CLASSES).id
+  return weightedPick(rng, STAR_CLASSES, byWeight).id
 }
 
 /** Радиус пустоты класса, св.г. Ноль — гигант не вытесняет соседей. */
