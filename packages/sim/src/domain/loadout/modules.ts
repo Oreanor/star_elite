@@ -1,41 +1,29 @@
+import type { ModuleKind, ShipModule, SlotCategory } from '../../config/schema'
+import type {
+  ArmourModule,
+  BombModule,
+  CargoModule,
+  CloakModule,
+  DroneModule,
+  EcmModule,
+  EngineModule,
+  HyperdriveModule,
+  LaserModule,
+  MielophoneModule,
+  MissileModule,
+  ScoopModule,
+  ShieldModule,
+  ThrusterModule,
+  WeaponModule,
+} from '../../config/schema'
+
 /**
- * Модули корабля. Каждый — данные, а не код: новый двигатель это новая запись
- * в каталоге, а не ветвление в симуляции.
+ * Правила про модули: куда они просятся и как сузиться до конкретного вида.
  *
- * Общий у всех — `mass`. Именно через неё модули честно связаны с физикой:
- * тяжёлый щит уменьшает и линейное ускорение (a = F/m), и угловое (ε = M/I).
- * Апгрейд всегда есть компромисс, и он не нарисован, а посчитан.
+ * Сама ФОРМА модуля (какие у двигателя поля) живёт в `config/schema` — там же, где
+ * каталог, который ею описан. Здесь только то, что является правилом игры: аукс-виды
+ * делят один слот, а `is*` заменяют `as` при сужении.
  */
-
-export type ModuleKind =
-  | 'engine'
-  | 'thrusters'
-  | 'shield'
-  | 'armour'
-  | 'laser'
-  | 'missile'
-  | 'cargo'
-  | 'hyperdrive'
-  | 'cloak'
-  | 'drone'
-  | 'mielophone'
-  | 'ecm'
-  | 'bomb'
-  | 'scoop'
-
-/**
- * КАТЕГОРИЯ СЛОТА. Не то же, что вид модуля: разные устройства (маскировка, ECM,
- * бомба, скуп, миелофон) делят один слот «аукс». Всё остальное — своя категория.
- * Оружие (laser/missile/drone) живёт на hardpoints, а не в слотах.
- */
-export type SlotCategory =
-  | 'engine'
-  | 'thrusters'
-  | 'shield'
-  | 'armour'
-  | 'cargo'
-  | 'hyperdrive'
-  | 'aux'
 
 /** Виды модулей, что кладутся в универсальный слот «аукс». */
 export const AUX_KINDS: ReadonlySet<ModuleKind> = new Set<ModuleKind>([
@@ -53,247 +41,6 @@ export const AUX_KINDS: ReadonlySet<ModuleKind> = new Set<ModuleKind>([
 export function slotCategoryOf(kind: ModuleKind): SlotCategory {
   return AUX_KINDS.has(kind) ? 'aux' : (kind as SlotCategory)
 }
-
-export interface ModuleBase {
-  /** Стабильный идентификатор для сохранений и торговли. */
-  id: string
-  name: string
-  kind: ModuleKind
-  /** Класс 1..4: определяет, в какой слот влезет. */
-  class: 1 | 2 | 3 | 4
-  /** Масса, т. */
-  mass: number
-  /** Цена, кредиты. */
-  cost: number
-  /** Шанс уцелеть при разрушении корабля-носителя, 0..1. */
-  salvageChance: number
-  /**
-   * Накопленная прокачка ЭТОГО экземпляра, доля к стоку: 0 (или нет поля) — заводской,
-   * 0.5 — «+50%». Живёт на экземпляре, не в каталоге: прокачанный щит игрока не должен
-   * усиливать такой же щит у пирата. Значения характеристик считаются как base × (1+upgrade).
-   */
-  upgrade?: number
-  /**
-   * ПОЛОМКА этого экземпляра, доля: 0 (или нет поля) — исправен, 0.5 — «сломан наполовину»,
-   * 1 — не работает вовсе. Числовая характеристика считается как base × (1−fault): поломка
-   * на 50% срезает 50% силы. НЕ износ (тот копится сам и бесит) — редкое предотвратимое
-   * СОБЫТИЕ боя (см. [[breakage-system]]): бьётся только по пробитому щиту, чинится у мастеров.
-   * Ракета (расходник) и грузовой контейнер (ломать нечего — ёмкость не тает) поломке не
-   * подвержены. Общий множитель с прокачкой: base × (1+upgrade) × (1−fault).
-   */
-  fault?: number
-}
-
-export interface EngineModule extends ModuleBase {
-  kind: 'engine'
-  /** Тяга, кН. Ускорение = THRUST / масса — считается, а не задаётся. */
-  thrust: number
-  /** Потолок скорости при массе `optimalMass`, м/с. */
-  maxSpeed: number
-  /** Масса, на которую двигатель рассчитан. Перегруз режет потолок скорости. */
-  optimalMass: number
-  /** Множитель тяги и потолка на форсаже. */
-  boostMult: number
-  /**
-   * Ёмкость батарей, ед. Двигатель здесь и реактор: отдельный модуль питания
-   * добавил бы слот, но не добавил бы ни одного решения игроку.
-   */
-  energy: number
-  /** Восстановление батарей, ед/с. */
-  energyRegen: number
-}
-
-export interface ThrusterModule extends ModuleBase {
-  kind: 'thrusters'
-  /**
-   * Боковая тяга, кН. Ею уходят с линии огня и с курса ракеты («бочка»).
-   * Апгрейд маневровых улучшает уклонение — считается из массы, не назначается.
-   */
-  lateralThrust: number
-  /** Момент маневровых по осям [тангаж, рыскание, крен], кН·м. */
-  torque: readonly [number, number, number]
-  /** Ограничение угловой скорости лётным компьютером, рад/с. */
-  maxRate: readonly [number, number, number]
-  /** Демпфирование при отпущенном управлении, 1/с. */
-  angDamp: number
-}
-
-export interface ShieldModule extends ModuleBase {
-  kind: 'shield'
-  capacity: number
-  /** Восстановление, ед/с. */
-  regen: number
-  /** Пауза после попадания, с. */
-  regenDelay: number
-}
-
-export interface ArmourModule extends ModuleBase {
-  kind: 'armour'
-  /** Прибавка к прочности корпуса. */
-  hull: number
-}
-
-export interface LaserModule extends ModuleBase {
-  kind: 'laser'
-  damage: number
-  range: number
-  /** Секунд между выстрелами. */
-  cooldown: number
-  /** Набор тепла за выстрел; 1.0 — блокировка. */
-  heatPerShot: number
-  /** Сброс тепла, 1/с. */
-  heatCool: number
-}
-
-/**
- * Ракета.
- *
- * `turnRate` даёт боковое ускорение v·ω — при 420 м/с и 1.25 рад/с это полсотни g,
- * втрое больше, чем способен выдать любой корабль. Уйти от такой ракеты манёвром
- * НЕЛЬЗЯ, и никакие «бочки» этого не изменят: физика посчитана, а не назначена.
- *
- * Промах даёт `seekerRate` — предел скорости слежения головки. Угловая скорость
- * линии визирования равна v⊥/d и на малой дистанции взлетает: рывок вбок у самого
- * носа ракеты головка отработать не успевает и теряет цель насовсем. Летящий по
- * прямой не срывает наведение никогда — у него v⊥ = 0. Именно поэтому бочка
- * работает, а прямой полёт — нет.
- */
-export interface MissileModule extends ModuleBase {
-  kind: 'missile'
-  ammo: number
-  damage: number
-  /** Маршевая скорость, м/с. */
-  speed: number
-  /**
-   * Безопасное удаление, с. Рули включаются только по его истечении: ракета
-   * должна отойти от носителя, прежде чем начать доворачивать.
-   *
-   * Это НЕ то же самое, что `boostTime`, хотя раньше было одним числом. Пока
-   * рули молчали весь разгон, ракета 0.55 с летела по прямой, а головка,
-   * проснувшись, мерила ту угловую скорость линии визирования, которую сама же
-   * и накопила, — и срывалась в первом же кадре наведения. Замер
-   * (`scratch/missile-500.ts`): срыв наступал ровно на 0.55 с, ни разу позже,
-   * и с 400 м не попадало НИЧЕГО, кроме неподвижной цели.
-   */
-  armTime: number
-  /**
-   * Разгон после схода с пилона, с. Ракета отделяется со скоростью носителя,
-   * зажигает двигатель и только потом уходит вперёд. Это не украшательство:
-   * иначе ракета исчезает в тот же кадр, в который её пустили, и её не видно.
-   * Разгоняется тяга — рулями заведует `armTime`.
-   */
-  boostTime: number
-  /** Угловая скорость самонаведения, рад/с. Низкая — ракету можно перекрутить. */
-  turnRate: number
-  /**
-   * Предел скорости слежения головки, рад/с. Выше — срыв наведения навсегда.
-   *
-   * Всегда БОЛЬШЕ `turnRate`: головка — зеркало на кардане, планер — полтонны
-   * железа, и зеркало доворачивается быстрее. Пока было наоборот (0.35 против
-   * 1.25), головка срывалась раньше, чем ракета успевала попробовать рулить, —
-   * предел планера не мог проявиться вообще ни разу.
-   */
-  seekerRate: number
-  /**
-   * Самоликвидация, с. Вместе со `speed` она и есть дальность ракеты, но не по
-   * пути, а по СБЛИЖЕНИЮ: убегающая цель вычитает свою скорость. Замер
-   * (`scratch/missile-range.ts`): по уходящему на 200 м/с достаём 2.6 км,
-   * по висящему — 5 км, по встречному — за 7 км.
-   */
-  lifetime: number
-}
-
-/**
- * Пусковой контейнер БПЛА. Висит на пилоне, как ракета, но выпускает не боевую
- * часть, а маленький корабль с собственным пилотом.
- *
- * Беспилотник не «ракета помощнее»: он существует РОВНО ПО ТЕМ ЖЕ правилам, что
- * и все остальные корабли, — тот же `Controller`, тот же `stepShip`, тот же ИИ,
- * что летает у пиратов. Отсюда и его ценность: враг не отличает его от корабля
- * и переключается на него, а игрок в это время бьёт с фланга.
- *
- * Живёт минуту и самоликвидируется. Иначе за час боёв система зарастает
- * беспилотниками, а бой превращается в осмотр чужой войны.
- */
-export interface DroneModule extends ModuleBase {
-  kind: 'drone'
-  /** Сколько аппаратов в контейнере. */
-  ammo: number
-  /** Сколько живёт выпущенный, с. */
-  lifetime: number
-  /** Больше стольких одновременно у носителя не бывает. */
-  maxActive: number
-}
-
-export interface CargoModule extends ModuleBase {
-  kind: 'cargo'
-  /** Вместимость, тонн груза. */
-  capacity: number
-}
-
-export interface HyperdriveModule extends ModuleBase {
-  kind: 'hyperdrive'
-  /**
-   * Дальность прыжка, световых лет. Единственная характеристика привода: он либо
-   * добивает до звезды, либо нет. Масса у него большая — апгрейд дальности
-   * оплачивается манёвренностью, как и всякий другой.
-   */
-  jumpRange: number
-}
-
-/**
- * Маскировочное поле. Корабль перестаёт отражать свет и исчезает с чужих экранов.
- *
- * Плата — главные батареи, те же, из которых бьёт ПРО. Поле держится, пока их
- * хватает, и опадает само, когда не хватило: таймера у маскировки нет, есть
- * счёт за электричество. Отсюда и единственная характеристика — расход.
- */
-export interface CloakModule extends ModuleBase {
-  kind: 'cloak'
-  /** Расход батарей, ед/с. */
-  drain: number
-}
-
-/**
- * Миелофон — устройство непрерывного масштаба: даёт право РАСТИ (клавиша роста). Без него
- * `stepScale` не двигает размер. Характеристики отдельной нет — темп роста и пороги живут в
- * `config/mielophone`; здесь это просто «есть слот-устройство или нет». Ставится вместо
- * другого устройства (маскировка/гипер) — сила гиганта взамен уловок обычного боя.
- */
-export interface MielophoneModule extends ModuleBase {
-  kind: 'mielophone'
-}
-
-/**
- * Аукс-устройства. Каждое работает по-своему, а числовые параметры срабатывания
- * живут в `config/weapons` (ECM/BOMB) — здесь модуль лишь «есть слот-устройство или
- * нет», как у миелофона. Прокачке аукс не подлежит: «на 25% лучше ECM» смысла не имеет.
- */
-export interface EcmModule extends ModuleBase {
-  kind: 'ecm'
-}
-export interface BombModule extends ModuleBase {
-  kind: 'bomb'
-}
-export interface ScoopModule extends ModuleBase {
-  kind: 'scoop'
-}
-
-export type ShipModule =
-  | EngineModule
-  | ThrusterModule
-  | ShieldModule
-  | ArmourModule
-  | LaserModule
-  | MissileModule
-  | DroneModule
-  | CargoModule
-  | HyperdriveModule
-  | CloakModule
-  | MielophoneModule
-  | EcmModule
-  | BombModule
-  | ScoopModule
 
 /** Сужение по виду — вместо `as`, чтобы `any` не понадобился нигде. */
 export const isEngine = (m: ShipModule): m is EngineModule => m.kind === 'engine'
@@ -313,8 +60,6 @@ export const isScoop = (m: ShipModule): m is ScoopModule => m.kind === 'scoop'
 /** Любое аукс-устройство: делит общий слот, прокачке не подлежит. */
 export const isAux = (m: ShipModule): boolean => AUX_KINDS.has(m.kind)
 
-/** Всё, что вешается на точку подвески. Пилон несёт ракету ИЛИ контейнер БПЛА. */
-export type WeaponModule = LaserModule | MissileModule | DroneModule
 export const isWeapon = (m: ShipModule): m is WeaponModule => isLaser(m) || isMissile(m) || isDrone(m)
 
 /**
@@ -324,3 +69,29 @@ export const isWeapon = (m: ShipModule): m is WeaponModule => isLaser(m) || isMi
  * но сублайт-полёт цел, а значит корабль всё ещё летит.
  */
 export const isEssential = (m: ShipModule): boolean => m.kind === 'engine' || m.kind === 'thrusters'
+
+/**
+ * Схема — часть каталога, но читатели домена привыкли брать типы отсюда, и это
+ * правильно: снаружи «модуль» — одно понятие, а не два файла в разных слоях.
+ */
+export type {
+  ArmourModule,
+  BombModule,
+  CargoModule,
+  CloakModule,
+  DroneModule,
+  EcmModule,
+  EngineModule,
+  HyperdriveModule,
+  LaserModule,
+  MielophoneModule,
+  MissileModule,
+  ModuleBase,
+  ModuleKind,
+  ScoopModule,
+  ShieldModule,
+  ShipModule,
+  SlotCategory,
+  ThrusterModule,
+  WeaponModule,
+} from '../../config/schema'

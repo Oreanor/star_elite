@@ -1,4 +1,4 @@
-import type { Chassis } from './chassis'
+import { createLoadout, type Loadout } from '../../config/schema'
 import {
   isArmour,
   isBomb,
@@ -25,25 +25,9 @@ import {
   type WeaponModule,
 } from './modules'
 
-/**
- * Что на корабле стоит прямо сейчас. Оружие индексируется по hardpoint'ам корпуса:
- * `weapons[i]` висит на `chassis.hardpoints[i]`, null — точка пустая.
- */
-export interface Loadout {
-  chassis: Chassis
-  /** Внутренние модули. Порядок не важен — слоты проверяются при установке. */
-  internals: ShipModule[]
-  weapons: (WeaponModule | null)[]
-}
-
-export function createLoadout(chassis: Chassis, internals: ShipModule[], weapons: (WeaponModule | null)[]): Loadout {
-  return {
-    chassis,
-    internals: [...internals],
-    // Нормализуем длину под число точек подвески: рендер и стрельба ходят по индексам.
-    weapons: chassis.hardpoints.map((_, i) => weapons[i] ?? null),
-  }
-}
+// Форма сборки и её конструктор — часть схемы каталога (`config/schema`): они ничего
+// не решают, только описывают и нормализуют. Правила ниже — уже домен.
+export { createLoadout, type Loadout }
 
 /** Двигатель и маневровые обязательны — без них корабль не летает. */
 export function findEngine(l: Loadout): EngineModule | null {

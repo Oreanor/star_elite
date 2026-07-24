@@ -15,7 +15,7 @@ import type {
   ShieldModule,
   ShipModule,
   ThrusterModule,
-} from '../domain/loadout'
+} from './schema'
 
 /**
  * Каталог модулей. Всё, что можно купить на станции или снять с обломков.
@@ -559,16 +559,20 @@ export const PULSE_LASER: LaserModule = {
  */
 export const PULSE_LASER_CENTRAL: LaserModule = {
   id: 'pulse_1c',
-  name: 'Импульсный лазер 1 «Столб»',
+  name: 'Плазменный лучемёт 1 «Столб»',
   kind: 'laser',
   class: 1,
   mass: 0.5,
   cost: 0,
   salvageChance: 0.4,
-  damage: 18, // 2× обычного: реже бьёт — сильнее за выстрел, DPS тот же
+  // НЕПРЕРЫВНЫЙ: числа секундные, а не за выстрел. Ствол — обычной силы; вдвое больнее
+  // и толще его делает НОСОВАЯ ТОЧКА (её калибр), куда он и ставится, — сила у места, а
+  // не у покупки. 18/с × калибр 2 = прежние 36/с, секундный урон не изменился.
+  beam: true,
+  damage: 18,
   range: 2200,
-  cooldown: 0.5, // вдвое реже PULSE_LASER (0.25)
-  heatPerShot: 0.14,
+  cooldown: 0, // струю нечем прерывать: перезаряда у луча нет
+  heatPerShot: 0.28, // за СЕКУНДУ огня (было 0.14 за импульс раз в 0.5 с)
   heatCool: 0.28,
 }
 

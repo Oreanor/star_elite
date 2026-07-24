@@ -1,5 +1,4 @@
-import type { Chassis } from '../domain/loadout'
-import { createLoadout, type Loadout } from '../domain/loadout'
+import { createLoadout, type Chassis, type Loadout } from './schema'
 import { ATLAS, AURORA_ONE, HERMES, ORION, PEGASUS, PERSEUS, SPIRITUS_SANCTUS, THESEUS } from './chassis'
 import {
   ARMOUR_PLATE,
