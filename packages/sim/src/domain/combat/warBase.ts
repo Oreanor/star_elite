@@ -1,26 +1,18 @@
-import { Quaternion, Vector3 } from 'three'
+import { Vector3 } from 'three'
 import { MONOLITH } from '../../config/monoliths'
-import { WARBASE } from '../../config/warbase'
 import type { WarBaseEntity, WarBaseFixture, World } from '../world/entities'
+import { warBaseFixtureWorldPos } from '../world/warBase'
+
+// Место детали — геометрия мира (`world/warBase`), но бой и его тесты привыкли брать её
+// отсюда: снаружи «деталь базы» одно понятие, а не два файла в соседних папках.
+export { warBaseFixtureWorldPos }
 import { spawnExplosion } from './effects'
 import { spawnRockDebrisPod } from './salvage'
 
 /** База не дрейфует — вспышка гибели без унаследованной скорости. */
 const _still = /* @__PURE__ */ new Vector3()
-const _spin = /* @__PURE__ */ new Quaternion()
 const _fixWorld = /* @__PURE__ */ new Vector3()
 
-/**
- * Мировая точка навесной детали в момент `time`: локальная радиаль, повёрнутая спином базы,
- * отложенная на поверхность + выступ. ОДИН источник для луча и рендера — куда нарисовано,
- * туда и попадает. Пишет в `out`, наружу scratch не отдаёт.
- */
-export function warBaseFixtureWorldPos(base: WarBaseEntity, fix: WarBaseFixture, time: number, out: Vector3): Vector3 {
-  _spin.setFromAxisAngle(base.spinAxis, base.spin * time)
-  out.copy(fix.dir).applyQuaternion(_spin)
-  const reach = base.radius + fix.size * WARBASE.FIXTURE_SIT_OUT
-  return out.multiplyScalar(reach).add(base.pos)
-}
 
 /** Сколько осколков сыплется с базы: крупнее — гуще. */
 function debrisCount(radius: number): number {

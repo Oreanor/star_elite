@@ -2,7 +2,7 @@ import { Quaternion, Vector3 } from 'three'
 import { pirateLoadout } from '../../config/loadouts'
 import { PLATFORM } from '../../config/platform'
 import { DEBRIS } from '../../config/world'
-import { signed } from '../../core/math'
+import { randomUnit } from '../../core/math'
 import { createAIState } from '../ai/types'
 import { COMMODITIES } from '../cargo/items'
 import { spawnExplosion } from '../combat/effects'
@@ -27,21 +27,13 @@ const _face = new Vector3()
 const _slot = new Vector3()
 const _still = new Vector3()
 
-/** Единичный вектор в случайную сторону. */
-function randomDir(world: World, out: Vector3): Vector3 {
-  do {
-    out.set(signed(world.rng), signed(world.rng), signed(world.rng))
-  } while (out.lengthSq() < 1e-6)
-  return out.normalize()
-}
-
 /**
  * Родить платформу со спящим экипажем. Появляется поодаль от игрока, в пределах
  * локатора — гнездо надо заметить и подойти. Возвращает пиратов: приложение
  * раздаёт им пилотов (тот же общий `aiController`, он уважает флаг `dormant`).
  */
 export function spawnPlatform(world: World): ShipEntity[] {
-  const pos = new Vector3().copy(world.player.state.pos).addScaledVector(randomDir(world, _dir), PLATFORM.SPAWN_RANGE)
+  const pos = new Vector3().copy(world.player.state.pos).addScaledVector(randomUnit(world.rng, _dir), PLATFORM.SPAWN_RANGE)
   // Палубой к игроку: нос платформы (−Z) смотрит на точку старта, силуэт читается сразу.
   _face.copy(world.player.state.pos).sub(pos)
   if (_face.lengthSq() < 1e-6) _face.set(0, 0, -1)

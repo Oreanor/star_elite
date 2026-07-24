@@ -1,5 +1,5 @@
 import { Vector3 } from 'three'
-import type { BoltEntity, World } from '../world/entities'
+import type { World } from '../world/entities'
 import { breakFromHit } from './breakage'
 import { applyDamage } from './damage'
 import { spawnExplosion, spawnShieldFlash, spawnTracer } from './effects'
@@ -31,7 +31,18 @@ const _still = /* @__PURE__ */ new Vector3()
  */
 const _shooter = { id: 0, cloaked: false }
 
-function resolveHit(world: World, bolt: BoltEntity, hitPos: Vector3, hit: ReturnType<typeof castLaser>): void {
+/**
+ * Что случилось там, куда пришёл лазер. Общая для БОЛТА и НЕПРЕРЫВНОГО ЛУЧА: правила
+ * попадания не должны расходиться оттого, что один снаряд летит, а другой достаёт сразу.
+ * Урон приходит параметром — у луча это доля за шаг (урон в секунду × dt).
+ */
+export function resolveLaserHit(
+  world: World,
+  hitPos: Vector3,
+  hit: ReturnType<typeof castLaser>,
+  damage: number,
+  hostile: boolean,
+): void {
   if (hit.ship) {
     /**
      * БОГ НЕУЯЗВИМ, и это должно быть ВИДНО. Болт гаснет о бесконечное поле голубой
@@ -47,32 +58,32 @@ function resolveHit(world: World, bolt: BoltEntity, hitPos: Vector3, hit: Return
       // HP кинематического (чужого) борта живёт на ЕГО клиенте — локально урон не наносим,
       // а РЕГИСТРИРУЕМ попадание, чтобы сеть переслала его владельцу (авторитет над своим HP).
       // Ни урона, ни обиды: это не наш бот, а внешний игрок; его реакция — на его стороне.
-      world.remoteHits.push({ targetId: hit.ship.id, damage: bolt.damage })
+      world.remoteHits.push({ targetId: hit.ship.id, damage })
     } else {
       // Щит ДО удара: по нему решается, изнашивается ли сам щит (цел) или ломается
       // деталь (пробит). Считаем до applyDamage — оно этот щит и просадит.
       const shieldUp = hit.ship.shield > 0
-      applyDamage(hit.ship, bolt.damage, world.time, { kind: 'laser', name: '' })
+      applyDamage(hit.ship, damage, world.time, { kind: 'laser', name: '' })
       // Поломка снаряжения — только у игрока (боты не чинятся). Враг ли стрелял, не
       // важно: попали по игроку — железо под ударом. Кинематический борт (чужой) — мимо.
       if (hit.ship.faction === 'player') breakFromHit(hit.ship, shieldUp, world.rng)
       // Попал болт игрока по не-врагу — повод к обиде, а не к мгновенной войне: копим
       // претензию, во враги переводит уже сам `registerPlayerHit` на пороге. `hostile`
       // ложно ровно у выстрелов игрока — по нему и узнаём стрелка, стрелок мог погибнуть.
-      if (!bolt.hostile) registerPlayerHit(world, hit.ship)
+      if (!hostile) registerPlayerHit(world, hit.ship)
     }
   } else if (hit.asteroid) {
     spawnExplosion(world, hitPos, hit.asteroid.vel, 0.4)
     // Камень не исчезает — он раскалывается. Правило дробления живёт в одном месте.
-    damageAsteroid(world, hit.asteroid, bolt.damage)
+    damageAsteroid(world, hit.asteroid, damage)
   } else if (hit.warBaseFixture) {
     // Отстрел детали: искра в точке удара; гибель детали — своя вспышка в `damageWarBaseFixture`.
     spawnExplosion(world, hitPos, _still, 0.5)
-    damageWarBaseFixture(world, hit.warBaseFixture.base, hit.warBaseFixture.fixture, bolt.damage)
+    damageWarBaseFixture(world, hit.warBaseFixture.base, hit.warBaseFixture.fixture, damage)
   } else if (hit.warBase) {
     // Искра в точке удара; снос базы рождает свой крупный взрыв в `destroyWarBase`.
     spawnExplosion(world, hitPos, _still, 0.8)
-    damageWarBase(world, hit.warBase, bolt.damage)
+    damageWarBase(world, hit.warBase, damage)
   } else if (hit.missile) {
     // Ракета не «повреждается»: у неё нет прочности, только боевая часть.
     hit.missile.alive = false
@@ -80,7 +91,7 @@ function resolveHit(world: World, bolt: BoltEntity, hitPos: Vector3, hit: Return
   } else if (hit.platform) {
     // Ядро платформы принимает урон корпусом: щита у гнезда нет. Гибель, взрыв и
     // металл — забота `stepPlatforms`, когда прочность уйдёт в ноль.
-    hit.platform.hull = Math.max(0, hit.platform.hull - bolt.damage)
+    hit.platform.hull = Math.max(0, hit.platform.hull - damage)
     spawnExplosion(world, hitPos, _still, 0.6)
   } else if (hit.station) {
     // Станция неуязвима: болт гаснет о защитное поле голубой вспышкой. Ни урона, ни
@@ -111,10 +122,14 @@ export function stepBolts(world: World, dt: number): void {
 
     // След за пройденный отрезок отдаём каждый шаг: контур болта складывается из
     // коротких трасс, что рендер уже умеет рисовать. Домен цветов не знает — несёт `weapon`.
-    spawnTracer(world, bolt.pos, _hitPos, bolt.hostile, bolt.weapon)
+    //
+    // ПЕРВЫЙ отрезок несёт привязку к дулу: его хвост рендер держит у ствола, пока
+    // корабль едет. Иначе на ходу луч начинался позади ствола (см. `Tracer.anchorId`).
+    spawnTracer(world, bolt.pos, _hitPos, bolt.hostile, bolt.weapon, bolt.bore, bolt.ownerId, bolt.muzzle)
+    bolt.muzzle = undefined
 
     if (hit.distance < reach) {
-      resolveHit(world, bolt, _hitPos, hit)
+      resolveLaserHit(world, _hitPos, hit, bolt.damage, bolt.hostile)
       bolt.alive = false
       continue
     }

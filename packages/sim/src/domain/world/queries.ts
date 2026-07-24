@@ -5,9 +5,12 @@ import { isVisible } from '../combat/cloak'
 import { shipAxes } from '../flight/axes'
 import type { AsteroidEntity, BodyEntity, ShipEntity, World } from './entities'
 import { figurineDisplayName } from './figurines'
+import { warBaseFixtureWorldPos } from './warBase'
 
 /** Горячий путь: запросы зовутся из кадра HUD, аллокации там недопустимы. */
 const _toPlayer = new Vector3()
+/** Место детали базы считается на лету (база вращается) — в кадре без аллокаций. */
+const _fixturePos = new Vector3()
 
 /** Чтение мира. Ничего не меняет — этим пользуются и HUD, и ИИ. */
 
@@ -119,13 +122,84 @@ function byFacingThenNear(a: { facing: number; d2: number }, b: { facing: number
 const ASTEROID_LOCK_RANGE = 4_000
 const ASTEROID_LOCK_RANGE_SQ = ASTEROID_LOCK_RANGE * ASTEROID_LOCK_RANGE
 
-type ContactKind = 'ship' | 'pod' | 'asteroid'
+type ContactKind = 'ship' | 'pod' | 'asteroid' | 'fixture'
 
-/** Снять контактный захват (борт / обломок / камень). */
+interface ContactCandidate {
+  id: number
+  kind: ContactKind
+  facing: number
+  d2: number
+}
+
+/**
+ * Кто вообще может попасть в круг Tab, уже отсортированный: перед носом, внутри — по удалению.
+ *
+ * Одна сборка на всех, и это не экономия строк: список кандидатов раньше был выписан
+ * ДВАЖДЫ — в переборе (Tab) и в «взять ближайшую» (Q). Круги обязаны совпадать, иначе Q
+ * берёт цель, до которой Tab не долистает; при первом же добавлении нового класса целей
+ * копии разъезжаются молча.
+ */
+function contactCandidates(world: World): ContactCandidate[] {
+  const from = world.player.state.pos
+  shipAxes(world.player.state.quat, _fwd, _right, _up)
+  const cands: ContactCandidate[] = [
+    ...targetablesOf(world).map((s) => ({ id: s.id, kind: 'ship' as const, ...facingScore(from, s.state.pos) })),
+    ...world.pods.filter((p) => p.alive).map((p) => ({ id: p.id, kind: 'pod' as const, ...facingScore(from, p.pos) })),
+    ...world.asteroids
+      .filter((a) => a.alive && a.pos.distanceToSquared(from) <= ASTEROID_LOCK_RANGE_SQ)
+      .map((a) => ({ id: a.id, kind: 'asteroid' as const, ...facingScore(from, a.pos) })),
+    // Детали базы — такие же цели, как борта: пушка и глаз бьются отдельно от корпуса,
+    // значит и наводиться на них надо отдельно. Место детали считаем на лету: база
+    // вращается, и связанное смещение живёт вместе с ней.
+    ...world.warBases.flatMap((base) =>
+      !base.alive
+        ? []
+        : base.fixtures
+            .filter((f) => f.alive)
+            .map((f) => {
+              warBaseFixtureWorldPos(base, f, world.time, _fixturePos)
+              return { id: f.id, kind: 'fixture' as const, ...facingScore(from, _fixturePos) }
+            })
+            .filter((c) => c.d2 <= ASTEROID_LOCK_RANGE_SQ),
+    ),
+  ]
+  cands.sort(byFacingThenNear)
+  return cands
+}
+
+/** Положить выбор круга в СВОЁ поле: остальные гасятся, захват всегда один. */
+function setContactLock(world: World, next: ContactCandidate): void {
+  world.lockedTargetId = next.kind === 'ship' ? next.id : null
+  world.lockedPodId = next.kind === 'pod' ? next.id : null
+  world.lockedAsteroidId = next.kind === 'asteroid' ? next.id : null
+  world.lockedFixtureId = next.kind === 'fixture' ? next.id : null
+}
+
+/**
+ * Взять БОРТ целью помимо круга: «связаться», «навести» из вкладки ЛЮДИ, ответить на вызов.
+ *
+ * Отдельная функция, потому что раньше это делали руками в трёх местах приложения: три
+ * копии «обнули четыре поля, положи id в пятое». Инвариант «захват ровно один» держался
+ * дисциплиной, и первое же новое поле (деталь базы) осталось бы висеть во всех трёх.
+ */
+export function lockShipContact(world: World, shipId: number): void {
+  clearNavLock(world)
+  clearContactLock(world)
+  world.lockedTargetId = shipId
+  world.targetFocus = 'contact'
+}
+
+/** Что сейчас держит контактный круг — по любому из его полей. */
+export function lockedContactId(world: World): number | null {
+  return world.lockedPodId ?? world.lockedAsteroidId ?? world.lockedFixtureId ?? world.lockedTargetId
+}
+
+/** Снять контактный захват (борт / обломок / камень / деталь базы). */
 export function clearContactLock(world: World): void {
   world.lockedTargetId = null
   world.lockedPodId = null
   world.lockedAsteroidId = null
+  world.lockedFixtureId = null
 }
 
 /** Снять нав-захват (тело / статуя + связь со станцией). */
@@ -135,10 +209,10 @@ export function clearNavLock(world: World): void {
 }
 
 /**
- * Tab — КОНТАКТЫ: борта, обломки и ближние астероиды. Порядок: перед носом, внутри —
- * по удалению. Свежий перебор (пауза > `CYCLE_RESTART`) — с ближайшего видимого.
- * Выбор: борт → `lockedTargetId`, контейнер → `lockedPodId`, камень → `lockedAsteroidId`
- * (поля взаимно гасятся). Нав гасим — старый фокус не держим. Мутирует мир.
+ * Tab — КОНТАКТЫ: борта, обломки, ближние астероиды и детали военных баз. Порядок:
+ * перед носом, внутри — по удалению. Свежий перебор (пауза > `CYCLE_RESTART`) — с
+ * ближайшего видимого. Выбор ложится в своё поле (они взаимно гасятся), нав гасим —
+ * старый фокус не держим. Мутирует мир.
  */
 export function cycleContact(world: World): void {
   // С PHASE_END мелкий мир растворён — контакты не перебираем.
@@ -146,29 +220,11 @@ export function cycleContact(world: World): void {
     clearContactLock(world)
     return
   }
-  const from = world.player.state.pos
-  shipAxes(world.player.state.quat, _fwd, _right, _up)
-  const cands: { id: number; kind: ContactKind; facing: number; d2: number }[] = [
-    ...targetablesOf(world).map((s) => {
-      const rank = facingScore(from, s.state.pos)
-      return { id: s.id, kind: 'ship' as const, ...rank }
-    }),
-    ...world.pods.filter((p) => p.alive).map((p) => {
-      const rank = facingScore(from, p.pos)
-      return { id: p.id, kind: 'pod' as const, ...rank }
-    }),
-    ...world.asteroids
-      .filter((a) => a.alive && a.pos.distanceToSquared(from) <= ASTEROID_LOCK_RANGE_SQ)
-      .map((a) => {
-        const rank = facingScore(from, a.pos)
-        return { id: a.id, kind: 'asteroid' as const, ...rank }
-      }),
-  ]
+  const cands = contactCandidates(world)
   if (cands.length === 0) {
     clearContactLock(world)
     return
   }
-  cands.sort(byFacingThenNear)
 
   const fresh = world.time - world.contactCycleAt > CYCLE_RESTART
   world.contactCycleAt = world.time
@@ -176,12 +232,9 @@ export function cycleContact(world: World): void {
   clearNavLock(world)
   world.targetFocus = 'contact'
 
-  const current = world.lockedPodId ?? world.lockedAsteroidId ?? world.lockedTargetId
+  const current = lockedContactId(world)
   const index = fresh || current === null ? -1 : cands.findIndex((c) => c.id === current)
-  const next = cands[(index + 1) % cands.length]!
-  world.lockedTargetId = next.kind === 'ship' ? next.id : null
-  world.lockedPodId = next.kind === 'pod' ? next.id : null
-  world.lockedAsteroidId = next.kind === 'asteroid' ? next.id : null
+  setContactLock(world, cands[(index + 1) % cands.length]!)
 }
 
 /** Небесные тела — точки навигации: звёзды, планеты, спутники, станции, ЧЁРНЫЕ ДЫРЫ.
@@ -299,36 +352,15 @@ export function retargetNearestContact(world: World): void {
     clearContactLock(world)
     return
   }
-  const from = world.player.state.pos
-  shipAxes(world.player.state.quat, _fwd, _right, _up)
-  const cands: { id: number; kind: ContactKind; facing: number; d2: number }[] = [
-    ...targetablesOf(world).map((s) => {
-      const rank = facingScore(from, s.state.pos)
-      return { id: s.id, kind: 'ship' as const, ...rank }
-    }),
-    ...world.pods.filter((p) => p.alive).map((p) => {
-      const rank = facingScore(from, p.pos)
-      return { id: p.id, kind: 'pod' as const, ...rank }
-    }),
-    ...world.asteroids
-      .filter((a) => a.alive && a.pos.distanceToSquared(from) <= ASTEROID_LOCK_RANGE_SQ)
-      .map((a) => {
-        const rank = facingScore(from, a.pos)
-        return { id: a.id, kind: 'asteroid' as const, ...rank }
-      }),
-  ]
+  const cands = contactCandidates(world)
   if (cands.length === 0) {
     clearContactLock(world)
     return
   }
-  cands.sort(byFacingThenNear)
   world.contactCycleAt = world.time
   clearNavLock(world)
   world.targetFocus = 'contact'
-  const next = cands[0]!
-  world.lockedTargetId = next.kind === 'ship' ? next.id : null
-  world.lockedPodId = next.kind === 'pod' ? next.id : null
-  world.lockedAsteroidId = next.kind === 'asteroid' ? next.id : null
+  setContactLock(world, cands[0]!)
 }
 
 /**

@@ -1,6 +1,6 @@
 import { Euler, Quaternion, Vector3 } from 'three'
 import { ASTEROID, TRAFFIC } from '../../config/world'
-import { signed } from '../../core/math'
+import { randomUnit, signed } from '../../core/math'
 import type { AsteroidEntity, World } from './entities'
 
 /**
@@ -13,13 +13,6 @@ import type { AsteroidEntity, World } from './entities'
 
 const _dir = new Vector3()
 const _pos = new Vector3()
-
-function randomDir(world: World, out: Vector3): Vector3 {
-  do {
-    out.set(signed(world.rng), signed(world.rng), signed(world.rng))
-  } while (out.lengthSq() < 1e-6)
-  return out.normalize()
-}
 
 function volOf(r: number): number {
   return r * r * r
@@ -81,7 +74,7 @@ function packRadii(world: World, count: number, totalVol: number): number[] {
 }
 
 function spawnSite(world: World, out: Vector3): void {
-  randomDir(world, _dir)
+  randomUnit(world.rng, _dir)
   const distance = TRAFFIC.SPAWN_MIN + world.rng() * (TRAFFIC.SPAWN_MAX - TRAFFIC.SPAWN_MIN)
   out.copy(world.player.state.pos).addScaledVector(_dir, distance)
 }

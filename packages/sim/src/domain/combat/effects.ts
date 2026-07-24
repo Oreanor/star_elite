@@ -4,10 +4,21 @@ import type { World } from '../world/entities'
 
 /** Чисто визуальные эффекты. Симуляция от них не зависит — их можно не слать по сети. */
 
-export function spawnTracer(world: World, from: Vector3, to: Vector3, hostile: boolean, weapon: string): void {
+export function spawnTracer(
+  world: World,
+  from: Vector3,
+  to: Vector3,
+  hostile: boolean,
+  weapon: string,
+  /** Калибр точки: носовой след вдвое толще крыльевого. */
+  bore = 1,
+  /** Стрелок и связанное смещение дула — только для ПЕРВОГО отрезка (см. `Tracer.anchorId`). */
+  anchorId?: number,
+  anchorOffset?: readonly [number, number, number],
+): void {
   // Жизнь трассы = базовая × множитель ствола: тяжёлый «Столб» тянет импульс длиннее.
   const life = GUNNERY.TRACER_LIFE * (TRACER_LIFE_SCALE[weapon] ?? 1)
-  world.tracers.push({ from: from.clone(), to: to.clone(), born: world.time, hostile, weapon, life })
+  world.tracers.push({ from: from.clone(), to: to.clone(), born: world.time, hostile, weapon, life, bore, anchorId, anchorOffset })
 }
 
 /** Взрыв наследует скорость того, что взорвалось: осколки не висят в пустоте. */

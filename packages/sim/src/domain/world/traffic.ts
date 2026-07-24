@@ -7,7 +7,7 @@ import { ARRIVAL } from '../../config/galaxy'
 import { CONTACTS } from '../../config/contacts'
 import { ASTEROID, TRAFFIC } from '../../config/world'
 import { despawnDistantAsteroids, liveAsteroidCount, spawnAsteroidEncounter } from './asteroidEncounter'
-import { signed, type Rng } from '../../core/math'
+import { randomUnit, signed, weightedPick, type Rng } from '../../core/math'
 import type { Loadout } from '../loadout'
 import { createAIState } from '../ai/types'
 import { residentAcquaintances } from './acquaintance'
@@ -114,16 +114,8 @@ export function biasedWeight(kind: EncounterKind, remoteness: number): number {
   return Math.max(0.02, kind.weight * (1 + kind.farBias * (2 * remoteness - 1)))
 }
 
-function weightedPick(rng: Rng, table: readonly EncounterKind[], remoteness: number): EncounterKind {
-  let total = 0
-  for (const kind of table) total += biasedWeight(kind, remoteness)
-  let roll = rng() * total
-  for (const kind of table) {
-    roll -= biasedWeight(kind, remoteness)
-    if (roll <= 0) return kind
-  }
-  return table[table.length - 1]!
-}
+const pickEncounter = (rng: Rng, table: readonly EncounterKind[], remoteness: number): EncounterKind =>
+  weightedPick(rng, table, (kind) => biasedWeight(kind, remoteness))
 
 /**
  * Насколько глухое место, 0..1. Ноль — у обитаемого мира или причала, единица —
@@ -141,14 +133,6 @@ export function remoteness(world: World): number {
   }
   if (!Number.isFinite(nearest)) return 1
   return nearest / (nearest + TRAFFIC.QUIET_RANGE)
-}
-
-/** Единичный вектор в случайную сторону. Записывает в `out`. */
-function randomDirection(world: World, out: Vector3): Vector3 {
-  do {
-    out.set(signed(world.rng), signed(world.rng), signed(world.rng))
-  } while (out.lengthSq() < 1e-6)
-  return out.normalize()
 }
 
 /** Свои и беспилотники не в счёт: потолок считает ВСТРЕЧЕННЫХ. */
@@ -179,7 +163,7 @@ function spawnSite(world: World, kind: EncounterKind, outPos: Vector3, outHome: 
     // вылетают с другой — станция работает на просвет, потоки не сходятся в горловине.
     _scratch.set(-NPC_DOCK.GATE[0], -NPC_DOCK.GATE[1], -NPC_DOCK.GATE[2])
     // Небольшой разброс, чтобы вылетающие не сыпались из одной точки.
-    _scratch.addScaledVector(randomDirection(world, _offset), 0.3).normalize()
+    _scratch.addScaledVector(randomUnit(world.rng, _offset), 0.3).normalize()
     outPos.copy(station.pos).addScaledVector(_scratch, station.radius * 3)
     outHome.copy(station.pos).addScaledVector(_scratch, TRAFFIC.DESTINATION_RANGE)
     return
@@ -192,13 +176,13 @@ function spawnSite(world: World, kind: EncounterKind, outPos: Vector3, outHome: 
     station &&
     station.pos.distanceTo(world.player.state.pos) < TRAFFIC.STATION_KEEPOUT
   ) {
-    randomDirection(world, _scratch)
+    randomUnit(world.rng, _scratch)
     outPos.copy(station.pos).addScaledVector(_scratch, TRAFFIC.PIRATE_STATION_DIST)
     outHome.copy(world.player.state.pos)
     return
   }
 
-  randomDirection(world, _scratch)
+  randomUnit(world.rng, _scratch)
   const distance = TRAFFIC.SPAWN_MIN + world.rng() * (TRAFFIC.SPAWN_MAX - TRAFFIC.SPAWN_MIN)
   outPos.copy(world.player.state.pos).addScaledVector(_scratch, distance)
 
@@ -305,7 +289,7 @@ function stockFreighter(world: World, ship: ShipEntity, tons: number): void {
 function spawnEscort(world: World, escort: NonNullable<EncounterKind['escort']>, patron: ShipEntity): ShipEntity[] {
   const born: ShipEntity[] = []
   for (let i = 0; i < escort.count; i++) {
-    randomDirection(world, _offset).multiplyScalar(patron.spec.hull.radius * 2 + world.rng() * TRAFFIC.GROUP_SPREAD)
+    randomUnit(world.rng, _offset).multiplyScalar(patron.spec.hull.radius * 2 + world.rng() * TRAFFIC.GROUP_SPREAD)
     const pos = _scratch.copy(patron.state.pos).add(_offset)
     const ship = makeShip(world.ids, escort.faction, 'Эскорт', escort.loadout(), pos.clone(), patron.state.quat.clone(), world.rng)
     ship.ai = createAIState(patron.state.pos, world.rng)
@@ -366,10 +350,10 @@ function acquaintanceSpawnSite(
     return 'hyper'
   }
 
-  randomDirection(world, _scratch)
+  randomUnit(world.rng, _scratch)
   const distance = TRAFFIC.SPAWN_MIN + world.rng() * (TRAFFIC.SPAWN_MAX - TRAFFIC.SPAWN_MIN)
   outPos.copy(world.player.state.pos).addScaledVector(_scratch, distance)
-  randomDirection(world, _offset).multiplyScalar(world.rng() * TRAFFIC.GROUP_SPREAD * 0.5)
+  randomUnit(world.rng, _offset).multiplyScalar(world.rng() * TRAFFIC.GROUP_SPREAD * 0.5)
   outPos.add(_offset)
   return 'cruise'
 }
@@ -402,7 +386,7 @@ export function spawnResidentContacts(world: World): ShipEntity[] {
     _scratch.copy(_site)
     const ship = spawnOne(world, kind, _scratch, _offset.copy(anchor))
     _offset.copy(anchor).sub(_scratch)
-    if (_offset.lengthSq() < 1e-6) randomDirection(world, _offset)
+    if (_offset.lengthSq() < 1e-6) randomUnit(world.rng, _offset)
     beginWarpArrival(world, ship, _scratch, _offset)
 
     // Тот же пилот, не новый: имя открыто (знакомы), характер и фракция — из записи.
@@ -445,7 +429,7 @@ function spawnEncounter(world: World): ShipEntity[] {
 
 /** Кромка локатора: 6–9 км от игрока, без «рождения у ворот». */
 function spawnFromRadarEdge(world: World, outPos: Vector3, outHome: Vector3, flyThrough: boolean): void {
-  randomDirection(world, _scratch)
+  randomUnit(world.rng, _scratch)
   const distance = TRAFFIC.SPAWN_MIN + world.rng() * (TRAFFIC.SPAWN_MAX - TRAFFIC.SPAWN_MIN)
   outPos.copy(world.player.state.pos).addScaledVector(_scratch, distance)
   if (flyThrough) outHome.copy(world.player.state.pos).addScaledVector(_scratch, -TRAFFIC.DESTINATION_RANGE)
@@ -453,7 +437,7 @@ function spawnFromRadarEdge(world: World, outPos: Vector3, outHome: Vector3, fly
 }
 
 function bornEncounter(world: World): ShipEntity[] {
-  const kind = weightedPick(world.rng, ENCOUNTERS, remoteness(world))
+  const kind = pickEncounter(world.rng, ENCOUNTERS, remoteness(world))
   const count = kind.min + Math.floor(world.rng() * (kind.max - kind.min + 1))
   const station = world.bodies.find((b) => b.kind === 'station')
   const canDock = station != null && canDockAtStation(kind)
@@ -466,7 +450,7 @@ function bornEncounter(world: World): ShipEntity[] {
   const born: ShipEntity[] = []
   for (let i = 0; i < count; i++) {
     if (trafficCount(world) >= TRAFFIC.MAX) break
-    randomDirection(world, _offset).multiplyScalar(world.rng() * TRAFFIC.GROUP_SPREAD)
+    randomUnit(world.rng, _offset).multiplyScalar(world.rng() * TRAFFIC.GROUP_SPREAD)
     const dock = canDock && world.rng() < TRAFFIC.DOCK_SHARE
     const home = dock ? station!.pos : transitHome
     const ship = spawnOne(world, kind, _scratch.copy(centre).add(_offset), home)
@@ -521,13 +505,13 @@ function stepStationApproach(world: World): ShipEntity[] {
     return [spawnStationLurker(world, station)]
   }
 
-  const kind = weightedPick(world.rng, DOCKABLE_KINDS, remoteness(world))
+  const kind = pickEncounter(world.rng, DOCKABLE_KINDS, remoteness(world))
   if (world.rng() >= TRAFFIC.DOCK_SHARE) return []
 
   const centre = new Vector3()
   const transitHome = new Vector3()
   spawnFromRadarEdge(world, centre, transitHome, true)
-  randomDirection(world, _offset).multiplyScalar(world.rng() * TRAFFIC.GROUP_SPREAD)
+  randomUnit(world.rng, _offset).multiplyScalar(world.rng() * TRAFFIC.GROUP_SPREAD)
   _scratch.copy(centre).add(_offset)
   const ship = spawnOne(world, kind, _scratch, _site.copy(station.pos))
   if (ship.ai) ship.ai.dock = 'inbound'
@@ -549,7 +533,7 @@ function spawnStationLurker(world: World, station: BodyEntity): ShipEntity {
   const centre = new Vector3()
   const transitHome = new Vector3()
   spawnFromRadarEdge(world, centre, transitHome, true)
-  randomDirection(world, _offset).multiplyScalar(world.rng() * TRAFFIC.GROUP_SPREAD)
+  randomUnit(world.rng, _offset).multiplyScalar(world.rng() * TRAFFIC.GROUP_SPREAD)
   _scratch.copy(centre).add(_offset)
   const ship = spawnOne(world, kind, _scratch, _site.copy(station.pos))
   _offset.copy(station.pos).sub(_scratch)
@@ -602,14 +586,14 @@ export function stepDockTraffic(world: World, dt: number): { changed: boolean; b
  * мимо; помощь пиратам его не обеляет — они враждебны и к нему.
  */
 function spawnSkirmish(world: World): ShipEntity[] {
-  randomDirection(world, _scratch)
+  randomUnit(world.rng, _scratch)
   const distance = TRAFFIC.SPAWN_MIN + world.rng() * (TRAFFIC.SPAWN_MAX - TRAFFIC.SPAWN_MIN)
   const centre = new Vector3().copy(world.player.state.pos).addScaledVector(_scratch, distance)
 
   // Место схватки — общий дом обеих сторон: они держатся тут и дерутся, а не гонятся
   // за игроком через полсистемы. Точки рождения разнесены в пределах строя.
   const nearCentre = (): Vector3 =>
-    _site.copy(centre).addScaledVector(randomDirection(world, _offset), 0.2 + world.rng() * TRAFFIC.GROUP_SPREAD)
+    _site.copy(centre).addScaledVector(randomUnit(world.rng, _offset), 0.2 + world.rng() * TRAFFIC.GROUP_SPREAD)
 
   const born: ShipEntity[] = []
   const pirateKind = ENCOUNTERS.find((k) => k.id === 'pirate')!

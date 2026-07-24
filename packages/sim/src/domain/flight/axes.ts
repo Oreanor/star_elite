@@ -22,3 +22,23 @@ export function shipAxes(q: Quaternion, fwd: Vector3, right: Vector3, up: Vector
 export function forward(q: Quaternion, out: Vector3): Vector3 {
   return out.set(0, 0, -1).applyQuaternion(q)
 }
+
+const _aimAxis = new Vector3()
+const _aimTurn = new Quaternion()
+
+/**
+ * ЛИНИЯ ОГНЯ: нос, довёрнутый на `aimPitch` вокруг поперечной оси борта.
+ *
+ * Одна функция на всех, и это не удобство, а требование: стволы сводятся сюда,
+ * прицел рисуется здесь же, камера смотрит туда же. Разойдись они — перекрестье
+ * перестанет означать «куда попадёт», а это единственное, что оно и значит.
+ *
+ * Ось поворота — СВЯЗАННЫЙ «вправо», поэтому прицел ходит вместе с креном: летишь
+ * вверх ногами — «вниз» для прицела там, где низ у корабля, а не у мира.
+ */
+export function aimDirection(q: Quaternion, aimPitch: number, out: Vector3): Vector3 {
+  out.set(0, 0, -1).applyQuaternion(q)
+  if (aimPitch === 0) return out
+  _aimAxis.set(1, 0, 0).applyQuaternion(q)
+  return out.applyQuaternion(_aimTurn.setFromAxisAngle(_aimAxis, aimPitch))
+}

@@ -88,6 +88,8 @@ export { pickFreeSpawn, isFreeSpawn } from './spawn'
 export {
   cycleTarget,
   cycleContact,
+  lockShipContact,
+  lockedContactId,
   cycleCelestial,
   retargetNearestContact,
   retargetNearestCelestial,
@@ -141,6 +143,6 @@ export {
   scoopFigurinesNear,
   type PlaceFigurineAheadResult,
 } from './figurines'
-export { placeShowcaseFleet } from './showcase'
 export { spawnPlatform, stepPlatforms } from './platforms'
 export { STARTER_SYSTEM, type PatrolDef, type SystemDef } from './system'
+export { findWarBaseFixture, warBaseFixtureWorldPos } from './warBase'

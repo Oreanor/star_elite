@@ -51,6 +51,7 @@ import {
   landOnSurface,
   landShip,
   meshSolidRadius,
+  warBaseSolidRadius,
   stepAutoland,
   stepLanding,
 } from '../flight/landing'
@@ -68,6 +69,7 @@ import {
   MONOLITH_NAMES,
   pruneGiantScaleLocks,
 } from '../world/queries'
+import { findWarBaseFixture } from '../world/warBase'
 import { stepOrbits } from '../world/orbits'
 import { maybeShiftOrigin } from '../world/origin'
 import { markContactLost } from '../world/acquaintance'
@@ -206,6 +208,9 @@ function stepPhysics(world: World, dt: number): void {
 }
 
 function stepWeapons(world: World, controllers: ControllerMap, dt: number): void {
+  // Струи непрерывных лучей — срез ЭТОГО шага, а не эффект с временем жизни: держат
+  // гашетку — список наполнится заново, отпустили — он пуст, и луч гаснет сам собой.
+  world.beams.length = 0
   for (const ship of allShips(world)) {
     // Кинематический борт не стреляет и не «остывает» локально: его залпы и
     // состояние приходят извне. Оружие по нему всё равно работает — он цель, не стрелок.
@@ -236,7 +241,7 @@ function stepWeapons(world: World, controllers: ControllerMap, dt: number): void
     // остаётся побегом, а не безнаказанностью: живого бодрствующего под ним не задеть.
     if (ship.cloaked) {
       if (!isPhased(ship) && controller.wantsFire(ship, world)) {
-        fireLasers(world, ship, ship.faction !== 'player')
+        fireLasers(world, ship, ship.faction !== 'player', dt)
       }
       continue
     }
@@ -248,7 +253,7 @@ function stepWeapons(world: World, controllers: ControllerMap, dt: number): void
     if (isPhased(ship)) continue
 
     const hostile = ship.faction !== 'player'
-    if (controller.wantsFire(ship, world)) fireLasers(world, ship, hostile)
+    if (controller.wantsFire(ship, world)) fireLasers(world, ship, hostile, dt)
 
     // Пилон: экипирован один тип за раз — обычная ракета или дрон-ракета. Одна клавиша.
     if (controller.wantsMissile?.(ship, world)) {
@@ -520,7 +525,7 @@ function stepBodyCollisions(world: World, dt: number): void {
     if (ghostBody) continue
     for (const rock of world.warBases) {
       if (!rock.alive) continue
-      const hitR = meshSolidRadius(rock.radius)
+      const hitR = warBaseSolidRadius(rock.radius)
       if (!hitsBodySphere(ship, rock.pos, hitR, dt)) continue
       if (ship.landedOn?.bodyId === rock.id) continue
       if (ship.autoland === rock.id) {
@@ -641,6 +646,11 @@ function cleanup(world: World): void {
   }
   if (world.lockedAsteroidId !== null && !world.asteroids.some((a) => a.id === world.lockedAsteroidId && a.alive)) {
     world.lockedAsteroidId = null
+  }
+  // Отстреленная деталь базы (или снесённая вместе с базой) — захват снимаем, как у камня:
+  // рамка на том, чего уже нет, врёт прибору.
+  if (world.lockedFixtureId !== null && !findWarBaseFixture(world.warBases, world.lockedFixtureId)) {
+    world.lockedFixtureId = null
   }
   // Нав-цель могла быть глыбой двора / гигантом пояса / статуэткой — снимаем, если её нет.
   if (world.navTargetId !== null) {

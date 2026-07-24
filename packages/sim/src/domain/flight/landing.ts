@@ -58,12 +58,12 @@ export function isLandableAsteroid(rock: AsteroidEntity, ship: ShipEntity): bool
   )
 }
 
-/** Глыба двора — те же ворота размера, что у астероида (к тверди меша). */
+/** Военная база — те же ворота размера, что у астероида, но твердь по гладкому шару. */
 export function isLandableWarBase(rock: WarBaseEntity, ship: ShipEntity): boolean {
   return (
     rock.alive &&
     landingScaleOk(ship) &&
-    isSurfaceLargeEnough(meshSolidRadius(rock.radius), ship)
+    isSurfaceLargeEnough(warBaseSolidRadius(rock.radius), ship)
   )
 }
 
@@ -93,12 +93,17 @@ export function meshSolidRadius(radius: number): number {
   return radius * LANDING.MESH_SOLID
 }
 
+/** Твердь военной базы. База — гладкий шар (сфера+карта), поэтому солид = сам радиус. */
+export function warBaseSolidRadius(radius: number): number {
+  return radius * LANDING.WARBASE_SOLID
+}
+
 function warBaseAsSurface(rock: WarBaseEntity): LandableSurface {
   return {
     id: rock.id,
     pos: rock.pos,
-    // Меш по внешней сфере — твердь глубже, высота стоянки от неё.
-    radius: meshSolidRadius(rock.radius),
+    // Гладкий шар: твердь совпадает с видимой поверхностью, высота стоянки от неё.
+    radius: warBaseSolidRadius(rock.radius),
     spinRate: rock.spin,
     spinAxis: rock.spinAxis,
   }
@@ -177,7 +182,7 @@ function nearestLandableWhere(
   // Статуи сознательно не здесь: сложный силуэт, стоянка только над шарами.
   for (const warBase of world.warBases) {
     if (!isLandableWarBase(warBase, ship)) continue
-    consider(warBase.id, { pos: warBase.pos, radius: meshSolidRadius(warBase.radius) })
+    consider(warBase.id, { pos: warBase.pos, radius: warBaseSolidRadius(warBase.radius) })
   }
   if (bestId < 0) return null
   return { id: bestId, altitude: bestAltitude }
@@ -244,8 +249,14 @@ export function armAutoland(world: World): boolean {
   return true
 }
 
-/** Положить корпус брюхом к нормали (нос в касательной). */
-function orientBelly(ship: ShipEntity, normal: Vector3): void {
+/**
+ * ПОСТАВИТЬ борт брюхом к поверхности: нос в касательной, крен нулевой.
+ *
+ * Зовётся один раз, в момент касания режима (вход в ховер, автозаход): сажают ровно, как
+ * на шасси, в какой бы позе борт ни подошёл. Дальше крен принадлежит пилоту и держится
+ * шаговым `keepNoseTangent` — там мы его уже не трогаем.
+ */
+function levelBelly(ship: ShipEntity, normal: Vector3): void {
   shipAxes(ship.state.quat, _forward, _right, _up)
   _forward.addScaledVector(normal, -_forward.dot(normal))
   if (_forward.lengthSq() < 1e-9) {
@@ -257,6 +268,44 @@ function orientBelly(ship: ShipEntity, normal: Vector3): void {
   _right.crossVectors(_forward, normal).normalize()
   _back.copy(_forward).negate()
   ship.state.quat.setFromRotationMatrix(_basis.makeBasis(_right, normal, _back)).normalize()
+}
+
+/**
+ * Держать НОС В КАСАТЕЛЬНОЙ плоскости — и только это.
+ *
+ * Нос не наклоняем к грунту потому, что иначе тяга уходит в радиаль и ход над поверхностью
+ * проседает (регрессия «вперёд лечу плохо», см. тест). Целятся здесь не корпусом, а ЛИНИЕЙ
+ * ОГНЯ (`controls.aimPitch`): прицел и камера ходят вверх-вниз, корабль идёт ровно.
+ *
+ * КРЕН НЕ ТРОГАЕМ. Раньше поза собиралась из базиса `(right, normal, −forward)`, то есть
+ * борт насильно ставился брюхом вниз, и A/D над поверхностью ничего не делали. Теперь
+ * «верх» берётся у самого корабля — можно идти боком и вверх ногами, как и в космосе:
+ * режим ограничивает ровно одну степень свободы, ту, из-за которой проседает тяга.
+ */
+function keepNoseTangent(ship: ShipEntity, normal: Vector3): void {
+  shipAxes(ship.state.quat, _forward, _right, _up)
+
+  // Нос — в касательную плоскость.
+  _forward.addScaledVector(normal, -_forward.dot(normal))
+  if (_forward.lengthSq() < 1e-9) {
+    _forward.set(0, 1, 0)
+    if (Math.abs(_forward.dot(normal)) > 0.9) _forward.set(1, 0, 0)
+    _forward.addScaledVector(normal, -_forward.dot(normal))
+  }
+  _forward.normalize()
+
+  // «Верх» корабля — свой собственный, лишь ортогонализованный к новому носу: так крен
+  // сохраняется. Выродился (смотрит вдоль носа) — берём нормаль, чтобы поза осталась
+  // определённой; это единственный случай, когда крен назначаем мы, а не пилот.
+  _up.addScaledVector(_forward, -_up.dot(_forward))
+  if (_up.lengthSq() < 1e-9) {
+    _up.copy(normal).addScaledVector(_forward, -normal.dot(_forward))
+  }
+  _up.normalize()
+
+  _right.crossVectors(_forward, _up).normalize()
+  _back.copy(_forward).negate()
+  ship.state.quat.setFromRotationMatrix(_basis.makeBasis(_right, _up, _back)).normalize()
 }
 
 /**
@@ -322,7 +371,7 @@ export function enterSurfaceFlight(ship: ShipEntity, surface: LandableSurface): 
   if (_normal.lengthSq() < 1e-9) _normal.set(0, 1, 0)
   _normal.normalize()
 
-  orientBelly(ship, _normal)
+  levelBelly(ship, _normal)
 
   ship.landedOn = { bodyId: surface.id, normal: _normal.clone(), altitude: LANDING.HOVER_ALT }
   ship.state.pos
@@ -456,9 +505,28 @@ export function stepLanding(ship: ShipEntity, world: World, dt: number): boolean
    * читаемым: земля внизу, небо вверху, поворот — рысканием.
    */
   stepShip(ship.state, ship.controls, ship.spec.tuning, dt)
-  orientBelly(ship, binding.normal)
+  keepNoseTangent(ship, binding.normal)
+
+  /**
+   * Тангаж гасим и в УГЛОВОЙ СКОРОСТИ, а не только в ориентации.
+   *
+   * `keepNoseTangent` стирает его из `quat` каждый шаг, но `stepShip` продолжает разгонять
+   * `angVel` — и вращение копилось бы, которого не видно: корпус стоит ровно, а внутри
+   * крутится. Наружу это выходит дрожью и выстрелом не по прицелу: залп считает
+   * направление по кадру ЭТОГО шага, а показывают его уже по выровненному.
+   *
+   * Рыскание (y) и КРЕН (z) не трогаем: ими над поверхностью и рулят — мышь ведёт нос,
+   * A/D вертят борт вокруг него.
+   */
+  ship.state.angVel.x = 0
   stepHoverAltitude(binding, ship.controls, dt)
   constrainToHoverSphere(ship, surface, binding)
+
+  // Отпустил газ у поверхности — тормозим ход вдоль сферы к нулю: борт встаёт. Это и есть
+  // «сесть, сбросив скорость». С газом коастинг вдоль поверхности остаётся прежним.
+  if (Math.abs(ship.controls.throttle) < LANDING.LAND_BRAKE_THROTTLE) {
+    ship.state.vel.multiplyScalar(Math.max(0, 1 - LANDING.LAND_BRAKE * dt))
+  }
 
   return true
 }

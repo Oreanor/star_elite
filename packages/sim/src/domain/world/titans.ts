@@ -1,6 +1,6 @@
 import { Quaternion, Vector3 } from 'three'
 import { TITAN } from '../../config/titans'
-import { signed } from '../../core/math'
+import { randomUnit } from '../../core/math'
 import type { BodyEntity, TitanEntity, World } from './entities'
 
 /**
@@ -14,14 +14,6 @@ import type { BodyEntity, TitanEntity, World } from './entities'
 const _dir = new Vector3()
 const _side = new Vector3()
 const _anchor = new Vector3()
-
-/** Единичный вектор в случайную сторону. */
-function randomDir(world: World, out: Vector3): Vector3 {
-  do {
-    out.set(signed(world.rng), signed(world.rng), signed(world.rng))
-  } while (out.lengthSq() < 1e-6)
-  return out.normalize()
-}
 
 /** Сколько китов сейчас в системе. */
 export const titanCount = (world: World): number => world.titans.length
@@ -74,7 +66,7 @@ export function spawnTrafficTitan(world: World): TitanEntity {
   const anchorBody = trafficAnchor(world)
   _anchor.copy(anchorBody?.pos ?? world.player.state.pos)
 
-  randomDir(world, _dir)
+  randomUnit(world.rng, _dir)
   const pos = _anchor.clone().addScaledVector(_dir, hangDistance(world))
   // Носом к якорю — «смотрит» на станцию, не на игрока.
   const facing = _side.copy(_anchor).sub(pos).normalize()
@@ -90,9 +82,9 @@ export function spawnTitan(world: World): TitanEntity {
   const pos = new Vector3()
   const vel = new Vector3()
 
-  randomDir(world, _dir)
+  randomUnit(world.rng, _dir)
   pos.copy(world.player.state.pos).addScaledVector(_dir, TITAN.SPAWN_RANGE)
-  randomDir(world, _side)
+  randomUnit(world.rng, _side)
   _side.addScaledVector(_dir, -_side.dot(_dir)).normalize()
   vel.copy(_side).multiplyScalar(TITAN.DRIFT_SPEED)
 

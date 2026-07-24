@@ -17,7 +17,7 @@ export {
   shatter,
   splittable,
 } from './mining'
-export { damageWarBase, destroyWarBase, damageWarBaseFixture, warBaseFixtureWorldPos } from './warBase'
+export { damageWarBase, destroyWarBase, damageWarBaseFixture } from './warBase'
 export { stepMissiles } from './missiles'
 export { stepBolts } from './bolts'
 export { castLaser, type LaserHit, type ShotSource } from './raycast'
@@ -46,5 +46,6 @@ export {
   missileAmmo,
   muzzleWorldPos,
   peakHeat,
+  meanHeat,
   spawnBolt,
 } from './weapons'

@@ -37,13 +37,18 @@ function layoutFixtures(ids: World['ids'], radius: number, rng: Rng): WarBaseFix
   const push = (model: number, dir: Vector3, size: number): void => {
     out.push({ id: ids.next(), model, dir, size, roll: rng() * Math.PI * 2, hull: WARBASE.FIXTURE_HULL_PER_M * size, alive: true })
   }
-  // Башня (model 0) на полюсе.
+  // ОБА полюса всегда прикрыты деталью. На полюсе equirect-карта стягивается в точку
+  // («закрутка звёздочкой»), и башня/пушка маскируют этот артефакт — иначе на «макушке»
+  // базы виден шов. Север — башня, юг — пушка.
   push(0, new Vector3(0, 1, 0), radius * WARBASE.TOWER_SIZE)
-  // Прочие — спираль Фибоначчи.
+  push(1, new Vector3(0, -1, 0), radius * WARBASE.TOWER_SIZE * 0.8)
+  // Прочие — спираль Фибоначчи, но В СРЕДНИХ ШИРОТАХ: полюса уже заняты, и спираль туда
+  // не лезет (y зажат в ±POLE_KEEPOUT), иначе деталь села бы поверх полюсной.
   const golden = Math.PI * (3 - Math.sqrt(5))
-  for (let i = 0; i < n - 1; i++) {
-    const t = (i + 0.5) / (n - 1)
-    const y = 1 - 2 * t
+  const spiral = n - 2
+  for (let i = 0; i < spiral; i++) {
+    const t = (i + 0.5) / spiral
+    const y = WARBASE.SPIRAL_LAT * (1 - 2 * t)
     const r = Math.sqrt(Math.max(0, 1 - y * y))
     const phi = i * golden + rng() * 0.6
     const dir = new Vector3(Math.cos(phi) * r, y, Math.sin(phi) * r).normalize()

@@ -1,6 +1,6 @@
 import { Vector3 } from 'three'
 import { SPAWN } from '../../config/world'
-import { signed, type Rng } from '../../core/math'
+import { randomUnit, type Rng } from '../../core/math'
 import type { World } from './entities'
 
 /**
@@ -18,13 +18,6 @@ const _dir = new Vector3()
 const _cand = new Vector3()
 
 /** Единичный вектор в случайную сторону из seeded-RNG. Пишет в `out`. */
-function randomUnit(rng: Rng, out: Vector3): Vector3 {
-  do {
-    out.set(signed(rng), signed(rng), signed(rng))
-  } while (out.lengthSq() < 1e-6)
-  return out.normalize()
-}
-
 /**
  * Свободно ли место под спавн: ни тела, ни живого астероида, ни живого борта в
  * зазоре `CLEARANCE` сверх их радиуса. Рождаемого игрока в мире ещё нет, поэтому

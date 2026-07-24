@@ -2,6 +2,7 @@ import { Vector3 } from 'three'
 import { AI } from '../../config/ai'
 import { isEngageable } from '../combat/engage'
 import { findShip } from '../world/queries'
+import { findWarBaseFixture, warBaseFixtureWorldPos } from '../world/warBase'
 import type { World } from '../world/entities'
 import { createAIState } from './types'
 
@@ -61,6 +62,16 @@ export function engageAutofight(world: World): boolean {
     return true
   }
 
+  if (world.lockedFixtureId !== null) {
+    const found = findWarBaseFixture(world.warBases, world.lockedFixtureId)
+    if (!found) return false
+    const ai = createAIState(player.state.pos, world.rng)
+    ai.orderedSoft = { kind: 'fixture', id: found.fixture.id }
+    ai.missileCooldown = 0
+    player.ai = ai
+    return true
+  }
+
   const target = findShip(world, world.lockedTargetId)
   if (!target || !target.alive || !isEngageable(target)) return false
 
@@ -102,7 +113,14 @@ export function autofightSpent(world: World): boolean {
   return target.state.pos.distanceTo(player.state.pos) > ABORT_RANGE
 }
 
-function softPos(world: World, soft: { kind: 'pod' | 'asteroid'; id: number }): Vector3 | null {
+const _softFixture = new Vector3()
+
+function softPos(world: World, soft: { kind: 'pod' | 'asteroid' | 'fixture'; id: number }): Vector3 | null {
+  if (soft.kind === 'fixture') {
+    // Деталь едет вместе с базой: место считаем на лету, а не помним точку прицеливания.
+    const found = findWarBaseFixture(world.warBases, soft.id)
+    return found ? warBaseFixtureWorldPos(found.base, found.fixture, world.time, _softFixture) : null
+  }
   if (soft.kind === 'pod') {
     const pod = world.pods.find((p) => p.id === soft.id && p.alive)
     return pod?.pos ?? null

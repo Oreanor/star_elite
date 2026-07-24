@@ -34,7 +34,7 @@ export interface AIState {
    * Мягкая цель автобоя (обломок / астероид). Не корабль — у неё нет `ShipEntity`,
    * поэтому приказ живёт отдельно от `orderedTargetId`. null — бьём борт или цели нет.
    */
-  orderedSoft: { kind: 'pod' | 'asteroid'; id: number } | null
+  orderedSoft: { kind: 'pod' | 'asteroid' | 'fixture'; id: number } | null
   /** Куда сейчас летим: патрульная точка или точка отрыва. */
   waypoint: Vector3
   /** Район патрулирования. Бот не улетает из него без причины. */
