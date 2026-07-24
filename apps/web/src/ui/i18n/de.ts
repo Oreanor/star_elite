@@ -310,6 +310,7 @@ export const DE: Record<keyof typeof RU, string> = {
   'locator.kind.figurine': 'Figur',
   'locator.kind.pod': 'Frachtkapsel',
   'locator.kind.asteroid': 'Asteroid',
+  'locator.kind.fixture': 'Geschütz',
   'locator.kind.warbase': 'Kriegsbasis',
   'locator.kind.ship': 'Schiff',
   'locator.kind.heat': 'Korona',
