@@ -35,6 +35,7 @@ import {
   stepStarHeat,
   stepMissiles,
   stepBolts,
+  stepWarBaseTurrets,
   stepWarBaseWrecks,
   warBaseWreckDone,
   surviveLethal,
@@ -165,6 +166,8 @@ export function stepWorld(world: World, frameDt: number, controllers: Controller
   stepDivineScale(world, frame)
   stepTitans(world, frame)
   stepPlatforms(world, frame)
+  // Турели баз: перезаряд и очереди заданы в секундах, поэтому шаг кадровый, как у трафика.
+  stepWarBaseTurrets(world, frame)
   // Претензии за случайные попадания гаснут по секундам, а не по шагам физики.
   stepGrievances(world)
   maybeShiftOrigin(world)

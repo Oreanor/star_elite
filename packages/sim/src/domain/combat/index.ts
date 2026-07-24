@@ -18,6 +18,7 @@ export {
   splittable,
 } from './mining'
 export { damageWarBase, destroyWarBase, damageWarBaseFixture, stepWarBaseWrecks, warBaseWreckDone } from './warBase'
+export { stepWarBaseTurrets } from './warBaseGuns'
 export { stepMissiles } from './missiles'
 export { stepBolts } from './bolts'
 export { castLaser, type LaserHit, type ShotSource } from './raycast'

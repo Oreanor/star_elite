@@ -35,26 +35,51 @@ function layoutFixtures(ids: World['ids'], radius: number, rng: Rng): WarBaseFix
   const out: WarBaseFixture[] = []
   const n = WARBASE.FIXTURES_MIN + Math.floor(rng() * (WARBASE.FIXTURES_MAX - WARBASE.FIXTURES_MIN + 1))
   const push = (model: number, dir: Vector3, size: number): void => {
-    out.push({ id: ids.next(), model, dir, size, roll: rng() * Math.PI * 2, alive: true })
+    out.push({ id: ids.next(), model, dir, size, roll: rng() * Math.PI * 2, cooldown: rng() * WARBASE.TURRET_COOLDOWN, burstLeft: 0, shotIn: 0, alive: true })
   }
   // ОБА полюса всегда прикрыты деталью. На полюсе equirect-карта стягивается в точку
   // («закрутка звёздочкой»), и башня/пушка маскируют этот артефакт — иначе на «макушке»
   // базы виден шов. Север — башня, юг — пушка.
   push(0, new Vector3(0, 1, 0), radius * WARBASE.TOWER_SIZE)
   push(1, new Vector3(0, -1, 0), radius * WARBASE.TOWER_SIZE * 0.8)
-  // Прочие — спираль Фибоначчи, но В СРЕДНИХ ШИРОТАХ: полюса уже заняты, и спираль туда
-  // не лезет (y зажат в ±POLE_KEEPOUT), иначе деталь села бы поверх полюсной.
-  const golden = Math.PI * (3 - Math.sqrt(5))
-  const spiral = n - 2
-  for (let i = 0; i < spiral; i++) {
-    const t = (i + 0.5) / spiral
-    const y = WARBASE.SPIRAL_LAT * (1 - 2 * t)
-    const r = Math.sqrt(Math.max(0, 1 - y * y))
-    const phi = i * golden + rng() * 0.6
-    const dir = new Vector3(Math.cos(phi) * r, y, Math.sin(phi) * r).normalize()
+  /**
+   * Прочие — ПО СЕТКЕ параллелей и меридианов, а не спиралью.
+   *
+   * Спираль Фибоначчи раскладывает точки равномерно, но БЕЗ ПОРЯДКА: получалась сыпь, а
+   * не сооружение. Рукотворная база должна читаться кварталами — ряды турелей вдоль
+   * широт, колонны вдоль меридианов. Поэтому сетка, а занятость каждой клетки решает
+   * бросок: где-то батарея, где-то пусто. Порядок виден, однообразия нет.
+   *
+   * Число колонн на параллели считается от её длины (`cos φ`): у экватора клеток больше,
+   * к полюсам меньше — иначе у макушки квартал сжимался бы в точку.
+   */
+  const rows = WARBASE.GRID_ROWS
+  const wanted = n - 2
+  const cells: { dir: Vector3 }[] = []
+  for (let r = 0; r < rows; r++) {
+    // Широты идут внутри пояса ±SPIRAL_LAT: полюса уже заняты башнями.
+    const lat = WARBASE.SPIRAL_LAT * (1 - 2 * ((r + 0.5) / rows))
+    const ring = Math.sqrt(Math.max(0, 1 - lat * lat))
+    const cols = Math.max(2, Math.round(WARBASE.GRID_COLS * ring))
+    // Каждый ряд сдвинут на свою долю шага: колонны не выстраиваются в один шов.
+    const shift = (r % 2) * 0.5
+    for (let c = 0; c < cols; c++) {
+      const phi = ((c + shift) / cols) * Math.PI * 2
+      cells.push({ dir: new Vector3(Math.cos(phi) * ring, lat, Math.sin(phi) * ring).normalize() })
+    }
+  }
+
+  // Занятость клетки — бросок, но с поправкой: сколько деталей заказано, столько и ставим.
+  // Идём по всем клеткам, беря каждую с шансом «осталось поставить / осталось клеток», —
+  // так число сходится точно, а места остаются случайными (без «первые подряд, дальше пусто»).
+  let left = Math.min(wanted, cells.length)
+  for (let i = 0; i < cells.length && left > 0; i++) {
+    const remaining = cells.length - i
+    if (rng() >= left / remaining) continue
+    left--
     const model = 1 + Math.floor(rng() * WARBASE.FIXTURE_MODELS)
     const size = radius * (WARBASE.FIXTURE_SIZE_MIN + rng() * (WARBASE.FIXTURE_SIZE_MAX - WARBASE.FIXTURE_SIZE_MIN))
-    push(model, dir, size)
+    push(model, cells[i]!.dir, size)
   }
   return out
 }

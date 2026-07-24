@@ -36,6 +36,7 @@ import { syncControllers, useSession, type Session } from '../../session/GameCon
 import { coastController } from '../../session/playerController'
 import { stepCameraView } from '../../session/cameraView'
 import { cycleHull, rigEditorActive, stepRigEditor, toggleRigEditor } from '../dev/rigEditor'
+import { stepWarBaseEditor } from '../dev/warBaseEditor'
 import { resetTorusFlight } from '../../session/torusFlight'
 import {
   consumeTorusArrival,
@@ -355,6 +356,10 @@ export function Simulation() {
     // 0 — следующий корпус из каталога: рама, габарит и меш меняются целиком.
     // Дев-переключатель под редактор: обойти все модели за один заход, не летая на верфь.
     if (consumePress('Digit0')) console.log('корпус:', cycleHull(world))
+
+    // 5–9 — редактор ВОЕННОЙ БАЗЫ, что сейчас в нав-цели: диаметр, набивка деталями и
+    // печать готового конфига. Без выбранной базы молчит, поэтому режима не заводим.
+    stepWarBaseEditor(world)
 
     // Пользовательский ракурс: облёт (←/→) и наезд (↑/↓), V — сброс. Чистая камера,
     // мир не трогает. Здесь, до clearPresses, чтобы тап V сработал.
