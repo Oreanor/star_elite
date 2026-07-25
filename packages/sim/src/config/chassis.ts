@@ -33,8 +33,12 @@ export const AURORA_ONE: Chassis = {
     { offset: [0, -0.86, 0.53], kind: 'gun', maxClass: 2, nozzles: [[-3.82, -0.86, 0.53], [3.82, -0.86, 0.53]] },
     { offset: [0, -1.21, -0.02], kind: 'gun', maxClass: 3, nozzles: [[-7.09, -1.21, -0.02], [7.09, -1.21, -0.02]] },
     { offset: [0, -0.87, -8.52], kind: 'gun', maxClass: 3, bore: 2, nozzles: [[0, -0.87, -8.52]] },
+    // ДВЕ ПАРЫ пилонов, по две ракеты на каждый: восемь заряженных на вылет. Места пары
+    // подбираются глазами в редакторе оснастки (K) — здесь лишь заводская раскладка.
     { offset: [-5.0, -0.8, 3.0], kind: 'pylon', maxClass: 1 },
     { offset: [5.0, -0.8, 3.0], kind: 'pylon', maxClass: 1 },
+    { offset: [-6.8, -0.8, 4.2], kind: 'pylon', maxClass: 1 },
+    { offset: [6.8, -0.8, 4.2], kind: 'pylon', maxClass: 1 },
   ],
   slots: [
     { kind: 'engine', maxClass: 3 },

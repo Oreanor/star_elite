@@ -36,11 +36,23 @@ function missileWorld(): ReturnType<typeof createWorld> {
 }
 
 describe('ракетный (мунишн) слот', () => {
-  it('у стартовой Авроры пилоны ЕСТЬ, но пустые: ракеты покупаются', () => {
+  /**
+   * Стартовая «Аврора» вылетает СНАРЯЖЁННОЙ: четыре пилона по две ракеты — восемь
+   * заряженных. Раньше пилоны были пусты и ракеты приходилось покупать первым делом;
+   * теперь боезапас есть сразу, и он честно весит (по тонне на ракету).
+   */
+  it('стартовая Аврора вылетает с восемью заряженными ракетами', () => {
     const world = createWorld()
-    expect(missilePylonIndices(world.player).length).toBeGreaterThan(0)
-    expect(installedMissile(world.player)).toBeNull()
-    expect(world.player.loadout.weapons.some((w) => w != null && isMissile(w))).toBe(false)
+    const pylons = missilePylonIndices(world.player)
+    expect(pylons.length).toBeGreaterThan(0)
+    expect(installedMissile(world.player)).not.toBeNull()
+
+    const loaded = world.player.spec.mounts.reduce(
+      (sum, mount, i) => (isMissile(mount.weapon) ? sum + (world.player.guns[i]?.ammo ?? 0) : sum),
+      0,
+    )
+    expect(loaded).toBe(8)
+    // Дрон-ракеты — покупные: их с завода не ставят.
     expect(world.player.loadout.weapons.some((w) => w != null && isDrone(w))).toBe(false)
   })
 

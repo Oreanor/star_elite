@@ -58,8 +58,9 @@ export function playerStartLoadout(): Loadout {
     [ENGINE_STANDARD, RCS_STANDARD, SHIELD_STANDARD, ARMOUR_PLATE, CARGO_LARGE, HYPERDRIVE_BASIC, CLOAK_FIELD],
     // ТРИ лазера (класс задаёт цвет луча): ЗЕЛЁНЫЙ класс 2 на СЕРЕДИНЕ крыла, КРАСНЫЙ
     // класс 3 на ЗАКОНЦОВКАХ (по краям), голубой класс 1 «Столб» в ЦЕНТРЕ (носа) — бьёт вдвое
-    // реже, но луч втрое толще. Пилоны Авроры остаются свободными — под ракеты.
-    [BURST_LASER, BEAM_LASER_HEAVY, PULSE_LASER_CENTRAL],
+    // реже, но луч втрое толще. ЧЕТЫРЕ пилона снаряжены с завода: 8 ракет на каждом — 32
+    // на вылет. Тридцать две тонны боезапаса пилот чувствует рулями, и это честная плата.
+    [BURST_LASER, BEAM_LASER_HEAVY, PULSE_LASER_CENTRAL, MISSILE_PYLON, MISSILE_PYLON, MISSILE_PYLON, MISSILE_PYLON],
   )
 }
 
@@ -131,7 +132,8 @@ export function auroraOneLoadout(): Loadout {
   return createLoadout(
     AURORA_ONE,
     [ENGINE_STANDARD, RCS_STANDARD, SHIELD_STANDARD, ARMOUR_PLATE, CARGO_SMALL, HYPERDRIVE_BASIC],
-    [PULSE_LASER, PULSE_LASER, null, MISSILE_PYLON, MISSILE_PYLON],
+    // Обе пары пилонов снаряжены: восемь ракет, как и у стартовой сборки.
+    [PULSE_LASER, PULSE_LASER, null, MISSILE_PYLON, MISSILE_PYLON, MISSILE_PYLON, MISSILE_PYLON],
   )
 }
 
