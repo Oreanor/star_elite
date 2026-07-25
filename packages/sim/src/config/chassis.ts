@@ -163,6 +163,24 @@ export const ORION: Chassis = {
 }
 
 /** «Тесей» — ещё один лёгкий истребитель (GLB-меш). */
+/**
+ * «Афина» и «Икар» — свежие серийные истребители. Раскладка точек ЗАВОДСКАЯ, снятая с
+ * «Тесея»: силуэты близкие, а точные места дул и пилонов подбираются глазами в редакторе
+ * оснастки (K) — там их и поправят, не трогая ни бой, ни верфь.
+ */
+export const ATHENA: Chassis = {
+  id: 'athena', name: 'Афина', class: 2, baseMass: 6, baseHull: 120, cargoCapacity: 14, auxCapacity: 110,
+  radius: 8, inertiaFactor: 0.85, assistLateralDamp: 1.25, assistSpeedDamp: 0.35,
+  hardpoints: THESEUS_HARDPOINTS, slots: FIGHTER_SLOTS, cost: 74_000,
+}
+
+/** «Икар» — легче и вёртче «Афины», но и шкура тоньше: скорость вместо брони. */
+export const ICARUS: Chassis = {
+  id: 'icarus', name: 'Икар', class: 2, baseMass: 4.5, baseHull: 95, cargoCapacity: 11, auxCapacity: 95,
+  radius: 7, inertiaFactor: 0.72, assistLateralDamp: 1.45, assistSpeedDamp: 0.35,
+  hardpoints: THESEUS_HARDPOINTS, slots: FIGHTER_SLOTS, cost: 58_000,
+}
+
 export const THESEUS: Chassis = {
   id: 'theseus', name: 'Тесей', class: 2, baseMass: 5, baseHull: 105, cargoCapacity: 13, auxCapacity: 100,
   radius: 8, inertiaFactor: 0.8, assistLateralDamp: 1.3, assistSpeedDamp: 0.35,
@@ -210,6 +228,8 @@ export const CHASSIS_CATALOGUE: readonly Chassis[] = [
   PEGASUS,
   ORION,
   THESEUS,
+  ATHENA,
+  ICARUS,
   ATLAS,
 ]
 

@@ -1,5 +1,5 @@
 import { createLoadout, type Chassis, type Loadout } from './schema'
-import { ATLAS, AURORA_ONE, HERMES, ORION, PEGASUS, PERSEUS, SPIRITUS_SANCTUS, THESEUS } from './chassis'
+import { ATHENA, ATLAS, AURORA_ONE, HERMES, ICARUS, ORION, PEGASUS, PERSEUS, SPIRITUS_SANCTUS, THESEUS } from './chassis'
 import {
   ARMOUR_PLATE,
   BEAM_LASER_HEAVY,
@@ -164,6 +164,14 @@ export function pegasusLoadout(): Loadout {
 export function orionLoadout(): Loadout {
   return fighterLoadout(ORION)
 }
+/** «Афина» — свежий серийный истребитель на общей раскладке. */
+export function athenaLoadout(): Loadout {
+  return fighterLoadout(ATHENA)
+}
+/** «Икар» — самый лёгкий из серийных: скорость вместо брони. */
+export function icarusLoadout(): Loadout {
+  return fighterLoadout(ICARUS)
+}
 /** «Тесей» — ещё один лёгкий истребитель на общей раскладке. */
 export function theseusLoadout(): Loadout {
   return fighterLoadout(THESEUS)
@@ -196,6 +204,8 @@ export const SHIPYARD: readonly HullOffer[] = [
   { chassis: PEGASUS, loadout: pegasusLoadout, cost: PEGASUS.cost },
   { chassis: ORION, loadout: orionLoadout, cost: ORION.cost },
   { chassis: THESEUS, loadout: theseusLoadout, cost: THESEUS.cost },
+  { chassis: ATHENA, loadout: athenaLoadout, cost: ATHENA.cost },
+  { chassis: ICARUS, loadout: icarusLoadout, cost: ICARUS.cost },
   { chassis: ATLAS, loadout: atlasLoadout, cost: ATLAS.cost },
   // Все корпуса теперь — загруженные GLB-модели. Процедурные (Мк III, Арес, Аполлон, Артемида,
   // Афина, Икар, Каркинос, Деметра) сняты из игры. «Каллиопа» (DRONE) корпусом не продаётся —

@@ -248,6 +248,10 @@ const GLB_HULLS: readonly GlbHullDef[] = [
   { id: 'orion', url: '/models/ships/orion.glb', scale: GLB_SCALE, yaw: GLB_YAW, pitch: GLB_PITCH, roll: GLB_ROLL },
   // «Тесей» — лёгкий истребитель (933 тришки).
   { id: 'theseus', url: '/models/ships/theseus.glb', scale: GLB_SCALE, yaw: GLB_YAW, pitch: GLB_PITCH, roll: GLB_ROLL },
+  // «Афина» и «Икар» — свежие серийные корпуса. Разворот общий; если меш приедет носом
+  // не туда, правится он здесь одной строкой, а не в домене.
+  { id: 'athena', url: '/models/ships/athena.glb', scale: GLB_SCALE, yaw: GLB_YAW, pitch: GLB_PITCH, roll: GLB_ROLL },
+  { id: 'icarus', url: '/models/ships/icarus.glb', scale: GLB_SCALE, yaw: GLB_YAW, pitch: GLB_PITCH, roll: GLB_ROLL },
   /**
    * «Атлас» — КОРАБЛЬ ПОКОЛЕНИЙ, и масштаб у него не «побольше прочих», а другого порядка:
    * 120 против 16 у истребителя. Это ковчег, в нём живут, — рядом с ним истребитель обязан
