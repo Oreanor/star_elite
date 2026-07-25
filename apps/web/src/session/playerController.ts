@@ -59,12 +59,13 @@ const STICK_DEADZONE = 0.02
  *
  * `AIM_RATE` — рад/с при полностью отклонённой ручке, того же порядка, что и скорость
  * рыскания: увод прицела должен ощущаться продолжением привычного движения мыши, а не
- * отдельным механизмом. `AIM_LIMIT` — конус в 50°: ниже уже смотришь себе под брюхо,
- * и стволы туда всё равно не достанут через корпус. `AIM_RETURN` возвращает линию огня
+ * отдельным механизмом. `AIM_LIMIT` — конус примерно в 23°: дальше перекрестье уходит за
+ * нижнюю кромку кадра, а целиться в грунт этого хватает с запасом. ЗНАК как у тангажа:
+ * ручка на себя поднимает прицел, от себя опускает. `AIM_RETURN` возвращает линию огня
  * к носу после отрыва — в космосе целятся кораблём.
  */
 const AIM_RATE = 1.1
-const AIM_LIMIT = 0.87
+const AIM_LIMIT = 0.4
 const AIM_RETURN = 2.5
 
 /**
@@ -439,7 +440,7 @@ export function createPlayerController(intent: PlayerIntent): Controller {
        * «смотреть себе под ноги».
        */
       if (ship.landedOn !== null) {
-        c.aimPitch = clamp(c.aimPitch - c.pitch * AIM_RATE * dt, -AIM_LIMIT, AIM_LIMIT)
+        c.aimPitch = clamp(c.aimPitch + c.pitch * AIM_RATE * dt, -AIM_LIMIT, AIM_LIMIT)
         c.pitch = 0
       } else if (c.aimPitch !== 0) {
         // Оторвались — линия огня возвращается к носу: в космосе целятся кораблём.

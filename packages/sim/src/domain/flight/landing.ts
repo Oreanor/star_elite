@@ -419,10 +419,12 @@ export function releaseLanding(ship: ShipEntity, _world: World): boolean {
  * Потолок — тот же, с которого прибор перестаёт быть высотомером; пол — чтобы борт не
  * втёрся брюхом в грунт.
  */
-function stepHoverAltitude(binding: SurfaceBinding, controls: ShipControls, dt: number): void {
-  if (Math.abs(controls.strafeUp) < 1e-3) return
+function stepHoverAltitude(binding: SurfaceBinding, controls: ShipControls, dt: number): number {
+  if (Math.abs(controls.strafeUp) < 1e-3) return 0
+  const before = binding.altitude
   const next = binding.altitude + controls.strafeUp * LANDING.ALT_RATE * dt
   binding.altitude = Math.min(LANDING.ALT_MAX, Math.max(LANDING.ALT_MIN, next))
+  return binding.altitude - before
 }
 
 /**
@@ -519,8 +521,18 @@ export function stepLanding(ship: ShipEntity, world: World, dt: number): boolean
    * A/D вертят борт вокруг него.
    */
   ship.state.angVel.x = 0
-  stepHoverAltitude(binding, ship.controls, dt)
+  /**
+   * НАБОР И СБРОС ВЫСОТЫ — это движение МИРА, а не корабля.
+   *
+   * Рельс сферы двигает борт по радиали, а камера тянется за ним пружиной и отстаёт: в
+   * кадре получалось, что уезжаешь ты, а грунт стоит. Смещение от смены эшелона идёт тем
+   * же каналом, что орбитальный перенос и перецентровка начала координат (),
+   * — камера повторяет его один в один. Тогда борт стоит на месте, а поверхность
+   * подъезжает или уходит вниз, как и должно быть при наборе высоты.
+   */
+  const climbed = stepHoverAltitude(binding, ship.controls, dt)
   constrainToHoverSphere(ship, surface, binding)
+  if (climbed !== 0 && ship === world.player) world.originShift.addScaledVector(binding.normal, climbed)
 
   // Отпустил газ у поверхности — тормозим ход вдоль сферы к нулю: борт встаёт. Это и есть
   // «сесть, сбросив скорость». С газом коастинг вдоль поверхности остаётся прежним.
