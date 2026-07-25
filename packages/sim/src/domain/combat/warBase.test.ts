@@ -21,9 +21,14 @@ function withBases(): ReturnType<typeof createWorld> {
   })
 }
 
+/** Сбить ОДНУ деталь: считаются попадания, и трёх точных хватает любой турели. */
+function knockOut(world: ReturnType<typeof createWorld>, base: (typeof world.warBases)[number], fix: (typeof base.fixtures)[number]): void {
+  for (let i = 0; i < WARBASE.FIXTURE_HITS; i++) damageWarBaseFixture(world, base, fix, 1)
+}
+
 /** Снести базу — значит сбить ВСЕ её детали: своей прочности у корпуса нет. */
 function razeBase(world: ReturnType<typeof createWorld>, base: (typeof world.warBases)[number]): void {
-  for (const fix of [...base.fixtures]) damageWarBaseFixture(world, base, fix, 1)
+  for (const fix of [...base.fixtures]) knockOut(world, base, fix)
 }
 
 /** Прокрутить мир до конца агонии: каскад вспышек, затем «пух» с разлётом лома. */
@@ -100,7 +105,7 @@ describe('военная база', () => {
     const total = base.fixtures.length
 
     expect(warBaseIntegrity(base)).toBe(1)
-    damageWarBaseFixture(world, base, base.fixtures[0]!, 1)
+    knockOut(world, base, base.fixtures[0]!)
     expect(warBaseIntegrity(base)).toBeCloseTo((total - 1) / total, 6)
 
     razeBase(world, base)
@@ -141,7 +146,7 @@ describe('отстрел деталей базы', () => {
     const fix = base.fixtures.find((f) => f.model !== 0)!
     const before = base.fixtures.filter((f) => f.alive).length
 
-    damageWarBaseFixture(world, base, fix, 1)
+    knockOut(world, base, fix)
 
     expect(fix.alive).toBe(false)
     expect(base.alive).toBe(true)
@@ -179,7 +184,7 @@ describe('отстрел деталей базы', () => {
     expect(world.lockedAsteroidId).toBeNull()
 
     // Отстрелили — рамка не должна остаться висеть на том, чего нет.
-    damageWarBaseFixture(world, base, fix, 1)
+    knockOut(world, base, fix)
     stepWorld(world, PHYSICS.FIXED_DT, new Map())
     expect(world.lockedFixtureId).toBeNull()
   })
@@ -196,7 +201,7 @@ describe('отстрел деталей базы', () => {
     const fix = base.fixtures.find((f) => f.model !== 0)!
     const before = base.fixtures.length
 
-    damageWarBaseFixture(world, base, fix, 1)
+    knockOut(world, base, fix)
     stepWorld(world, PHYSICS.FIXED_DT, new Map())
 
     expect(base.fixtures.length).toBe(before)

@@ -101,6 +101,8 @@ function Hull({ base }: { base: WarBaseEntity }) {
 
 /** Обломок мельче целой детали: от неё остался огрызок, а не она сама. */
 const TRASH_SCALE = 0.62
+/** Насколько обломок УТОПЛЕН в обшивку, в долях своего габарита: он врос, а не лежит. */
+const TRASH_SINK = 0.55
 /** Пакеты обломков — по одному на облик. Список постоянный, считается один раз. */
 const TRASH_KEYS = Array.from({ length: TRASH_VARIANTS }, (_, i) => i)
 
@@ -190,8 +192,10 @@ function TrashBatch({ variant }: { variant: number }) {
         const size = fix.size * TRASH_SCALE
         warBaseFixtureWorldPos(base, fix, time, _pos)
         _dir.copy(_pos).sub(base.pos).normalize()
-        // Осадка: центр обломка ниже центра детали ровно на разницу их выступов.
-        _pos.addScaledVector(_dir, -(fix.size - size) * WARBASE.FIXTURE_SIT_OUT)
+        // ОСАДКА: обломок не просто ниже целой детали — он ВДАВЛЕН в обшивку. Разницы
+        // выступов не хватало, огрызок парил над бортом; топим его ещё на долю габарита,
+        // и он читается как вросший в корпус, а не приклеенный к воздуху.
+        _pos.addScaledVector(_dir, -(fix.size - size) * WARBASE.FIXTURE_SIT_OUT - size * TRASH_SINK)
         _dummy.position.copy(_pos).sub(base.pos).multiplyScalar(shrink).add(base.pos)
         _align.setFromUnitVectors(_UP, _dir)
         _roll.setFromAxisAngle(_dir, fix.roll)

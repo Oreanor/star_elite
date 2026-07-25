@@ -107,12 +107,14 @@ export function warBaseWreckDone(base: WarBaseEntity, now: number): boolean {
 export function damageWarBase(_world: World, _base: WarBaseEntity, _amount: number): void {}
 
 /**
- * Отстрел ДЕТАЛИ. Сбивается ОДНИМ попаданием, какой бы слабой ни была пушка: у детали нет
- * своей копилки прочности. Гибнет отдельной вспышкой в своей точке; сбитая последняя
+ * Отстрел ДЕТАЛИ. Считаются ПОПАДАНИЯ, а не урон: три точных снимают любую турель, каким
+ * бы слабым ни был ствол. Гибнет она отдельной вспышкой в своей точке; сбитая последняя
  * забирает с собой базу — держаться ей больше не на чем.
  */
 export function damageWarBaseFixture(world: World, base: WarBaseEntity, fix: WarBaseFixture, _amount: number): void {
   if (!fix.alive || !base.alive) return
+  fix.hitsLeft -= 1
+  if (fix.hitsLeft > 0) return
   fix.alive = false
   warBaseFixtureWorldPos(base, fix, world.time, _fixWorld)
   spawnExplosion(world, _fixWorld, _still, fix.size * 1.2)

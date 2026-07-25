@@ -81,6 +81,7 @@ function addFixture(world: World, base: WarBaseEntity): boolean {
     cooldown: 0,
     burstLeft: 0,
     shotIn: 0,
+    hitsLeft: WARBASE.FIXTURE_HITS,
     alive: true,
   })
   return true

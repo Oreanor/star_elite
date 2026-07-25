@@ -528,7 +528,7 @@ export const PULSE_LASER_WORN: LaserModule = {
   cost: 0,
   salvageChance: 0.7,
   damage: 6,
-  range: 1600,
+  range: 4000,
   cooldown: 0.34,
   heatPerShot: 0.16,
   heatCool: 0.22,
@@ -543,7 +543,7 @@ export const PULSE_LASER: LaserModule = {
   cost: 0,
   salvageChance: 0.55,
   damage: 9,
-  range: 2200,
+  range: 4000,
   // 4 выстрела/с. Стояло 0.11 — это девять в секунду, темп пулемёта:
   // пара таких стволов снимала полный щит меньше чем за секунду.
   cooldown: 0.25,
@@ -570,7 +570,7 @@ export const PULSE_LASER_CENTRAL: LaserModule = {
   // не у покупки. 18/с × калибр 2 = прежние 36/с, секундный урон не изменился.
   beam: true,
   damage: 18,
-  range: 2200,
+  range: 4000,
   cooldown: 0, // струю нечем прерывать: перезаряда у луча нет
   heatPerShot: 0.28, // за СЕКУНДУ огня (было 0.14 за импульс раз в 0.5 с)
   heatCool: 0.28,
@@ -585,7 +585,7 @@ export const BURST_LASER: LaserModule = {
   cost: 16000,
   salvageChance: 0.35,
   damage: 14,
-  range: 2400,
+  range: 4000,
   cooldown: 0.19,
   heatPerShot: 0.1,
   heatCool: 0.26,
@@ -600,7 +600,7 @@ export const BEAM_LASER: LaserModule = {
   cost: 47000,
   salvageChance: 0.2,
   damage: 22,
-  range: 2600,
+  range: 4000,
   cooldown: 0.14,
   // Жрёт тепло: очередями не постреляешь, нужен ритм.
   heatPerShot: 0.11,
@@ -618,7 +618,7 @@ export const PULSE_LASER_FINE: LaserModule = {
   cost: 7000,
   salvageChance: 0.5,
   damage: 11,
-  range: 2300,
+  range: 4000,
   cooldown: 0.24,
   heatPerShot: 0.11,
   heatCool: 0.3,
@@ -635,7 +635,7 @@ export const BEAM_LASER_LIGHT: LaserModule = {
   cost: 22000,
   salvageChance: 0.4,
   damage: 16,
-  range: 2400,
+  range: 4000,
   cooldown: 0.22,
   // Горячий для класса-1: длинных очередей не даёт.
   heatPerShot: 0.15,
@@ -653,7 +653,7 @@ export const BEAM_LASER_HEAVY: LaserModule = {
   cost: 98000,
   salvageChance: 0.14,
   damage: 30,
-  range: 2800,
+  range: 4000,
   cooldown: 0.13,
   // Раскаляется так, что непрерывно бить нельзя вовсе: чистый альфа-удар, не поток.
   heatPerShot: 0.13,
@@ -671,7 +671,7 @@ export const ROTARY_LASER: LaserModule = {
   cost: 9000,
   salvageChance: 0.4,
   damage: 5,
-  range: 1400, // близкий бой: на дистанции роторный бесполезен
+  range: 4000, // близкий бой: на дистанции роторный бесполезен
   cooldown: 0.1,
   // Тепла за выстрел больше, чем успевает сброситься: длинная очередь глохнет сама.
   heatPerShot: 0.14,
@@ -687,7 +687,7 @@ export const ROTARY_LASER_B: LaserModule = {
   cost: 28000,
   salvageChance: 0.3,
   damage: 7,
-  range: 1600,
+  range: 4000,
   cooldown: 0.08, // пиковый темп в каталоге — и мгновенный перегрев в уплату
   heatPerShot: 0.12,
   heatCool: 0.32,
@@ -705,7 +705,7 @@ export const PLASMA_GUN: LaserModule = {
   cost: 41000,
   salvageChance: 0.25,
   damage: 34, // тяжёлый одиночный удар, но раз в полсекунды
-  range: 3000,
+  range: 4000,
   cooldown: 0.55,
   heatPerShot: 0.3,
   heatCool: 0.2,
@@ -721,7 +721,7 @@ export const PLASMA_GUN_HEAVY: LaserModule = {
   cost: 132000,
   salvageChance: 0.12,
   damage: 52,
-  range: 3200,
+  range: 4000,
   cooldown: 0.6,
   heatPerShot: 0.32,
   heatCool: 0.2,
@@ -1132,7 +1132,7 @@ export const DRONE_LASER: LaserModule = {
   // Сгорает вместе с аппаратом: снимать с обломка нечего.
   salvageChance: 0,
   damage: 3,
-  range: 1200,
+  range: 4000,
   cooldown: 0.4,
   heatPerShot: 0.05,
   heatCool: 0.4,
