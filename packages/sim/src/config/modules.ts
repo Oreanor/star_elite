@@ -79,7 +79,7 @@ export const ENGINE_MILITARY: EngineModule = {
 // «Гражданский» — бюджетная линия: дёшева, но за тягу платит собственной массой.
 // 1D тяжелее и прожорливее вольного 1E, зато первый платный шаг стоит копейки —
 // это апгрейд для того, у кого ещё нет денег на «Стандарт».
-export const ENGINE_CIVILIAN_D: EngineModule = {
+const ENGINE_CIVILIAN_D: EngineModule = {
   id: 'engine_1d',
   name: 'Двигатель 1D «Гражданский»',
   kind: 'engine',
@@ -97,7 +97,7 @@ export const ENGINE_CIVILIAN_D: EngineModule = {
 
 // «Стандарт» — рабочая лошадка. 2B поверх стокового 2C: больше тяги, но и массы,
 // и цены. Прямой, честный шаг вверх без фокусов, за него платят и тонной, и кредитами.
-export const ENGINE_STANDARD_B: EngineModule = {
+const ENGINE_STANDARD_B: EngineModule = {
   id: 'engine_2b',
   name: 'Двигатель 2B «Стандарт»',
   kind: 'engine',
@@ -116,7 +116,7 @@ export const ENGINE_STANDARD_B: EngineModule = {
 // «Стриж» — лёгкая дорогая линия. Тяги в ней НЕ больше, чем у соседей по классу,
 // но масса меньше — а ускорение это тяга/масса, значит разгон и разворот выигрывают.
 // Расплата ровно одна и крупная: цена. Лёгкое и резвое всегда стоит дорого.
-export const ENGINE_SWIFT: EngineModule = {
+const ENGINE_SWIFT: EngineModule = {
   id: 'engine_2a',
   name: 'Двигатель 2A «Стриж»',
   kind: 'engine',
@@ -132,7 +132,7 @@ export const ENGINE_SWIFT: EngineModule = {
   energyRegen: 8,
 }
 
-export const ENGINE_SWIFT_B: EngineModule = {
+const ENGINE_SWIFT_B: EngineModule = {
   id: 'engine_3b',
   name: 'Двигатель 3B «Стриж»',
   kind: 'engine',
@@ -153,7 +153,7 @@ export const ENGINE_SWIFT_B: EngineModule = {
 // «Военный» — предельная тяга, тяжёлая и дорогая. 3C — входной военный: сырой тяги
 // в нём меньше, чем в топовом 3A, зато и цена, и масса ниже. Внутри линии старший
 // грейд и тяжелее, и мощнее, и дороже — тяга не бывает бесплатной.
-export const ENGINE_MILITARY_C: EngineModule = {
+const ENGINE_MILITARY_C: EngineModule = {
   id: 'engine_3c',
   name: 'Двигатель 3C «Военный»',
   kind: 'engine',
@@ -222,7 +222,7 @@ export const RCS_MILITARY: ThrusterModule = {
 
 // «Гражданский» — бюджет. 1D сильнее вольного 1E по моменту, но тяжелее и уже за
 // деньги: первый шаг к сносному развороту для того, кто ещё не накопил на класс 2.
-export const RCS_CIVILIAN_D: ThrusterModule = {
+const RCS_CIVILIAN_D: ThrusterModule = {
   id: 'rcs_1d',
   name: 'Маневровые 1D «Гражданский»',
   kind: 'thrusters',
@@ -237,7 +237,7 @@ export const RCS_CIVILIAN_D: ThrusterModule = {
 }
 
 // «Стандарт» — рабочая лошадка. 2B поверх 2C: момент выше, но и масса, и цена.
-export const RCS_STANDARD_B: ThrusterModule = {
+const RCS_STANDARD_B: ThrusterModule = {
   id: 'rcs_2b',
   name: 'Маневровые 2B «Стандарт»',
   kind: 'thrusters',
@@ -255,7 +255,7 @@ export const RCS_STANDARD_B: ThrusterModule = {
 // МЕНЬШЕЙ массе — а угловое ускорение это момент/инерция, значит нос ходит резче.
 // Лимит угловой скорости всё равно ниже военного потолка: перекрутить игрока
 // нельзя ничем, иначе свалка перестанет разрешаться. Платят за «Вихрь» ценой.
-export const RCS_VORTEX: ThrusterModule = {
+const RCS_VORTEX: ThrusterModule = {
   id: 'rcs_2a',
   name: 'Маневровые 2A «Вихрь»',
   kind: 'thrusters',
@@ -269,7 +269,7 @@ export const RCS_VORTEX: ThrusterModule = {
   angDamp: 2.1,
 }
 
-export const RCS_VORTEX_B: ThrusterModule = {
+const RCS_VORTEX_B: ThrusterModule = {
   id: 'rcs_3b',
   name: 'Маневровые 3B «Вихрь»',
   kind: 'thrusters',
@@ -286,7 +286,7 @@ export const RCS_VORTEX_B: ThrusterModule = {
 
 // «Военные» — предельный момент, тяжёлые и дорогие. 3C — входной: слабее топового
 // 3A и по моменту, и по лимитам, зато легче и вдвое дешевле. Старший грейд тяжелее.
-export const RCS_MILITARY_C: ThrusterModule = {
+const RCS_MILITARY_C: ThrusterModule = {
   id: 'rcs_3c',
   name: 'Маневровые 3C «Военные»',
   kind: 'thrusters',
@@ -344,7 +344,7 @@ export const SHIELD_HEAVY: ShieldModule = {
 
 // Бюджетная линия щитов. 1D сильнее вольного 1E, но тяжелее и уже за деньги —
 // первый доступный шаг, пока не по карману класс 2.
-export const SHIELD_LIGHT_D: ShieldModule = {
+const SHIELD_LIGHT_D: ShieldModule = {
   id: 'shield_1d',
   name: 'Щит 1D',
   kind: 'shield',
@@ -358,7 +358,7 @@ export const SHIELD_LIGHT_D: ShieldModule = {
 }
 
 // «Стандарт» — рабочая лошадка. 2B поверх 2C: больше ёмкости, но и массы, и цены.
-export const SHIELD_STANDARD_B: ShieldModule = {
+const SHIELD_STANDARD_B: ShieldModule = {
   id: 'shield_2b',
   name: 'Щит 2B',
   kind: 'shield',
@@ -374,7 +374,7 @@ export const SHIELD_STANDARD_B: ShieldModule = {
 // «Мираж» — лёгкий, быстро восстанавливающийся, дорогой. Сырой ёмкости в нём НЕ
 // больше, чем у соседа по классу, но регенерация выше, пауза короче, а масса мала:
 // щит стычки, который отходит между заходами. Платят за это ценой, не защитой.
-export const SHIELD_MIRAGE: ShieldModule = {
+const SHIELD_MIRAGE: ShieldModule = {
   id: 'shield_2a',
   name: 'Щит 2A «Мираж»',
   kind: 'shield',
@@ -387,7 +387,7 @@ export const SHIELD_MIRAGE: ShieldModule = {
   regenDelay: 3.0,
 }
 
-export const SHIELD_MIRAGE_B: ShieldModule = {
+const SHIELD_MIRAGE_B: ShieldModule = {
   id: 'shield_3b',
   name: 'Щит 3B «Мираж»',
   kind: 'shield',
@@ -402,7 +402,7 @@ export const SHIELD_MIRAGE_B: ShieldModule = {
 
 // «Бастион» — тяжёлая ёмкая стена. 3C — входной: ёмкости меньше топового 3A, зато
 // легче и дешевле. Старший грейд и тяжелее, и ёмче, и дороже — защита не даром.
-export const SHIELD_HEAVY_C: ShieldModule = {
+const SHIELD_HEAVY_C: ShieldModule = {
   id: 'shield_3c',
   name: 'Щит 3C «Бастион»',
   kind: 'shield',
@@ -442,7 +442,7 @@ export const ARMOUR_COMPOSITE: ArmourModule = {
 // «Сталь» — дешёвый мясистый прокат: прочности за кредит много, но масса зверская.
 // «Бронеплиты» выше — её младший грейд. 2D и 3C дают корпуса больше композита за
 // меньшие деньги, и вся разница уходит в тонны — а тонны это потерянный манёвр.
-export const ARMOUR_STEEL_2: ArmourModule = {
+const ARMOUR_STEEL_2: ArmourModule = {
   id: 'armour_2d',
   name: 'Броня 2D «Сталь»',
   kind: 'armour',
@@ -466,7 +466,7 @@ export const ARMOUR_STEEL_3: ArmourModule = {
 
 // «Композит» — сбалансированная середина. 2B поверх стокового композита: чуть
 // больше корпуса за чуть больше массы и цены. Ни легковес, ни мясо — ровно между.
-export const ARMOUR_COMPOSITE_B: ArmourModule = {
+const ARMOUR_COMPOSITE_B: ArmourModule = {
   id: 'armour_2b',
   name: 'Броня 2B «Композит»',
   kind: 'armour',
@@ -479,7 +479,7 @@ export const ARMOUR_COMPOSITE_B: ArmourModule = {
 
 // «Керамет» — лёгкая дорогая линия. Прочности на тонну больше, чем у стали, но и
 // цена другая: корпус для тех, кому нельзя терять манёвр. Платят кредитами, не массой.
-export const ARMOUR_CERAMET_1: ArmourModule = {
+const ARMOUR_CERAMET_1: ArmourModule = {
   id: 'armour_1c',
   name: 'Броня 1C «Керамет»',
   kind: 'armour',
@@ -490,7 +490,7 @@ export const ARMOUR_CERAMET_1: ArmourModule = {
   hull: 140,
 }
 
-export const ARMOUR_CERAMET_2: ArmourModule = {
+const ARMOUR_CERAMET_2: ArmourModule = {
   id: 'armour_2a',
   name: 'Броня 2A «Керамет»',
   kind: 'armour',
@@ -501,7 +501,7 @@ export const ARMOUR_CERAMET_2: ArmourModule = {
   hull: 250,
 }
 
-export const ARMOUR_CERAMET_3: ArmourModule = {
+const ARMOUR_CERAMET_3: ArmourModule = {
   id: 'armour_3a',
   name: 'Броня 3A «Керамет»',
   kind: 'armour',
@@ -591,7 +591,7 @@ export const BURST_LASER: LaserModule = {
   heatCool: 0.26,
 }
 
-export const BEAM_LASER: LaserModule = {
+const BEAM_LASER: LaserModule = {
   id: 'beam_2',
   name: 'Лучевой лазер 2',
   kind: 'laser',
@@ -609,7 +609,7 @@ export const BEAM_LASER: LaserModule = {
 
 // «Импульсный» — холодная надёжная линия. 1A поверх вольного «Импульсного 1»:
 // урона чуть больше, тепла меньше, но уже за деньги. Всё ещё скромнее «Импульсного 2».
-export const PULSE_LASER_FINE: LaserModule = {
+const PULSE_LASER_FINE: LaserModule = {
   id: 'pulse_1a',
   name: 'Импульсный лазер 1A',
   kind: 'laser',
@@ -626,7 +626,7 @@ export const PULSE_LASER_FINE: LaserModule = {
 
 // «Лучевой» — большой урон за выстрел, горячий, дорогой, дальнобойный. 1-й — младший
 // лучевой на класс-1 слот: бьёт сильнее импульсных, но греется и стоит дороже них.
-export const BEAM_LASER_LIGHT: LaserModule = {
+const BEAM_LASER_LIGHT: LaserModule = {
   id: 'beam_1',
   name: 'Лучевой лазер 1',
   kind: 'laser',
@@ -662,7 +662,7 @@ export const BEAM_LASER_HEAVY: LaserModule = {
 
 // «Роторный» — брызжет очередью: урона за выстрел мало, но темп бешеный. Берёт числом
 // попаданий, а расплата двойная — короткая дальность и мгновенный перегрев. Дёшев.
-export const ROTARY_LASER: LaserModule = {
+const ROTARY_LASER: LaserModule = {
   id: 'rotary_1',
   name: 'Роторный лазер 1 «Овод»',
   kind: 'laser',
@@ -678,7 +678,7 @@ export const ROTARY_LASER: LaserModule = {
   heatCool: 0.3,
 }
 
-export const ROTARY_LASER_B: LaserModule = {
+const ROTARY_LASER_B: LaserModule = {
   id: 'rotary_2',
   name: 'Роторный лазер 2 «Шквал»',
   kind: 'laser',
@@ -696,7 +696,7 @@ export const ROTARY_LASER_B: LaserModule = {
 // «Плазменное» — снайперская линия: удар за выстрел огромный, перезаряд долгий,
 // дальность за три километра. Постоянного урона в секунду меньше, чем у лучевого, —
 // оно берёт альфа-ударом и дистанцией, а не потоком. Горячее и дорогое.
-export const PLASMA_GUN: LaserModule = {
+const PLASMA_GUN: LaserModule = {
   id: 'plasma_2',
   name: 'Плазменное орудие 2 «Гарпун»',
   kind: 'laser',
@@ -712,7 +712,7 @@ export const PLASMA_GUN: LaserModule = {
 }
 
 // Класс-3 вершина плазмы — витрина, как «Клинок»: под сегодняшние слоты не влезет.
-export const PLASMA_GUN_HEAVY: LaserModule = {
+const PLASMA_GUN_HEAVY: LaserModule = {
   id: 'plasma_3',
   name: 'Плазменное орудие 3 «Таран»',
   kind: 'laser',
@@ -773,7 +773,7 @@ export const MISSILE_PYLON: MissileModule = {
   lifetime: 12,
 }
 
-export const MISSILE_HOMING: MissileModule = {
+const MISSILE_HOMING: MissileModule = {
   id: 'missile_1',
   name: 'Ракета «Искатель»',
   kind: 'missile',
@@ -792,7 +792,7 @@ export const MISSILE_HOMING: MissileModule = {
   lifetime: 12,
 }
 
-export const MISSILE_HEAVY: MissileModule = {
+const MISSILE_HEAVY: MissileModule = {
   id: 'missile_2',
   name: 'Ракета «Молот»',
   kind: 'missile',
@@ -815,7 +815,7 @@ export const MISSILE_HEAVY: MissileModule = {
 // «Шершень» — прямая ударная линия на пилон: тяжёлая боевая часть, малый боезапас,
 // слабая головка — от неё уворачиваются. Дёшева. «Жало» — бюджетный младший грейд,
 // «Оса» — старший: боеголовка крупнее, но головка ещё хуже — большой заряд легче стряхнуть.
-export const MISSILE_STING: MissileModule = {
+const MISSILE_STING: MissileModule = {
   id: 'missile_pe',
   name: 'Ракета 1E «Жало»',
   kind: 'missile',
@@ -833,7 +833,7 @@ export const MISSILE_STING: MissileModule = {
   lifetime: 11,
 }
 
-export const MISSILE_WASP: MissileModule = {
+const MISSILE_WASP: MissileModule = {
   id: 'missile_pa',
   name: 'Ракета 1A «Оса»',
   kind: 'missile',
@@ -854,7 +854,7 @@ export const MISSILE_WASP: MissileModule = {
 // «Искатель» — рой самонаводящихся: много, урона в каждой мало, зато головка цепкая —
 // сорвать её тяжело. «Свора» — дешёвый младший грейд, «Гончая» — старший: цепче и злее,
 // но тяжелее и дороже. Прибавка стата оплачена массой и кредитами, не бесплатна.
-export const MISSILE_SWARM: MissileModule = {
+const MISSILE_SWARM: MissileModule = {
   id: 'missile_1e',
   name: 'Ракета 1E «Свора»',
   kind: 'missile',
@@ -872,7 +872,7 @@ export const MISSILE_SWARM: MissileModule = {
   lifetime: 12,
 }
 
-export const MISSILE_HOUND: MissileModule = {
+const MISSILE_HOUND: MissileModule = {
   id: 'missile_1b',
   name: 'Ракета 1B «Гончая»',
   kind: 'missile',
@@ -892,7 +892,7 @@ export const MISSILE_HOUND: MissileModule = {
 
 // «Молот» — тяжёлая осадная линия. «Кувалда» — старший грейд: боеголовка ещё крупнее,
 // но ракет меньше, планер инертнее, а головка едва обгоняет цель — сбить её легче всех.
-export const MISSILE_SLEDGE: MissileModule = {
+const MISSILE_SLEDGE: MissileModule = {
   id: 'missile_2a',
   name: 'Ракета 2A «Кувалда»',
   kind: 'missile',
@@ -934,7 +934,7 @@ export const CARGO_SMALL: CargoModule = {
   capacity: 4,
 }
 
-export const CARGO_MEDIUM: CargoModule = {
+const CARGO_MEDIUM: CargoModule = {
   id: 'cargo_2',
   name: 'Грузовой контейнер 2',
   kind: 'cargo',
@@ -961,7 +961,7 @@ export const CARGO_LARGE: CargoModule = {
 // «Композит» — лёгкая дорогая линия трюма. Вместимости на тонну больше стандартной, а
 // массы меньше: отсек для боевого торговца, которому нельзя терять манёвр под грузом.
 // Платят кредитами. Композитный держит почти столько же, что стоковый, вдвое легче.
-export const CARGO_COMPOSITE_1: CargoModule = {
+const CARGO_COMPOSITE_1: CargoModule = {
   id: 'cargo_1a',
   name: 'Грузовой отсек 1A «Композит»',
   kind: 'cargo',
@@ -972,7 +972,7 @@ export const CARGO_COMPOSITE_1: CargoModule = {
   capacity: 4,
 }
 
-export const CARGO_COMPOSITE_2: CargoModule = {
+const CARGO_COMPOSITE_2: CargoModule = {
   id: 'cargo_2a',
   name: 'Грузовой отсек 2A «Композит»',
   kind: 'cargo',
@@ -983,7 +983,7 @@ export const CARGO_COMPOSITE_2: CargoModule = {
   capacity: 7,
 }
 
-export const CARGO_COMPOSITE_3: CargoModule = {
+const CARGO_COMPOSITE_3: CargoModule = {
   id: 'cargo_3a',
   name: 'Грузовой отсек 3A «Композит»',
   kind: 'cargo',
@@ -996,7 +996,7 @@ export const CARGO_COMPOSITE_3: CargoModule = {
 
 // «Балкер» — дешёвый мясистый трюм: тонн за кредит больше всех, но масса зверская.
 // Отсек для баржи, которой манёвр и так не нужен, а на боевом корпусе он гиря.
-export const CARGO_BULK_2: CargoModule = {
+const CARGO_BULK_2: CargoModule = {
   id: 'cargo_2h',
   name: 'Грузовой трюм 2E «Балкер»',
   kind: 'cargo',
@@ -1007,7 +1007,7 @@ export const CARGO_BULK_2: CargoModule = {
   capacity: 14,
 }
 
-export const CARGO_BULK_3: CargoModule = {
+const CARGO_BULK_3: CargoModule = {
   id: 'cargo_3h',
   name: 'Грузовой трюм 3E «Балкер»',
   kind: 'cargo',
@@ -1040,7 +1040,7 @@ export const HYPERDRIVE_BASIC: HyperdriveModule = {
   jumpRange: GALAXY.BASE_JUMP_RANGE,
 }
 
-export const HYPERDRIVE_LONG: HyperdriveModule = {
+const HYPERDRIVE_LONG: HyperdriveModule = {
   id: 'hyper_2',
   name: 'Гиперпривод 2C «Меридиан»',
   kind: 'hyperdrive',
@@ -1077,7 +1077,7 @@ export const HYPERDRIVE_COMPACT: HyperdriveModule = {
   jumpRange: 28,
 }
 
-export const HYPERDRIVE_COMPACT_B: HyperdriveModule = {
+const HYPERDRIVE_COMPACT_B: HyperdriveModule = {
   id: 'hyper_2a',
   name: 'Гиперпривод 2A «Стриж»',
   kind: 'hyperdrive',
@@ -1091,7 +1091,7 @@ export const HYPERDRIVE_COMPACT_B: HyperdriveModule = {
 // «Тягач» — дешёвый тяжёлый привод. Дальность почти как у дорогих собратьев за
 // малые деньги, но масса огромна. Для баржи это идеал: разворот ей и так не нужен,
 // а на боевом корпусе такой привод — гиря, съедающая манёвр целиком.
-export const HYPERDRIVE_HAULER: HyperdriveModule = {
+const HYPERDRIVE_HAULER: HyperdriveModule = {
   id: 'hyper_2h',
   name: 'Гиперпривод 2E «Тягач»',
   kind: 'hyperdrive',
@@ -1102,7 +1102,7 @@ export const HYPERDRIVE_HAULER: HyperdriveModule = {
   jumpRange: 45,
 }
 
-export const HYPERDRIVE_HAULER_B: HyperdriveModule = {
+const HYPERDRIVE_HAULER_B: HyperdriveModule = {
   id: 'hyper_3h',
   name: 'Гиперпривод 3E «Тягач»',
   kind: 'hyperdrive',
@@ -1159,7 +1159,7 @@ export const DRONE_BAY: DroneModule = {
 
 // «Звено» — бюджетный контейнер: три аппарата, короткий срок жизни. Дешёвый способ
 // заставить пирата вертеться, если на полноценный «Рой» ещё не хватает.
-export const DRONE_BAY_LIGHT: DroneModule = {
+const DRONE_BAY_LIGHT: DroneModule = {
   id: 'drone_bay_e',
   name: 'Контейнер БПЛА «Звено»',
   kind: 'drone',
@@ -1174,7 +1174,7 @@ export const DRONE_BAY_LIGHT: DroneModule = {
 
 // «Легион» — крупный класс-2 контейнер: шесть аппаратов, дольше в воздухе, до пяти
 // сразу. Больше отвлекающего роя за большую массу и цену — тот же размен, что везде.
-export const DRONE_BAY_HEAVY: DroneModule = {
+const DRONE_BAY_HEAVY: DroneModule = {
   id: 'drone_bay_a',
   name: 'Контейнер БПЛА «Легион»',
   kind: 'drone',
@@ -1212,7 +1212,7 @@ export const CLOAK_FIELD: CloakModule = {
 
 // «Дымка» — бюджетное поле: дешевле «Вуали», но тяжелее и прожорливее. Расход 20
 // при том же реакторе даёт секунд восемь под полем — только-только разорвать контакт.
-export const CLOAK_HAZE: CloakModule = {
+const CLOAK_HAZE: CloakModule = {
   id: 'cloak_1e',
   name: 'Маскировочное поле «Дымка»',
   kind: 'cloak',
@@ -1225,7 +1225,7 @@ export const CLOAK_HAZE: CloakModule = {
 
 // «Морок» — премиальное поле: легче и экономичнее «Вуали», но втрое дороже. Меньший
 // расход растягивает невидимость секунд до двадцати. Лёгкое и мощное — значит дорогое.
-export const CLOAK_SPECTRE: CloakModule = {
+const CLOAK_SPECTRE: CloakModule = {
   id: 'cloak_2',
   name: 'Маскировочное поле «Морок»',
   kind: 'cloak',
@@ -1282,7 +1282,7 @@ export const BOMB_UNIT: BombModule = {
 }
 
 /** Топливный скуп: черпает вещество короны звезды (механика топлива — позже). */
-export const SCOOP_UNIT: ScoopModule = {
+const SCOOP_UNIT: ScoopModule = {
   id: 'scoop_1',
   name: 'Топливозаборник «Черпак»',
   kind: 'scoop',
