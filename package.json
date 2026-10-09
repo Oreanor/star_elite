@@ -10,8 +10,8 @@
   "scripts": {
     "dev": "npm run dev -w @elite/web",
     "build": "npm run build -w @elite/web",
-    "test": "npm run test -w @elite/sim",
-    "typecheck": "npm run typecheck -w @elite/sim"
+    "test": "npm run test -w @elite/sim && npm run test -w @elite/web",
+    "typecheck": "npm run typecheck -w @elite/sim && npm run typecheck -w @elite/web"
   },
   "devDependencies": {
     "playwright": "^1.61.1",
