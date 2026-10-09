@@ -3,6 +3,7 @@ import { WARP } from '../../config/ai'
 import { WARBASE } from '../../config/warbase'
 import { CONTACTS } from '../../config/contacts'
 import { PHYSICS } from '../../config/physics'
+import { TIME } from '../../config/time'
 import { raySphere } from '../../core/math'
 import { retain } from '../../core/list'
 import { BOMB, GUNNERY, SALVAGE } from '../../config/weapons'
@@ -128,7 +129,10 @@ export function stepWorld(world: World, frameDt: number, controllers: Controller
   if (world.docked) {
     world.originShift.set(0, 0, 0)
     const ticks = takeTicks(world, frameDt)
-    for (let i = 0; i < ticks; i++) stepDockTraffic(world, PHYSICS.FIXED_DT)
+    for (let i = 0; i < ticks; i++) {
+      advanceCalendar(world, PHYSICS.FIXED_DT)
+      stepDockTraffic(world, PHYSICS.FIXED_DT)
+    }
     return
   }
 
@@ -150,6 +154,22 @@ export function stepWorld(world: World, frameDt: number, controllers: Controller
     onTick?.(PHYSICS.FIXED_DT)
   }
   endTrailFrame(world)
+}
+
+/**
+ * Календарь мира идёт тактами (+dt), а не прыгает раз в кадр на показание часов: орбиты от
+ * него, и шаг орбит обязан быть шагом такта. От общих часов (`calendarClock`) он не уходит —
+ * малое расхождение гасится плавно, большое (пауза, вход) — сразу.
+ */
+function advanceCalendar(world: World, dt: number): void {
+  // Общих часов нет — календарю не от чего идти (см. `calendarClock`).
+  if (Number.isNaN(world.calendarClock)) return
+  const drift = world.calendarClock - world.calendarTime
+  if (Math.abs(drift) > TIME.SYNC_SNAP) {
+    world.calendarTime = world.calendarClock
+    return
+  }
+  world.calendarTime += dt + drift * Math.min(1, dt / TIME.SYNC_SLEW)
 }
 
 /**
@@ -182,6 +202,8 @@ function takeTicks(world: World, frameDt: number): number {
  * Один такт — одни часы на весь мир, поэтому ничего «раз в кадр» в домене нет.
  */
 function stepTick(world: World, controllers: ControllerMap, dt: number): void {
+  // Календарь — первым: орбиты в этом такте встают на его новое показание.
+  advanceCalendar(world, dt)
   // Выход из прыжка двигает корабли до всего остального: этот такт их уже видит на месте.
   stepWarpEmergence(world, dt)
   // Спутники расставляются ПЕРВЫМИ: и пилот, и столкновения, и крейсерский

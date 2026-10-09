@@ -198,6 +198,7 @@ export function commitPreparedJump(
   }
   destination.time = source.time
   destination.calendarTime = source.calendarTime
+  destination.calendarClock = source.calendarClock
   destination.epoch = source.epoch + 1
   destination.jumpTargetIndex = null
   destination.jumpArrivalPlanet = null

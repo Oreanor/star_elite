@@ -126,4 +126,33 @@ describe('показ между тактами', () => {
     // Перенос действительно был — иначе тест ничего не проверял.
     expect(carried).toBeGreaterThan(1)
   })
+
+  /**
+   * Регрессия: календарь (а от него — орбиты) клиент ставил раз в кадр по реальным часам —
+   * вторые часы в симуляции, орбиты сдвигались рывком раз в кадр, мимо такта. Теперь
+   * календарь идёт тактами и лишь держится у общих часов; после паузы — догоняет сразу.
+   */
+  it('календарь идёт тактами и держится у общих часов', () => {
+    const world = quietWorld()
+    world.calendarClock = 1000
+    stepWorld(world, PHYSICS.FIXED_DT, new Map())
+    // Первое показание — прыжок сразу: расхождение огромное.
+    expect(world.calendarTime).toBeCloseTo(1000, 6)
+
+    const frame = 1 / 144
+    for (let i = 0; i < 1440; i++) {
+      world.calendarClock += frame
+      const before = world.calendarTime
+      stepWorld(world, frame, new Map())
+      // В кадре без такта календарь стоит: он идёт тактами, а не кадрами.
+      if (world.time === 0) continue
+      expect(world.calendarTime).toBeGreaterThanOrEqual(before)
+    }
+    expect(Math.abs(world.calendarClock - world.calendarTime)).toBeLessThan(0.05)
+
+    // Пауза: общие часы ушли на минуту — календарь догоняет сразу, а не ползёт.
+    world.calendarClock += 60
+    stepWorld(world, PHYSICS.FIXED_DT, new Map())
+    expect(Math.abs(world.calendarClock - world.calendarTime)).toBeLessThan(0.05)
+  })
 })

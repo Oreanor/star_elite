@@ -241,7 +241,8 @@ export function Simulation() {
 
   useFrame((_, dt) => {
     const { world, controllers, intent } = session
-    world.calendarTime = gameTimeSec()
+    // Показание общих часов; календарь мира идёт тактами и лишь подтягивается к нему.
+    world.calendarClock = gameTimeSec()
 
     /**
      * Кадр начинается с «мир стоит». Любой ранний выход ниже — гибель, док, карта,

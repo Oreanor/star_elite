@@ -779,6 +779,8 @@ export function createWorld(def: SystemDef = STARTER_SYSTEM, profile?: PilotProf
   const world: World = {
     time: 0,
     calendarTime: 0,
+    // Общих часов ещё нет (тест, сервер до синхронизации): календарь стоит, орбиты тоже.
+    calendarClock: Number.NaN,
     player,
     ships,
     asteroids: makeAsteroids(rng, ids, def),

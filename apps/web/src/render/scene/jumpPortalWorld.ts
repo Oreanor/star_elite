@@ -87,6 +87,7 @@ export function prepareJumpPortalWorld(source: Session): PreparedJumpWorld {
   const layoutWorld = createWorld()
   layoutWorld.galaxySeed = sourceWorld.galaxySeed
   layoutWorld.calendarTime = sourceWorld.calendarTime
+  layoutWorld.calendarClock = sourceWorld.calendarClock
   enterSystem(layoutWorld, def, destIndex, start)
   layoutWorld.time = sourceWorld.time
   applyPlayerSave(layoutWorld, {
@@ -177,6 +178,7 @@ function syncPreparedPlayer(source: Session, target: PreparedJumpWorld): void {
 export function syncPreparedJumpWorld(source: Session, target: PreparedJumpWorld, dt: number): void {
   const dstWorld = target.world
   dstWorld.calendarTime = source.world.calendarTime
+  dstWorld.calendarClock = source.world.calendarClock
   target.session.running = source.running
   syncPreparedPlayer(source, target)
 
