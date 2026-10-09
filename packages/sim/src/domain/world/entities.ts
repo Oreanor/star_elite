@@ -503,6 +503,8 @@ export interface WarBaseFixture {
    * доля живых), и один и тот же выстрел стоит одинаково у мелкой пушки и у крупной.
    */
   hitsLeft: number
+  /** Когда засчитано последнее попадание, с. Одновременные удары сливаются (`FIXTURE_HIT_MERGE`). */
+  lastHitAt: number
   alive: boolean
 }
 

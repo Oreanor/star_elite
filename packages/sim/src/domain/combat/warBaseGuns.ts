@@ -46,40 +46,53 @@ function shortestAngle(delta: number): number {
 }
 
 /**
+ * Радиаль детали и опорное направление ствола (`roll = 0`) в мировых осях → `_radial`, `_ref`.
+ * Радиаль учитывает спин базы: деталь крутится вместе с корпусом. Опора построена так же,
+ * как у рендера («вверх» детали кладётся на радиаль), — иначе домен целился бы не туда,
+ * куда нарисовано.
+ */
+function fixtureFrame(world: World, base: WarBaseEntity, fix: WarBaseFixture): void {
+  _spinQ.setFromAxisAngle(base.spinAxis, base.spin * world.time)
+  _radial.copy(fix.dir).applyQuaternion(_spinQ).normalize()
+  _align.setFromUnitVectors(_UP, _radial)
+  _ref.copy(_FWD).applyQuaternion(_align)
+}
+
+/**
+ * Мировое направление ствола ЭТОЙ детали — из её собственного `roll`, без доворота.
+ *
+ * Очередь доигрывается и после того, как цель ушла из зоны, и стрелять она обязана вдоль
+ * своего ствола. Общий на модуль вектор прицела хранил направление той турели, что
+ * доворачивалась последней, — и залп уходил по чужому стволу.
+ */
+function barrelDir(world: World, base: WarBaseEntity, fix: WarBaseFixture, out: Vector3): void {
+  fixtureFrame(world, base, fix)
+  out.copy(_ref).applyQuaternion(_spinQ.setFromAxisAngle(_radial, fix.roll))
+}
+
+/**
  * ДОВОРОТ ТУРЕЛИ к игроку. Крутится ВСЯ деталь вокруг своей радиали — то самое `roll`,
  * которым её и так разворачивает рендер: отдельной подвижной башни в модели нет, а тумба
  * у пушек круглая, и разница на глаз не читается.
  *
- * Возвращает мировое направление ствола ПОСЛЕ доворота. Скорость ограничена
- * (`TURRET_TURN_RATE`): турель ВЕДЁТ цель, а не прилипает к ней намертво — пролетая
- * вплотную, из-под ствола можно выскочить.
+ * Скорость ограничена (`TURRET_TURN_RATE`): турель ВЕДЁТ цель, а не прилипает к ней
+ * намертво — пролетая вплотную, из-под ствола можно выскочить.
  */
-function aimTurret(world: World, base: WarBaseEntity, fix: WarBaseFixture, dt: number, out: Vector3): void {
+function aimTurret(world: World, base: WarBaseEntity, fix: WarBaseFixture, dt: number): void {
   warBaseFixtureWorldPos(base, fix, world.time, _muzzle)
-
-  // Радиаль детали в мировых осях — с учётом спина базы: она крутится вместе с корпусом.
-  _spinQ.setFromAxisAngle(base.spinAxis, base.spin * world.time)
-  _radial.copy(fix.dir).applyQuaternion(_spinQ).normalize()
-
-  // Опорное направление ствола при `roll = 0`: то же построение, что у рендера («вверх»
-  // детали кладётся на радиаль). Иначе домен целился бы не туда, куда нарисовано.
-  _align.setFromUnitVectors(_UP, _radial)
-  _ref.copy(_FWD).applyQuaternion(_align)
+  fixtureFrame(world, base, fix)
 
   // Куда хотим смотреть: на игрока, спроецировав в касательную плоскость — вертеть турель
   // можно только вокруг радиали, вверх-вниз она не ходит.
   _toTarget.copy(world.player.state.pos).sub(_muzzle)
   _toTarget.addScaledVector(_radial, -_toTarget.dot(_radial))
-  if (_toTarget.lengthSq() > 1e-6) {
-    _toTarget.normalize()
-    _cross.crossVectors(_ref, _toTarget)
-    const wanted = Math.atan2(_cross.dot(_radial), _ref.dot(_toTarget))
-    const delta = shortestAngle(wanted - fix.roll)
-    const step = WARBASE.TURRET_TURN_RATE * dt
-    fix.roll += Math.abs(delta) <= step ? delta : Math.sign(delta) * step
-  }
-
-  out.copy(_ref).applyQuaternion(_spinQ.setFromAxisAngle(_radial, fix.roll))
+  if (_toTarget.lengthSq() <= 1e-6) return
+  _toTarget.normalize()
+  _cross.crossVectors(_ref, _toTarget)
+  const wanted = Math.atan2(_cross.dot(_radial), _ref.dot(_toTarget))
+  const delta = shortestAngle(wanted - fix.roll)
+  const step = WARBASE.TURRET_TURN_RATE * dt
+  fix.roll += Math.abs(delta) <= step ? delta : Math.sign(delta) * step
 }
 
 /** Стреляет ли деталь этого облика и сколькими импульсами. Нет в таблице — не орудие. */
@@ -140,12 +153,13 @@ export function stepWarBaseTurrets(world: World, dt: number): void {
 
       // Ствол ведёт цель, пока она в зоне, — и в перезаряде тоже: к следующей очереди
       // турель уже смотрит куда надо, а не начинает доворачиваться с нуля.
-      if (near && open) aimTurret(world, base, fix, dt, _aim)
+      if (near && open) aimTurret(world, base, fix, dt)
 
       // Очередь доигрывается всегда: начатый залп не обрывается тем, что цель ушла.
       if (fix.burstLeft > 0) {
         fix.shotIn -= dt
         if (fix.shotIn <= 0) {
+          barrelDir(world, base, fix, _aim)
           fireOne(world, base, fix, _aim)
           fix.burstLeft--
           fix.shotIn = WARBASE.TURRET_BURST_GAP

@@ -82,4 +82,43 @@ describe('турели военной базы', () => {
     expect(Math.abs(afterOne - first)).toBeLessThanOrEqual(WARBASE.TURRET_TURN_RATE * 0.05 + 1e-9)
     expect(fix.roll).not.toBe(first)
   })
+
+  /**
+   * Регрессия: прицел был ОДИН на модуль. Цель уходила посреди очереди, турель её больше не
+   * вела, а доигрывала залп по вектору той детали, что доворачивалась последней, — болты
+   * летели вдоль чужого ствола. Очередь обязана идти вдоль СВОЕГО ствола.
+   */
+  it('очередь, брошенная целью, идёт вдоль своего ствола, а не чужого', () => {
+    const world = withBase()
+    const base = world.warBases[0]!
+    const guns = base.fixtures.filter((f) => (WARBASE.TURRET_BURST[f.model] ?? 0) >= 2)
+    const at = (f: (typeof guns)[number]) => warBaseFixtureWorldPos(base, f, world.time, new Vector3())
+    // B раньше A в обходе и далеко от неё: B доворачивается ПЕРЕД тем, как A доигрывает очередь.
+    let pair: [typeof guns[number], typeof guns[number]] | null = null
+    for (let i = 0; i < guns.length && !pair; i++)
+      for (let j = i + 1; j < guns.length && !pair; j++)
+        if (at(guns[i]!).distanceTo(at(guns[j]!)) > WARBASE.TURRET_RANGE * 3) pair = [guns[i]!, guns[j]!]
+    expect(pair).not.toBeNull()
+    const [b, a] = pair!
+    // B направлен заведомо не туда, куда A.
+    b.roll = a.roll + Math.PI / 2
+    // A заряжена, B в перезаряде: её дело в этом тесте — только доворот.
+    a.cooldown = 0
+    b.cooldown = 1e3
+
+    world.player.state.pos.copy(at(a)).add(new Vector3(0, 0, WARBASE.TURRET_RANGE * 0.5))
+    // Первый вызов заряжает очередь, второй выпускает её первый импульс.
+    stepWarBaseTurrets(world, 0.05)
+    stepWarBaseTurrets(world, 0.01)
+    expect(world.bolts.length).toBe(1)
+    const first = world.bolts[0]!.vel.clone().normalize()
+
+    world.player.state.pos.copy(at(b)).add(new Vector3(0, 0, WARBASE.TURRET_RANGE * 0.5))
+    stepWarBaseTurrets(world, WARBASE.TURRET_BURST_GAP + 0.01)
+    expect(world.bolts.length).toBe(2)
+    const second = world.bolts[1]!.vel.clone().normalize()
+
+    // Ствол A не двигался — расхождение только от разброса, а не на четверть оборота.
+    expect(second.angleTo(first)).toBeLessThan(WARBASE.TURRET_SPREAD * 4)
+  })
 })

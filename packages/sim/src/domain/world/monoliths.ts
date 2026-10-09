@@ -35,7 +35,7 @@ function layoutFixtures(ids: World['ids'], radius: number, rng: Rng): WarBaseFix
   const out: WarBaseFixture[] = []
   const n = WARBASE.FIXTURES_MIN + Math.floor(rng() * (WARBASE.FIXTURES_MAX - WARBASE.FIXTURES_MIN + 1))
   const push = (model: number, dir: Vector3, size: number): void => {
-    out.push({ id: ids.next(), model, dir, size, roll: rng() * Math.PI * 2, cooldown: rng() * WARBASE.TURRET_COOLDOWN, burstLeft: 0, shotIn: 0, hitsLeft: WARBASE.FIXTURE_HITS, alive: true })
+    out.push({ id: ids.next(), model, dir, size, roll: rng() * Math.PI * 2, cooldown: rng() * WARBASE.TURRET_COOLDOWN, burstLeft: 0, shotIn: 0, hitsLeft: WARBASE.FIXTURE_HITS, lastHitAt: -Infinity, alive: true })
   }
   // ОБА полюса всегда прикрыты деталью. На полюсе equirect-карта стягивается в точку
   // («закрутка звёздочкой»), и башня/пушка маскируют этот артефакт — иначе на «макушке»

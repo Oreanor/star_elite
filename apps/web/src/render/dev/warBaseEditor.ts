@@ -82,6 +82,7 @@ function addFixture(world: World, base: WarBaseEntity): boolean {
     burstLeft: 0,
     shotIn: 0,
     hitsLeft: WARBASE.FIXTURE_HITS,
+    lastHitAt: -Infinity,
     alive: true,
   })
   return true

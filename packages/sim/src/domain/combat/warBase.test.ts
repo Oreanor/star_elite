@@ -21,9 +21,15 @@ function withBases(): ReturnType<typeof createWorld> {
   })
 }
 
-/** Сбить ОДНУ деталь: считаются попадания, и трёх точных хватает любой турели. */
+/**
+ * Сбить ОДНУ деталь: считаются попадания, и трёх точных хватает любой турели. Между ударами
+ * идёт время — одновременные сливаются в одно попадание.
+ */
 function knockOut(world: ReturnType<typeof createWorld>, base: (typeof world.warBases)[number], fix: (typeof base.fixtures)[number]): void {
-  for (let i = 0; i < WARBASE.FIXTURE_HITS; i++) damageWarBaseFixture(world, base, fix, 1)
+  for (let i = 0; i < WARBASE.FIXTURE_HITS; i++) {
+    damageWarBaseFixture(world, base, fix, 1)
+    world.time += WARBASE.FIXTURE_HIT_MERGE * 2
+  }
 }
 
 /** Снести базу — значит сбить ВСЕ её детали: своей прочности у корпуса нет. */
@@ -206,6 +212,25 @@ describe('отстрел деталей базы', () => {
 
     expect(base.fixtures.length).toBe(before)
     expect(base.fixtures.find((f) => f.id === fix.id)?.alive).toBe(false)
+  })
+
+  /**
+   * Регрессия: многодульный лазер и луч из нескольких сопел бьют в ОДНО мгновение, и каждый
+   * их болт считался отдельным попаданием — турель снималась единственным нажатием, а «три
+   * точных» теряли смысл. Удары одного мгновения — одно попадание; разнесённые во времени
+   * считаются все.
+   */
+  it('залп нескольких стволов в одно мгновение — одно попадание', () => {
+    const world = withBases()
+    const base = world.warBases[0]!
+    const fix = base.fixtures.find((f) => f.model !== 0)!
+
+    for (let i = 0; i < WARBASE.FIXTURE_HITS * 2; i++) damageWarBaseFixture(world, base, fix, 1)
+    expect(fix.alive).toBe(true)
+    expect(fix.hitsLeft).toBe(WARBASE.FIXTURE_HITS - 1)
+
+    knockOut(world, base, fix)
+    expect(fix.alive).toBe(false)
   })
 
   /**

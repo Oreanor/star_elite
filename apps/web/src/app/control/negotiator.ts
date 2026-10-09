@@ -23,7 +23,6 @@ const GROQ_DEFAULT_MODELS = [
   'openai/gpt-oss-120b',
   'moonshotai/kimi-k2-instruct',
   'qwen/qwen3-32b',
-  'gemma2-9b-it',
 ]
 
 const DEFAULT_MODELS = [

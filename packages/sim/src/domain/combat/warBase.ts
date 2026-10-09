@@ -110,9 +110,14 @@ export function damageWarBase(_world: World, _base: WarBaseEntity, _amount: numb
  * Отстрел ДЕТАЛИ. Считаются ПОПАДАНИЯ, а не урон: три точных снимают любую турель, каким
  * бы слабым ни был ствол. Гибнет она отдельной вспышкой в своей точке; сбитая последняя
  * забирает с собой базу — держаться ей больше не на чем.
+ *
+ * Удары одного мгновения — залп нескольких стволов, тик луча из нескольких сопел — это
+ * ОДНО попадание: иначе многодульный лазер снимал турель единственным нажатием.
  */
 export function damageWarBaseFixture(world: World, base: WarBaseEntity, fix: WarBaseFixture, _amount: number): void {
   if (!fix.alive || !base.alive) return
+  if (world.time - fix.lastHitAt < WARBASE.FIXTURE_HIT_MERGE) return
+  fix.lastHitAt = world.time
   fix.hitsLeft -= 1
   if (fix.hitsLeft > 0) return
   fix.alive = false
