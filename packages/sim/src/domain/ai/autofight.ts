@@ -5,6 +5,7 @@ import { findShip } from '../world/queries'
 import { findWarBaseFixture, warBaseFixtureWorldPos } from '../world/warBase'
 import type { World } from '../world/entities'
 import { createAIState } from './types'
+import { lockedShipId, lockedPodId, lockedAsteroidId, lockedFixtureId } from '../world/queries'
 
 /**
  * Автобой. Пилот-бот садится за штурвал ИГРОКА и дерётся с захваченной целью.
@@ -42,8 +43,8 @@ export function engageAutofight(world: World): boolean {
   // из старого Tab — иначе снова путаница «куда жму».
   if (world.targetFocus !== 'contact') return false
 
-  if (world.lockedPodId !== null) {
-    const pod = world.pods.find((p) => p.id === world.lockedPodId && p.alive)
+  if (lockedPodId(world) !== null) {
+    const pod = world.pods.find((p) => p.id === lockedPodId(world) && p.alive)
     if (!pod) return false
     const ai = createAIState(player.state.pos, world.rng)
     ai.orderedSoft = { kind: 'pod', id: pod.id }
@@ -52,8 +53,8 @@ export function engageAutofight(world: World): boolean {
     return true
   }
 
-  if (world.lockedAsteroidId !== null) {
-    const rock = world.asteroids.find((a) => a.id === world.lockedAsteroidId && a.alive)
+  if (lockedAsteroidId(world) !== null) {
+    const rock = world.asteroids.find((a) => a.id === lockedAsteroidId(world) && a.alive)
     if (!rock) return false
     const ai = createAIState(player.state.pos, world.rng)
     ai.orderedSoft = { kind: 'asteroid', id: rock.id }
@@ -62,8 +63,8 @@ export function engageAutofight(world: World): boolean {
     return true
   }
 
-  if (world.lockedFixtureId !== null) {
-    const found = findWarBaseFixture(world.warBases, world.lockedFixtureId)
+  if (lockedFixtureId(world) !== null) {
+    const found = findWarBaseFixture(world.warBases, lockedFixtureId(world))
     if (!found) return false
     const ai = createAIState(player.state.pos, world.rng)
     ai.orderedSoft = { kind: 'fixture', id: found.fixture.id }
@@ -72,7 +73,7 @@ export function engageAutofight(world: World): boolean {
     return true
   }
 
-  const target = findShip(world, world.lockedTargetId)
+  const target = findShip(world, lockedShipId(world))
   if (!target || !target.alive || !isEngageable(target)) return false
 
   const ai = createAIState(player.state.pos, world.rng)

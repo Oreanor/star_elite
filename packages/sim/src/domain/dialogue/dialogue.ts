@@ -7,6 +7,7 @@ import { jettisonCargo, jettisonWeapons } from '../combat/salvage'
 import type { Relationship } from '../world/acquaintance'
 import type { ShipEntity, World } from '../world/entities'
 import type { Persona } from '../world/persona'
+import { lockedShipId } from '../world/queries'
 
 /**
  * Разговор с захваченным кораблём.
@@ -44,7 +45,7 @@ export interface Reply {
  * говоришь. Так и с боевым противником на разлёте, и со знакомым из вкладки «Люди».
  */
 export function interlocutor(world: World): ShipEntity | null {
-  const id = world.lockedTargetId
+  const id = lockedShipId(world)
   if (id === null) return null
 
   const ship = world.ships.find((s) => s.id === id)

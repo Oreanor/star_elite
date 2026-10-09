@@ -9,6 +9,7 @@ import { DEFAULT_PERSONA } from '../world/persona'
 import { createWorld, STARTER_SYSTEM, type World } from '../world'
 import type { ShipEntity } from '../world/entities'
 import { applyOutcome, applySocial, escortFee, interlocutor, linesFor, moodTo, say } from './dialogue'
+import { lockContact } from '../world/queries'
 
 /**
  * Разговор — правило, а не окно. Всё проверяется без браузера: если для теста
@@ -28,7 +29,7 @@ function withShip(faction: 'hostile' | 'neutral'): { world: World; other: ShipEn
   other.persona = { ...DEFAULT_PERSONA }
   world.player.state.pos.set(0, 0, 0)
   other.state.pos.set(0, 0, -200)
-  world.lockedTargetId = other.id
+  lockContact(world, 'ship', other.id)
   return { world, other }
 }
 
@@ -42,11 +43,11 @@ describe('разговор', () => {
     const { world, other } = withShip('hostile')
     expect(interlocutor(world)?.id).toBe(other.id)
 
-    world.lockedTargetId = null
+    lockContact(world, 'ship', null)
     expect(interlocutor(world)).toBeNull()
 
     // Далеко — не помеха: захватил и говоришь, хоть за полсистемы.
-    world.lockedTargetId = other.id
+    lockContact(world, 'ship', other.id)
     other.state.pos.set(0, 0, -(DIALOGUE.RANGE + 5000))
     expect(interlocutor(world)?.id).toBe(other.id)
 

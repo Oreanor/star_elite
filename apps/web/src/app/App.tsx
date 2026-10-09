@@ -577,7 +577,7 @@ function Shell({ onRestart }: { onRestart: () => void }) {
       if (e.code === 'KeyT') {
         if (docked || tab !== null || talking || chatWith || dispatching) return
         // Захвачена СТАНЦИЯ — T вызывает её диспетчера (свой оверлей). Проверяем первой:
-        // при захвате станции `lockedTargetId` пуст, так что с бортами это не конфликтует.
+        // станция на связи — это нав-цель, а не контакт, так что с бортами это не конфликтует.
         if (stationInterlocutor(session.world)) {
           setDispatching(true)
           releaseLock()

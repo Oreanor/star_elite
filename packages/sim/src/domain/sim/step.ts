@@ -75,7 +75,7 @@ import {
   MONOLITH_NAMES,
   pruneGiantScaleLocks,
 } from '../world/queries'
-import { findWarBaseFixture, warBaseFixtureWorldPos } from '../world/warBase'
+import { warBaseFixtureWorldPos } from '../world/warBase'
 import { stepOrbits } from '../world/orbits'
 import { maybeShiftOrigin } from '../world/origin'
 import { beginTrailTick, endTrailFrame, snapMovedTrails } from '../world/poseTrail'
@@ -86,6 +86,7 @@ import { stepTitans } from '../world/titans'
 import { stepPlatforms } from '../world/platforms'
 import { stepGrievances } from '../combat/grievance'
 import { NULL_CONTROLLER, type Controller, type ControllerMap } from './controller'
+import { contactExists, lockedAsteroidId, lockedShipId } from '../world/queries'
 
 /**
  * Шаг мира. Симуляция не знает, кто управляет кораблём: она спрашивает Controller.
@@ -361,7 +362,7 @@ function stepWeapons(world: World, helm: Helm, dt: number): void {
       // Камень — цель, если борта в захвате нет: ракета дробит его как бомба.
       const target =
         ship === world.player
-          ? (world.lockedTargetId ?? world.lockedAsteroidId)
+          ? (lockedShipId(world) ?? lockedAsteroidId(world))
           : world.player.id
       if (!fireMissile(world, ship, target)) launchDrone(world, ship)
     }
@@ -762,22 +763,9 @@ function cleanup(world: World): void {
 
   expirePods(world)
 
-  // Захваченная цель могла погибнуть — снимаем захват, а не показываем рамку в пустоте.
-  if (world.lockedTargetId !== null && !world.ships.some((s) => s.id === world.lockedTargetId && s.alive)) {
-    world.lockedTargetId = null
-  }
-  // Захваченный обломок мог быть подобран или истечь (expirePods выше) — тоже снимаем.
-  if (world.lockedPodId !== null && !world.pods.some((p) => p.id === world.lockedPodId && p.alive)) {
-    world.lockedPodId = null
-  }
-  if (world.lockedAsteroidId !== null && !world.asteroids.some((a) => a.id === world.lockedAsteroidId && a.alive)) {
-    world.lockedAsteroidId = null
-  }
-  // Отстреленная деталь базы (или снесённая вместе с базой) — захват снимаем, как у камня:
-  // рамка на том, чего уже нет, врёт прибору.
-  if (world.lockedFixtureId !== null && !findWarBaseFixture(world.warBases, world.lockedFixtureId)) {
-    world.lockedFixtureId = null
-  }
+  // Захваченное могло погибнуть, быть подобрано, истечь (expirePods выше) или быть
+  // отстреленным — снимаем захват, а не показываем рамку в пустоте.
+  if (world.contactLock !== null && !contactExists(world, world.contactLock)) world.contactLock = null
   // Нав-цель могла быть глыбой двора / гигантом пояса / статуэткой — снимаем, если её нет.
   if (world.navTargetId !== null) {
     const id = world.navTargetId
@@ -789,7 +777,6 @@ function cleanup(world: World): void {
       world.asteroids.some((a) => a.id === id && a.alive)
     if (!stillThere) {
       world.navTargetId = null
-      world.lockedStationId = null
     }
   }
   // Миелофон: корабли с PHASE_END, планеты/станции с GHOST_BODY — цели снимаем.

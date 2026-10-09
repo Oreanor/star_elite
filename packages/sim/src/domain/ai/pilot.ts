@@ -18,6 +18,7 @@ import { isHostileTo, selectTarget } from './targeting'
 import { stepTasks } from './tasks'
 import { advanceContactPlan, acquaintanceOf, flyContactPlan } from '../world/plan'
 import type { AIMode, AIState } from './types'
+import { lockedShipId } from '../world/queries'
 
 /**
  * Пилот-бот. Реализует тот же `Controller`, что и игрок: заполняет ShipControls
@@ -374,7 +375,7 @@ function followEscort(e: ShipEntity, world: World): void {
   // и остаётся позади, стоило игроку тронуться с места.
   ai.home.copy(patron.state.pos)
 
-  const wanted = patron === world.player ? world.lockedTargetId : (patron.ai?.targetId ?? null)
+  const wanted = patron === world.player ? lockedShipId(world) : (patron.ai?.targetId ?? null)
   const enemy = wanted === null ? null : world.ships.find((s) => s.id === wanted)
   // Мирного по приказу не бьют — наёмник не убийца по найму, — а невидимку
   // и стыкующегося просто не берут на прицел.

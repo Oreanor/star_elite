@@ -311,8 +311,6 @@ export function SystemMap({
       clearContactLock(world)
       world.navTargetId = id
       world.targetFocus = 'nav'
-      const body = world.bodies.find((b) => b.id === id)
-      world.lockedStationId = body?.kind === 'station' ? id : null
     }
     bump((n) => n + 1)
   }

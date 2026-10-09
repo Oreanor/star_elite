@@ -699,10 +699,7 @@ export function enterSystem(
   placeMonoliths(world)
   placeWarBases(world, def)
   placeFigurines(world)
-  world.lockedTargetId = null
-  world.lockedPodId = null
-  world.lockedAsteroidId = null
-  world.lockedFixtureId = null
+  world.contactLock = null
   world.navTargetId = world.bodies.find((b) => b.kind === 'station')?.id ?? null
   world.targetFocus = 'nav'
   // Прибыли — выбранная для прыжка система достигнута, метку и точку выхода снимаем.
@@ -809,11 +806,7 @@ export function createWorld(def: SystemDef = STARTER_SYSTEM, profile?: PilotProf
     dockArmed: true,
     dockOccupantId: null,
     berthRevision: 0,
-    lockedTargetId: null,
-    lockedStationId: null,
-    lockedPodId: null,
-    lockedAsteroidId: null,
-    lockedFixtureId: null,
+    contactLock: null,
     navTargetId: station?.id ?? null,
     targetFocus: 'nav',
     contactCycleAt: -1e9,

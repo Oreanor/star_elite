@@ -3,9 +3,9 @@ import { MIELOPHONE } from '../../config/mielophone'
 import { ASTEROID } from '../../config/world'
 import { isVisible } from '../combat/cloak'
 import { shipAxes } from '../flight/axes'
-import type { AsteroidEntity, BodyEntity, ShipEntity, World } from './entities'
+import type { AsteroidEntity, BodyEntity, ContactKind, ContactLock, ShipEntity, World } from './entities'
 import { figurineDisplayName } from './figurines'
-import { warBaseFixtureWorldPos } from './warBase'
+import { findWarBaseFixture, warBaseFixtureWorldPos } from './warBase'
 
 /** Горячий путь: запросы зовутся из кадра HUD, аллокации там недопустимы. */
 const _toPlayer = new Vector3()
@@ -122,8 +122,6 @@ function byFacingThenNear(a: { facing: number; d2: number }, b: { facing: number
 const ASTEROID_LOCK_RANGE = 4_000
 const ASTEROID_LOCK_RANGE_SQ = ASTEROID_LOCK_RANGE * ASTEROID_LOCK_RANGE
 
-type ContactKind = 'ship' | 'pod' | 'asteroid' | 'fixture'
-
 interface ContactCandidate {
   id: number
   kind: ContactKind
@@ -167,51 +165,88 @@ function contactCandidates(world: World): ContactCandidate[] {
   return cands
 }
 
-/** Положить выбор круга в СВОЁ поле: остальные гасятся, захват всегда один. */
+/** Положить выбор круга в захват. Захват один по построению: новое вытесняет старое. */
 function setContactLock(world: World, next: ContactCandidate): void {
-  world.lockedTargetId = next.kind === 'ship' ? next.id : null
-  world.lockedPodId = next.kind === 'pod' ? next.id : null
-  world.lockedAsteroidId = next.kind === 'asteroid' ? next.id : null
-  world.lockedFixtureId = next.kind === 'fixture' ? next.id : null
+  world.contactLock = { kind: next.kind, id: next.id }
+}
+
+/**
+ * Взять контакт вида `kind` (или снять, если `id` — null). Снимается только захват ЭТОГО
+ * вида: «отпустить камень» не должно ронять захваченный борт.
+ */
+export function lockContact(world: World, kind: ContactKind, id: number | null): void {
+  if (id !== null) world.contactLock = { kind, id }
+  else if (world.contactLock?.kind === kind) world.contactLock = null
+}
+
+/** Существует ли ещё то, что держит захват: живой борт, целый обломок, камень, деталь. */
+export function contactExists(world: World, lock: ContactLock): boolean {
+  const id = lock.id
+  switch (lock.kind) {
+    case 'ship':
+      return world.ships.some((s) => s.id === id && s.alive)
+    case 'pod':
+      return world.pods.some((p) => p.id === id && p.alive)
+    case 'asteroid':
+      return world.asteroids.some((a) => a.id === id && a.alive)
+    case 'fixture':
+      return findWarBaseFixture(world.warBases, id) !== null
+  }
+}
+
+/** Id захваченного контакта вида `kind`, или null. */
+function lockedOf(world: World, kind: ContactKind): number | null {
+  const lock = world.contactLock
+  return lock !== null && lock.kind === kind ? lock.id : null
+}
+
+/** Захваченный БОРТ — цель боя (ракеты, автобой, связь). Обломок или камень сюда не попадают. */
+export const lockedShipId = (world: World): number | null => lockedOf(world, 'ship')
+export const lockedPodId = (world: World): number | null => lockedOf(world, 'pod')
+export const lockedAsteroidId = (world: World): number | null => lockedOf(world, 'asteroid')
+export const lockedFixtureId = (world: World): number | null => lockedOf(world, 'fixture')
+
+/**
+ * Станция на связи (T → диспетчер) — это нав-цель, если та станция. Выводится, а не
+ * хранится: отдельное поле приходилось держать в согласии с `navTargetId` в шести местах.
+ */
+export function lockedStationId(world: World): number | null {
+  const id = world.navTargetId
+  if (id === null) return null
+  return world.bodies.some((b) => b.id === id && b.kind === 'station') ? id : null
 }
 
 /**
  * Взять БОРТ целью помимо круга: «связаться», «навести» из вкладки ЛЮДИ, ответить на вызов.
  *
- * Отдельная функция, потому что раньше это делали руками в трёх местах приложения: три
- * копии «обнули четыре поля, положи id в пятое». Инвариант «захват ровно один» держался
- * дисциплиной, и первое же новое поле (деталь базы) осталось бы висеть во всех трёх.
+ * Отдельная функция: взять борт — это ещё и снять нав-цель и перевести фокус на контакт.
+ * Три места приложения делали это руками и расходились.
  */
 export function lockShipContact(world: World, shipId: number): void {
   clearNavLock(world)
-  clearContactLock(world)
-  world.lockedTargetId = shipId
+  world.contactLock = { kind: 'ship', id: shipId }
   world.targetFocus = 'contact'
 }
 
-/** Что сейчас держит контактный круг — по любому из его полей. */
+/** Что сейчас держит контактный круг. */
 export function lockedContactId(world: World): number | null {
-  return world.lockedPodId ?? world.lockedAsteroidId ?? world.lockedFixtureId ?? world.lockedTargetId
+  return world.contactLock?.id ?? null
 }
 
 /** Снять контактный захват (борт / обломок / камень / деталь базы). */
 export function clearContactLock(world: World): void {
-  world.lockedTargetId = null
-  world.lockedPodId = null
-  world.lockedAsteroidId = null
-  world.lockedFixtureId = null
+  world.contactLock = null
 }
 
-/** Снять нав-захват (тело / статуя + связь со станцией). */
+/** Снять нав-захват (тело / статуя; станция на связи уходит вместе с ним). */
 export function clearNavLock(world: World): void {
   world.navTargetId = null
-  world.lockedStationId = null
 }
 
 /**
  * Tab — КОНТАКТЫ: борта, обломки, ближние астероиды и детали военных баз. Порядок:
  * перед носом, внутри — по удалению. Свежий перебор (пауза > `CYCLE_RESTART`) — с
- * ближайшего видимого. Выбор ложится в своё поле (они взаимно гасятся), нав гасим —
+ * ближайшего видимого. Выбор вытесняет прежний захват (он один по построению), нав гасим —
  * старый фокус не держим. Мутирует мир.
  */
 export function cycleContact(world: World): void {
@@ -270,7 +305,6 @@ export function pruneGiantScaleLocks(world: World): void {
   const nav = navTarget(world)
   if (!nav || !isStellarNavKind(nav.kind)) clearNavLock(world)
   else {
-    world.lockedStationId = null
     world.targetFocus = 'nav'
   }
 }
@@ -340,7 +374,6 @@ export function cycleCelestial(world: World): void {
   const index = fresh || world.navTargetId === null ? -1 : cands.findIndex((c) => c.id === world.navTargetId)
   const next = cands[(index + 1) % cands.length]!
   world.navTargetId = next.id
-  world.lockedStationId = next.station ? next.id : null
 }
 
 /**
@@ -416,7 +449,6 @@ export function retargetNearestCelestial(world: World): void {
   world.targetFocus = 'nav'
   const next = cands[0]!
   world.navTargetId = next.id
-  world.lockedStationId = next.station ? next.id : null
 }
 
 /**

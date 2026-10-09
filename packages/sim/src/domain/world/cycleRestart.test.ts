@@ -7,6 +7,7 @@ import {
   retargetNearestContact,
   targetablesOf,
 } from './queries'
+import { lockContact, lockedShipId } from './queries'
 
 /** Три врага на разных дистанциях перед носом (−Z). */
 function withThreeHostiles(): World {
@@ -40,18 +41,18 @@ describe('свежий Tab-перебор начинается с ближайш
     expect(far).toBeDefined()
 
     cycleContact(world)
-    expect(world.lockedTargetId).toBe(near)
+    expect(lockedShipId(world)).toBe(near)
 
     cycleContact(world)
-    expect(world.lockedTargetId).toBe(mid)
+    expect(lockedShipId(world)).toBe(mid)
 
     cycleContact(world)
-    expect(world.lockedTargetId).toBe(far)
+    expect(lockedShipId(world)).toBe(far)
 
     // Пауза дольше CYCLE_RESTART — новый перебор с ближайшего видимого.
     world.time += 2
     cycleContact(world)
-    expect(world.lockedTargetId).toBe(near)
+    expect(lockedShipId(world)).toBe(near)
   })
 
   it('быстрые тапы продолжают круг без сброса', () => {
@@ -59,10 +60,10 @@ describe('свежий Tab-перебор начинается с ближайш
     const [near, mid] = byDistance(world)
 
     cycleContact(world)
-    expect(world.lockedTargetId).toBe(near)
+    expect(lockedShipId(world)).toBe(near)
     world.time += 0.2
     cycleContact(world)
-    expect(world.lockedTargetId).toBe(mid)
+    expect(lockedShipId(world)).toBe(mid)
   })
 
   it('новый круг всегда гасит старый фокус', () => {
@@ -71,16 +72,16 @@ describe('свежий Tab-перебор начинается с ближайш
     expect(planet).toBeDefined()
 
     cycleContact(world)
-    expect(world.lockedTargetId).not.toBeNull()
+    expect(lockedShipId(world)).not.toBeNull()
     expect(world.targetFocus).toBe('contact')
 
     cycleCelestial(world)
     expect(world.navTargetId).not.toBeNull()
     expect(world.targetFocus).toBe('nav')
-    expect(world.lockedTargetId).toBeNull()
+    expect(lockedShipId(world)).toBeNull()
 
     cycleContact(world)
-    expect(world.lockedTargetId).not.toBeNull()
+    expect(lockedShipId(world)).not.toBeNull()
     expect(world.targetFocus).toBe('contact')
     expect(world.navTargetId).toBeNull()
   })
@@ -92,14 +93,14 @@ describe('Q / Shift+Q — ближайшая из круга Tab / Shift+Tab', (
     const [near, mid, far] = byDistance(world)
 
     cycleContact(world)
-    expect(world.lockedTargetId).toBe(near)
+    expect(lockedShipId(world)).toBe(near)
     cycleContact(world)
-    expect(world.lockedTargetId).toBe(mid)
+    expect(lockedShipId(world)).toBe(mid)
     cycleContact(world)
-    expect(world.lockedTargetId).toBe(far)
+    expect(lockedShipId(world)).toBe(far)
 
     retargetNearestContact(world)
-    expect(world.lockedTargetId).toBe(near)
+    expect(lockedShipId(world)).toBe(near)
     expect(world.targetFocus).toBe('contact')
   })
 
@@ -114,7 +115,7 @@ describe('Q / Shift+Q — ближайшая из круга Tab / Shift+Tab', (
     retargetNearestCelestial(world)
     expect(world.navTargetId).toBe(first)
     expect(world.targetFocus).toBe('nav')
-    expect(world.lockedTargetId).toBeNull()
+    expect(lockedShipId(world)).toBeNull()
   })
 
   it('Q без контактов гасит контактный захват, нав не трогает', () => {
@@ -123,15 +124,15 @@ describe('Q / Shift+Q — ближайшая из круга Tab / Shift+Tab', (
     for (const s of targetablesOf(world)) s.alive = false
     world.pods.length = 0
     world.asteroids.length = 0
-    world.lockedTargetId = 1
-    world.lockedPodId = null
-    world.lockedAsteroidId = null
+    lockContact(world, 'ship', 1)
+    lockContact(world, 'pod', null)
+    lockContact(world, 'asteroid', null)
     cycleCelestial(world)
     const nav = world.navTargetId
     expect(nav).not.toBeNull()
 
     retargetNearestContact(world)
-    expect(world.lockedTargetId).toBeNull()
+    expect(lockedShipId(world)).toBeNull()
     expect(world.navTargetId).toBe(nav)
   })
 })

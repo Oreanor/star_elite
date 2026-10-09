@@ -3,6 +3,7 @@ import { ASTEROID, TRAFFIC } from '../../config/world'
 import { randomUnit, signed } from '../../core/math'
 import { retain } from '../../core/list'
 import type { AsteroidEntity, World } from './entities'
+import { lockedAsteroidId } from './queries'
 
 /**
  * Камни как ВСТРЕЧИ, не хардкод-пояс.
@@ -134,7 +135,7 @@ export function despawnDistantAsteroids(world: World): void {
   const landed = world.player.landedOn
   retain(world.asteroids, (a) => {
     if (!a.alive) return false
-    if (a.id === world.lockedAsteroidId) return true
+    if (a.id === lockedAsteroidId(world)) return true
     if (a.id === world.navTargetId) return true
     if (landed?.bodyId === a.id) return true
     return a.pos.distanceToSquared(player) <= limitSq

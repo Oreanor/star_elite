@@ -6,6 +6,7 @@ import { createAIState } from '../ai/types'
 import { deriveShipSpec } from '../loadout'
 import { makeShip } from '../world'
 import { quietWorld } from '../../testkit'
+import { lockContact } from './queries'
 
 describe('тяжёлый грузовик', () => {
   it('неповоротлив: угловое ускорение ниже истребительского', () => {
@@ -64,7 +65,7 @@ describe('тяжёлый грузовик', () => {
     merc.ai.escortOf = world.player.id // патрон — игрок, а не грузовик
     world.ships.push(merc)
 
-    world.lockedTargetId = null // игрок никого не захватил — но враг рядом
+    lockContact(world, 'ship', null) // игрок никого не захватил — но враг рядом
     aiController.update(merc, world, 0.2)
     // Компаньон не ждёт приказа: берёт налётчика сам, а не летит красиво рядом.
     // Захват (Tab) лишь ПЕРЕнаправил бы его на другую цель.

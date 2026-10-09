@@ -24,6 +24,7 @@ import { stockSlovoCollection } from './figurines'
 import { pickTrafficVariant } from './trafficVariants'
 import { spawnTrafficTitan, titanCount } from './titans'
 import type { BodyEntity, Faction, ShipEntity, World } from './entities'
+import { lockedShipId } from './queries'
 
 /**
  * Встречи в космосе.
@@ -632,7 +633,7 @@ function despawnDistant(world: World): void {
     if (!s.alive || isDroneShip(s)) return true
     // Слово не убираем по дальности: у Крестов он вписан в мир, а пролётом уходит сам.
     if (s.divine) return true
-    if (s.id === world.lockedTargetId) return true
+    if (s.id === lockedShipId(world)) return true
     if (s.ai?.escortOf != null) return true
     // ЗНАКОМЫЙ (с ним говорили) не растворяется, как прочий трафик: он отслеживается,
     // помечен на картах и всегда на связи. Прохожие копятся и гибнут — знакомые живут.

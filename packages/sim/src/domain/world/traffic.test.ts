@@ -9,6 +9,7 @@ import { createWorld, STARTER_SYSTEM } from './index'
 import type { ShipEntity, World } from './entities'
 import { ENCOUNTERS, biasedWeight, remoteness, spawnResidentContacts, stepDockedBerth, stepDockTraffic, stepTraffic } from './traffic'
 import { quietWorld } from '../../testkit'
+import { lockContact } from './queries'
 
 /**
  * Встречи. Космос без них — тир, а не место, где живут; но и встреча по
@@ -215,7 +216,7 @@ describe('встречи в космосе', () => {
     const world = quietWorld()
     const ship = runUntilShip(world)
 
-    world.lockedTargetId = ship.id
+    lockContact(world, 'ship', ship.id)
     ship.state.pos.copy(world.player.state.pos).setX(TRAFFIC.DESPAWN_RANGE * 3)
     stepTraffic(world, 1 / 60)
     expect(met(world).some((s) => s.id === ship.id)).toBe(true)

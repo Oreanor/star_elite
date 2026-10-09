@@ -3,6 +3,7 @@ import { createWorld, STARTER_SYSTEM } from '../world'
 import { cycleCelestial, targetableStationsOf } from '../world/queries'
 import { dispatcherBriefing, dispatcherPersona, stationInterlocutor } from './dispatcher'
 import { localSettlement } from './shop'
+import { lockContact, lockedShipId, lockedStationId } from '../world/queries'
 
 function world() {
   return createWorld({ ...STARTER_SYSTEM, patrols: [], belt: null })
@@ -36,7 +37,7 @@ describe('диспетчер станции', () => {
     const station = targetableStationsOf(w)[0]!
 
     // Был захват борта — Shift+Tab на станцию обязан его сбросить (один фокус).
-    w.lockedTargetId = 42
+    lockContact(w, 'ship', 42)
     w.targetFocus = 'contact'
 
     // Листаем небесные тела по удалению, пока круг не встанет на станцию.
@@ -47,8 +48,8 @@ describe('диспетчер станции', () => {
     } while (w.navTargetId !== station.id && guard < 50)
 
     expect(w.navTargetId).toBe(station.id) // станция — точка навигации
-    expect(w.lockedStationId).toBe(station.id) // и взята на связь (T → диспетчер)
-    expect(w.lockedTargetId).toBeNull() // старый контакт сброшен
+    expect(lockedStationId(w)).toBe(station.id) // и взята на связь (T → диспетчер)
+    expect(lockedShipId(w)).toBeNull() // старый контакт сброшен
     expect(w.targetFocus).toBe('nav')
     expect(stationInterlocutor(w)?.id).toBe(station.id)
   })

@@ -1,7 +1,5 @@
 import {
-  type AcquaintanceEvent,
   capitalOf,
-  type Command,
   commandableByPlayer,
   COMMODITIES,
   commodityBuyPrice,
@@ -24,13 +22,16 @@ import {
   figurinePriceFactor,
   figurineTitleName,
   figurineTitlesInHold,
+  TIME,
+  lockedShipId,
+  type AcquaintanceEvent,
+  type Command,
   type FigurineHobby,
   type Mood,
   type Persona,
   type Relationship,
   type ShipEntity,
   type StarSystem,
-  TIME,
   type Topic,
   type World,
 } from '@elite/sim'
@@ -769,7 +770,7 @@ export function buildContext(
       name: s.name,
       standing: s.faction === 'hostile' ? 'враг' : s.faction === player.faction ? 'свой' : 'мирный',
       distanceM: Math.round(s.state.pos.distanceTo(player.state.pos)),
-      locked: s.id === world.lockedTargetId,
+      locked: s.id === lockedShipId(world),
     }))
     .filter((s) => s.distanceM < NEARBY_RANGE)
     .sort((a, b) => a.distanceM - b.distanceM)

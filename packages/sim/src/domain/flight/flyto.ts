@@ -11,6 +11,7 @@ import { galaxyAnchorLocal, metersPerLy, speedScaleFactor } from '../scale/scale
 import type { ShipEntity, World } from '../world/entities'
 import { findShip, navTarget } from '../world/queries'
 import { steerToward } from './steering'
+import { lockedShipId } from '../world/queries'
 
 /**
  * Автопилот-НА-ЦЕЛЬ. Третий режим рядом с автостыковкой и автобоем: «лети к тому,
@@ -95,7 +96,7 @@ function destination(world: World): Dest | null {
       galaxy: false,
     }
   }
-  const ship = findShip(world, world.lockedTargetId)
+  const ship = findShip(world, lockedShipId(world))
   if (ship && ship !== world.player && ship.alive) {
     return { pos: ship.state.pos, radius: 0, bodyId: null, galaxy: false }
   }

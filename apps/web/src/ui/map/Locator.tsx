@@ -9,6 +9,8 @@ import {
   NAV_ASTEROID_NAME,
   shipAxes,
   stanceTo,
+  lockContact,
+  lockedShipId,
   type BodyEntity,
   type ShipEntity,
   type World,
@@ -25,7 +27,7 @@ import { discProject, MapCard, MapFrame, MapPin, MapRow } from './MapFrame'
  *
  * Тот же прибор, что в углу кабины (`drawRadar`), но во весь экран и живой: его можно
  * КРУТИТЬ и НАКЛОНЯТЬ драгом, приближать колесом и КЛИКАТЬ отметку — выбор пишет в те же
- * поля мира, что Tab / Shift+Tab / карта системы (`navTargetId` или `lockedTargetId` +
+ * поля мира, что Tab / Shift+Tab / карта системы (`navTargetId` или `contactLock` +
  * `targetFocus`). HUD и J/P читают их сразу. Наведение показывает карточку; клик —
  * захват.
  *
@@ -221,7 +223,7 @@ function blips(world: World): Blip[] {
       shape: 'square',
       size: 7,
       // Кольцо только у активного Tab-захвата — не у знакомых.
-      ring: ship.id === world.lockedTargetId && world.targetFocus === 'contact',
+      ring: ship.id === lockedShipId(world) && world.targetFocus === 'contact',
       kind: t('locator.kind.ship'),
       // Имя БОРТА, а не пилота: род объекта на локаторе — корабль, человек внутри идёт
       // строкой ниже. Раньше здесь стояло имя пилота, и «корабль: Джон» читалось враньём.
@@ -243,13 +245,13 @@ function blips(world: World): Blip[] {
 /** Клик по отметке — тот же захват, что Tab / Shift+Tab / карта системы. */
 function applySelect(world: World, kind: SelectKind, id: number): void {
   if (kind === 'ship') {
-    if (world.lockedTargetId === id && world.targetFocus === 'contact') {
+    if (lockedShipId(world) === id && world.targetFocus === 'contact') {
       clearContactLock(world)
       return
     }
     clearNavLock(world)
     clearContactLock(world)
-    world.lockedTargetId = id
+    lockContact(world, 'ship', id)
     world.targetFocus = 'contact'
     return
   }
@@ -261,8 +263,6 @@ function applySelect(world: World, kind: SelectKind, id: number): void {
   clearContactLock(world)
   world.navTargetId = id
   world.targetFocus = 'nav'
-  const body = world.bodies.find((b) => b.id === id)
-  world.lockedStationId = body?.kind === 'station' ? id : null
 }
 
 /** Расстояние, отвечающее доле радиуса k (обратная логарифмической шкале радара). */
@@ -310,7 +310,7 @@ export function Locator({ world }: { world: World }) {
   // это, не листая. Обратное направление (строка → диск) листать нечего.
   useEffect(() => {
     listRef.current?.querySelector('[data-active="true"]')?.scrollIntoView({ block: 'nearest' })
-  }, [world.navTargetId, world.lockedTargetId, world.targetFocus])
+  }, [world.navTargetId, lockedShipId(world), world.targetFocus])
 
   // Список слева: ближнее сверху. Выделение двустороннее — наведение на строку зажигает
   // отметку на диске, наведение на отметку подсвечивает строку.

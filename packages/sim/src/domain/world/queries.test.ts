@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { MIELOPHONE } from '../../config/mielophone'
 import { createWorld, makeShip, STARTER_SYSTEM, type World } from '.'
 import { cycleCelestial, cycleTarget, pruneGiantScaleLocks, targetablesOf } from './queries'
+import { lockContact, lockedShipId, lockedStationId } from './queries'
 
 /** Мир с пиратом и нейтралом перед носом игрока. */
 function withPirateAndNeutral(): World {
@@ -51,11 +52,10 @@ describe('гигантский масштаб гасит системный на
     expect(star).toBeTruthy()
 
     world.navTargetId = station!.id
-    world.lockedStationId = station!.id
     world.player.state.scale = MIELOPHONE.GHOST_BODY_SCALE
     pruneGiantScaleLocks(world)
     expect(world.navTargetId).toBeNull()
-    expect(world.lockedStationId).toBeNull()
+    expect(lockedStationId(world)).toBeNull()
 
     world.navTargetId = star!.id
     pruneGiantScaleLocks(world)
@@ -66,11 +66,11 @@ describe('гигантский масштаб гасит системный на
     const world = createWorld({ ...STARTER_SYSTEM, belt: null, patrols: [] })
     const other = world.ships.find((s) => s.id !== world.player.id) ?? world.ships[0]
     // Если патрулей нет — подставим фиктивный id; prune всё равно гасит контактный захват.
-    world.lockedTargetId = other?.id ?? 99
+    lockContact(world, 'ship', other?.id ?? 99)
     world.targetFocus = 'contact'
     world.player.state.scale = MIELOPHONE.PHASE_END
     pruneGiantScaleLocks(world)
-    expect(world.lockedTargetId).toBeNull()
+    expect(lockedShipId(world)).toBeNull()
   })
 
   it('Shift+Tab выше GHOST_BODY берёт только звезду/дыру', () => {

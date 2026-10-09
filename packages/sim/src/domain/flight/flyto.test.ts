@@ -6,6 +6,7 @@ import { AUTOPILOT } from '../../config/station'
 import { placeSystem } from '../galaxy/shape'
 import { createWorld, STARTER_SYSTEM } from '../world'
 import { canEngageFlyTo, flyToArrived, flyToController } from './flyto'
+import { lockContact, lockedShipId } from '../world/queries'
 
 const _nose = new Vector3(0, 0, -1)
 const _to = new Vector3()
@@ -28,8 +29,7 @@ function withTarget(dist: number, side = 0) {
   if (!target) throw new Error('нужен борт-цель в мире')
   // Цель на известном удалении от игрока, с боковым сносом — чтобы был повод доворачивать.
   target.state.pos.copy(world.player.state.pos).add(new Vector3(side, 0, -dist))
-  world.lockedTargetId = target.id
-  world.lockedStationId = null
+  lockContact(world, 'ship', target.id)
   world.targetFocus = 'contact'
   return { world, target }
 }
@@ -45,10 +45,10 @@ describe('автопилот-к-цели', () => {
     const { world, target } = withTarget(5000)
     expect(canEngageFlyTo(world)).toBe(true)
 
-    world.lockedTargetId = null
+    lockContact(world, 'ship', null)
     expect(canEngageFlyTo(world)).toBe(false) // нечего вести
 
-    world.lockedTargetId = target.id
+    lockContact(world, 'ship', target.id)
     world.docked = true
     expect(canEngageFlyTo(world)).toBe(false) // в доке не летают
   })
@@ -66,7 +66,7 @@ describe('автопилот-к-цели', () => {
     ))
     world.navTargetId = planet.id
     world.targetFocus = 'nav'
-    expect(world.lockedTargetId).toBe(target.id)
+    expect(lockedShipId(world)).toBe(target.id)
     expect(canEngageFlyTo(world)).toBe(true)
     expect(flyToArrived(world)).toBe(false) // ведём к планете, не к ближнему пирату
 
@@ -101,7 +101,7 @@ describe('автопилот-к-цели', () => {
     target.state.pos.copy(world.player.state.pos).add(new Vector3(0, 0, -10_000))
     expect(flyToArrived(world)).toBe(false)
 
-    world.lockedTargetId = null // цель снята — вести некуда, штурвал возвращаем
+    lockContact(world, 'ship', null) // цель снята — вести некуда, штурвал возвращаем
     expect(flyToArrived(world)).toBe(true)
   })
 
@@ -147,7 +147,7 @@ describe('автопилот-к-цели', () => {
   it('на галактическом × J ведёт к jumpTarget мягким газом и с форсажем на дальнем плече', () => {
     // Tab на проявленном слое пишет jumpTarget — захвата системы нет, автопилот обязан сюда.
     const { world } = withTarget(5000)
-    world.lockedTargetId = null
+    lockContact(world, 'ship', null)
     world.targetFocus = 'nav'
     world.navTargetId = null
     world.player.state.scale = MIELOPHONE.GHOST_BODY_SCALE

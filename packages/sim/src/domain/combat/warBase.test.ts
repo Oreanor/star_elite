@@ -10,6 +10,7 @@ import { castLaser } from './raycast'
 import { damageWarBaseFixture, warBaseFixtureWorldPos } from './warBase'
 import { resolveLaserHit } from './bolts'
 import { warBaseIntegrity } from '../world/warBase'
+import { lockedShipId, lockedAsteroidId, lockedFixtureId } from '../world/queries'
 
 /** Мир с двумя базами у причала: километровой и трёхкилометровой. */
 function withBases(): ReturnType<typeof createWorld> {
@@ -175,7 +176,7 @@ describe('отстрел деталей базы', () => {
   })
 
   /**
-   * Деталь — ТАКАЯ ЖЕ ЦЕЛЬ, как борт: Tab её берёт, и захват ложится в своё поле. Раньше
+   * Деталь — ТАКАЯ ЖЕ ЦЕЛЬ, как борт: Tab её берёт (`contactLock` вида `fixture`). Раньше
    * пушку можно было только расстрелять, водя прицелом, — навестись на неё было нечем.
    */
   it('Tab берёт деталь базы целью, разбитая — снимается', () => {
@@ -192,15 +193,15 @@ describe('отстрел деталей базы', () => {
     world.pods.length = 0
 
     cycleContact(world)
-    expect(world.lockedFixtureId).toBe(fix.id)
+    expect(lockedFixtureId(world)).toBe(fix.id)
     // Захват ровно один: борт/обломок/камень при этом пусты.
-    expect(world.lockedTargetId).toBeNull()
-    expect(world.lockedAsteroidId).toBeNull()
+    expect(lockedShipId(world)).toBeNull()
+    expect(lockedAsteroidId(world)).toBeNull()
 
     // Отстрелили — рамка не должна остаться висеть на том, чего нет.
     knockOut(world, base, fix)
     stepWorld(world, PHYSICS.FIXED_DT, new Map())
-    expect(world.lockedFixtureId).toBeNull()
+    expect(lockedFixtureId(world)).toBeNull()
   })
 
   /**

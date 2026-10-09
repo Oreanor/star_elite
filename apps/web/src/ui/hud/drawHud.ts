@@ -45,6 +45,10 @@ import {
   renderPos,
   renderQuat,
   shownPosition,
+  lockedShipId,
+  lockedPodId,
+  lockedAsteroidId,
+  lockedFixtureId,
   type BodyEntity,
   type ShipEntity,
   type StarSystem,
@@ -251,7 +255,7 @@ function drawPods(frame: HudFrame): void {
   for (const pod of world.pods) {
     if (!pod.alive) continue
 
-    const locked = pod.id === world.lockedPodId
+    const locked = pod.id === lockedPodId(world)
     const p = projectPoint(shownPosition(world, pod.pos, _shownAt), camera, width, height)
     // Захваченный обломок отмечаем ВСЕГДА (как захваченный борт), даже вне дальности меток и
     // за кадром — иначе выбранная Tab'ом цель терялась бы. Прочие — только вблизи.
@@ -402,7 +406,7 @@ function drawTargets({ ctx, camera, world, width, height }: HudFrame): void {
     const p = projectPoint(shownPosition(world, ship.state.pos, _shownAt), camera, width, height)
     if (p.behind || !isOnScreen(p.x, p.y, width, height, 20 * S)) continue
 
-    const locked = ship.id === world.lockedTargetId
+    const locked = ship.id === lockedShipId(world)
     const color = radarColor(ship, world)
 
     // Маленький квадрат-метка: без него борт на километре — пылинка. Рамочка — лишь у выбранного.
@@ -447,7 +451,7 @@ function drawOffscreenArrows(frame: HudFrame): void {
    */
   for (const ship of world.ships) {
     if (!ship.alive || !isVisible(ship) || isStationBot(ship)) continue
-    const locked = ship.id === world.lockedTargetId
+    const locked = ship.id === lockedShipId(world)
     if (ship.faction !== 'hostile' && !locked) continue
     // Цвет = отношение; заливка = активный, контур = прочие. Иначе за кадром
     // два красных треугольника не скажут, какой выбран Tab'ом.
@@ -541,11 +545,11 @@ function drawTargetLock(frame: HudFrame): void {
   // В масштабе — то, что в фокусе портрета. Цвет рамки = цвет значка.
   if (world.targetFocus === 'contact') {
     if (stellarOnly) return
-    const locked = world.lockedTargetId != null ? world.ships.find((s) => s.id === world.lockedTargetId) : null
+    const locked = lockedShipId(world) != null ? world.ships.find((s) => s.id === lockedShipId(world)) : null
     if (locked && locked.alive && isVisible(locked) && !isStationBot(locked)) {
       mark(locked.state.pos, radarColor(locked, world), locked.acquaintanceId != null ? `◈ ${properName(locked.name)}` : null)
     }
-    const pod = world.lockedPodId != null ? world.pods.find((p) => p.id === world.lockedPodId) : null
+    const pod = lockedPodId(world) != null ? world.pods.find((p) => p.id === lockedPodId(world)) : null
     if (pod && pod.alive) mark(pod.pos, HUD_COLORS.WARN, null)
   } else {
     const nav = navTarget(world)
@@ -927,7 +931,7 @@ function drawTargetPanels(frame: HudFrame): void {
   }
 
   if (world.targetFocus === 'contact') {
-    const ship = world.lockedTargetId == null ? null : world.ships.find((s) => s.id === world.lockedTargetId)
+    const ship = lockedShipId(world) == null ? null : world.ships.find((s) => s.id === lockedShipId(world))
     if (ship && ship.alive && isVisible(ship)) {
       const color = radarColor(ship, world)
       const stance = stanceTo(world, ship)
@@ -955,7 +959,7 @@ function drawTargetPanels(frame: HudFrame): void {
       })
       return
     }
-    const pod = world.lockedPodId != null ? world.pods.find((p) => p.id === world.lockedPodId && p.alive) : null
+    const pod = lockedPodId(world) != null ? world.pods.find((p) => p.id === lockedPodId(world) && p.alive) : null
     if (pod) {
       cell(HUD_COLORS.WARN, [t('locator.kind.pod'), formatDistance(shipDistance(world, pod.pos))], (cx, cy) => {
         drawPodCrate(ctx, cx + size / 2, cy + size / 2, size, HUD_COLORS.WARN, world.time)
@@ -963,7 +967,7 @@ function drawTargetPanels(frame: HudFrame): void {
       return
     }
     // Деталь базы — такая же цель, как борт: род, прочность и удаление в той же клетке.
-    const fixture = findWarBaseFixture(world.warBases, world.lockedFixtureId)
+    const fixture = findWarBaseFixture(world.warBases, lockedFixtureId(world))
     if (fixture) {
       warBaseFixtureWorldPos(fixture.base, fixture.fixture, world.time, _fixtureAt)
       cell(
@@ -979,8 +983,8 @@ function drawTargetPanels(frame: HudFrame): void {
       )
       return
     }
-    const rock = world.lockedAsteroidId != null
-      ? world.asteroids.find((a) => a.id === world.lockedAsteroidId && a.alive)
+    const rock = lockedAsteroidId(world) != null
+      ? world.asteroids.find((a) => a.id === lockedAsteroidId(world) && a.alive)
       : null
     if (rock) {
       cell(
@@ -1470,7 +1474,7 @@ function drawRadar(frame: HudFrame): void {
       if (!fix.alive) continue
       warBaseFixtureWorldPos(base, fix, world.time, _fixtureAt)
       if (_fixtureAt.distanceToSquared(player.state.pos) > ROCK_RANGE * ROCK_RANGE) continue
-      plot(_fixtureAt, HUD_COLORS.STATION, Math.round(1.5 * S), fix.id === world.lockedFixtureId)
+      plot(_fixtureAt, HUD_COLORS.STATION, Math.round(1.5 * S), fix.id === lockedFixtureId(world))
     }
   }
 
@@ -1480,13 +1484,13 @@ function drawRadar(frame: HudFrame): void {
     // Нав-глыбу держим на радаре всегда; мелочь — только рядом.
     if (!nav && rock.pos.distanceToSquared(player.state.pos) > ROCK_RANGE * ROCK_RANGE) continue
     const color = nav ? HUD_COLORS.MONOLITH : HUD_COLORS.ROCK
-    const locked = rock.id === world.lockedAsteroidId
+    const locked = rock.id === lockedAsteroidId(world)
     plot(rock.pos, color, Math.round((nav ? 3 : 1.5) * S), nav || locked, 'round', nav ? NAV_ASTEROID_NAME : undefined)
   }
 
   for (const pod of world.pods) {
     if (!pod.alive) continue
-    plot(pod.pos, HUD_COLORS.WARN, Math.round(1.5 * S), pod.id === world.lockedPodId)
+    plot(pod.pos, HUD_COLORS.WARN, Math.round(1.5 * S), pod.id === lockedPodId(world))
   }
 
   // Киты / платформы — крупнее рядового борта, без кольца (кольцо = только активный захват).
@@ -1498,7 +1502,7 @@ function drawRadar(frame: HudFrame): void {
 
   for (const ship of world.ships) {
     if (!isVisible(ship) || isStationBot(ship)) continue
-    plot(ship.state.pos, radarColor(ship, world), Math.round(2 * S), ship.id === world.lockedTargetId)
+    plot(ship.state.pos, radarColor(ship, world), Math.round(2 * S), ship.id === lockedShipId(world))
   }
 }
 

@@ -4,6 +4,7 @@ import type { BodyEntity, World } from '../world/entities'
 import { makePersona, type Persona } from '../world/persona'
 import { findShip } from '../world/queries'
 import { localSettlement } from './shop'
+import { lockedStationId } from '../world/queries'
 
 /**
  * Диспетчер станции — всезнающий по своей округе собеседник со своей персоной.
@@ -19,7 +20,7 @@ import { localSettlement } from './shop'
 
 /** Захваченная станция-собеседник, или null. Отдельно от `interlocutor` (это про борта). */
 export function stationInterlocutor(world: World): BodyEntity | null {
-  const id = world.lockedStationId
+  const id = lockedStationId(world)
   if (id === null) return null
   return world.bodies.find((b) => b.id === id && b.kind === 'station') ?? null
 }
