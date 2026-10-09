@@ -2,6 +2,7 @@ import { Vector3 } from 'three'
 import { describe, expect, it } from 'vitest'
 import { PHYSICS } from '../../config/physics'
 import { createWorld, type World } from '../world'
+import { startAtStation } from '../world'
 import { renderPos } from '../world/poseTrail'
 import { STARTER_SYSTEM } from '../world/system'
 import { quietWorld } from '../../testkit'
@@ -92,5 +93,37 @@ describe('показ между тактами', () => {
     expect(world.originShift.lengthSq()).toBeGreaterThan(0)
     // Показанная поза — в пределах одного такта хода от настоящей, а не в километрах.
     expect(renderPos(world, p, new Vector3()).distanceTo(p.pos)).toBeLessThan(500 * PHYSICS.FIXED_DT * 1.01)
+  })
+
+  /**
+   * Регрессия: у станции игрока несёт её орбита — десятки км/с, сотни метров за такт. Камера
+   * получает этот перенос сразу (`originShift`), а показ отставал на долю такта: корабль
+   * дёргался вбок на корпус. Перенос опорой — смена системы отсчёта, следы едут вместе с ним:
+   * стоящий у станции корабль показывается там, где он есть, без отставания на орбиту.
+   */
+  it('перенос орбитой станции не даёт отставания показа', () => {
+    const world = quietWorld()
+    startAtStation(world, 2_500)
+    const station = world.bodies.find((b) => b.kind === 'station')!
+    const p = world.player.state
+    p.vel.set(0, 0, 0)
+    let carried = 0
+    for (let i = 0; i < 40; i++) {
+      // Календарь двигает клиент раз в кадр (реальное время) — орбиты едут от него.
+      world.calendarTime += PHYSICS.FIXED_DT * 1.37
+      stepWorld(world, PHYSICS.FIXED_DT * 1.37, new Map())
+      carried = Math.max(carried, world.originShift.length())
+      const shownPlayer = renderPos(world, p, new Vector3())
+      const shownStation = renderPos(world, station, new Vector3())
+      // Камера сдвинута на перенос СРАЗУ — значит и стоящий корабль показан там, где он есть,
+      // а не на долю такта позади по орбите.
+      expect(shownPlayer.distanceTo(p.pos)).toBeLessThan(1)
+      // И относительно станции показ совпадает с симуляцией.
+      const rel = shownPlayer.clone().sub(shownStation)
+      const simRel = p.pos.clone().sub(station.pos)
+      expect(rel.distanceTo(simRel)).toBeLessThan(1)
+    }
+    // Перенос действительно был — иначе тест ничего не проверял.
+    expect(carried).toBeGreaterThan(1)
   })
 })

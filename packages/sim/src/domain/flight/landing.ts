@@ -1,4 +1,5 @@
 import { Matrix4, Quaternion, Vector3 } from 'three'
+import { shiftTrail } from '../world/poseTrail'
 import { LANDING } from '../../config/landing'
 import { effectiveRadius } from '../scale/scale'
 import type {
@@ -13,6 +14,7 @@ import type { ShipControls } from './types'
 import { shipAxes } from './axes'
 import { stepShip } from './model'
 
+const _climb = new Vector3()
 const _normal = /* @__PURE__ */ new Vector3()
 const _forward = /* @__PURE__ */ new Vector3()
 const _right = /* @__PURE__ */ new Vector3()
@@ -532,7 +534,11 @@ export function stepLanding(ship: ShipEntity, world: World, dt: number): boolean
    */
   const climbed = stepHoverAltitude(binding, ship.controls, dt)
   constrainToHoverSphere(ship, surface, binding)
-  if (climbed !== 0 && ship === world.player) world.originShift.addScaledVector(binding.normal, climbed)
+  if (climbed !== 0 && ship === world.player) {
+    world.originShift.addScaledVector(binding.normal, climbed)
+    // Камера получает смену эшелона сразу — значит и след позы едет с ней, без отставания.
+    shiftTrail(ship.state, _climb.copy(binding.normal).multiplyScalar(climbed))
+  }
 
   // Отпустил газ у поверхности — тормозим ход вдоль сферы к нулю: борт встаёт. Это и есть
   // «сесть, сбросив скорость». С газом коастинг вдоль поверхности остаётся прежним.

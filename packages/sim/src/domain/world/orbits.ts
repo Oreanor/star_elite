@@ -3,6 +3,7 @@ import { GRAVITY } from '../../config/bodies'
 import { SCALE } from '../../config/galaxy'
 import { orbitSec } from '../../config/time'
 import type { BodyEntity, OrbitDef, World } from './entities'
+import { shiftTrail } from './poseTrail'
 
 /**
  * Орбиты тел: угол = phase + rate·t, позиция считается заново каждый шаг.
@@ -164,6 +165,15 @@ export function stepOrbits(world: World, time = orbitTime(world)): void {
     _playerReferenceShift.copy(playerReference.pos).sub(_playerReferenceBefore)
     world.player.state.pos.add(_playerReferenceShift)
     /**
+     * Перенос опорой — СМЕНА СИСТЕМЫ ОТСЧЁТА, а не ход корабля: следы поз едут вместе с ним
+     * (как при перецентровке начала координат). Камера получает этот сдвиг сразу целиком
+     * (`originShift`), и покажи рендер его с отставанием на долю такта — корабль у станции
+     * дёргался бы вбок на десятки метров: орбита здесь — десятки км/с. Опорное тело едет
+     * тем же сдвигом, поэтому и его след сдвигаем: относительно игрока оно стоит.
+     */
+    shiftTrail(world.player.state, _playerReferenceShift)
+    shiftTrail(playerReference, _playerReferenceShift)
+    /**
      * Устье гиперпортала открывается В ОКРЕСТНОСТИ ИГРОКА (сотня метров перед носом) и
      * ехать обязано С ЕГО ОПОРОЙ, а не со станцией. Пока оно ехало со станцией, у планеты
      * или в открытом космосе опоры расходились, и кольцо уносило РАЗНОСТЬЮ орбитальных
@@ -191,17 +201,41 @@ export function stepOrbits(world: World, time = orbitTime(world)): void {
      * ровно так статуи, поставленные в двадцати километрах от причала, оказывались в 500
      * световых секундах. Всё, что живёт в окрестности станции, обязано ехать вместе с ней.
      */
-    for (const ship of world.ships) ship.state.pos.add(_stationShift)
-    for (const asteroid of world.asteroids) asteroid.pos.add(_stationShift)
-    for (const pod of world.pods) pod.pos.add(_stationShift)
-    for (const missile of world.missiles) missile.pos.add(_stationShift)
-    for (const bolt of world.bolts) bolt.pos.add(_stationShift)
-    for (const titan of world.titans) titan.pos.add(_stationShift)
+    // Окрестность едет со станцией — это тоже смена системы отсчёта, следы поз едут с ней
+    // (см. перенос игрока выше): интерполируется только собственный ход, не орбита причала.
+    if (station !== playerReference) shiftTrail(station, _stationShift)
+    for (const ship of world.ships) {
+      ship.state.pos.add(_stationShift)
+      shiftTrail(ship.state, _stationShift)
+    }
+    for (const asteroid of world.asteroids) {
+      asteroid.pos.add(_stationShift)
+      shiftTrail(asteroid, _stationShift)
+    }
+    for (const pod of world.pods) {
+      pod.pos.add(_stationShift)
+      shiftTrail(pod, _stationShift)
+    }
+    for (const missile of world.missiles) {
+      missile.pos.add(_stationShift)
+      shiftTrail(missile, _stationShift)
+    }
+    for (const bolt of world.bolts) {
+      bolt.pos.add(_stationShift)
+      shiftTrail(bolt, _stationShift)
+    }
+    for (const titan of world.titans) {
+      titan.pos.add(_stationShift)
+      shiftTrail(titan, _stationShift)
+    }
     // Статуи стоят У ПРИЧАЛА — без этой строки они и отставали на пол-системы.
     for (const monolith of world.monoliths) monolith.pos.add(_stationShift)
     // Пояс глыб держится за Люцифера — едет вместе с причалом и статуями.
     for (const rock of world.warBases) rock.pos.add(_stationShift)
-    for (const platform of world.platforms) platform.pos.add(_stationShift)
+    for (const platform of world.platforms) {
+      platform.pos.add(_stationShift)
+      shiftTrail(platform, _stationShift)
+    }
     for (const tracer of world.tracers) {
       tracer.from.add(_stationShift)
       tracer.to.add(_stationShift)
@@ -219,6 +253,7 @@ export function stepOrbits(world: World, time = orbitTime(world)): void {
     // Сели на статую — едем её сдвигом станции, а не орбитой чужой планеты рядом.
     if (boundMonolith) {
       world.player.state.pos.add(_stationShift)
+      shiftTrail(world.player.state, _stationShift)
       world.originShift.add(_stationShift)
     }
   }
