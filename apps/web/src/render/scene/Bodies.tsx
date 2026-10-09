@@ -1,7 +1,7 @@
 import { useFrame } from '@react-three/fiber'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Color, Group, Matrix4, Mesh, Object3D, Quaternion, Vector3, type Texture } from 'three'
-import { type BodyEntity } from '@elite/sim'
+import { renderPos, renderTime, type BodyEntity, type World } from '@elite/sim'
 import { useSession } from '../../session/GameContext'
 import { ATMOSPHERE, ATMOSPHERE_COLOR, BODY_SEGMENTS, CITY_LIGHTS, CORONA, MOON_DECOR } from '../config'
 import { starWorldShrink, worldShrink } from '../worldShrink'
@@ -70,14 +70,18 @@ const REST_POLE = new Vector3(0, 1, 0)
  * наклон оси читался бы как болтанка. Сначала кладём полюс на ось, потом крутим
  * вокруг неё — тогда полюс неподвижен, каким он в природе и бывает.
  */
-function place(node: Object3D, body: BodyEntity, time: number, rest: Vector3): void {
-  node.position.copy(body.pos)
+function place(node: Object3D, world: World, body: BodyEntity, rest: Vector3): void {
+  // Место и поворот — на ПОКАЗАННЫЙ миг (между тактами, см. `poseTrail`): тело по орбите
+  // едет в такте, и голая поза такта дёргалась бы относительно корабля на 144 Гц.
+  const time = renderTime(world)
+  renderPos(world, body, node.position)
   _tiltQuat.setFromUnitVectors(rest, body.spinAxis)
   _spinQuat.setFromAxisAngle(body.spinAxis, body.spin * time)
   node.quaternion.copy(_spinQuat).multiply(_tiltQuat)
 }
 
 const _toStar = new Vector3()
+const _starAt = new Vector3()
 const _airTint = new Color()
 const _lightsTint = new Color()
 
@@ -143,7 +147,7 @@ function Planet({ body }: { body: BodyEntity }) {
 
     if (ref.current) {
       ref.current.visible = on
-      place(ref.current, body, session.world.time, REST_POLE)
+      place(ref.current, session.world, body, REST_POLE)
       ref.current.scale.setScalar(body.radius * shrink)
     }
 
@@ -153,7 +157,7 @@ function Planet({ body }: { body: BodyEntity }) {
      */
     if (lightsRef.current) {
       lightsRef.current.visible = on
-      place(lightsRef.current, body, session.world.time, REST_POLE)
+      place(lightsRef.current, session.world, body, REST_POLE)
       lightsRef.current.scale.setScalar(body.radius * CITY_LIGHTS.SCALE * shrink)
     }
 
@@ -162,7 +166,7 @@ function Planet({ body }: { body: BodyEntity }) {
     // и то и другое.
     if (air) {
       air.visible = on
-      air.position.copy(body.pos)
+      renderPos(session.world, body, air.position)
       air.scale.setScalar(body.radius * airScale * shrink)
     }
 
@@ -171,6 +175,8 @@ function Planet({ body }: { body: BodyEntity }) {
     // Ближайшая к ПЛАНЕТЕ — у двойных систем терминатор от «своего» солнца.
     const star = nearestStar(session.world, body.pos)
     if (!star) return
+    // Направление на звезду не зависит от доли такта ощутимо (тысячи км против метров) —
+    // берём голые позы: свет — не место, по которому сверяется глаз.
     _toStar.copy(star.pos).sub(body.pos).normalize()
     if (airMaterial) {
       airMaterial.uniforms.uLight!.value.copy(_toStar)
@@ -247,23 +253,24 @@ function Star({ body }: { body: BodyEntity }) {
   }, [surfaceMaterial])
 
   useFrame((state) => {
+    const at = renderPos(session.world, body, _starAt)
     // К границе — starWorldShrink (догон к ×STAR_INFLATE); дальше точка слоя.
     const shrink = starWorldShrink(session.world.player.state.scale)
     const on = shrink > 0
     if (ref.current) {
       ref.current.visible = on
-      ref.current.position.copy(body.pos)
+      ref.current.position.copy(at)
       ref.current.scale.setScalar(body.radius * shrink)
     }
     if (glowRef.current) {
       glowRef.current.visible = on
-      glowRef.current.position.copy(body.pos)
+      glowRef.current.position.copy(at)
       // Плоскость короны РАЗВОРАЧИВАЕМ лицом к камере вручную — это billboard: у свечения
       // нет поверхности, оно всегда смотрит на зрителя. Но НЕ копируем кватернион камеры
       // целиком (тогда её крен катал бы узор короны каруселью): строим разворот к камере
       // со СТАБИЛЬНЫМ мировым верхом. lookAt(camera, star, up) даёт ось Z = star→camera —
       // ровно нормаль плоскости к зрителю, а верх остаётся мировым: протуберанцы не крутит.
-      _billboard.lookAt(state.camera.position, body.pos, _worldUp)
+      _billboard.lookAt(state.camera.position, at, _worldUp)
       glowRef.current.quaternion.setFromRotationMatrix(_billboard)
       glowRef.current.scale.set(glowSize * shrink, glowSize * shrink, 1)
 
@@ -272,7 +279,7 @@ function Star({ body }: { body: BodyEntity }) {
       // кромкой вблизи шар «раздувается» и наползает на корону. Экранный силуэт ложится на
       // билборд как долю 2/(SCALE·√(1−(R/d)²)) — вдали это наши 2/SCALE, вблизи кромка
       // раздвигается ровно вслед за шаром. Зажата, чтобы у самой поверхности не схлопнуться.
-      const camDist = state.camera.position.distanceTo(body.pos)
+      const camDist = state.camera.position.distanceTo(at)
       const rOverD = Math.min(0.985, (body.radius * shrink) / Math.max(camDist, 1e-3))
       const edge = (2 * 0.975) / (CORONA.SCALE * Math.sqrt(1 - rOverD * rOverD))
       material.uniforms.uDiskFrac!.value = Math.min(edge, 0.96)
@@ -280,7 +287,7 @@ function Star({ body }: { body: BodyEntity }) {
     // Фаза абсолютна для мира, а не является возрастом экземпляра материала. WorldVisuals
     // можно размонтировать/смонтировать при handoff — та же звезда обязана продолжить ровно
     // тот кадр плазмы, который был виден внутри кольца, а не стартовать с uTime=0.
-    const visualTime = session.world.time
+    const visualTime = renderTime(session.world)
     material.uniforms.uTime!.value = visualTime
     if (surfaceMaterial) surfaceMaterial.uniforms.uTime!.value = visualTime
   })
@@ -325,7 +332,7 @@ function Station({ body }: { body: BodyEntity }) {
     if (m && mesh.material !== m) mesh.material = m
     // Ось симметрии GLB-станции — её «верх» (Meshy: Y), НЕ продольная Z кориолиса. Кладём Y на
     // ось спина (domain spinAxis) и крутим вокруг неё — иначе ось модели гоняется по кругу (кувырок).
-    place(mesh, body, session.world.time, REST_POLE)
+    place(mesh, session.world, body, REST_POLE)
     const shrink = worldShrink(session.world.player.state.scale)
     mesh.visible = shrink > 0
     mesh.scale.setScalar(body.radius * shrink)
@@ -354,12 +361,12 @@ function CrossStation({ body }: { body: BodyEntity }) {
   useFrame(() => {
     const group = groupRef.current
     if (!group) return
-    place(group, body, session.world.time, REST_POLE)
+    place(group, session.world, body, REST_POLE)
     const shrink = worldShrink(session.world.player.state.scale)
     group.visible = shrink > 0
     group.scale.setScalar(body.radius * shrink)
     syncCrossPortalSky(portalMaterial, session.world.galaxySeed)
-    tickCrossPortal(neonMaterial, session.world.time)
+    tickCrossPortal(neonMaterial, renderTime(session.world))
   })
 
   return (

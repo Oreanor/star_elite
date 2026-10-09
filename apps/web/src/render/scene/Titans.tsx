@@ -1,7 +1,7 @@
 import { useFrame } from '@react-three/fiber'
 import { useMemo, useRef } from 'react'
 import { InstancedMesh, Object3D, Quaternion, Vector3 } from 'three'
-import { TITAN } from '@elite/sim'
+import { TITAN, renderPos, renderQuat, renderTime } from '@elite/sim'
 import { useSession } from '../../session/GameContext'
 import { titanGeometry } from '../geometry/titans'
 import { hullMaterial } from '../materials/materials'
@@ -36,10 +36,10 @@ function VariantBatch({ variant }: { variant: number }) {
     for (const titan of session.world.titans) {
       if (titan.variant % TITAN.VARIANTS !== variant || count >= CAP) continue
 
-      _dummy.position.copy(titan.pos)
+      renderPos(session.world, titan, _dummy.position)
       // Медленное продольное вращение поверх ориентации по курсу. Угол — из времени.
-      _spin.setFromAxisAngle(AXIS_Z, titan.spin * session.world.time)
-      _dummy.quaternion.copy(titan.quat).multiply(_spin)
+      _spin.setFromAxisAngle(AXIS_Z, titan.spin * renderTime(session.world))
+      renderQuat(session.world, titan, _dummy.quaternion).multiply(_spin)
       _dummy.scale.setScalar(titan.radius)
       _dummy.updateMatrix()
       mesh.setMatrixAt(count, _dummy.matrix)

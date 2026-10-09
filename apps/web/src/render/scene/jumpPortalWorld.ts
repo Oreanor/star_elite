@@ -195,6 +195,10 @@ export function syncPreparedJumpWorld(source: Session, target: PreparedJumpWorld
   // Оба мира используют одну временную фазу для материалов и орбит. Внутренние таймеры
   // destination уже получили тот же dt через stepWorld; это только устраняет дрейф float.
   dstWorld.time = source.world.time
+  // Та же фаза такта: картинка за кольцом показывается между тактами на ту же долю, что и
+  // своя, иначе мир в окне подрагивал бы относительно рамки.
+  dstWorld.stepCarry = source.world.stepCarry
+  dstWorld.renderAlpha = source.world.renderAlpha
 }
 
 export function syncDestCamera(main: Camera): PerspectiveCamera {

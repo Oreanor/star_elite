@@ -1,7 +1,7 @@
 import { useFrame } from '@react-three/fiber'
 import { useMemo, useRef } from 'react'
 import { InstancedMesh, Object3D, Quaternion, Vector3 } from 'three'
-import { PLATFORM } from '@elite/sim'
+import { PLATFORM, renderPos, renderQuat, renderTime } from '@elite/sim'
 import { useSession } from '../../session/GameContext'
 import { platformGeometry } from '../geometry/platform'
 import { hullMaterial } from '../materials/materials'
@@ -36,10 +36,10 @@ function VariantBatch({ variant }: { variant: number }) {
     for (const platform of session.world.platforms) {
       if (!platform.alive || platform.variant % PLATFORM.VARIANTS !== variant || count >= CAP) continue
 
-      _dummy.position.copy(platform.pos)
+      renderPos(session.world, platform, _dummy.position)
       // Медленный крен поверх ориентации гнезда. Угол — из времени, не накапливаем.
-      _spin.setFromAxisAngle(AXIS_Z, platform.spin * session.world.time)
-      _dummy.quaternion.copy(platform.quat).multiply(_spin)
+      _spin.setFromAxisAngle(AXIS_Z, platform.spin * renderTime(session.world))
+      renderQuat(session.world, platform, _dummy.quaternion).multiply(_spin)
       // Масштаб — по силуэту (extent), а не по ядру столкновений (radius).
       _dummy.scale.setScalar(platform.extent)
       _dummy.updateMatrix()

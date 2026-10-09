@@ -1,7 +1,7 @@
 import { useFrame } from '@react-three/fiber'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { InstancedMesh, Object3D, type Texture } from 'three'
-import { ASTEROID } from '@elite/sim'
+import { ASTEROID, renderPos, renderQuat } from '@elite/sim'
 import { useSession } from '../../session/GameContext'
 import { asteroidShapes } from '../geometry/rocks'
 import { rockMaterial, rockTexturedMaterial } from '../materials/materials'
@@ -47,8 +47,8 @@ function ShapeBatch({ shapeIndex }: { shapeIndex: number }) {
     for (const rock of session.world.asteroids) {
       if (rock.shape !== shapeIndex || count >= MAX_PER_SHAPE) continue
 
-      _dummy.position.copy(rock.pos)
-      _dummy.quaternion.copy(rock.quat)
+      renderPos(session.world, rock, _dummy.position)
+      renderQuat(session.world, rock, _dummy.quaternion)
       // Геометрия единичного радиуса — настоящий размер задаёт масштаб.
       _dummy.scale.setScalar(rock.radius * shrink)
       _dummy.updateMatrix()

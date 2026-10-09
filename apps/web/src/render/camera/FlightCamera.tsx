@@ -1,7 +1,7 @@
 import { useFrame, useThree } from '@react-three/fiber'
 import { useRef } from 'react'
 import { PerspectiveCamera, Quaternion, Vector3 } from 'three'
-import { CRUISE, clamp } from '@elite/sim'
+import { CRUISE, clamp, renderPos, renderQuat, renderTime } from '@elite/sim'
 import { manoeuvreHoldsCamera } from '../../session/playerController'
 import { useSession } from '../../session/GameContext'
 import { undocking, undockProgress } from '../../session/undockFx'
@@ -19,6 +19,12 @@ import { BUSH, CAMERA, GIANT_RENDER_CAP, RENDER } from '../config'
  */
 
 const _target = new Vector3()
+/**
+ * Поза игрока ДЛЯ ПОКАЗА — между тактами симуляции (см. `poseTrail`). Камера ведёт именно её:
+ * корабль рисуется в ней же, и ведомая по голой позе такта камера дёргалась бы относительно
+ * него на 144 Гц, где такт есть не в каждом кадре.
+ */
+const _shown = { pos: new Vector3(), quat: new Quaternion() }
 const _offset = new Vector3()
 /** Скорость для упреждения, обрезанная базовым MAX_SPEED: см. врезку у addScaledVector. */
 const _lead = new Vector3()
@@ -101,7 +107,9 @@ export function FlightCamera() {
     const running = session.running
 
     const player = session.world.player
-    const state = player.state
+    const state = _shown
+    renderPos(session.world, player.state, state.pos)
+    renderQuat(session.world, player.state, state.quat)
 
     // JumpDirector уже перенёс саму камеру. Переносим тем же поворотом её скрытый базис,
     // иначе следующий кадр пружины пересчитывает старый курс и создаёт видимый рывок.
@@ -221,8 +229,8 @@ export function FlightCamera() {
        * одна константа не годится сразу для обеих. Но сверху он ограничен, иначе
        * на быстрой фигуре корабль улетает в точку и не видно, что он делает.
        */
-      const rate = Math.max(0.4, Math.abs(state.angVel.x))
-      const loopRadius = state.vel.length() / rate
+      const rate = Math.max(0.4, Math.abs(player.state.angVel.x))
+      const loopRadius = player.state.vel.length() / rate
       const pullback = clamp(
         1 + (CAMERA.LOOP_PULLBACK_GAIN * loopRadius) / _offset.length(),
         1,
@@ -243,7 +251,7 @@ export function FlightCamera() {
     // Множитель зажат потолком РЕНДЕРА (см. GIANT_RENDER_CAP): выше него километровый
     // корпус мерцает в лог-буфере, а на экране он и так во весь кадр. Тот же зажим у меша
     // корабля — тогда он остаётся постоянного размера, просто мир перестаёт уменьшаться.
-    _offset.multiplyScalar(Math.min(state.scale, GIANT_RENDER_CAP))
+    _offset.multiplyScalar(Math.min(player.state.scale, GIANT_RENDER_CAP))
 
     // На КУСТЕ камера отъезжает, чтобы в кадр вошла КРОНА пузырей: базовая chase-дистанция
     // выверена под бой у самого корабля, а тут смотрят на дерево галактик впереди. В комнате
@@ -353,11 +361,11 @@ export function FlightCamera() {
     // За GIANT_RENDER_CAP отвод камеры и меш уже заморожены: мягкая пружина + vel∝scale
     // дают ложное «стою, а уезжаю вперёд». Жёсткий погон с капа — силуэт в кадре.
     // Ниже капа — пружина с потолком отставания (MAX_AHEAD).
-    if (running && state.scale < GIANT_RENDER_CAP) {
+    if (running && player.state.scale < GIANT_RENDER_CAP) {
       // Упреждение по скорости, ОБРЕЗАННОЙ базовым MAX_SPEED. Иначе на крейсере
       // член vel·LEAD выносит цель на километры ВПЕРЁД корабля — камера обгоняет.
       const cap = player.spec.tuning.MAX_SPEED
-      _lead.copy(state.vel)
+      _lead.copy(player.state.vel)
       if (_lead.lengthSq() > cap * cap) _lead.setLength(cap)
       _target.addScaledVector(_lead, CAMERA.VELOCITY_LEAD)
       camera.position.lerp(_target, chaseAlpha)
@@ -398,7 +406,7 @@ export function FlightCamera() {
       CAMERA.SHAKE_MAX * cruiseFraction * (CAMERA.SHAKE_STEADY_FALLOFF + (1 - CAMERA.SHAKE_STEADY_FALLOFF) * accelerating)
 
     if (amplitude > 1e-4) {
-      const time = session.world.time
+      const time = renderTime(session.world)
       _shake.set(shakeAt(time, 1.7), shakeAt(time, 4.2), shakeAt(time, 8.9)).multiplyScalar(amplitude)
       // Смещение в связанных осях: трясёт кабину, а не мир.
       _shake.applyQuaternion(camera.quaternion)
@@ -413,9 +421,9 @@ export function FlightCamera() {
 
     // Толчок кабины на попадании по КОРПУСУ (щит пробит). Короткий вздрог + лёгкий увод
     // кадра — «как будто на миг тряхнуло управление». Мимо физики: домен лишь метит момент.
-    const hullAge = (session.world.time - player.lastHullHitAt) / CAMERA.HULL_HIT_SHAKE_LIFE
+    const hullAge = (renderTime(session.world) - player.lastHullHitAt) / CAMERA.HULL_HIT_SHAKE_LIFE
     if (hullAge >= 0 && hullAge < 1) {
-      const time = session.world.time
+      const time = renderTime(session.world)
       const amp = CAMERA.HULL_HIT_SHAKE_MAX * (1 - hullAge)
       _shake.set(shakeAt(time, 3.1), shakeAt(time, 6.7), shakeAt(time, 0.9)).multiplyScalar(amp)
       camera.position.add(_shake.applyQuaternion(camera.quaternion))

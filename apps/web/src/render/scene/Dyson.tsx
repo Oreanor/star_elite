@@ -1,7 +1,7 @@
 import { useFrame } from '@react-three/fiber'
 import { useMemo, useRef } from 'react'
 import { LineSegments, Mesh, Quaternion, Vector3 } from 'three'
-import { DYSON } from '@elite/sim'
+import { DYSON, renderPos, renderTime } from '@elite/sim'
 import { useSession } from '../../session/GameContext'
 import { dysonGeometry, dysonIsLines, ruinGeometry } from '../geometry/dyson'
 import { dysonLineMaterial, dysonPanelMaterial } from '../materials/materials'
@@ -37,8 +37,8 @@ function Structure({ variant, ruined }: { variant: number; ruined: boolean }) {
     // Позиция — из ГЛАВНОЙ звезды: у двойной структура висит на первой.
     const star = session.world.bodies.find((b) => b.kind === 'star')
     if (!star) return
-    node.position.copy(star.pos)
-    _spin.setFromAxisAngle(AXIS, DYSON.SPIN * session.world.time)
+    renderPos(session.world, star, node.position)
+    _spin.setFromAxisAngle(AXIS, DYSON.SPIN * renderTime(session.world))
     node.quaternion.copy(_spin)
     node.scale.setScalar(star.radius * DYSON.SHELL_RADIUS)
   })

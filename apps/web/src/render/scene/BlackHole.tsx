@@ -7,6 +7,7 @@ import {
   Texture,
   Vector3,
 } from 'three'
+import { renderPos, renderTime } from '@elite/sim'
 import type { BodyEntity } from '@elite/sim'
 import { useSession } from '../../session/GameContext'
 import {
@@ -117,21 +118,21 @@ function BlackHoleInstance({ body }: { body: BodyEntity }) {
 
     if (coreRef.current) {
       coreRef.current.visible = true
-      coreRef.current.position.copy(body.pos)
+      renderPos(session.world, body, coreRef.current.position)
       coreRef.current.scale.setScalar(rs * 1.02)
     }
 
     lens.visible = lensOn
     if (lensOn) {
-      lens.position.copy(body.pos)
+      renderPos(session.world, body, lens.position)
       lens.scale.setScalar(influence)
       lens.updateMatrixWorld()
       const u = lensMat.uniforms
-      u.uBhCenter!.value.copy(body.pos)
+      renderPos(session.world, body, u.uBhCenter!.value)
       u.uCameraPos!.value.copy(camera.position)
       // Аккреционный диск имеет фазу времени мира, а не возраст React-компонента.
       // Поэтому ремоунт после портала не запускает чёрную дыру заново с нуля.
-      u.uTime!.value = session.world.time
+      u.uTime!.value = renderTime(session.world)
       u.uRs!.value = rs
       u.uInfluence!.value = influence
       u.uDiskInner!.value = params.diskInnerRadius * rs

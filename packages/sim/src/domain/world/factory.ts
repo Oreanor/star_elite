@@ -821,6 +821,8 @@ export function createWorld(def: SystemDef = STARTER_SYSTEM, profile?: PilotProf
     trafficTimer: TRAFFIC.FIRST_DELAY,
     originOffset: new Vector3(),
     originShift: new Vector3(),
+    stepCarry: 0,
+    renderAlpha: 1,
     rng,
     ids,
     systemName: def.name,

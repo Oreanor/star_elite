@@ -8,7 +8,7 @@ import {
   ShaderMaterial,
   type InstancedBufferAttribute,
 } from 'three'
-import { WARBASE } from '@elite/sim'
+import { WARBASE, renderTime } from '@elite/sim'
 import { useSession } from '../../session/GameContext'
 import { Color } from 'three'
 import { PALETTE } from '../config'
@@ -89,7 +89,7 @@ export function Blastwaves() {
   useFrame(({ camera }) => {
     const mesh = ref.current
     if (!mesh) return
-    const now = session.world.time
+    const now = renderTime(session.world)
     let count = 0
 
     for (const wave of session.world.blastwaves) {

@@ -1,7 +1,7 @@
 import { useFrame } from '@react-three/fiber'
 import { useMemo, useRef } from 'react'
-import { InstancedMesh, Object3D, Vector3 } from 'three'
-import { hardpointIndices, isMissile, shipAxes } from '@elite/sim'
+import { InstancedMesh, Object3D, Quaternion, Vector3 } from 'three'
+import { hardpointIndices, isMissile, shipAxes, renderPos, renderQuat } from '@elite/sim'
 import { useSession } from '../../session/GameContext'
 import { missileGeometry } from '../geometry/ships'
 import { missileMaterial } from '../materials/materials'
@@ -15,6 +15,8 @@ import { missileMaterial } from '../materials/materials'
 
 const MAX_PYLONS = 8
 
+const _shownAt = new Vector3()
+const _shownQuat = new Quaternion()
 const _dummy = new Object3D()
 const _fwd = new Vector3()
 const _right = new Vector3()
@@ -41,7 +43,10 @@ export function WingMissiles() {
       return
     }
 
-    shipAxes(player.state.quat, _fwd, _right, _up)
+    // Подвеска едет с ПОКАЗАННЫМ корпусом (между тактами), иначе ракеты отстают от крыла.
+    renderQuat(session.world, player.state, _shownQuat)
+    renderPos(session.world, player.state, _shownAt)
+    shipAxes(_shownQuat, _fwd, _right, _up)
 
     let count = 0
     for (const index of pylons) {
@@ -57,14 +62,14 @@ export function WingMissiles() {
 
       const [x, y, z] = mount.hardpoint.offset
       _pos
-        .copy(player.state.pos)
+        .copy(_shownAt)
         .addScaledVector(_right, x)
         .addScaledVector(_up, y)
         // Смещение задано в связанных осях, где +Z назад, а нос смотрит в -Z.
         .addScaledVector(_fwd, -z)
 
       _dummy.position.copy(_pos)
-      _dummy.quaternion.copy(player.state.quat)
+      _dummy.quaternion.copy(_shownQuat)
       _dummy.updateMatrix()
       mesh.setMatrixAt(count, _dummy.matrix)
       count++

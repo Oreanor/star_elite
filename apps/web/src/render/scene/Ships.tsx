@@ -1,7 +1,17 @@
 import { useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef } from 'react'
 import { InstancedMesh, Mesh, Object3D, Plane, type Material } from 'three'
-import { CHASSIS_CATALOGUE, clamp, isDroneShip, isVisible, warpDepartHidden, warpEmergeHidden, type ShipEntity } from '@elite/sim'
+import {
+  CHASSIS_CATALOGUE,
+  clamp,
+  isDroneShip,
+  isVisible,
+  renderPos,
+  renderQuat,
+  warpDepartHidden,
+  warpEmergeHidden,
+  type ShipEntity,
+} from '@elite/sim'
 import { useSession } from '../../session/GameContext'
 import { jumpPortal, portalOpen } from '../../session/jumpPortal'
 import { GIANT_HIDE, GIANT_RENDER_CAP } from '../config'
@@ -63,8 +73,9 @@ export function PlayerShip() {
     // потолком рендера (GIANT_RENDER_CAP), синхронно с камерой: выше него корпус мерцает
     // в лог-буфере глубины. По игре ты растёшь дальше — просто на экране размер замирает.
     const capped = Math.min(player.state.scale, GIANT_RENDER_CAP)
-    mesh.quaternion.copy(player.state.quat)
-    mesh.position.copy(player.state.pos)
+    // Поза для показа — между тактами (см. `poseTrail`), как и у камеры.
+    renderQuat(session.world, player.state, mesh.quaternion)
+    renderPos(session.world, player.state, mesh.position)
 
     // Гигант-режим: выше GIANT_HIDE.START свой корпус тает НА МЕСТЕ (масштаб → 0).
     // Раньше уводили назад к камере — с pitch камеры это читалось как «уполз вниз
@@ -127,8 +138,8 @@ export function Drones() {
     for (const ship of session.world.ships) {
       if (!isDroneShip(ship) || !isVisible(ship) || count >= MAX_DRONES) continue
 
-      _dummy.position.copy(ship.state.pos)
-      _dummy.quaternion.copy(ship.state.quat)
+      renderPos(session.world, ship.state, _dummy.position)
+      renderQuat(session.world, ship.state, _dummy.quaternion)
       _dummy.scale.setScalar(ship.state.scale) // миелофон: истинный размер борта
       _dummy.updateMatrix()
       mesh.setMatrixAt(count, _dummy.matrix)
@@ -176,8 +187,8 @@ function BotChassisBatch({ chassisId }: { chassisId: string }) {
       )
         continue
 
-      _dummy.position.copy(ship.state.pos)
-      _dummy.quaternion.copy(ship.state.quat)
+      renderPos(session.world, ship.state, _dummy.position)
+      renderQuat(session.world, ship.state, _dummy.quaternion)
       _dummy.scale.setScalar(ship.state.scale) // миелофон: истинный размер борта
       _dummy.updateMatrix()
       mesh.setMatrixAt(count, _dummy.matrix)

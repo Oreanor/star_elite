@@ -1,6 +1,7 @@
 import { Vector3 } from 'three'
 import { PHYSICS } from '../../config/physics'
 import type { World } from './entities'
+import { shiftTrail } from './poseTrail'
 
 /**
  * Плавающее начало координат.
@@ -34,6 +35,7 @@ export function maybeShiftOrigin(world: World): void {
   world.originShift.add(_shift)
 
   pos.set(0, 0, 0)
+  shiftTrail(world.player.state, _shift)
 
   /**
    * Сдвинуть обязано ВСЁ, у чего есть место в мире. Список тут — ручной, и это его слабость:
@@ -43,19 +45,46 @@ export function maybeShiftOrigin(world: World): void {
    * пол-а.е. Аудит по этому следу вскрыл, что так же забыты были болты, платформы, варп-вспышки,
    * порталы и вспышки поля. НОВЫЙ СПИСОК С `pos` — НОВАЯ СТРОКА ЗДЕСЬ.
    */
-  for (const s of world.ships) s.state.pos.add(_shift)
-  for (const a of world.asteroids) a.pos.add(_shift)
-  for (const p of world.pods) p.pos.add(_shift)
-  for (const m of world.missiles) m.pos.add(_shift)
+  for (const s of world.ships) {
+    s.state.pos.add(_shift)
+    shiftTrail(s.state, _shift)
+  }
+  for (const a of world.asteroids) {
+    a.pos.add(_shift)
+    shiftTrail(a, _shift)
+  }
+  for (const p of world.pods) {
+    p.pos.add(_shift)
+    shiftTrail(p, _shift)
+  }
+  for (const m of world.missiles) {
+    m.pos.add(_shift)
+    shiftTrail(m, _shift)
+  }
   // Болты — снаряды в полёте. Сдвиг случается и посреди боя: без него очередь teleportируется.
-  for (const b of world.bolts) b.pos.add(_shift)
-  for (const b of world.bodies) b.pos.add(_shift)
-  for (const t of world.titans) t.pos.add(_shift)
+  for (const b of world.bolts) {
+    b.pos.add(_shift)
+    shiftTrail(b, _shift)
+  }
+  for (const b of world.bodies) {
+    b.pos.add(_shift)
+    shiftTrail(b, _shift)
+  }
+  for (const t of world.titans) {
+    t.pos.add(_shift)
+    shiftTrail(t, _shift)
+  }
   for (const m of world.monoliths) m.pos.add(_shift)
-  for (const f of world.figurines) f.pos.add(_shift)
+  for (const f of world.figurines) {
+    f.pos.add(_shift)
+    shiftTrail(f, _shift)
+  }
   for (const r of world.warBases) r.pos.add(_shift)
   // Платформы-гнёзда стоят на месте — тем заметнее был бы их прыжок.
-  for (const p of world.platforms) p.pos.add(_shift)
+  for (const p of world.platforms) {
+    p.pos.add(_shift)
+    shiftTrail(p, _shift)
+  }
   for (const t of world.tracers) {
     t.from.add(_shift)
     t.to.add(_shift)

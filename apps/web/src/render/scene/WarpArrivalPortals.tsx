@@ -10,7 +10,7 @@ import {
   TorusGeometry,
   Vector3,
 } from 'three'
-import { WARP } from '@elite/sim'
+import { WARP, renderTime } from '@elite/sim'
 import { useSession } from '../../session/GameContext'
 import { WARP_PORTAL } from '../config'
 
@@ -143,7 +143,7 @@ function PortalInstance({
 export function WarpArrivalPortals() {
   const session = useSession()
   const portals = session.world.warpPortals
-  const time = session.world.time
+  const time = renderTime(session.world)
   if (portals.length === 0) return null
   return (
     <>

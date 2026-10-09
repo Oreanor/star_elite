@@ -1,4 +1,4 @@
-import { BOMB } from '@elite/sim'
+import { BOMB, renderTime } from '@elite/sim'
 import type { World } from '@elite/sim'
 import { Vector3 } from 'three'
 
@@ -24,7 +24,7 @@ const SHAKE_AMPLITUDE = 1.4
 function newest(world: World): { age: number; power: number } | null {
   const wave = world.shockwaves[0]
   if (!wave) return null
-  return { age: world.time - wave.born, power: wave.power }
+  return { age: renderTime(world) - wave.born, power: wave.power }
 }
 
 /**
@@ -77,7 +77,7 @@ export function bombShake(world: World, out: Vector3): Vector3 {
 
   const decay = (1 - wave.age / SHAKE_LIFE) ** 2
   const amplitude = SHAKE_AMPLITUDE * wave.power * decay
-  const t = world.time
+  const t = renderTime(world)
 
   // Три несоизмеримые частоты: рисунок не повторяется за время тряски.
   out.set(Math.sin(t * 47.3), Math.sin(t * 61.7), Math.sin(t * 39.1) * 0.4).multiplyScalar(amplitude)

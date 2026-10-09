@@ -1,7 +1,7 @@
 import { useFrame } from '@react-three/fiber'
 import { useMemo, useRef } from 'react'
 import { AdditiveBlending, InstancedMesh, MeshBasicMaterial, Object3D, Quaternion, Vector3 } from 'three'
-import { clamp, CRUISE, shipAxes, type ShipEntity } from '@elite/sim'
+import { clamp, CRUISE, shipAxes, renderPos, renderQuat, renderTime, type ShipEntity } from '@elite/sim'
 import { useSession } from '../../session/GameContext'
 import { EXHAUST, GIANT_RENDER_CAP } from '../config'
 import { flameGeometry } from '../geometry/flame'
@@ -20,6 +20,9 @@ import { rigEditorActive } from '../dev/rigEditor'
  * то, что игрок и ощущает как «газ». Мерцание — чисто рендер, физику не трогает.
  */
 
+/** Поза корабля/ракеты для показа — между тактами (см. `poseTrail`). */
+const _shownAt = new Vector3()
+const _shownQuat = new Quaternion()
 const MAX_FLAMES = 160
 
 const _dummy = new Object3D()
@@ -105,7 +108,7 @@ function Flames({ cone }: { cone: Cone }) {
      * а на первом — равным ёмкости буфера, и в начале координат вспыхнула бы
      * сотня конусов. Поэтому мир на паузе просто отдаёт нулевой шаг.
      */
-    const time = world.time
+    const time = renderTime(world)
     const step = session.running ? dt : 0
     let count = 0
 
@@ -192,7 +195,8 @@ function Flames({ cone }: { cone: Cone }) {
       // Масштаб факела зажат тем же потолком, что меш корабля и камера (GIANT_RENDER_CAP):
       // без этого выше потолка меш замирает, а факел растёт дальше — и сопла «отрываются»
       // назад от замёрзшего корпуса. С зажимом струя остаётся приклеена к дюзам.
-      emit(ship.state.pos, ship.state.quat, nozzlesFor(ship), length, Math.min(ship.state.scale, GIANT_RENDER_CAP), fade)
+      // Факел крепится к ПОКАЗАННОМУ корпусу (между тактами), иначе отклеивается от дюз.
+      emit(renderPos(world, ship.state, _shownAt), renderQuat(world, ship.state, _shownQuat), nozzlesFor(ship), length, Math.min(ship.state.scale, GIANT_RENDER_CAP), fade)
     }
 
     // Корабль игрока канул в кольцо — гасим и его факел вместе с корпусом.
@@ -215,7 +219,7 @@ function Flames({ cone }: { cone: Cone }) {
       const length =
         (EXHAUST.MISSILE_LENGTH * cruise + EXHAUST.MISSILE_IGNITION_LENGTH * ignition + 1.2) * flicker
 
-      emit(m.pos, m.quat, MISSILE_FLAME, length)
+      emit(renderPos(world, m, _shownAt), renderQuat(world, m, _shownQuat), MISSILE_FLAME, length)
     }
 
     mesh.count = count

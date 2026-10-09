@@ -77,6 +77,7 @@ import {
 import { findWarBaseFixture, warBaseFixtureWorldPos } from '../world/warBase'
 import { stepOrbits } from '../world/orbits'
 import { maybeShiftOrigin } from '../world/origin'
+import { beginTrailTick, endTrailFrame, snapMovedTrails } from '../world/poseTrail'
 import { markContactLost } from '../world/acquaintance'
 import { stepWarpEmergence } from '../world/warp'
 import { stepDivineScale, stepDockTraffic, stepTraffic } from '../world/traffic'
@@ -126,12 +127,8 @@ export function stepWorld(world: World, frameDt: number, controllers: Controller
   // что и полёт: это те же часы, а не отдельный таймер экрана станции.
   if (world.docked) {
     world.originShift.set(0, 0, 0)
-    let remaining = Math.min(frameDt, PHYSICS.MAX_FRAME_DT)
-    while (remaining > 0) {
-      const dt = Math.min(PHYSICS.FIXED_DT, remaining)
-      remaining -= dt
-      stepDockTraffic(world, dt)
-    }
+    const ticks = takeTicks(world, frameDt)
+    for (let i = 0; i < ticks; i++) stepDockTraffic(world, PHYSICS.FIXED_DT)
     return
   }
 
@@ -142,16 +139,35 @@ export function stepWorld(world: World, frameDt: number, controllers: Controller
   // дальше оба только прибавляют.
   world.originShift.set(0, 0, 0)
 
-  // Накопитель ограничен сверху: свёрнутая вкладка не должна телепортировать мир.
-  let remaining = Math.min(frameDt, PHYSICS.MAX_FRAME_DT)
+  // Переставленное снаружи с прошлого кадра (прыжок, отчаливание) — без протяжки следа.
+  snapMovedTrails(world)
 
-  while (remaining > 0) {
-    const dt = Math.min(PHYSICS.FIXED_DT, remaining)
-    remaining -= dt
-    world.time += dt
-    stepTick(world, controllers, dt)
-    onTick?.(dt)
+  const ticks = takeTicks(world, frameDt)
+  for (let i = 0; i < ticks; i++) {
+    beginTrailTick(world)
+    world.time += PHYSICS.FIXED_DT
+    stepTick(world, controllers, PHYSICS.FIXED_DT)
+    onTick?.(PHYSICS.FIXED_DT)
   }
+  endTrailFrame(world)
+}
+
+/**
+ * НАКОПИТЕЛЬ: сколько целых тактов отыграть за этот кадр. Остаток не досчитывается
+ * укороченным тактом, а ждёт следующего кадра (`stepCarry`): такт всегда ровно `FIXED_DT`,
+ * и физика не зависит от герцовки. Что недошагали — догоняет рендер, показывая тела между
+ * тактами (`renderAlpha`, см. `poseTrail`).
+ *
+ * Сверху кадр ограничен: свёрнутая вкладка не должна телепортировать мир.
+ */
+function takeTicks(world: World, frameDt: number): number {
+  const available = world.stepCarry + Math.min(frameDt, PHYSICS.MAX_FRAME_DT)
+  // Крошечный допуск: 1/60 = 2·(1/120) в плавающей точке иногда даёт 1.9999…, и целый
+  // такт уезжал бы в следующий кадр, а кадр 60 Гц делал бы то один, то три такта.
+  const ticks = Math.floor(available / PHYSICS.FIXED_DT + 1e-9)
+  world.stepCarry = Math.max(0, available - ticks * PHYSICS.FIXED_DT)
+  world.renderAlpha = Math.min(1, world.stepCarry / PHYSICS.FIXED_DT)
+  return ticks
 }
 
 /**

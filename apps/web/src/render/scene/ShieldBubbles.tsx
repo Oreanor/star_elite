@@ -1,6 +1,7 @@
 import { useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef } from 'react'
 import { Color, InstancedBufferAttribute, InstancedMesh, Object3D, PlaneGeometry, Vector3 } from 'three'
+import { renderPos, renderTime } from '@elite/sim'
 import type { ShipEntity } from '@elite/sim'
 import { useSession } from '../../session/GameContext'
 import { SHIELD_BUBBLE } from '../config'
@@ -40,7 +41,7 @@ export function ShieldBubbles() {
     if (!mesh) return
 
     const world = session.world
-    const now = world.time
+    const now = renderTime(world)
     // FlightCamera работает на -50, поэтому здесь уже лежит окончательная поза этого
     // кадра. Нужна ПОЗИЦИЯ камеры: кольцо целится в неё, а не копирует ориентацию камеры.
     camera.getWorldPosition(_camPos)
@@ -51,7 +52,7 @@ export function ShieldBubbles() {
       const age = (now - ship.lastShieldHitAt) / SHIELD_BUBBLE.LIFE
       if (age < 0 || age > 1) return
 
-      _dummy.position.copy(ship.state.pos)
+      renderPos(world, ship.state, _dummy.position)
       // Billboard в ТОЧКУ камеры, а не по её ориентации. Экранно-параллельный диск
       // (copy(cameraQuat)) у корабля СБОКУ экрана виден косо и читается плоским эллипсом —
       // «щит повернулся к выстрелу». Целясь нормалью прямо в камеру, кольцо предстаёт полной

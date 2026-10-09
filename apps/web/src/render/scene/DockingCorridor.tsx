@@ -1,6 +1,7 @@
 import { useFrame } from '@react-three/fiber'
 import { useEffect, useMemo, useRef } from 'react'
 import { Color, InstancedBufferAttribute, InstancedMesh, Object3D, Vector3 } from 'three'
+import { renderPos, renderTime } from '@elite/sim'
 import { useSession } from '../../session/GameContext'
 import { CORRIDOR } from '../config'
 import { corridorRingGeometry } from '../geometry/props'
@@ -117,11 +118,11 @@ export function DockingCorridor() {
         ? CORRIDOR.COUNT
         : Math.max(0, Math.min(CORRIDOR.COUNT, Math.floor((limit.current - CORRIDOR.FIRST) / CORRIDOR.SPACING) + 1))
 
-    mesh.position.copy(station.pos)
+    renderPos(world, station, mesh.position)
 
     const array = colors.array as Float32Array
     for (let i = 0; i < CORRIDOR.COUNT; i++) {
-      const b = pulse(i, world.time)
+      const b = pulse(i, renderTime(world))
       array[i * 3] = _tint.r * b
       array[i * 3 + 1] = _tint.g * b
       array[i * 3 + 2] = _tint.b * b

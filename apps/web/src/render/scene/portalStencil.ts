@@ -18,6 +18,7 @@ import {
   type Camera,
   type WebGLRenderer,
 } from 'three'
+import { renderTime } from '@elite/sim'
 import type { World } from '@elite/sim'
 import { portalOpen } from '../../session/jumpPortal'
 import { jumpPortal, markPortalDestinationDrawn } from '../../session/jumpPortal'
@@ -284,9 +285,9 @@ export function renderJumpPortalOverlay(
   place(ringGroup!, r)
   place(haloGroup!, r)
 
-  ringMaterial!.uniforms.uTime!.value = _world.time
-  haloMaterial!.uniforms.uTime!.value = _world.time
-  diffuseGlowMaterial!.uniforms.uTime!.value = _world.time
+  ringMaterial!.uniforms.uTime!.value = renderTime(_world)
+  haloMaterial!.uniforms.uTime!.value = renderTime(_world)
+  diffuseGlowMaterial!.uniforms.uTime!.value = renderTime(_world)
 
   const destCam = syncDestCamera(camera)
   const dest = destPortalScene()

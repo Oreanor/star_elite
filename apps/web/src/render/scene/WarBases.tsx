@@ -12,7 +12,7 @@ import {
   type BufferGeometry,
   type Texture,
 } from 'three'
-import { WARBASE, warBaseFixtureWorldPos, type WarBaseEntity } from '@elite/sim'
+import { WARBASE, warBaseFixtureWorldPos, renderTime, type WarBaseEntity } from '@elite/sim'
 import { useSession } from '../../session/GameContext'
 import { WARBASE_FX } from '../config'
 import {
@@ -93,7 +93,7 @@ function Hull({ base }: { base: WarBaseEntity }) {
     const material = texture.current ? planetTexturedMaterial(texture.current) : warBaseHullFallback()
     if (mesh.material !== material) mesh.material = material
     mesh.position.copy(base.pos)
-    mesh.quaternion.setFromAxisAngle(base.spinAxis, base.spin * session.world.time)
+    mesh.quaternion.setFromAxisAngle(base.spinAxis, base.spin * renderTime(session.world))
     mesh.scale.setScalar(base.radius * shrink)
   })
   return <mesh ref={ref} geometry={geometry} frustumCulled={false} />
@@ -128,7 +128,7 @@ function DetailBatch({ dkey }: { dkey: DetailKey }) {
     if (mesh.geometry !== g) mesh.geometry = g
     if (mesh.material !== m) mesh.material = m
 
-    const time = session.world.time
+    const time = renderTime(session.world)
     let count = 0
     for (const base of session.world.warBases) {
       if (!base.alive) continue
@@ -183,7 +183,7 @@ function TrashBatch({ variant }: { variant: number }) {
     if (mesh.geometry !== g) mesh.geometry = g
     if (mesh.material !== m) mesh.material = m
 
-    const time = session.world.time
+    const time = renderTime(session.world)
     let count = 0
     for (const base of session.world.warBases) {
       if (!base.alive) continue

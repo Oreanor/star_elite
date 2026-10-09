@@ -1,6 +1,7 @@
 import { useFrame } from '@react-three/fiber'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Color, InstancedMesh, Object3D, Quaternion, Vector3, type Texture } from 'three'
+import { renderPos, renderTime } from '@elite/sim'
 import type { BodyEntity } from '@elite/sim'
 import { useSession } from '../../session/GameContext'
 import { MOON_DECOR } from '../config'
@@ -101,10 +102,10 @@ function MoonGroup({ shape, moons }: { shape: number; moons: readonly BodyEntity
       return
     }
 
-    const time = session.world.time
+    const time = renderTime(session.world)
     for (let i = 0; i < moons.length; i++) {
       const body = moons[i]!
-      _dummy.position.copy(body.pos)
+      renderPos(session.world, body, _dummy.position)
       // Порядок важен: сначала кладём полюс на ось, потом крутим вокруг неё.
       // Иначе полюс описывает конус, и луна не вращается, а кувыркается.
       _tilt.setFromUnitVectors(REST_POLE, body.spinAxis)

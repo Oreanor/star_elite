@@ -146,3 +146,4 @@ export {
 export { spawnPlatform, stepPlatforms } from './platforms'
 export { STARTER_SYSTEM, type PatrolDef, type SystemDef } from './system'
 export { findWarBaseFixture, livingFixtures, warBaseFixtureWorldPos, warBaseIntegrity } from './warBase'
+export { renderPos, renderQuat, renderTime, shownPosition, type Posed } from './poseTrail'

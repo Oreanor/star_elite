@@ -14,7 +14,7 @@ import {
   ShaderMaterial,
   Vector3,
 } from 'three'
-import { applyDelta, GALAXY, generateGalaxy, SCALE, type BodyEntity } from '@elite/sim'
+import { applyDelta, GALAXY, generateGalaxy, SCALE, renderTime, type BodyEntity } from '@elite/sim'
 import { useSession } from '../../session/GameContext'
 import { GALAXY_LAYER } from '../config'
 import {
@@ -524,10 +524,10 @@ export function GalaxyLayer() {
     const cam = state.camera as PerspectiveCamera
     const uProj = state.gl.domElement.height / Math.tan((cam.fov * DEG2RAD) / 2)
     material.uniforms.uProj!.value = uProj
-    material.uniforms.uTime!.value = world.time
+    material.uniforms.uTime!.value = renderTime(world)
     backgroundGlowMaterial.uniforms.uProj!.value = uProj
-    discMat.uniforms.uTime!.value = world.time
-    tickStarSurfaceTime(world.time)
+    discMat.uniforms.uTime!.value = renderTime(world)
+    tickStarSurfaceTime(renderTime(world))
 
     const fade = GALAXY_LAYER.FADE_IN_START
     const lock = GALAXY_LAYER.LOCK_SCALE

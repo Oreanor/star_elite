@@ -15,7 +15,7 @@ import {
   Points,
   SphereGeometry,
 } from 'three'
-import { smoothstep } from '@elite/sim'
+import { smoothstep, renderTime } from '@elite/sim'
 import { useSession } from '../../session/GameContext'
 import { placeTorusAt, torusView } from '../../session/torusFlight'
 import { setTorusNav, torusAutopilotActive, torusTargetVertex } from '../../session/torusAutopilot'
@@ -370,7 +370,7 @@ export function HypertorusLayer() {
         cross.position.set(_p.x, _p.y, _p.z)
         cross.scale.setScalar(puffRadius(mw) * TORUS.CROSS_SCALE)
         cross.quaternion.copy(camera.quaternion)
-        tickCrossPortal(crossMat, world.time)
+        tickCrossPortal(crossMat, renderTime(world))
       }
     }
 

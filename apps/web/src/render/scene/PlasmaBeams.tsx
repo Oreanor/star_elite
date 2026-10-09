@@ -1,6 +1,8 @@
 import { useFrame } from '@react-three/fiber'
 import { useMemo, useRef } from 'react'
 import { Mesh, Object3D, Quaternion, Vector3 } from 'three'
+import { renderTime } from '@elite/sim'
+import { shownShipPoint } from '../shownPose'
 import { useSession } from '../../session/GameContext'
 import { plasmaBeamGeometry } from '../geometry/props'
 import { beamCoreMaterial, beamShellMaterial, stepBeamMaterials } from '../materials/plasmaBeam'
@@ -38,7 +40,7 @@ export function PlasmaBeams() {
 
   useFrame(() => {
     const world = session.world
-    stepBeamMaterials(world.time)
+    stepBeamMaterials(renderTime(world))
 
     let count = 0
     for (const beam of world.beams) {
@@ -54,7 +56,7 @@ export function PlasmaBeams() {
       if (!core || !shell) break
 
       const [ox, oy, oz] = beam.offset
-      _pos.set(ox, oy, oz).applyQuaternion(ship.state.quat).add(ship.state.pos)
+      shownShipPoint(world, ship, ox, oy, oz, _pos)
       _dir.copy(beam.dir)
       _quat.setFromUnitVectors(_zAxis, _dir)
 

@@ -1,6 +1,7 @@
 import { useFrame } from '@react-three/fiber'
 import { useRef } from 'react'
 import { Mesh, Quaternion } from 'three'
+import { renderTime } from '@elite/sim'
 import type { MonolithEntity } from '@elite/sim'
 import { useSession } from '../../session/GameContext'
 import { statueGlbGeometry, statueGlbMaterial } from '../geometry/statueGlb'
@@ -35,7 +36,7 @@ function Monolith({ monolith }: { monolith: MonolithEntity }) {
 
     mesh.position.copy(monolith.pos)
     // Угол ОТ ВРЕМЕНИ, а не накоплением: то же время — тот же угол.
-    _spin.setFromAxisAngle(monolith.spinAxis, monolith.spin * session.world.time)
+    _spin.setFromAxisAngle(monolith.spinAxis, monolith.spin * renderTime(session.world))
     mesh.quaternion.copy(_spin)
     mesh.scale.setScalar(monolith.radius * shrink)
   })

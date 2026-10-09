@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useFrame } from '@react-three/fiber'
 import { InstancedMesh, MeshLambertMaterial, Object3D, type Material, type Texture } from 'three'
-import { MONOLITH } from '@elite/sim'
+import { MONOLITH, renderPos, renderQuat } from '@elite/sim'
 import { useSession } from '../../session/GameContext'
 import { PALETTE } from '../config'
 import { DEBRIS_CHUNK_VARIANTS, debrisChunkGeometries } from '../geometry/debrisChunks'
@@ -44,8 +44,8 @@ function DebrisBatch({ shapeIndex, meshIndex }: { shapeIndex: number; meshIndex:
       if (pod.debris.shape !== shapeIndex) continue
       if (pod.id % DEBRIS_CHUNK_VARIANTS !== meshIndex) continue
 
-      _dummy.position.copy(pod.pos)
-      _dummy.quaternion.copy(pod.quat)
+      renderPos(session.world, pod, _dummy.position)
+      renderQuat(session.world, pod, _dummy.quaternion)
       _dummy.scale.setScalar(pod.debris.radius)
       _dummy.updateMatrix()
       mesh.setMatrixAt(count, _dummy.matrix)

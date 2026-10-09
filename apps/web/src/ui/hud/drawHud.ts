@@ -1,4 +1,4 @@
-import { Vector3, type Camera, type PerspectiveCamera } from 'three'
+import { Quaternion, Vector3, type Camera, type PerspectiveCamera } from 'three'
 import {
   AUTODOCK,
   CRUISE,
@@ -42,6 +42,9 @@ import {
   stationRange,
   warBaseFixtureWorldPos,
   warBaseIntegrity,
+  renderPos,
+  renderQuat,
+  shownPosition,
   type BodyEntity,
   type ShipEntity,
   type StarSystem,
@@ -90,6 +93,10 @@ const _point = new Vector3()
 const _fixtureAt = new Vector3()
 const _velocityDir = new Vector3()
 const _gtar = new Vector3()
+/** Позиции/поворот для ПОКАЗА — между тактами (см. `poseTrail`); живут до конца вызова. */
+const _shownAt = new Vector3()
+const _shownQuat = new Quaternion()
+const _arrowAt = new Vector3()
 
 const S = HUD_SCALE
 
@@ -245,7 +252,7 @@ function drawPods(frame: HudFrame): void {
     if (!pod.alive) continue
 
     const locked = pod.id === world.lockedPodId
-    const p = projectPoint(pod.pos, camera, width, height)
+    const p = projectPoint(shownPosition(world, pod.pos, _shownAt), camera, width, height)
     // Захваченный обломок отмечаем ВСЕГДА (как захваченный борт), даже вне дальности меток и
     // за кадром — иначе выбранная Tab'ом цель терялась бы. Прочие — только вблизи.
     if (p.behind || (!locked && (p.distance > POD_MARK_RANGE || !isOnScreen(p.x, p.y, width, height, 10 * S)))) continue
@@ -268,7 +275,7 @@ function drawPods(frame: HudFrame): void {
   const pod = nearestPod(world, POD_MARK_RANGE)
   if (!pod) return
 
-  const p = projectPoint(pod.pos, camera, width, height)
+  const p = projectPoint(shownPosition(world, pod.pos, _shownAt), camera, width, height)
   if (p.behind || !isOnScreen(p.x, p.y, width, height, 10 * S)) return
 
   const readiness = scoopReadiness(player, pod)
@@ -331,9 +338,10 @@ function dockState(world: World, station: BodyEntity, autodock: boolean): DockSt
  * иначе перекрестье перестанет означать «куда попадёт».
  */
 function drawGunsight({ ctx, camera, world, width, height }: HudFrame): void {
+  // Прицел строим от ПОКАЗАННОГО корабля: камера и корпус стоят там же, между тактами.
   const state = world.player.state
-  aimDirection(state.quat, world.player.controls.aimPitch, _fwd)
-  _point.copy(state.pos).addScaledVector(_fwd, GUNNERY.CONVERGENCE)
+  aimDirection(renderQuat(world, state, _shownQuat), world.player.controls.aimPitch, _fwd)
+  _point.copy(renderPos(world, state, _shownAt)).addScaledVector(_fwd, GUNNERY.CONVERGENCE)
 
   const p = projectPoint(_point, camera, width, height)
   if (p.behind) return
@@ -356,7 +364,7 @@ function drawFlightPathMarker({ ctx, camera, world, width, height }: HudFrame): 
   if (state.vel.length() < 1) return
 
   _velocityDir.copy(state.vel).normalize()
-  _point.copy(state.pos).addScaledVector(_velocityDir, 200)
+  _point.copy(renderPos(world, state, _shownAt)).addScaledVector(_velocityDir, 200)
 
   const p = projectPoint(_point, camera, width, height)
   if (p.behind) return
@@ -391,7 +399,7 @@ function drawTargets({ ctx, camera, world, width, height }: HudFrame): void {
     // (приходит громадой и ужимается у причала) — обычный корабль и метится как все.
     if (!ship.alive || isStationBot(ship)) continue
 
-    const p = projectPoint(ship.state.pos, camera, width, height)
+    const p = projectPoint(shownPosition(world, ship.state.pos, _shownAt), camera, width, height)
     if (p.behind || !isOnScreen(p.x, p.y, width, height, 20 * S)) continue
 
     const locked = ship.id === world.lockedTargetId
@@ -462,7 +470,8 @@ function offscreenArrow(
   filled = false,
   label?: string | null,
 ): void {
-  const p = projectPoint(pos, camera, width, height)
+  // Позицию тела показываем там же, где оно нарисовано, — между тактами (см. `poseTrail`).
+  const p = projectPoint(shownPosition(world, pos, _arrowAt), camera, width, height)
   if (!p.behind && isOnScreen(p.x, p.y, width, height, 20 * S)) return
 
   const cx = width / 2
@@ -519,7 +528,7 @@ function drawTargetLock(frame: HudFrame): void {
 
   // `surfaceR` — радиус тела: дистанцию к крупному телу меряем до поверхности, не до центра.
   const mark = (pos: Vector3, color: string, label: string | null, surfaceR = 0): void => {
-    const p = projectPoint(pos, camera, width, height)
+    const p = projectPoint(shownPosition(world, pos, _shownAt), camera, width, height)
     if (!p.behind && isOnScreen(p.x, p.y, width, height, 20 * S)) {
       corners(ctx, p.x, p.y, 16 * S, color, 2)
       text(ctx, formatDistance(Math.max(0, shipDistance(world, pos) - surfaceR)), p.x, p.y + 16 * S, color, 'center')
@@ -605,7 +614,7 @@ function drawPinnedStar(frame: HudFrame): void {
   // Звезда практически на бесконечности: проецируем точку далеко по направлению от борта.
   // Дистанцию к ней меряем не в метрах (их триллионы), а в СВЕТОВЫХ ГОДАХ — из геометрии.
   const FAR = 1e9 // м — заведомо дальше любого тела системы, но в пределах проекции
-  _gtar.copy(world.player.state.pos).addScaledVector(_pinDir, FAR)
+  _gtar.copy(renderPos(world, world.player.state, _shownAt)).addScaledVector(_pinDir, FAR)
   const color = `#${star.star.color.toString(16).padStart(6, '0')}`
   const title = properName(star.name)
   const range = formatLy(distanceLy(origin, star))
@@ -751,7 +760,7 @@ function drawBodyMarkers({ ctx, camera, world, width, height, aperture }: HudFra
   const hole = apertureEllipse(aperture, camera, width, height)
 
   for (const m of collectMarkers(world)) {
-    const p = projectPoint(m.pos, camera, width, height)
+    const p = projectPoint(shownPosition(world, m.pos, _shownAt), camera, width, height)
     if (p.behind || !isOnScreen(p.x, p.y, width, height)) continue
     // Подпись своей системы, попавшая в дырку, лежала бы поверх чужого неба —
     // ровно того, что stencil из кадра вырезал. Гасим.
@@ -767,7 +776,7 @@ function drawBodyMarkers({ ctx, camera, world, width, height, aperture }: HudFra
   const destCamera = aperture?.camera
   if (hole && destWorld && destCamera) {
     for (const m of collectMarkers(destWorld, true)) {
-      const p = projectPoint(m.pos, destCamera, width, height)
+      const p = projectPoint(shownPosition(destWorld, m.pos, _shownAt), destCamera, width, height)
       if (p.behind || !isOnScreen(p.x, p.y, width, height)) continue
       if (!insideAperture(hole, p.x, p.y)) continue
       shown.push({ m, x: p.x, y: p.y, distance: p.distance, from: destWorld })

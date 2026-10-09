@@ -12,7 +12,8 @@ import {
   PlaneGeometry,
   Vector3,
 } from 'three'
-import { findModule, GUNNERY, type Tracer, type World } from '@elite/sim'
+import { findModule, GUNNERY, renderPos, renderQuat, renderTime, type Tracer, type World } from '@elite/sim'
+import { shownShipPoint } from '../shownPose'
 import { useSession } from '../../session/GameContext'
 import { EXPLOSION, LASER, LASER_CLASS_GLOW, LASER_CLASS_WIDTH, LASER_GLOW_FALLBACK, MUZZLE, SHIELD_FLASH, WARP_FLASH } from '../config'
 import {
@@ -151,7 +152,7 @@ function anchoredFrom(world: World, tracer: Tracer): Vector3 | null {
   if (!offset || tracer.anchorId === undefined) return null
   const ship = world.player.id === tracer.anchorId ? world.player : world.ships.find((s) => s.id === tracer.anchorId)
   if (!ship || !ship.alive) return null
-  return _anchor.set(offset[0], offset[1], offset[2]).applyQuaternion(ship.state.quat).add(ship.state.pos)
+  return shownShipPoint(world, ship, offset[0], offset[1], offset[2], _anchor)
 }
 
 /**
@@ -216,7 +217,7 @@ export function MuzzleFlashes() {
     if (!mesh) return
 
     const world = session.world
-    const now = world.time
+    const now = renderTime(world)
     // Квад разворачиваем плоскостью К КАМЕРЕ — тогда круглый градиент всегда виден анфас.
     const faceCam = state.camera.quaternion
     let count = 0
@@ -233,7 +234,7 @@ export function MuzzleFlashes() {
       if (!ship) continue
 
       const [ox, oy, oz] = flash.offset
-      _muzzlePos.set(ox, oy, oz).applyQuaternion(ship.state.quat).add(ship.state.pos)
+      shownShipPoint(world, ship, ox, oy, oz, _muzzlePos)
 
       const cls = classOf(flash.weapon)
       const width = (LASER_CLASS_WIDTH[cls] ?? 1) * flash.bore
@@ -288,7 +289,7 @@ export function Explosions() {
     const mesh = ref.current
     if (!mesh) return
 
-    const now = session.world.time
+    const now = renderTime(session.world)
     let count = 0
 
     for (const blast of session.world.explosions) {
@@ -349,7 +350,7 @@ export function ExplosionChunks() {
     const mesh = ref.current
     if (!mesh) return
 
-    const now = session.world.time
+    const now = renderTime(session.world)
     let count = 0
 
     for (const blast of session.world.explosions) {
@@ -422,7 +423,7 @@ export function WarpFlashes() {
     const mesh = ref.current
     if (!mesh) return
 
-    const now = session.world.time
+    const now = renderTime(session.world)
     let count = 0
 
     for (const flash of session.world.warps) {
@@ -483,7 +484,7 @@ export function StationShields() {
     const mesh = ref.current
     if (!mesh) return
 
-    const now = session.world.time
+    const now = renderTime(session.world)
     let count = 0
 
     for (const flash of session.world.shieldFlashes) {
@@ -535,8 +536,8 @@ export function CargoPods() {
     for (const pod of session.world.pods) {
       // Осколки глыб рисует `RockDebris` — простые камни с текстурой астероида.
       if (!pod.alive || pod.debris || count >= MAX_PODS) continue
-      _dummy.position.copy(pod.pos)
-      _dummy.quaternion.copy(pod.quat)
+      renderPos(session.world, pod, _dummy.position)
+      renderQuat(session.world, pod, _dummy.quaternion)
       _dummy.scale.setScalar(1)
       _dummy.updateMatrix()
       mesh.setMatrixAt(count, _dummy.matrix)
@@ -561,8 +562,8 @@ export function Missiles() {
     let count = 0
     for (const missile of session.world.missiles) {
       if (!missile.alive || count >= MAX_MISSILES) continue
-      _dummy.position.copy(missile.pos)
-      _dummy.quaternion.copy(missile.quat)
+      renderPos(session.world, missile, _dummy.position)
+      renderQuat(session.world, missile, _dummy.quaternion)
       _dummy.scale.setScalar(1)
       _dummy.updateMatrix()
       mesh.setMatrixAt(count, _dummy.matrix)

@@ -1,6 +1,8 @@
 import { useFrame } from '@react-three/fiber'
 import { useEffect, useRef } from 'react'
 import { InstancedMesh, MeshBasicMaterial, Object3D, SphereGeometry } from 'three'
+import { renderQuat } from '@elite/sim'
+import { shownShipPoint } from '../shownPose'
 import { groupPoints, rigEditor, type RigGroup } from '../dev/rigEditor'
 import { useSession } from '../../session/GameContext'
 
@@ -77,8 +79,8 @@ export function RigEditorMarks() {
       for (const p of groupPoints(group)) {
         const slot = active ? liveCount : group.slot === 'gun' ? gunCount : nozzleCount
         if (slot >= MAX_MARKS) continue
-        _dummy.position.set(p.x, p.y, p.z).applyQuaternion(player.state.quat).add(player.state.pos)
-        _dummy.quaternion.copy(player.state.quat)
+        shownShipPoint(session.world, player, p.x, p.y, p.z, _dummy.position)
+        renderQuat(session.world, player.state, _dummy.quaternion)
         _dummy.scale.setScalar(size * (active ? 1.25 : 1))
         _dummy.updateMatrix()
         mesh.setMatrixAt(slot, _dummy.matrix)

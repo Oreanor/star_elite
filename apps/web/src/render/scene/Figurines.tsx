@@ -1,3 +1,4 @@
+import { renderPos, renderTime } from '@elite/sim'
 import { useFrame } from '@react-three/fiber'
 import { useRef } from 'react'
 import { Mesh, Quaternion } from 'three'
@@ -32,8 +33,8 @@ function Figurine({ figurine }: { figurine: FigurineEntity }) {
     if (mesh.geometry !== g) mesh.geometry = g
     if (mesh.material !== m) mesh.material = m
 
-    mesh.position.copy(figurine.pos)
-    _spin.setFromAxisAngle(figurine.spinAxis, figurine.spin * session.world.time)
+    renderPos(session.world, figurine, mesh.position)
+    _spin.setFromAxisAngle(figurine.spinAxis, figurine.spin * renderTime(session.world))
     mesh.quaternion.copy(_spin)
     mesh.scale.setScalar(figurine.radius * shrink)
   })
