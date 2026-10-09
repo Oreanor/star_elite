@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest'
 import { findModule } from '../../config/modules'
 import { isLaser, isShield } from '../loadout'
 import { createWorld } from '../world'
-import { moduleFault, repairModule, repairModuleQuote, withFault } from './shop'
+import { repairModule, repairModuleQuote } from './repair'
+import { moduleFault } from './moduleState'
+import { withFault } from './moduleState'
 
 /**
  * Ремонт ПОЛОМКИ детали у мастеров. Свойства, не числа: поломка режет характеристику

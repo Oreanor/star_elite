@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { createWorld, STARTER_SYSTEM } from '../world'
 import { cycleCelestial, targetableStationsOf } from '../world/queries'
 import { dispatcherBriefing, dispatcherPersona, stationInterlocutor } from './dispatcher'
-import { localSettlement } from './shop'
+import { localSettlement } from './trade'
 import { lockContact, lockedShipId, lockedStationId } from '../world/queries'
 
 function world() {

@@ -10,7 +10,15 @@ import { type World } from '../world'
 import { stepOrbits } from '../world/orbits'
 import { autodockController, canEngageAutodock } from './autopilot'
 import { canDockAt, dock, dockThreshold, findStation, stationRange, undock } from './docking'
-import { buy, buyCommodity, canBuyCommodity, commodityBuyPrice, commoditySellPrice, masterClass, repair, repairChance, repairCost, sellItem } from './shop'
+import { buy } from './shop'
+import { masterClass, repair, repairChance, repairCost } from './repair'
+import {
+  buyCommodity,
+  canBuyCommodity,
+  commodityBuyPrice,
+  commoditySellPrice,
+  sellItem,
+} from './trade'
 import { quietWorld } from '../../testkit'
 
 /** Ставит игрока в метре от причального кольца и гасит скорость. */

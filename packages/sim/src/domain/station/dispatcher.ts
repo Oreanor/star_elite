@@ -3,7 +3,7 @@ import type { Settlement } from '../galaxy/types'
 import type { BodyEntity, World } from '../world/entities'
 import { makePersona, type Persona } from '../world/persona'
 import { findShip } from '../world/queries'
-import { localSettlement } from './shop'
+import { localSettlement } from './trade'
 import { lockedStationId } from '../world/queries'
 
 /**

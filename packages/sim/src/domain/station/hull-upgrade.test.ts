@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { SHIPYARD } from '../../config/loadouts'
 import { createWorld } from '../world'
 import { swapHull } from './shipyard'
-import { canUpgradeHullStat, hullStatUpgradeCost, upgradeHullStat } from './shop'
+import { canUpgradeHullStat, hullStatUpgradeCost, upgradeHullStat } from './upgrade'
 
 /**
  * Прокачка собственных х-к рамы — РАЗОВАЯ, по осям (HP / грузоподъёмность / аукс): каждую

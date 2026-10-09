@@ -5,7 +5,8 @@ import { refreshSpec } from '../world/factory'
 import { addItem } from '../cargo/hold'
 import { isMissile, isShield, type MissileModule, type ShieldModule } from '../loadout'
 import { createWorld } from '../world'
-import { canUpgrade, upgradeLevel, upgradeModule } from './shop'
+import { canUpgrade, upgradeModule } from './upgrade'
+import { upgradeLevel } from './moduleState'
 
 /**
  * Прокачка модуля. Проверяем СВОЙСТВА, а не магические числа: усиление растит

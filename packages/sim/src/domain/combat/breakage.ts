@@ -1,7 +1,7 @@
 import { BREAKAGE } from '../../config/weapons'
 import type { Rng } from '../../core/math'
 import { isArmour, isCargo, isMissile, isShield, type WeaponModule } from '../loadout'
-import { withFault } from '../station/shop'
+import { withFault } from '../station/moduleState'
 import type { ShipEntity } from '../world/entities'
 import { refreshSpec } from '../world/factory'
 

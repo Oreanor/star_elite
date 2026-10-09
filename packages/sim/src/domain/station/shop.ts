@@ -1,25 +1,14 @@
-import { MIELOPHONE } from '../../config/mielophone'
-import { SERVICE, SHOP, STOCK } from '../../config/station'
+import { SHOP, STOCK } from '../../config/station'
 import { clamp, makeRng } from '../../core/math'
-import { addCommodity, addItem, cargoMass, freeCapacity, removeItem } from '../cargo/hold'
-import { COMMODITIES, itemValue, type CargoItem, type Commodity } from '../cargo/items'
-import { settlementAt } from '../galaxy/generate'
+import { addItem, cargoMass, freeCapacity, removeItem } from '../cargo/hold'
 import type { Settlement } from '../galaxy/types'
-import { MODULE_CATALOGUE, findModule } from '../../config/modules'
+import { MODULE_CATALOGUE } from '../../config/modules'
 import {
   deriveShipSpec,
   isArmour,
-  isAux,
-  isCargo,
-  isCloak,
   isDrone,
-  isEngine,
   isEssential,
-  isHyperdrive,
-  isLaser,
   isMissile,
-  isShield,
-  isThrusters,
   isWeapon,
   slotCategoryOf,
   type Loadout,
@@ -29,7 +18,10 @@ import {
 } from '../loadout'
 import type { ShipEntity, World } from '../world/entities'
 import { refreshSpec } from '../world/factory'
-import { stockLevel, unitBuyPrice, unitSellPrice } from './market'
+import { StatKey, hashModuleId, locateInstalled, minTechForClass, moduleFault, upgradeLevel, withUpgrade } from './moduleState'
+import { hullDamage } from './repair'
+import { localSettlement } from './trade'
+import { UpgradeError, canUpgrade, upgradeCashCost, upgradeCopyIndex } from './upgrade'
 
 /**
  * Торговля и ремонт. Чистые правила: ни одного обращения к UI.
@@ -37,172 +29,6 @@ import { stockLevel, unitBuyPrice, unitSellPrice } from './market'
  * Ремонтируем только корпус. Щит восстанавливается сам — брать за это деньги
  * значило бы продавать время.
  */
-
-export function hullDamage(ship: ShipEntity): number {
-  return Math.max(0, ship.spec.hull.hull - ship.hull)
-}
-
-/** Базовая цена ремонта корпуса, без скидки мастерской. Растёт с уроном. */
-export function repairCost(ship: ShipEntity): number {
-  return Math.ceil(hullDamage(ship) * SHOP.HULL_REPAIR_COST)
-}
-
-// ─── Мастерская: класс по развитию планеты × класс чинимой вещи ───────────────
-//
-// Отменяет прежнее жёсткое «чинят только по своему уровню». Теперь мастер БЕРЁТСЯ за
-// работу вероятностно: класс-1 (захолустье) уверенно чинит класс-1, но за класс-2 —
-// как повезёт, а класс-3 «не видел и не умеет». Развитее мастер — выше шанс и шире охват.
-// Провал корпус не чинит, а порой доламывает (урон растёт), но денег за провал не берут.
-
-export type MasterClass = 1 | 2 | 3
-export type RepairOutcome = 'repaired' | 'botched' | 'refused' | 'no-money' | 'nothing'
-
-/** Класс мастерской по развитию поселения: захолустье→1, средняя→2, развитая→3. */
-export function masterClass(settlement: Settlement): MasterClass {
-  const t = settlement.techLevel
-  if (t >= SERVICE.MIN_TECH_BY_CLASS[3]) return 3 // тех ≥9
-  if (t >= SERVICE.MIN_TECH_BY_CLASS[2]) return 2 // тех ≥5
-  return 1
-}
-
-/** Развитость ВНУТРИ тира мастера, 0..1 — двигает вероятность внутри вилки. */
-function masterDev(settlement: Settlement, m: MasterClass): number {
-  const t = settlement.techLevel
-  if (m === 3) return clamp((t - SERVICE.MIN_TECH_BY_CLASS[3]) / 6, 0, 1) // 9..15
-  if (m === 2) return clamp((t - SERVICE.MIN_TECH_BY_CLASS[2]) / 3, 0, 1) // 5..8
-  return clamp((t - SERVICE.MIN_TECH_BY_CLASS[1]) / 3, 0, 1) // 1..4
-}
-
-/**
- * Шанс УСПЕХА ремонта вещи класса `item` у мастера класса `m`, 0..1. Ноль — не берётся
- * («такого не видели»). Числа — прямо из задумки: мастер уверенно чинит свой класс и ниже,
- * тянется на класс выше с риском, а на два класса выше не берётся вовсе.
- */
-export function repairChance(m: MasterClass, item: number, dev: number): number {
-  if (item <= m) {
-    if (m === 1) return 0.7 + 0.3 * dev // м1/кл1: 70–100%
-    if (m === 2) return item < 2 ? 1 : 0.8 + 0.2 * dev // м2: кл1=100%, кл2 80–100%
-    return item < 3 ? 1 : 0.9 + 0.1 * dev // м3: кл1–2=100%, кл3 90–100%
-  }
-  if (item - m === 1) {
-    if (m === 1) return 0.1 + 0.3 * dev // м1 берётся за кл2: 10–40%, чаще портит
-    if (m === 2) return 0.4 + 0.3 * dev // м2 за кл3: 40–70%
-    return 0.3 + 0.3 * dev // м3 за кл4 (god-tier): редко и рискованно
-  }
-  return 0 // разрыв ≥2 класса — не берутся
-}
-
-export interface RepairQuote {
-  master: MasterClass
-  /** Класс чинимой вещи. Для корпуса — класс корпуса. */
-  itemClass: number
-  /** Шанс успеха, 0..1. Ноль — тут за это не берутся. */
-  chance: number
-  /** Цена ПРИ УСПЕХЕ, со скидкой тира. При провале денег не берут. */
-  price: number
-}
-
-/** Расклад ремонта КОРПУСА здесь: кто чинит, с каким шансом и почём при успехе. */
-export function repairQuote(world: World, ship: ShipEntity): RepairQuote {
-  const settlement = localSettlement(world)
-  const master = masterClass(settlement)
-  const itemClass = ship.loadout.chassis.class
-  const chance = repairChance(master, itemClass, masterDev(settlement, master))
-  const price = Math.ceil(repairCost(ship) * SHOP.REPAIR_TIER_PRICE[master])
-  return { master, itemClass, chance, price }
-}
-
-/**
- * Ремонт корпуса БРОСКОМ (см. `repairQuote`). Успех — корпус в норму, деньги списаны.
- * Провал — денег НЕ берут, но криворукий сервис ещё и доломал: урон подрос, следующий
- * ремонт дороже. Сид от системы и текущего урона — детерминирован и меняется от попытки
- * к попытке (провал двигает урон), `Math.random` под запретом ради сети.
- */
-export function repair(world: World, ship: ShipEntity): RepairOutcome {
-  const dmg = hullDamage(ship)
-  if (dmg <= 0) return 'nothing'
-  const quote = repairQuote(world, ship)
-  if (quote.chance <= 0) return 'refused'
-  if (world.credits < quote.price) return 'no-money'
-
-  const rng = makeRng(
-    world.galaxySeed ^
-      Math.imul(world.systemIndex + 1, 0x9e3779b1) ^
-      Math.imul(Math.round(dmg), 0x85ebca6b) ^
-      Math.imul(quote.itemClass, 0x27d4eb2f),
-  )
-  if (rng() < quote.chance) {
-    world.credits -= quote.price
-    ship.hull = ship.spec.hull.hull
-    return 'repaired'
-  }
-  // Провал: не починили и подпортили. Корпус не роняем в ноль — ремонт не убивает.
-  ship.hull = Math.max(1, ship.hull - ship.spec.hull.hull * SHOP.REPAIR_BOTCH_DAMAGE)
-  return 'botched'
-}
-
-// ─── Ремонт ПОЛОМКИ детали ─────────────────────────────────────────────────────
-//
-// Отдельно от корпуса: ломается КОНКРЕТНАЯ деталь (лазер, щит, двигатель), и чинят её
-// же — тем же мастером и тем же броском, что и корпус, но по классу самой детали.
-
-/** Поломка детали, доля: 0 — исправна, 1 — молчит. */
-export function moduleFault(module: ShipModule): number {
-  return module.fault ?? 0
-}
-
-/** Базовая цена починки поломки, без скидки тира: доля цены детали × доля поломки. */
-export function moduleRepairCost(module: ShipModule): number {
-  return Math.ceil(module.cost * moduleFault(module) * SHOP.MODULE_REPAIR_FRACTION)
-}
-
-/** Расклад ремонта ДЕТАЛИ: кто чинит, с каким шансом и почём при успехе — по классу детали. */
-export function repairModuleQuote(world: World, module: ShipModule): RepairQuote {
-  const settlement = localSettlement(world)
-  const master = masterClass(settlement)
-  const chance = repairChance(master, module.class, masterDev(settlement, master))
-  const price = Math.ceil(moduleRepairCost(module) * SHOP.REPAIR_TIER_PRICE[master])
-  return { master, itemClass: module.class, chance, price }
-}
-
-/**
- * Починить ПОЛОМКУ детали броском (см. `repairModuleQuote`). Успех — деталь в норму,
- * деньги списаны. Провал — денег НЕ берут, но криворукий мастер доломал: поломка
- * растёт «как за выстрел», следующий ремонт дороже. Сид от системы, класса и текущей
- * поломки — детерминирован и МЕНЯЕТСЯ от попытки к попытке (провал двигает поломку).
- */
-export function repairModule(world: World, ship: ShipEntity, module: ShipModule): RepairOutcome {
-  const fault = moduleFault(module)
-  if (fault <= 0) return 'nothing'
-  const quote = repairModuleQuote(world, module)
-  if (quote.chance <= 0) return 'refused'
-  if (world.credits < quote.price) return 'no-money'
-
-  const rng = makeRng(
-    world.galaxySeed ^
-      Math.imul(world.systemIndex + 1, 0x9e3779b1) ^
-      Math.imul(Math.round(fault * 100), 0x85ebca6b) ^
-      Math.imul(hashModuleId(module.id), 0x27d4eb2f),
-  )
-  if (rng() < quote.chance) {
-    world.credits -= quote.price
-    replaceInstalled(ship, module, withFault(module, -fault)) // в ноль: деталь как новая
-    refreshSpec(ship)
-    return 'repaired'
-  }
-  // Провал: доломали. Характеристика просела ещё — пересобираем spec.
-  replaceInstalled(ship, module, withFault(module, SHOP.MODULE_REPAIR_BOTCH_FAULT))
-  refreshSpec(ship)
-  return 'botched'
-}
-
-/** Подменить установленный модуль его новым экземпляром НА ТОМ ЖЕ месте (клон-правка). */
-function replaceInstalled(ship: ShipEntity, module: ShipModule, next: ShipModule): void {
-  const at = locateInstalled(ship, module)
-  if (!at) return
-  if ('weapon' in at) ship.loadout.weapons[at.weapon] = next as WeaponModule
-  else ship.loadout.internals[at.internal] = next
-}
 
 export function priceOf(module: ShipModule): number {
   return Math.ceil(module.cost * SHOP.MARKUP)
@@ -333,27 +159,6 @@ export function stockChance(module: ShipModule, settlement: Settlement): number 
   return clamp(STOCK.BASE_CHANCE - classPenalty + techBonus, STOCK.MIN_CHANCE, STOCK.MAX_CHANCE)
 }
 
-/**
- * Ассортимент станции этой системы. Детерминирован из зерна и индекса системы,
- * как и цены: два пилота в одной системе видят одну витрину, ничего не пересылая.
- * Оттого магазин синхронизируется по сети даром. Решение по каждому модулю —
- * независимый бросок от собственного зерна, поэтому список стабилен между вызовами.
- */
-/** Минимальный тех-уровень мира, чтобы держать/обслуживать модуль этого КЛАССА. */
-export function minTechForClass(cls: 1 | 2 | 3 | 4): number {
-  return SERVICE.MIN_TECH_BY_CLASS[cls]
-}
-
-/**
- * Тянет ли ЭТОТ мир такой класс железа — и продать, и обслужить. Развитость поселения
- * это технологический потолок: класс 4 (вершина, сюда же ремонт инструментов бога)
- * доступен лишь на тех ≥ 12, а дикарям не собрать и класс 2. Одна дверь для витрины и
- * для сервиса, чтобы «где куплю» и «где починю» отвечали одинаково.
- */
-export function canServiceHere(world: World, module: ShipModule): boolean {
-  return localSettlement(world).techLevel >= minTechForClass(module.class)
-}
-
 export function stationStock(world: World): readonly ShipModule[] {
   const settlement = localSettlement(world)
   return MODULE_CATALOGUE.filter((m) => {
@@ -363,12 +168,6 @@ export function stationStock(world: World): readonly ShipModule[] {
     const rng = makeRng(world.galaxySeed ^ Math.imul(world.systemIndex + 1, 0x9e3779b1) ^ hashModuleId(m.id))
     return rng() < stockChance(m, settlement)
   })
-}
-
-function hashModuleId(id: string): number {
-  let h = 2166136261
-  for (let i = 0; i < id.length; i++) h = Math.imul(h ^ id.charCodeAt(i), 16777619)
-  return h >>> 0
 }
 
 // ─── Перестановка железа: установить из трюма, сравнить с установленным ────────
@@ -464,15 +263,6 @@ export function fitFromHold(ship: ShipEntity, holdIndex: number): FitError | nul
   return null
 }
 
-/**
- * Идентификатор характеристики — НЕ слово. Домен языка не знает: перевод «щита» в
- * «ЩИТ»/«SHLD» и подстановку единиц делает слой интерфейса. Иначе перевод пришлось
- * бы тащить в симуляцию, которой стоять на сервере без всякого экрана.
- */
-export type StatKey =
-  | 'shield' | 'hull' | 'speed' | 'turn' | 'cargo' | 'jump'
-  | 'thrust' | 'damage' | 'ammo' | 'drain' | 'scale' | 'mass'
-
 /** Одна строка сравнения: было → станет по конкретной характеристике. */
 export interface StatDelta {
   key: StatKey
@@ -542,221 +332,6 @@ export function fitDeltas(ship: ShipEntity, module: ShipModule): StatDelta[] {
 export function statHigherBetter(key: StatKey): boolean {
   // У расхода и массы меньшее число — выигрыш.
   return key !== 'drain' && key !== 'mass'
-}
-
-export function moduleStat(m: ShipModule): { key: StatKey; value: number } {
-  switch (m.kind) {
-    case 'engine': return { key: 'thrust', value: m.thrust }
-    case 'thrusters': return { key: 'turn', value: m.maxRate[2] }
-    case 'shield': return { key: 'shield', value: m.capacity }
-    case 'armour': return { key: 'hull', value: m.hull }
-    case 'laser': return { key: 'damage', value: m.damage }
-    case 'missile': return { key: 'ammo', value: m.ammo }
-    case 'drone': return { key: 'ammo', value: m.ammo }
-    case 'cargo': return { key: 'cargo', value: m.capacity }
-    case 'hyperdrive': return { key: 'jump', value: m.jumpRange }
-    case 'cloak': return { key: 'drain', value: m.drain }
-    // Миелофон: своей числовой характеристики нет (темп и пределы в config/mielophone).
-    // Показываем темп роста — единственное осмысленное число артефакта.
-    case 'mielophone': return { key: 'scale', value: MIELOPHONE.GROW_RATE }
-    // Аукс-устройства (ECM/бомба/скуп) числовой характеристики не имеют — показываем
-    // массу как честный скаляр (меньше — лучше). Параметры срабатывания живут в config.
-    case 'ecm':
-    case 'bomb':
-    case 'scoop': return { key: 'mass', value: m.mass }
-  }
-}
-
-// ─── Прокачка модуля ──────────────────────────────────────────────────────────
-
-export type UpgradeError = 'maxed' | 'no-copy' | 'no-money' | 'low-tech'
-
-/** Накопленная прибавка модуля, доля к стоку: 0 — заводской, 0.5 — «+50%». */
-export function upgradeLevel(module: ShipModule): number {
-  return module.upgrade ?? 0
-}
-
-/**
- * Индекс копии этого модуля в трюме — по тому же `id` (прокачка id не меняет).
- * Ею и качают на +50%: копия честнее денег, оттого и сильнее. null — копии нет.
- */
-export function upgradeCopyIndex(ship: ShipEntity, module: ShipModule): number | null {
-  const i = ship.hold.items.findIndex((it) => it.kind === 'module' && it.module.id === module.id)
-  return i >= 0 ? i : null
-}
-
-/** Цена ОДНОГО денежного шага прокачки. С копией денег не берут — платит трюм. */
-export function upgradeCashCost(module: ShipModule): number {
-  return Math.ceil(Math.max(module.cost, SHOP.UPGRADE_MIN_BASE) * SHOP.UPGRADE_CASH_FRACTION)
-}
-
-/** Проверка БЕЗ побочных эффектов: ею UI гасит кнопку, ею же `upgradeModule` решает. */
-export function canUpgrade(
-  world: World,
-  ship: ShipEntity,
-  module: ShipModule,
-  useCopy: boolean,
-): UpgradeError | null {
-  // Аукс-устройства не прокачиваются: каждое работает по-своему, «+25% к ECM» бессмыслен.
-  // Гасим как «предельный» — отдельного кода в UI заводить незачем.
-  if (isAux(module)) return 'maxed'
-  // Каждый модуль улучшается один раз: уже прокачанный дальше не берут.
-  if (upgradeLevel(module) > 1e-6) return 'maxed'
-  // Мир не тянет этот класс — прокачать его здесь негде (тот же потолок, что и у витрины).
-  if (!canServiceHere(world, module)) return 'low-tech'
-  if (useCopy) return upgradeCopyIndex(ship, module) === null ? 'no-copy' : null
-  return world.credits < upgradeCashCost(module) ? 'no-money' : null
-}
-
-/**
- * Множит характеристики модуля от СТОКА: clone.field = base.field × (1+level).
- * От стока, а не от текущего значения, — чтобы показанное «+50%» точно равнялось
- * правде, а не накопленной дроби с округлениями. Момент и лимиты множатся целиком:
- * разворот растёт по всем осям. У маскировки растёт не расход, а экономичность —
- * потому делится, а не множится: меньше жрёт батарей значит лучше.
- */
-function scaleToBase(m: ShipModule, base: ShipModule, k: number): void {
-  if (isEngine(m) && isEngine(base)) { m.thrust = base.thrust * k; m.maxSpeed = base.maxSpeed * k; return }
-  if (isThrusters(m) && isThrusters(base)) {
-    m.torque = [base.torque[0] * k, base.torque[1] * k, base.torque[2] * k]
-    m.maxRate = [base.maxRate[0] * k, base.maxRate[1] * k, base.maxRate[2] * k]
-    return
-  }
-  if (isShield(m) && isShield(base)) { m.capacity = base.capacity * k; m.regen = base.regen * k; return }
-  if (isArmour(m) && isArmour(base)) { m.hull = base.hull * k; return }
-  if (isLaser(m) && isLaser(base)) { m.damage = base.damage * k; return }
-  // Ракета — расходник: её не чинят, но пусковую УЛУЧШАЮТ бо́льшим боезапасом (не уроном).
-  if (isMissile(m) && isMissile(base)) { m.ammo = Math.round(base.ammo * k); return }
-  if (isDrone(m) && isDrone(base)) { m.ammo = Math.round(base.ammo * k); return }
-  if (isCargo(m) && isCargo(base)) { m.capacity = Math.round(base.capacity * k); return }
-  if (isHyperdrive(m) && isHyperdrive(base)) { m.jumpRange = base.jumpRange * k; return }
-  if (isCloak(m) && isCloak(base)) { m.drain = base.drain / k }
-}
-
-/**
- * Общий множитель характеристики экземпляра: прокачка усиливает, поломка ослабляет.
- * base × (1+upgrade) × (1−fault). Печём ОБА через один `scaleToBase` от стока —
- * иначе прокачка сломанной детали или поломка прокачанной считались бы друг от друга
- * с накоплением ошибок. Поломка ракеты/контейнера не бывает (fault=0) — множитель их не трогает.
- */
-function combinedScale(m: ShipModule): number {
-  return (1 + (m.upgrade ?? 0)) * (1 - (m.fault ?? 0))
-}
-
-/** Собственный прокачанный экземпляр модуля. Конфиг не трогаем — он общий на всех. */
-function withUpgrade(module: ShipModule, level: number): ShipModule {
-  const base = findModule(module.id) ?? module
-  const clone: ShipModule = { ...module, upgrade: level }
-  // От стока с УЧЁТОМ уже накопленной поломки: прокачка чинёного не «лечит» его.
-  scaleToBase(clone, base, combinedScale(clone))
-  return clone
-}
-
-/**
- * Собственный экземпляр модуля с изменённой ПОЛОМКОЙ (в бою — от попадания, у мастера —
- * при провале/успехе ремонта). Возвращает КЛОН, а не мутирует вход: установленные модули
- * ссылаются прямо на каталог (и `[LASER, LASER]` — один объект дважды), поэтому правка на
- * месте испортила бы сток всем кораблям сразу. Тот же приём, что у `withUpgrade`. Ракету и
- * контейнер сюда не зовут: им ломаться нечем (расходник / ёмкость от поломки не тает).
- */
-export function withFault(module: ShipModule, delta: number): ShipModule {
-  const base = findModule(module.id) ?? module
-  const clone: ShipModule = { ...module, fault: clamp((module.fault ?? 0) + delta, 0, 1) }
-  scaleToBase(clone, base, combinedScale(clone))
-  return clone
-}
-
-/**
- * Значение главной характеристики ПОСЛЕ прокачки (копией +50% / деньгами +25%) — для
- * предпросмотра «было → станет» в верфи. Считает ровно тем путём, что и сама прокачка,
- * поэтому число в окне не разойдётся с делом.
- */
-export function upgradedStatValue(module: ShipModule, useCopy: boolean): number {
-  const level = useCopy ? SHOP.UPGRADE_COPY_STEP : SHOP.UPGRADE_CASH_STEP
-  return moduleStat(withUpgrade(module, level)).value
-}
-
-/**
- * Прокачать установленный модуль. Клон заменяет ИМЕННО тот экземпляр, что стоит в
- * оснастке (сверяем по ссылке — UI передаёт реальный модуль из loadout). Копия из
- * трюма расходуется; денежная дорога — списывает кредиты. Массу не трогаем: усиление
- * характеристики не должно тайком менять манёвренность, только заявленную ось.
- *
- * Только на верфи — как и вся смена оснастки: правило держит UI, домен исполняет.
- */
-export function upgradeModule(
-  world: World,
-  ship: ShipEntity,
-  module: ShipModule,
-  useCopy: boolean,
-): UpgradeError | null {
-  const error = canUpgrade(world, ship, module, useCopy)
-  if (error) return error
-
-  // Однократно: до сюда доходит только сток (canUpgrade отсекает уже прокачанный).
-  const level = useCopy ? SHOP.UPGRADE_COPY_STEP : SHOP.UPGRADE_CASH_STEP
-  const upgraded = withUpgrade(module, level)
-
-  const wi = ship.loadout.weapons.findIndex((w) => w === module)
-  if (wi >= 0) {
-    ship.loadout.weapons[wi] = upgraded as WeaponModule
-  } else {
-    const ii = ship.loadout.internals.indexOf(module)
-    if (ii < 0) return 'no-copy' // модуля нет на корабле — звать было неоткуда
-    ship.loadout.internals[ii] = upgraded
-  }
-
-  if (useCopy) {
-    const idx = upgradeCopyIndex(ship, module) // копия ещё в трюме — она и оплата
-    if (idx !== null) removeItem(ship.hold, idx)
-  } else {
-    world.credits -= upgradeCashCost(module)
-  }
-
-  // Характеристики сменились — пересобираем на СОБЫТИЕ, как и при покупке.
-  refreshSpec(ship)
-  return null
-}
-
-// ─── Прокачка СОБСТВЕННЫХ х-к КОРПУСА ─────────────────────────────────────────
-//
-// Три оси рамы — HP / грузоподъёмность / аукс-ёмкость — каждую можно усилить ОДИН раз
-// на +25% (как модуль: разово, без уровней). Что усилено, живёт на сущности (`hullUp`);
-// х-ки выводит `deriveShipSpec`. Усиленная ось поднимает и СТОИМОСТЬ рамы при зачёте.
-
-/** Ось собственной прокачки рамы. Совпадает с ключами `HullUpgrades`. */
-export type HullStat = 'hull' | 'cargo' | 'aux'
-export const HULL_STATS: readonly HullStat[] = ['hull', 'cargo', 'aux']
-
-export type HullUpgradeError = 'no-money' | 'already'
-
-/** Цена прокачки одной оси рамы — доля цены корпуса. Одна на все оси: рама одна. */
-export function hullStatUpgradeCost(ship: ShipEntity): number {
-  return Math.ceil(SHOP.HULL_STAT_COST_FRACTION * ship.loadout.chassis.cost)
-}
-
-/** Проверка без побочных эффектов: уже усилена — 'already', не хватает денег — 'no-money'. */
-export function canUpgradeHullStat(world: World, ship: ShipEntity, stat: HullStat): HullUpgradeError | null {
-  if (ship.hullUp[stat]) return 'already'
-  return world.credits < hullStatUpgradeCost(ship) ? 'no-money' : null
-}
-
-/**
- * Усилить одну ось рамы на +25% — РАЗОВО (второй раз → 'already'). Прирост потолка HP и
- * аукс-заряда отдаём СРАЗУ: усиленная рама уже на борту, а не «оплачена, но пуста».
- */
-export function upgradeHullStat(world: World, ship: ShipEntity, stat: HullStat): HullUpgradeError | null {
-  const error = canUpgradeHullStat(world, ship, stat)
-  if (error) return error
-
-  world.credits -= hullStatUpgradeCost(ship)
-  const beforeHull = ship.spec.hull.hull
-  const beforeAux = ship.spec.power.auxCapacity
-  ship.hullUp[stat] = true
-  refreshSpec(ship)
-  ship.hull += ship.spec.hull.hull - beforeHull
-  ship.auxEnergy += ship.spec.power.auxCapacity - beforeAux
-  return null
 }
 
 // ─── Ракетный (мунишн) слот: ОДИН тип на всю подвеску ─────────────────────────
@@ -891,15 +466,6 @@ export function sellMissiles(world: World, ship: ShipEntity): StripError | null 
 
 export type StripError = 'not-installed' | 'no-room' | 'essential'
 
-/** Где стоит модуль: точка подвески, внутренний слот, или нигде (уже снят). */
-function locateInstalled(ship: ShipEntity, module: ShipModule): { weapon: number } | { internal: number } | null {
-  const wi = ship.loadout.weapons.findIndex((w) => w === module)
-  if (wi >= 0) return { weapon: wi }
-  const ii = ship.loadout.internals.indexOf(module)
-  if (ii >= 0) return { internal: ii }
-  return null
-}
-
 function detach(ship: ShipEntity, at: { weapon: number } | { internal: number }): void {
   if ('weapon' in at) ship.loadout.weapons[at.weapon] = null
   else ship.loadout.internals.splice(at.internal, 1)
@@ -954,185 +520,6 @@ export function sellModule(world: World, ship: ShipEntity, module: ShipModule): 
   world.credits += value
   refreshSpec(ship)
   return null
-}
-
-// ─── Груз ────────────────────────────────────────────────────────────────────
-
-/**
- * Поселение-столица, чьей станцией сейчас торгует пилот. Выводится из зерна
- * системы (см. `settlementAt`) — не хранится в мире и оттого одинаково у всех,
- * кто зашёл в ту же систему. На нём и держится будущая сетевая синхронизация цен.
- */
-const NEUTRAL_MARKET: Settlement = {
-  economy: 'Промышленная', government: 'Многовластие', techLevel: 7, population: 1, species: '—',
-}
-
-export function localSettlement(world: World): Settlement {
-  return settlementAt(world.systemIndex, world.galaxySeed) ?? NEUTRAL_MARKET
-}
-
-/** Номинальная стоимость трюма по каталогу — грубая прикидка, без учёта рынка. */
-export function cargoValue(ship: ShipEntity): number {
-  let total = 0
-  for (const item of ship.hold.items) total += itemValue(item)
-  return total
-}
-
-/** Прилавок станции. Каталог без коллекционных статуэток — их только находят в системе. */
-export function commodityStock(): readonly Commodity[] {
-  return Object.values(COMMODITIES).filter((c) => c.id !== COMMODITIES.FIGURINE.id)
-}
-
-/** Цена покупки единицы здесь. Выше цены продажи на спред — прилавок не благотворитель. */
-export function commodityBuyPrice(world: World, commodity: Commodity): number {
-  return unitBuyPrice(commodity, localSettlement(world), world.systemIndex, world.galaxySeed)
-}
-
-/** Цена, по которой станция ПРИНИМАЕТ единицу. Ниже покупки — отсюда и убыток на месте. */
-export function commoditySellPrice(world: World, commodity: Commodity): number {
-  return unitSellPrice(commodity, localSettlement(world), world.systemIndex, world.galaxySeed)
-}
-
-/** Сколько единиц товара на складе станции. Мало — цена выше, много — ниже. */
-export function commodityStockAt(world: World, commodity: Commodity): number {
-  return stockLevel(commodity, localSettlement(world), world.systemIndex, world.galaxySeed)
-}
-
-/** Выручка за один предмет трюма здесь. Товар — по рынку, модуль — по остаточной цене. */
-export function itemSellValue(world: World, item: CargoItem): number {
-  if (item.kind === 'commodity') return commoditySellPrice(world, item.commodity) * item.units
-  return itemValue(item)
-}
-
-/** Сколько выручит весь трюм, если продать его на ЭТОЙ станции. */
-export function holdSellValue(world: World, ship: ShipEntity): number {
-  let total = 0
-  for (const item of ship.hold.items) total += itemSellValue(world, item)
-  return total
-}
-
-export type TradeError = 'no-money' | 'no-room'
-
-/**
- * Проверка покупки БЕЗ побочных эффектов — ею UI гасит кнопку, ею же `buyCommodity`
- * решает, продавать ли. Две независимые проверки однажды разошлись бы.
- */
-export function canBuyCommodity(world: World, ship: ShipEntity, commodity: Commodity): TradeError | null {
-  if (world.credits < commodityBuyPrice(world, commodity)) return 'no-money'
-  // Масса 0 (статуэтки) места не занимает.
-  if (commodity.unitMass > 0 && freeCapacity(ship.hold) < commodity.unitMass) return 'no-room'
-  return null
-}
-
-/**
- * Купить сколько-то единиц товара. Берём столько, сколько влезает И на сколько
- * хватает денег: отказать целиком там, где можно продать половину, — плохая лавка.
- *
- * Уплаченное записываем в стопку (`costBasis`): без цены входа не показать выгоду
- * на продаже. Это личная история пилота, а не свойство рынка.
- *
- * @returns купленное количество, ноль — если не вышло ничего.
- */
-export function buyCommodity(world: World, ship: ShipEntity, commodity: Commodity, units: number): number {
-  const price = commodityBuyPrice(world, commodity)
-  if (price <= 0 || units <= 0) return 0
-
-  const affordable = Math.floor(world.credits / price)
-  const fits =
-    commodity.unitMass <= 0
-      ? units
-      : Math.floor(freeCapacity(ship.hold) / commodity.unitMass)
-  const taken = Math.min(units, affordable, fits)
-  if (taken <= 0) return 0
-
-  const added = addCommodity(ship.hold, commodity, taken)
-  if (added <= 0) return 0
-
-  const stack = ship.hold.items.find(
-    (i): i is Extract<CargoItem, { kind: 'commodity' }> =>
-      i.kind === 'commodity' && i.commodity.id === commodity.id,
-  )
-  if (stack) stack.costBasis = (stack.costBasis ?? 0) + added * price
-
-  world.credits -= added * price
-  // Тонны в трюме меняют ускорения. Это считается, а не назначается.
-  refreshSpec(ship)
-  return added
-}
-
-/**
- * Продать один предмет из трюма — по индексу, а не «всё разом»: контрабанду
- * иногда выгоднее держать, а лом сбыть.
- *
- * @returns выручка, ноль — если индекса нет.
- */
-export function sellItem(world: World, ship: ShipEntity, index: number): number {
-  const item = ship.hold.items[index]
-  if (!item) return 0
-
-  const value = itemSellValue(world, item)
-  removeItem(ship.hold, index)
-  world.credits += value
-  refreshSpec(ship)
-  return value
-}
-
-/** Сколько единиц этого товара уже в трюме — источник максимума для ползунка продажи. */
-export function commodityHeld(ship: ShipEntity, commodity: Commodity): number {
-  const stack = ship.hold.items.find(
-    (i): i is Extract<CargoItem, { kind: 'commodity' }> =>
-      i.kind === 'commodity' && i.commodity.id === commodity.id,
-  )
-  return stack?.units ?? 0
-}
-
-/**
- * Продать N единиц конкретного товара — для ползунка «продать столько-то». В отличие
- * от sellItem (весь предмет по индексу) берёт ЧАСТЬ стопки: costBasis режется
- * пропорционально проданной доле, чтобы выгода на остатке считалась честно.
- *
- * @returns выручка, ноль — если такого товара нет или units<=0.
- */
-export function sellCommodity(world: World, ship: ShipEntity, commodity: Commodity, units: number): number {
-  if (units <= 0) return 0
-  const stack = ship.hold.items.find(
-    (i): i is Extract<CargoItem, { kind: 'commodity' }> =>
-      i.kind === 'commodity' && i.commodity.id === commodity.id,
-  )
-  if (!stack) return 0
-
-  const sold = Math.min(units, stack.units)
-  if (sold <= 0) return 0
-
-  const value = commoditySellPrice(world, commodity) * sold
-  // Цену входа режем пропорционально: остаток хранит basis только своих единиц.
-  if (stack.costBasis !== undefined) {
-    stack.costBasis = sold >= stack.units ? 0 : Math.round(stack.costBasis * ((stack.units - sold) / stack.units))
-  }
-  stack.units -= sold
-  if (stack.units <= 0) {
-    const idx = ship.hold.items.indexOf(stack)
-    if (idx >= 0) removeItem(ship.hold, idx)
-  }
-  world.credits += value
-  refreshSpec(ship)
-  return value
-}
-
-/**
- * Продать весь трюм разом. Возвращает выручку; ноль, если продавать нечего.
- *
- * Пересобираем характеристики: пустой трюм — это минус тонны, то есть плюс
- * к ускорениям. Забыть здесь `refreshSpec` значило бы летать с массой призрака.
- */
-export function sellCargo(world: World, ship: ShipEntity): number {
-  const value = holdSellValue(world, ship)
-  if (value === 0) return 0
-
-  world.credits += value
-  ship.hold.items.length = 0
-  refreshSpec(ship)
-  return value
 }
 
 // ─── Боезапас ────────────────────────────────────────────────────────────────

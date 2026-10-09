@@ -14,7 +14,8 @@ import {
 } from '../loadout'
 import { refreshSpec } from '../world'
 import type { ShipEntity, World } from '../world/entities'
-import { localSettlement, masterClass, type MasterClass } from './shop'
+import { masterClass, type MasterClass } from './repair'
+import { localSettlement } from './trade'
 
 /**
  * Верфь: смена КОРПУСА, а не отдельного модуля.

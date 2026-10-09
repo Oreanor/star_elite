@@ -3,7 +3,8 @@ import { SHOP } from '../../config/station'
 import { SHIPYARD } from '../../config/loadouts'
 import { COMMODITIES } from '../cargo/items'
 import { createWorld } from '../world'
-import { buyCommodity, commodityHeld, localSettlement, masterClass, sellCommodity } from './shop'
+import { masterClass } from './repair'
+import { buyCommodity, commodityHeld, localSettlement, sellCommodity } from './trade'
 import { hullPurchase, hullTradeIn } from './shipyard'
 
 /**
