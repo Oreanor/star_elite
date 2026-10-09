@@ -47,7 +47,7 @@ describe('linked jump portal frame sync', () => {
 
     // Orbit/floating-origin code owns the collider pose before the render director runs.
     gate.pos.copy(shifted)
-    tickPortal(world, 1 / 60, true, 1 / 60)
+    tickPortal(world, true, 1 / 60)
 
     expect(gate.pos.distanceTo(shifted)).toBeLessThan(1e-9)
     expect(jumpPortal().ringPos.distanceTo(shifted)).toBeLessThan(1e-9)
@@ -78,7 +78,7 @@ describe('linked jump portal frame sync', () => {
     const index = reachableTarget(world)
     openPortal(world, index, null, 0)
     markPortalDestinationDrawn()
-    tickPortal(world, LINKED_PORTAL.OPEN_SECONDS, true, LINKED_PORTAL.OPEN_SECONDS)
+    tickPortal(world, true, LINKED_PORTAL.OPEN_SECONDS)
     expect(jumpPortal().ringRadius).toBeCloseTo(jumpPortal().targetRadius)
 
     closePortal()
@@ -123,12 +123,12 @@ describe('linked jump portal frame sync', () => {
     const p = jumpPortal()
     const dt = LINKED_PORTAL.OPEN_SECONDS * 0.1
 
-    tickPortal(world, dt, true, dt)
+    tickPortal(world, true, dt)
     expect(p.ringRadius).toBeCloseTo(p.targetRadius * 0.1)
     expect(world.jumpGates[0]!.tube).toBe(0)
 
     markPortalDestinationDrawn()
-    tickPortal(world, dt, true, dt * 2)
+    tickPortal(world, true, dt * 2)
 
     expect(p.ringRadius).toBeCloseTo(p.targetRadius * 0.2)
     expect(world.jumpGates[0]!.tube).toBe(LINKED_PORTAL.TUBE)
@@ -143,13 +143,13 @@ describe('linked jump portal frame sync', () => {
     markPortalDestinationDrawn()
     const p = jumpPortal()
 
-    tickPortal(world, 0.2, true, 0.2)
+    tickPortal(world, true, 0.2)
     const grown = p.ringRadius
     expect(grown).toBeGreaterThan(0)
 
-    tickPortal(world, 0.2, false, 0.4) // отпустил — размер замер
+    tickPortal(world, false, 0.4) // отпустил — размер замер
     expect(p.ringRadius).toBe(grown)
-    tickPortal(world, 0.2, true, 0.6) // нажал снова — растёт дальше, а не сжимается
+    tickPortal(world, true, 0.6) // нажал снова — растёт дальше, а не сжимается
     expect(p.ringRadius).toBeGreaterThan(grown)
     expect(portalOpen()).toBe(true)
   })
@@ -160,7 +160,7 @@ describe('linked jump portal frame sync', () => {
     const chargeBefore = world.player.jumpCharge
 
     openPortal(world, targetIndex, null, 0)
-    tickPortal(world, 1, true, 1)
+    tickPortal(world, true, 1)
     closePortal()
 
     expect(world.player.jumpCharge).toBe(chargeBefore)
@@ -174,11 +174,11 @@ describe('linked jump portal frame sync', () => {
     markPortalDestinationDrawn()
 
     // Первый кадр запоминает подходную сторону и полностью раскрывает отверстие.
-    expect(tickPortal(world, 2.5, true, 2.5)).toBeNull()
+    expect(tickPortal(world, true, 2.5)).toBeNull()
     const portal = jumpPortal()
     world.player.state.pos.copy(portal.ringPos).addScaledVector(portal.ringNormal, 1)
 
-    expect(tickPortal(world, 1 / 60, true, 2.5 + 1 / 60)).toBe('cross')
+    expect(tickPortal(world, true, 2.5 + 1 / 60)).toBe('cross')
   })
 
   it('prepares the real destination World before stencil renders it', () => {

@@ -113,7 +113,14 @@ function controllerFor(controllers: ControllerMap, ship: ShipEntity) {
   return controllers.get(ship.id) ?? NULL_CONTROLLER
 }
 
-export function stepWorld(world: World, frameDt: number, controllers: ControllerMap): void {
+/**
+ * Свой такт для систем, что живут ВНЕ домена, но обязаны идти по его часам (полёт сквозь
+ * гипертор в клиенте). Домен не знает, что это: он лишь зовёт хук в конце каждого такта,
+ * как зовёт `Controller`, — иначе такая система шагала бы кадром, на вторых часах.
+ */
+export type TickHook = (dt: number) => void
+
+export function stepWorld(world: World, frameDt: number, controllers: ControllerMap, onTick?: TickHook): void {
   // В доке мир стоит. Иначе пираты за окном магазина продолжают охоту,
   // а игрок за стеклом ничего не может сделать. Живёт только причал — теми же тактами,
   // что и полёт: это те же часы, а не отдельный таймер экрана станции.
@@ -143,6 +150,7 @@ export function stepWorld(world: World, frameDt: number, controllers: Controller
     remaining -= dt
     world.time += dt
     stepTick(world, controllers, dt)
+    onTick?.(dt)
   }
 }
 

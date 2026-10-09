@@ -17,7 +17,7 @@ import {
 } from 'three'
 import { smoothstep } from '@elite/sim'
 import { useSession } from '../../session/GameContext'
-import { placeTorusAt, stepTorusFlight, torusView } from '../../session/torusFlight'
+import { placeTorusAt, torusView } from '../../session/torusFlight'
 import { setTorusNav, torusAutopilotActive, torusTargetVertex } from '../../session/torusAutopilot'
 import { bushExitScale } from '../../session/bushExit'
 import { nameOfVertex, vertexOfNode } from './torusNodes'
@@ -217,7 +217,7 @@ export function HypertorusLayer() {
     [puffGeo, puffMat, dotGeo, dotMat, backdropGeo, backdropMat, crossGeo, crossMat],
   )
 
-  useFrame((_, dt) => {
+  useFrame(() => {
     const { world, bush } = session
     const group = groupRef.current
     const puffs = puffRef.current
@@ -241,8 +241,7 @@ export function HypertorusLayer() {
     backdrop.position.copy(camera.position)
     backdrop.scale.setScalar(TORUS.BACKDROP_RADIUS_M)
 
-    // ПОЛЁТ: W/S/ПКМ гонят S³ сквозь игрока по носу корабля; накопленным видом двигаем решётку.
-    stepTorusFlight(world.player.state.quat, Math.min(dt, 0.1))
+    // ПОЛЁТ (W/S/ПКМ гонят S³ сквозь игрока) шагает в такте мира; здесь только читаем вид.
     applyPose(GRID, torusView(), _rot)
 
     // ПУФЫ-галактики в узлах. Заодно отбираем ближайшие (самые яркие) под подписи имён.

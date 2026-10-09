@@ -20,8 +20,8 @@ import { finishTorusApproach, torusAutopilotActive, torusNav } from './torusAuto
  * нос берём из ориентации корабля, поэтому куда смотришь — туда и летишь. S³ замкнута —
  * лететь можно бесконечно, придёшь к себе же.
  *
- * Живёт в app/control (можно читать ввод). Слой рендера зовёт `stepTorusFlight` каждый кадр и
- * читает `torusView()` — тот же шов, что у портала прыжка.
+ * Живёт в session (можно читать ввод). `stepTorusFlight` идёт хуком в каждом такте мира
+ * (`stepWorld(..., onTick)`), слой рендера лишь читает `torusView()`.
  */
 
 const view: Pose4 = identity4()

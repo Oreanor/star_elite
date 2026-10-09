@@ -686,7 +686,7 @@ function Shell({ onRestart }: { onRestart: () => void }) {
           session.world,
           target,
           planet != null ? { kind: 'body', planet } : null,
-          performance.now() / 1000,
+          session.world.time,
         )
         hlog('ОТКРЫЛИ портал', { target, planet, targetRadius: jumpPortal().targetRadius })
         if (tab !== null) closeConsole()

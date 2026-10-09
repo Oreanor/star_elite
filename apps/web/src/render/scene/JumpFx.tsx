@@ -37,9 +37,9 @@ const _cameraFrameRotation = new Quaternion()
  */
 export function JumpDirector() {
   const session = useSession()
-  useFrame(({ camera }, dt) => {
+  useFrame(({ camera }) => {
     if (!portalOpen()) return
-    const ev = tickPortal(session.world, Math.min(dt, 0.1), isHeld('KeyH'), performance.now() / 1000)
+    const ev = tickPortal(session.world, isHeld('KeyH'), session.world.time)
     if (ev === 'close') {
       hlog('пара устьев снята, дальний мир выброшен')
       disposeJumpPortalWorld()

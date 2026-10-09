@@ -37,7 +37,13 @@ export interface JumpPortal {
    * Флаг нужен HUD: пока держат — голубая плашка «открытие гиперкольца».
    */
   growHeld: boolean
+  /**
+   * Время МИРА (`world.time`, с) открытия пары и последнего такта портала. Не часы браузера:
+   * свёрнутая вкладка и пауза стоят для портала так же, как для всего мира, а рост кольца
+   * и его срок жизни идут по тем же часам, по которым летит корабль.
+   */
   openedAt: number
+  tickedAt: number
   /** Точка выхода в целевой системе (без scatter — превью совпадает с «окном»). */
   destPos: Vector3
   destQuat: Quaternion
@@ -80,6 +86,7 @@ const portal: JumpPortal = {
   targetRadius: 0,
   growHeld: false,
   openedAt: 0,
+  tickedAt: 0,
   destPos: new Vector3(),
   destQuat: new Quaternion(),
   destNormal: new Vector3(0, 0, -1),
@@ -165,7 +172,7 @@ function syncGateShape(): void {
   localGate.tube = portal.destWarm ? LINKED_PORTAL.TUBE : 0
 }
 
-export function openPortal(world: World, index: number, arrival: Arrival | null, realTime: number): void {
+export function openPortal(world: World, index: number, arrival: Arrival | null, now: number): void {
   activeWorld = world
   const s = world.player.state
   _fwd.set(0, 0, -1).applyQuaternion(s.quat)
@@ -176,7 +183,8 @@ export function openPortal(world: World, index: number, arrival: Arrival | null,
   portal.targetRadius = linkedPortalTargetRadius(world.player)
   portal.ringRadius = 0
   portal.growHeld = true
-  portal.openedAt = realTime
+  portal.openedAt = now
+  portal.tickedAt = now
   portal.hereIndex = world.systemIndex
   portal.index = index
   portal.arrival = arrival
@@ -296,13 +304,16 @@ export function linkVectorThroughPortal(input: Vector3, out: Vector3): void {
   out.copy(input).applyQuaternion(_linkQuat)
 }
 
-export function tickPortal(world: World, dt: number, growHeld: boolean, realTime: number): 'cross' | 'close' | null {
+export function tickPortal(world: World, growHeld: boolean, now: number): 'cross' | 'close' | null {
   if (!portal.open || portal.committing) {
     hstate('такт', portal.committing ? 'переход, такта нет' : 'портала нет')
     return null
   }
+  // Шаг — сколько прошло МИРОВОГО времени с прошлого такта: мир стоял — стоит и кольцо.
+  const dt = Math.max(0, now - portal.tickedAt)
+  portal.tickedAt = now
 
-  if (realTime - portal.openedAt >= LINKED_PORTAL.LIFE_SECONDS) {
+  if (now - portal.openedAt >= LINKED_PORTAL.LIFE_SECONDS) {
     hlog('ЗАКРЫТ: истекла минута жизни пары')
     closePortal()
     return 'close'

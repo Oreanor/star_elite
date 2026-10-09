@@ -1,4 +1,5 @@
 import { useFrame, useThree } from '@react-three/fiber'
+import { useMemo } from 'react'
 import {
   armAutoland,
   releaseLanding,
@@ -20,6 +21,7 @@ import {
   missileAmmo,
   serializePlayer,
   stepWorld,
+  type TickHook,
   enterBush,
   leaveBush,
   enterSystem,
@@ -37,7 +39,7 @@ import { coastController } from '../../session/playerController'
 import { stepCameraView } from '../../session/cameraView'
 import { cycleHull, rigEditorActive, stepRigEditor, toggleRigEditor } from '../dev/rigEditor'
 import { stepWarBaseEditor } from '../dev/warBaseEditor'
-import { resetTorusFlight } from '../../session/torusFlight'
+import { resetTorusFlight, stepTorusFlight } from '../../session/torusFlight'
 import {
   consumeTorusArrival,
   cycleTorusTarget,
@@ -169,7 +171,7 @@ function stepBush(session: Session): void {
   }
 
   // Корабль СТОИТ В ЦЕНТРЕ проекции и только вертится мышью (bushPilot глушит тягу). Полёт —
-  // это поток S³ сквозь него (`stepTorusFlight` в слое), а не перемещение борта. Держим борт в
+  // это поток S³ сквозь него (`stepTorusFlight` в такте мира), а не перемещение борта. Держим борт в
   // начале координат: любой снос сдвинул бы центр проекции и «уронил» бы выворот.
   const s = world.player.state
   s.pos.set(0, 0, 0)
@@ -228,6 +230,14 @@ const BUSH_EXIT_RADII = 100
 export function Simulation() {
   const session = useSession()
   const camera = useThree((state) => state.camera)
+  // Полёт сквозь гипертор идёт по часам мира — в каждом такте, а не раз в кадр из слоя
+  // рендера: на паузе он стоит вместе с миром, а темп не зависит от частоты монитора.
+  const torusTick = useMemo<TickHook>(
+    () => (dt) => {
+      if (session.bush.active) stepTorusFlight(session.world.player.state.quat, dt)
+    },
+    [session],
+  )
 
   useFrame((_, dt) => {
     const { world, controllers, intent } = session
@@ -289,7 +299,7 @@ export function Simulation() {
       // Штурвал — коастящему контроллеру (или автопилоту стыковки/полёта-к-цели, если он вёл):
       // мышь на меню, пилот не рулит. Ставим ПОСЛЕ syncControllers, чтобы пересборка не вернула ввод.
       controllers.set(world.player.id, helmController(session, true))
-      stepWorld(world, dt, controllers)
+      stepWorld(world, dt, controllers, torusTick)
       camera.position.add(world.originShift)
       return
     }
@@ -420,7 +430,7 @@ export function Simulation() {
     syncControllers(session)
 
     // Накопитель и фиксированный шаг — внутри stepWorld.
-    stepWorld(world, dt, controllers)
+    stepWorld(world, dt, controllers, torusTick)
 
     // Мир мог сдвинуться (плавающее начало координат). Камера живёт в мировых
     // координатах, и без этой поправки пружина преследования полсекунды тащит её
