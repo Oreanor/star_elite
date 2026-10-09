@@ -67,6 +67,21 @@ const TIERS: ModelRef[][] = [
   tierOf(OPENROUTER_ENDPOINT, OPENROUTER_KEY, OPENROUTER_MODELS, 'or'),
 ].filter((tier) => tier.length > 0)
 
+/**
+ * Здоровье моделей на сеанс. Снятую или неизвестную сервису модель (400/404) спрашивать
+ * больше незачем — она выбывает до перезагрузки. Упёршуюся в лимит (429) не дёргаем минуту:
+ * бесплатный ключ иначе выжигается повторами в пустоту.
+ */
+const deadModels = new Set<string>()
+const restingUntil = new Map<string, number>()
+const REST_MS = 60_000
+/** Сколько моделей уровня спрашивать разом: гонка всем списком жгла лимит в разы быстрее. */
+const RACE_WIDTH = 2
+
+function liveModels(tier: ModelRef[], now: number): ModelRef[] {
+  return tier.filter((ref) => !deadModels.has(ref.label) && (restingUntil.get(ref.label) ?? 0) <= now)
+}
+
 export function negotiatorAvailable(): boolean {
   return TIERS.length > 0
 }
@@ -155,6 +170,13 @@ async function callModel(ref: ModelRef, messages: OutboundMessages): Promise<str
     if (!res.ok) {
       const body = await res.text().catch(() => '')
       console.warn(`[negotiator] ${ref.label} → HTTP ${res.status}: ${body.slice(0, 200)}`)
+      if (res.status === 400 || res.status === 404) {
+        // Снята или не существует — повтор не поможет. 400 бывает и от кривого запроса,
+        // поэтому выбывает только при явном отказе в модели.
+        if (res.status === 404 || /model_(decommissioned|not_found)|does not exist/i.test(body)) deadModels.add(ref.label)
+      } else if (res.status === 429) {
+        restingUntil.set(ref.label, Date.now() + REST_MS)
+      }
       return null
     }
     const data = (await res.json()) as { choices?: { message?: { content?: string } }[] }
@@ -212,10 +234,15 @@ export async function negotiate(
 
   for (let attempt = 0; attempt < 2; attempt++) {
     for (const tier of TIERS) {
-      const reply = await raceAll(tier, messages, ctx.allowedIntents, role, ctx.economy.escortFee ?? null)
-      if (reply) {
-        if (reply.hangup && chars >= PROMPT_SOFT_CHARS) return { ...reply, source: 'overload' }
-        return reply
+      // Пары живых моделей по очереди: ответила первая пара — остальных не трогаем.
+      const live = liveModels(tier, Date.now())
+      for (let i = 0; i < live.length; i += RACE_WIDTH) {
+        const batch = live.slice(i, i + RACE_WIDTH)
+        const reply = await raceAll(batch, messages, ctx.allowedIntents, role, ctx.economy.escortFee ?? null)
+        if (reply) {
+          if (reply.hangup && chars >= PROMPT_SOFT_CHARS) return { ...reply, source: 'overload' }
+          return reply
+        }
       }
     }
     if (attempt === 0) await delay(RETRY_BACKOFF_MS)
