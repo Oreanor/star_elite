@@ -234,6 +234,34 @@ describe('отстрел деталей базы', () => {
   })
 
   /**
+   * Регрессия: твёрдым был только шар базы, и корабль влетал в навесную деталь насквозь —
+   * башня трёхкилометровой базы в шестьсот метров, внутри неё камера, а до обшивки и до
+   * посадки ещё сотни метров. Деталь — твердь: корабль встаёт на ней, а не под ней.
+   */
+  it('в башню базы не влететь: деталь твёрдая, как и шар', () => {
+    const world = withBases()
+    const base = world.warBases[1]!
+    const tower = base.fixtures.find((f) => f.model === 0)!
+    const top = warBaseFixtureWorldPos(base, tower, world.time, new Vector3())
+    const out = top.clone().sub(base.pos).normalize()
+    const player = world.player.state
+    player.pos.copy(top).addScaledVector(out, tower.size * 2)
+    player.quat.identity()
+
+    let closest = Infinity
+    for (let i = 0; i < 1200; i++) {
+      // Гоним прямо в башню, как пилот на полном газу.
+      player.vel.copy(out).multiplyScalar(-150)
+      stepWorld(world, PHYSICS.FIXED_DT, new Map())
+      const at = warBaseFixtureWorldPos(base, tower, world.time, new Vector3())
+      closest = Math.min(closest, player.pos.distanceTo(at))
+    }
+    // Ближе тверди детали (с корпусом корабля) не подойти, хотя до шара ещё далеко.
+    expect(closest).toBeGreaterThan(tower.size * 0.5)
+    expect(player.pos.distanceTo(base.pos) - base.radius).toBeGreaterThan(tower.size * 0.5)
+  })
+
+  /**
    * ПОРЯДОК СНОСА: сперва каскад вспышек, и только когда он отгремит — «пух» ударной
    * волны с разлётом лома. Сложи их в один кадр, и километровый шар просто исчезнет
    * во вспышке; ради этой паузы у базы и появилась фаза агонии.

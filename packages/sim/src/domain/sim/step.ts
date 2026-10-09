@@ -62,7 +62,7 @@ import {
 } from '../flight/landing'
 import { stepShip } from '../flight/model'
 import { stepDocking } from '../station/docking'
-import type { CrashHit, ShipEntity, World } from '../world/entities'
+import type { CrashHit, ShipEntity, WarBaseEntity, World } from '../world/entities'
 import {
   canAttractFigurine,
   figurineDisplayName,
@@ -74,7 +74,7 @@ import {
   MONOLITH_NAMES,
   pruneGiantScaleLocks,
 } from '../world/queries'
-import { findWarBaseFixture } from '../world/warBase'
+import { findWarBaseFixture, warBaseFixtureWorldPos } from '../world/warBase'
 import { stepOrbits } from '../world/orbits'
 import { maybeShiftOrigin } from '../world/origin'
 import { markContactLost } from '../world/acquaintance'
@@ -401,6 +401,34 @@ function stepCollisions(world: World, dt: number): void {
   }
 }
 
+const _fixtureAt = /* @__PURE__ */ new Vector3()
+
+/**
+ * Навесные детали базы — ТВЕРДЬ, как и её шар.
+ *
+ * Башня трёхкилометровой базы — шестьсот метров, пушки — по полторы-три сотни, и все они
+ * торчат над обшивкой. Твёрдым был только шар, и корабль влетал в деталь насквозь: камера
+ * внутри башни, а до «поверхности» и до посадки ещё полкилометра. Деталь — неровный меш,
+ * нормированный в единичную сферу, поэтому твердь берётся тем же правилом, что у глыб
+ * (`meshSolidRadius`), а не по описанной сфере.
+ *
+ * Проверяется и над поверхностью (в ховере): эшелон в двадцать метров ниже любой башни.
+ */
+function bounceOffFixtures(world: World, ship: ShipEntity, base: WarBaseEntity, dt: number): boolean {
+  // Дешёвая отбраковка: самая высокая деталь (башня) не выходит за полтора радиуса базы.
+  const reach = base.radius * (1 + 2 * WARBASE.TOWER_SIZE) + effectiveRadius(ship)
+  if (base.pos.distanceToSquared(ship.state.pos) > reach * reach) return false
+  for (const fix of base.fixtures) {
+    if (!fix.alive) continue
+    warBaseFixtureWorldPos(base, fix, world.time, _fixtureAt)
+    const solid = meshSolidRadius(fix.size)
+    if (!hitsBodySphere(ship, _fixtureAt, solid, dt)) continue
+    crashBounce(world, ship, _fixtureAt, solid, dt, { kind: 'warbase', name: '' })
+    return true
+  }
+  return false
+}
+
 /** Точка контакта корабля с полем станции — для вспышки. Горячий путь, без аллокаций. */
 const _shieldContact = /* @__PURE__ */ new Vector3()
 const _bodyPrev = /* @__PURE__ */ new Vector3()
@@ -545,6 +573,7 @@ function stepBodyCollisions(world: World, dt: number): void {
     if (ghostBody) continue
     for (const rock of world.warBases) {
       if (!rock.alive) continue
+      if (bounceOffFixtures(world, ship, rock, dt)) break
       const hitR = warBaseSolidRadius(rock.radius)
       if (!hitsBodySphere(ship, rock.pos, hitR, dt)) continue
       if (ship.landedOn?.bodyId === rock.id) continue
