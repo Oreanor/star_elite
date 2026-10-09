@@ -10,14 +10,11 @@ export function isHostileTo(a: Faction, b: Faction): boolean {
   if (a === b) return false
   if (a === 'neutral' || b === 'neutral') return false
   // Пираты против всех, кто не пират; полиция и игрок — союзники по умолчанию.
-  const lawful = (f: Faction) => f === 'player' || f === 'police'
   if (lawful(a) && lawful(b)) return false
   return true
 }
 
-function candidates(world: World): ShipEntity[] {
-  return world.player.alive ? [world.player, ...world.ships] : world.ships
-}
+const lawful = (f: Faction): boolean => f === 'player' || f === 'police'
 
 /**
  * Ближайший враг в радиусе осведомлённости.
@@ -30,7 +27,10 @@ export function selectTarget(self: ShipEntity, world: World): ShipEntity | null 
   let best: ShipEntity | null = null
   let bestDistance = AI.AWARENESS
 
-  for (const other of candidates(world)) {
+  // Игрок (индекс −1) и борта — без склейки в новый массив: выбор цели идёт у каждого бота
+  // в такте размышления, и `[player, ...ships]` плодил по массиву на бот.
+  for (let i = world.player.alive ? -1 : 0; i < world.ships.length; i++) {
+    const other = i < 0 ? world.player : world.ships[i]!
     // Замаскированного пилот не видит, стыкующегося не трогает.
     if (other === self || !isEngageable(other)) continue
     if (!isHostileTo(self.faction, other.faction)) continue
