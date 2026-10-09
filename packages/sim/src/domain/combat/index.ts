@@ -17,7 +17,7 @@ export {
   shatter,
   splittable,
 } from './mining'
-export { damageWarBase, destroyWarBase, damageWarBaseFixture, stepWarBaseWrecks, warBaseWreckDone } from './warBase'
+export { destroyWarBase, damageWarBaseFixture, stepWarBaseWrecks, warBaseWreckDone } from './warBase'
 export { stepWarBaseTurrets } from './warBaseGuns'
 export { stepMissiles } from './missiles'
 export { stepBolts } from './bolts'

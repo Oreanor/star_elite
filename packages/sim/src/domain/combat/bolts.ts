@@ -6,7 +6,7 @@ import { spawnExplosion, spawnShieldFlash, spawnTracer } from './effects'
 import { registerPlayerHit } from './grievance'
 import { damageAsteroid } from './mining'
 import { castLaser } from './raycast'
-import { damageWarBase, damageWarBaseFixture } from './warBase'
+import { damageWarBaseFixture } from './warBase'
 
 /**
  * Полёт лазерных болтов. Лазер больше НЕ мгновенный: болт летит снарядом и попадает
@@ -81,9 +81,9 @@ export function resolveLaserHit(
     spawnExplosion(world, hitPos, _still, 0.5)
     damageWarBaseFixture(world, hit.warBaseFixture.base, hit.warBaseFixture.fixture, damage)
   } else if (hit.warBase) {
-    // Искра в точке удара; снос базы рождает свой крупный взрыв в `destroyWarBase`.
+    // Удар в ОБШИВКУ урона не наносит: живучесть базы — её детали (`damageWarBaseFixture`),
+    // и снос — это счёт сбитых турелей, а не измор невидимой копилки. Только искра.
     spawnExplosion(world, hitPos, _still, 0.8)
-    damageWarBase(world, hit.warBase, damage)
   } else if (hit.missile) {
     // Ракета не «повреждается»: у неё нет прочности, только боевая часть.
     hit.missile.alive = false

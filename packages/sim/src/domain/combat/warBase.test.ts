@@ -7,7 +7,8 @@ import { createWorld } from '../world'
 import { cycleContact } from '../world/queries'
 import { STARTER_SYSTEM } from '../world/system'
 import { castLaser } from './raycast'
-import { damageWarBase, damageWarBaseFixture, warBaseFixtureWorldPos } from './warBase'
+import { damageWarBaseFixture, warBaseFixtureWorldPos } from './warBase'
+import { resolveLaserHit } from './bolts'
 import { warBaseIntegrity } from '../world/warBase'
 
 /** Мир с двумя базами у причала: километровой и трёхкилометровой. */
@@ -95,7 +96,14 @@ describe('военная база', () => {
     const base = world.warBases[0]!
     const before = base.fixtures.filter((f) => f.alive).length
 
-    damageWarBase(world, base, 1e9)
+    // Луч, погасший на ОБШИВКЕ (не на детали), — настоящий путь попадания по корпусу.
+    resolveLaserHit(
+      world,
+      base.pos.clone(),
+      { distance: 0, ship: null, asteroid: null, warBase: base, warBaseFixture: null, missile: null, platform: null, station: null },
+      1e9,
+      false,
+    )
 
     expect(base.alive).toBe(true)
     expect(base.fixtures.filter((f) => f.alive).length).toBe(before)

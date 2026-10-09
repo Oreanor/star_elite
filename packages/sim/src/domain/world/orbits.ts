@@ -241,6 +241,7 @@ export function stepOrbits(world: World, time = orbitTime(world)): void {
       tracer.to.add(_stationShift)
     }
     for (const explosion of world.explosions) explosion.pos.add(_stationShift)
+    for (const wave of world.blastwaves) wave.pos.add(_stationShift)
     for (const warp of world.warps) warp.pos.add(_stationShift)
     for (const portal of world.warpPortals) portal.pos.add(_stationShift)
     // Гиперпортала здесь НЕТ намеренно: он едет с опорой ИГРОКА (см. выше). У причала

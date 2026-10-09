@@ -1,8 +1,9 @@
 import { useFrame } from '@react-three/fiber'
-import { useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import {
   AdditiveBlending,
   CircleGeometry,
+  Color,
   InstancedMesh,
   Object3D,
   ShaderMaterial,
@@ -10,7 +11,6 @@ import {
 } from 'three'
 import { WARBASE, renderTime } from '@elite/sim'
 import { useSession } from '../../session/GameContext'
-import { Color } from 'three'
 import { PALETTE } from '../config'
 
 /**
@@ -30,12 +30,22 @@ const MAX_WAVES = 4
 
 const _dummy = new Object3D()
 
-/** Единичный круг: диаметр задаётся масштабом инстанса. */
+/**
+ * Единичный круг: диаметр задаётся масштабом инстанса. Геометрия — на компонент, а не на
+ * модуль, и это не оплошность: она несёт поинстансную фазу волны, а сцен бывает две (своя
+ * и мир за кольцом портала). Общая геометрия смешала бы фазы двух миров.
+ */
 function waveGeometry(): CircleGeometry {
   return new CircleGeometry(1, 48)
 }
 
+let materialCache: ShaderMaterial | null = null
 function waveMaterial(): ShaderMaterial {
+  materialCache ??= createWaveMaterial()
+  return materialCache
+}
+
+function createWaveMaterial(): ShaderMaterial {
   return new ShaderMaterial({
     uniforms: { uColor: { value: new Color(PALETTE.EXPLOSION) } },
     vertexShader: /* glsl */ `
@@ -82,7 +92,9 @@ export function Blastwaves() {
   const session = useSession()
   const ref = useRef<InstancedMesh>(null)
   const geometry = useMemo(waveGeometry, [])
-  const material = useMemo(waveMaterial, [])
+  const material = waveMaterial()
+  // Своя геометрия уходит вместе с компонентом; материал общий — живёт с модулем.
+  useEffect(() => () => geometry.dispose(), [geometry])
   // Фаза живёт в инстансном атрибуте: одна отрисовка на все волны кадра.
   const phases = useMemo(() => new Float32Array(MAX_WAVES), [])
 
