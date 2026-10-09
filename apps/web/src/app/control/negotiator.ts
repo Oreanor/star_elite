@@ -16,32 +16,24 @@ const OPENROUTER_KEY = env.VITE_OPENROUTER_API_KEY?.trim() || ''
 const GROQ_ENDPOINT = 'https://api.groq.com/openai/v1/chat/completions'
 const OPENROUTER_ENDPOINT = 'https://openrouter.ai/api/v1/chat/completions'
 
+/**
+ * Порядок — это пары гонки (`RACE_WIDTH`): первыми спрашиваются лучшие. Сверено с живыми
+ * списками сервисов и прогоном на промпте переговорщика 2026-10-09: держат роль, формат и
+ * русский. Списки сервисов меняются без предупреждения — снятая модель выбывает сама.
+ */
 const GROQ_DEFAULT_MODELS = [
-  'llama-3.1-8b-instant',
-  'llama-3.3-70b-versatile',
-  'openai/gpt-oss-20b',
   'openai/gpt-oss-120b',
-  'moonshotai/kimi-k2-instruct',
-  'qwen/qwen3-32b',
+  'qwen/qwen3.8-27b',
+  'openai/gpt-oss-20b',
 ]
 
 const DEFAULT_MODELS = [
-  'openai/gpt-oss-120b:free',
-  'google/gemma-4-26b-a4b-it:free',
-  'nvidia/nemotron-nano-9b-v2:free',
-  'meta-llama/llama-3.2-3b-instruct:free',
-  'meta-llama/llama-3.3-70b-instruct:free',
+  'apodex/apodex-1.1-mini:free',
   'nvidia/nemotron-3-super-120b-a12b:free',
-  'nvidia/nemotron-3-nano-30b-a3b:free',
   'google/gemma-4-31b-it:free',
-  'qwen/qwen3-next-80b-a3b-instruct:free',
-  'nousresearch/hermes-3-llama-3.1-405b:free',
-  'cognitivecomputations/dolphin-mistral-24b-venice-edition:free',
-  'openai/gpt-oss-20b:free',
-  'tencent/hy3:free',
-  'nvidia/nemotron-nano-12b-v2-vl:free',
+  'google/gemma-4-26b-a4b-it:free',
+  'dots-studio/dots-3-note-preview:free',
   'nvidia/nemotron-3-ultra-550b-a55b:free',
-  'liquid/lfm-2.5-1.2b-instruct:free',
 ]
 
 function envModels(key: string, fallback: string[]): string[] {
@@ -153,6 +145,25 @@ function toReply(parsed: ReturnType<typeof parseModelReply>): NegotiatorReply | 
 
 type OutboundMessages = ReturnType<typeof buildMessages>['messages']
 
+/**
+ * Сколько токенов дать ответу. Сам JSON реплики со всеми полями — около двухсот, а модели с
+ * рассуждением (gpt-oss, Nemotron) тратят лимит ещё и на скрытую мысль: при прежних 300 они
+ * упирались в потолок и отдавали ПУСТОЙ ответ — бот отвечал «шумом связи».
+ */
+const MAX_TOKENS = 900
+
+/**
+ * Рассуждать коротко: болтовне в эфире глубокая мысль не нужна, а каждый её токен — задержка
+ * и риск упереться в лимит. Параметр у сервисов свой: Groq — `reasoning_effort` по семейству
+ * (у Qwen рассуждение выключается совсем), OpenRouter — единое поле `reasoning`.
+ */
+function reasoningParams(ref: ModelRef): Record<string, unknown> {
+  if (ref.endpoint === OPENROUTER_ENDPOINT) return { reasoning: { effort: 'low', exclude: true } }
+  if (ref.model.startsWith('openai/gpt-oss')) return { reasoning_effort: 'low' }
+  if (ref.model.startsWith('qwen/')) return { reasoning_effort: 'none' }
+  return {}
+}
+
 async function callModel(ref: ModelRef, messages: OutboundMessages): Promise<string | null> {
   const ctrl = new AbortController()
   const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS)
@@ -165,7 +176,7 @@ async function callModel(ref: ModelRef, messages: OutboundMessages): Promise<str
         'Content-Type': 'application/json',
         'X-Title': 'Star Elite',
       },
-      body: JSON.stringify({ model: ref.model, messages, temperature: 0.72, max_tokens: 300 }),
+      body: JSON.stringify({ model: ref.model, messages, temperature: 0.72, max_tokens: MAX_TOKENS, ...reasoningParams(ref) }),
     })
     if (!res.ok) {
       const body = await res.text().catch(() => '')
