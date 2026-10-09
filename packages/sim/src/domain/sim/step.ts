@@ -85,7 +85,7 @@ import { stepDivineScale, stepDockTraffic, stepTraffic } from '../world/traffic'
 import { stepTitans } from '../world/titans'
 import { stepPlatforms } from '../world/platforms'
 import { stepGrievances } from '../combat/grievance'
-import { NULL_CONTROLLER, type ControllerMap } from './controller'
+import { NULL_CONTROLLER, type Controller, type ControllerMap } from './controller'
 
 /**
  * Шаг мира. Симуляция не знает, кто управляет кораблём: она спрашивает Controller.
@@ -111,8 +111,21 @@ function allShips(world: World): ShipEntity[] {
   return _allShips
 }
 
-function controllerFor(controllers: ControllerMap, ship: ShipEntity) {
-  return controllers.get(ship.id) ?? NULL_CONTROLLER
+/**
+ * Кто за штурвалом в этом шаге: назначенные пилоты и пилот «по умолчанию» для борта, у
+ * которого назначения нет. Борт, родившийся в такте (трафик), до следующего кадра в карте
+ * не значится — без пилота по умолчанию он летел бы несколько тактов без управления.
+ * Кто этот пилот, решает вызывающий: домен не импортирует ИИ (см. `Controller`).
+ */
+interface Helm {
+  assigned: ControllerMap
+  unassigned: Controller
+}
+// Один на модуль: stepWorld не вложен, а объект на каждый кадр — мусор.
+const _helm: Helm = { assigned: new Map(), unassigned: NULL_CONTROLLER }
+
+function controllerFor(helm: Helm, ship: ShipEntity): Controller {
+  return helm.assigned.get(ship.id) ?? helm.unassigned
 }
 
 /**
@@ -122,7 +135,18 @@ function controllerFor(controllers: ControllerMap, ship: ShipEntity) {
  */
 export type TickHook = (dt: number) => void
 
-export function stepWorld(world: World, frameDt: number, controllers: ControllerMap, onTick?: TickHook): void {
+export interface StepOptions {
+  /** Хук в конце каждого такта (см. `TickHook`). */
+  onTick?: TickHook
+  /** Пилот для борта без назначения в `controllers` — обычно ИИ. Нет — борт без управления. */
+  unassigned?: Controller
+}
+
+export function stepWorld(world: World, frameDt: number, controllers: ControllerMap, options: StepOptions = {}): void {
+  const { onTick } = options
+  _helm.assigned = controllers
+  _helm.unassigned = options.unassigned ?? NULL_CONTROLLER
+  const helm = _helm
   // В доке мир стоит. Иначе пираты за окном магазина продолжают охоту,
   // а игрок за стеклом ничего не может сделать. Живёт только причал — теми же тактами,
   // что и полёт: это те же часы, а не отдельный таймер экрана станции.
@@ -150,7 +174,7 @@ export function stepWorld(world: World, frameDt: number, controllers: Controller
   for (let i = 0; i < ticks; i++) {
     beginTrailTick(world)
     world.time += PHYSICS.FIXED_DT
-    stepTick(world, controllers, PHYSICS.FIXED_DT)
+    stepTick(world, helm, PHYSICS.FIXED_DT)
     onTick?.(PHYSICS.FIXED_DT)
   }
   endTrailFrame(world)
@@ -210,7 +234,7 @@ function takeTicks(world: World, frameDt: number): number {
  * числился живым до конца кадра, турель стреляла с точностью до кадра, а не такта.
  * Один такт — одни часы на весь мир, поэтому ничего «раз в кадр» в домене нет.
  */
-function stepTick(world: World, controllers: ControllerMap, dt: number): void {
+function stepTick(world: World, helm: Helm, dt: number): void {
   // Календарь — первым: орбиты в этом такте встают на его новое показание.
   advanceCalendar(world, dt)
   applyIncomingHits(world)
@@ -219,9 +243,9 @@ function stepTick(world: World, controllers: ControllerMap, dt: number): void {
   // Спутники расставляются ПЕРВЫМИ: и пилот, и столкновения, и крейсерский
   // потолок должны видеть луну там, где она в это мгновение находится.
   stepOrbits(world)
-  stepControllers(world, controllers, dt)
+  stepControllers(world, helm, dt)
   stepPhysics(world, dt)
-  stepWeapons(world, controllers, dt)
+  stepWeapons(world, helm, dt)
   stepAsteroids(world, dt)
   stepMissiles(world, dt)
   // Болты летят и заметают отрезок ПОСЛЕ движения кораблей и ракет этого шага:
@@ -230,7 +254,7 @@ function stepTick(world: World, controllers: ControllerMap, dt: number): void {
   stepCollisions(world, dt)
   for (const gate of world.jumpGates) stepJumpGateCollision(world.player, gate)
   stepBodyCollisions(world, dt)
-  stepScooping(world, controllers, dt)
+  stepScooping(world, helm, dt)
   stepDocking(world)
 
   cleanup(world)
@@ -248,13 +272,13 @@ function stepTick(world: World, controllers: ControllerMap, dt: number): void {
  * Все решения принимаются до физики: контроллеры «жмут кнопки» в начале шага.
  * Крейсерский привод считается здесь же — он лишь пишет множитель в controls.
  */
-function stepControllers(world: World, controllers: ControllerMap, dt: number): void {
+function stepControllers(world: World, helm: Helm, dt: number): void {
   for (const ship of allShips(world)) {
     if (!ship.alive) continue
     // Кинематический борт рулится извне — свой контроллер и крейсер ему не задаём.
     if (ship.kinematic) continue
     if (ship.warpEmerging || ship.warpDeparting) continue
-    const controller = controllerFor(controllers, ship)
+    const controller = controllerFor(helm, ship)
     controller.update(ship, world, dt)
     updateCruise(ship, world, controller.wantsCruise?.(ship, world) ?? false, dt)
   }
@@ -284,7 +308,7 @@ function stepPhysics(world: World, dt: number): void {
   }
 }
 
-function stepWeapons(world: World, controllers: ControllerMap, dt: number): void {
+function stepWeapons(world: World, helm: Helm, dt: number): void {
   // Струи непрерывных лучей — срез ЭТОГО шага, а не эффект с временем жизни: держат
   // гашетку — список наполнится заново, отпустили — он пуст, и луч гаснет сам собой.
   world.beams.length = 0
@@ -298,7 +322,7 @@ function stepWeapons(world: World, controllers: ControllerMap, dt: number): void
     regenAux(ship, dt)
     if (!ship.alive) continue
 
-    const controller = controllerFor(controllers, ship)
+    const controller = controllerFor(helm, ship)
 
     // Одна клавиша поднимает поле и она же опускает. Расход считается ПОСЛЕ
     // `regenEnergy`: иначе поле питалось бы восполнением того же шага.
@@ -643,10 +667,10 @@ function stepBodyCollisions(world: World, dt: number): void {
  *
  * Луч спрашивается у Controller, как стрельба: симуляция не знает про клавишу C.
  */
-function stepScooping(world: World, controllers: ControllerMap, dt: number): void {
+function stepScooping(world: World, helm: Helm, dt: number): void {
   const player = world.player
   const wantTractor =
-    player.alive && !!controllerFor(controllers, player).wantsTractor?.(player, world)
+    player.alive && !!controllerFor(helm, player).wantsTractor?.(player, world)
 
   clearTractorMarks(world)
 

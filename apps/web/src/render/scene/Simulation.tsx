@@ -21,6 +21,7 @@ import {
   missileAmmo,
   serializePlayer,
   stepWorld,
+  aiController,
   type TickHook,
   enterBush,
   leaveBush,
@@ -279,7 +280,7 @@ export function Simulation() {
     // В доке мир стоит, живёт только причал — это решает stepWorld. Курсор отпущен (экран
     // станции), поэтому зовём его здесь, до проверки захвата ниже.
     if (world.docked) {
-      stepWorld(world, dt, controllers)
+      stepWorld(world, dt, controllers, { unassigned: aiController })
       return
     }
 
@@ -300,7 +301,7 @@ export function Simulation() {
       // Штурвал — коастящему контроллеру (или автопилоту стыковки/полёта-к-цели, если он вёл):
       // мышь на меню, пилот не рулит. Ставим ПОСЛЕ syncControllers, чтобы пересборка не вернула ввод.
       controllers.set(world.player.id, helmController(session, true))
-      stepWorld(world, dt, controllers, torusTick)
+      stepWorld(world, dt, controllers, { onTick: torusTick, unassigned: aiController })
       camera.position.add(world.originShift)
       return
     }
@@ -431,7 +432,7 @@ export function Simulation() {
     syncControllers(session)
 
     // Накопитель и фиксированный шаг — внутри stepWorld.
-    stepWorld(world, dt, controllers, torusTick)
+    stepWorld(world, dt, controllers, { onTick: torusTick, unassigned: aiController })
 
     // Мир мог сдвинуться (плавающее начало координат). Камера живёт в мировых
     // координатах, и без этой поправки пружина преследования полсекунды тащит её

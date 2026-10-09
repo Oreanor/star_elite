@@ -1,8 +1,10 @@
-import { Vector3 } from 'three'
+import { Quaternion, Vector3 } from 'three'
+import { pirateLoadout } from '../../config/loadouts'
 import { describe, expect, it } from 'vitest'
 import { PHYSICS } from '../../config/physics'
 import { createWorld, type World } from '../world'
-import { startAtStation } from '../world'
+import { makeShip, startAtStation } from '../world'
+import { NULL_CONTROLLER, type Controller } from './controller'
 import { renderPos } from '../world/poseTrail'
 import { STARTER_SYSTEM } from '../world/system'
 import { quietWorld } from '../../testkit'
@@ -154,5 +156,20 @@ describe('показ между тактами', () => {
     world.calendarClock += 60
     stepWorld(world, PHYSICS.FIXED_DT, new Map())
     expect(Math.abs(world.calendarClock - world.calendarTime)).toBeLessThan(0.05)
+  })
+
+  /**
+   * Регрессия: борт, рождённый трафиком посреди кадра, до следующего кадра не значился в
+   * карте пилотов и несколько тактов летел без управления. Пилот по умолчанию (`unassigned`)
+   * берёт его с первого же такта.
+   */
+  it('борт без назначения ведёт пилот по умолчанию с первого такта', () => {
+    const world = quietWorld()
+    const stray = makeShip(world.ids, 'neutral', 'Без пилота', pirateLoadout(), new Vector3(500, 0, 0), new Quaternion())
+    world.ships.push(stray)
+    const piloted: number[] = []
+    const fallback: Controller = { ...NULL_CONTROLLER, update: (ship) => void piloted.push(ship.id) }
+    stepWorld(world, PHYSICS.FIXED_DT, new Map(), { unassigned: fallback })
+    expect(piloted).toContain(stray.id)
   })
 })

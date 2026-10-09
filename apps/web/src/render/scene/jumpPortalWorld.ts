@@ -188,7 +188,7 @@ export function syncPreparedJumpWorld(source: Session, target: PreparedJumpWorld
     // или получать урон, но весь остальной мир обязан жить тем же stepWorld.
     dstWorld.player.alive = false
     syncPreparedControllers(target)
-    stepWorld(dstWorld, dt, target.session.controllers)
+    stepWorld(dstWorld, dt, target.session.controllers, { unassigned: aiController })
     dstWorld.player.alive = wasAlive
     // Симуляция могла сдвинуть floating origin; привязываем призрак уже в новом кадре.
     syncPreparedPlayer(source, target)

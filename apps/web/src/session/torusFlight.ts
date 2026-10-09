@@ -21,7 +21,7 @@ import { finishTorusApproach, torusAutopilotActive, torusNav } from './torusAuto
  * лететь можно бесконечно, придёшь к себе же.
  *
  * Живёт в session (можно читать ввод). `stepTorusFlight` идёт хуком в каждом такте мира
- * (`stepWorld(..., onTick)`), слой рендера лишь читает `torusView()`.
+ * (`stepWorld(..., { onTick })`), слой рендера лишь читает `torusView()`.
  */
 
 const view: Pose4 = identity4()
