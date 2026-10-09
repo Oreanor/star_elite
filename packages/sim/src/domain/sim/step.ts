@@ -130,47 +130,64 @@ export function stepWorld(world: World, frameDt: number, controllers: Controller
   // Накопитель ограничен сверху: свёрнутая вкладка не должна телепортировать мир.
   let remaining = Math.min(frameDt, PHYSICS.MAX_FRAME_DT)
 
-  stepWarpEmergence(world, Math.min(frameDt, PHYSICS.MAX_FRAME_DT))
-
   while (remaining > 0) {
     const dt = Math.min(PHYSICS.FIXED_DT, remaining)
     remaining -= dt
     world.time += dt
-
-    // Спутники расставляются ПЕРВЫМИ: и пилот, и столкновения, и крейсерский
-    // потолок должны видеть луну там, где она в это мгновение находится.
-    stepOrbits(world)
-    stepControllers(world, controllers, dt)
-    stepPhysics(world, dt)
-    stepWeapons(world, controllers, dt)
-    stepAsteroids(world, dt)
-    stepMissiles(world, dt)
-    // Болты летят и заметают отрезок ПОСЛЕ движения кораблей и ракет этого шага:
-    // попадание считается по свежим позициям целей, а не по вчерашним.
-    stepBolts(world, dt)
-    stepCollisions(world, dt)
-    for (const gate of world.jumpGates) stepJumpGateCollision(world.player, gate)
-    stepShipCollisions(world)
-    stepBodyCollisions(world, dt)
-    stepScooping(world, controllers, dt)
-    stepDocking(world)
+    stepTick(world, controllers, dt)
   }
+}
+
+/**
+ * ОДИН ТАКТ мира. Всё, что меняет состояние игры, живёт здесь — и физика, и «сценарий»:
+ * трафик, киты, турели, обиды, уборка мёртвых.
+ *
+ * Раньше сценарий шёл раз в КАДР с кадровым `dt` — «чтобы не зависеть от герцовки». Но
+ * таймер в секундах, убывающий на `dt` такта, от герцовки не зависит и так, а кадровый шаг
+ * как раз зависел: число бросков `world.rng` в секунду росло с частотой монитора, и одно
+ * зерно давало разный мир на 60 и на 144 Гц. Порядок тоже плыл: погибший корабль
+ * числился живым до конца кадра, турель стреляла с точностью до кадра, а не такта.
+ * Один такт — одни часы на весь мир, поэтому ничего «раз в кадр» в домене нет.
+ */
+function stepTick(world: World, controllers: ControllerMap, dt: number): void {
+  // Выход из прыжка двигает корабли до всего остального: этот такт их уже видит на месте.
+  stepWarpEmergence(world, dt)
+  // Спутники расставляются ПЕРВЫМИ: и пилот, и столкновения, и крейсерский
+  // потолок должны видеть луну там, где она в это мгновение находится.
+  stepOrbits(world)
+  stepControllers(world, controllers, dt)
+  stepPhysics(world, dt)
+  stepWeapons(world, controllers, dt)
+  stepAsteroids(world, dt)
+  stepMissiles(world, dt)
+  // Болты летят и заметают отрезок ПОСЛЕ движения кораблей и ракет этого шага:
+  // попадание считается по свежим позициям целей, а не по вчерашним.
+  stepBolts(world, dt)
+  stepCollisions(world, dt)
+  for (const gate of world.jumpGates) stepJumpGateCollision(world.player, gate)
+  stepBodyCollisions(world, dt)
+  stepScooping(world, controllers, dt)
+  stepDocking(world)
 
   cleanup(world)
-  // Трафик и киты — раз в кадр и по СЕКУНДАМ, а не по шагам физики: иначе они
-  // появлялись бы и двигались вдвое чаще на 120 Гц, чем на 60.
-  const frame = Math.min(frameDt, PHYSICS.MAX_FRAME_DT)
-  stepTraffic(world, frame)
-  // Бог, идущий к причалу, ужимается до обычного борта: масштаб — свойство облика,
-  // поэтому и живёт в такте трафика, а не в физике.
-  stepDivineScale(world, frame)
-  stepTitans(world, frame)
-  stepPlatforms(world, frame)
-  // Турели баз: перезаряд и очереди заданы в секундах, поэтому шаг кадровый, как у трафика.
-  stepWarBaseTurrets(world, frame)
-  // Претензии за случайные попадания гаснут по секундам, а не по шагам физики.
+  stepTraffic(world, dt)
+  // Бог, идущий к причалу, ужимается до обычного борта: масштаб — свойство облика.
+  stepDivineScale(world, dt)
+  stepTitans(world, dt)
+  stepPlatforms(world, dt)
+  stepWarBaseTurrets(world, dt)
   stepGrievances(world)
   maybeShiftOrigin(world)
+}
+
+/**
+ * Выбросить из списка то, что не прошло проверку, НА МЕСТЕ. Уборка идёт каждый такт,
+ * а `filter` на каждый такт — десяток массивов на выброс для сборщика мусора.
+ */
+function retain<T>(list: T[], keep: (item: T) => boolean): void {
+  let n = 0
+  for (const item of list) if (keep(item)) list[n++] = item
+  list.length = n
 }
 
 /**
@@ -378,15 +395,6 @@ function stepCollisions(world: World, dt: number): void {
   }
 }
 
-/**
- * Столкновения корабль↔корабль отключены при росте: борта — Tab-контакты, не Shift+Tab.
- * При scale>1 твердь только у небесных/нав-целей (планеты, станции, глыбы…).
- * Обычный масштаб (1) и так сквозной — бой манёвром, не бильярдом.
- */
-function stepShipCollisions(_world: World): void {
-  // Раньше гигант давил мелочь — при любом росте это только мешало.
-}
-
 /** Точка контакта корабля с полем станции — для вспышки. Горячий путь, без аллокаций. */
 const _shieldContact = /* @__PURE__ */ new Vector3()
 const _bodyPrev = /* @__PURE__ */ new Vector3()
@@ -589,18 +597,18 @@ function scoopNearby(world: World, ship: ShipEntity): void {
 function cleanup(world: World): void {
   const now = world.time
 
-  // Срок жизни беспилотника задан в СЕКУНДАХ, поэтому истекает раз в кадр,
-  // а не раз в шаг физики: от герцовки он зависеть не должен.
+  // Срок жизни беспилотника задан в СЕКУНДАХ и сверяется с `world.time` — от частоты такта
+  // не зависит.
   expireDrones(world)
 
-  world.tracers = world.tracers.filter((t) => now - t.born < t.life)
-  world.muzzleFlashes = world.muzzleFlashes.filter((f) => now - f.born < GUNNERY.MUZZLE_FLASH_LIFE)
-  world.explosions = world.explosions.filter((e) => now - e.born < DEBRIS.EXPLOSION_LIFE)
-  world.shockwaves = world.shockwaves.filter((w) => now - w.born < BOMB.WAVE_LIFE)
-  world.warps = world.warps.filter((w) => now - w.born < WARP.FLASH_LIFE)
-  world.shieldFlashes = world.shieldFlashes.filter((f) => now - f.born < SHIELD.FLASH_LIFE)
+  retain(world.tracers, (t) => now - t.born < t.life)
+  retain(world.muzzleFlashes, (f) => now - f.born < GUNNERY.MUZZLE_FLASH_LIFE)
+  retain(world.explosions, (e) => now - e.born < DEBRIS.EXPLOSION_LIFE)
+  retain(world.shockwaves, (w) => now - w.born < BOMB.WAVE_LIFE)
+  retain(world.warps, (w) => now - w.born < WARP.FLASH_LIFE)
+  retain(world.shieldFlashes, (f) => now - f.born < SHIELD.FLASH_LIFE)
   // Вести о пропавших знакомых гаснут сами, как трассеры: HUD показал — и хватит.
-  world.notices = world.notices.filter((n) => now - n.at < CONTACTS.NOTICE_LIFE)
+  retain(world.notices, (n) => now - n.at < CONTACTS.NOTICE_LIFE)
 
   for (const ship of world.ships) {
     if (ship.alive || ship.wreckAt !== null) continue
@@ -630,19 +638,20 @@ function cleanup(world: World): void {
 
   // Обломок держим, пока взрыв не отыграет. Ушедшего прыжком снимаем молча: он не
   // погиб (alive всё ещё true, взрыва не было) — его просто больше нет в системе.
-  world.ships = world.ships.filter(
+  retain(
+    world.ships,
     (s) => !s.warpedOut && (s.alive || (s.wreckAt !== null && now - s.wreckAt < DEBRIS.WRECK_LIFE)),
   )
 
   // Убитый камень уже раскололся в `damageAsteroid` — здесь только выметаем мёртвых.
   // Второе место, гасящее астероид по прочности, однажды забыло бы про осколки.
-  world.asteroids = world.asteroids.filter((a) => a.alive)
+  retain(world.asteroids, (a) => a.alive)
   // Военные базы: гибнут в `damageWarBaseFixture` вместе с последней деталью — тут только выметаем.
   // Снесённая база остаётся в мире, пока не отгремит её агония: каскад вспышек, затем
   // "пух" волны с разлётом лома. Вынести раньше — оборвать зрелище на полуслове.
   stepWarBaseWrecks(world)
-  world.warBases = world.warBases.filter((r) => !warBaseWreckDone(r, now))
-  world.blastwaves = world.blastwaves.filter((w) => now - w.born < WARBASE.WAVE_LIFE)
+  retain(world.warBases, (r) => !warBaseWreckDone(r, now))
+  retain(world.blastwaves, (w) => now - w.born < WARBASE.WAVE_LIFE)
 
   expirePods(world)
 
