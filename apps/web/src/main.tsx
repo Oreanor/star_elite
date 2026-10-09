@@ -4,6 +4,7 @@ import { initWorldClock } from './session/net/worldClock'
 import { preloadHulls } from './render/geometry/ships'
 import { preloadPortraits } from './ui/portrait'
 import { preloadTitleAssets } from './ui/preload'
+import { currentLang, loadLang } from './ui/i18n'
 import './styles.css'
 
 const root = document.getElementById('root')
@@ -23,6 +24,10 @@ void preloadTitleAssets().then(() => {
   preloadHulls()
   preloadPortraits()
 })
+
+// Язык игрока — до первого кадра: прочие языки грузятся по требованию, и без этого
+// заставка мигнула бы русским, пока доезжает свой словарь.
+await loadLang(currentLang())
 
 // StrictMode намеренно выключен: он монтирует дерево дважды, и мир создался бы
 // в двух экземплярах, а игровая петля запустилась бы поверх самой себя.

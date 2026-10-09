@@ -994,7 +994,7 @@ function Settings({ session }: { session: ReturnType<typeof useSession> }) {
   const lang = useLang()
   const [assist, setAssist] = useState(session.intent.flightAssist)
 
-  const pickLang = (next: Lang) => setLang(next)
+  const pickLang = (next: Lang) => void setLang(next)
   const toggleAssist = (on: boolean) => {
     session.intent.flightAssist = on
     localStorage.setItem(ASSIST_STORAGE_KEY, on ? 'on' : 'off')

@@ -1,63 +1,47 @@
 import { figurineTitleName, type CargoItem, type Commodity, type LifeLevel, type ShipModule } from '@elite/sim'
-import { currentLang, t, type Key } from './i18n'
-import {
-  COMMODITY_L,
-  COMMODITY_DESC_L,
-  FIGURINE_TITLE_L,
-  GALAXY_SHAPE_L,
-  MODULE_L,
-  OCCUPATION_FACTION_L,
-  OCCUPATION_L,
-  OCCUPATION_PILOT_L,
-  PLACE_L,
-  PROFESSION_FALLBACK_L,
-  PROFESSION_L,
-  SPECIES_L,
-  STAR_CLASS_L,
-  STATION_TYPE_L,
-} from './dataTranslations'
+import { currentLang, langData, RU_LANG_DATA, t, type Key } from './i18n'
+import type { LangData } from './data/types'
 
 /**
  * Перевод ДАННЫХ, а не хрома. Домен авторит имена по-русски (товары, модули, расы) —
  * это его канон и запас на случай, если строки для языка нет. Интерфейс же переводит их
  * по `id`: домену язык знать незачем, а игроку на английском не должно лезть «Двигатель».
  *
- * Таблицы плоские и по языку (`dataTranslations.ts`, генерятся): новый модуль — новая
+ * Таблицы плоские, файл на язык (`data/<язык>.ts`, генерятся): новый модуль — новая
  * строка, не ветвление. Нет строки — показываем русский канон из домена, а не пустоту:
  * игра не ломается на пропущенном переводе, он лишь виден как недоделка.
  */
 
-type LangTable = Partial<Record<string, Record<string, string>>>
+/** Таблица перевода данных (не строковые поля пакета языка). */
+type Table = { [K in keyof LangData]: LangData[K] extends string ? never : K }[keyof LangData]
 
 /**
  * Показ значения по языку интерфейса. Русский — доменный канон (он и есть авторитет).
  * Иначе таблица языка; нет строки — снова канон: перевод недоделан, но игра цела.
  */
-function pick(table: LangTable, key: string, canon: string): string {
-  const lang = currentLang()
-  if (lang === 'ru') return canon
-  return table[lang]?.[key] ?? canon
+function pick(table: Table, key: string, canon: string): string {
+  if (currentLang() === 'ru') return canon
+  return langData()[table][key] ?? canon
 }
 
 export function commodityName(c: Commodity): string {
-  return pick(COMMODITY_L, c.id, c.name)
+  return pick('commodity', c.id, c.name)
 }
 
 /** Описание товара на языке интерфейса — откат на русский канон домена, если нет строки. */
 export function commodityDesc(c: Commodity): string {
-  return pick(COMMODITY_DESC_L, c.id, c.description)
+  return pick('commodityDesc', c.id, c.description)
 }
 
 export function moduleName(m: ShipModule): string {
-  return pick(MODULE_L, m.id, m.name)
+  return pick('module', m.id, m.name)
 }
 
 /** Имя расы: сперва целиком (люди), иначе по словам — русские части через пробел. */
 export function speciesName(s: string): string {
   const lang = currentLang()
   if (lang === 'ru') return s
-  const table = SPECIES_L[lang]
-  if (!table) return s
+  const table = langData().species
   if (table[s]) return table[s]!
   return s.split(' ').map((w) => table[w] ?? w).join(' ')
 }
@@ -74,7 +58,7 @@ export function itemDisplayName(item: CargoItem): string {
 
 /** Имя экземпляра статуэтки: канон RU из домена, иначе таблица языка. */
 export function figurineTitleLocal(titleId: string): string {
-  return pick(FIGURINE_TITLE_L, titleId, figurineTitleName(titleId))
+  return pick('figurineTitle', titleId, figurineTitleName(titleId))
 }
 
 /**
@@ -112,12 +96,12 @@ function translit(name: string): string {
 export function properName(name: string): string {
   const lang = currentLang()
   if (lang === 'ru') return name
-  const place = PLACE_L[lang]?.[name]
+  const place = langData().place[name]
   if (place) return place
   // Станция зовётся «Тип «Имя»»: тип переводим, имя внутри кавычек — транслитом.
   const station = /^(.+?) «(.+)»$/.exec(name)
   if (station) {
-    const type = STATION_TYPE_L[lang]?.[station[1]!] ?? translit(station[1]!)
+    const type = langData().stationType[station[1]!] ?? translit(station[1]!)
     return `${type} «${translit(station[2]!)}»`
   }
   return translit(name)
@@ -126,11 +110,11 @@ export function properName(name: string): string {
 // ─── Доменные перечисления: таблица по языку, откат на русский канон домена ──────
 
 export function starClassName(star: { class: string; className: string }): string {
-  return pick(STAR_CLASS_L, star.class, star.className)
+  return pick('starClass', star.class, star.className)
 }
 
 export function galaxyShapeName(shape: { id: string; name: string }): string {
-  return pick(GALAXY_SHAPE_L, shape.id, shape.name)
+  return pick('galaxyShape', shape.id, shape.name)
 }
 
 /**
@@ -139,11 +123,9 @@ export function galaxyShapeName(shape: { id: string; name: string }): string {
  * чтобы не позвать в напарники пирата вслепую. Неизвестный тип — откат по фракции.
  */
 export function occupationName(originKind: string | null, faction: string): string {
-  const lang = currentLang()
-  const byKind = OCCUPATION_L[lang] ?? OCCUPATION_L.ru!
-  if (originKind && byKind[originKind]) return byKind[originKind]!
-  const byFaction = OCCUPATION_FACTION_L[lang] ?? OCCUPATION_FACTION_L.ru!
-  return byFaction[faction] ?? OCCUPATION_PILOT_L[lang] ?? OCCUPATION_PILOT_L.ru!
+  const d = langData()
+  if (originKind && d.occupation[originKind]) return d.occupation[originKind]!
+  return d.occupationFaction[faction] ?? (d.pilot || RU_LANG_DATA.pilot)
 }
 
 /**
@@ -152,9 +134,8 @@ export function occupationName(originKind: string | null, faction: string): stri
  * сейв без выбора) — нейтральный «вольный делец».
  */
 export function professionName(profession: string | undefined): string {
-  const lang = currentLang()
-  const by = PROFESSION_L[lang] ?? PROFESSION_L.ru!
-  return (profession && by[profession]) || (PROFESSION_FALLBACK_L[lang] ?? PROFESSION_FALLBACK_L.ru!)
+  const d = langData()
+  return (profession && d.profession[profession]) || d.professionFallback || RU_LANG_DATA.professionFallback
 }
 
 /**
