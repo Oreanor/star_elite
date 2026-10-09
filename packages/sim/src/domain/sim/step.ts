@@ -156,6 +156,15 @@ export function stepWorld(world: World, frameDt: number, controllers: Controller
   endTrailFrame(world)
 }
 
+/** Урон, присланный по сети между тактами, — ложится здесь, в такте (см. `incomingHits`). */
+function applyIncomingHits(world: World): void {
+  if (world.incomingHits.length === 0) return
+  for (const damage of world.incomingHits) {
+    if (world.player.alive) applyDamage(world.player, damage, world.time)
+  }
+  world.incomingHits.length = 0
+}
+
 /**
  * Календарь мира идёт тактами (+dt), а не прыгает раз в кадр на показание часов: орбиты от
  * него, и шаг орбит обязан быть шагом такта. От общих часов (`calendarClock`) он не уходит —
@@ -204,6 +213,7 @@ function takeTicks(world: World, frameDt: number): number {
 function stepTick(world: World, controllers: ControllerMap, dt: number): void {
   // Календарь — первым: орбиты в этом такте встают на его новое показание.
   advanceCalendar(world, dt)
+  applyIncomingHits(world)
   // Выход из прыжка двигает корабли до всего остального: этот такт их уже видит на месте.
   stepWarpEmergence(world, dt)
   // Спутники расставляются ПЕРВЫМИ: и пилот, и столкновения, и крейсерский

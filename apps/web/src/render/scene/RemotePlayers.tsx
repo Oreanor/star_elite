@@ -1,7 +1,7 @@
 import { useFrame } from '@react-three/fiber'
 import { useEffect, useMemo, useRef } from 'react'
 import { InstancedMesh, Object3D, Quaternion, Vector3 } from 'three'
-import { applyDamage, despawnRemotePlayer, isVisible, spawnRemotePlayer } from '@elite/sim'
+import { despawnRemotePlayer, isVisible, spawnRemotePlayer } from '@elite/sim'
 import { useSession } from '../../session/GameContext'
 import { useOnlinePlayers } from '../../session/net/presence'
 import { sendHit, subscribeHits } from '../../session/net/hits'
@@ -80,12 +80,12 @@ export function RemotePlayers() {
   }, [session])
 
   // Приём попаданий по СЕБЕ: чужой болт долетел на клиенте стрелка, он прислал урон — и мы
-  // сами бьём по своему HP (авторитет над своим здоровьем). Живёт, пока компонент смонтирован.
+  // сами бьём по своему HP (авторитет над своим здоровьем). Урон приходит между тактами,
+  // поэтому кладётся в ящик мира и ложится в ближайшем такте, а не здесь.
   useEffect(() => {
     if (!activeWorld) return
     return subscribeHits((dmg) => {
-      const world = session.world
-      if (world.player.alive) applyDamage(world.player, dmg, world.time)
+      session.world.incomingHits.push(dmg)
     })
   }, [session, activeWorld])
 
