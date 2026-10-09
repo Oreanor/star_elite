@@ -8,6 +8,7 @@ import { CONTACTS } from '../../config/contacts'
 import { ASTEROID, TRAFFIC } from '../../config/world'
 import { despawnDistantAsteroids, liveAsteroidCount, spawnAsteroidEncounter } from './asteroidEncounter'
 import { randomUnit, signed, weightedPick, type Rng } from '../../core/math'
+import { countWhere, retain } from '../../core/list'
 import type { Loadout } from '../loadout'
 import { createAIState } from '../ai/types'
 import { residentAcquaintances } from './acquaintance'
@@ -476,9 +477,10 @@ function bornEncounter(world: World): ShipEntity[] {
  * (`dock='done'`) и из счёта выпадает — тогда приток добирает норму заново.
  */
 function stationRegulars(world: World): number {
-  return world.ships.filter(
+  return countWhere(
+    world.ships,
     (s) => s.alive && !isDroneShip(s) && s.faction === 'neutral' && (s.ai?.dock === 'inbound' || s.ai?.dock === 'berthed'),
-  ).length
+  )
 }
 
 /**
@@ -569,14 +571,14 @@ export function stepDockedBerth(world: World, dt: number): boolean {
 }
 
 /**
- * Трафик у причала, пока игрок в доке: обычный приток с кромки радара (как в космосе)
+ * Такт причала, пока игрок в доке: обычный приток с кромки радара (как в космосе)
  * и таймер стоянки у уже стоящих. Inbound остаётся на подлёте — увидишь его, когда
- * отчалишь.
+ * отчалишь. Смена состава двигает `berthRevision` — по нему перерисовывается экран станции.
  */
-export function stepDockTraffic(world: World, dt: number): { changed: boolean; born: ShipEntity[] } {
+export function stepDockTraffic(world: World, dt: number): ShipEntity[] {
   const born = stepTraffic(world, dt)
-  const changed = stepDockedBerth(world, dt) || born.length > 0
-  return { changed, born }
+  if (stepDockedBerth(world, dt) || born.length > 0) world.berthRevision++
+  return born
 }
 
 /**
@@ -626,7 +628,7 @@ function spawnSkirmish(world: World): ShipEntity[] {
  */
 function despawnDistant(world: World): void {
   const limitSq = TRAFFIC.DESPAWN_RANGE * TRAFFIC.DESPAWN_RANGE
-  world.ships = world.ships.filter((s) => {
+  retain(world.ships, (s) => {
     if (!s.alive || isDroneShip(s)) return true
     // Слово не убираем по дальности: у Крестов он вписан в мир, а пролётом уходит сам.
     if (s.divine) return true

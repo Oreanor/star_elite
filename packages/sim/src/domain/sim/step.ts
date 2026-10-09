@@ -4,6 +4,7 @@ import { WARBASE } from '../../config/warbase'
 import { CONTACTS } from '../../config/contacts'
 import { PHYSICS } from '../../config/physics'
 import { raySphere } from '../../core/math'
+import { retain } from '../../core/list'
 import { BOMB, GUNNERY, SALVAGE } from '../../config/weapons'
 import { ASTEROID, DEBRIS, SCORE } from '../../config/world'
 import { SHIELD } from '../../config/station'
@@ -78,7 +79,7 @@ import { stepOrbits } from '../world/orbits'
 import { maybeShiftOrigin } from '../world/origin'
 import { markContactLost } from '../world/acquaintance'
 import { stepWarpEmergence } from '../world/warp'
-import { stepDivineScale, stepTraffic } from '../world/traffic'
+import { stepDivineScale, stepDockTraffic, stepTraffic } from '../world/traffic'
 import { stepTitans } from '../world/titans'
 import { stepPlatforms } from '../world/platforms'
 import { stepGrievances } from '../combat/grievance'
@@ -114,9 +115,16 @@ function controllerFor(controllers: ControllerMap, ship: ShipEntity) {
 
 export function stepWorld(world: World, frameDt: number, controllers: ControllerMap): void {
   // В доке мир стоит. Иначе пираты за окном магазина продолжают охоту,
-  // а игрок за стеклом ничего не может сделать.
+  // а игрок за стеклом ничего не может сделать. Живёт только причал — теми же тактами,
+  // что и полёт: это те же часы, а не отдельный таймер экрана станции.
   if (world.docked) {
     world.originShift.set(0, 0, 0)
+    let remaining = Math.min(frameDt, PHYSICS.MAX_FRAME_DT)
+    while (remaining > 0) {
+      const dt = Math.min(PHYSICS.FIXED_DT, remaining)
+      remaining -= dt
+      stepDockTraffic(world, dt)
+    }
     return
   }
 
@@ -178,16 +186,6 @@ function stepTick(world: World, controllers: ControllerMap, dt: number): void {
   stepWarBaseTurrets(world, dt)
   stepGrievances(world)
   maybeShiftOrigin(world)
-}
-
-/**
- * Выбросить из списка то, что не прошло проверку, НА МЕСТЕ. Уборка идёт каждый такт,
- * а `filter` на каждый такт — десяток массивов на выброс для сборщика мусора.
- */
-function retain<T>(list: T[], keep: (item: T) => boolean): void {
-  let n = 0
-  for (const item of list) if (keep(item)) list[n++] = item
-  list.length = n
 }
 
 /**

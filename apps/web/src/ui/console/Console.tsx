@@ -6,7 +6,6 @@ import {
   findStation,
   generateSystem,
   livingContacts,
-  stepDockTraffic,
   stanceTo,
   type BodyEntity,
   type Contact,
@@ -111,14 +110,16 @@ export function Console({
   const bushActive = useSession().bush.active
   const [, bump] = useReducer((n: number) => n + 1, 0)
 
-  // Причал не застывает, пока сидишь в доке: мир на паузе, поэтому смену лиц у причала
-  // ведём отдельным тиком по реальному времени. Изменился состав — перерисовываем плашки.
+  // Причал живёт и в доке — его ведёт stepWorld. Экран лишь сверяет счётчик смен и
+  // перерисовывает плашки, когда состав поменялся; мир отсюда не двигается.
   useEffect(() => {
     if (!docked) return
-    const dt = 2 // с реального времени между попытками
+    let seen = world.berthRevision
     const id = window.setInterval(() => {
-      if (stepDockTraffic(world, dt).changed) bump()
-    }, dt * 1000)
+      if (world.berthRevision === seen) return
+      seen = world.berthRevision
+      bump()
+    }, 500)
     return () => window.clearInterval(id)
   }, [docked, world])
 

@@ -805,6 +805,7 @@ export function createWorld(def: SystemDef = STARTER_SYSTEM, profile?: PilotProf
     docked: false,
     dockArmed: true,
     dockOccupantId: null,
+    berthRevision: 0,
     lockedTargetId: null,
     lockedStationId: null,
     lockedPodId: null,

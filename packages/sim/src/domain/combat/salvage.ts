@@ -2,6 +2,7 @@ import { Quaternion, Vector3 } from 'three'
 import { MONOLITH } from '../../config/monoliths'
 import { SALVAGE } from '../../config/weapons'
 import { range, signed } from '../../core/math'
+import { retain } from '../../core/list'
 import type { Rng } from '../../core/math'
 import { addItem, freeCapacity } from '../cargo/hold'
 import { COMMODITIES, itemMass, type CargoItem, type Commodity } from '../cargo/items'
@@ -347,5 +348,5 @@ export function jettisonWeapons(world: World, ship: ShipEntity): number {
 /** Контейнеры не живут вечно: иначе система зарастает мусором за час боёв. */
 export function expirePods(world: World): void {
   const now = world.time
-  world.pods = world.pods.filter((p) => p.alive && now - p.born < SALVAGE.POD_LIFETIME)
+  retain(world.pods, (p) => p.alive && now - p.born < SALVAGE.POD_LIFETIME)
 }

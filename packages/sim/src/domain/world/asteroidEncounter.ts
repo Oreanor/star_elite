@@ -1,6 +1,7 @@
 import { Euler, Quaternion, Vector3 } from 'three'
 import { ASTEROID, TRAFFIC } from '../../config/world'
 import { randomUnit, signed } from '../../core/math'
+import { retain } from '../../core/list'
 import type { AsteroidEntity, World } from './entities'
 
 /**
@@ -131,7 +132,7 @@ export function despawnDistantAsteroids(world: World): void {
   const limitSq = TRAFFIC.DESPAWN_RANGE * TRAFFIC.DESPAWN_RANGE
   const player = world.player.state.pos
   const landed = world.player.landedOn
-  world.asteroids = world.asteroids.filter((a) => {
+  retain(world.asteroids, (a) => {
     if (!a.alive) return false
     if (a.id === world.lockedAsteroidId) return true
     if (a.id === world.navTargetId) return true

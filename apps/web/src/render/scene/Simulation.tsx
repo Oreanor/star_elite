@@ -265,8 +265,12 @@ export function Simulation() {
       }
       session.onDockChange?.(world.docked)
     }
-    // Мир в доке не шагает (это внутри stepWorld); здесь просто нечего делать.
-    if (world.docked) return
+    // В доке мир стоит, живёт только причал — это решает stepWorld. Курсор отпущен (экран
+    // станции), поэтому зовём его здесь, до проверки захвата ниже.
+    if (world.docked) {
+      stepWorld(world, dt, controllers)
+      return
+    }
 
     /**
      * Курсор отпущен. Два случая:
