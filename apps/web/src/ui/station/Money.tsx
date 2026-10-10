@@ -30,9 +30,15 @@ export function moneyNumber(amount: number): string {
 }
 
 /** Сумма: монетка и число. Не переносится — «монетка / 52 000» на двух строках читалось бы как два значения. */
-export function Money({ amount, sign }: { amount: number; sign?: '+' | '−' }) {
+/** Деньги — всегда белым: сумма должна читаться с одного взгляда, где бы ни стояла. */
+const MONEY_TONE = '#ffffff'
+
+/**
+ * @param color Свой цвет — только там, где цвет и есть смысл: выгода (+ зелёным, − красным).
+ */
+export function Money({ amount, sign, color = MONEY_TONE }: { amount: number; sign?: '+' | '−'; color?: string }) {
   return (
-    <span className="inline-flex items-baseline gap-2 whitespace-nowrap tabular-nums">
+    <span className="inline-flex items-baseline gap-2 whitespace-nowrap tabular-nums" style={{ color }}>
       {sign}
       <Coin />
       {moneyNumber(amount)}

@@ -489,7 +489,6 @@ export function UniverseMap({ onClose }: { onClose: () => void }) {
               kind={t('map.view.galaxy')}
               name={properName(target.name).toUpperCase()}
               color={UI.PRIMARY}
-              locked
               lines={[
                 // Дальность — в градусах дуги: 0° под ногами, 180° край мира. Единственная
                 // честная мера в замкнутой вселенной, где «километров до» не существует.

@@ -185,7 +185,7 @@ export function HullBuyModal({
         </p>
       )}
 
-      <div className="mt-5 flex justify-end gap-2">
+      <div className="mt-5 flex justify-center gap-2">
         <Button small variant="primary" disabled={!canBuy} onClick={() => onConfirm(q.net)}>
           {t('ship.ok')}
         </Button>

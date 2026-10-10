@@ -7,6 +7,7 @@ import {
   itemSellValue,
   jettisonItem,
   moduleFault,
+  moduleStat,
   placeFigurineFromHold,
   sellItem,
   type CargoItem,
@@ -17,10 +18,11 @@ import { trend, UI } from '../theme'
 import { t, useLang } from '../i18n'
 import { pushWarning } from '../../session/warnings'
 import { Button, Column, DIM, Modal, Panel, Table } from './chrome'
-import { formatStat } from './format'
-import { displayName, moduleBenefit } from './Equipment'
-import { commodityDesc, itemDisplayName } from '../i18n/dataNames'
+import { formatStat, statLabel } from './format'
+import { displayName } from './Equipment'
+import { itemDisplayName } from '../i18n/dataNames'
 import { Money } from './Money'
+import { ItemSheet, StatLine } from './ItemSheet'
 
 /**
  * Груз — ОДИН компонент и в магазине станции, и на вкладке груза корабля.
@@ -189,40 +191,28 @@ function ItemModal({
 
   return (
     <Modal onClose={onClose}>
-      <div className="mb-3 flex items-baseline justify-between gap-3">
-        <h3 className="text-base tracking-[0.2em]">
-          {item.kind === 'module' ? displayName(item.module) : itemDisplayName(item)}
-        </h3>
-        <span className="text-xs" style={{ color: DIM }}>
-          {formatStat('mass', itemMass(item))}
-        </span>
-      </div>
+      {/* Та же карточка, что в окне покупки (`ItemSheet`): название, ниже с отступом строки
+          «ПОДПИСЬ: значение» — главная (у модуля), масса, цена здесь с выгодой следом. */}
+      <ItemSheet title={item.kind === 'module' ? displayName(item.module) : itemDisplayName(item)}>
+        {item.kind === 'module' && (
+          <StatLine label={statLabel(moduleStat(item.module).key)}>
+            {formatStat(moduleStat(item.module).key, moduleStat(item.module).value)}
+          </StatLine>
+        )}
+        <StatLine label={statLabel('mass')}>{formatStat('mass', itemMass(item), 1)}</StatLine>
+        <StatLine label={t('station.col.price')}>
+          <span className="inline-flex items-baseline gap-3">
+            <Money amount={value} />
+            <span className="text-xs" style={{ color: mark.color }}>
+              {mark.text}
+            </span>
+          </span>
+        </StatLine>
+        {/* Поломка — это урон в бою, а не износ на продажу: красным и в процентах. */}
+        {fault > 0 && <p style={{ color: UI.DANGER }}>{t('ship.broken', { pct: Math.round(fault * 100) })}</p>}
+      </ItemSheet>
 
-      {item.kind === 'commodity' ? (
-        <p className="mb-4 text-xs leading-relaxed" style={{ color: DIM }}>
-          {commodityDesc(item.commodity)}
-        </p>
-      ) : (
-        <div className="mb-4 text-sm">
-          <p style={{ color: DIM }}>{moduleBenefit(item.module)}</p>
-          {/* Поломка — это урон в бою, а не износ на продажу: красным и в процентах. */}
-          {fault > 0 && (
-            <p style={{ color: UI.DANGER }}>{t('ship.broken', { pct: Math.round(fault * 100) })}</p>
-          )}
-        </div>
-      )}
-
-      {/* Цена продажи здесь — крупно; под ней выгода/находка тем же знаком, что в списке. */}
-      <div className="text-center">
-        <div className="text-2xl tabular-nums" style={{ color: UI.PRIMARY }}>
-          <Money amount={value} />
-        </div>
-        <div className="mt-1 text-xs" style={{ color: mark.color }}>
-          {mark.text}
-        </div>
-      </div>
-
-      <div className="mt-5 flex justify-end gap-2">
+      <div className="mt-6 flex justify-center gap-2">
         {atStation ? (
           <Button
             small
@@ -276,5 +266,6 @@ function profitMark(item: CargoItem, revenue: number): { text: React.ReactNode; 
   if (basis === undefined) return { text: t('station.salvage'), color: DIM }
 
   const profit = revenue - basis
-  return { text: <Money amount={Math.abs(profit)} sign={profit >= 0 ? '+' : '−'} />, color: trend(profit >= 0).color }
+  const color = trend(profit >= 0).color
+  return { text: <Money amount={Math.abs(profit)} sign={profit >= 0 ? '+' : '−'} color={color} />, color }
 }

@@ -13,6 +13,7 @@ export {
 export { canDockAt, dock, findStation, startDocked, stationRange, stepDocking, undock } from './docking'
 export {
   stationInterlocutor,
+  dispatcherName,
   dispatcherPersona,
   dispatcherBriefing,
   type BriefingBody,

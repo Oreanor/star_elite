@@ -237,6 +237,7 @@ export const FR: Record<keyof typeof RU, string> = {
   'station.col.name': 'NOM',
   'station.col.price': 'PRIX',
   'station.col.mass': 'MASSE',
+  'station.col.unit': 'UNITÉ',
   'station.col.stock': 'STOCK',
   'station.col.market': 'MARCHÉ',
   'station.col.value': 'VALEUR',
@@ -293,6 +294,7 @@ export const FR: Record<keyof typeof RU, string> = {
   'station.nav.planet': 'PLANÈTE',
   'station.nav.shop': 'MARCHÉ',
   'station.nav.people': 'GENS',
+  'station.nav.station': 'STATION',
   'station.nav.map': 'CARTE',
   'station.nav.ref': 'GUIDE',
   'station.atPlanet': '{station} (planète {planet})',
@@ -331,6 +333,7 @@ export const FR: Record<keyof typeof RU, string> = {
 
   // Gens : registre des contacts.
   'people.atStation': 'À la station en ce moment :',
+  'people.dispatcher': 'contrôleur',
   'people.docked.empty': 'Le quai est vide — juste vous. Les vaisseaux arrivent avec le temps.',
   'people.acquaintances': 'CONNAISSANCES',
   'people.subtitle': 'Ceux à qui vous avez parlé et qui sont encore en vie. Leur position est toujours connue.',
@@ -363,7 +366,6 @@ export const FR: Record<keyof typeof RU, string> = {
 
   'dispatcher.off': 'TERMINÉ',
   'dispatcher.lost': 'Liaison perdue.',
-  'dispatcher.title': 'RÉGULATEUR · {station}',
   'dispatcher.section.locale': 'LOCAL',
   'dispatcher.section.system': 'SYSTÈME',
   'dispatcher.gov': 'Régime',

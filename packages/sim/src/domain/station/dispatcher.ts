@@ -2,6 +2,7 @@ import { makeRng } from '../../core/math'
 import type { Settlement } from '../galaxy/types'
 import type { BodyEntity, World } from '../world/entities'
 import { makePersona, type Persona } from '../world/persona'
+import { makePilotName } from '../world/names'
 import { findShip } from '../world/queries'
 import { localSettlement } from './trade'
 import { lockedStationId } from '../world/queries'
@@ -33,6 +34,15 @@ export function stationInterlocutor(world: World): BodyEntity | null {
 export function dispatcherPersona(world: World, station: BodyEntity): Persona {
   const seed = (Math.imul(world.galaxySeed | 0, 2654435761) ^ Math.imul(world.systemIndex + 1, 40503) ^ station.id) >>> 0
   return { ...makePersona(makeRng(seed)), species: localSettlement(world).species }
+}
+
+/**
+ * Имя диспетчера станции — от того же зерна, что и его персона: у одной станции один и тот
+ * же человек на связи, у всех игроков. Имя по обычаям местного вида, как у пилотов.
+ */
+export function dispatcherName(world: World, station: BodyEntity): string {
+  const seed = (Math.imul(world.galaxySeed | 0, 2654435761) ^ Math.imul(world.systemIndex + 1, 40503) ^ station.id) >>> 0
+  return makePilotName(makeRng(seed ^ 0x5f3759df), localSettlement(world).species)
 }
 
 /** Одно тело в сводке: где оно и обитаемо ли. Дистанция — от игрока, км. */

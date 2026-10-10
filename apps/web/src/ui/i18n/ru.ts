@@ -247,6 +247,7 @@ export const RU = {
   'station.col.name': 'НАЗВАНИЕ',
   'station.col.price': 'ЦЕНА',
   'station.col.mass': 'МАССА',
+  'station.col.unit': 'ЕДИНИЦА',
   'station.col.stock': 'СКЛАД',
   'station.col.market': 'РЫНОК',
   'station.col.value': 'ВЫРУЧКА',
@@ -311,6 +312,7 @@ export const RU = {
   'station.nav.planet': 'ПЛАНЕТА',
   'station.nav.shop': 'ТОРГОВЛЯ',
   'station.nav.people': 'ЛЮДИ',
+  'station.nav.station': 'СТАНЦИЯ',
   'station.nav.map': 'КАРТА',
   'station.nav.ref': 'СПРАВОЧНИК',
   'station.atPlanet': '{station} (планета {planet})',
@@ -351,6 +353,7 @@ export const RU = {
 
   // ─── Люди: реестр знакомых ───────────────────────────────────────────────────
   'people.atStation': 'Сейчас на станции:',
+  'people.dispatcher': 'диспетчер',
   'people.docked.empty': 'Причал пуст — ты один. Борта заходят со временем.',
   'people.acquaintances': 'ЗНАКОМЫЕ',
   'people.subtitle': 'С кем ты говорил и кто ещё жив. Их положение известно всегда.',
@@ -383,7 +386,6 @@ export const RU = {
 
   'dispatcher.off': 'ОТБОЙ',
   'dispatcher.lost': 'Связь прервана.',
-  'dispatcher.title': 'ДИСПЕТЧЕР · {station}',
   'dispatcher.section.locale': 'ОКРУГА',
   'dispatcher.section.system': 'СИСТЕМА',
   'dispatcher.gov': 'Строй',

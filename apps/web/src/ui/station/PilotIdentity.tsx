@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import type { Relationship } from '@elite/sim'
 import { t, type Key } from '../i18n'
-import { stanceColor } from '../theme'
+import { ROLE_TONE, stanceColor } from '../theme'
 import { DIM } from './chrome'
 
 /**
@@ -60,15 +60,18 @@ export function PilotIdentity({
         <div className="min-w-0">
           {/* Имя — как пишется, не капсом: это человек, а не заголовок. Чуть крупнее и жирнее строк ниже. */}
           <div className="truncate text-lg font-semibold leading-6">{name}</div>
+          {/* Занятие — почти белым (`ROLE_TONE`): «торговец», «пират», «патруль» решает, о чём с
+              ним говорить и стоит ли стрелять, — это важнее корабля под ним. */}
           {role ? (
-            <div className="truncate text-xs leading-4 tracking-widest" style={{ color: DIM }}>
+            <div className="truncate text-xs leading-4 tracking-widest" style={{ color: ROLE_TONE }}>
               {role.toUpperCase()}
             </div>
           ) : null}
           {craft ? (
             <div className="truncate text-xs leading-4 tracking-widest" style={{ color: DIM }}>
               {/* Корабль — именем собственным, в кавычках: «ПЕГАС», а не род занятий. */}
-            «{craft.toUpperCase()}»
+            {/* Уже в кавычках (станция «…») — вторые не ставим. */}
+            {craft.includes('«') ? craft.toUpperCase() : `«${craft.toUpperCase()}»`}
             </div>
           ) : null}
           {stance ? (

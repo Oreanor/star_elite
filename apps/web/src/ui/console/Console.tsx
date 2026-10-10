@@ -4,6 +4,7 @@ import {
   contactTravelEta,
   contactWhereabouts,
   findStation,
+  dispatcherName,
   dispatcherPersona,
   generateSystem,
   livingContacts,
@@ -20,6 +21,7 @@ import { currentGameDate } from '../clock'
 import { chassisName, occupationName, professionName, properName } from '../i18n/dataNames'
 import { ACCENT, Button, DIM, PilotPortrait } from '../station/chrome'
 import { PilotIdentity } from '../station/PilotIdentity'
+import { dispatcherFace } from '../dialogue/Dispatcher'
 import { GLASS_PANEL, screenBackground } from '../station/backdrop'
 import { Market } from '../station/Market'
 import { ShipScreen } from '../ship/ShipScreen'
@@ -141,7 +143,9 @@ export function Console({
     // станции под тобой нет, и та же вкладка показывает паспорт мира — ПЛАНЕТА.
     { id: 'planet', label: t('station.nav.planet') },
     // ЛЮДИ — сразу за местом: кто здесь и с кем связаться. Есть и у причала, и в полёте.
-    { id: 'people', label: t('station.nav.people') },
+    // У причала вкладка — про СТАНЦИЮ: кто здесь, диспетчер, Слово. В полёте станции под
+    // тобой нет, и там это знакомые и игроки онлайн — ЛЮДИ.
+    { id: 'people', label: t(docked ? 'station.nav.station' : 'station.nav.people') },
     // КОРАБЛЬ — и твой борт, и витрина корпусов: у причала под моделью стрелки листают
     // каталог и кнопка покупки. Отдельной «ВЕРФИ» больше нет.
     { id: 'ship', label: t('ship.title') },
@@ -387,10 +391,10 @@ function PeopleTab({
             <div className={CARD_GRID}>
               {station && dispatcher && (
                 <PersonPlaque
-                  name={`ДИСПЕТЧЕР · ${properName(station.name)}`}
-                  role="ДИСПЕТЧЕР"
+                  name={dispatcherName(world, station)}
+                  role={t('people.dispatcher')}
                   craft={properName(station.name)}
-                  portrait={<PilotPortrait species={dispatcher.species} face={0} size={108} />}
+                  portrait={<PilotPortrait species={dispatcher.species} face={dispatcherFace(station.name)} size={108} />}
                   onTalk={onDispatch}
                 />
               )}
@@ -402,10 +406,10 @@ function PeopleTab({
           ) : station ? (
             <div className={CARD_GRID}>
               <PersonPlaque
-                name={`ДИСПЕТЧЕР · ${properName(station.name)}`}
-                role="ДИСПЕТЧЕР"
+                name={dispatcherName(world, station)}
+                role={t('people.dispatcher')}
                 craft={properName(station.name)}
-                portrait={<PilotPortrait species={dispatcherPersona(world, station).species} face={0} size={108} />}
+                portrait={<PilotPortrait species={dispatcherPersona(world, station).species} face={dispatcherFace(station.name)} size={108} />}
                 onTalk={onDispatch}
               />
             </div>

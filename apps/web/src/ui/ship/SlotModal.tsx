@@ -39,6 +39,7 @@ import { formatStat, statLabel } from '../station/format'
 import { Money, tm } from '../station/Money'
 import { displayName, headlineCompare, headlineNumber, weaponSlot } from '../station/Equipment'
 import { type SlotView } from './ShipSlots'
+import { ItemSheet } from '../station/ItemSheet'
 
 /**
  * Окно слота: что стоит, чем заменить (магазин / трюм), ремонт и подтверждение. Своя причина
@@ -51,6 +52,13 @@ export interface Confirm {
   message: React.ReactNode
   /** Цена отдельно от текста — для подтверждения покупки. */
   price?: number
+  /** Характеристика детали над ценой: что покупаешь, а не только почём. */
+  detail?: React.ReactNode
+  /**
+   * Карточка предмета вместо сообщения: заголовок и строки «ПОДПИСЬ: значение» (`ItemSheet`),
+   * как в окне продажи из отсека. Есть — `message`/`detail`/`price` не рисуются.
+   */
+  sheet?: { title: React.ReactNode; lines: React.ReactNode }
   // `stay` — оставить модалку слота ОТКРЫТОЙ после действия (покупка/установка): деталь
   // встаёт в слот, и пилот тут же жмёт «улучшить», не открывая слот заново.
   actions: { label: React.ReactNode; run: () => void; stay?: boolean }[]
@@ -435,13 +443,18 @@ export function ConfirmBox({
   return (
     // Два действия и больше — окно шире, чтобы кнопки стояли в одну строку, а не лесенкой.
     <Modal onClose={onCancel} z={60} medium={confirm.actions.length > 1}>
-      <p className={confirm.price !== undefined ? 'text-center text-base' : 'text-sm'}>{confirm.message}</p>
-      {confirm.price !== undefined && (
+      {confirm.sheet ? (
+        <ItemSheet title={confirm.sheet.title}>{confirm.sheet.lines}</ItemSheet>
+      ) : (
+        <p className={confirm.price !== undefined ? 'text-center text-base' : 'text-sm'}>{confirm.message}</p>
+      )}
+      {!confirm.sheet && confirm.detail && <div className="mt-2 text-center text-sm">{confirm.detail}</div>}
+      {!confirm.sheet && confirm.price !== undefined && (
         <div className="mt-3 text-center text-2xl font-semibold leading-8 tabular-nums" style={{ color: ACCENT }}>
           <Money amount={confirm.price} />
         </div>
       )}
-      <div className="mt-5 flex flex-wrap justify-end gap-2">
+      <div className="mt-6 flex flex-wrap justify-center gap-2">
         {confirm.actions.map((a, i) => (
           <Button key={i} small variant="primary" onClick={() => onRun(a)}>
             {a.label}

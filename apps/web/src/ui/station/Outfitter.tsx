@@ -6,6 +6,7 @@ import {
   buyToHold,
   freeCapacity,
   canBuy,
+  moduleStat,
   priceOf,
   stationStock,
   type PurchaseError,
@@ -18,8 +19,9 @@ import { DIM, SideTabs, Table, type Column } from './chrome'
 import { buyLabel, displayName, headlineCompare, weaponSlot } from './Equipment'
 import { trend } from '../theme'
 import { CATEGORY_ORDER, cardOf, type SlotCard } from '../ship/ShipSlots'
-import { formatStat, statNumber } from './format'
+import { formatStat, statLabel, statNumber } from './format'
 import { Money } from './Money'
+import { StatLine } from './ItemSheet'
 
 /**
  * ОБОРУДОВАНИЕ: всё железо, что лежит на прилавке ЭТОЙ станции, одним списком.
@@ -49,6 +51,32 @@ function canPurchase(world: World, m: ShipModule): PurchaseError | null {
 /** Можно ли купить В ТРЮМ, без установки: хватает денег и места. Тот же расчёт, что в `buyToHold`. */
 const canStow = (world: World, m: ShipModule) => world.credits >= priceOf(m) && freeCapacity(world.player.hold) >= m.mass
 
+/**
+ * Характеристика детали для окна покупки — тем же языком, что колонка «было → станет»:
+ * «СКОРОСТЬ 156 → 135 м/с ▼ 14%». Сравнивать не с чем — просто «ТЯГА 215 кН».
+ */
+function ModuleDetail({ world, module }: { world: World; module: ShipModule }) {
+  const cmp = headlineCompare(world, module)
+  if (!cmp) {
+    const { key, value } = moduleStat(module)
+    return <StatLine label={statLabel(key)}>{formatStat(key, value)}</StatLine>
+  }
+  const same = cmp.to === cmp.from
+  const tone = trend(cmp.better)
+  const pct = cmp.from !== 0 ? Math.round(Math.abs((cmp.to - cmp.from) / cmp.from) * 100) : null
+  return (
+    <StatLine label={statLabel(cmp.key)}>
+      <span className="whitespace-nowrap">
+        <span style={{ color: DIM }}>{statNumber(cmp.key, cmp.from)} → </span>
+        <span style={{ color: same ? DIM : tone.color }}>
+          {formatStat(cmp.key, cmp.to)}
+          {same ? ' =' : ` ${tone.mark}${pct !== null ? ` ${pct}%` : ''}`}
+        </span>
+      </span>
+    </StatLine>
+  )
+}
+
 export function Outfitter({ world, onChange }: { world: World; onChange: () => void }) {
   useLang()
   const [confirm, setConfirm] = useState<Confirm | null>(null)
@@ -75,7 +103,24 @@ export function Outfitter({ world, onChange }: { world: World; onChange: () => v
         label: t('station.buyFit'),
         run: () => (isMunition(m) ? armMissiles(world, world.player, m) : buy(world, world.player, m, weaponSlot(world, m))),
       })
-    setConfirm({ message: displayName(m), price: priceOf(m), actions })
+    setConfirm({
+      message: displayName(m),
+      // Та же карточка, что при продаже из отсека: главная характеристика (с изменением),
+      // масса, цена.
+      sheet: {
+        title: displayName(m),
+        lines: (
+          <>
+            <ModuleDetail world={world} module={m} />
+            <StatLine label={statLabel('mass')}>{formatStat('mass', m.mass, 1)}</StatLine>
+            <StatLine label={t('station.col.price')}>
+              <Money amount={priceOf(m)} />
+            </StatLine>
+          </>
+        ),
+      },
+      actions,
+    })
   }
 
   const columns: Column<ShipModule>[] = [
@@ -83,41 +128,25 @@ export function Outfitter({ world, onChange }: { world: World; onChange: () => v
     // в одну строку, переносится лишь название — и только когда места правда не хватает.
     // Жёсткие ширины раздували таблицу за край на длинных сравнениях (гиперприводы).
     { key: 'name', header: t('station.col.name'), cell: (m) => displayName(m) },
-    // Сравнение в ДВА столбца, разрез по стрелке: «было → станет» прижато вправо, а ▲/▼ с
-    // процентом — отдельным столбцом влево. Одной ячейкой проценты разной длины сдвигали
-    // числа, и стрелки не стояли в столбик.
+    // Сравнение одной ячейкой, прижатой вправо: «156 → 135 м/с ▼». Треугольник — вплотную за
+    // новым значением (отдельной колонкой он отъезжал на её поля). Ширина у него одна, так
+    // что столбик значений по правому краю не гуляет.
     {
       key: 'compare',
       header: t('station.col.compare'),
-      // Заголовок накрывает и соседний столбец ▲/▼: это одно сравнение.
-      headerSpan: 2,
       align: 'right',
       cell: (m) => {
         const cmp = headlineCompare(world, m)
         if (!cmp) return <span style={{ color: DIM }}>·</span>
+        const same = cmp.to === cmp.from
+        const tone = trend(cmp.better)
         return (
           <span className="whitespace-nowrap">
-            {/* Единица — один раз, в конце, у нового значения. Равное — без цвета: не лучше и не хуже. */}
+            {/* Единица — один раз, в конце, у нового значения. Равное — без цвета и со «=». */}
             <span style={{ color: DIM }}>{statNumber(cmp.key, cmp.from)} → </span>
-            <span style={{ color: cmp.to === cmp.from ? DIM : trend(cmp.better).color }}>{formatStat(cmp.key, cmp.to)}</span>
-          </span>
-        )
-      },
-    },
-    {
-      key: 'delta',
-      header: '',
-      cell: (m) => {
-        const cmp = headlineCompare(world, m)
-        if (!cmp) return null
-        // Ничего не меняется — не «▼ 0%», а просто знак равенства.
-        if (cmp.to === cmp.from) return <span style={{ color: DIM }}>=</span>
-        // Процента нет, когда сравнивать не с чем (было 0: пустой слот) — остаётся стрелка.
-        const pct = cmp.from !== 0 ? Math.round(Math.abs((cmp.to - cmp.from) / cmp.from) * 100) : null
-        return (
-          <span className="whitespace-nowrap" style={{ color: trend(cmp.better).color }}>
-            {trend(cmp.better).mark}
-            {pct !== null ? ` ${pct}%` : ''}
+            <span style={{ color: same ? DIM : tone.color }}>
+              {formatStat(cmp.key, cmp.to)} {same ? '=' : tone.mark}
+            </span>
           </span>
         )
       },

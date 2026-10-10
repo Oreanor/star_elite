@@ -18,7 +18,7 @@ import {
 } from '@elite/sim'
 import { galaxyRadar } from '../../render/scene/galaxyRadar'
 import { HUD_COLORS, bar, text } from './draw'
-import { stanceColor, threatColor } from '../theme'
+import { ROLE_TONE, stanceColor, threatColor } from '../theme'
 import { t, type Key } from '../i18n'
 import { chassisName, occupationName, properName, starClassName } from '../i18n/dataNames'
 import { formatStat } from '../station/format'
@@ -273,7 +273,8 @@ export function drawTargetPanels(frame: HudFrame): void {
       // Порядок — как в карточке пилота: имя, занятие, корабль, отношение; ниже расстояние.
       cell(color, [
         ship.pilotName,
-        occupationName(ship.originKind, ship.faction),
+        // Занятие — почти белым, как в карточке пилота: по нему решают, говорить или стрелять.
+        { text: occupationName(ship.originKind, ship.faction), color: ROLE_TONE },
         `«${chassisName(ship.loadout.chassis.name)}»`,
         { text: t(stanceKey), color: stanceColor(stance), bold: true },
         // У бога опасности нет: его не победить, и множитель только путал бы.

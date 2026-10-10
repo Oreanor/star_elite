@@ -369,12 +369,17 @@ export function Locator({ world }: { world: World }) {
         onPointerDown={(e) => {
           dragged.current = false
           drag.current = { x: e.clientX, y: e.clientY }
-          e.currentTarget.setPointerCapture(e.pointerId)
         }}
         onPointerMove={(e) => {
           const s = drag.current
           if (!s) return
-          if (Math.abs(e.clientX - s.x) + Math.abs(e.clientY - s.y) > 3) dragged.current = true
+          // Указатель захватываем, только когда пошёл ДРАГ. Захват сразу на нажатии уводил к
+          // подложке и отпускание, и сам клик — до отметки объекта он не доходил, и карточка
+          // по клику не открывалась.
+          if (!dragged.current && Math.abs(e.clientX - s.x) + Math.abs(e.clientY - s.y) > 3) {
+            dragged.current = true
+            e.currentTarget.setPointerCapture(e.pointerId)
+          }
           setYaw((y) => y - (e.clientX - s.x) * 0.008)
           setTilt((tl) => Math.max(0, Math.min(1.35, tl + (e.clientY - s.y) * 0.006)))
           drag.current = { x: e.clientX, y: e.clientY }
@@ -464,7 +469,6 @@ export function Locator({ world }: { world: World }) {
               kind={active.b.kind}
               name={active.b.title}
               color={active.b.color}
-              locked={active.b.ring}
               lines={[...active.b.lines, `${t('map.distance')}: ${formatDistance(active.b.dist)}`]}
               body={
                 active.b.ship ? (
@@ -482,10 +486,12 @@ export function Locator({ world }: { world: World }) {
                       <div className="mt-1 leading-4">
                         <ThreatBadge ship={active.b.ship} reference={world.player} />
                       </div>
-                      <div className="text-xs tracking-widest" style={{ color: UI.DIM }}>
-                        {formatDistance(active.b.dist)}
-                      </div>
                     </PilotIdentity>
+                    {/* Расстояние — последней строкой ПОД паспортом, от левого края карточки, с
+                        подписью, как в карточках прочих объектов. */}
+                    <div className="mt-2 text-xs tracking-widest" style={{ color: UI.DIM }}>
+                      {t('map.distance')}: {formatDistance(active.b.dist)}
+                    </div>
                   </div>
                 ) : undefined
               }

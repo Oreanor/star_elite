@@ -123,7 +123,7 @@ export const COMMODITIES = {
   // Контрабанду плодят беззаконные окраины (низкий tier), а спрос на неё — в богатых
   // законопослушных мирах: оттого её и возят снизу вверх, рискуя штрафом.
   SLAVES: { id: 'slaves', name: 'Рабы', description: 'Живой груз. Торговля ограничена законом, но перевозка разрешена.', unitMass: 1, basePrice: 1240, tier: 3, contraband: true },
-  LUXURIES: { id: 'luxuries', name: 'Роскошь', description: 'Редкости для тех, кому некуда девать деньги. Малый вес, крупный навар.', unitMass: 0.5, basePrice: 1850, tier: 12, contraband: false },
+  LUXURIES: { id: 'luxuries', name: 'Роскошь', description: 'Редкости для тех, кому некуда девать деньги. Малый вес, крупный навар.', unitMass: 1, basePrice: 3700, tier: 12, contraband: false },
   NARCOTICS: { id: 'narcotics', name: 'Наркотики', description: 'Химия с ограниченной торговлей. Дорога, компактна и пахнет штрафом.', unitMass: 0.4, basePrice: 2900, tier: 9, contraband: true },
   /**
    * Статуэтка богов — коллекционная реликвия с орбиты системы.

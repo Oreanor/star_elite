@@ -238,6 +238,7 @@ export const IT: Record<keyof typeof RU, string> = {
   'station.col.name': 'NOME',
   'station.col.price': 'PREZZO',
   'station.col.mass': 'MASSA',
+  'station.col.unit': 'UNITÀ',
   'station.col.stock': 'SCORTA',
   'station.col.market': 'MERCATO',
   'station.col.value': 'VALORE',
@@ -294,6 +295,7 @@ export const IT: Record<keyof typeof RU, string> = {
   'station.nav.planet': 'PIANETA',
   'station.nav.shop': 'MERCATO',
   'station.nav.people': 'GENTE',
+  'station.nav.station': 'STAZIONE',
   'station.nav.map': 'MAPPA',
   'station.nav.ref': 'MANUALE',
   'station.atPlanet': '{station} (pianeta {planet})',
@@ -332,6 +334,7 @@ export const IT: Record<keyof typeof RU, string> = {
 
   // Gente: registro dei contatti.
   'people.atStation': 'Ora sulla stazione:',
+  'people.dispatcher': 'controllore',
   'people.docked.empty': 'L\'ormeggio è vuoto — solo tu. Le navi arrivano col tempo.',
   'people.acquaintances': 'CONOSCENZE',
   'people.subtitle': 'Chi hai contattato e chi è ancora vivo. La loro posizione è sempre nota.',
@@ -364,7 +367,6 @@ export const IT: Record<keyof typeof RU, string> = {
 
   'dispatcher.off': 'CHIUDO',
   'dispatcher.lost': 'Collegamento perso.',
-  'dispatcher.title': 'CONTROLLO · {station}',
   'dispatcher.section.locale': 'LOCALE',
   'dispatcher.section.system': 'SISTEMA',
   'dispatcher.gov': 'Governo',

@@ -81,7 +81,6 @@ export function MapCard({
   kind,
   name,
   color,
-  locked = false,
   lines,
   body,
 }: {
@@ -94,17 +93,17 @@ export function MapCard({
   kind: string
   name: string
   color: string
-  locked?: boolean
   /** Строки сведений; пустые и `null` выброшены — карточка не держит пустых мест. */
   lines: (string | null | undefined)[]
 }) {
   return (
     <div
       // Карточка ВСЕГДА висит поверх поля (см. `MapPin`), поэтому фон у неё непрозрачный:
-      // читать имя сквозь звёзды и орбиты нельзя. Рамка цветом — только у захваченного.
+      // читать имя сквозь звёзды и орбиты нельзя. Рамка всегда одна и та же: цветом она ничего
+      // не кодирует — захват и так виден кольцом у отметки и заливкой строки в списке.
       className="rounded border p-3 backdrop-blur-sm"
       style={{
-        borderColor: locked ? color : 'rgba(124,196,255,0.35)',
+        borderColor: 'rgba(124,196,255,0.35)',
         background: 'rgba(8,22,42,0.88)',
         boxShadow: '0 0 24px rgba(0,0,0,0.5)',
       }}

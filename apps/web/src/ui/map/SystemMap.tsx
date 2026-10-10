@@ -391,7 +391,6 @@ export function SystemMap({
                 kind={kindWord(shown.kind)}
                 name={properName(shown.name)}
                 color={shown.tint ?? colourOf(shown.kind)}
-                locked={shown.id === world.navTargetId}
                 lines={[`${t('map.distance')}: ${formatDistance(shown.range)}`]}
               />
             </MapPin>

@@ -236,6 +236,7 @@ export const EN: Record<keyof typeof RU, string> = {
   'station.col.name': 'NAME',
   'station.col.price': 'PRICE',
   'station.col.mass': 'MASS',
+  'station.col.unit': 'UNIT',
   'station.col.stock': 'STOCK',
   'station.col.market': 'MARKET',
   'station.col.value': 'VALUE',
@@ -292,6 +293,7 @@ export const EN: Record<keyof typeof RU, string> = {
   'station.nav.planet': 'PLANET',
   'station.nav.shop': 'MARKET',
   'station.nav.people': 'PEOPLE',
+  'station.nav.station': 'STATION',
   'station.nav.map': 'MAP',
   'station.nav.ref': 'HANDBOOK',
   'station.atPlanet': '{station} (planet {planet})',
@@ -332,6 +334,7 @@ export const EN: Record<keyof typeof RU, string> = {
 
   // People: contacts registry.
   'people.atStation': 'At the station now:',
+  'people.dispatcher': 'dispatcher',
   'people.docked.empty': "Berth is empty — just you. Ships arrive over time.",
   'people.acquaintances': 'ACQUAINTANCES',
   'people.subtitle': "Those you've talked to and who are still alive. Their whereabouts are always known.",
@@ -364,7 +367,6 @@ export const EN: Record<keyof typeof RU, string> = {
 
   'dispatcher.off': 'OVER',
   'dispatcher.lost': 'Link lost.',
-  'dispatcher.title': 'DISPATCHER · {station}',
   'dispatcher.section.locale': 'LOCAL',
   'dispatcher.section.system': 'SYSTEM',
   'dispatcher.gov': 'Government',

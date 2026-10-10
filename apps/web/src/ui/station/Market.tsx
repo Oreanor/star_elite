@@ -52,6 +52,13 @@ export function Market({ world, onChange }: { world: World; onChange: () => void
         </span>
       ),
     },
+    // Порядок: что, в чём меряется, почём, сколько есть, как цена против обычной.
+    {
+      key: 'mass',
+      header: t('station.col.unit'),
+      align: 'right',
+      cell: (c) => <span style={{ color: DIM }}>{commodityMass(c)}</span>,
+    },
     {
       key: 'price',
       header: t('station.col.price'),
@@ -63,22 +70,16 @@ export function Market({ world, onChange }: { world: World; onChange: () => void
       ),
     },
     {
-      key: 'mass',
-      header: t('station.col.mass'),
+      key: 'stock',
+      header: t('station.col.stock'),
       align: 'right',
-      cell: (c) => <span style={{ color: DIM }}>{commodityMass(c)}</span>,
+      cell: (c) => <span style={{ color: DIM }}>{commodityStockAt(world, c)}</span>,
     },
     {
       key: 'market',
       header: t('station.col.market'),
       align: 'center',
       cell: (c) => <MarketTag world={world} commodity={c} />,
-    },
-    {
-      key: 'stock',
-      header: t('station.col.stock'),
-      align: 'right',
-      cell: (c) => <span style={{ color: DIM }}>{commodityStockAt(world, c)}</span>,
     },
   ]
 
@@ -110,9 +111,9 @@ export function Market({ world, onChange }: { world: World; onChange: () => void
     // Растягиваемся на всю высоту вкладки — чтобы отсек справа доходил до низа панели.
     <div className="flex flex-1 flex-col">
       {/* Отсек справа — от 1280 px; уже — он уходит под список: пять колонок оборудования
-          без переносов в две трети узкого окна не влезают и наезжали на отсек. */}
-      <div className="grid min-h-0 flex-1 grid-cols-1 gap-5 xl:grid-cols-3">
-        <div className="min-w-0 xl:col-span-2">
+          без переносов в 60% узкого окна не влезают и наезжали на отсек. Пропорция 60 / 40. */}
+      <div className="grid min-h-0 flex-1 grid-cols-1 gap-5 xl:grid-cols-[3fr_2fr]">
+        <div className="min-w-0">
           {switcher}
           {section === 'gear' ? (
             <Outfitter world={world} onChange={onChange} />
@@ -168,7 +169,7 @@ function tradeLimits(world: World, c: Commodity): { buyMax: number; held: number
 
 /** Единица массы товара: обычные — в тоннах, роскошь и наркотики — в килограммах,
  *  иначе их доли тонны читаются как ноль. Масса в домене всегда в тоннах. */
-const KG_GOODS = new Set(['luxuries', 'narcotics'])
+const KG_GOODS = new Set(['narcotics'])
 function commodityMass(c: Commodity): string {
   if (KG_GOODS.has(c.id)) return `${Math.round(c.unitMass * 1000)} ${t('unit.kg')}`
   return formatStat('mass', c.unitMass)
@@ -240,13 +241,14 @@ function TradeModal({
         </h3>
       </div>
 
-      {/* Цена за ТОННУ, а не за единицу: у роскоши единица легче тонны, и «по 1456» без
-          единицы читалось бы как цена тонны. */}
+      {/* Товар в тоннах — «3 т × цена тонны». Товар в килограммах (роскошь, наркотики) —
+          счётом единиц: «3 × 500 кг × цена единицы». Иначе ползунок по полтонны давал в строке
+          «1.5 т», «2.5 т» — дробные тонны, которых в отсеке никто не считает. */}
       <div className="mt-7 flex flex-col gap-2 text-center tabular-nums" style={{ color: ACCENT }}>
         <div className="text-base font-normal leading-7">
             {tm('station.trade.line', {
-              mass: formatStat('mass', totalMass, Number.isInteger(totalMass) ? 0 : 1),
-              price: <Money amount={unitPrice / commodity.unitMass} />,
+              mass: commodity.unitMass === 1 ? formatStat('mass', totalMass) : `${units} × ${commodityMass(commodity)}`,
+              price: <Money amount={unitPrice} />,
             })}
         </div>
         <div className="text-xl leading-7">
@@ -255,7 +257,7 @@ function TradeModal({
       </div>
 
       <div className="mt-5 flex items-center gap-3 text-xs tabular-nums">
-        <span className="w-10 text-right" style={{ color: DIM }}>0</span>
+        <span className="w-10 text-right text-base" style={{ color: DIM }}>0</span>
         <input
           type="range"
           aria-label={t(selling ? 'station.trade.sell' : 'station.trade.buy')}
@@ -267,7 +269,7 @@ function TradeModal({
           onChange={(e) => setQty(Number(e.target.value))}
           className="h-1 flex-1 cursor-pointer accent-[#7fd6ff]"
         />
-        <span className="w-10" style={{ color: DIM }}>{max}</span>
+        <span className="w-10 text-base" style={{ color: DIM }}>{max}</span>
       </div>
 
       <div className="mt-5 flex justify-center gap-2">

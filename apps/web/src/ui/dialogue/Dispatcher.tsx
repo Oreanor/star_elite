@@ -1,11 +1,15 @@
 import { useEffect, useRef, useState } from 'react'
-import { dispatcherPersona, localFine, payLocalFine, stationInterlocutor, type World } from '@elite/sim'
+import { dispatcherName, dispatcherPersona, localFine, payLocalFine, stationInterlocutor, type World } from '@elite/sim'
 import type { ChatTurn, NegotiatorReply } from './facts'
-import { ACCENT, Button, DIM, PilotPortrait } from '../station/chrome'
-import { properName, speciesName } from '../i18n/dataNames'
+import { Button, PilotPortrait } from '../station/chrome'
+import { GLASS_PANEL, screenBackground } from '../station/backdrop'
+import { UI } from '../theme'
+import { PilotIdentity } from '../station/PilotIdentity'
+import { properName } from '../i18n/dataNames'
 import { t, useLang } from '../i18n'
 
-function faceOf(name: string): number {
+/** Лицо диспетчера — по названию станции; одно и то же в окне связи и в карточке «Люди». */
+export function dispatcherFace(name: string): number {
   let h = 0
   for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0
   return h % 36
@@ -52,26 +56,77 @@ export function Dispatcher({ world, onClose, negotiate }: { world: World; onClos
     requestAnimationFrame(() => inputRef.current?.focus())
   }
 
+  // Окно — ТО ЖЕ, что разговор с пилотом (`Dialogue`): фон станции/стекло, панель
+  // `GLASS_PANEL`, шапка-паспорт, лента «Имя: реплика», поле ввода под чертой. Прежде у
+  // диспетчера была своя вёрстка с пузырями, и связь с ним выглядела другим приложением.
+  const myName = world.player.pilotName
+  const theirName = dispatcherName(world, station)
   return (
-    <div className="absolute inset-0 flex items-center justify-center font-mono" style={{ color: ACCENT }}>
-      <div className="flex h-[38rem] max-h-[85vh] w-[40rem] flex-col rounded-2xl border px-8 py-6 backdrop-blur-md" style={{ borderColor: 'rgba(124,196,255,0.3)', background: 'linear-gradient(150deg, rgba(40,95,150,0.18), rgba(8,22,42,0.5))' }}>
+    <div
+      className={`absolute inset-0 flex items-center justify-center font-mono ${world.docked ? '' : 'backdrop-blur-md'}`}
+      style={{ color: UI.PRIMARY, background: screenBackground(world, world.docked) }}
+    >
+      <div
+        className="flex h-[38rem] max-h-[85vh] w-[40rem] flex-col rounded-2xl border px-8 py-6 backdrop-blur-md"
+        style={{ ...GLASS_PANEL, color: UI.PRIMARY }}
+      >
         <div className="mb-4 flex items-start justify-between gap-4">
-          <div className="flex items-start gap-4">
-            <PilotPortrait species={persona.species} face={faceOf(station.name)} size={96} />
-            <div>
-              <div className="text-lg tracking-[0.2em]">{t('dispatcher.title', { station: properName(station.name).toUpperCase() })}</div>
-              <div className="text-xs tracking-widest" style={{ color: DIM }}>{speciesName(persona.species).toUpperCase()}</div>
-            </div>
+          {/* Тот же паспорт, что карточка диспетчера во вкладке «Люди»: имя, должность, станция. */}
+          <PilotIdentity
+            portrait={<PilotPortrait species={persona.species} face={dispatcherFace(station.name)} size={108} />}
+            name={theirName}
+            role={t('people.dispatcher')}
+            craft={properName(station.name)}
+          />
+          <div className="flex shrink-0 flex-col items-end gap-2">
+            <Button small onClick={onClose}>
+              {t('dialogue.end')}
+            </Button>
           </div>
-          <Button small onClick={onClose}>{t('dialogue.end')}</Button>
         </div>
-        <div ref={scroller} className="min-h-0 flex-1 space-y-3 overflow-y-auto border-y px-2 py-4">
-          {turns.map((turn, index) => <div key={`${index}-${turn.who}`} className={turn.who === 'you' ? 'text-right' : ''}><span className="inline-block max-w-[85%] rounded border px-3 py-2 text-sm" style={{ borderColor: turn.who === 'you' ? ACCENT : DIM, color: turn.who === 'you' ? ACCENT : '#cfe8ff' }}>{turn.text}</span></div>)}
-          {busy && <div className="text-xs tracking-widest" style={{ color: DIM }}>…</div>}
+
+        <div ref={scroller} className="mb-4 min-h-[8rem] flex-1 overflow-y-auto pr-1 text-sm leading-relaxed">
+          <div className="flex flex-col gap-2">
+            {turns.map((turn, i) => (
+              <div key={i}>
+                {turn.who === 'you' ? (
+                  <span>
+                    <span style={{ color: UI.DIM }}>{myName}:&nbsp;</span>
+                    {turn.text}
+                  </span>
+                ) : turn.who === 'system' ? (
+                  <span className="text-xs tracking-widest" style={{ color: UI.WARN }}>
+                    · {turn.text} ·
+                  </span>
+                ) : (
+                  <span>
+                    <span style={{ color: UI.PRIMARY }}>{theirName}:&nbsp;</span>
+                    {turn.text}
+                  </span>
+                )}
+              </div>
+            ))}
+            {busy && <span style={{ color: UI.DIM }}>…</span>}
+          </div>
         </div>
-        <div className="mt-4 flex gap-2">
-          <input ref={inputRef} value={input} onChange={(event) => setInput(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') void send() }} disabled={busy} autoFocus className="min-w-0 flex-1 border bg-transparent px-3 py-2 text-sm outline-none" style={{ borderColor: DIM, color: ACCENT }} placeholder="Сказать диспетчеру…" />
-          <Button small onClick={() => void send()} disabled={busy || !input.trim()}>ОТПРАВИТЬ</Button>
+
+        <div className="flex gap-2 border-t pt-4" style={{ borderColor: UI.DIM }}>
+          <input
+            ref={inputRef}
+            autoFocus
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') void send()
+            }}
+            disabled={busy}
+            placeholder={t('chat.placeholder')}
+            className="flex-1 border bg-transparent px-3 py-2 text-sm outline-none disabled:opacity-50"
+            style={{ borderColor: UI.DIM, color: UI.PRIMARY }}
+          />
+          <Button small onClick={() => void send()} disabled={busy || !input.trim()}>
+            {t('chat.send')}
+          </Button>
         </div>
       </div>
     </div>
