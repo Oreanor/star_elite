@@ -1,10 +1,13 @@
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import {
+  BufferGeometry,
+  Float32BufferAttribute,
   Group,
   Mesh,
   MeshLambertMaterial,
   Plane,
+  PointsMaterial,
   Raycaster,
   SphereGeometry,
   Vector2,
@@ -12,7 +15,7 @@ import {
   type Texture,
 } from 'three'
 import { bodyMass, findStation, type BodyEntity, type World } from '@elite/sim'
-import { loadPlanetTexture, pickVariant, planetLook } from '../../render/sky/planets'
+import { loadPlanetTexture, pickVariant, planetLook, planetSeed } from '../../render/sky/planets'
 import { loadRockTexture, rockTextureOf } from '../../render/materials/rockTextures'
 import { t, useLang } from '../i18n'
 import {
@@ -54,6 +57,32 @@ const G = 6.674e-11
 const G_EARTH = 9.80665
 
 const _sphere = new SphereGeometry(1, 48, 32)
+const ORBIT_DOTS = 180
+const _orbitMaterial = new PointsMaterial({ color: UI.PRIMARY, size: 1.5, sizeAttenuation: false, transparent: true, opacity: 0.35, depthWrite: false })
+const _orbitGeometries = new Map<number, BufferGeometry>()
+const orbitRadius = (i: number) => R * 1.7 + i * R * 0.55
+
+/** Все кольца одним буфером: повторное открытие вкладки не создаёт геометрию заново. */
+function OrbitRings({ count }: { count: number }) {
+  if (count === 0) return null
+  let geometry = _orbitGeometries.get(count)
+  if (!geometry) {
+    const positions = new Float32Array(count * ORBIT_DOTS * 3)
+    for (let ring = 0; ring < count; ring++) {
+      const radius = orbitRadius(ring)
+      for (let dot = 0; dot < ORBIT_DOTS; dot++) {
+        const angle = dot * Math.PI * 2 / ORBIT_DOTS
+        const offset = (ring * ORBIT_DOTS + dot) * 3
+        positions[offset] = Math.cos(angle) * radius
+        positions[offset + 2] = Math.sin(angle) * radius
+      }
+    }
+    geometry = new BufferGeometry()
+    geometry.setAttribute('position', new Float32BufferAttribute(positions, 3))
+    _orbitGeometries.set(count, geometry)
+  }
+  return <points geometry={geometry} material={_orbitMaterial} dispose={null} />
+}
 /** Переиспользуемые для проекции и захвата: в кадре и в драге не аллоцируем. */
 const _screen = new Vector3()
 const _ndc = new Vector2()
@@ -83,38 +112,83 @@ function approach(dt: number, tau: number): number {
   return 1 - Math.exp(-dt / tau)
 }
 
+/** Загрузчик карты поверхности: зовёт одно из двух, возвращает отписку. */
+type SurfaceLoader = (onLoaded: (texture: Texture) => void, onMissing: () => void) => () => void
+
+/** За сколько тело проявляется, когда карта готова, с. Короче — снова «щелчок». */
+const REVEAL_TAU = 0.18
+
+/**
+ * Материал тела на витрине, который ПРОЯВЛЯЕТСЯ, когда карта готова.
+ *
+ * Пока карта едет, тело прозрачно. Прежде оно стояло плоской покраской цвета тела, и
+ * вкладка, открытая сразу после прыжка, показывала зелёный шар, на который через миг
+ * щёлкала текстура. Файла нет вовсе — проявляется покраска: это штатный вид, а не сбой.
+ *
+ * Готовность держится в ссылке, а не в состоянии React: прозрачность ведёт кадр,
+ * перерисовывать дерево ради неё незачем.
+ *
+ * @param key Меняется — значит, другое тело: материал собирается заново и снова ждёт.
+ * @param load null — карты не бывает (причал): тело видно сразу.
+ */
+function useRevealedSurface(color: number, key: string, load: SurfaceLoader | null) {
+  const ready = useRef(load === null)
+  const material = useMemo(
+    () => new MeshLambertMaterial({ color, transparent: true, opacity: load === null ? 1 : 0 }),
+    // Загрузчик — новая стрелка на каждом рендере; тело определяет ключ.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [color, key],
+  )
+  useEffect(() => () => material.dispose(), [material])
+  useEffect(() => {
+    if (!load) {
+      ready.current = true
+      return
+    }
+    ready.current = false
+    return load(
+      (texture) => {
+        material.map = texture
+        material.color.set(0xffffff)
+        material.needsUpdate = true
+        ready.current = true
+      },
+      () => {
+        ready.current = true
+      },
+    )
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [material])
+  const reveal = (dt: number) => {
+    material.opacity += ((ready.current ? 1 : 0) - material.opacity) * approach(dt, REVEAL_TAU)
+  }
+  return { material, reveal }
+}
+
 /**
  * Шар с настоящей текстурой мира. Вращается сам — вокруг своей оси, в свою сторону.
  *
- * Его можно РАСКРУТИТЬ мышью: драг по горизонтали крутит шар, а на отпускании остаётся
+ * Драг по вертикали наклоняет всю систему, по горизонтали крутит шар, а на отпускании остаётся
  * маховик — набранная скорость гаснет трением и возвращается к собственной. Это витрина,
  * и трение здесь бутафорское: домен о нём не знает, вращение мира в симуляции своё.
  */
-function Globe({ body, spin, radius }: { body: BodyEntity; spin: number; radius: number }) {
+function Globe({ body, spin, radius, tilt }: { body: BodyEntity; spin: number; radius: number; tilt: React.RefObject<Group | null> }) {
   const ref = useRef<Mesh>(null)
   /** Текущая угловая скорость шара на витрине, рад/с. Драг её задаёт, трение возвращает. */
   const vel = useRef(spin)
-  const drag = useRef<{ x: number; at: number } | null>(null)
+  const drag = useRef<{ x: number; y: number; at: number } | null>(null)
   const look = planetLook(body.surface)
   // Зерно то же, что в сцене (`Bodies`): вкладка обязана показывать ТОТ ЖЕ мир, что за окном.
-  const seed = body.id * 7919
-  const [texture, setTexture] = useState<Texture | null>(null)
+  const seed = planetSeed(body.id)
   // Луна кроется КАМНЕМ по id — тем же снимком, что в мире (`Bodies`): спутник это большой
   // камень, а не планета, и планетная карта на нём читалась бы как ошибка.
-  useEffect(
-    () => body.kind === 'moon'
-      ? loadRockTexture(rockTextureOf(body.id), setTexture)
-      : loadPlanetTexture(look, pickVariant(look, seed), setTexture),
-    [body.kind, body.id, look, seed],
+  const { material, reveal } = useRevealedSurface(
+    body.color,
+    `${body.kind}/${body.id}/${look}/${seed}`,
+    body.kind === 'moon'
+      ? (onLoaded, onMissing) => loadRockTexture(rockTextureOf(body.id), onLoaded, onMissing)
+      : (onLoaded, onMissing) => loadPlanetTexture(look, pickVariant(look, seed), onLoaded, onMissing),
   )
-
-  const material = useMemo(() => new MeshLambertMaterial({ color: body.color }), [body.color])
-  useEffect(() => () => material.dispose(), [material])
-  useEffect(() => {
-    material.map = texture
-    material.color.set(texture ? 0xffffff : body.color)
-    material.needsUpdate = true
-  }, [material, texture, body.color])
 
   // Драг живёт на окне, а не на самом шаре: увёл курсор за край планеты — вращение не
   // должно обрываться. Слушатели ставятся только на время захвата.
@@ -124,12 +198,17 @@ function Globe({ body, spin, radius }: { body: BodyEntity; spin: number; radius:
       const m = ref.current
       if (!d || !m) return
       const dx = e.clientX - d.x
+      const dy = e.clientY - d.y
       const dt = Math.max(0.008, (e.timeStamp - d.at) / 1000)
       const step = dx * 0.01
       m.rotation.y += step
+      // Общая группа наклоняет орбиты вместе с планетой, не меняя её собственного вращения.
+      if (tilt.current) tilt.current.rotation.x += dy * 0.01
       // Скорость маховика — из ЖЕСТА: сколько прокрутил за секунду, столько и полетит.
       vel.current = step / dt
-      drag.current = { x: e.clientX, at: e.timeStamp }
+      d.x = e.clientX
+      d.y = e.clientY
+      d.at = e.timeStamp
     }
     const onUp = () => {
       drag.current = null
@@ -142,12 +221,13 @@ function Globe({ body, spin, radius }: { body: BodyEntity; spin: number; radius:
       window.removeEventListener('pointerup', onUp)
       window.removeEventListener('pointercancel', onUp)
     }
-  }, [])
+  }, [tilt])
 
   // Вращение — по кадру, а не по времени мира: это витрина, и она крутится, даже когда
   // мир на паузе у причала. Знак берём у собственного вращения тела: обратное вращение
   // бывает, и выглядит правильно только настоящим.
   useFrame((_, dt) => {
+    reveal(dt)
     const m = ref.current
     if (!m || drag.current) return // в руке шар крутит жест, а не кадр
     // Трение: набранная драгом скорость плавно возвращается к собственной. Ноль трения
@@ -163,12 +243,11 @@ function Globe({ body, spin, radius }: { body: BodyEntity; spin: number; radius:
       material={material}
       scale={radius}
       onPointerDown={(e) => {
+        if (e.button !== 0) return
         e.stopPropagation()
-        drag.current = { x: e.clientX, at: e.timeStamp }
+        drag.current = { x: e.clientX, y: e.clientY, at: e.timeStamp }
       }}
-    >
-      {/* Наклон оси — из данных тела: терминатор и полюса получаются сами. */}
-    </mesh>
+    />
   )
 }
 
@@ -203,18 +282,13 @@ function Satellite({
   boxes: React.RefObject<Map<number, HTMLDivElement>>
 }) {
   const ref = useRef<Group>(null)
-  const material = useMemo(() => new MeshLambertMaterial({ color }), [color])
-  useEffect(() => () => material.dispose(), [material])
-
   // Тем же снимком, что и в мире (`Bodies`) и на шаре вкладки: луна на орбите не должна
-  // выглядеть иначе, чем та же луна вблизи. Без карты оставался плоский цвет — «не обёрнута».
-  const [texture, setTexture] = useState<Texture | null>(null)
-  useEffect(() => (rocky ? loadRockTexture(rockTextureOf(id), setTexture) : undefined), [rocky, id])
-  useEffect(() => {
-    material.map = texture
-    material.color.set(texture ? 0xffffff : color)
-    material.needsUpdate = true
-  }, [material, texture, color])
+  // выглядеть иначе, чем та же луна вблизи. Причал карты не ждёт — он белая коробка.
+  const { material, reveal } = useRevealedSurface(
+    color,
+    `${id}/${rocky}`,
+    rocky ? (onLoaded, onMissing) => loadRockTexture(rockTextureOf(id), onLoaded, onMissing) : null,
+  )
   /** Где спутник ПОКАЗАН. Его и тянет мышь. */
   const angle = useRef(phase)
   /** Где он ДОЛЖЕН быть по расписанию. Идёт своим ходом, что бы ни делала рука. */
@@ -248,6 +322,7 @@ function Satellite({
   }, [camera, gl])
 
   useFrame(({ size }, dt) => {
+    reveal(dt)
     const m = ref.current
     if (!m) return
 
@@ -263,7 +338,7 @@ function Satellite({
 
     const el = boxes.current.get(id)
     if (!el) return
-    _screen.copy(m.position).project(camera)
+    m.getWorldPosition(_screen).project(camera)
     // За спиной камеры точка проецируется зеркально — подпись висела бы не с той стороны.
     if (_screen.z > 1) {
       el.style.opacity = '0'
@@ -345,10 +420,11 @@ export function PlanetScreen({ world, planet }: { world: World; planet: BodyEnti
   // Хуки — ДО всякого раннего возврата: мир под тобой бывает и null (пустая система),
   // и порядок хуков не имеет права от этого меняться.
   const box = useRef<HTMLDivElement>(null)
+  const tilt = useRef<Group>(null)
   /** Удаление камеры от центра. Живёт в ref: зум не должен перерисовывать паспорт. */
   const dist = useRef(R * 4.2)
   useWheelZoom(box, (dy) => {
-    dist.current = Math.max(CAM_NEAR, Math.min(CAM_FAR, dist.current * (dy > 0 ? 1.12 : 0.89)))
+    dist.current = Math.max(CAM_NEAR, Math.min(CAM_FAR, dist.current * Math.exp(Math.max(-100, Math.min(100, dy)) * 0.0012)))
   })
   /**
    * Подписи спутников и причала: по одному div на тело, собираем ссылки по id. Позицию
@@ -373,7 +449,6 @@ export function PlanetScreen({ world, planet }: { world: World; planet: BodyEnti
 
   // Схема вокруг шара: кольца разведены равномерно, а не по настоящим орбитам —
   // у Луны отношение 60 радиусов, и в кадре остался бы один пиксель планеты.
-  const ring = (i: number) => R * 1.7 + i * R * 0.55
 
   return (
     // `overflow-hidden` здесь обязателен: подписи спутников — абсолютные div'ы, которые
@@ -381,7 +456,7 @@ export function PlanetScreen({ world, planet }: { world: World; planet: BodyEnti
     // прокрутки. Паспорт слева прокручивается сам, внутри своей колонки.
     <div className="flex min-h-0 w-full flex-1 items-stretch gap-6 overflow-hidden font-mono" style={{ color: ACCENT }}>
       <div className="flex min-h-0 w-1/3 min-w-0 shrink-0 flex-col">
-        <h1 className="text-xl tracking-[0.3em]">{properName(planet.name).toUpperCase()}</h1>
+        <h1 className="text-xl tracking-[0.12em]">{properName(planet.name).toUpperCase()}</h1>
         <p className="mb-4 mt-1 text-[11px] tracking-widest opacity-50">
           {t('station.system')} {properName(world.systemName).toUpperCase()}
         </p>
@@ -440,13 +515,15 @@ export function PlanetScreen({ world, planet }: { world: World; planet: BodyEnti
               теневая сторона не была чёрной дырой. Терминатор получается сам. */}
           <directionalLight position={[4, 2, 3]} intensity={2.6} />
           <ambientLight intensity={0.22} />
-          <Globe body={planet} spin={planet.spin >= 0 ? 0.12 : -0.12} radius={R} />
+          <group ref={tilt}>
+          <OrbitRings count={moons.length + (station ? 1 : 0)} />
+          <Globe body={planet} spin={planet.spin >= 0 ? 0.12 : -0.12} radius={R} tilt={tilt} />
           {moons.map((m, i) => (
             <Satellite
               key={m.id}
               // Спутник мельче планеты, но не пылинка: отношение радиусов сжато корнем.
               radius={Math.max(R * 0.06, R * Math.sqrt(m.radius / planet.radius) * 0.4)}
-              orbit={ring(i)}
+              orbit={orbitRadius(i)}
               rate={0.25 / (i + 1)}
               phase={m.orbit?.phase ?? 0}
               color={m.color}
@@ -458,7 +535,7 @@ export function PlanetScreen({ world, planet }: { world: World; planet: BodyEnti
           {station && (
             <Satellite
               radius={R * 0.05}
-              orbit={ring(moons.length)}
+              orbit={orbitRadius(moons.length)}
               rate={0.5}
               phase={station.orbit?.phase ?? 0}
               color={0xffffff}
@@ -467,6 +544,7 @@ export function PlanetScreen({ world, planet }: { world: World; planet: BodyEnti
               boxes={labels}
             />
           )}
+          </group>
         </Canvas>
 
         {/* Подписи спутников и причала — только ИМЯ, без рода: здесь и так видно, кто есть

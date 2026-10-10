@@ -4,7 +4,9 @@ import {
   asteroidMass,
   findBody,
   navTarget,
+  assessThreat,
   stanceTo,
+  type ThreatLevel,
   findWarBaseFixture,
   isVisible,
   warBaseFixtureWorldPos,
@@ -16,12 +18,16 @@ import {
 } from '@elite/sim'
 import { galaxyRadar } from '../../render/scene/galaxyRadar'
 import { HUD_COLORS, bar, text } from './draw'
+import { stanceColor, threatColor } from '../theme'
 import { t, type Key } from '../i18n'
 import { chassisName, occupationName, properName, starClassName } from '../i18n/dataNames'
 import { formatStat } from '../station/format'
 import { formatDistance } from './project'
 import {
+  DUDE_SHEET,
   PORTRAIT_GRID,
+  dudeFrame,
+  emotionToDivine,
   loadSheet,
   pilotEmotion,
   portraitCell,
@@ -46,13 +52,94 @@ const _gtar = new Vector3()
 const CELL = 48
 
 /** Подпись под клеткой: до четырёх строк мелким кеглем. Возвращает базовый шрифт на место. */
-function cellCaption(ctx: CanvasRenderingContext2D, midX: number, y: number, lines: [string, string?, string?, string?]): void {
+/**
+ * Сведения о цели — СБОКУ от портрета, вплотную к рамке и по её верхнему краю, прижаты
+ * вправо к портрету: клетка у правого края экрана, и текст растёт влево, в пустоту. Под
+ * портретом они висели отдельным столбиком, и глаз прыгал между лицом и подписью.
+ */
+/**
+ * Строка подписи: текст, текст со своим цветом (отношение — цветом отношения) или значок
+ * опасности отдельной строкой.
+ */
+type CaptionLine =
+  | string
+  | { text: string; color: string; bold?: boolean }
+  | { threat: { score: number; level: ThreatLevel } }
+
+/**
+ * Подпись повторяет карточку пилота (`PilotIdentity`: «Люди», разговор, локатор), только
+ * зеркально — текст слева от портрета: имя как пишется, крупнее и жирнее; ниже мелкие
+ * приглушённые строки капсом; отношение — жирным своим цветом, с отступом сверху.
+ */
+const FONT = '"Consolas", "DejaVu Sans Mono", monospace'
+const NAME_SIZE = 8
+const LINE_SIZE = 6
+/** Шаг мелких строк, с воздухом: в 7 единиц они слипались. */
+const LINE_STEP = 8
+const NAME_STEP = 11
+
+/**
+ * Название без слова-типа в начале: «База «Цитадель»» под строкой «БАЗА» читалось трижды
+ * «база». Тип и так стоит строкой ниже — в имени остаётся собственное: «Цитадель».
+ */
+function withoutKind(name: string, kind: string): string {
+  const head = kind.trim().toLowerCase()
+  if (!head || !name.toLowerCase().startsWith(head + ' ')) return name
+  const rest = name.slice(head.length + 1).trim()
+  return rest || name
+}
+
+/** Длиннее — название делится на две строки: иначе «Кориолис «Люревоввор»» тянулось через полэкрана. */
+const NAME_ONE_LINE = 14
+
+/**
+ * Название в одну или две строки. Разрыв — перед кавычкой, если она есть («Кориолис» /
+ * «Люревоввор»): тип постройки сверху, имя под ним. Иначе — по пробелу ближе к середине.
+ * Короткое и неделимое (одно слово) — одной строкой.
+ */
+function splitName(name: string): string[] {
+  if (name.length <= NAME_ONE_LINE) return [name]
+  const quote = name.indexOf(' «')
+  if (quote > 0) return [name.slice(0, quote), name.slice(quote + 1)]
+  let best = -1
+  for (let i = name.indexOf(' '); i >= 0; i = name.indexOf(' ', i + 1)) {
+    if (best < 0 || Math.abs(i - name.length / 2) < Math.abs(best - name.length / 2)) best = i
+  }
+  return best > 0 ? [name.slice(0, best), name.slice(best + 1)] : [name]
+}
+
+function cellCaption(ctx: CanvasRenderingContext2D, rightX: number, y: number, all: readonly (CaptionLine | undefined)[]): void {
   const baseFont = ctx.font
-  ctx.font = `${Math.round(6 * S)}px "Consolas", "DejaVu Sans Mono", monospace`
-  text(ctx, lines[0].toUpperCase(), midX, y, HUD_COLORS.PRIMARY, 'center')
-  if (lines[1]) text(ctx, lines[1].toUpperCase(), midX, y + 7 * S, HUD_COLORS.DIM, 'center')
-  if (lines[2]) text(ctx, lines[2].toUpperCase(), midX, y + 14 * S, HUD_COLORS.DIM, 'center')
-  if (lines[3]) text(ctx, lines[3].toUpperCase(), midX, y + 21 * S, HUD_COLORS.DIM, 'center')
+  // Пустые строки (у тела нет массы и т.п.) не оставляют дыры — следующие подтягиваются.
+  const lines = all.filter((l): l is CaptionLine => l !== undefined && l !== '')
+  let ly = y
+  lines.forEach((line, i) => {
+    if (typeof line !== 'string' && 'threat' in line) {
+      // Опасность — своей строкой, значок прижат к портрету.
+      ctx.font = `bold ${Math.round(LINE_SIZE * S)}px ${FONT}`
+      drawThreat(ctx, rightX - threatWidth(ctx, line.threat), ly, line.threat)
+      ly += LINE_STEP * S
+      return
+    }
+    const value = typeof line === 'string' ? line : line.text
+    const bold = typeof line !== 'string' && line.bold === true
+    if (i === 0) {
+      // Имя — как пишется, крупнее и жирнее: это человек или место, а не поле анкеты.
+      ctx.font = `bold ${Math.round(NAME_SIZE * S)}px ${FONT}`
+      const color = typeof line === 'string' ? HUD_COLORS.PRIMARY : line.color
+      for (const part of splitName(value)) {
+        text(ctx, part, rightX, ly, color, 'right')
+        ly += NAME_STEP * S
+      }
+      return
+    }
+    // Жирная строка (отношение) отбита от паспорта сверху, как в карточке.
+    if (bold) ly += 2 * S
+    ctx.font = `${bold ? 'bold ' : ''}${Math.round(LINE_SIZE * S)}px ${FONT}`
+    const color = typeof line === 'string' ? HUD_COLORS.DIM : line.color
+    text(ctx, value.toUpperCase(), rightX, ly, color, 'right')
+    ly += LINE_STEP * S
+  })
   ctx.font = baseFont
 }
 
@@ -84,6 +171,29 @@ function cellStar(
   drawStarBall(ctx, cx, cy, cell / 2 - 8 * S, color, classId, time)
 }
 
+/** Ширина значка опасности «△ 0.9×» при текущем шрифте — чтобы поставить его в конец строки. */
+function threatWidth(ctx: CanvasRenderingContext2D, threat: { score: number }): number {
+  return 6 * S + 2 * S + ctx.measureText(`${threat.score.toFixed(1)}×`).width
+}
+
+/** Значок опасности: треугольник «!» цвета уровня и множитель силы. Левый верх — (x, y). */
+function drawThreat(ctx: CanvasRenderingContext2D, x: number, y: number, threat: { score: number; level: ThreatLevel }): void {
+  const color = threatColor(threat.level)
+  const tri = 6 * S
+  ctx.strokeStyle = color
+  ctx.lineWidth = 1
+  ctx.beginPath()
+  ctx.moveTo(Math.round(x + tri / 2) + 0.5, Math.round(y) + 0.5)
+  ctx.lineTo(Math.round(x + tri) + 0.5, Math.round(y + tri) + 0.5)
+  ctx.lineTo(Math.round(x) + 0.5, Math.round(y + tri) + 0.5)
+  ctx.closePath()
+  ctx.stroke()
+  ctx.fillStyle = color
+  ctx.fillRect(Math.round(x + tri / 2), Math.round(y + tri * 0.4), 1, Math.max(1, Math.round(tri * 0.3)))
+  ctx.fillRect(Math.round(x + tri / 2), Math.round(y + tri * 0.8), 1, 1)
+  text(ctx, `${threat.score.toFixed(1)}×`, x + tri + 2 * S, y, color)
+}
+
 /**
  * Одна клетка над локатором: текущий фокус (`targetFocus`). Новый выбор гасит старый
  * круг — в портрете ровно одна цель. Рамка = цвет значка.
@@ -96,12 +206,13 @@ export function drawTargetPanels(frame: HudFrame): void {
   const radarTop = height - 2 * radiusY - 12 * S
   const size = CELL * S
   const x = radarCx - size / 2
-  // Чуть выше локатора: место под 3 строки подписи (занятие · отношение · корпус).
-  const y = radarTop - size - 36 * S
+  // Чуть выше локатора: под портретом только полоски щита/корпуса — подписи ушли вбок.
+  const y = radarTop - size - 20 * S
 
   const cell = (
     color: string,
-    lines: [string, string?, string?, string?],
+    /** По одному параметру на строку: имя, занятие, отношение, корпус, расстояние. */
+    lines: readonly (CaptionLine | undefined)[],
     body: (x: number, y: number) => void,
     /** Состояние захваченного борта. Метки в космосе мелки и уезжают за кадр — читать
      *  «добивать или уходить» пилот должен здесь, под портретом. */
@@ -123,7 +234,7 @@ export function drawTargetPanels(frame: HudFrame): void {
       bar(ctx, x, captionY, size, 2 * S, bars.hull, HUD_COLORS.DANGER)
       captionY += 5 * S
     }
-    cellCaption(ctx, x + size / 2, captionY, lines)
+    cellCaption(ctx, x - 6 * S, y + 1 * S, lines)
   }
 
   // Перебор звёзд галактики (Tab при активном слое) — не контакт и не нав системы.
@@ -159,14 +270,30 @@ export function drawTargetPanels(frame: HudFrame): void {
       const color = radarColor(ship, world)
       const stance = stanceTo(world, ship)
       const stanceKey = (`dialogue.stance.${stance}`) as Key
+      // Порядок — как в карточке пилота: имя, занятие, корабль, отношение; ниже расстояние.
       cell(color, [
         ship.pilotName,
-        `${occupationName(ship.originKind, ship.faction)} · ${t(stanceKey)}`,
-        chassisName(ship.loadout.chassis.name),
+        occupationName(ship.originKind, ship.faction),
+        `«${chassisName(ship.loadout.chassis.name)}»`,
+        { text: t(stanceKey), color: stanceColor(stance), bold: true },
+        // У бога опасности нет: его не победить, и множитель только путал бы.
+        ship.divine ? undefined : { threat: assessThreat(ship, world.player) },
         formatDistance(shipDistance(world, ship.state.pos)),
       ], (cx, cy) => {
+        // Бог — своим лицом (Лебовски, `dude.webp`), как в панелях; иначе HUD брал случайное
+        // лицо из расового листа, и Слово на портрете цели было кем-то другим.
+        if (ship.divine) {
+          const dude = loadSheet(DUDE_SHEET)
+          if (sheetReady(dude)) {
+            const { col, cols } = dudeFrame(emotionToDivine(pilotEmotion(ship, world)))
+            const w = dude.naturalWidth / cols
+            ctx.imageSmoothingEnabled = false
+            ctx.drawImage(dude, col * w, 0, w, dude.naturalHeight, Math.round(cx), Math.round(cy), Math.round(size), Math.round(size))
+            return
+          }
+        }
         const sheet = loadSheet(portraitSheet(ship.persona.species, pilotEmotion(ship, world)))
-        if (sheetReady(sheet)) {
+        if (!ship.divine && sheetReady(sheet)) {
           const c = sheet.naturalWidth / PORTRAIT_GRID
           const { col, row } = portraitCell(portraitIndex(ship))
           ctx.imageSmoothingEnabled = false
@@ -235,7 +362,7 @@ export function drawTargetPanels(frame: HudFrame): void {
   // показывает ровно то, что видно глазами на её боках.
   const navBase = nav.kind === 'warbase' ? world.warBases.find((b) => b.id === nav.id && b.alive) : undefined
   cell(color, [
-    properName(nav.name),
+    withoutKind(properName(nav.name), t(kindKey)),
     t(kindKey),
     navMass,
     formatDistance(Math.max(0, shipDistance(world, nav.pos) - nav.radius)),

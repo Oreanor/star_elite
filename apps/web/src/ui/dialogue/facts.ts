@@ -11,6 +11,7 @@ import {
   generateGalaxy,
   itemName,
   localSettlement,
+  localFine,
   escortFee,
   masterClass,
   moodTo,
@@ -204,6 +205,8 @@ export interface NegotiationContext {
   entrusted: string[]
   /** Деньги и услуги — цифры из домена, чтобы не путать «кто кому платит». */
   economy: EconomySnapshot
+  /** Долг местным властям, виден только полицейскому патрулю этой планеты. */
+  localFineAmount: number | null
   /** Станция системы: что можно у причала и кто сейчас у дока. */
   station: StationSnapshot
   /** Справочники с полным текстом в промпте (не больше MAX_ACTIVE_DIGESTS). */
@@ -602,7 +605,7 @@ function galaxyFor(world: World): StarSystem[] {
 /**
  * Местные цены на заметные легальные товары — РЕАЛЬНЫЕ из домена (`commodityBuyPrice`/
  * `commoditySellPrice`). Пилот эти цифры знает и может назвать; модель их лишь озвучивает,
- * а не сочиняет. Контрабанду в прайс не суём: о ней разговор особый.
+ * а не сочиняет. Товары с ограниченной торговлей в обычный прайс не суём.
  */
 function localMarket(world: World): MarketQuote[] {
   return commodityStock()
@@ -778,6 +781,7 @@ export function buildContext(
 
   const record = world.acquaintances.find((a) => a.id === other.acquaintanceId)
   const fee = escortFee(world, other)
+  const fine = other.faction === 'police' ? localFine(world)?.amount ?? null : null
   const escortHired = other.ai?.escortOf === player.id
 
   // Где он сам: бот должен уметь ответить, где находится, — у планеты, в доке станции.
@@ -851,6 +855,7 @@ export function buildContext(
       escortHired,
       canAffordEscort: fee != null && world.credits >= fee,
     },
+    localFineAmount: fine,
     station: buildStationSnapshot(world, at.docked),
     activeDigests: [...active],
     forgottenDigests: [...forgotten],

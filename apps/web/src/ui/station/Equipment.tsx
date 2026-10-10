@@ -18,11 +18,12 @@ import {
   type StatKey,
   type World,
 } from '@elite/sim'
-import { UI } from '../theme'
+import { trend } from '../theme'
 import { moduleName } from '../i18n/dataNames'
 import { t, type Key } from '../i18n'
 import { Button, DIM } from './chrome'
-import { credits, formatStat, statLabel } from './format'
+import { formatStat, statLabel } from './format'
+import { Money } from './Money'
 
 /**
  * Снаряжение: мелкие кирпичики, из которых сложены верфь и экран корабля.
@@ -70,27 +71,6 @@ export function headlineCompare(world: World, module: ShipModule): HeadlineCompa
   return { key: delta.key, from: delta.from, to: delta.to, better }
 }
 
-/**
- * Клетка сравнения: «твоё → это» ▲/▼ %. Текущее погашено, новое светит цветом
- * исхода (зелёное лучше, красное хуже). Игроку не нужно помнить свой корабль —
- * оба числа рядом. Процент опускаем, когда сравнивать не с чем (было 0: пустой слот).
- */
-export function CompareCell({ world, module }: { world: World; module: ShipModule }) {
-  const cmp = headlineCompare(world, module)
-  if (!cmp) return <span style={{ color: DIM }}>·</span>
-  const color = cmp.better ? UI.ALLY : UI.DANGER
-  const pct = cmp.from !== 0 ? Math.round(Math.abs((cmp.to - cmp.from) / cmp.from) * 100) : null
-  return (
-    <span className="whitespace-nowrap">
-      <span style={{ color: DIM }}>{formatStat(cmp.key, cmp.from)} → </span>
-      <span style={{ color }}>
-        {formatStat(cmp.key, cmp.to)} {cmp.better ? '▲' : '▼'}
-        {pct !== null ? ` ${pct}%` : ''}
-      </span>
-    </span>
-  )
-}
-
 /** Read-only карточка модуля: его характеристика и вид. Экран корабля показывает только её. */
 export function ModuleHeadline({ module }: { module: ShipModule }) {
   const { key, value } = moduleStat(module)
@@ -104,8 +84,8 @@ export function ModuleHeadline({ module }: { module: ShipModule }) {
 }
 
 /**
- * Сравнение «было → станет», если поставить модуль вместо стоящего. ▲ зелёным — лучше,
- * ▼ красным — хуже. `higherBetter` из домена: рост не всегда благо (у расхода наоборот).
+ * Сравнение «было → станет», если поставить модуль вместо стоящего — общим знаком
+ * «лучше/хуже» (`trend`). `higherBetter` из домена: рост не всегда благо (у расхода наоборот).
  */
 export function StatDeltas({ world, module }: { world: World; module: ShipModule }) {
   const deltas = fitDeltas(world.player, module)
@@ -114,7 +94,7 @@ export function StatDeltas({ world, module }: { world: World; module: ShipModule
     <ul className="mt-1 space-y-0.5 text-xs">
       {deltas.map((d) => {
         const better = d.higherBetter ? d.to > d.from : d.to < d.from
-        const color = better ? UI.ALLY : UI.DANGER
+        const { color, mark } = trend(better)
         return (
           <li key={d.key} className="flex gap-2">
             <span className="w-24 shrink-0" style={{ color: DIM }}>
@@ -122,7 +102,7 @@ export function StatDeltas({ world, module }: { world: World; module: ShipModule
             </span>
             <span style={{ color: DIM }}>{formatStat(d.key, d.from)} →</span>
             <span style={{ color }}>
-              {formatStat(d.key, d.to)} {better ? '▲' : '▼'}
+              {formatStat(d.key, d.to)} {mark}
             </span>
           </li>
         )
@@ -159,7 +139,7 @@ function fitLabel(error: FitError): string {
 }
 
 /** Ошибка покупки — на кнопке вместо цены. */
-function buyLabel(error: PurchaseError): string {
+export function buyLabel(error: PurchaseError): string {
   switch (error) {
     case 'no-money':
       return t('station.noFunds')
@@ -277,7 +257,11 @@ export function UpgradeControls({
   const error = useCopy ? copyError : cashError
   const label = useCopy
     ? t('station.upgradeCopy')
-    : `${t('station.upgradeCash')} · ${credits(upgradeCashCost(module))}`
+    : (
+        <>
+          {t('station.upgradeCash')} · <Money amount={upgradeCashCost(module)} />
+        </>
+      )
   return (
     <div className="flex items-stretch gap-1.5">
       <Button small onClick={() => setUseCopy((c) => !c)}>

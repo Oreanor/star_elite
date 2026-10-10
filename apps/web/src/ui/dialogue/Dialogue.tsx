@@ -7,18 +7,19 @@ import {
   rememberPilot,
   stanceTo,
   type Command,
-  type Relationship,
   type Topic,
 } from '@elite/sim'
 import { useSession } from '../../session/GameContext'
 import { Button, PilotPortrait } from '../station/chrome'
+import { PilotIdentity } from '../station/PilotIdentity'
 import { GLASS_PANEL, screenBackground } from '../station/backdrop'
 import { clearOutcomeEmotion, markOutcomeEmotion, type DivineEmotion, type Emotion } from '../portrait'
 import { UI } from '../theme'
 import { chassisName, occupationName } from '../i18n/dataNames'
-import { t, useLang, type Key } from '../i18n'
+import { t, useLang } from '../i18n'
 import { buildContext, createDigestMemory, rememberDigest, sufflerDigestsFor, type ChatTurn, type ContextDigest, type DigestMemory, type NegotiatorReply } from './facts'
 import { DIALOGUE_REACTION_MS, dialogueBaseline, dialogueReaction } from './dialogueFace'
+import { Money, tm } from '../station/Money'
 
 /** Суфлёр: тихая подгрузка справочников в промпт — без паузы в ленте. */
 
@@ -61,19 +62,6 @@ function applyTurnToChat(
   push({ who: 'them', text: fx.them })
   for (const line of fx.system) push({ who: 'system', text: line })
   return fx
-}
-
-/** Отношение борта к игроку — одним словом в шапке. Три состояния, как `stanceTo`. */
-const STANCE_KEY: Record<Relationship, Key> = {
-  friendly: 'dialogue.stance.friendly',
-  neutral: 'dialogue.stance.neutral',
-  hostile: 'dialogue.stance.hostile',
-}
-
-const STANCE_COLOR: Record<Relationship, string> = {
-  friendly: UI.ALLY,
-  neutral: UI.DIM,
-  hostile: UI.DANGER,
 }
 
 export function Dialogue({
@@ -254,21 +242,16 @@ export function Dialogue({
       >
         {/* Шапка: портрет и паспорт слева; «нанять» и «положить трубку» — столбиком справа. */}
         <div className="mb-4 flex items-start justify-between gap-4">
-          <div className="flex min-w-0 items-center gap-4">
-            <PilotPortrait ship={other} world={world} emotion={faceEmo} divineEmotion={other.divine ? divineFace ?? undefined : undefined} size={108} />
-            <div className="min-w-0">
-              <div className="text-lg tracking-[0.3em]">{other.pilotName.toUpperCase()}</div>
-              <div className="text-xs tracking-widest" style={{ color: UI.DIM }}>
-                {occupationName(other.originKind, other.faction).toUpperCase()}
-              </div>
-              <div className="text-xs tracking-widest" style={{ color: UI.DIM }}>
-                {chassisName(other.loadout.chassis.name).toUpperCase()}
-              </div>
-              <div className="mt-1 text-xs tracking-widest" style={{ color: STANCE_COLOR[stance] }}>
-                {t(STANCE_KEY[stance])}
-              </div>
-            </div>
-          </div>
+          {/* Паспорт — тот же блок, что карточка во вкладке «Люди»: один пилот, один вид. */}
+          <PilotIdentity
+            portrait={
+              <PilotPortrait ship={other} world={world} emotion={faceEmo} divineEmotion={other.divine ? divineFace ?? undefined : undefined} size={108} />
+            }
+            name={other.pilotName}
+            role={occupationName(other.originKind, other.faction)}
+            craft={chassisName(other.loadout.chassis.name)}
+            stance={stance}
+          />
 
           {!ended && (
             <div className="flex shrink-0 flex-col items-end gap-2">
@@ -278,7 +261,7 @@ export function Dialogue({
                   onClick={() => speak(hireLine.topic)}
                   disabled={hireLine.blocked !== null || busy}
                 >
-                  {hireFee != null ? t('dialogue.hire', { fee: hireFee }) : t('dialogue.hirePlain')}
+                  {hireFee != null ? tm('dialogue.hire', { fee: <Money amount={hireFee} /> }) : t('dialogue.hirePlain')}
                 </Button>
               )}
               <Button small onClick={onClose}>

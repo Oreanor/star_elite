@@ -23,7 +23,7 @@ import { useSession } from '../../session/GameContext'
 import { useOnlinePlayers } from '../../session/net/presence'
 import { UI } from '../theme'
 import { t, useLang } from '../i18n'
-import { galaxyShapeName, properName } from '../i18n/dataNames'
+import { properName } from '../i18n/dataNames'
 import { CONTACT_MAP, ContactLabels, ContactStars, PLAYER_MAP, PlayerLabels, PlayerStars, contactSystemsOf, playerSystemsOf } from './GalaxyPeople'
 import { JumpSphere, OrbitCamera, Route, StarLabel, Stars, YouAreHere, YouLabel, formatStarSize, positionOf } from './GalaxyScene'
 import { SystemPopup, formatRange } from './SystemPopup'
@@ -320,8 +320,7 @@ function GalaxyMapImpl({ onClose, embedded = false }: { onClose: () => void; emb
 
   const content = (
     <MapFrame
-      title={`${t('map.galaxy')} ${properName(galaxy.name).toUpperCase()}`}
-      subtitle={`${galaxyShapeName(galaxy.shape).toUpperCase()} · ${t('map.starsCount', { n: systems.length })}`}
+      title={properName(galaxy.name).toUpperCase()}
       aside={
         <>
           {/* Поиск, фильтры и список звёзд — в колонке, как у остальных карт. Раньше они
@@ -379,7 +378,7 @@ function GalaxyMapImpl({ onClose, embedded = false }: { onClose: () => void; emb
             {listed.map((s) => (
               <li key={s.index}>
                 <MapRow
-                  kind={t('map.view.system')}
+                  kind=""
                   name={properName(s.name).toUpperCase()}
                   meta={`${s.distance.toFixed(1)} ${t('unit.ly')}`}
                   color={UI.PRIMARY}
@@ -560,4 +559,3 @@ function GalaxyMapImpl({ onClose, embedded = false }: { onClose: () => void; emb
     </div>
   )
 }
-

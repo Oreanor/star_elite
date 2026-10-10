@@ -12,6 +12,7 @@ import {
 } from '../../config/loadouts'
 import type { Rng } from '../../core/math'
 import type { Loadout } from '../loadout'
+import { withUpgrade } from '../station/moduleState'
 import type { Profession } from './persona'
 
 /**
@@ -26,6 +27,21 @@ interface VariantEntry {
   readonly weight: number
   readonly loadout: () => Loadout
   readonly profession: Profession
+}
+
+/**
+ * Полоса прокачки трафика. Это НЕ автолевел: профиль привязан к роли борта,
+ * а бросок независим от игрока и от расстояния до центра. Поэтому в одном
+ * коридоре могут встретиться и стоковый слабый пират, и редкий ветеран.
+ */
+const UPGRADE_BAND: Readonly<Record<string, readonly [number, number]>> = {
+  trader: [0, 0.2],
+  convoy: [0, 0.3],
+  freighter: [0, 0.35],
+  police: [0.1, 0.55],
+  pirate: [0, 0.65],
+  gang: [0, 0.75],
+  raider: [0.2, 0.9],
 }
 
 const CIVIL_MIX: readonly VariantEntry[] = [
@@ -74,5 +90,14 @@ function pickFromTable(rng: Rng, table: readonly VariantEntry[]): VariantEntry {
 export function pickTrafficVariant(kindId: string, rng: Rng): { loadout: Loadout; profession: Profession } {
   const table = BY_KIND[kindId] ?? CIVIL_MIX
   const entry = pickFromTable(rng, table)
-  return { loadout: entry.loadout(), profession: entry.profession }
+  const stock = entry.loadout()
+  const band = UPGRADE_BAND[kindId] ?? [0, 0.2]
+  const level = band[0] + rng() * (band[1] - band[0])
+  // Каталожные модули общие и неизменяемые: прокачка всегда получает клон.
+  const loadout: Loadout = {
+    chassis: stock.chassis,
+    internals: stock.internals.map((module) => withUpgrade(module, level)),
+    weapons: stock.weapons.map((module) => (module ? withUpgrade(module, level) as typeof module : null)),
+  }
+  return { loadout, profession: entry.profession }
 }

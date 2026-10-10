@@ -1,4 +1,4 @@
-import { HUD_SCALE } from '../../render/config'
+import { S } from './hudShared'
 import {
   MASK_START,
   RING_COUNT,
@@ -13,7 +13,6 @@ import { HUD_COLORS } from './draw'
  * прорезь на космос с голубым ободом (как раньше). Без общих кривых и догонялок.
  */
 
-const S = HUD_SCALE
 const TAU = Math.PI * 2
 
 const clamp01 = (x: number): number => (x < 0 ? 0 : x > 1 ? 1 : x)

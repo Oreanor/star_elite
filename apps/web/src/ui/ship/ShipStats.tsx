@@ -1,7 +1,8 @@
 import {
   type ShipSpec,
 } from '@elite/sim'
-import { Column, DIM, Panel, Table } from '../station/chrome'
+import { DIM } from '../station/chrome'
+import { trend } from '../theme'
 import { StatId, formatStat, statLabel } from '../station/format'
 
 /**
@@ -44,42 +45,45 @@ function statRows(spec: ShipSpec): { own: StatRow[]; gear: StatRow[] } {
   }
 }
 
-/** Стрелка сравнения с текущим кораблём: белая вверх — лучше, синяя вниз — хуже. */
+/** Стрелка сравнения с текущим кораблём — общим знаком «лучше/хуже» (`trend`). */
 function CompareArrow({ id, value, base }: { id: StatId; value: number; base: number }) {
   if (Math.abs(value - base) < 1e-6) return null
   const better = (HIGHER_BETTER[id] ?? true) ? value > base : value < base
-  return <span style={{ color: better ? '#eaf4ff' : '#5b9bd6' }}>{better ? '▲' : '▼'}</span>
+  const { color, mark } = trend(better)
+  return <span style={{ color }}>{mark}</span>
 }
 
 export function Stats({ spec, name, baseline }: { spec: ShipSpec; name: string; baseline?: ShipSpec | null }) {
   const rows = statRows(spec)
   const base = baseline ? statRows(baseline) : null
   const baseAll = base ? [...base.own, ...base.gear] : null
+  const all = [...rows.own, ...rows.gear]
+  const half = Math.ceil(all.length / 2)
 
-  const columns: Column<StatRow>[] = [
-    { key: 'name', header: '', cell: (r) => <span style={{ color: DIM }}>{statLabel(r.id)}</span> },
-    {
-      key: 'value',
-      header: '',
-      align: 'right',
-      cell: (r) => {
-        const b = baseAll?.find((x) => x.id === r.id)
-        return (
-          <span className="inline-flex items-center justify-end gap-1.5">
-            {formatStat(r.id, r.value)}
-            {b && <CompareArrow id={r.id} value={r.value} base={b.value} />}
-          </span>
-        )
-      },
-    },
-  ]
+  // Плотные строки, а не общая таблица станции: экран корабля обязан влезть без прокрутки
+  // целиком, а у таблицы поля рассчитаны на длинные списки товаров.
+  const row = (r: StatRow) => {
+    const b = baseAll?.find((x) => x.id === r.id)
+    return (
+      <div key={r.id} className="flex items-baseline justify-between gap-3 py-0.5 text-sm">
+        <span style={{ color: DIM }}>{statLabel(r.id)}</span>
+        <span className="inline-flex items-center gap-1.5">
+          {formatStat(r.id, r.value)}
+          {b && <CompareArrow id={r.id} value={r.value} base={b.value} />}
+        </span>
+      </div>
+    )
+  }
 
   return (
-    <Panel title={name}>
-      <Table columns={columns} rows={rows.own} rowKey={(r) => r.id} />
-      {/* Маленький разделитель: выше — своё, ниже — от оборудования. */}
-      <div className="my-1.5 border-t" style={{ borderColor: DIM, opacity: 0.4 }} />
-      <Table columns={columns} rows={rows.gear} rowKey={(r) => r.id} />
-    </Panel>
+    <section className="border px-4 py-3" style={{ borderColor: DIM }}>
+      <h2 className="mb-1.5 text-sm tracking-[0.3em]">{name}</h2>
+      {/* Две колонки по порядку чтения: своё корпуса, затем от оборудования. Половина
+          ширины экрана — это слишком длинная строка для пары «имя … число». */}
+      <div className="grid grid-cols-2 items-start gap-x-8">
+        <div>{all.slice(0, half).map(row)}</div>
+        <div>{all.slice(half).map(row)}</div>
+      </div>
+    </section>
   )
 }

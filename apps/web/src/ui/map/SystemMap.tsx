@@ -14,7 +14,7 @@ import { t, useLang } from '../i18n'
 import { figurineTitleLocal, properName } from '../i18n/dataNames'
 import { formatDistance } from '../hud/project'
 import { useWheelZoom } from './useWheelZoom'
-import { discProject, MapCard, MapFrame, MapPin, MapRow } from './MapFrame'
+import { bySort, discProject, MapCard, MapFrame, MapPin, MapRow, SortToggle, type ListSort } from './MapFrame'
 
 /**
  * Карта системы — голограмма над консолью.
@@ -231,19 +231,6 @@ const kindWord = (kind: MarkerKind): string =>
     ? t('locator.kind.ship')
     : t(`locator.kind.${kind}` as 'locator.kind.planet')
 
-/** Состав системы одной строкой: сколько чего в ней есть. */
-function census(world: World): string {
-  const count = (kind: BodyEntity['kind']) => world.bodies.filter((b) => b.kind === kind).length
-  const parts: string[] = []
-  const push = (n: number, key: 'map.count.stars' | 'map.count.planets' | 'map.count.moons' | 'map.count.stations') =>
-    n > 0 && parts.push(`${n} ${t(key)}`)
-  push(count('star'), 'map.count.stars')
-  push(count('planet'), 'map.count.planets')
-  push(count('moon'), 'map.count.moons')
-  push(count('station'), 'map.count.stations')
-  return parts.join(' · ')
-}
-
 export function SystemMap({
   world,
   onClose,
@@ -262,6 +249,8 @@ export function SystemMap({
   const [zoom, setZoom] = useState(1)
   /** Наведение — ОДНО на карту: строка списка и метка на диске подсвечивают друг друга. */
   const [hover, setHover] = useState<number | null>(null)
+  /** Список системы — кучками по типу (как прежде) или по удалённости от тебя. */
+  const [sortBy, setSortBy] = useState<ListSort>('type')
   const holoRef = useRef<HTMLDivElement>(null)
   const listRef = useRef<HTMLUListElement>(null)
   useWheelZoom(holoRef, (dy) => setZoom((z) => Math.min(6, Math.max(0.6, z * (dy > 0 ? 0.9 : 1.1)))))
@@ -335,13 +324,15 @@ export function SystemMap({
     <MapFrame
       square
       title={properName(world.systemName).toUpperCase()}
-      // Состав системы: сколько звёзд, планет, лун и причалов — видно, что тут есть.
-      subtitle={census(world)}
       aside={
         <>
+          <SortToggle value={sortBy} onChange={setSortBy} />
           {/* Длинный список объектов не должен распирать карточку — он скроллится сам. */}
           <ul ref={listRef} className="min-h-0 flex-1 space-y-1 overflow-y-auto pr-1">
-            {points.filter(selectable).map((m) => (
+            {points
+              .filter(selectable)
+              .sort((a, b) => bySort(sortBy)({ kind: a.kind, dist: a.range }, { kind: b.kind, dist: b.range }))
+              .map((m) => (
               <li key={m.id}>
                 <MapRow
                   kind={kindWord(m.kind)}

@@ -401,7 +401,6 @@ export function UniverseMap({ onClose }: { onClose: () => void }) {
   return (
     <MapFrame
       title={t('map.view.universe')}
-      subtitle={`${items.length} ${t('map.view.galaxy')}`}
       aside={
         <>
           <input
@@ -416,7 +415,7 @@ export function UniverseMap({ onClose }: { onClose: () => void }) {
             {found.map((it) => (
               <MapRow
                 key={it.vertex}
-                kind={t('map.view.galaxy')}
+                kind=""
                 name={
                   properName(it.name).toUpperCase() +
                   (it.vertex === homeVertex ? ' ·ДОМ' : '') +

@@ -32,7 +32,7 @@ import { formatStat } from '../station/format'
 import { drawFlare } from './drawFlare'
 import { angularSize, formatDistance, projectPoint } from './project'
 import { apertureEllipse, insideAperture } from './aperture'
-import { HudFrame, S, bodyColor, formatLy, hudGalaxyFor, isOnScreen, navMarkerColor, navReticle, offscreenArrow, radarColor, shipDistance } from './hudShared'
+import { HudFrame, S, bodyColor, fitHudScale, formatLy, hudGalaxyFor, isOnScreen, navMarkerColor, navReticle, offscreenArrow, radarColor, shipDistance } from './hudShared'
 import { drawBushLocator, drawTorusLabels, drawTorusMarkers } from './hudBush'
 import { drawRadar } from './hudRadar'
 import { drawReadouts } from './hudReadouts'
@@ -57,6 +57,8 @@ const _shownQuat = new Quaternion()
 
 export function drawHud(frame: HudFrame): void {
   const { ctx, width, height, world } = frame
+  // Масштаб HUD — под размер окна, до всякой отрисовки этого кадра.
+  fitHudScale(width, height)
 
   ctx.clearRect(0, 0, width, height)
   ctx.font = `${Math.round(9 * S)}px "Consolas", "DejaVu Sans Mono", monospace`
@@ -444,7 +446,8 @@ function drawPinnedStar(frame: HudFrame): void {
 }
 
 /** Ближе этого порога (px HUD) две подписи мешаются — вторичную гасим. */
-const LABEL_MIN_GAP = 14 * S
+/** Минимальный зазор подписей целей; зависит от масштаба HUD, поэтому функция, а не константа. */
+const labelMinGap = () => 14 * S
 
 interface Marker {
   pos: Vector3
@@ -605,7 +608,7 @@ function drawBodyMarkers({ ctx, camera, world, width, height, aperture }: HudFra
     // выбранную станцию (пусть у другой планеты) — потому что это цель. Вторичный
     // же объект вплотную к уже подписанному молчит, чтобы не плодить кашу.
     const forced = m.primary || m.nav
-    if (!forced && placed.some((q) => Math.hypot(q.x - x, q.y - y) < LABEL_MIN_GAP)) continue
+    if (!forced && placed.some((q) => Math.hypot(q.x - x, q.y - y) < labelMinGap())) continue
 
     // Подпись отодвинута за рамку: иначе имя ложится ей на грань и не читается.
     const gap = (m.nav ? 12 : 6) * S

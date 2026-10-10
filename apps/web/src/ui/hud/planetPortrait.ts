@@ -1,21 +1,16 @@
 /**
  * Портрет планеты/луны в клетке HUD: вращающийся шарик с картой типа.
  * Без освещения и без кипения — твёрдая поверхность, только спин + рыбий глаз.
- * То же зерно варианта, что у Bodies (`id * 7919` + pickVariant).
+ * То же зерно варианта, что у Bodies (`planetSeed` + pickVariant).
  */
 
 import type { BodyEntity } from '@elite/sim'
-import { planetLook, planetTextureUrl, pickVariant } from '../../render/sky/planets'
+import { planetLook, planetSeed, planetTextureUrl, pickVariant } from '../../render/sky/planets'
 import { rockTextureOf, rockTextureUrl } from '../../render/materials/rockTextures'
 import { drawSampledBall, drawTextureBall, hash2 } from './textureBall'
 
 /** Медленнее звезды: планета в портрете не должна мельтешить. */
 const PLANET_PAINT = { spin: 0.12, boil: 0 } as const
-
-/** То же зерно, что `Planet` в Bodies — одна карта в сцене и в HUD. */
-export function planetPortraitSeed(bodyId: number): number {
-  return bodyId * 7919
-}
 
 function rgbOf(color: number): [number, number, number] {
   return [(color >> 16) & 255, (color >> 8) & 255, color & 255]
@@ -49,7 +44,7 @@ export function drawPlanetBall(
   time: number,
 ): void {
   const look = planetLook(body.surface)
-  const seed = planetPortraitSeed(body.id)
+  const seed = planetSeed(body.id)
   const variant = pickVariant(look, seed)
   // Луна — тот же КАМЕНЬ по id, что в мире и на вкладке ПЛАНЕТА: спутник это большой камень.
   // Мелкая копия карты: клетка портрета — полтора десятка пикселей, и полновесные

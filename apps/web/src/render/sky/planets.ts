@@ -1,4 +1,5 @@
-import { SRGBColorSpace, TextureLoader, type Texture } from 'three'
+import type { Texture } from 'three'
+import { loadSurfaceTexture } from '../materials/surfaceTexture'
 import type { PlanetType } from '@elite/sim'
 import type { PlanetLook } from '../geometry/bodies'
 
@@ -47,6 +48,14 @@ const VARIANTS: Record<PlanetLook, number> = {
   gas: 7,
 }
 
+/**
+ * Зерно варианта карты по id тела. Одно на сцену, вкладку планеты, портрет HUD и прогрев:
+ * разойдись они — и в окне один мир, а на вкладке другой.
+ */
+export function planetSeed(bodyId: number): number {
+  return bodyId * 7919
+}
+
 /** Детерминированный выбор варианта. Тот же seed — та же планета, всегда. */
 export function pickVariant(look: PlanetLook, seed: number): number {
   const count = VARIANTS[look]
@@ -74,41 +83,16 @@ export function planetTextureUrl(
   return `/textures/${dir}/${variant}.webp`
 }
 
-const cache = new Map<string, Texture>()
-
 /**
- * @param onLoaded Зовётся, если картинка нашлась. Может не позваться никогда.
+ * @param onLoaded Зовётся, если картинка нашлась.
+ * @param onMissing Зовётся, если файла нет (см. `loadSurfaceTexture`).
  * @returns функция отписки: компонент мог размонтироваться, пока грузилось.
  */
 export function loadPlanetTexture(
   look: PlanetLook,
   variant: number,
   onLoaded: (texture: Texture) => void,
+  onMissing?: () => void,
 ): () => void {
-  const key = `${look}/${variant}`
-
-  const ready = cache.get(key)
-  if (ready) {
-    onLoaded(ready)
-    return () => {}
-  }
-
-  let cancelled = false
-  new TextureLoader().load(
-    planetTextureUrl(look, variant),
-    (texture) => {
-      texture.colorSpace = SRGBColorSpace
-      // Планета почти всегда видна ВСКОЛЬЗЬ (шар), и у лимба текстура сжимается по
-      // одной оси — без анизотропии там мыло. 16 — потолок; three сам зажмёт до макс.
-      texture.anisotropy = 16
-      cache.set(key, texture)
-      if (!cancelled) onLoaded(texture)
-    },
-    undefined,
-    // 404 — не ошибка, а штатный случай: остаёмся на покраске по вершинам.
-    () => {},
-  )
-  return () => {
-    cancelled = true
-  }
+  return loadSurfaceTexture(planetTextureUrl(look, variant), onLoaded, onMissing)
 }

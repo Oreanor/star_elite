@@ -1,4 +1,5 @@
-import { SRGBColorSpace, TextureLoader, type Texture } from 'three'
+import type { Texture } from 'three'
+import { loadSurfaceTexture } from './surfaceTexture'
 
 /**
  * Текстуры камня. Та же равнопромежуточная развёртка 2:1, что у планет и неба:
@@ -39,33 +40,11 @@ export function rockTextureUrl(shape: number, quality: 'full' | 'lo' = 'full'): 
   return quality === 'lo' ? `/textures/asteroids/lo/${shape}.webp` : `/textures/asteroids/${shape}.webp`
 }
 
-const cache = new Map<number, Texture>()
-
 /**
- * @param onLoaded Зовётся, если картинка нашлась. Может не позваться никогда.
+ * @param onLoaded Зовётся, если картинка нашлась.
+ * @param onMissing Зовётся, если файла нет (см. `loadSurfaceTexture`).
  * @returns функция отписки: компонент мог размонтироваться, пока грузилось.
  */
-export function loadRockTexture(shape: number, onLoaded: (texture: Texture) => void): () => void {
-  const ready = cache.get(shape)
-  if (ready) {
-    onLoaded(ready)
-    return () => {}
-  }
-
-  let cancelled = false
-  new TextureLoader().load(
-    `/textures/asteroids/${shape}.webp`,
-    (texture) => {
-      texture.colorSpace = SRGBColorSpace
-      texture.anisotropy = 16 // камень виден вскользь у лимба — иначе мыло; three зажмёт до макс
-      cache.set(shape, texture)
-      if (!cancelled) onLoaded(texture)
-    },
-    undefined,
-    // 404 — не ошибка, а штатный случай: остаёмся на покраске по вершинам.
-    () => {},
-  )
-  return () => {
-    cancelled = true
-  }
+export function loadRockTexture(shape: number, onLoaded: (texture: Texture) => void, onMissing?: () => void): () => void {
+  return loadSurfaceTexture(rockTextureUrl(shape), onLoaded, onMissing)
 }

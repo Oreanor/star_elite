@@ -166,6 +166,14 @@ const DUDE_ORDER: readonly DivineEmotion[] = [
   'neutral', 'smile', 'laugh', 'tired', 'confusion', 'surprise', 'frown', 'angry',
 ]
 
+/**
+ * Кадр бога на листе для канваса (HUD): столбец и число столбцов. Тот же порядок, что у
+ * `dudeStyle`, — лицо Слова одно везде, и в панелях, и на портрете цели.
+ */
+export function dudeFrame(emotion: DivineEmotion): { col: number; cols: number } {
+  return { col: Math.max(0, DUDE_ORDER.indexOf(emotion)), cols: DUDE_COLS }
+}
+
 /** CSS-крой кадра бога: лист 800%×100%, сдвиг по столбцу. Неизвестная эмоция → нейтраль (кадр 0). */
 export function dudeStyle(emotion: DivineEmotion): CSSProperties {
   const col = Math.max(0, DUDE_ORDER.indexOf(emotion))

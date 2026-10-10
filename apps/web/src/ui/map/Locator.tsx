@@ -2,6 +2,7 @@ import { useEffect, useReducer, useRef, useState } from 'react'
 import { Vector3 } from 'three'
 import {
   clearContactLock,
+  assessThreat,
   clearNavLock,
   isVisible,
   MIELOPHONE,
@@ -15,12 +16,14 @@ import {
   type ShipEntity,
   type World,
 } from '@elite/sim'
-import { UI } from '../theme'
+import { threatColor, UI } from '../theme'
 import { t, useLang } from '../i18n'
 import { figurineTitleLocal, chassisName, occupationName, properName } from '../i18n/dataNames'
 import { formatDistance } from '../hud/project'
 import { useWheelZoom } from './useWheelZoom'
-import { discProject, MapCard, MapFrame, MapPin, MapRow } from './MapFrame'
+import { bySort, discProject, MapCard, MapFrame, MapPin, MapRow, SortToggle, type ListSort } from './MapFrame'
+import { PilotPortrait } from '../station/chrome'
+import { PilotIdentity } from '../station/PilotIdentity'
 
 /**
  * Локатор — большой круглый радар консоли: вид сверху, нос корабля ВВЕРХ.
@@ -91,10 +94,19 @@ interface Blip {
   /** Род объекта словом: ПЛАНЕТА, ПРИЧАЛ, КОРАБЛЬ. Пишется перед именем и на поле, и в списке. */
   kind: string
   title: string
+  /**
+   * Строка в списке, если отличается от «род: имя». У борта — «пилот, корпус, занятие»:
+   * «КОРАБЛЬ: Торговец» не говорило ничего, а человек и его корабль — главное о встречном.
+   */
+  row?: { kind: string; name: string; strong?: boolean }
+  /** Борт — для аватара пилота в карточке. */
+  ship?: ShipEntity
   /** Строки карточки: у борта — пилот, профессия, отношение, корпус. */
   lines: string[]
   /** До игрока, метры: по нему выстроен список — ближнее сверху. */
   dist: number
+  /** Род ключом для сортировки «по типу» (`kindRank`): ship, planet, station… */
+  rank: string
   /** Клик пишет захват в мир — тот же id, что у тела/борта/статуи. */
   selectId: number
   selectKind: SelectKind
@@ -144,6 +156,7 @@ function blips(world: World): Blip[] {
       size: body.kind === 'star' || body.kind === 'blackhole' ? 11 : 7,
       ring: body.id === world.navTargetId && world.targetFocus === 'nav',
       kind: t(`locator.kind.${body.kind}` as 'locator.kind.planet'),
+      rank: body.kind,
       title: properName(body.name),
       lines: [],
       selectId: body.id,
@@ -166,6 +179,7 @@ function blips(world: World): Blip[] {
       size: 9,
       ring: m.id === world.navTargetId && world.targetFocus === 'nav',
       kind: t('locator.kind.monolith'),
+      rank: 'monolith',
       title: properName(MONOLITH_NAMES[m.variant] ?? 'Монолит'),
       lines: [],
       selectId: m.id,
@@ -185,6 +199,7 @@ function blips(world: World): Blip[] {
       size: 9,
       ring: f.id === world.navTargetId && world.targetFocus === 'nav',
       kind: t('locator.kind.figurine'),
+      rank: 'figurine',
       title: figurineTitleLocal(f.titleId),
       lines: [],
       selectId: f.id,
@@ -204,6 +219,7 @@ function blips(world: World): Blip[] {
       size: 7,
       ring: rock.id === world.navTargetId && world.targetFocus === 'nav',
       kind: t('locator.kind.asteroid'),
+      rank: 'asteroid',
       title: properName(NAV_ASTEROID_NAME),
       lines: [],
       selectId: rock.id,
@@ -215,7 +231,6 @@ function blips(world: World): Blip[] {
     if (!isVisible(ship) || ship.divine) continue
     const d = toDisc(world, ship.state.pos)
     if (!d) continue
-    const stance = stanceTo(world, ship)
     out.push({
       key: `ship-${ship.id}`,
       ...d,
@@ -225,15 +240,19 @@ function blips(world: World): Blip[] {
       // Кольцо только у активного Tab-захвата — не у знакомых.
       ring: ship.id === lockedShipId(world) && world.targetFocus === 'contact',
       kind: t('locator.kind.ship'),
-      // Имя БОРТА, а не пилота: род объекта на локаторе — корабль, человек внутри идёт
-      // строкой ниже. Раньше здесь стояло имя пилота, и «корабль: Джон» читалось враньём.
-      title: properName(ship.name),
-      lines: [
-        `${t('map.label.pilot')}: ${ship.pilotName}`,
-        `${t('map.label.profession')}: ${occupationName(ship.originKind, ship.faction)}`,
-        `${t('map.label.stance')}: ${t(`dialogue.stance.${stance}` as 'dialogue.stance.neutral')}`,
-        `${t('map.label.hull')}: ${chassisName(ship.loadout.chassis.name)}`,
-      ],
+      rank: 'ship',
+      // Корпус, а не имя пилота и не «Торговец»: род на локаторе — корабль, и «корабль: Пегас»
+      // говорит, ЧТО летит; человек внутри — строкой ниже. Строки «корпус» поэтому нет.
+      title: chassisName(ship.loadout.chassis.name),
+      ship,
+      row: {
+        // Пилот — именем (жирным), следом корпус и занятие — на месте «рода» после запятой.
+        name: ship.pilotName,
+        kind: `«${chassisName(ship.loadout.chassis.name)}», ${occupationName(ship.originKind, ship.faction).toLowerCase()}`,
+        strong: true,
+      },
+      // Строк нет: карточка борта — паспорт пилота (`PilotIdentity`), а не список сведений.
+      lines: [],
       selectId: ship.id,
       selectKind: 'ship',
     })
@@ -277,6 +296,8 @@ export function Locator({ world }: { world: World }) {
   useLang()
   const [, bump] = useReducer((n: number) => n + 1, 0)
   const [hover, setHover] = useState<string | null>(null)
+  /** Список — по удалённости (ближнее сверху) или кучками по типу (внутри — по удалённости). */
+  const [sortBy, setSortBy] = useState<ListSort>('dist')
   // Поворот, наклон и зум диска. Наклон по умолчанию — лёгкий (радар-«тарелка»), но
   // 0 даёт честный вид сверху; крайние значения зажаты, чтобы диск не выворачивался.
   const [yaw, setYaw] = useState(0)
@@ -314,17 +335,20 @@ export function Locator({ world }: { world: World }) {
 
   // Список слева: ближнее сверху. Выделение двустороннее — наведение на строку зажигает
   // отметку на диске, наведение на отметку подсвечивает строку.
-  const listed = [...marks].sort((a, b) => a.b.dist - b.b.dist)
+  const order = bySort(sortBy)
+  const listed = [...marks].sort((a, b) => order({ kind: a.b.rank, dist: a.b.dist }, { kind: b.b.rank, dist: b.b.dist }))
 
   return (
-    <MapFrame square title={t('locator.title')} subtitle={t('locator.count', { n: marks.length })} aside={
+    <MapFrame square aside={
       <>
+        <SortToggle value={sortBy} onChange={setSortBy} />
         <ul ref={listRef} className="min-h-0 flex-1 space-y-1 overflow-y-auto pr-1">
           {listed.map(({ b }) => (
             <li key={b.key}>
               <MapRow
-                kind={b.kind}
-                name={b.title}
+                kind={b.row?.kind ?? b.kind}
+                name={b.row?.name ?? b.title}
+                strong={b.row?.strong}
                 meta={formatDistance(b.dist)}
                 color={b.color}
                 active={b.ring}
@@ -435,18 +459,60 @@ export function Locator({ world }: { world: World }) {
         {/* Карточка — булавкой у самой отметки, поверх диска. Координаты `viewBox`
             переводим в доли поля: SVG растянут на весь квадрат, значит доля та же. */}
         {active && (
-          <MapPin x={(active.tip.x + VIEW / 2) / VIEW} y={(active.tip.y + VIEW / 2) / VIEW}>
+          <MapPin x={(active.tip.x + VIEW / 2) / VIEW} y={(active.tip.y + VIEW / 2) / VIEW} wide={!!active.b.ship}>
             <MapCard
               kind={active.b.kind}
               name={active.b.title}
               color={active.b.color}
               locked={active.b.ring}
               lines={[...active.b.lines, `${t('map.distance')}: ${formatDistance(active.b.dist)}`]}
+              body={
+                active.b.ship ? (
+                  // Борт — тем же паспортом пилота, что во вкладке «Люди» и в разговоре;
+                  // снизу расстояние вместо кнопки связи.
+                  <div style={{ color: UI.PRIMARY }}>
+                    <PilotIdentity
+                      portrait={<PilotPortrait ship={active.b.ship} world={world} emotion="neutral" size={96} />}
+                      name={active.b.ship.pilotName}
+                      role={occupationName(active.b.ship.originKind, active.b.ship.faction)}
+                      craft={chassisName(active.b.ship.loadout.chassis.name)}
+                      stance={stanceTo(world, active.b.ship)}
+                    >
+                      {/* Опасность — отдельной строкой под отношением. */}
+                      <div className="mt-1 leading-4">
+                        <ThreatBadge ship={active.b.ship} reference={world.player} />
+                      </div>
+                      <div className="text-xs tracking-widest" style={{ color: UI.DIM }}>
+                        {formatDistance(active.b.dist)}
+                      </div>
+                    </PilotIdentity>
+                  </div>
+                ) : undefined
+              }
             />
           </MapPin>
         )}
       </div>
     </MapFrame>
+  )
+}
+
+/**
+ * Опасность борта для тебя — значком, не словами: треугольник цвета уровня и множитель
+ * силы относительно твоего корабля. Стоит в строке отношения: «кто он мне» и «насколько
+ * опасен» читаются вместе.
+ */
+function ThreatBadge({ ship, reference }: { ship: ShipEntity; reference: ShipEntity }) {
+  const threat = assessThreat(ship, reference)
+  const color = threatColor(threat.level)
+  return (
+    <span className="inline-flex items-center gap-1 text-[0.65rem] font-bold tracking-widest" style={{ color }}>
+      <svg viewBox="0 0 12 11" className="h-[1em] w-[1.1em]" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth={1.3}>
+        <path d="M6 1 L11.2 10 H0.8 Z" strokeLinejoin="round" />
+        <path d="M6 4.2 V6.8 M6 8.2 V8.6" strokeLinecap="round" />
+      </svg>
+      {threat.score.toFixed(1)}×
+    </span>
   )
 }
 

@@ -73,9 +73,9 @@ export const RU = {
   'key.roll.what': 'крен',
   'key.barrel': 'AA',
   'key.barrel.what': 'бочка: сбить наведение ракет',
-  'key.loop': 'WW / SS',
+  'key.loop': 'WW',
   'key.loop.what': 'петля: сбросить хвост',
-  'key.reversal': 'DD',
+  'key.reversal': 'SS',
   'key.reversal.what': 'разворот через петлю',
   'key.retro': 'Ctrl',
   'key.retro.what': 'ручник: гасит ход и снимает защёлку форсажа',
@@ -119,6 +119,10 @@ export const RU = {
   'key.flyto.what': 'автопилот к захваченной цели',
   'key.pause': 'Esc',
   'key.pause.what': 'пауза и курсор',
+  'key.jump': 'H',
+  'key.jump.what': 'прыжок: держать — портал к выбранной звезде',
+  'key.help': 'K',
+  'key.help.what': 'схема клавиш',
 
   // ─── Разделы таблицы клавиш ─────────────────────────────────────────────────
   'keys.group.flight': 'ПИЛОТИРОВАНИЕ',
@@ -194,7 +198,6 @@ export const RU = {
   'unit.rads': 'рад/с²',
   'unit.kn': 'кН',
   'unit.units': 'ед.',
-  'unit.cr': 'кр.',
 
   // ─── Характеристики (ключи moduleStat / fitDeltas) ──────────────────────────
   'stat.shield': 'ЩИТ',
@@ -230,7 +233,7 @@ export const RU = {
   'kind.cloak': 'маскировка',
   'kind.drone': 'БПЛА',
   'kind.mielophone': 'миелофон',
-  'kind.aux': 'доп. оборуд.',
+  'kind.aux': 'доп. оборудование',
   'kind.ecm': 'РЭБ',
   'kind.bomb': 'энергобомба',
   'kind.scoop': 'топливозабор',
@@ -238,8 +241,7 @@ export const RU = {
   // ─── Станция: общее ─────────────────────────────────────────────────────────
   'station.title': 'СТАНЦИЯ',
   'station.system': 'СИСТЕМА',
-  'station.credits': 'КРЕДИТОВ',
-  'station.undock': 'ОТЧАЛИТЬ',
+  'station.undock': 'ВЫЛЕТ',
 
   // ─── Колонки таблиц ─────────────────────────────────────────────────────────
   'station.col.name': 'НАЗВАНИЕ',
@@ -252,14 +254,18 @@ export const RU = {
 
   // ─── Рынок ──────────────────────────────────────────────────────────────────
   'station.market.title': 'ТОВАРЫ',
+  'station.outfit.title': 'ОБОРУДОВАНИЕ',
+  'station.outfit.empty': 'Оборудования в продаже нет',
+  'station.col.compare': 'БЫЛО → СТАНЕТ',
+  'station.buyFit': 'КУПИТЬ И УСТАНОВИТЬ',
+  'ship.confirm.buyPlain': 'Купить «{name}» за {price}?',
   'station.buy': 'КУПИТЬ',
   'station.noFunds': 'НЕТ ДЕНЕГ',
   'station.cheap': 'дёшево',
   'station.dear': 'дорого',
   'station.trade.buy': 'КУПИТЬ',
   'station.trade.sell': 'ПРОДАТЬ',
-  'station.trade.stock': 'на складе {n}',
-  'station.trade.have': 'в отсеке {n}',
+  'station.trade.line': '{mass} × {price}',
 
   // ─── Грузовой отсек ─────────────────────────────────────────────────────────
   'station.hold.title': 'ГРУЗОВОЙ ОТСЕК',
@@ -267,7 +273,6 @@ export const RU = {
   'station.sell': 'ПРОДАТЬ',
   'station.strip': 'СНЯТЬ',
   'station.sellModule': 'ПРОДАТЬ · {value}',
-  'station.sellAll': 'ПРОДАТЬ ВСЁ ЗА {total}',
   'station.salvage': 'находка',
 
   // ─── Верфь ──────────────────────────────────────────────────────────────────
@@ -304,9 +309,12 @@ export const RU = {
   'station.popUnit': '{n} млн',
   // Навигация со стартового экрана станции.
   'station.nav.planet': 'ПЛАНЕТА',
-  'station.nav.shop': 'МАГАЗИН',
+  'station.nav.shop': 'ТОРГОВЛЯ',
   'station.nav.people': 'ЛЮДИ',
   'station.nav.map': 'КАРТА',
+  'station.nav.ref': 'СПРАВОЧНИК',
+  'station.atPlanet': '{station} (планета {planet})',
+  'ref.col.tech': 'ТЕХ',
   // Три кнопки внутри вкладки КАРТА.
   'map.view.locator': 'ЛОКАТОР',
   'map.view.system': 'СИСТЕМА',
@@ -332,6 +340,8 @@ export const RU = {
   'locator.kind.fixture': 'орудие',
   'locator.kind.warbase': 'база',
   'locator.kind.ship': 'корабль',
+  'locator.sort.dist': 'ПО УДАЛЁННОСТИ',
+  'locator.sort.type': 'ПО ТИПУ',
   'locator.kind.heat': 'корона',
   'locator.kind.laser': 'лазер',
   'locator.kind.missile': 'ракета',
@@ -340,8 +350,7 @@ export const RU = {
   'locator.kind.unknown': 'неизвестно',
 
   // ─── Люди: реестр знакомых ───────────────────────────────────────────────────
-  'people.title': 'ЛЮДИ',
-  'people.docked': 'ПРИСТЫКОВАНЫ',
+  'people.atStation': 'Сейчас на станции:',
   'people.docked.empty': 'Причал пуст — ты один. Борта заходят со временем.',
   'people.acquaintances': 'ЗНАКОМЫЕ',
   'people.subtitle': 'С кем ты говорил и кто ещё жив. Их положение известно всегда.',
@@ -362,7 +371,7 @@ export const RU = {
   'chat.placeholder': 'Сказать что-нибудь…',
   'chat.send': 'СКАЗАТЬ',
   'chat.close': 'T — ПОЛОЖИТЬ ТРУБКУ',
-  'dialogue.hire': 'НАНЯТЬ ЗА {fee} КР',
+  'dialogue.hire': 'НАНЯТЬ ЗА {fee}',
   'dialogue.hirePlain': 'НАНЯТЬ',
   'dialogue.end': 'ПОЛОЖИТЬ ТРУБКУ',
   'dialogue.closeChannel': 'ЗАКРЫТЬ КАНАЛ',
@@ -433,8 +442,8 @@ export const RU = {
   'ship.repair.nothing': 'Чинить нечего.',
   'ship.repair.rearmed': 'Ракеты пополнены.',
   'ship.repair.tooComplex': 'Тут за такой корпус не берутся — слишком сложно для местной мастерской.',
-  'ship.owned': 'УЖЕ У ВАС',
   'ship.buyHull': 'КУПИТЬ · {price}',
+  'ship.alreadyOwned': 'УЖЕ У ВАС',
   'ship.hullBuy.title': 'ПОКУПКА КОРПУСА',
   'ship.hullBuy.tradeIn': 'примут автоматически, состояние {pct}%',
   'ship.hullBuy.overflow': 'Не подошедшее оборудование ({n}) уедет в грузовой отсек',
@@ -449,7 +458,7 @@ export const RU = {
   'hud.scalePlate': 'ПРОСТРАНСТВЕННАЯ РЕКАЛИБРОВКА',
   'hud.growPlate': 'Всё чудесатее и чудесатее!',
   'hud.shrinkPlate': 'Складываюсь, как подзорная труба!',
-  'ship.cargo.used': 'ЗАНЯТО {used} ИЗ {cap} Т',
+  'ship.cargo.used': 'ЗАНЯТО: {used}/{cap} Т',
   'ship.jettison': 'ВЫБРОСИТЬ',
   'ship.jettisonAll': 'ВЫБРОСИТЬ ВСЁ',
   'ship.col.shop': 'МАГАЗИН',
@@ -515,10 +524,6 @@ export const RU = {
   'planet.earthMass': '{n} масс Земли',
   'planet.hours': '{n} ч',
   'planet.days': '{n} сут',
-  'map.label.pilot': 'ПИЛОТ',
-  'map.label.profession': 'ПРОФЕССИЯ',
-  'map.label.stance': 'ОТНОШЕНИЕ',
-  'map.label.hull': 'КОРПУС',
   'map.search': 'ПОИСК СИСТЕМЫ…',
   'map.searchNone': 'не найдено',
   'map.filter.all': 'ВСЕ',

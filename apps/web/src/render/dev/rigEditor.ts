@@ -12,7 +12,7 @@ import { consumePress, isHeld } from '../../platform/input/input'
 import { setInputCaptured } from '../../session/inputCapture'
 
 /**
- * РЕДАКТОР ОСНАСТКИ (клавиша K). Дев-инструмент: за один обход правит у корпуса ВСЁ, что
+ * РЕДАКТОР ОСНАСТКИ (клавиша O). Дев-инструмент: за один обход правит у корпуса ВСЁ, что
  * ставится на глаз, — дула, сопла и общий размер. Числа в конфиге раньше ставились наугад
  * и каждая правка стоила перезапуска; здесь корабль показывает точки, лазер бьёт из дул,
  * факел льётся из сопел, а облёт камеры (стрелки без модификатора) остаётся рабочим.
@@ -28,7 +28,7 @@ import { setInputCaptured } from '../../session/inputCapture'
  *   6 / 7           — весь корабль меньше / больше (посадочные места растут вместе)
  *   Enter           — следующая группа (закольцованно)
  *   0               — следующий корпус
- *   K               — напечатать конфиг в консоль и выйти
+ *   O               — напечатать конфиг в консоль и выйти
  *
  * Слой — `app/control`: это ввод и состояние сеанса. Дула правим как верфь (КЛОН шасси,
  * каталог неприкосновенен), сопла и размер — через рантайм-оверрайды рендера.
@@ -90,7 +90,7 @@ export function rigEditorActive(): boolean {
   return editor.active
 }
 
-/** K: включить редактор либо напечатать конфиг и выйти. */
+/** O: включить редактор либо напечатать конфиг и выйти. */
 export function toggleRigEditor(world: World): void {
   if (editor.active) exitEditor(world)
   else enterEditor(world)
@@ -345,7 +345,7 @@ function printout(): string {
   const radius = num(editor.baseRadius * editor.sizeMul)
 
   return [
-    `// ${editor.chassisId} — из редактора (K). scale: ${scale} (ships.ts), radius: ${radius} (chassis.ts)`,
+    `// ${editor.chassisId} — из редактора (O). scale: ${scale} (ships.ts), radius: ${radius} (chassis.ts)`,
     ...gunLines,
     `  nozzles: [${nz.join(', ')}],`,
   ].join('\n')

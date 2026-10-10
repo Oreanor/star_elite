@@ -5,6 +5,7 @@ import { requestLock, setStickSuspended } from '../platform/input/input'
 import { setLang, t, useLang, type Key, type Lang } from '../ui/i18n'
 import { Tabs } from '../ui/station/chrome'
 import { preloadTitleAssets, titleAssetsReady } from '../ui/preload'
+import { preloadSystemSurfaces } from '../render/materials/surfacePreload'
 
 /**
  * Титульный экран: заставка, пауза, настройки и экран гибели. Отдельно от App —
@@ -61,7 +62,9 @@ const KEY_GROUPS: { title: Key; rows: [Key, Key][] }[] = [
       ['key.galaxy', 'key.galaxy.what'],
       ['key.talk', 'key.talk.what'],
       ['key.camera', 'key.camera.what'],
+      ['key.jump', 'key.jump.what'],
       ['key.pause', 'key.pause.what'],
+      ['key.help', 'key.help.what'],
     ],
   },
 ]
@@ -622,6 +625,11 @@ export function Paused({
   const [gfxProgress, setGfxProgress] = useState(() =>
     titleAssetsReady() ? 1 : 0,
   )
+  // Пока игрок смотрит на титул, качаются карты поверхности стартовой системы: сцена
+  // строится лишь по СТАРТУ, и без прогрева первые секунды планеты стояли бы голой
+  // покраской. Полосу загрузки не держит — титул ждёт только свою графику.
+  useEffect(() => preloadSystemSurfaces(session.world), [session])
+
   useEffect(() => {
     if (gfxReady) return
     let alive = true

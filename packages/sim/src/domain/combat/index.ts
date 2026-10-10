@@ -20,6 +20,7 @@ export {
 export { destroyWarBase, damageWarBaseFixture, stepWarBaseWrecks, warBaseWreckDone } from './warBase'
 export { stepWarBaseTurrets } from './warBaseGuns'
 export { stepMissiles } from './missiles'
+export { assessThreat, threatLevel, type ThreatAssessment, type ThreatLevel } from './threat'
 export { stepBolts } from './bolts'
 export { castLaser, type LaserHit, type ShotSource } from './raycast'
 export {

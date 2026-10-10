@@ -48,6 +48,11 @@ export interface Nozzle {
 // в километр занимает доли пикселя: игрок физически не видит, что в него летит,
 // и «уворачиваться от ракет» превращается в угадывание. Восемь метров — это
 // сознательная ложь ради читаемости, и она стоит дешевле, чем непонятная смерть.
+//
+// Но восемь — перебор: у корабля в 16–24 м ракета выходила в треть корпуса и толщиной
+// с бревно. Модель строится в «восьмиметровых» числах ниже и ужимается этим множителем
+// целиком — вместе с соплом, иначе факел остался бы от большой ракеты.
+const MISSILE_SCALE = 0.55
 
 const M_NOSE: Vec3 = [0, 0, -4.6]
 const M_SHOULDER_R: Vec3 = [0.75, 0, -2.6]
@@ -94,11 +99,13 @@ export function missileGeometry(): BufferGeometry {
     all.push(...quarter.map((t) => tri(rot(t.a), rot(t.b), rot(t.c), t.color)))
   }
   missileCache = buildGeometry(all)
+  missileCache.scale(MISSILE_SCALE, MISSILE_SCALE, MISSILE_SCALE)
+  missileCache.computeBoundingSphere()
   return missileCache
 }
 
 /** Сопло ракеты. Радиус великоват для калибра — иначе факел не видно издали. */
-export const MISSILE_NOZZLE: Nozzle = { offset: [0, 0, 4.0], radius: 1.35 }
+export const MISSILE_NOZZLE: Nozzle = { offset: [0, 0, 4.0 * MISSILE_SCALE], radius: 1.35 * MISSILE_SCALE }
 
 // ─── БПЛА «Оса» ──────────────────────────────────────────────────────────────
 //

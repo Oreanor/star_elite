@@ -53,11 +53,13 @@ export function Button({
   onClick,
   disabled,
   small,
+  variant = 'secondary',
 }: {
   children: React.ReactNode
   onClick?: () => void
   disabled?: boolean
   small?: boolean
+  variant?: 'primary' | 'secondary'
 }) {
   return (
     <button
@@ -67,7 +69,11 @@ export function Button({
       className={`border tracking-[0.2em] transition-colors ${small ? 'px-3 py-1 text-xs' : 'mt-4 px-6 py-2 text-sm'} ${
         disabled ? 'cursor-not-allowed opacity-35' : 'cursor-pointer hover:bg-[#7fd6ff] hover:text-black'
       }`}
-      style={{ borderColor: disabled ? DIM : ACCENT, color: disabled ? DIM : ACCENT }}
+      style={{
+        borderColor: disabled ? DIM : ACCENT,
+        color: variant === 'primary' ? '#08162a' : disabled ? DIM : ACCENT,
+        backgroundColor: variant === 'primary' ? disabled ? DIM : ACCENT : undefined,
+      }}
     >
       {children}
     </button>
@@ -107,6 +113,47 @@ export function Tabs<T extends string>({
             }}
           >
             {tab}
+          </button>
+        )
+      })}
+    </nav>
+  )
+}
+
+/**
+ * Вкладки СТОЛБИКОМ слева от списка — слоты корабля в справочнике и в магазине.
+ * Одна на оба экрана: два столбика однажды разошлись бы шириной и порядком.
+ * Неактивный пункт виден, но гаснет — так видно, что вообще бывает.
+ */
+export function SideTabs<T extends string>({
+  items,
+  active,
+  onSelect,
+}: {
+  items: readonly { id: T; label: string; disabled?: boolean }[]
+  active: T
+  onSelect: (id: T) => void
+}) {
+  return (
+    // Ширина — по самой длинной надписи, без переносов: «ДОП. ОБОРУДОВАНИЕ» в две строки ломал столбик.
+    <nav className="flex w-max shrink-0 flex-col gap-1.5">
+      {items.map(({ id, label, disabled }) => {
+        const on = id === active
+        return (
+          <button
+            key={id}
+            type="button"
+            disabled={disabled}
+            onClick={() => onSelect(id)}
+            aria-current={on ? 'page' : undefined}
+            className="whitespace-nowrap border px-3 py-1.5 text-left text-xs tracking-[0.2em] transition-colors enabled:cursor-pointer enabled:hover:bg-[#7fd6ff] enabled:hover:text-black disabled:cursor-not-allowed disabled:opacity-35"
+            style={{
+              borderColor: on ? ACCENT : DIM,
+              backgroundColor: on ? ACCENT : 'transparent',
+              color: on ? '#000' : DIM,
+            }}
+          >
+            {label}
           </button>
         )
       })}
@@ -241,11 +288,14 @@ export function Modal({
   onClose,
   children,
   wide,
+  medium,
   z = 50,
 }: {
   onClose: () => void
   children: React.ReactNode
   wide?: boolean
+  /** Средняя ширина: вопрос с несколькими кнопками в одну строку («купить / купить и поставить / отмена»). */
+  medium?: boolean
   z?: number
 }) {
   return (
@@ -255,7 +305,7 @@ export function Modal({
       onClick={onClose}
     >
       <div
-        className={`w-full rounded-2xl border p-6 backdrop-blur-md ${wide ? 'max-h-[85vh] max-w-2xl overflow-y-auto' : 'max-w-sm'}`}
+        className={`w-full rounded-2xl border p-6 backdrop-blur-md ${wide ? 'max-h-[85vh] max-w-2xl overflow-y-auto' : medium ? 'max-w-lg' : 'max-w-sm'}`}
         onClick={(e) => e.stopPropagation()}
         style={GLASS_PANEL}
       >
@@ -275,6 +325,11 @@ export interface Column<Row> {
   align?: 'left' | 'right' | 'center'
   /** CSS-ширина колонки, напр. '6rem'. Прочее делит остаток. */
   width?: string
+  /**
+   * Заголовок накрывает столько колонок, начиная с этой (по умолчанию 1). Накрытые
+   * следом свой заголовок не рисуют. Для пар, что читаются вместе: «было → станет» и ▲/▼.
+   */
+  headerSpan?: number
   cell: (row: Row) => React.ReactNode
 }
 
@@ -326,18 +381,31 @@ export function Table<Row>({
 
   return (
     <table className="w-full border-collapse text-sm">
+      {/* Ширины — колонкам, а не заголовкам: заголовок может накрывать несколько колонок. */}
+      <colgroup>
+        {columns.map((c) => (
+          <col key={c.key} style={{ width: c.width }} />
+        ))}
+      </colgroup>
       {showHead && (
         <thead>
           <tr className="border-b" style={{ borderColor: DIM }}>
-            {columns.map((c) => (
-              <th
-                key={c.key}
-                className={`px-2 pb-1 text-xs font-normal tracking-widest first:pl-0 last:pr-0 ${alignClass(c.align)}`}
-                style={{ color: DIM, width: c.width }}
-              >
-                {c.header}
-              </th>
-            ))}
+            {columns.map((c, i) => {
+              // Колонку накрыл заголовок одной из предыдущих — своего не рисуем.
+              if (columns.slice(0, i).some((p, j) => j + (p.headerSpan ?? 1) > i)) return null
+              const span = c.headerSpan ?? 1
+              return (
+                <th
+                  key={c.key}
+                  colSpan={span}
+                  // Общий заголовок пары — по ЛЕВОМУ краю, с началом её первой колонки; одиночный — как его колонка.
+                  className={`px-2 pb-1 text-xs font-normal tracking-widest first:pl-0 last:pr-0 ${span > 1 ? 'text-left' : alignClass(c.align)}`}
+                  style={{ color: DIM }}
+                >
+                  {c.header}
+                </th>
+              )
+            })}
           </tr>
         </thead>
       )}

@@ -37,6 +37,8 @@ export interface ActionContext {
    * командой. `null`/нет — наём не при чём, любые деньги проводим как есть.
    */
   readonly escortFee?: number | null
+  /** Текущий долг собеседнику перед местной полицией, если он разговаривает с патрулём. */
+  readonly fineAmount?: number | null
 }
 
 /**
@@ -109,6 +111,22 @@ const transferAction: DialogueAction = {
     const intent = coerceTopic(o.intent)
     const transfer = sanitizeEscortTransfer(coerceTransfer(o.transfer), intent, ctx.escortFee ?? null)
     return transfer ? [{ action: 'transfer', payload: transfer }] : []
+  },
+}
+
+/** Оплата местного штрафа: сначала запрос суммы, затем явное подтверждение. */
+const fineAction: DialogueAction = {
+  id: 'fine',
+  roles: ['bot'],
+  build(o, ctx) {
+    if (ctx.fineAmount == null || ctx.fineAmount <= 0) return []
+    const raw = o.fine
+    if (typeof raw === 'boolean') return [{ action: 'fine', payload: { confirm: raw } }]
+    if (typeof raw === 'object' && raw !== null) {
+      const confirm = (raw as Record<string, unknown>).confirm
+      if (typeof confirm === 'boolean') return [{ action: 'fine', payload: { confirm } }]
+    }
+    return []
   },
 }
 
@@ -234,6 +252,7 @@ export const ACTIONS: readonly DialogueAction[] = [
   mapEditAction,
   orderAction,
   transferAction,
+  fineAction,
   demandAction,
   surrenderAction,
   meetAction,

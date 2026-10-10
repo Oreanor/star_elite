@@ -33,7 +33,7 @@ import { createCityLightsMaterial } from '../materials/cityLights'
 import { createCoronaMaterial } from '../materials/starCorona'
 import { createStarSurfaceMaterial, loadStarSurface } from '../materials/starSurface'
 import { loadRockTexture, rockTextureOf } from '../materials/rockTextures'
-import { loadPlanetTexture, pickVariant, planetLook } from '../sky/planets'
+import { loadPlanetTexture, pickVariant, planetLook, planetSeed } from '../sky/planets'
 import { MoonSwarm } from './Moons'
 
 /**
@@ -92,7 +92,7 @@ function Planet({ body }: { body: BodyEntity }) {
   const session = useSession()
 
   const look = planetLook(body.surface)
-  const seed = body.id * 7919
+  const seed = planetSeed(body.id)
   // Луна получает грубую сферу: с расстояния, на котором её видно, шестьдесят
   // меридианов не отличить от ста шестидесяти, а у гиганта их шесть штук.
   const segments = BODY_SEGMENTS[body.kind]

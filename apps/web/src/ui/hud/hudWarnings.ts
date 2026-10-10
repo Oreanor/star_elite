@@ -12,7 +12,7 @@ import {
   stationRange,
 } from '@elite/sim'
 import { undocking, consumePendingBonVoyage } from '../../session/undockFx'
-import { HUD_COLORS, line, text } from './draw'
+import { HUD_COLORS, line } from './draw'
 import { t, type Key } from '../i18n'
 import { properName } from '../i18n/dataNames'
 import { formatDistance } from './project'
@@ -230,11 +230,12 @@ export function paintWarningPlate(frame: HudFrame, plate: Plate): void {
   const now = world.time
 
   const baseFont = ctx.font
-  const pad = 44 * S
+  // На 20% мельче прежнего (15/30/44): плашка кричала на полэкрана.
+  const pad = 36 * S
   // Плашка вверху по центру — места по ширине много, но не до самых краёв. Если подпись
   // (с полями) не влезает в доступную ширину, УЖИМАЕМ шрифт под неё, а не обрезаем текст.
   const maxW = width - 24 * S
-  let fontPx = 15 * S
+  let fontPx = 12 * S
   ctx.font = hudFont(fontPx)
   let textW = ctx.measureText(plate.label).width
   if (textW + pad > maxW) {
@@ -245,7 +246,7 @@ export function paintWarningPlate(frame: HudFrame, plate: Plate): void {
   const font = hudFont(fontPx)
   const bw = Math.min(maxW, textW + pad)
   ctx.font = baseFont
-  const bh = 30 * S
+  const bh = 24 * S
   // Вверху по центру, с тем же отступом от кромки, что у даты и счётчика кадров (~8px):
   // не вплотную к краю, но и не в глубине кадра, где перекрыло бы прицел. Плюс 20 px
   // вниз по просьбе: плашки-пуши сидят чуть ниже верхней кромки.
@@ -264,8 +265,17 @@ export function paintWarningPlate(frame: HudFrame, plate: Plate): void {
   const lit = plate.hz <= 0 || Math.sin(now * plate.hz * Math.PI * 2) > -0.35
   if (lit) {
     ctx.font = font
-    // Центрируем по высоте под текущий кегль (baseline='top'): при ужатом шрифте не съедет.
-    text(ctx, plate.label, cx, cy - fontPx / 2, plate.color, 'center')
+    // По центру ЧЕРНИЛ строки, а не кегля: у Consolas над буквами запас, и от верхнего края
+    // шрифта строка съезжала. Меряем реальные верх и низ надписи от базовой линии и ставим
+    // их середину в середину плашки. Замер бывает нулевым (шрифт ещё не готов) — тогда
+    // берём высоту заглавной долей кегля.
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'alphabetic'
+    const m = ctx.measureText(plate.label)
+    const ascent = m.actualBoundingBoxAscent > 0 ? m.actualBoundingBoxAscent : fontPx * 0.66
+    const descent = m.actualBoundingBoxAscent > 0 ? m.actualBoundingBoxDescent : 0
+    ctx.fillStyle = plate.color
+    ctx.fillText(plate.label, Math.round(cx), Math.round(cy + (ascent - descent) / 2))
     ctx.font = baseFont
   }
 }

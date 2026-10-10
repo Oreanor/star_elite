@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import { UI } from '../theme'
+import { t } from '../i18n'
 
 /**
  * Проекция точки диска на экран для КРУГЛЫХ карт (локатор и система): поворот в
@@ -36,14 +37,11 @@ export function discProject(
  */
 export function MapFrame({
   title,
-  subtitle,
   aside,
   square = false,
   children,
 }: {
-  title: string
-  /** Строка под заголовком: состав системы, счёт отметок, форма галактики. */
-  subtitle?: string
+  title?: string
   /** Содержимое левой колонки: карточка выбранного, список, поиск, фильтры. */
   aside: ReactNode
   /** Поле круглое (локатор, система) — вписываем квадрат по высоте, чтобы не резало обод. */
@@ -53,21 +51,19 @@ export function MapFrame({
   return (
     <div className="flex min-h-0 w-full flex-1 items-stretch gap-6 font-mono" style={{ color: UI.PRIMARY }}>
       <div className="flex min-h-0 w-1/3 min-w-0 shrink-0 flex-col">
-        <h1 className="text-xl tracking-[0.3em]">{title}</h1>
-        {/* Подзаголовок держим всегда, даже пустой: иначе список дёргается вверх-вниз
-            при смене вида, а высота колонки должна быть одна и та же. */}
-        <p className="mb-4 mt-1 min-h-[1rem] text-[11px] tracking-widest opacity-50">{subtitle ?? ''}</p>
         <div className="flex min-h-0 flex-1 flex-col gap-3">{aside}</div>
       </div>
 
-      <div className="flex min-h-0 w-2/3 items-center justify-center">
-        {square ? (
-          // Квадрат меряется ВЫСОТОЙ панели: ширины у правой доли с запасом, а вот
-          // высота — то, что режет обод локатора, если её не ограничить.
-          <div className="relative aspect-square h-full max-w-full">{children}</div>
-        ) : (
-          <div className="relative h-full w-full">{children}</div>
-        )}
+      <div className="flex min-h-0 w-2/3 min-w-0 flex-col">
+        {title !== undefined && <h1 className="mb-3 shrink-0 text-center text-xl tracking-[0.12em]">{title}</h1>}
+        <div className="flex min-h-0 flex-1 items-center justify-center">
+          {square ? (
+            // Квадрат меряется высотой поля под заголовком, чтобы не резало обод.
+            <div className="relative aspect-square h-full max-w-full">{children}</div>
+          ) : (
+            <div className="relative h-full w-full">{children}</div>
+          )}
+        </div>
       </div>
     </div>
   )
@@ -87,7 +83,13 @@ export function MapCard({
   color,
   locked = false,
   lines,
+  body,
 }: {
+  /**
+   * Своё содержимое вместо «род: имя» и строк — у бортов паспорт пилота (`PilotIdentity`),
+   * тот же, что во вкладке «Люди» и в шапке разговора. Рамка и фон карточки остаются.
+   */
+  body?: React.ReactNode
   /** Род объекта словом: ПЛАНЕТА, ПРИЧАЛ, КОРАБЛЬ, СИСТЕМА, ГАЛАКТИКА. */
   kind: string
   name: string
@@ -107,17 +109,21 @@ export function MapCard({
         boxShadow: '0 0 24px rgba(0,0,0,0.5)',
       }}
     >
-      <div className="truncate text-base tracking-widest" style={{ color }}>
-        <span className="opacity-60">{kind.toUpperCase()}: </span>
-        {name}
-      </div>
-      {lines
-        .filter((s): s is string => typeof s === 'string' && s.length > 0)
-        .map((s, i) => (
-          <div key={i} className="mt-1 truncate text-xs tracking-widest opacity-70">
-            {s}
+      {body ?? (
+        <>
+          <div className="truncate text-base tracking-widest" style={{ color }}>
+            <span className="opacity-60">{kind.toUpperCase()}: </span>
+            {name}
           </div>
-        ))}
+          {lines
+            .filter((s): s is string => typeof s === 'string' && s.length > 0)
+            .map((s, i) => (
+              <div key={i} className="mt-1 truncate text-xs tracking-widest opacity-70">
+                {s}
+              </div>
+            ))}
+        </>
+      )}
     </div>
   )
 }
@@ -131,11 +137,12 @@ export function MapCard({
  * на все четыре вида. Ближе к правому краю карточка сама перекидывается влево, иначе
  * она уезжала бы за поле у крайних отметок.
  */
-export function MapPin({ x, y, children }: { x: number; y: number; children: ReactNode }) {
+export function MapPin({ x, y, wide, children }: { x: number; y: number; wide?: boolean; children: ReactNode }) {
   const flip = x > 0.55
   return (
     <div
-      className="pointer-events-none absolute z-30 w-64 max-w-[80%]"
+      // `wide` — карточка с портретом (борт): паспорт пилота в узкую не влезал и рубился «Пег…».
+      className={`pointer-events-none absolute z-30 ${wide ? 'w-[24rem]' : 'w-64'} max-w-[80%]`}
       style={{
         left: `${x * 100}%`,
         top: `${y * 100}%`,
@@ -165,9 +172,12 @@ export function MapRow({
   hover,
   onClick,
   onHover,
+  strong,
 }: {
   kind: string
   name: string
+  /** Имя жирным — у людей (пилот встречного борта): человек важнее корпуса. */
+  strong?: boolean
   meta?: string
   color: string
   /** Захвачен: то же состояние, что кольцо на поле. */
@@ -184,18 +194,72 @@ export function MapRow({
       onClick={onClick}
       onMouseEnter={() => onHover?.(true)}
       onMouseLeave={() => onHover?.(false)}
-      className="flex w-full cursor-pointer items-baseline gap-3 rounded border px-3 py-1.5 text-left text-sm transition-colors"
+      // Строка как в таблицах торговли: без рамки, наведение и захват — фоном.
+      className="flex w-full cursor-pointer items-baseline gap-3 px-2 py-1 text-left text-sm transition-colors"
       style={{
-        borderColor: active ? color : hover ? 'rgba(124,196,255,0.4)' : 'rgba(124,196,255,0.16)',
-        background: active ? 'rgba(124,196,255,0.12)' : hover ? 'rgba(124,196,255,0.06)' : 'transparent',
+        background: active ? 'rgba(124,196,255,0.16)' : hover ? 'rgba(124,196,255,0.07)' : 'transparent',
         color,
       }}
     >
       <span className="min-w-0 flex-1 truncate">
-        <span className="text-xs opacity-60">{kind.toUpperCase()}: </span>
-        {name}
+        {/* По-человечески: сперва имя, род — следом через запятую, приглушённо («Ардин,
+            планета»). Не «ПЛАНЕТА: Ардин» — анкета вместо названия. Род, совпадающий с именем
+            («Астероид»), не повторяем. */}
+        {strong ? <span className="font-semibold">{name}</span> : name}
+        {kind && kind.toLowerCase() !== name.toLowerCase() ? <span className="opacity-60">, {kind}</span> : null}
       </span>
       {meta ? <span className="shrink-0 text-xs opacity-60">{meta}</span> : null}
     </button>
+  )
+}
+
+export type ListSort = 'dist' | 'type'
+
+/**
+ * Порядок кучек при сортировке по типу — один на локатор и карту системы: сперва то, с чем
+ * говорят и дерутся (борта), затем куда летят (станции, планеты, луны), потом светила и
+ * прочие ориентиры. Незнакомый род — в конец.
+ */
+const KIND_RANK: Record<string, number> = {
+  ship: 0,
+  contact: 0,
+  player: 0,
+  station: 1,
+  planet: 2,
+  moon: 3,
+  star: 4,
+  blackhole: 5,
+  figurine: 6,
+  monolith: 7,
+  asteroid: 8,
+}
+export const kindRank = (kind: string): number => KIND_RANK[kind] ?? 9
+
+/** Сравнение строк списка: по удалённости или кучками по типу (внутри — по удалённости). */
+export function bySort(sort: ListSort) {
+  return (a: { kind: string; dist: number }, b: { kind: string; dist: number }): number =>
+    sort === 'type' ? kindRank(a.kind) - kindRank(b.kind) || a.dist - b.dist : a.dist - b.dist
+}
+
+/** Переключатель сортировки над списком карты. */
+export function SortToggle({ value, onChange }: { value: ListSort; onChange: (v: ListSort) => void }) {
+  return (
+    <div className="mb-2 flex gap-2">
+      {(['dist', 'type'] as const).map((k) => {
+        const on = k === value
+        return (
+          <button
+            key={k}
+            type="button"
+            onClick={() => onChange(k)}
+            aria-current={on ? 'true' : undefined}
+            className="cursor-pointer border px-3 py-1 text-xs tracking-[0.2em] transition-colors hover:bg-[#7fd6ff] hover:text-black"
+            style={{ borderColor: on ? UI.PRIMARY : UI.DIM, backgroundColor: on ? UI.PRIMARY : 'transparent', color: on ? '#000' : UI.DIM }}
+          >
+            {t(k === 'dist' ? 'locator.sort.dist' : 'locator.sort.type')}
+          </button>
+        )
+      })}
+    </div>
   )
 }

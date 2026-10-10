@@ -1,4 +1,4 @@
-import { extractModelJson, parseModelReply, type DialogueRole, type Persona, type Topic } from '@elite/sim'
+import { commodityBuyPrice, commoditySellPrice, commodityStock, dispatcherBriefing, extractModelJson, localFine, localSettlement, parseModelReply, stationInterlocutor, type DialogueRole, type Persona, type Topic, type World } from '@elite/sim'
 import type { ChatTurn, ContextDigest, NegotiationContext, NegotiatorReply } from '../../ui/dialogue/facts'
 import { currentLang } from '../../ui/i18n/i18n'
 import { negotiatorLocale } from './negotiatorLocale'
@@ -211,6 +211,7 @@ function raceAll(
   allowed: Topic[],
   role: DialogueRole,
   escortFee: number | null,
+  fineAmount: number | null,
 ): Promise<NegotiatorReply | null> {
   return new Promise((resolve) => {
     let pending = refs.length
@@ -218,7 +219,7 @@ function raceAll(
     for (const ref of refs) {
       void callModel(ref, messages).then((raw) => {
         if (done) return
-        const reply = raw ? toReply(parseModelReply(extractModelJson(raw), allowed, role, escortFee)) : null
+        const reply = raw ? toReply(parseModelReply(extractModelJson(raw), allowed, role, escortFee, fineAmount)) : null
         if (reply) {
           done = true
           resolve(reply)
@@ -249,7 +250,7 @@ export async function negotiate(
       const live = liveModels(tier, Date.now())
       for (let i = 0; i < live.length; i += RACE_WIDTH) {
         const batch = live.slice(i, i + RACE_WIDTH)
-        const reply = await raceAll(batch, messages, ctx.allowedIntents, role, ctx.economy.escortFee ?? null)
+        const reply = await raceAll(batch, messages, ctx.allowedIntents, role, ctx.economy.escortFee ?? null, ctx.localFineAmount)
         if (reply) {
           if (reply.hangup && chars >= PROMPT_SOFT_CHARS) return { ...reply, source: 'overload' }
           return reply
@@ -259,4 +260,65 @@ export async function negotiate(
     if (attempt === 0) await delay(RETRY_BACKOFF_MS)
   }
   return staticNoise(history)
+}
+
+/** Свободный чат с диспетчером станции. Это отдельная роль: он знает округу,
+ * но не притворяется пилотом и не получает торговые/боевые команды. */
+export async function negotiateDispatcher(world: World, history: ChatTurn[], userText: string): Promise<NegotiatorReply> {
+  const station = stationInterlocutor(world)
+  if (!station || !negotiatorAvailable()) return staticNoise(history)
+  const brief = dispatcherBriefing(world)
+  const english = currentLang() === 'en'
+  const bodies = brief.bodies
+    .map((body) => `${body.name} (${body.kind}, ${body.distanceKm} km, ${body.populated ? 'inhabited' : 'uninhabited'}${body.hasStation ? ', station' : ''})`)
+    .join('; ')
+  const fine = localFine(world)?.amount ?? null
+  const system = english
+    ? `You are the station dispatcher at ${station.name}. Speak as a concise in-world radio operator. You know this station and the entire current system. Government: ${brief.settlement.government}; economy: ${brief.settlement.economy}; tech level: ${brief.settlement.techLevel}; dock occupant: ${brief.dockOccupant ?? 'none'}; bodies: ${bodies || 'none'}. Answer the pilot's questions directly. Do not invent missions, prices, or facts absent from this briefing. If details are missing, request lookup: market, worlds, history, or guide. The commander owes this local authority ${fine == null ? 'nothing' : `${fine} credits`}. On first contact, remind him. If he asks to pay, quote the amount first; set fine confirm:false, and only set fine confirm:true after explicit consent. Reply with one JSON object: {"reply":"...","emotion":"neutral"|"joy"|"pain"|"anger"|"fear"|"sadness"|null,"fine":{"confirm":true|false}|null,"lookup":"market"|"worlds"|"history"|"guide"|null,"hangup":true|false}.`
+    : `Ты диспетчер станции ${station.name}. Говори коротко, как живой оператор связи, и отвечай прямо на вопросы пилота. Ты знаешь эту станцию и всю текущую систему. Строй: ${brief.settlement.government}; экономика: ${brief.settlement.economy}; техуровень: ${brief.settlement.techLevel}; у причала: ${brief.dockOccupant ?? 'никого'}; тела системы: ${bodies || 'нет'}. Не выдумывай миссии, цены и факты, которых нет в этой сводке. Если не хватает деталей, запроси lookup: market, worlds, history или guide. Командир должен местной власти ${fine == null ? 'ничего' : `${fine} кредитов`}. При первой связи напомни об этом. Если он просит заплатить, сначала назови сумму и поставь fine confirm:false; fine confirm:true ставь только после явного согласия. Ответь одним JSON: {"reply":"…","emotion":"neutral"|"joy"|"pain"|"anger"|"fear"|"sadness"|null,"fine":{"confirm":true|false}|null,"lookup":"market"|"worlds"|"history"|"guide"|null,"hangup":true|false}.`
+  const messages: OutboundMessages = [{ role: 'system', content: system }]
+  for (const turn of history.slice(-CHAT_RECENT)) {
+    if (turn.who === 'you') messages.push({ role: 'user', content: turn.text })
+    else if (turn.who === 'them') messages.push({ role: 'assistant', content: turn.text })
+  }
+  messages.push({ role: 'user', content: userText })
+  const request = async (input: OutboundMessages): Promise<NegotiatorReply | null> => {
+    for (const tier of TIERS) {
+      const reply = await raceAll(liveModels(tier, Date.now()), input, [], 'bot', null, fine)
+      if (reply) return reply
+    }
+    return null
+  }
+  const first = await request(messages)
+  if (!first) return staticNoise(history)
+  if (!first.lookup) return first
+
+  const lookup = dispatcherLookup(world, first.lookup, english)
+  const followUp: OutboundMessages = [...messages, { role: 'assistant', content: first.text }, {
+    role: 'user',
+    content: english
+      ? `SYSTEM LOOKUP (${first.lookup}):\n${lookup}\nNow answer the pilot's last question using this data. Do not request another lookup; set lookup:null.`
+      : `СИСТЕМНЫЙ LOOKUP (${first.lookup}):\n${lookup}\nТеперь ответь на последний вопрос пилота по этим данным. Новый lookup не запрашивай; поставь lookup:null.`,
+  }]
+  return (await request(followUp)) ?? first
+}
+
+function dispatcherLookup(world: World, kind: NonNullable<NegotiatorReply['lookup']>, english: boolean): string {
+  if (kind === 'market') {
+    const settlement = localSettlement(world)
+    return commodityStock()
+      .slice(0, 12)
+      .map((c) => `${c.name}: buy ${commodityBuyPrice(world, c)}, sell ${commoditySellPrice(world, c)}`)
+      .join('; ') + ` (tech ${settlement.techLevel}, ${settlement.economy})`
+  }
+  if (kind === 'worlds') {
+    return world.bodies
+      .filter((b) => b.kind !== 'star')
+      .map((b) => `${b.name}: ${b.kind}, population ${b.population}, radius ${Math.round(b.radius / 1000)} km`)
+      .join('; ')
+  }
+  if (kind === 'history') return english ? 'The dispatcher has no personal history with the commander.' : 'У диспетчера пока нет личной истории с командиром.'
+  return english
+    ? 'Station operations: trade and fitting are available while docked; navigation and system information are available by radio.'
+    : 'Правила станции: торговля и оснащение доступны в доке; навигационные сведения и данные системы можно запросить по связи.'
 }

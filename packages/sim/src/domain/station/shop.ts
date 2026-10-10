@@ -143,6 +143,23 @@ function grantArmourHull(ship: ShipEntity, maxHullBefore: number): void {
   if (gained > 0) ship.hull = Math.min(ship.spec.hull.hull, ship.hull + gained)
 }
 
+/** Почему модуль нельзя купить в трюм. */
+export type StowError = 'no-money' | 'no-room'
+
+/**
+ * Купить модуль, НЕ ставя: он ложится в грузовой отсек. Это запас — поставить позже из
+ * трюма (`fitFromHold`), отвезти на корабль крупнее или продать в другой системе.
+ * Ни корпус, ни класс не проверяем: в трюм кладут что угодно, ставить никто не обязывает.
+ * Отказ ничего не списывает.
+ */
+export function buyToHold(world: World, ship: ShipEntity, module: ShipModule): StowError | null {
+  if (world.credits < priceOf(module)) return 'no-money'
+  if (freeCapacity(ship.hold) < module.mass) return 'no-room'
+  if (!addItem(ship.hold, { kind: 'module', module, costBasis: priceOf(module) })) return 'no-room'
+  world.credits -= priceOf(module)
+  return null
+}
+
 /** Что станция может предложить из произвольного набора: бесплатный стартовый хлам не продаётся. */
 export function stock(catalogue: readonly ShipModule[]): readonly ShipModule[] {
   return catalogue.filter((m) => m.cost > 0)
@@ -255,7 +272,7 @@ export function fitFromHold(ship: ShipEntity, holdIndex: number): FitError | nul
     if (displaced) ship.loadout.internals.splice(ship.loadout.internals.indexOf(displaced), 1)
     ship.loadout.internals.push(module)
   }
-  if (displaced) addItem(ship.hold, { kind: 'module', module: displaced })
+  if (displaced) addItem(ship.hold, { kind: 'module', module: displaced, costBasis: displaced.cost })
 
   // Масса и характеристики сменились — пересобираем на СОБЫТИЕ.
   refreshSpec(ship)
@@ -444,7 +461,7 @@ export function stripMissiles(ship: ShipEntity): StripError | null {
   for (const i of missilePylonIndices(ship)) {
     if (ship.loadout.weapons[i] && isMunition(ship.loadout.weapons[i]!)) ship.loadout.weapons[i] = null
   }
-  addItem(ship.hold, { kind: 'module', module })
+  addItem(ship.hold, { kind: 'module', module, costBasis: module.cost })
   refreshSpec(ship)
   return null
 }
@@ -484,7 +501,7 @@ export function unfitModule(ship: ShipEntity, module: ShipModule): StripError | 
   if (isEssential(module)) return 'essential'
   if (freeCapacity(ship.hold) < module.mass) return 'no-room'
   detach(ship, at)
-  addItem(ship.hold, { kind: 'module', module })
+  addItem(ship.hold, { kind: 'module', module, costBasis: module.cost })
   refreshSpec(ship)
   return null
 }

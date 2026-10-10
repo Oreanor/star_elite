@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { applyPilotProfile, interlocutor, jumpBlock, lockShipContact, pendingHail, serializePlayer, stationInterlocutor, undock, type JumpBlock, type PilotProfile, type PlayerSave, type World } from '@elite/sim'
+import { applyPilotProfile, hailPoliceForFine, interlocutor, jumpBlock, lockShipContact, markPoliceFineHail, pendingHail, pendingPoliceFineHail, serializePlayer, stationInterlocutor, undock, type JumpBlock, type PilotProfile, type PlayerSave, type World } from '@elite/sim'
 import { GameProvider, useSession } from '../session/GameContext'
 import { closePortal, freshPortalKeyDown, jumpPortal, openPortal, portalActive, portalOpen } from '../session/jumpPortal'
 import { disposeJumpPortalWorld, resetJumpPortalWorlds } from '../render/scene/jumpPortalWorld'
 import { hlog, hreset } from '../session/hyperLog'
 import { startUndock } from '../session/undockFx'
-import { negotiate, negotiatorAvailable } from './control/negotiator'
+import { negotiate, negotiateDispatcher, negotiatorAvailable } from './control/negotiator'
 import { Game } from './Game'
+import { readResume, writeResume } from './resume'
+import { KeyHelp } from './KeyHelp'
 import { Paused, GameOver } from './TitleScreen'
 import { clearServerSave, loadServerSave, onAuthChange, signOut } from '../session/net/account'
 import { online } from '../session/net/firebase'
@@ -165,20 +167,29 @@ const VEIL_HOLD_MS = 500
 
 function Shell({ onRestart }: { onRestart: () => void }) {
   const session = useSession()
+  /**
+   * Перезагрузка у причала: мир поднялся пристыкованным, а вкладка браузера помнит, на какой
+   * вкладке консоли ты стоял. Тогда титул и взлёт пропускаем — сразу станция, та же вкладка.
+   * Читается один раз на монтирование: дальше состояние живёт в React, как обычно.
+   */
+  const [resume] = useState(() => (!session.isNewGame && session.world.docked ? readResume() : null))
   const [locked, setLocked] = useState(false)
   const [over, setOver] = useState(false)
-  const [docked, setDocked] = useState(false)
+  const [docked, setDocked] = useState(resume !== null)
+  /** Для колбэка сима, который ставится один раз и иначе видел бы устаревший `docked`. */
+  const dockedRef = useRef(docked)
+  dockedRef.current = docked
   /**
    * Игра уже начиналась. Тогда та же заставка — это ПАУЗА, и кнопка на ней
    * возвращает в игру, а не начинает её. Экран один, смысл разный.
    */
-  const [started, setStarted] = useState(false)
+  const [started, setStarted] = useState(resume !== null)
   /**
    * Открытая вкладка консоли, или `null` — консоль закрыта. У причала открыта всегда;
    * в полёте её раскрывают M/G/I на нужной вкладке. Оверлей ставит мир на паузу
    * (отпускает курсор), поэтому одно состояние на всю панель.
    */
-  const [tab, setTab] = useState<ConsoleTab | null>(null)
+  const [tab, setTab] = useState<ConsoleTab | null>(resume?.tab ?? null)
   /**
    * Меню паузы раскрыто ЯВНО. В полёте оно не нужно как состояние: Escape отбирает у
    * браузера захват курсора, и меню всплывает по `locked`. У ПРИЧАЛА захвата нет —
@@ -220,7 +231,7 @@ function Shell({ onRestart }: { onRestart: () => void }) {
    * загрузка, а не как поломка. Захват курсора в это время не даётся (канваса
    * ещё нет), и кнопка сама повторяет запрос, пока сцена не встанет.
    */
-  const [booted, setBooted] = useState(false)
+  const [booted, setBooted] = useState(resume !== null)
   // Сцена реально ПОСТРОЕНА — по этому сигналу титул даёт «вжух». `booted` лишь запускает
   // сборку (тяжёлый рендер сцены), а этот эффект срабатывает уже ПОСЛЕ её коммита: два кадра
   // rAF гарантируют, что сцена собрана и отрисована, а не «помечена к сборке». Надёжнее, чем
@@ -330,6 +341,12 @@ function Shell({ onRestart }: { onRestart: () => void }) {
    */
   const [created, setCreated] = useState(!session.isNewGame)
 
+  // Помним вкладку, пока стоим у причала в начатой игре; отстыковался, умер, ушёл в меню —
+  // забываем, и следующая перезагрузка честно начнётся с титула.
+  useEffect(() => {
+    writeResume(started && docked && !over && !menu && tab !== null ? { tab } : null)
+  }, [started, docked, over, menu, tab])
+
   /**
    * Захват курсора браузер снимает не только по `pointerlockchange`: уход фокуса
    * и скрытие вкладки делают это молча. Не переспросив, оверлей паузы остался бы
@@ -397,6 +414,10 @@ function Shell({ onRestart }: { onRestart: () => void }) {
       // Во время флориша взлёта (новая игра И «продолжить») стыковку из сима ИГНОРИРУЕМ:
       // док покажем сами, ПОСЛЕ «вжуха». Иначе станция накрывает панелью улетающий корабль.
       if (d && flourishRef.current) return
+      // Уже у причала (поднялись из сейва после перезагрузки) — сим лишь подтверждает
+      // стыковку первым кадром. Вкладку не трогаем: иначе восстановленный магазин
+      // перебивался «планетой».
+      if (d && dockedRef.current) return
       setDocked(d)
       // Пристыковались — консоль открыта на планете; отчалили — закрыта.
       setTab(d ? 'planet' : null)
@@ -431,12 +452,19 @@ function Shell({ onRestart }: { onRestart: () => void }) {
     if (!session.world.docked) void requestLock()
   }, [session])
 
-  // Закрыть связь с диспетчером: разговор со станцией всегда в полёте (в доке T молчит),
-  // поэтому просто возвращаем захват. Отдельно от `closeTalk` — это другой оверлей.
+  // Закрыть связь с диспетчером. В доке захват возвращать не нужно: консоль уже открыта.
   const closeDispatch = useCallback(() => {
     setDispatching(false)
-    void requestLock()
-  }, [])
+    if (!session.world.docked) void requestLock()
+  }, [session])
+  const openDispatch = useCallback(() => {
+    if (session.world.docked) {
+      const station = session.world.bodies.find((body) => body.kind === 'station')
+      if (station) session.world.navTargetId = station.id
+    }
+    setDispatching(true)
+    if (!session.world.docked) releaseLock()
+  }, [session])
   // Открыть разговор с живым игроком — ровно как с ботом по T: окно на весь экран, курсор
   // отпущен (значит мир на паузе). Занят (говоришь с ботом или уже в чате) — новый вызов не
   // перебивает текущий, а встаёт баннером «входящий»: закончишь один — перейдёшь к другому.
@@ -488,6 +516,25 @@ function Shell({ onRestart }: { onRestart: () => void }) {
     lockShipContact(w, shipId)
     setTalking(true)
   }, [session])
+
+  // Местная полиция сама вызывает по связи при встрече с должником. Флаг живёт в
+  // World и привязан к epoch: после прыжка напоминание снова разрешено, но в одной
+  // системе повторного автоматического вызова не будет.
+  useEffect(() => {
+    if (docked || talking || dispatching || chatWith !== null) return
+    const check = () => {
+      const w = session.world
+      const police = pendingPoliceFineHail(w)
+      if (!police) return
+      markPoliceFineHail(w)
+      lockShipContact(w, police.id)
+      setTalking(true)
+      releaseLock()
+    }
+    check()
+    const id = window.setInterval(check, 250)
+    return () => window.clearInterval(id)
+  }, [session, docked, talking, dispatching, chatWith])
   // «Навести» из вкладки «Люди»: захватываем борт знакомого — стрелка HUD поведёт к
   // нему. В полёте закрываем консоль, чтобы мир ожил и можно было лететь; у причала
   // лететь некуда, метку просто держим.
@@ -587,7 +634,7 @@ function Shell({ onRestart }: { onRestart: () => void }) {
         // задел), T отвечает ему — наводимся на него и открываем канал, чтобы разрядить
         // претензию, пока она не перелилась во враги.
         if (!interlocutor(session.world)) {
-          const hail = pendingHail(session.world)
+          const hail = pendingHail(session.world) ?? hailPoliceForFine(session.world)
           if (!hail) return
           const w = session.world
           lockShipContact(w, hail.id)
@@ -776,7 +823,7 @@ function Shell({ onRestart }: { onRestart: () => void }) {
       ) : talking ? (
         <Dialogue onClose={closeTalk} negotiate={negotiate} chatAvailable={negotiatorAvailable()} />
       ) : dispatching ? (
-        <Dispatcher world={session.world} onClose={closeDispatch} />
+        <Dispatcher world={session.world} onClose={closeDispatch} negotiate={(history, text) => negotiateDispatcher(session.world, history, text)} />
       ) : docked || tab !== null ? (
         // Одна консоль и в полёте, и у причала: планета, корабль, груз, карты (плюс
         // верфь и магазин у причала). «Открыть карту» — раскрыть эту панель на нужной
@@ -788,6 +835,7 @@ function Shell({ onRestart }: { onRestart: () => void }) {
           onTab={setTab}
           onClose={docked ? undockAndResume : closeConsole}
           onTalk={talkTo}
+          onDispatch={openDispatch}
           onLocate={locateShip}
           onRoute={routeTo}
           onChat={hail}
@@ -807,6 +855,8 @@ function Shell({ onRestart }: { onRestart: () => void }) {
       {chatWith && <PlayerChat player={chatWith} onClose={closeChat} />}
       {/* Второй вызов пока занят — баннер поверх текущего окна. Заверши текущий, чтобы перейти. */}
       {waiting && <IncomingCall caller={waiting} />}
+      {/* K — схема управления поверх всего; клавиатуру, пока открыта, забирает себе. */}
+      <KeyHelp />
 
       {/* Выход из комнаты вселенной: тор разлетается, экран гаснет, и из растущей круглой
           прорези проявляется галактика. Мир под пеленой подменяется в самой её черноте. */}

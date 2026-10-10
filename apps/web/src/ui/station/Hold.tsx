@@ -2,25 +2,25 @@ import { useState } from 'react'
 import {
   COMMODITIES,
   cargoMass,
-  holdSellValue,
   itemMass,
   itemName,
   itemSellValue,
   jettisonItem,
   moduleFault,
   placeFigurineFromHold,
-  sellCargo,
   sellItem,
   type CargoItem,
+  type Commodity,
   type World,
 } from '@elite/sim'
-import { UI } from '../theme'
+import { trend, UI } from '../theme'
 import { t, useLang } from '../i18n'
 import { pushWarning } from '../../session/warnings'
 import { Button, Column, DIM, Modal, Panel, Table } from './chrome'
-import { credits, formatStat } from './format'
+import { formatStat } from './format'
 import { displayName, moduleBenefit } from './Equipment'
 import { commodityDesc, itemDisplayName } from '../i18n/dataNames'
+import { Money } from './Money'
 
 /**
  * Груз — ОДИН компонент и в магазине станции, и на вкладке груза корабля.
@@ -74,10 +74,16 @@ export function Hold({
   world,
   onChange,
   atStation,
+  onTrade,
 }: {
   world: World
   onChange: () => void
   atStation: boolean
+  /**
+   * Товар из отсека продают ТЕМ ЖЕ окном сделки, что и со списка товаров (его держит
+   * магазин). Есть — клик по товару зовёт его; модули и вне станции — своя карточка.
+   */
+  onTrade?: (commodity: Commodity) => void
 }) {
   useLang()
   const player = world.player
@@ -98,12 +104,6 @@ export function Hold({
       header: t('station.col.mass'),
       align: 'right',
       cell: (item) => <span style={{ color: DIM }}>{formatStat('mass', itemMass(item))}</span>,
-    },
-    {
-      key: 'value',
-      header: t('station.col.value'),
-      align: 'right',
-      cell: (item) => <span style={{ color: DIM }}>{credits(itemSellValue(world, item))}</span>,
     },
     {
       key: 'profit',
@@ -134,18 +134,12 @@ export function Hold({
             // Ключ обязан пережить продажу соседа: одинаковые товары уже в одной стопке,
             // разные модули различаются именем, а хвост индекса разводит совпадения.
             rowKey={(item, i) => `${itemName(item)}-${i}`}
-            onRowClick={(item) => setDetail(item)}
+            onRowClick={(item) => (item.kind === 'commodity' && onTrade ? onTrade(item.commodity) : setDetail(item))}
           />
 
-          {atStation ? (
-            <Button
-              onClick={() => {
-                if (sellCargo(world, player) > 0) onChange()
-              }}
-            >
-              {t('station.sellAll', { total: holdSellValue(world, player) })}
-            </Button>
-          ) : (
+          {/* У причала «продать всё» нет: товар продают по одному через окно сделки, видя
+              цену и выгоду. В полёте остаётся «выбросить всё» — там торговаться не с кем. */}
+          {!atStation && (
             <Button
               onClick={() => {
                 if (dumpAllInFlight(world)) onChange()
@@ -221,7 +215,7 @@ function ItemModal({
       {/* Цена продажи здесь — крупно; под ней выгода/находка тем же знаком, что в списке. */}
       <div className="text-center">
         <div className="text-2xl tabular-nums" style={{ color: UI.PRIMARY }}>
-          {credits(value)}
+          <Money amount={value} />
         </div>
         <div className="mt-1 text-xs" style={{ color: mark.color }}>
           {mark.text}
@@ -232,6 +226,7 @@ function ItemModal({
         {atStation ? (
           <Button
             small
+            variant="primary"
             onClick={() => {
               // Индекс берём в момент клика из живого трюма: продажа соседа его сдвигает.
               const index = world.player.hold.items.indexOf(item)
@@ -244,6 +239,7 @@ function ItemModal({
         ) : (
           <Button
             small
+            variant="primary"
             onClick={() => {
               const index = world.player.hold.items.indexOf(item)
               if (index < 0) {
@@ -261,7 +257,7 @@ function ItemModal({
             {t('ship.jettison')}
           </Button>
         )}
-        <Button small onClick={onClose}>
+        <Button small variant="secondary" onClick={onClose}>
           {t('ship.close')}
         </Button>
       </div>
@@ -273,11 +269,12 @@ function ItemModal({
  * Пометка выгоды. Куплено — абсолютный выигрыш/проигрыш от продажи ЗДЕСЬ.
  * Не куплено (добыча, трофей) — «находка»: цены входа нет, сравнивать не с чем.
  */
-function profitMark(item: CargoItem, revenue: number): { text: string; color: string } {
-  const basis = item.kind === 'commodity' ? item.costBasis : undefined
+function profitMark(item: CargoItem, revenue: number): { text: React.ReactNode; color: string } {
+  // Цена входа есть и у товара, и у модуля (купленного или снятого со своего борта).
+  // Нет её — трофей с обломков: «находка».
+  const basis = item.costBasis
   if (basis === undefined) return { text: t('station.salvage'), color: DIM }
 
   const profit = revenue - basis
-  const sign = profit >= 0 ? '+' : '−'
-  return { text: `${sign}${credits(Math.abs(profit))}`, color: profit >= 0 ? UI.ALLY : UI.DANGER }
+  return { text: <Money amount={Math.abs(profit)} sign={profit >= 0 ? '+' : '−'} />, color: trend(profit >= 0).color }
 }

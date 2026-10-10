@@ -7,7 +7,7 @@ import { refreshSpec } from '../world/factory'
 import type { Acquaintance } from '../world/acquaintance'
 import { emptyPlan } from '../world/contactPlan'
 import type { Persona } from '../world/persona'
-import type { World } from '../world/entities'
+import type { FineRecord, World } from '../world/entities'
 
 /** Куда пересаживать сейв со снятого из игры корпуса — стартовый корпус игрока. */
 const FALLBACK_CHASSIS = 'aurora_one'
@@ -41,6 +41,11 @@ export interface SavedLoadout {
   weapons: (SavedModule | null)[]
 }
 
+/** Модуль в трюме: тот же `SavedModule` плюс цена входа (для «выгоды» на продаже). */
+export interface SavedHoldModule extends SavedModule {
+  costBasis?: number
+}
+
 /** Стопка товара: id номенклатуры, количество и личная цена входа (не синхронизируется по сети). */
 export interface SavedStack {
   commodity: string
@@ -61,10 +66,18 @@ export interface PlayerSave {
   persona: Persona
   /** Личный реестр знакомств: с кем виделся и отношение. Чистые данные. */
   acquaintances: Acquaintance[]
+  /** Местные штрафы; старые сейвы загружаются без долгов. */
+  fines?: FineRecord[]
   loadout: SavedLoadout
   /** Разовые прокачки собственных х-к рамы. Необязательно: старые сейвы — заводская рама. */
   hullUp?: HullUpgrades
   hold: SavedStack[]
+  /**
+   * Модули в трюме. Раньше не сохранялись («трофеи момента»), но теперь железо покупают в
+   * трюм за деньги — и терять купленное на перезагрузке нельзя. Необязательно: старые сейвы
+   * грузятся с пустым трюмом по модулям, как и были.
+   */
+  holdModules?: SavedHoldModule[]
   hull: number
   shield: number
   energy: number
@@ -130,10 +143,13 @@ export function rehydrateLoadout(saved: SavedLoadout): Loadout {
 export function serializePlayer(world: World): PlayerSave {
   const p = world.player
   const hold: SavedStack[] = []
+  const holdModules: SavedHoldModule[] = []
   for (const item of p.hold.items) {
-    // Снятые модули в трюме не сохраняем: это трофеи момента, не часть личности
-    // пилота. Останутся у обломков в живом мире, если он их обронил.
-    if (item.kind !== 'commodity') continue
+    if (item.kind === 'module') {
+      const saved = serializeModule(item.module)
+      holdModules.push(item.costBasis !== undefined ? { ...saved, costBasis: item.costBasis } : saved)
+      continue
+    }
     hold.push(
       item.costBasis !== undefined
         ? { commodity: item.commodity.id, units: item.units, costBasis: item.costBasis }
@@ -158,9 +174,11 @@ export function serializePlayer(world: World): PlayerSave {
       plan: { ...a.plan, queue: [...a.plan.queue] },
       entrusted: a.entrusted.map((e) => ({ ...e })),
     })),
+    fines: world.fines.map((fine) => ({ ...fine })),
     loadout: serializeLoadout(p.loadout),
     hullUp: { ...p.hullUp },
     hold,
+    holdModules,
     hull: p.hull,
     shield: p.shield,
     energy: p.energy,
@@ -195,6 +213,7 @@ export function applyPlayerSave(world: World, save: PlayerSave): void {
     // Сейвы до доверенного груза о нём не знали — пустой список, а не падение на чтении.
     entrusted: a.entrusted ? a.entrusted.map((e) => ({ ...e })) : [],
   }))
+  world.fines = save.fines ? save.fines.map((fine) => ({ ...fine })) : []
 
   const p = world.player
   // Имя игрока открыто — это он сам. Ставим и отображаемое, и истинное.
@@ -213,6 +232,11 @@ export function applyPlayerSave(world: World, save: PlayerSave): void {
     const commodity = COMMODITY_BY_ID.get(stack.commodity)
     if (!commodity) continue // товар вырезали из игры — пропускаем, а не роняем
     addItem(p.hold, { kind: 'commodity', commodity, units: stack.units, costBasis: stack.costBasis })
+  }
+  for (const saved of save.holdModules ?? []) {
+    const module = rehydrateModule(saved)
+    if (!module) continue // модуль вырезали из игры — пропускаем
+    addItem(p.hold, saved.costBasis !== undefined ? { kind: 'module', module, costBasis: saved.costBasis } : { kind: 'module', module })
   }
   // Второй раз — уже с массой груза: спек (а с ним ускорения) отражает гружёный борт.
   refreshSpec(p)

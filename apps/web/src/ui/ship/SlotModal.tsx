@@ -33,9 +33,10 @@ import {
   type World,
 } from '@elite/sim'
 import { t, type Key } from '../i18n'
-import { UI } from '../theme'
+import { trend, UI } from '../theme'
 import { ACCENT, Button, DIM, Modal } from '../station/chrome'
-import { credits, formatStat, statLabel } from '../station/format'
+import { formatStat, statLabel } from '../station/format'
+import { Money, tm } from '../station/Money'
 import { displayName, headlineCompare, headlineNumber, weaponSlot } from '../station/Equipment'
 import { type SlotView } from './ShipSlots'
 
@@ -47,10 +48,12 @@ import { type SlotView } from './ShipSlots'
 /** Выбор, который модалка задаёт перед необратимым действием: «купить и поставить?»,
  *  «установить взамен?». Пустой список действий — просто сообщение с «ОК» (нет денег). */
 export interface Confirm {
-  message: string
+  message: React.ReactNode
+  /** Цена отдельно от текста — для подтверждения покупки. */
+  price?: number
   // `stay` — оставить модалку слота ОТКРЫТОЙ после действия (покупка/установка): деталь
   // встаёт в слот, и пилот тут же жмёт «улучшить», не открывая слот заново.
-  actions: { label: string; run: () => void; stay?: boolean }[]
+  actions: { label: React.ReactNode; run: () => void; stay?: boolean }[]
 }
 
 export interface RepairInfo {
@@ -145,11 +148,11 @@ export function SlotModal({
     const at = weaponSlot(world, m)
     const affordable = isMissileSlot ? world.credits >= priceOf(m) : canBuy(world, player, m, at) !== 'no-money'
     if (!affordable) {
-      setConfirm({ message: t('ship.confirm.noFunds', { price: credits(priceOf(m)) }), actions: [] })
+      setConfirm({ message: tm('ship.confirm.noFunds', { price: <Money amount={priceOf(m)} /> }), actions: [] })
       return
     }
     setConfirm({
-      message: t('ship.confirm.buy', { name: displayName(m), price: credits(priceOf(m)) }),
+      message: tm('ship.confirm.buy', { name: displayName(m), price: <Money amount={priceOf(m)} /> }),
       // Покупка не закрывает слот: деталь встала взамен — можно тут же жать «улучшить».
       actions: [
         {
@@ -181,7 +184,11 @@ export function SlotModal({
       })
     if (canUpgrade(world, player, module, false) === null)
       actions.push({
-        label: `${t('station.upgradeCash')} · ${credits(upgradeCashCost(module))} · ${arrow(false)}`,
+        label: (
+          <>
+            {t('station.upgradeCash')} · <Money amount={upgradeCashCost(module)} /> · {arrow(false)}
+          </>
+        ),
         run: () => (isMissileSlot ? upgradeMissiles(world, player, false) : upgradeModule(world, player, module, false)),
         stay: true,
       })
@@ -193,7 +200,7 @@ export function SlotModal({
         ? { message: t('ship.confirm.upgrade', { name: displayName(module) }), actions }
         : lowTech
           ? { message: t('ship.confirm.lowTech', { tech: minTechForClass(module.class) }), actions: [] }
-          : { message: t('ship.confirm.noFunds', { price: credits(upgradeCashCost(module)) }), actions: [] },
+          : { message: tm('ship.confirm.noFunds', { price: <Money amount={upgradeCashCost(module)} /> }), actions: [] },
     )
   }
 
@@ -214,14 +221,9 @@ export function SlotModal({
           <h3 className="text-sm tracking-[0.25em]" style={{ color: DIM }}>
             {t(('kind.' + labelKind) as Key).toUpperCase()}
           </h3>
-          <button
-            type="button"
-            onClick={onClose}
-            className="cursor-pointer border px-3 py-1 text-xs tracking-[0.3em] transition-colors hover:bg-[#7fd6ff] hover:text-black"
-            style={{ borderColor: ACCENT }}
-          >
+          <Button small variant="secondary" onClick={onClose}>
             {t('ship.close')}
-          </button>
+          </Button>
         </div>
 
         {/* Что стоит сейчас — крупно, без рамки. */}
@@ -336,17 +338,23 @@ function ActionBar({
   return (
     <>
       <div className="mt-4 flex flex-wrap gap-2 border-t pt-4" style={{ borderColor: DIM }}>
-        <Button small disabled={!module || essential || noRoom} onClick={onStrip}>
+        <Button small variant="primary" disabled={!module || essential || noRoom} onClick={onStrip}>
           {t('station.strip')}
         </Button>
-        <Button small disabled={!repair.can} onClick={onRepair}>
-          {repair.price > 0 ? `${repairLabel} · ${credits(repair.price)}` : repairLabel}
+        <Button small variant="primary" disabled={!repair.can} onClick={onRepair}>
+          {repair.price > 0 ? (
+            <>
+              {repairLabel} · <Money amount={repair.price} />
+            </>
+          ) : (
+            repairLabel
+          )}
         </Button>
-        <Button small disabled={!module || maxed} onClick={onUpgrade}>
+        <Button small variant="primary" disabled={!module || maxed} onClick={onUpgrade}>
           {t('station.upgrade')}
         </Button>
-        <Button small disabled={!module || essential} onClick={onSell}>
-          {module ? t('station.sellModule', { value: credits(moduleResaleValue(player, module)) }) : t('station.sell')}
+        <Button small variant="primary" disabled={!module || essential} onClick={onSell}>
+          {module ? tm('station.sellModule', { value: <Money amount={moduleResaleValue(player, module)} /> }) : t('station.sell')}
         </Button>
       </div>
       {/* Захолустная мастерская за такой корпус не берётся — так и говорим, а не молчим кнопкой. */}
@@ -403,15 +411,19 @@ function VariantRow({
       <span className="min-w-0 truncate">{displayName(module)}</span>
       <span className="flex shrink-0 items-center gap-2 whitespace-nowrap">
         <span style={{ color: DIM }}>{headlineNumber(module)}</span>
-        {cmp && <span style={{ color: cmp.better ? UI.ALLY : UI.DANGER }}>{cmp.better ? '▲' : '▼'}</span>}
-        {price !== undefined && <span style={{ color: DIM }}>{credits(price)}</span>}
+        {cmp && <span style={{ color: trend(cmp.better).color }}>{trend(cmp.better).mark}</span>}
+        {price !== undefined && (
+          <span style={{ color: DIM }}>
+            <Money amount={price} />
+          </span>
+        )}
       </span>
     </button>
   )
 }
 
 /** Стеклянный вопрос поверх модалки: сообщение и кнопки действий (или одна «ОК»). */
-function ConfirmBox({
+export function ConfirmBox({
   confirm,
   onRun,
   onCancel,
@@ -421,15 +433,21 @@ function ConfirmBox({
   onCancel: () => void
 }) {
   return (
-    <Modal onClose={onCancel} z={60}>
-      <p className="text-sm">{confirm.message}</p>
+    // Два действия и больше — окно шире, чтобы кнопки стояли в одну строку, а не лесенкой.
+    <Modal onClose={onCancel} z={60} medium={confirm.actions.length > 1}>
+      <p className={confirm.price !== undefined ? 'text-center text-base' : 'text-sm'}>{confirm.message}</p>
+      {confirm.price !== undefined && (
+        <div className="mt-3 text-center text-2xl font-semibold leading-8 tabular-nums" style={{ color: ACCENT }}>
+          <Money amount={confirm.price} />
+        </div>
+      )}
       <div className="mt-5 flex flex-wrap justify-end gap-2">
-        {confirm.actions.map((a) => (
-          <Button key={a.label} small onClick={() => onRun(a)}>
+        {confirm.actions.map((a, i) => (
+          <Button key={i} small variant="primary" onClick={() => onRun(a)}>
             {a.label}
           </Button>
         ))}
-        <Button small onClick={onCancel}>
+        <Button small variant={confirm.actions.length > 0 ? 'secondary' : 'primary'} onClick={onCancel}>
           {confirm.actions.length > 0 ? t('ship.cancel') : t('ship.ok')}
         </Button>
       </div>

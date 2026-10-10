@@ -88,23 +88,30 @@ export function buildSlots(loadout: Loadout): SlotView[] {
   return rows
 }
 
-/**
- * Категория слота у карточки. Мунишн ('missile'+'drone') → 'missile' (ракеты и дрон-ракеты
- * в одной ячейке), аукс-виды → 'aux', прочее — само. По первому виду, а не по числу видов:
- * у мунишна их два, но это НЕ аукс.
- */
-function categoryOf(s: SlotView): string {
-  const first = s.optionKinds[0] ?? 'engine'
-  if (AUX_KINDS.has(first)) return 'aux'
-  if (first === 'missile' || first === 'drone') return 'missile'
-  return first
-}
-
 /** Порядок категорий в сетке — от «сердца» корабля к грузу и допам. */
-const CATEGORY_ORDER = [
+export const CATEGORY_ORDER = [
   'engine', 'thrusters', 'shield', 'hyperdrive',
   'laser', 'missile', 'armour', 'cargo', 'aux',
 ] as const
+
+export type SlotCard = (typeof CATEGORY_ORDER)[number]
+
+/**
+ * В какую карточку слота попадает вид модуля. Мунишн ('missile'+'drone') → 'missile'
+ * (ракеты и дрон-ракеты висят на одних пилонах), аукс-виды → 'aux' (один доп. отсек),
+ * прочее — само. Одна раскладка на экран корабля, магазин и справочник: где деталь
+ * встанет, там её и ищут.
+ */
+export function cardOf(kind: ModuleKind): SlotCard {
+  if (AUX_KINDS.has(kind)) return 'aux'
+  if (kind === 'missile' || kind === 'drone') return 'missile'
+  return kind as SlotCard
+}
+
+/** Категория слота у карточки — по первому виду: у мунишна их два, но это НЕ аукс. */
+function categoryOf(s: SlotView): SlotCard {
+  return cardOf(s.optionKinds[0] ?? 'engine')
+}
 
 /** Свернуть плоские под-слоты в карточки по КАТЕГОРИИ, в заданном порядке. Пустых нет. */
 function groupCards(slots: readonly SlotView[]): CategoryCard[] {
@@ -127,7 +134,14 @@ export function SlotGrid({
   slots,
   onOpen,
   interactive,
+  cargoCapacity,
 }: {
+  /**
+   * Вместимость отсека — та же, что у самого отсека (`spec.cargoCapacity`). НЕ сумма
+   * контейнеров: оборудование ест грузоподъёмность корпуса своей массой, и сумма
+   * контейнеров врала бы — карточка 41 т, а в отсеке 33.
+   */
+  cargoCapacity: number
   slots: readonly SlotView[]
   onOpen: (key: string) => void
   /** Клик открывает мастерскую только у СВОЕГО борта на верфи. Чужой корпус — на просмотр. */
@@ -135,17 +149,15 @@ export function SlotGrid({
 }) {
   const cards = groupCards(slots)
   return (
-    <section className="border p-5" style={{ borderColor: DIM }}>
-      <h2 className="mb-3 text-sm tracking-[0.3em]">{t('ship.tab.modules')}</h2>
-      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
+    // Плотно: вся оснастка обязана влезть рядом с кораблём без прокрутки.
+    <section className="border px-4 py-3" style={{ borderColor: DIM }}>
+      <h2 className="mb-2 text-sm tracking-[0.3em]">{t('ship.tab.modules')}</h2>
+      <div className="grid grid-cols-2 gap-2">
         {cards.map(({ cat, subs }) => {
           const filled = subs.filter((s) => s.module)
-          const cargoTons =
-            cat === 'cargo'
-              ? filled.reduce((sum, s) => sum + moduleStat(s.module!).value, 0)
-              : null
+          const cargoTons = cat === 'cargo' ? cargoCapacity : null
           return (
-            <div key={cat} className="flex flex-col gap-1.5 border p-3" style={{ borderColor: DIM }}>
+            <div key={cat} className="flex flex-col gap-1 border px-2.5 py-2" style={{ borderColor: DIM }}>
               {/* Шапка карточки: имя категории и «занято/всего», если под-слотов больше одного. */}
               <div className="flex items-baseline justify-between">
                 <span className="text-[0.6rem] tracking-[0.2em]" style={{ color: DIM }}>
@@ -163,7 +175,7 @@ export function SlotGrid({
                   key={s.key}
                   type="button"
                   onClick={interactive ? () => onOpen(s.key) : undefined}
-                  className={`flex items-baseline justify-between gap-2 border px-2 py-1 text-left transition-colors ${
+                  className={`flex items-baseline justify-between gap-2 border px-2 py-0.5 text-left transition-colors ${
                     interactive ? 'cursor-pointer hover:border-[#7fd6ff] hover:bg-[#7fd6ff]/10' : 'cursor-default'
                   }`}
                   style={{ borderColor: 'rgba(127,214,255,0.12)' }}

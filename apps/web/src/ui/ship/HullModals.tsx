@@ -16,8 +16,9 @@ import {
 import { t, useLang, type Key } from '../i18n'
 import { UI } from '../theme'
 import { ACCENT, Button, DIM, Modal } from '../station/chrome'
-import { credits, statLabel } from '../station/format'
+import { statLabel } from '../station/format'
 import { chassisName } from '../i18n/dataNames'
+import { Money } from '../station/Money'
 
 /**
  * Окна корпуса: смена рамы на верфи и покупка нового корпуса.
@@ -73,7 +74,7 @@ export function HullModal({
           : t('station.service.hullDmg', { cur: hullCur, max: hullMax, cost: quote.price })}
       </p>
       <div className="mt-3">
-        <Button small disabled={dmg <= 0 || quote.chance <= 0 || world.credits < quote.price} onClick={doRepair}>
+        <Button small variant="primary" disabled={dmg <= 0 || quote.chance <= 0 || world.credits < quote.price} onClick={doRepair}>
           {dmg <= 0 ? t('station.service.hullWhole') : t('station.service.repair')}
         </Button>
       </div>
@@ -97,7 +98,7 @@ export function HullModal({
               style={{ borderColor: done ? DIM : ACCENT, color: done ? DIM : ACCENT }}
             >
               <span>{done ? `${statLabel(stat)} ✓` : t('ship.hullStat', { stat: statLabel(stat) })}</span>
-              <span>{done ? '+25%' : credits(cost)}</span>
+              <span>{done ? '+25%' : <Money amount={cost} />}</span>
             </button>
           )
         })}
@@ -144,7 +145,9 @@ export function HullBuyModal({
       <div className="text-sm">
         <div className="flex justify-between gap-3">
           <span>{chassisName(q.oldChassis.name)}</span>
-          <span style={{ color: UI.ALLY }}>+{credits(q.tradeIn)}</span>
+          <span style={{ color: UI.ALLY }}>
+            <Money amount={q.tradeIn} sign="+" />
+          </span>
         </div>
         <p className="mt-0.5 text-xs" style={{ color: DIM }}>
           {t('ship.hullBuy.tradeIn', { pct: Math.round(q.oldCondition * 100) })}
@@ -154,7 +157,9 @@ export function HullBuyModal({
       {/* Новый корпус — каталожная цена. */}
       <div className="mt-3 flex justify-between gap-3 text-sm">
         <span>{chassisName(q.chassis.name)}</span>
-        <span style={{ color: DIM }}>{credits(q.price)}</span>
+        <span style={{ color: DIM }}>
+          <Money amount={q.price} />
+        </span>
       </div>
 
       {/* Что не влезло в слоты нового корпуса — уедет в грузовой отсек (если по массе влезет). */}
@@ -170,7 +175,7 @@ export function HullBuyModal({
             {q.net >= 0 ? t('ship.hullBuy.toPay') : t('ship.hullBuy.youGet')}
           </div>
           <div className="text-2xl tabular-nums" style={{ color: q.net >= 0 ? ACCENT : UI.ALLY }}>
-            {credits(Math.abs(q.net))}
+            <Money amount={Math.abs(q.net)} />
           </div>
         </div>
       ) : (
@@ -181,10 +186,10 @@ export function HullBuyModal({
       )}
 
       <div className="mt-5 flex justify-end gap-2">
-        <Button small disabled={!canBuy} onClick={() => onConfirm(q.net)}>
+        <Button small variant="primary" disabled={!canBuy} onClick={() => onConfirm(q.net)}>
           {t('ship.ok')}
         </Button>
-        <Button small onClick={onClose}>
+        <Button small variant="secondary" onClick={onClose}>
           {t('ship.cancel')}
         </Button>
       </div>

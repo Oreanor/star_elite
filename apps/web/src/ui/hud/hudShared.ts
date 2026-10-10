@@ -10,7 +10,7 @@ import {
   type StarSystem,
   type World,
 } from '@elite/sim'
-import { HUD_SCALE } from '../../render/config'
+import { HUD_SCALE, PIXEL_SCALE } from '../../render/config'
 import { HUD_COLORS, corners, text } from './draw'
 import { t } from '../i18n'
 import { formatDistance, projectPoint } from './project'
@@ -56,7 +56,27 @@ let _galSeed: number | null = null
 
 let _galSys: ReturnType<typeof generateGalaxy> = []
 
-export const S = HUD_SCALE
+/**
+ * Масштаб размеров HUD на этот кадр — пропорционально окну, как и кегль панелей
+ * (`styles.css`): эталон 1530×780 CSS-пикселей даёт ровно `HUD_SCALE`, по меньшей из
+ * сторон, в пределах `HUD_FIT_MIN`…`HUD_FIT_MAX`. Иначе на ноутбуке приборы оставались того
+ * же размера в пикселях и съедали полэкрана, а на большом мониторе терялись.
+ *
+ * `let`: обновляется в начале каждого кадра (`fitHudScale`); импорт ES-модуля — живая
+ * ссылка, все `S` в отрисовке видят свежее значение.
+ */
+export let S = HUD_SCALE
+
+const HUD_REF_W = 1530
+const HUD_REF_H = 780
+const HUD_FIT_MIN = 0.6
+const HUD_FIT_MAX = 1.25
+
+/** Подогнать масштаб HUD под размер канваса (CSS-пиксели × `PIXEL_SCALE`). Зовётся в начале кадра. */
+export function fitHudScale(canvasWidth: number, canvasHeight: number): void {
+  const fit = Math.min((canvasWidth * PIXEL_SCALE) / HUD_REF_W, (canvasHeight * PIXEL_SCALE) / HUD_REF_H)
+  S = HUD_SCALE * Math.min(HUD_FIT_MAX, Math.max(HUD_FIT_MIN, fit))
+}
 
 export interface HudFrame {
   ctx: CanvasRenderingContext2D

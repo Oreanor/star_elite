@@ -5,6 +5,7 @@ import type { Settlement } from '../galaxy/types'
 import type { ShipEntity, World } from '../world/entities'
 import { refreshSpec } from '../world/factory'
 import { stockLevel, unitBuyPrice, unitSellPrice } from './market'
+import { issueFine, localFine } from './legal'
 
 /**
  * Торговля грузом на станции: цены от рынка поселения, покупка и продажа товара, стоимость трюма.
@@ -63,13 +64,14 @@ export function holdSellValue(world: World, ship: ShipEntity): number {
   return total
 }
 
-export type TradeError = 'no-money' | 'no-room'
+export type TradeError = 'no-money' | 'no-room' | 'local-fine'
 
 /**
  * Проверка покупки БЕЗ побочных эффектов — ею UI гасит кнопку, ею же `buyCommodity`
  * решает, продавать ли. Две независимые проверки однажды разошлись бы.
  */
 export function canBuyCommodity(world: World, ship: ShipEntity, commodity: Commodity): TradeError | null {
+  if (localFine(world)) return 'local-fine'
   if (world.credits < commodityBuyPrice(world, commodity)) return 'no-money'
   // Масса 0 (статуэтки) места не занимает.
   if (commodity.unitMass > 0 && freeCapacity(ship.hold) < commodity.unitMass) return 'no-room'
@@ -86,8 +88,17 @@ export function canBuyCommodity(world: World, ship: ShipEntity, commodity: Commo
  * @returns купленное количество, ноль — если не вышло ничего.
  */
 export function buyCommodity(world: World, ship: ShipEntity, commodity: Commodity, units: number): number {
+  if (localFine(world)) return 0
   const price = commodityBuyPrice(world, commodity)
   if (price <= 0 || units <= 0) return 0
+
+  // Перевозка сама по себе разрешена. Нарушение возникает только в момент
+  // торговой операции: попытка купить запрещённый товар сразу фиксирует долг,
+  // а товар не переходит в трюм.
+  if (commodity.contraband) {
+    issueFine(world, Math.max(100, Math.floor(price * units * 0.25)), 'illegal-purchase')
+    return 0
+  }
 
   const affordable = Math.floor(world.credits / price)
   const fits =
@@ -119,10 +130,14 @@ export function buyCommodity(world: World, ship: ShipEntity, commodity: Commodit
  * @returns выручка, ноль — если индекса нет.
  */
 export function sellItem(world: World, ship: ShipEntity, index: number): number {
+  if (localFine(world)) return 0
   const item = ship.hold.items[index]
   if (!item) return 0
 
   const value = itemSellValue(world, item)
+  if (item.kind === 'commodity' && item.commodity.contraband) {
+    issueFine(world, Math.max(100, Math.floor(value * 0.25)), 'illegal-sale')
+  }
   removeItem(ship.hold, index)
   world.credits += value
   refreshSpec(ship)
@@ -146,6 +161,7 @@ export function commodityHeld(ship: ShipEntity, commodity: Commodity): number {
  * @returns выручка, ноль — если такого товара нет или units<=0.
  */
 export function sellCommodity(world: World, ship: ShipEntity, commodity: Commodity, units: number): number {
+  if (localFine(world)) return 0
   if (units <= 0) return 0
   const stack = ship.hold.items.find(
     (i): i is Extract<CargoItem, { kind: 'commodity' }> =>
@@ -157,6 +173,7 @@ export function sellCommodity(world: World, ship: ShipEntity, commodity: Commodi
   if (sold <= 0) return 0
 
   const value = commoditySellPrice(world, commodity) * sold
+  if (commodity.contraband) issueFine(world, Math.max(100, Math.floor(value * 0.25)), 'illegal-sale')
   // Цену входа режем пропорционально: остаток хранит basis только своих единиц.
   if (stack.costBasis !== undefined) {
     stack.costBasis = sold >= stack.units ? 0 : Math.round(stack.costBasis * ((stack.units - sold) / stack.units))
@@ -178,9 +195,15 @@ export function sellCommodity(world: World, ship: ShipEntity, commodity: Commodi
  * к ускорениям. Забыть здесь `refreshSpec` значило бы летать с массой призрака.
  */
 export function sellCargo(world: World, ship: ShipEntity): number {
+  if (localFine(world)) return 0
   const value = holdSellValue(world, ship)
   if (value === 0) return 0
 
+  for (const item of ship.hold.items) {
+    if (item.kind === 'commodity' && item.commodity.contraband) {
+      issueFine(world, Math.max(100, Math.floor(itemSellValue(world, item) * 0.25)), 'illegal-sale')
+    }
+  }
   world.credits += value
   ship.hold.items.length = 0
   refreshSpec(ship)

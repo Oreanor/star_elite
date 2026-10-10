@@ -61,6 +61,31 @@ export const UI = {
   PLAYER: '#ff8fd6',
 } as const
 
+/**
+ * Отношение пилота к тебе — цветом: друг зелёный, враг красный, нейтрал голубой. Один код
+ * на шапку разговора, карточки «Люди» и всё, где отношение показано плашкой.
+ */
+export function stanceColor(stance: 'friendly' | 'neutral' | 'hostile'): string {
+  return stance === 'friendly' ? UI.ALLY : stance === 'hostile' ? UI.DANGER : UI.PRIMARY
+}
+
+/**
+ * Опасность борта для тебя (`assessThreat`) — цветом уровня. Один код на карточку локатора
+ * и портрет цели на HUD: пилот должен узнавать «красный треугольник» везде одинаково.
+ */
+export function threatColor(level: 'low' | 'moderate' | 'high' | 'extreme'): string {
+  return level === 'low' ? UI.ALLY : level === 'moderate' ? UI.WARN : level === 'high' ? UI.DANGER : '#ff2f8f'
+}
+
+/**
+ * «Лучше / хуже» при сравнении характеристик — ОДИН цвет и ОДИН знак на весь интерфейс:
+ * характеристики корпуса на верфи, прилавок, окно слота. Прежде корпус мигал белой ▲ и
+ * синей ▼, а магазин — зелёной и красной, и одно и то же «хуже» читалось по-разному.
+ */
+export function trend(better: boolean): { color: string; mark: '▲' | '▼' } {
+  return better ? { color: UI.ALLY, mark: '▲' } : { color: UI.DANGER, mark: '▼' }
+}
+
 /** Тот же фосфор для three.js, где цвет — число, а не строка. */
 export const UI_HEX = {
   PRIMARY: 0x7fd6ff,

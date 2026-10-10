@@ -75,9 +75,9 @@ export const PT: Record<keyof typeof RU, string> = {
   'key.roll.what': 'rolagem',
   'key.barrel': 'AA',
   'key.barrel.what': 'parafuso: quebra a mira do míssil',
-  'key.loop': 'WW / SS',
+  'key.loop': 'WW',
   'key.loop.what': 'looping: despistar o rabo',
-  'key.reversal': 'DD',
+  'key.reversal': 'SS',
   'key.reversal.what': 'meia-volta',
   'key.retro': 'Ctrl',
   'key.retro.what': 'freio de mão: zera velocidade e solta o trava do pós-combustão',
@@ -121,6 +121,10 @@ export const PT: Record<keyof typeof RU, string> = {
   'key.flyto.what': 'piloto automático ao alvo travado',
   'key.pause': 'Esc',
   'key.pause.what': 'pausa e cursor',
+  'key.jump': 'H',
+  'key.jump.what': 'salto: segurar abre um portal para a estrela escolhida',
+  'key.help': 'K',
+  'key.help.what': 'esquema de teclas',
 
   // ─── Seções da tabela de teclas ──────────────────────────────────────────────
   'keys.group.flight': 'VOO',
@@ -196,7 +200,6 @@ export const PT: Record<keyof typeof RU, string> = {
   'unit.rads': 'rad/s²',
   'unit.kn': 'kN',
   'unit.units': 'un.',
-  'unit.cr': 'cr',
 
   // ─── Atributos (chaves moduleStat / fitDeltas) ───────────────────────────────
   'stat.shield': 'ESCUDO',
@@ -240,7 +243,6 @@ export const PT: Record<keyof typeof RU, string> = {
   // ─── Estação: geral ──────────────────────────────────────────────────────────
   'station.title': 'ESTAÇÃO',
   'station.system': 'SISTEMA',
-  'station.credits': 'CRÉDITOS',
   'station.undock': 'DESATRACAR',
 
   // ─── Colunas das tabelas ─────────────────────────────────────────────────────
@@ -254,14 +256,18 @@ export const PT: Record<keyof typeof RU, string> = {
 
   // ─── Mercado ─────────────────────────────────────────────────────────────────
   'station.market.title': 'MERCADORIAS',
+  'station.outfit.title': 'EQUIPAMENTO',
+  'station.outfit.empty': 'Nenhum equipamento à venda',
+  'station.col.compare': 'ANTES → DEPOIS',
+  'station.buyFit': 'COMPRAR E INSTALAR',
+  'ship.confirm.buyPlain': 'Comprar «{name}» por {price}?',
   'station.buy': 'COMPRAR',
   'station.noFunds': 'SEM FUNDOS',
   'station.cheap': 'barato',
   'station.dear': 'caro',
   'station.trade.buy': 'COMPRAR',
   'station.trade.sell': 'VENDER',
-  'station.trade.stock': 'em estoque {n}',
-  'station.trade.have': 'no porão {n}',
+  'station.trade.line': '{mass} × {price}',
 
   // ─── Porão de carga ──────────────────────────────────────────────────────────
   'station.hold.title': 'CARGA',
@@ -269,7 +275,6 @@ export const PT: Record<keyof typeof RU, string> = {
   'station.sell': 'VENDER',
   'station.strip': 'REMOVER',
   'station.sellModule': 'VENDER · {value}',
-  'station.sellAll': 'VENDER TUDO POR {total}',
   'station.salvage': 'achado',
 
   // ─── Estaleiro ───────────────────────────────────────────────────────────────
@@ -309,6 +314,9 @@ export const PT: Record<keyof typeof RU, string> = {
   'station.nav.shop': 'MERCADO',
   'station.nav.people': 'PESSOAS',
   'station.nav.map': 'MAPA',
+  'station.nav.ref': 'GUIA',
+  'station.atPlanet': '{station} (planeta {planet})',
+  'ref.col.tech': 'TEC',
   // Três botões dentro da aba MAPA.
   'map.view.locator': 'LOCALIZADOR',
   'map.view.system': 'SISTEMA',
@@ -332,6 +340,8 @@ export const PT: Record<keyof typeof RU, string> = {
   'locator.kind.fixture': 'emplacamento',
   'locator.kind.warbase': 'base militar',
   'locator.kind.ship': 'nave',
+  'locator.sort.dist': 'POR DISTÂNCIA',
+  'locator.sort.type': 'POR TIPO',
   'locator.kind.heat': 'coroa',
   'locator.kind.laser': 'laser',
   'locator.kind.missile': 'míssil',
@@ -340,8 +350,7 @@ export const PT: Record<keyof typeof RU, string> = {
   'locator.kind.unknown': 'desconhecido',
 
   // ─── Pessoas: registro de conhecidos ─────────────────────────────────────────
-  'people.title': 'PESSOAS',
-  'people.docked': 'ATRACADOS AQUI',
+  'people.atStation': 'Agora na estação:',
   'people.docked.empty': 'O cais está vazio — só você. As naves chegam com o tempo.',
   'people.acquaintances': 'CONHECIDOS',
   'people.subtitle': 'Aqueles com quem você falou e que ainda vivem. A posição deles é sempre conhecida.',
@@ -362,7 +371,7 @@ export const PT: Record<keyof typeof RU, string> = {
   'chat.placeholder': 'Diga algo…',
   'chat.send': 'DIZER',
   'chat.close': 'T — DESLIGAR',
-  'dialogue.hire': 'CONTRATAR POR {fee} CR',
+  'dialogue.hire': 'CONTRATAR POR {fee}',
   'dialogue.hirePlain': 'CONTRATAR',
   'dialogue.end': 'DESLIGAR',
   'dialogue.closeChannel': 'FECHAR CANAL',
@@ -433,8 +442,8 @@ export const PT: Record<keyof typeof RU, string> = {
   'ship.repair.nothing': 'Nada para reparar.',
   'ship.repair.rearmed': 'Mísseis reabastecidos.',
   'ship.repair.tooComplex': 'Não aceitam um casco dessa classe aqui — complexo demais para o estaleiro local.',
-  'ship.owned': 'JÁ É SEU',
   'ship.buyHull': 'COMPRAR · {price}',
+  'ship.alreadyOwned': 'JÁ É SEU',
   'ship.hullBuy.title': 'COMPRAR CASCO',
   'ship.hullBuy.tradeIn': 'aceito automaticamente, estado {pct}%',
   'ship.hullBuy.overflow': 'O equipamento que não couber ({n}) vai para o porão',
@@ -515,10 +524,6 @@ export const PT: Record<keyof typeof RU, string> = {
   'planet.earthMass': '{n} massas terrestres',
   'planet.hours': '{n} h',
   'planet.days': '{n} d',
-  'map.label.pilot': 'PILOTO',
-  'map.label.profession': 'OFÍCIO',
-  'map.label.stance': 'POSTURA',
-  'map.label.hull': 'CASCO',
   'map.search': 'BUSCAR SISTEMA…',
   'map.searchNone': 'não encontrado',
   'map.filter.all': 'TODOS',

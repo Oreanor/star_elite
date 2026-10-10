@@ -1,7 +1,8 @@
-import { Canvas, useFrame } from '@react-three/fiber'
-import { useMemo, useRef } from 'react'
-import { Group, Vector3, type BufferGeometry } from 'three'
+import { Canvas, useFrame, useThree } from '@react-three/fiber'
+import { useEffect, useMemo, useRef } from 'react'
+import { Group, PerspectiveCamera, Vector3, type BufferGeometry } from 'three'
 import { chassisGeometry } from '../../render/geometry/ships'
+import { useWheelZoom } from '../map/useWheelZoom'
 import { hullMaterialFor } from '../../render/materials/materials'
 import { ACCENT, DIM } from '../station/chrome'
 
@@ -94,29 +95,33 @@ export function Blueprint({ chassisId }: { chassisId: string }) {
   }
   // Колесо приближает и отдаляет борт. Множитель на «щелчок», зажат в пределах, чтобы
   // не влететь внутрь модели и не потерять её вдали. Дистанцию ведёт кадр (SpinningShip).
-  const onWheel = (e: React.WheelEvent) => {
+  // Через общий хук карт, а не `onWheel`: тот пассивный, и колесо заодно листало панель,
+  // а щипок тачпада зумил всю страницу.
+  const box = useRef<HTMLDivElement>(null)
+  useWheelZoom(box, (deltaY) => {
     const d = drag.current
-    d.zoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, d.zoom * (e.deltaY > 0 ? 1.12 : 1 / 1.12)))
-  }
+    d.zoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, d.zoom * (deltaY > 0 ? 1.12 : 1 / 1.12)))
+  })
 
   return (
     <div
+      ref={box}
       className="h-full w-full cursor-grab touch-none active:cursor-grabbing"
       onPointerDown={onDown}
       onPointerMove={onMove}
       onPointerUp={onUp}
       onPointerLeave={onUp}
-      onWheel={onWheel}
     >
       <Canvas
+        style={{ transform: 'translateY(-30px)' }}
         gl={{ antialias: true, alpha: true }}
-        camera={{ fov: FOV, near: distance * 0.05, far: distance * 6, position: camPos }}
+        camera={{ fov: FOV, position: camPos }}
         onCreated={({ camera }) => camera.lookAt(0, 0, 0)}
       >
         <directionalLight position={[-4, 6, 8]} intensity={1.9} color={0xfff2dd} />
         <directionalLight position={[6, 3, -6]} intensity={0.55} color={0xa8c4e6} />
         <hemisphereLight args={[0x4a6480, 0x141a22, 0.5]} />
-        <SpinningShip geometry={geometry} centre={centre} drag={drag} chassisId={chassisId} camPos={camPos} />
+        <SpinningShip geometry={geometry} centre={centre} drag={drag} chassisId={chassisId} camPos={camPos} distance={distance} />
       </Canvas>
     </div>
   )
@@ -133,14 +138,31 @@ function SpinningShip({
   drag,
   chassisId,
   camPos,
+  distance,
 }: {
   geometry: BufferGeometry
   centre: Vector3
   drag: React.RefObject<DragState>
   chassisId: string
   camPos: [number, number, number]
+  /** Кадрирующая дистанция этого корпуса. По ней — плоскости отсечения. */
+  distance: number
 }) {
   const ref = useRef<Group>(null)
+  /**
+   * Плоскости отсечения — по ТЕКУЩЕМУ корпусу, на каждую смену. Проп `camera` у Canvas
+   * читается лишь при создании: листая верфь от «Осы» к Атласу, камера оставалась с
+   * дальней плоскостью малыша, и отдаление колесом срезало крупный корпус кусками.
+   * Дальняя — за самым дальним зумом с запасом на радиус модели; ближняя — внутри
+   * самого близкого (сфера модели — около трети кадрирующей дистанции).
+   */
+  const camera = useThree((s) => s.camera)
+  useEffect(() => {
+    if (!(camera instanceof PerspectiveCamera)) return
+    camera.near = distance * 0.02
+    camera.far = distance * (ZOOM_MAX + 1)
+    camera.updateProjectionMatrix()
+  }, [camera, distance])
   // Базовое направление камеры от центра: зум лишь масштабирует эту дистанцию.
   const base = useMemo(() => new Vector3(...camPos), [camPos])
   useFrame((state, dt) => {

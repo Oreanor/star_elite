@@ -59,6 +59,7 @@ export function parseModelReply(
   role: DialogueRole = 'bot',
   /** Гонорар найма, если обсуждается: по нему отличают эхо платы от осознанного платежа. */
   escortFee: number | null = null,
+  fineAmount: number | null = null,
 ): ParsedModelReply | null {
   if (typeof parsed !== 'object' || parsed === null) return null
   const o = parsed as Record<string, unknown>
@@ -73,6 +74,6 @@ export function parseModelReply(
     return { text, commands: [], hangup: false, lookup, clarify: true, emotion }
   }
 
-  const commands = buildCommands(o, role, { allowedTopics, escortFee })
+  const commands = buildCommands(o, role, { allowedTopics, escortFee, fineAmount })
   return { text, commands, hangup: o.hangup === true, lookup, emotion }
 }

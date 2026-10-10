@@ -23,9 +23,8 @@ export interface Commodity {
    */
   tier: number
   /**
-   * Запрещённый груз. Пока это только метка на товаре — досмотра в игре нет.
-   * Но цена рабов и наркотиков назначена ИЗ-ЗА неё: они дороги именно потому,
-   * что за них полагается штраф. Как только появится полиция, метка уже здесь.
+   * Товар с ограниченной торговлей. Само владение и перевозка разрешены во всех
+   * системах; штраф возникает только при попытке купить или продать его.
    */
   contraband: boolean
 }
@@ -65,6 +64,12 @@ export interface CommodityStack {
 export interface ModuleItem {
   kind: 'module'
   module: ShipModule
+  /**
+   * Во что модуль обошёлся, кр. Купленный в трюм — цена покупки; снятый со своего борта —
+   * цена по каталогу (за него когда-то платили). Нет — трофей с обломков: брали даром,
+   * выгоду считать не от чего («находка»).
+   */
+  costBasis?: number
 }
 
 export type CargoItem = CommodityStack | ModuleItem
@@ -117,9 +122,9 @@ export const COMMODITIES = {
   ELECTRONICS: { id: 'electronics', name: 'Электроника', description: 'Платы и чипы высокого передела. Лёгкая, дорогая, нужна всем.', unitMass: 0.5, basePrice: 980, tier: 11, contraband: false },
   // Контрабанду плодят беззаконные окраины (низкий tier), а спрос на неё — в богатых
   // законопослушных мирах: оттого её и возят снизу вверх, рискуя штрафом.
-  SLAVES: { id: 'slaves', name: 'Рабы', description: 'Живой груз. Вне закона в цивилизованных мирах — оттого и в цене.', unitMass: 1, basePrice: 1240, tier: 3, contraband: true },
+  SLAVES: { id: 'slaves', name: 'Рабы', description: 'Живой груз. Торговля ограничена законом, но перевозка разрешена.', unitMass: 1, basePrice: 1240, tier: 3, contraband: true },
   LUXURIES: { id: 'luxuries', name: 'Роскошь', description: 'Редкости для тех, кому некуда девать деньги. Малый вес, крупный навар.', unitMass: 0.5, basePrice: 1850, tier: 12, contraband: false },
-  NARCOTICS: { id: 'narcotics', name: 'Наркотики', description: 'Запрещённая химия. Дорога, компактна и пахнет штрафом.', unitMass: 0.4, basePrice: 2900, tier: 9, contraband: true },
+  NARCOTICS: { id: 'narcotics', name: 'Наркотики', description: 'Химия с ограниченной торговлей. Дорога, компактна и пахнет штрафом.', unitMass: 0.4, basePrice: 2900, tier: 9, contraband: true },
   /**
    * Статуэтка богов — коллекционная реликвия с орбиты системы.
    * Масса 0: в трюме не весит. Не путать с монолитами у причала.

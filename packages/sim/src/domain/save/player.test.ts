@@ -146,3 +146,28 @@ describe('round-trip сейва игрока', () => {
     expect(findModule(upgraded.id)?.upgrade).toBeUndefined()
   })
 })
+
+describe('модули в трюме переживают сохранение', () => {
+  it('купленный в трюм модуль и его цена входа возвращаются после загрузки', () => {
+    // Регрессия: трюмные модули не писались в сейв («трофеи момента»). С покупкой в трюм
+    // это значило бы: заплатил, перезагрузился — ни денег, ни железа.
+    const src = createWorld(STARTER_SYSTEM)
+    const shield = findModule('shield_2b')!
+    addItem(src.player.hold, { kind: 'module', module: shield, costBasis: 40000 })
+
+    const dst = createWorld(STARTER_SYSTEM)
+    applyPlayerSave(dst, serializePlayer(src))
+
+    const back = dst.player.hold.items.find((i) => i.kind === 'module' && i.module.id === shield.id)
+    expect(back).toBeDefined()
+    expect(back?.kind === 'module' ? back.costBasis : undefined).toBe(40000)
+  })
+
+  it('старый сейв без поля модулей грузится, трюм по модулям пуст', () => {
+    const save = serializePlayer(createWorld(STARTER_SYSTEM))
+    delete save.holdModules
+    const dst = createWorld(STARTER_SYSTEM)
+    applyPlayerSave(dst, save)
+    expect(dst.player.hold.items.some((i) => i.kind === 'module')).toBe(false)
+  })
+})

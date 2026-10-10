@@ -4,6 +4,7 @@ import {
   contactTravelEta,
   contactWhereabouts,
   findStation,
+  dispatcherPersona,
   generateSystem,
   livingContacts,
   stanceTo,
@@ -14,11 +15,11 @@ import {
   type World,
 } from '@elite/sim'
 import { useOnlinePlayers, type OnlinePlayer } from '../../session/net/presence'
-import { currentLang, t, useLang, type Key } from '../i18n'
-import { UI } from '../theme'
+import { t, useLang } from '../i18n'
 import { currentGameDate } from '../clock'
 import { chassisName, occupationName, professionName, properName } from '../i18n/dataNames'
 import { ACCENT, Button, DIM, PilotPortrait } from '../station/chrome'
+import { PilotIdentity } from '../station/PilotIdentity'
 import { GLASS_PANEL, screenBackground } from '../station/backdrop'
 import { Market } from '../station/Market'
 import { ShipScreen } from '../ship/ShipScreen'
@@ -28,6 +29,8 @@ import { UniverseMap } from '../map/UniverseMap'
 import { useSession } from '../../session/GameContext'
 import { Locator } from '../map/Locator'
 import { PlanetScreen } from '../planet/PlanetScreen'
+import { Reference } from '../reference/Reference'
+import { Money } from '../station/Money'
 
 /**
  * Консоль — ОДНА стеклянная панель с вкладками, общая для причала и полёта.
@@ -53,6 +56,8 @@ export type ConsoleTab =
   | 'galaxy'
   /** МИР — вид карты вселенной. Только в комнате: снаружи ты внутри галактики, а не между ними. */
   | 'universe'
+  /** СПРАВОЧНИК — всё железо по слотам. И у причала, и в полёте: это книга, а не прилавок. */
+  | 'reference'
 
 /**
  * Вкладка КАРТА — одна кнопка в шапке, а внутри ЧЕТЫРЕ вида: локатор, система, галактика, мир.
@@ -90,6 +95,7 @@ export function Console({
   onTab,
   onClose,
   onTalk,
+  onDispatch,
   onLocate: _onLocate,
   onRoute: _onRoute,
   onChat,
@@ -101,6 +107,7 @@ export function Console({
   onTab: (tab: ConsoleTab) => void
   onClose: () => void
   onTalk: (shipId: number) => void
+  onDispatch: () => void
   onLocate?: (shipId: number) => void
   onRoute?: (systemIndex: number) => void
   onChat: (player: OnlinePlayer) => void
@@ -133,14 +140,14 @@ export function Console({
     // У причала первая вкладка — СТАНЦИЯ (шапка места + кто пристыкован); в полёте
     // станции под тобой нет, и та же вкладка показывает паспорт мира — ПЛАНЕТА.
     { id: 'planet', label: t('station.nav.planet') },
+    // ЛЮДИ — сразу за местом: кто здесь и с кем связаться. Есть и у причала, и в полёте.
+    { id: 'people', label: t('station.nav.people') },
     // КОРАБЛЬ — и твой борт, и витрина корпусов: у причала под моделью стрелки листают
     // каталог и кнопка покупки. Отдельной «ВЕРФИ» больше нет.
     { id: 'ship', label: t('ship.title') },
     ...(docked ? [{ id: 'shop' as const, label: t('station.nav.shop') }] : []),
     // ГРУЗ отдельной вкладкой больше не живёт: трюм — плашка под модулями во вкладке
-    // КОРАБЛЬ. Он часть корабля, а не самостоятельный прибор.
-    // ЛЮДИ — знакомые пилоты: где они и как с ними связаться. Есть и у причала, и в полёте.
-    { id: 'people', label: t('station.nav.people') },
+    // КОРАБЛЬ (в полёте) и рядом со списком в МАГАЗИНЕ (у причала).
     // КАРТА — одна кнопка на ЧЕТЫРЕ вида (локатор/система/галактика/мир). Подсвечена, пока
     // открыт любой из них; клик ведёт на первый осмысленный в текущей обстановке.
     {
@@ -164,33 +171,35 @@ export function Console({
         className="flex h-[calc(100vh-3rem)] w-[calc(100vw-3rem)] max-w-6xl flex-col rounded-2xl border p-7 font-mono"
         style={{ ...GLASS_PANEL, color: ACCENT }}
       >
-        {/* Заголовок модалки — ПРИЧАЛ, где стоим: имя станции и в скобках её планета.
+        {/* Заголовок модалки — ПРИЧАЛ, где стоим: имя станции и в скобках «планета …».
             В полёте причала нет — тогда пишем хотя бы систему, чтобы шапка не пустовала.
-            Кредиты и паспорт мира — не сюда: деньги у корабля, планета — в первой вкладке. */}
-        <div className="flex items-start justify-between gap-6">
-          <div>
-            <h1 className="text-xl tracking-[0.3em]">
+            Планета подробнее показана в первой вкладке. */}
+        <div className="flex items-center justify-between gap-6">
+            <h1 className="min-w-0 text-xl tracking-[0.12em]">
               {docked && station
-                ? `${properName(station.name)}${planet ? ` (${properName(planet.name)})` : ''}`
+                ? planet
+                  ? t('station.atPlanet', { station: properName(station.name), planet: properName(planet.name) })
+                  : properName(station.name)
                 : `${t('station.system')}: ${properName(world.systemName).toUpperCase()}`}
             </h1>
-            {/* Дата мира — общий календарь для всех игроков (`worldClock`). */}
-            <p className="mt-1 text-sm tracking-widest" style={{ color: DIM }}>
-              {currentGameDate()}
-            </p>
-          </div>
-          {/* Кошелёк — единожды и на виду: слева от выхода, а не в каждой вкладке. */}
-          <div className="flex items-center gap-4">
-            <span className="whitespace-nowrap text-sm tracking-widest" style={{ color: DIM }}>
-              {t('station.credits')} {world.credits.toLocaleString(currentLang() === 'ru' ? 'ru' : 'en-US')}
-            </span>
+          <div className="ml-auto flex shrink-0 items-center gap-8">
+            <div
+              className="flex items-center gap-5 rounded-lg border px-4 py-2 text-sm tracking-widest"
+              style={{ borderColor: DIM, color: DIM, background: 'rgba(8,22,42,0.3)' }}
+            >
+              {/* Дата мира — общий календарь для всех игроков (`worldClock`). */}
+              <span className="whitespace-nowrap">{currentGameDate()}</span>
+              <span className="whitespace-nowrap border-l pl-5 font-semibold" style={{ borderColor: DIM, color: '#d9f3ff' }}>
+                <Money amount={world.credits} />
+              </span>
+            </div>
             <Button small onClick={onClose}>
-              {docked ? t('station.undock') : t('ship.close')}
+              {docked ? <>{t('station.undock')} <span aria-hidden="true">→</span></> : t('ship.close')}
             </Button>
           </div>
         </div>
 
-        <nav className="mt-4 flex flex-wrap gap-2">
+        <nav className="mt-4 flex flex-wrap gap-2" style={{ boxShadow: `inset 0 -1px 0 ${DIM}` }}>
           {tabs.map((item) => {
             const on = item.active ?? item.id === tab
             return (
@@ -220,8 +229,9 @@ export function Console({
           {tab === 'planet' && <PlanetScreen world={world} planet={planet} />}
           {tab === 'ship' && <ShipScreen world={world} docked={docked} embedded onChange={bump} onClose={() => onTab('planet')} />}
           {tab === 'shop' && docked && <Market world={world} onChange={bump} />}
+          {tab === 'reference' && <Reference />}
           {tab === 'people' && (
-            <PeopleTab key={peopleRefresh} world={world} docked={docked} onTalk={onTalk} onChat={onChat} />
+            <PeopleTab key={peopleRefresh} world={world} docked={docked} onTalk={onTalk} onDispatch={onDispatch} onChat={onChat} />
           )}
           {isMapView(tab) && (() => {
             // Выбранный вид мог погаснуть от обстановки (влетел в комнату, вырос миелофоном) —
@@ -274,68 +284,54 @@ export function Console({
   )
 }
 
-/** Единая плашка человека: портрет слева, справа имя/роль/деталь и кнопка «Связаться». */
 /**
- * ОТНОШЕНИЕ словом и цветом. Ключи и слова — ТЕ ЖЕ, что в шапке диалога и на метках
- * кабины: враг красный, друг зелёный, нейтрал погашенный. Фосфор UI — хром, не «друг».
+ * Сетка карточек людей — ОДНА на все списки вкладки: равная ширина, во всю ширину панели,
+ * по три в ряд, на узком экране по две. Прежде карточки тянулись по содержимому и стояли
+ * лесенкой.
  */
-const STANCE_KEY: Record<Relationship, Key> = {
-  friendly: 'dialogue.stance.friendly',
-  neutral: 'dialogue.stance.neutral',
-  hostile: 'dialogue.stance.hostile',
-}
-const STANCE_COLOR: Record<Relationship, string> = {
-  friendly: UI.ALLY,
-  neutral: DIM,
-  hostile: UI.DANGER,
-}
+const CARD_GRID = 'mt-3 grid grid-cols-2 gap-3 xl:grid-cols-3'
 
+/**
+ * Карточка человека: в рамке тот же паспорт, что в шапке разговора (`PilotIdentity`),
+ * плюс где он сейчас и кнопка «Связаться».
+ */
 function PersonPlaque({
   name,
-  roleLine,
+  role,
+  craft,
   stance,
-  detailLine,
+  note,
   portrait,
   onTalk,
 }: {
   name: string
-  roleLine?: string
-  /** Как он к тебе относится. Нет — не показываем строку вовсе (напр. это ты сам). */
+  role?: string
+  craft?: string
+  /** Как он к тебе относится. Нет — не показываем вовсе (напр. живой игрок). */
   stance?: Relationship
-  detailLine?: string
+  /** Где он: система, причал, «отошёл». */
+  note?: string
   portrait: ReactNode
   onTalk?: () => void
 }) {
   return (
-    <div className="flex items-center gap-3 border px-3 py-2" style={{ borderColor: DIM, minWidth: '15rem' }}>
-      {portrait}
-      <div className="min-w-0 flex-1 text-left">
-        <div className="truncate text-sm tracking-widest" style={{ color: ACCENT }}>
-          {name}
-        </div>
-        {stance ? (
-          <div className="truncate text-xs tracking-widest" style={{ color: STANCE_COLOR[stance] }}>
-            {t(STANCE_KEY[stance])}
+    <div className="border p-3" style={{ borderColor: DIM, color: ACCENT }}>
+      <PilotIdentity portrait={portrait} name={name} role={role} craft={craft} stance={stance}>
+        {note || onTalk ? (
+          <div className="min-w-0">
+            {note ? (
+              <div className="truncate text-xs leading-4" style={{ color: DIM }}>
+                {note}
+              </div>
+            ) : null}
+            {onTalk ? (
+              <Button small onClick={onTalk}>
+                {t('people.talk')}
+              </Button>
+            ) : null}
           </div>
         ) : null}
-        {roleLine ? (
-          <div className="truncate text-xs tracking-widest" style={{ color: DIM }}>
-            {roleLine}
-          </div>
-        ) : null}
-        {detailLine ? (
-          <div className="truncate text-xs" style={{ color: DIM }}>
-            {detailLine}
-          </div>
-        ) : null}
-        {onTalk ? (
-          <div className="mt-1">
-            <Button small onClick={onTalk}>
-              {t('people.talk')}
-            </Button>
-          </div>
-        ) : null}
-      </div>
+      </PilotIdentity>
     </div>
   )
 }
@@ -362,50 +358,59 @@ function PeopleTab({
   world,
   docked,
   onTalk,
+  onDispatch,
   onChat,
 }: {
   world: World
   docked: boolean
   onTalk: (shipId: number) => void
+  onDispatch: () => void
   onChat: (player: OnlinePlayer) => void
 }) {
   const dockedHere = docked ? dockedPilots(world).slice(1).filter((s) => s.alive) : []
   // Слово — особый бог на Кресте: ВНЕ категорий (не «пристыкованный», не «знакомый»), но
   // на этой станции виден ВСЕГДА. Из «знакомых» исключаем, чтобы не задвоить после разговора.
   const slovo = docked ? world.ships.find((s) => s.alive && s.divine) : undefined
+  const station = docked ? findStation(world) : null
+  const dispatcher = station ? dispatcherPersona(world, station) : null
   const contacts = contactsExceptDocked(livingContacts(world), dockedHere).filter((c) => !c.ship?.divine)
 
   return (
     <div>
-      <h1 className="text-2xl tracking-[0.2em]">{t('people.title')}</h1>
-
-      {/* СЛОВО — бог на Кресте. Вне категорий: отдельная плашка над списками, всегда, пока ты
-          на этой станции. Не «пристыкованный» и не «знакомый» (знакомым станет, когда заговоришь). */}
-      {slovo && (
-        <div className="mt-4 flex flex-wrap gap-3">
-          <DockPlaque ship={slovo} you={false} world={world} onTalk={onTalk} />
-        </div>
-      )}
-
-      {/* ПРИСТЫКОВАНЫ — кто физически здесь, у причала: к ним можно подойти и заговорить.
-          Могут быть и вовсе незнакомцы. Себя не показываем — свою плашку видеть незачем.
-          У причала показываем всегда (даже пустой): пусто в начале — борта заходят со
-          временем, а пока стоишь в доке мир на паузе, так что причал наполнится по возврате. */}
+      {/* У причала — кто СЕЙЧАС здесь, одной строкой без категорий: Слово (бог на Кресте) и
+          пристыкованные борта. Себя не показываем. Пусто — так и говорим: борта заходят со
+          временем, а пока стоишь в доке, мир на паузе. */}
       {docked && (
-        <div className="mt-6">
-          <h2 className="text-sm tracking-[0.3em]" style={{ color: ACCENT }}>
-            {t('people.docked')}
-          </h2>
-          {dockedHere.length > 0 ? (
-            <div className="mt-3 flex flex-wrap gap-3">
+        <div>
+          <h2 className="text-base">{t('people.atStation')}</h2>
+          {slovo || dockedHere.length > 0 ? (
+            <div className={CARD_GRID}>
+              {station && dispatcher && (
+                <PersonPlaque
+                  name={`ДИСПЕТЧЕР · ${properName(station.name)}`}
+                  role="ДИСПЕТЧЕР"
+                  craft={properName(station.name)}
+                  portrait={<PilotPortrait species={dispatcher.species} face={0} size={108} />}
+                  onTalk={onDispatch}
+                />
+              )}
+              {slovo && <DockPlaque ship={slovo} you={false} world={world} onTalk={onTalk} />}
               {dockedHere.map((p) => (
                 <DockPlaque key={p.id} ship={p} you={false} world={world} onTalk={onTalk} />
               ))}
             </div>
+          ) : station ? (
+            <div className={CARD_GRID}>
+              <PersonPlaque
+                name={`ДИСПЕТЧЕР · ${properName(station.name)}`}
+                role="ДИСПЕТЧЕР"
+                craft={properName(station.name)}
+                portrait={<PilotPortrait species={dispatcherPersona(world, station).species} face={0} size={108} />}
+                onTalk={onDispatch}
+              />
+            </div>
           ) : (
-            <p className="mt-2 text-sm" style={{ color: DIM }}>
-              {t('people.docked.empty')}
-            </p>
+            <p className="mt-2 text-sm" style={{ color: DIM }}>{t('people.docked.empty')}</p>
           )}
         </div>
       )}
@@ -422,7 +427,7 @@ function PeopleTab({
           <p className="mt-1 text-xs tracking-widest" style={{ color: DIM }}>
             {t('people.subtitle')}
           </p>
-          <div className="mt-3 flex flex-wrap gap-3">
+          <div className={CARD_GRID}>
             {contacts.map((c) => (
               <ContactPlaque key={c.record.id} world={world} contact={c} onTalk={onTalk} />
             ))}
@@ -447,7 +452,7 @@ function OnlineList({ onChat }: { onChat: (player: OnlinePlayer) => void }) {
       <h2 className="text-sm tracking-[0.3em]" style={{ color: ACCENT }}>
         {t('people.online')}
       </h2>
-      <div className="mt-3 flex flex-wrap gap-3">
+      <div className={CARD_GRID}>
         {players.map((p) => {
           const where = p.place
             ? t('people.online.dock', { place: properName(p.place), sys: properName(p.systemName) })
@@ -456,10 +461,10 @@ function OnlineList({ onChat }: { onChat: (player: OnlinePlayer) => void }) {
             <PersonPlaque
               key={p.uid}
               name={p.name}
-              roleLine={professionName(p.profession).toUpperCase()}
-              detailLine={p.paused ? t('people.online.paused') : where}
+              role={professionName(p.profession)}
+              note={p.paused ? t('people.online.paused') : where}
               portrait={
-                <PilotPortrait species={p.species} face={p.face} muted={p.paused} size={96} />
+                <PilotPortrait species={p.species} face={p.face} muted={p.paused} size={108} />
               }
               onTalk={() => onChat(p)}
             />
@@ -505,28 +510,27 @@ function ContactPlaque({
         .filter(Boolean)
         .join(' · ')
 
-  const roleLine = ship
-    ? (ship.persona.profession
-        ? professionName(ship.persona.profession)
-        : occupationName(ship.originKind, ship.faction)
-      ).toUpperCase()
-    : ''
-
-  const detailLine = ship ? chassisName(ship.loadout.chassis.name) : locationLine
+  const role = ship
+    ? ship.persona.profession
+      ? professionName(ship.persona.profession)
+      : occupationName(ship.originKind, ship.faction)
+    : undefined
 
   return (
     <PersonPlaque
       name={record.name}
-      roleLine={roleLine}
+      role={role}
       // Отношение берём у ЖИВОГО борта (`stanceTo` учитывает и фракцию: свежий пират враждебен
       // и без записи). Борта рядом нет — показываем, чем кончилось знакомство по журналу.
       stance={ship ? stanceTo(world, ship) : record.relationship}
-      detailLine={detailLine}
+      craft={ship ? chassisName(ship.loadout.chassis.name) : undefined}
+      // Где он — только когда борта рядом нет: рядом он и так на радаре, а вдали это главное.
+      note={ship ? undefined : locationLine}
       portrait={
         ship ? (
-          <PilotPortrait ship={ship} world={world} emotion="neutral" size={96} />
+          <PilotPortrait ship={ship} world={world} emotion="neutral" size={108} />
         ) : (
-          <PilotPortrait name={record.name} size={96} />
+          <PilotPortrait name={record.name} size={108} />
         )
       }
       onTalk={where.present && ship ? () => onTalk(ship.id) : undefined}
@@ -539,12 +543,12 @@ function DockPlaque({ ship, you, world, onTalk }: { ship: ShipEntity; you: boole
   return (
     <PersonPlaque
       name={ship.pilotName}
-      roleLine={(you ? professionName(ship.persona.profession) : occupationName(ship.originKind, ship.faction)).toUpperCase()}
+      role={you ? professionName(ship.persona.profession) : occupationName(ship.originKind, ship.faction)}
       // У СЕБЯ отношения нет — не показываем: «ты нейтрален к себе» это шум, а не сведения.
       stance={you ? undefined : stanceTo(world, ship)}
-      // У бога корабля нет — вместо марки корпуса пусто: его строка «БОГ» уже всё сказала.
-      detailLine={ship.divine ? '' : chassisName(ship.loadout.chassis.name)}
-      portrait={<PilotPortrait ship={ship} emotion="neutral" size={96} />}
+      // У бога тоже корабль — его ладья; в шапке разговора она указана, и здесь так же.
+      craft={chassisName(ship.loadout.chassis.name)}
+      portrait={<PilotPortrait ship={ship} emotion="neutral" size={108} />}
       onTalk={you ? undefined : () => onTalk(ship.id)}
     />
   )
@@ -582,4 +586,3 @@ function dockedPilots(world: World): ShipEntity[] {
   const here = world.ships.filter((s) => s.alive && (s.ai?.dock === 'berthed' || s.ai?.dock === 'inbound'))
   return [world.player, ...here]
 }
-

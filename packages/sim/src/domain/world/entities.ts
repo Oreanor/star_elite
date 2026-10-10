@@ -795,6 +795,14 @@ export interface ContactLock {
   id: number
 }
 
+/** Локальный долг перед властями планеты. Не переносится между системами. */
+export interface FineRecord {
+  readonly systemIndex: number
+  readonly authorityId: number
+  amount: number
+  reason: 'illegal-purchase' | 'illegal-sale'
+}
+
 export interface World {
   /** Локальное время симуляции, с. Замирает в доке и на паузе. */
   time: number
@@ -971,6 +979,8 @@ export interface World {
    * это факт симуляции: миры до и после прыжка не связаны ничем, кроме корабля.
    */
   epoch: number
+  /** Эпоха последнего автоматического напоминания полиции о местном штрафе. */
+  policeFineHailEpoch: number
   credits: number
   score: number
 
@@ -979,6 +989,8 @@ export interface World {
    * (пилот — не корабль), и прыжки между системами, как кредиты и очки.
    */
   acquaintances: Acquaintance[]
+  /** Штрафы перед местными властями; один и тот же груз не создаёт глобальный розыск. */
+  fines: FineRecord[]
 
   /**
    * Вести о событиях вне поля зрения (пропавший знакомый). Домен добавляет, HUD

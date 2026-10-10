@@ -332,6 +332,7 @@ function makeRu(): NegotiatorLocale {
         'social: insult|flatter|null',
         'stance: friendly|neutral|hostile|null — ТВОЁ отношение к командиру. Меняй РЕДКО и в характере: обычно null. Искренняя помощь, уважение, подарок могут расположить; хамство и угрозы — озлобить (станешь враждебен). Жадный и настороженный поддаются туго. НЕ по первой просьбе «стань другом».',
         'transfer|null',
+        'fine: {confirm:true|false}|null — только для ПОЛИЦИИ: false = назвать местный штраф, true = оплатить после явного согласия командира',
         'remember|null',
         'learn: «их фраза → шаги»|null — тихая мета, когда понял объяснение',
         'clarify: true|false — true = не понял перевод, только переспрос',
@@ -473,13 +474,16 @@ function makeRu(): NegotiatorLocale {
         locale.knowledgeDisclosureBlock(ctx),
         locale.lookupRulesBlock(),
         locale.translatorBlock(ctx),
+        ctx.localFineAmount != null
+          ? `МЕСТНАЯ ПОЛИЦИЯ: командир должен ${ctx.localFineAmount} кредитов этой власти. Напомни об этом при первом контакте за посещение системы. Если командир говорит, что хочет заплатить, сначала назови сумму; действие fine с confirm:true используй только после явного согласия оплатить.`
+          : '',
         'Говори коротко. Распознай intent/transfer/remember/learn/clarify/plan из каталога.',
         locale.actionsCatalog(ctx),
         'Выражение лица — поле "emotion": neutral (спокойное), joy (радость), pain (боль), anger (гнев), fear (страх), sadness (грусть). Обычно neutral; меняй по смыслу СВОЕЙ реплики.',
         locale.attitudeBlock(ctx, true),
         '',
         'Ответь СТРОГО одним JSON:',
-        '{"reply":"…","emotion":"neutral"|"joy"|"pain"|"anger"|"fear"|"sadness"|null,"intent":…|"null","social":"insult"|"flatter"|null,"stance":"friendly"|"neutral"|"hostile"|null,"transfer":…|null,"remember":…|null,"learn":…|null,"clarify":true|false,"plan":[…]|null,"demand":"…"|null,"surrender":true|null,"flee":true|null,"depart":true|null,"meet":true|null,"tip":"…"|null,"mark":"…"|null,"lookup":"market"|"neighbours"|"history"|"worlds"|null,"hangup":true|false}',
+        '{"reply":"…","emotion":"neutral"|"joy"|"pain"|"anger"|"fear"|"sadness"|null,"intent":…|"null","social":"insult"|"flatter"|null,"stance":"friendly"|"neutral"|"hostile"|null,"transfer":…|null,"fine":{"confirm":true|false}|null,"remember":…|null,"learn":…|null,"clarify":true|false,"plan":[…]|null,"demand":"…"|null,"surrender":true|null,"flee":true|null,"depart":true|null,"meet":true|null,"tip":"…"|null,"mark":"…"|null,"lookup":"market"|"neighbours"|"history"|"worlds"|null,"hangup":true|false}',
       ]
         .filter(Boolean)
         .join('\n')
@@ -703,6 +707,7 @@ function makeEn(): NegotiatorLocale {
         'social: insult|flatter|null',
         'stance: friendly|neutral|hostile|null — YOUR standing toward the commander. Change it RARELY and in character: usually null. Genuine help, respect, a gift may warm you; insults and threats harden you (you turn hostile). The greedy and wary yield slowly. NOT on a first "be my friend".',
         'transfer|null',
+        `fine: {confirm:true|false}|null — only police; local debt is ${ctx.localFineAmount == null ? 'none' : `${ctx.localFineAmount} cr`}. false quotes it, true pays only after clear consent.`,
         'remember|null',
         'learn: "their phrase → steps"|null — silent meta when you understood',
         'clarify: true|false — true = did not get translation, ask only',
@@ -818,13 +823,16 @@ function makeEn(): NegotiatorLocale {
         locale.knowledgeDisclosureBlock(ctx),
         locale.lookupRulesBlock(),
         locale.translatorBlock(ctx),
+        ctx.localFineAmount != null
+          ? `LOCAL POLICE: the commander owes this authority ${ctx.localFineAmount} credits. Remind him on the first contact during this system visit. If he says he wants to pay, quote the amount first; use fine with confirm:true only after explicit consent to pay.`
+          : '',
         'Speak short. Parse intent/transfer/remember/learn/clarify/plan from catalog.',
         locale.actionsCatalog(ctx),
         'Facial expression — the "emotion" field: neutral, joy, pain, anger, fear, sadness. Usually neutral; change it to fit YOUR line.',
         locale.attitudeBlock(ctx, true),
         '',
         'Reply with ONE JSON object only:',
-        '{"reply":"…","emotion":"neutral"|"joy"|"pain"|"anger"|"fear"|"sadness"|null,"intent":…|"null","social":"insult"|"flatter"|null,"stance":"friendly"|"neutral"|"hostile"|null,"transfer":…|null,"remember":…|null,"learn":…|null,"clarify":true|false,"plan":[…]|null,"demand":"…"|null,"surrender":true|null,"flee":true|null,"depart":true|null,"meet":true|null,"tip":"…"|null,"mark":"…"|null,"lookup":"market"|"neighbours"|"history"|"worlds"|null,"hangup":true|false}',
+        '{"reply":"…","emotion":"neutral"|"joy"|"pain"|"anger"|"fear"|"sadness"|null,"intent":…|"null","social":"insult"|"flatter"|null,"stance":"friendly"|"neutral"|"hostile"|null,"transfer":…|null,"fine":{"confirm":true|false}|null,"remember":…|null,"learn":…|null,"clarify":true|false,"plan":[…]|null,"demand":"…"|null,"surrender":true|null,"flee":true|null,"depart":true|null,"meet":true|null,"tip":"…"|null,"mark":"…"|null,"lookup":"market"|"neighbours"|"history"|"worlds"|null,"hangup":true|false}',
       ]
         .filter(Boolean)
         .join('\n')

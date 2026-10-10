@@ -23,6 +23,7 @@ export {
   armMissilesFromHold,
   buy,
   canBuy,
+  buyToHold,
   installedMissile,
   sellMissiles,
   stripMissiles,
@@ -45,6 +46,7 @@ export {
   stockChance,
   unfitModule,
   type PurchaseError,
+  type StowError,
   type StripError,
 } from './shop'
 export { canServiceHere, minTechForClass, moduleStat, type StatKey } from './moduleState'
@@ -95,6 +97,16 @@ export {
   sellItem,
   type TradeError,
 } from './trade'
+export {
+  issueFine,
+  localFine,
+  localAuthorityId,
+  payLocalFine,
+  illegalCargoUnits,
+  pendingPoliceFineHail,
+  hailPoliceForFine,
+  markPoliceFineHail,
+} from './legal'
 export {
   govFactor,
   marketValue,

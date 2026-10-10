@@ -8,7 +8,6 @@ import {
 } from '@elite/sim'
 import { t, useLang } from '../i18n'
 import { ACCENT, DIM } from '../station/chrome'
-import { credits } from '../station/format'
 import { Hold } from '../station/Hold'
 import { chassisName, properName } from '../i18n/dataNames'
 import { ArrowButton, Blueprint } from './ShipBlueprint'
@@ -16,6 +15,7 @@ import { HullBuyModal, HullModal } from './HullModals'
 import { SlotGrid, buildSlots } from './ShipSlots'
 import { SlotModal } from './SlotModal'
 import { Stats } from './ShipStats'
+import { Money, tm } from '../station/Money'
 
 /**
  * Экран корабля (клавиша I) и он же — ВЕРФЬ у причала. ОДИН компонент, а не два:
@@ -129,21 +129,20 @@ export function ShipScreen({
         </div>
       )}
 
-      {/* Слева паспорт (чертёж + характеристики), справа — оснастка ПЛИТКОЙ, а не в
-          три колонки таблиц. Столбца «класс» больше нет: класс жил лишь в имени
-          модуля, отдельной осью пилоту он ни к чему. */}
-      <div className="mt-1 grid gap-5 lg:grid-cols-[minmax(0,18rem)_1fr]">
+      {/* Пополам: слева паспорт (корабль крупно, под ним характеристики в две колонки),
+          справа — оснастка плиткой. Корабль — главное на экране, ему половина ширины,
+          а не узкая полоска над столбцом цифр. */}
+      <div className="mt-1 grid gap-5 lg:grid-cols-2">
         <div className="space-y-3">
           {/* Клик по вращающемуся кораблю открывает МАСТЕРСКУЮ КОРПУСА: ремонт и усиление
               осей. Раньше это был ряд кнопок под характеристиками — он занимал полколонки
               и висел там даже тогда, когда чинить и качать нечего. Корабль сам себе кнопка. */}
           <div
-            className={`relative aspect-[15/8] w-full border ${hullWorkshop ? 'cursor-pointer' : ''}`}
+            // Чуть ниже 4:3 (на 15%) и без подложки: корабль висит прямо на стекле панели,
+            // а под ним целиком влезают характеристики. На низком окне потолок по высоте
+            // экрана сжимает превью первым — характеристики важнее простора вокруг модели.
+            className={`relative aspect-[80/51] max-h-[40vh] w-full ${hullWorkshop ? 'cursor-pointer' : ''}`}
             onClick={hullWorkshop ? () => setHullOpen(true) : undefined}
-            style={{
-              borderColor: DIM,
-              background: 'radial-gradient(ellipse at center, rgba(20,44,74,0.35), rgba(2,6,12,0.6))',
-            }}
           >
             <Blueprint chassisId={shownId} />
 
@@ -162,26 +161,25 @@ export function ShipScreen({
                 </div>
               </>
             )}
-          </div>
 
-          {/* Цена внутри кнопки покупки, либо «уже у вас». Клик открывает модалку сделки:
-              зачёт старого корпуса, что уедет в грузовой отсек и сколько доплатить. */}
-          {docked && (
-            owned ? (
-              <div className="w-full border py-2.5 text-center text-sm tracking-[0.2em]" style={{ borderColor: DIM, color: DIM }}>
-                {t('ship.owned')}
-              </div>
-            ) : (
+            {/* Покупка — под кораблём, снизу по центру: отдельной строкой она съедала
+                высоту, нужную характеристикам. Свой корпус обозначен неактивной кнопкой.
+                Клик открывает модалку сделки: зачёт старого, груз-осадок, доплата. */}
+            {docked && (
               <button
                 type="button"
-                onClick={() => setBuyingHull(true)}
-                className="w-full cursor-pointer border px-4 py-2.5 text-sm tracking-[0.2em] transition-colors hover:bg-[#7fd6ff] hover:text-black"
+                disabled={owned}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setBuyingHull(true)
+                }}
+                className="absolute bottom-1.5 left-1/2 -translate-x-1/2 cursor-pointer border bg-black/40 px-4 py-1.5 text-sm tracking-[0.2em] whitespace-nowrap backdrop-blur-sm transition-colors enabled:hover:bg-[#7fd6ff] enabled:hover:text-black disabled:cursor-default disabled:opacity-50"
                 style={{ borderColor: ACCENT, color: ACCENT }}
               >
-                {t('ship.buyHull', { price: credits(offer.cost) })}
+                {owned ? t('ship.alreadyOwned') : tm('ship.buyHull', { price: <Money amount={offer.cost} /> })}
               </button>
-            )
-          )}
+            )}
+          </div>
 
           {/* Характеристики. У чужого корпуса — со стрелками сравнения с текущим: белая
               вверх — параметр лучше, синяя вниз — хуже. */}
@@ -194,7 +192,12 @@ export function ShipScreen({
         </div>
 
         <div className="space-y-5">
-          <SlotGrid slots={slots} onOpen={setOpenKey} interactive={slotsInteractive} />
+          <SlotGrid
+            slots={slots}
+            onOpen={setOpenKey}
+            interactive={slotsInteractive}
+            cargoCapacity={(owned ? player.spec : previewSpec).cargoCapacity}
+          />
           {/* ГРУЗ у причала уехал в МАГАЗИН, под товары: там торгуют, и трюм нужен рядом с
               прилавком. В полёте магазина нет, а трюм есть — и он остаётся здесь, под
               модулями, в режиме «выбросить за борт». Компонент один и тот же. */}

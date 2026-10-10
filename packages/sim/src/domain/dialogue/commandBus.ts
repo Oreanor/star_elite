@@ -17,6 +17,7 @@ import { WARP } from '../../config/ai'
 import { applyOutcome, applySocial, linesFor, say, type Social } from './dialogue'
 import { coerceOrder, coerceStance, coerceTopic, coerceTransfer } from './payload'
 import { applyTransfer, type TransferResult } from './transfer'
+import { localFine, payLocalFine } from '../station/legal'
 
 /**
  * КОМАНДА боту — единица «что игрок велел / о чём договорились» в диалоге: {действие, груз}.
@@ -260,6 +261,20 @@ function transferCommand(world: World, ship: ShipEntity, payload: unknown): Comm
   return { line: transferLine(r) }
 }
 
+/** Местная полиция: сначала называет долг, затем принимает только явное подтверждение. */
+function fineCommand(world: World, ship: ShipEntity, payload: unknown): CommandOutcome | null {
+  if (ship.faction !== 'police') return null
+  const fine = localFine(world)
+  if (!fine) return { line: null, spoken: 'ПРЕТЕНЗИЙ НЕТ. МЕСТНЫЙ ДОЛГ ОТСУТСТВУЕТ.' }
+  const o = asObject(payload)
+  if (o?.confirm !== true) {
+    return { line: null, spoken: `ШТРАФ СОСТАВЛЯЕТ ${fine.amount} КРЕДИТОВ. ОПЛАТИТЕ ЕГО?` }
+  }
+  const paid = payLocalFine(world)
+  if (!paid.ok) return { line: null, spoken: `НЕДОСТАТОЧНО СРЕДСТВ. ТРЕБУЕТСЯ ${paid.amount} КРЕДИТОВ.` }
+  return { line: `Штраф оплачен: ${paid.amount} кр.`, spoken: 'ПЛАТЁЖ ПРИНЯТ. ПРЕТЕНЗИЙ К ВАМ НЕТ.' }
+}
+
 /** Произвольный факт «запомни это» — короткой фразой (режем по `NOTE_MAX_CHARS`). */
 function noteCommand(world: World, ship: ShipEntity, payload: unknown): CommandOutcome | null {
   const o = asObject(payload)
@@ -408,6 +423,7 @@ const HANDLERS: Record<string, CommandHandler> = {
   stance: stanceCommand,
   mapEdit: mapEditCommand,
   transfer: transferCommand,
+  fine: fineCommand,
   note: noteCommand,
   learn: learnCommand,
   plan: planCommand,

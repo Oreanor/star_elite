@@ -11,12 +11,14 @@ import {
   type Commodity,
   type World,
 } from '@elite/sim'
-import { UI } from '../theme'
+import { trend } from '../theme'
 import { t, useLang } from '../i18n'
-import { ACCENT, Button, Column, DIM, Modal, Panel, Table } from './chrome'
+import { ACCENT, Button, Column, DIM, Modal, Table } from './chrome'
 import { Hold } from './Hold'
-import { credits, formatStat } from './format'
-import { commodityDesc, commodityName } from '../i18n/dataNames'
+import { Outfitter } from './Outfitter'
+import { formatStat } from './format'
+import { commodityName } from '../i18n/dataNames'
+import { Money, tm } from './Money'
 
 /**
  * Прилавок. Цена выведена из уровня развития системы и её строя плюс запаса на
@@ -29,20 +31,36 @@ import { commodityDesc, commodityName } from '../i18n/dataNames'
  */
 export function Market({ world, onChange }: { world: World; onChange: () => void }) {
   useLang() // перерисоваться при смене языка: заголовки и метки идут через t()
+  // Две половины прилавка: товары на перепродажу и железо для своего корабля.
+  const [section, setSection] = useState<'goods' | 'gear'>('goods')
   // Строка не раскрывается вниз — клик открывает модалку сделки (купить/продать).
-  const [trading, setTrading] = useState<Commodity | null>(null)
+  // Из списка товаров и из отсека открывается одна и та же сделка.
+  const [trading, setTrading] = useState<{ commodity: Commodity; sell?: boolean } | null>(null)
 
   const columns: Column<Commodity>[] = [
     {
       key: 'name',
       header: t('station.col.name'),
-      cell: (c) => (c.contraband ? `${commodityName(c)} ⚠` : commodityName(c)),
+      cell: (c) => (
+        <span>
+          {commodityName(c)}
+          {c.contraband && (
+            <span className="ml-2 cursor-help" title="Торговля ограничена законом: перевозка разрешена, штрафуют за покупку или продажу" aria-label="Торговля ограничена законом: перевозка разрешена, штрафуют за покупку или продажу">
+              ⚠
+            </span>
+          )}
+        </span>
+      ),
     },
     {
       key: 'price',
       header: t('station.col.price'),
       align: 'right',
-      cell: (c) => <span style={{ color: DIM }}>{credits(commodityBuyPrice(world, c))}</span>,
+      cell: (c) => (
+        <span style={{ color: DIM }}>
+          <Money amount={commodityBuyPrice(world, c)} />
+        </span>
+      ),
     },
     {
       key: 'mass',
@@ -64,30 +82,71 @@ export function Market({ world, onChange }: { world: World; onChange: () => void
     },
   ]
 
-  return (
-    <div className="space-y-5">
-      <Panel title={t('station.market.title')}>
-        {/* Список — ВСЕ товары, чтобы видеть цену даже на то, чего ни у кого нет. Но строка,
-            в которой сейчас ни купить, ни продать, — неактивна: делать в ней нечего. */}
-        <Table
-          columns={columns}
-          rows={commodityStock()}
-          rowKey={(c) => c.id}
-          onRowClick={(c) => setTrading(c)}
-          rowDisabled={(c) => {
-            const { buyMax, held } = tradeLimits(world, c)
-            return buyMax < 1 && held < 1
-          }}
-        />
-        {trading && (
-          <TradeModal world={world} commodity={trading} onChange={onChange} onClose={() => setTrading(null)} />
-        )}
-      </Panel>
+  const switcher = (
+    <div className="mb-5 flex gap-2">
+      {(['goods', 'gear'] as const).map((s) => {
+        const on = s === section
+        return (
+          <button
+            key={s}
+            type="button"
+            onClick={() => setSection(s)}
+            aria-current={on ? 'page' : undefined}
+            className="cursor-pointer border px-4 py-1.5 text-xs tracking-[0.25em] transition-colors hover:bg-[#7fd6ff] hover:text-black"
+            style={{ borderColor: on ? ACCENT : DIM, backgroundColor: on ? ACCENT : 'transparent', color: on ? '#000' : DIM }}
+          >
+            {t(s === 'goods' ? 'station.market.title' : 'station.outfit.title')}
+          </button>
+        )
+      })}
+    </div>
+  )
 
-      {/* ТРЮМ — сразу под товарами: торговля это разговор двух списков, «что продают» и
-          «что у меня». Ходить за вторым в другую вкладку значит считать выгоду по памяти.
-          Компонент тот же, что был вкладкой ГРУЗ; здесь он всегда в режиме продажи. */}
-      <Hold world={world} onChange={onChange} atStation />
+  // Список (товары или оборудование) — левые две трети, ГРУЗОВОЙ ОТСЕК — правая треть на
+  // всю высоту, и на ОБЕИХ вкладках: торговля это разговор двух списков, «что продают» и
+  // «что у меня», а купленное в трюм железо должно тут же появиться рядом. Отступ панелей
+  // гасим, чтобы обе колонки начинались вровень.
+  return (
+    // Растягиваемся на всю высоту вкладки — чтобы отсек справа доходил до низа панели.
+    <div className="flex flex-1 flex-col">
+      {/* Отсек справа — от 1280 px; уже — он уходит под список: пять колонок оборудования
+          без переносов в две трети узкого окна не влезают и наезжали на отсек. */}
+      <div className="grid min-h-0 flex-1 grid-cols-1 gap-5 xl:grid-cols-3">
+        <div className="min-w-0 xl:col-span-2">
+          {switcher}
+          {section === 'gear' ? (
+            <Outfitter world={world} onChange={onChange} />
+          ) : (
+            // Без своей рамки и заголовка: вкладка ТОВАРЫ сверху уже сказала, что это за список.
+            <div>
+              {/* Список — ВСЕ товары, чтобы видеть цену даже на то, чего ни у кого нет. Но строка,
+                  в которой сейчас ни купить, ни продать, — неактивна: делать в ней нечего. */}
+              <Table
+                columns={columns}
+                rows={commodityStock()}
+                rowKey={(c) => c.id}
+                onRowClick={(c) => setTrading({ commodity: c })}
+                rowDisabled={(c) => {
+                  const { buyMax, held } = tradeLimits(world, c)
+                  return buyMax < 1 && held < 1
+                }}
+              />
+            </div>
+          )}
+        </div>
+        <div className="flex min-h-0 min-w-0 flex-col [&>section]:mt-0 [&>section]:flex-1">
+          <Hold world={world} onChange={onChange} atStation onTrade={(c) => setTrading({ commodity: c, sell: true })} />
+        </div>
+      </div>
+      {trading && (
+        <TradeModal
+          world={world}
+          commodity={trading.commodity}
+          initialSell={trading.sell}
+          onChange={onChange}
+          onClose={() => setTrading(null)}
+        />
+      )}
     </div>
   )
 }
@@ -95,7 +154,7 @@ export function Market({ world, onChange }: { world: World; onChange: () => void
 /**
  * Пределы сделки ЗДЕСЬ И СЕЙЧАС: сколько можно купить (меньшее из денег, места и склада) и
  * сколько этого товара уже в грузовом отсеке. Один источник для неактивности строки в списке
- * и для гашения вкладок КУПИТЬ/ПРОДАТЬ в модалке — чтобы они не разошлись.
+ * и для границ ползунка в модалке — чтобы они не разошлись.
  */
 function tradeLimits(world: World, c: Commodity): { buyMax: number; held: number } {
   const hold = world.player.hold
@@ -118,28 +177,28 @@ function commodityMass(c: Commodity): string {
 /** «дёшево / дорого» относительно каталога — сигнал рынка одной клеткой, не строкой. */
 function MarketTag({ world, commodity }: { world: World; commodity: Commodity }) {
   const ratio = commodityBuyPrice(world, commodity) / commodity.basePrice
-  if (ratio < 0.95) return <span style={{ color: UI.ALLY }}>{t('station.cheap')}</span>
-  if (ratio > 1.3) return <span style={{ color: UI.WARN }}>{t('station.dear')}</span>
+  // Тот же код, что «лучше/хуже» (`trend`): дёшево — выгодно, зелёным; дорого — красным.
+  if (ratio < 0.95) return <span style={{ color: trend(true).color }}>{t('station.cheap')}</span>
+  if (ratio > 1.3) return <span style={{ color: trend(false).color }}>{t('station.dear')}</span>
   return <span style={{ color: DIM }}>·</span>
 }
 
-type TradeMode = 'buy' | 'sell'
-
 /**
- * Модалка сделки: название и описание товара, переключатель КУПИТЬ/ПРОДАТЬ, один
- * горизонтальный ползунок 0..макс и итоговая сумма с кнопкой ОК. Макс покупки —
+ * Отрицательное количество продаёт груз, положительное покупает. Макс покупки —
  * меньшее из трёх (деньги, место в отсеке, склад станции); макс продажи — сколько
- * этого товара уже в отсеке. Вкладка, по которой сейчас ничего не сделать, гаснет.
- * После сделки НЕ закрываемся — вкладки и пределы перепроверяются на месте.
+ * этого товара уже в отсеке. Ноль не совершает сделку.
+ * После сделки окно закрывается: сделка сделана.
  */
 function TradeModal({
   world,
   commodity,
+  initialSell = false,
   onChange,
   onClose,
 }: {
   world: World
   commodity: Commodity
+  initialSell?: boolean
   onChange: () => void
   onClose: () => void
 }) {
@@ -147,129 +206,78 @@ function TradeModal({
   const player = world.player
   const buyPrice = commodityBuyPrice(world, commodity)
   const sellPrice = commoditySellPrice(world, commodity)
-  const stock = commodityStockAt(world, commodity)
-  // Пределы читаем из мира КАЖДЫЙ рендер: после сделки onChange перерисовывает модалку,
-  // и вкладки/ползунок пересчитываются сами — «купил/продал → сразу перепроверка».
+  // Пределы читаем из мира: нельзя продать больше груза или купить больше доступного.
   const { buyMax, held } = tradeLimits(world, commodity)
 
-  const [mode, setMode] = useState<TradeMode>(() => (buyMax >= 1 ? 'buy' : 'sell'))
+  const selling = initialSell
+  const max = selling ? held : buyMax
   const [qty, setQty] = useState(0)
-
-  const canBuy = buyMax >= 1
-  const canSell = held >= 1
-  // Выбранный режим мог стать недоступен после сделки (продал всё → ПРОДАТЬ гаснет). Тогда
-  // сами показываем доступный, а не оставляем игрока на мёртвой вкладке.
-  const effMode: TradeMode =
-    mode === 'buy' ? (canBuy ? 'buy' : canSell ? 'sell' : 'buy') : canSell ? 'sell' : canBuy ? 'buy' : 'sell'
-  const max = effMode === 'buy' ? buyMax : held
-  const unitPrice = effMode === 'buy' ? buyPrice : sellPrice
-
-  // Границы могли сузиться после сделки — держим ползунок в них, не заводя вторую истину.
   const value = Math.min(Math.max(0, qty), max)
-  const disabled = value < 1
+  const units = value
+  const unitPrice = selling ? sellPrice : buyPrice
+  const totalMass = Math.round(units * commodity.unitMass * 10) / 10
+  const disabled = value === 0
 
-  const pick = (m: TradeMode) => {
-    setMode(m)
-    setQty(0)
-  }
-
-  // Купил/продал — НЕ закрываемся: сбрасываем ползунок и перерисовываемся (onChange), чтобы
-  // вкладки и пределы перепроверились по новому кошельку/отсеку. Закрыть — только «Отмена».
+  // Купил/продал — сделка сделана, окно закрывается; перерисовка (onChange) обновит список,
+  // отсек и кошелёк под ним.
   const act = () => {
+    if (disabled) return
     const ok =
-      effMode === 'buy'
-        ? buyCommodity(world, player, commodity, value) > 0
-        : sellCommodity(world, player, commodity, value) > 0
+      selling
+        ? sellCommodity(world, player, commodity, units) > 0
+        : buyCommodity(world, player, commodity, units) > 0
     if (ok) {
-      setQty(0)
       onChange()
+      onClose()
     }
   }
 
   return (
     <Modal onClose={onClose}>
       <div className="mb-3 flex items-baseline justify-between gap-3">
-        <h3 className="text-base tracking-[0.2em]">
+        <h3 className="text-lg tracking-[0.2em]">
           {commodity.contraband ? `${commodityName(commodity)} ⚠` : commodityName(commodity)}
         </h3>
-        <span className="text-xs" style={{ color: DIM }}>
-          {commodityMass(commodity)}
-        </span>
-      </div>
-      <p className="mb-4 text-xs leading-relaxed" style={{ color: DIM }}>
-        {commodityDesc(commodity)}
-      </p>
-
-      {/* Переключатель режима: залитая вкладка — активный режим. Вкладка, по которой сейчас
-          нечего делать (нечего купить/нечего продать), гаснет и не жмётся. */}
-      <div className="mb-4 flex gap-2">
-        <TradeTab on={effMode === 'buy'} disabled={!canBuy} onClick={() => pick('buy')} label={t('station.trade.buy')} />
-        <TradeTab on={effMode === 'sell'} disabled={!canSell} onClick={() => pick('sell')} label={t('station.trade.sell')} />
       </div>
 
-      {/* Контекст режима: почём и «сколько где». */}
-      <div className="mb-2 flex justify-between text-xs" style={{ color: DIM }}>
-        <span>{credits(unitPrice)}</span>
-        <span>{effMode === 'buy' ? t('station.trade.stock', { n: stock }) : t('station.trade.have', { n: held })}</span>
+      {/* Цена за ТОННУ, а не за единицу: у роскоши единица легче тонны, и «по 1456» без
+          единицы читалось бы как цена тонны. */}
+      <div className="mt-7 flex flex-col gap-2 text-center tabular-nums" style={{ color: ACCENT }}>
+        <div className="text-base font-normal leading-7">
+            {tm('station.trade.line', {
+              mass: formatStat('mass', totalMass, Number.isInteger(totalMass) ? 0 : 1),
+              price: <Money amount={unitPrice / commodity.unitMass} />,
+            })}
+        </div>
+        <div className="text-xl leading-7">
+          <Money amount={units * unitPrice} />
+        </div>
       </div>
 
-      {/* Ползунок 0..макс: слева ноль, справа потолок режима. */}
-      <div className="flex items-center gap-3 text-sm tabular-nums">
-        <span className="w-10 text-right" style={{ color: DIM }}>
-          0
-        </span>
+      <div className="mt-5 flex items-center gap-3 text-xs tabular-nums">
+        <span className="w-10 text-right" style={{ color: DIM }}>0</span>
         <input
           type="range"
+          aria-label={t(selling ? 'station.trade.sell' : 'station.trade.buy')}
           min={0}
-          max={Math.max(1, max)}
+          max={max}
+          step={1}
           value={value}
-          disabled={max < 1}
+          disabled={max === 0}
           onChange={(e) => setQty(Number(e.target.value))}
           className="h-1 flex-1 cursor-pointer accent-[#7fd6ff]"
         />
-        <span className="w-10" style={{ color: DIM }}>
-          {max}
-        </span>
+        <span className="w-10" style={{ color: DIM }}>{max}</span>
       </div>
 
-      {/* Итог — крупно по центру: главное число сделки. Под ним мелко «сколько × почём». */}
-      <div className="mt-4 text-center">
-        <div className="text-2xl tabular-nums" style={{ color: ACCENT }}>
-          {credits(value * unitPrice)}
-        </div>
-        <div className="mt-1 text-xs tabular-nums" style={{ color: DIM }}>
-          {value} × {credits(unitPrice)}
-        </div>
-      </div>
-
-      <div className="mt-5 flex justify-end gap-2">
-        <Button small disabled={disabled} onClick={act}>
-          {t('ship.ok')}
+      <div className="mt-5 flex justify-center gap-2">
+        <Button small variant="primary" disabled={disabled} onClick={act}>
+          {t(selling ? 'station.trade.sell' : 'station.trade.buy')}
         </Button>
-        <Button small onClick={onClose}>
+        <Button small variant="secondary" onClick={onClose}>
           {t('ship.cancel')}
         </Button>
       </div>
     </Modal>
-  )
-}
-
-/**
- * Вкладка режима сделки: залита в активном, обведена в неактивном. `disabled` — по этому
- * режиму сейчас нечего делать (нечего купить/продать): гасим и не даём нажать.
- */
-function TradeTab({ on, disabled, onClick, label }: { on: boolean; disabled?: boolean; onClick: () => void; label: string }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      className={`flex-1 border px-4 py-1.5 text-xs tracking-[0.2em] transition-colors ${
-        disabled ? 'cursor-not-allowed opacity-35' : 'cursor-pointer hover:bg-[#7fd6ff] hover:text-black'
-      }`}
-      style={{ borderColor: on ? ACCENT : DIM, backgroundColor: on ? ACCENT : 'transparent', color: on ? '#000' : DIM }}
-    >
-      {label}
-    </button>
   )
 }

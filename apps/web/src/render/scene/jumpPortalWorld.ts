@@ -17,6 +17,7 @@ import {
   type World,
 } from '@elite/sim'
 import type { Session } from '../../session/GameContext'
+import { preloadSystemSurfaces } from '../materials/surfacePreload'
 import { jumpPortal, linkThroughPortal, linkVectorThroughPortal, setDestPortal } from '../../session/jumpPortal'
 
 /** Полноценный второй World и его отдельная three-сцена. */
@@ -102,6 +103,9 @@ export function prepareJumpPortalWorld(source: Session): PreparedJumpWorld {
   carryFollowersOnJump(layoutWorld)
   driftContacts(layoutWorld)
   spawnResidentContacts(layoutWorld)
+  // Карты планет назначения качаем, пока кольцо раскрывается: в дырке и после перехода
+  // миры должны стоять уже обёрнутыми, а не щёлкать текстурой на глазах.
+  preloadSystemSurfaces(layoutWorld)
 
   const lookAt = layoutWorld.bodies.find((body) => body.kind === 'station')
     ?? layoutWorld.bodies.find((body) => body.kind === 'planet')

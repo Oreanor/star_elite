@@ -37,9 +37,20 @@ const STAT_UNIT: Partial<Record<StatId, Key>> = {
 /** Где доли важны: угловые ускорения и дальность прыжка. Прочее округляем — целое читается быстрее. */
 const STAT_DECIMALS: Partial<Record<StatId, number>> = { turn: 2, jump: 2, pitch: 2, yaw: 2, roll: 2, maneuver: 2 }
 
-/** «значение единица» на языке интерфейса. */
-export function formatStat(id: StatId, value: number): string {
-  const decimals = STAT_DECIMALS[id] ?? 0
+/**
+ * Только число характеристики, без единицы: левая часть «1.40 → 1.02 рад/с²», где единица
+ * пишется один раз — в конце, у нового значения.
+ */
+export function statNumber(id: StatId, value: number, decimals = STAT_DECIMALS[id] ?? 0): string {
+  return decimals > 0 ? value.toFixed(decimals) : String(Math.round(value))
+}
+
+/**
+ * «значение единица» на языке интерфейса.
+ * @param decimals Знаков после запятой вместо принятых для характеристики — там, где
+ *   сравнивают соседние строки (справочник: масса линий различается десятыми).
+ */
+export function formatStat(id: StatId, value: number, decimals = STAT_DECIMALS[id] ?? 0): string {
   const num = decimals > 0 ? value.toFixed(decimals) : String(Math.round(value))
   const unit = STAT_UNIT[id]
   return unit ? `${num} ${t(unit)}` : num
@@ -50,7 +61,3 @@ export function statLabel(id: StatId): string {
   return t(`stat.${id}` as Key)
 }
 
-/** Сумма кредитов с единицей: «1240 кр.» / «1240 cr». Валюта тоже локализуется. */
-export function credits(amount: number): string {
-  return `${amount} ${t('unit.cr')}`
-}
