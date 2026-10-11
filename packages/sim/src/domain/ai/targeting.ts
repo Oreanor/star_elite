@@ -1,6 +1,6 @@
 import { AI } from '../../config/ai'
-import { isEngageable } from '../combat/engage'
 import type { Faction, ShipEntity, World } from '../world/entities'
+import { knowsOf } from './perception'
 
 /**
  * Кто кому враг. Правило, а не таблица «все против игрока» — иначе полиция
@@ -16,8 +16,27 @@ export function isHostileTo(a: Faction, b: Faction): boolean {
 
 const lawful = (f: Faction): boolean => f === 'player' || f === 'police'
 
+/** Фракция для вражды: чужой живой игрок — как игрок (см. `ShipEntity.peer`). */
+const factionOf = (s: ShipEntity): Faction => (s.peer ? 'player' : s.faction)
+
 /**
- * Ближайший враг в радиусе осведомлённости.
+ * Враг ли `other` для `self`: по фракции ИЛИ лично. Личная вражда (`ai.foes`) — то, чего
+ * фракции не знают: пират и торговец, отказавший ему в грузе, не воюют фракциями, но
+ * воюют друг с другом. Взаимна: достаточно записи у одного из двоих.
+ */
+export function isFoe(self: ShipEntity, other: ShipEntity): boolean {
+  if (isHostileTo(factionOf(self), factionOf(other))) return true
+  return (self.ai?.foes.includes(other.id) ?? false) || (other.ai?.foes.includes(self.id) ?? false)
+}
+
+/** Записать личную вражду (без дублей). Вторая сторона узнает о ней через `isFoe`. */
+export function declareFoe(self: ShipEntity, other: ShipEntity): void {
+  const foes = self.ai?.foes
+  if (foes && !foes.includes(other.id)) foes.push(other.id)
+}
+
+/**
+ * Ближайший враг, о котором бот ЗНАЕТ (видит по прямой или только что получил от него).
  * Прилипание к текущей цели намеренное: бот, каждый кадр меняющий жертву,
  * не доводит ни одной атаки до конца.
  */
@@ -25,23 +44,25 @@ export function selectTarget(self: ShipEntity, world: World): ShipEntity | null 
   const current = self.ai?.targetId ?? null
 
   let best: ShipEntity | null = null
-  let bestDistance = AI.AWARENESS
+  let bestDistance = Infinity
 
   // Игрок (индекс −1) и борта — без склейки в новый массив: выбор цели идёт у каждого бота
   // в такте размышления, и `[player, ...ships]` плодил по массиву на бот.
   for (let i = world.player.alive ? -1 : 0; i < world.ships.length; i++) {
     const other = i < 0 ? world.player : world.ships[i]!
-    // Замаскированного пилот не видит, стыкующегося не трогает.
-    if (other === self || !isEngageable(other)) continue
-    if (!isHostileTo(self.faction, other.faction)) continue
+    if (other === self || !other.alive) continue
+    if (!isFoe(self, other)) continue
+    // Замаскированного и стыкующегося не видит; за планетой — не видит, пока тот не стреляет.
+    if (!knowsOf(self, other, world)) continue
 
     const distance = other.state.pos.distanceTo(self.state.pos)
-    if (distance > AI.AWARENESS) continue
+    // Стрелок, которого чувствуешь, может быть и за радиусом: от него не отмахиваются.
+    const effective = Math.min(distance, AI.AWARENESS)
 
     // Текущей цели даём фору: менять её стоит только ради заметно более близкой.
     const bias = other.id === current ? AI.TARGET_STICKINESS : 1
-    if (distance * bias < bestDistance) {
-      bestDistance = distance * bias
+    if (effective * bias < bestDistance) {
+      bestDistance = effective * bias
       best = other
     }
   }

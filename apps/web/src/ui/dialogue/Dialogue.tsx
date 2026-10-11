@@ -1,10 +1,14 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from 'react'
 import {
+  acceptBlock,
+  acceptOffer,
+  declineOffer,
   dialogueEffects,
   escortFee,
   interlocutor,
   linesFor,
   rememberPilot,
+  revealOffer,
   stanceTo,
   type Command,
   type Topic,
@@ -20,6 +24,8 @@ import { t, useLang } from '../i18n'
 import { buildContext, createDigestMemory, rememberDigest, sufflerDigestsFor, type ChatTurn, type ContextDigest, type DigestMemory, type NegotiatorReply } from './facts'
 import { DIALOGUE_REACTION_MS, dialogueBaseline, dialogueReaction } from './dialogueFace'
 import { Money, tm } from '../station/Money'
+import { offerText } from '../jobs/jobText'
+import { publishGodMemory, watchGodMemory } from '../../session/net/godMemory'
 
 /** Суфлёр: тихая подгрузка справочников в промпт — без паузы в ленте. */
 
@@ -114,6 +120,11 @@ export function Dialogue({
     if (other) setFaceEmo(dialogueBaseline(world, other))
   }, [world, other])
 
+  // Бог помнит всех, кто его находил: в разговоре с ним слушаем общую память галактики.
+  useEffect(() => {
+    if (other?.divine) watchGodMemory(world.galaxySeed)
+  }, [other?.id])
+
   useEffect(() => {
     if (!other) return
     const id = other.id
@@ -132,6 +143,16 @@ export function Dialogue({
   useEffect(() => {
     scroller.current?.scrollTo({ top: scroller.current.scrollHeight })
   }, [turns, busy, ended])
+
+  // Сам вызвал с делом (или зовёт на помощь) — с дела он и начинает: ответил на вызов —
+  // услышал оферту, не спрашивая. Раз на открытие окна.
+  useEffect(() => {
+    if (!other?.offer) return
+    if (world.offerHailShipId !== other.id && other.offer.kind !== 'rescue') return
+    const offer = revealOffer(world, other)
+    if (offer) setTurns((tt) => [...tt, { who: 'them', text: offerText(offer) }])
+    bump()
+  }, [other?.id])
 
   if (!other) {
     onClose()
@@ -160,6 +181,37 @@ export function Dialogue({
     bump()
   }
 
+  // ─ Дело: кнопки зовут домен напрямую (правило одно — в `contracts`), слова — из словаря.
+  const jobAsk = () => {
+    if (ended) return
+    rememberPilot(world, other)
+    push({ who: 'you', text: t('job.ask') })
+    const offer = revealOffer(world, other)
+    push({ who: 'them', text: offer ? offerText(offer) : t('job.none') })
+    bump()
+  }
+  const jobAccept = () => {
+    if (ended || acceptBlock(world, other) !== null) return
+    push({ who: 'you', text: t('job.accept') })
+    if (acceptOffer(world, other)) {
+      push({ who: 'them', text: t('job.accepted') })
+      markOutcomeEmotion(other.id, 'joy', world.time)
+    }
+    bump()
+  }
+  const jobDecline = () => {
+    if (ended) return
+    push({ who: 'you', text: t('job.decline') })
+    const mood = declineOffer(world, other)
+    push({ who: 'them', text: t(mood === 'angry' ? 'job.declined.angry' : 'job.declined.shrug') })
+    if (mood === 'angry') markOutcomeEmotion(other.id, 'anger', world.time)
+    bump()
+  }
+  const offer = other.offer
+  const jobBlock = offer?.revealed ? acceptBlock(world, other) : null
+  // Спросить о работе можно любого мирного; враг и бог дел не раздают.
+  const canAskJob = !other.divine && other.faction !== 'hostile' && !offer?.revealed
+
   // ─ Свободная реплика: модель ловит ТРИГГЕР и красит слова, а исход считает ДОМЕН.
   const deliverReply = (reply: NegotiatorReply) => {
     rememberPilot(world, other)
@@ -186,6 +238,8 @@ export function Dialogue({
       const emo = outcomeFace(fx.askOutcome.topic, fx.askOutcome.agreed)
       if (emo) markOutcomeEmotion(other.id, emo, world.time)
     }
+    // Сказанное богу — в общую память: другие смертные услышат от него, что ты был.
+    if (other.divine) publishGodMemory(world)
     if (reply.hangup) {
       digestMemory.current = createDigestMemory()
       setEnded(reply.source === 'overload' ? t('dialogue.overload') : t('dialogue.hangup'))
@@ -263,6 +317,26 @@ export function Dialogue({
                 >
                   {hireFee != null ? tm('dialogue.hire', { fee: <Money amount={hireFee} /> }) : t('dialogue.hirePlain')}
                 </Button>
+              )}
+              {canAskJob && (
+                <Button small onClick={jobAsk} disabled={busy}>
+                  {t('job.ask')}
+                </Button>
+              )}
+              {offer?.revealed && (
+                <>
+                  <Button small onClick={jobAccept} disabled={busy || jobBlock !== null}>
+                    {t('job.accept')}
+                  </Button>
+                  <Button small onClick={jobDecline} disabled={busy}>
+                    {t('job.decline')}
+                  </Button>
+                  {jobBlock && jobBlock !== 'no-offer' && (
+                    <span className="max-w-[11rem] text-right text-[0.65rem] leading-snug tracking-widest" style={{ color: UI.DIM }}>
+                      {t(jobBlock === 'hold-full' ? 'job.block.hold' : jobBlock === 'remote' ? 'job.block.remote' : 'job.block.busy')}
+                    </span>
+                  )}
+                </>
               )}
               <Button small onClick={onClose}>
                 {t('dialogue.end')}

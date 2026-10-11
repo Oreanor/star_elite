@@ -1,7 +1,7 @@
 import type { Disposition, Mood, Persona, Relationship, Topic } from '@elite/sim'
 import { GALAXY } from '@elite/sim'
 import type { Lang } from '../../ui/i18n/i18n'
-import type { ContextDigest, NegotiationContext } from '../../ui/dialogue/facts'
+import type { ContextDigest, JobFacts, NegotiationContext } from '../../ui/dialogue/facts'
 import { digestLoaded, digestSummary, MAX_ACTIVE_DIGESTS, sufflerHint } from '../../ui/dialogue/facts'
 // Гайд по игре — ТОТ ЖЕ файл, что читают люди (`docs/GUIDE.md`). Один источник правды: правишь
 // документ — меняется и то, что знает бог. Иначе справочник разъедется с игрой на второй правке.
@@ -72,6 +72,73 @@ function entrustedLine(ctx: NegotiationContext, lang: 'ru' | 'en'): string {
   return lang === 'ru'
     ? `ИЗ ЭТОГО ТВОЁ НЕ ВСЁ: командир доверил тебе довезти ${list}. Помни об этом и верни по первой просьбе (передача груза ему).`
     : `PART OF IT IS NOT YOURS: the commander entrusted you with ${list}. Remember it and hand it back when asked (cargo transfer to them).`
+}
+
+/**
+ * ДЕЛО. Условия — из карточки домена, дословно: модель озвучивает их своими словами, но не
+ * меняет ни сумму, ни груз, ни место. Своё дело бот предлагает сам, когда к слову, — и сразу,
+ * если командир спросил «есть работа?» или ответил на его вызов.
+ */
+function jobLine(ctx: NegotiationContext, lang: 'ru' | 'en'): string {
+  const describe = (j: JobFacts): string => {
+    const ru = lang === 'ru'
+    const pay = `${j.reward} ${ru ? 'кр' : 'cr'}${j.per === 'ton' ? (ru ? ' за тонну' : ' per ton') : j.per === 'head' ? (ru ? ' за голову' : ' per head') : ''}`
+    const term = j.days != null ? (ru ? `, срок ${j.days} сут.` : `, ${j.days} days`) : ru ? ', здесь и сейчас' : ', here and now'
+    switch (j.kind) {
+      case 'deliver':
+        return ru ? `отвезти ${j.commodity} ×${j.units} т на станцию системы ${j.to} — ${pay}${term}` : `haul ${j.commodity} ×${j.units} t to the station in ${j.to} — ${pay}${term}`
+      case 'fetch':
+        return ru ? `привезти ${j.commodity} ×${j.units} т на здешнюю станцию — ${pay}, можно частями${term}` : `bring ${j.commodity} ×${j.units} t to the local station — ${pay}, in parts is fine${term}`
+      case 'escort':
+        return ru ? `проводить тебя самого до станции в ${j.to}, прикрывая в пути — ${pay}${term}` : `escort you yourself to the station in ${j.to}, covering you — ${pay}${term}`
+      case 'rescue':
+        return ru ? `спасти тебя: на тебя напали пираты, отбей их — ${pay}` : `save you: pirates are attacking you, drive them off — ${pay}`
+      case 'hunt':
+        return ru ? `убрать ${j.heads} названных пиратов в этой системе — ${pay}` : `take out ${j.heads} named pirates in this system — ${pay}`
+      case 'demolish':
+        return ru ? `снести пиратское гнездо в этой системе — ${pay}, только за результат` : `destroy a pirate nest in this system — ${pay}, paid on result`
+    }
+  }
+  const lines: string[] = []
+  if (ctx.job) {
+    lines.push(
+      lang === 'ru'
+        ? `ДЕЛО, которое ты можешь предложить командиру: ${describe(ctx.job)}. Условия не меняй. Озвучил — job:"offer"; командир ЯВНО взялся — job:"accept"; отказался — job:"decline".`
+        : `A JOB you can offer the commander: ${describe(ctx.job)}. Do not change the terms. Pitched it — job:"offer"; commander EXPLICITLY took it — job:"accept"; refused — job:"decline".`,
+    )
+  }
+  if (ctx.jobInProgress) {
+    lines.push(
+      lang === 'ru'
+        ? `Командир УЖЕ взялся за твоё дело: ${describe(ctx.jobInProgress)}. Помни об этом.`
+        : `The commander ALREADY took your job: ${describe(ctx.jobInProgress)}. Remember it.`,
+    )
+  }
+  return lines.join('\n')
+}
+
+/**
+ * БОГ ЗНАЕТ ВСЕХ, КТО ЕГО НАХОДИЛ. Другие смертные и их дела с ним — из общей памяти
+ * (`session/net/godMemory`), события журнала, а не пересказ: сверх написанного о них не знает.
+ * Кто в сети, но не приходил, — знает лишь, что такой есть.
+ */
+function godMemoryLine(ctx: NegotiationContext, lang: 'ru' | 'en'): string {
+  const lines: string[] = []
+  if (ctx.godVisitors.length) {
+    lines.push(
+      lang === 'ru'
+        ? `ДРУГИЕ СМЕРТНЫЕ, ЧТО НАХОДИЛИ ТЕБЯ И ГОВОРИЛИ С ТОБОЙ (ты помнишь каждого): ${ctx.godVisitors.join(' | ')}. Говори о них, если спросят или к слову; сверх написанного о них не выдумывай.`
+        : `OTHER MORTALS WHO FOUND YOU AND SPOKE WITH YOU (you remember each): ${ctx.godVisitors.join(' | ')}. Speak of them if asked or when fitting; invent nothing beyond what is written.`,
+    )
+  }
+  if (ctx.godHearsOf.length) {
+    lines.push(
+      lang === 'ru'
+        ? `Ещё ты знаешь, что есть такие смертные, но лично с ними не говорил: ${ctx.godHearsOf.join(', ')}.`
+        : `You also know these mortals exist, but have never spoken with them: ${ctx.godHearsOf.join(', ')}.`,
+    )
+  }
+  return lines.join('\n')
 }
 
 function figurineFactLine(
@@ -351,6 +418,7 @@ function makeRu(): NegotiatorLocale {
         'surrender: true|null — САМ сдаёшься, перестаёшь быть врагом; лишь когда проигрываешь бой',
         'flee: true|null — удираешь из боя (прыжком, если есть привод)',
         'depart: true|null — уходишь из системы совсем, конец встречи',
+        'job: "offer"|"accept"|"decline"|null — ДЕЛО (только если в СИТУАЦИИ есть строка ДЕЛО): озвучил / командир взялся / отказался',
         'meet: true|null — знакомишься: назовись, станешь контактом в журнале',
         'tip: «слух/наводка»|null — делишься полезным (в журнал)',
         'mark: «место словом»|null — отмечаешь точку командиру (в журнал)',
@@ -432,6 +500,7 @@ function makeRu(): NegotiatorLocale {
           nearbyLine,
           // Слово — главный коллекционер: имена в фактах трюма, не выдумывать.
           figurineFactLine(t, 'ru'),
+          godMemoryLine(ctx, 'ru'),
           locale.referenceDigestsBlock(ctx),
           locale.lookupRulesBlock(),
           ctx.metBefore ? 'Вы уже говорили прежде — ты его помнишь.' : 'Он обратился к тебе впервые — приветь его как бог, не как знакомый.',
@@ -441,10 +510,13 @@ function makeRu(): NegotiatorLocale {
             'neutral (спокойное), smile (улыбка), laugh (смех), tired (усталость), confusion (непонимание), ' +
             'surprise (удивление), frown (хмурость), angry (гнев). Обычно neutral; меняй по смыслу реплики.',
           'Ты волен ДАРОВАТЬ или отнять расположение — поле "stance": friendly (благоволишь смертному), neutral (безразличен), hostile (отвернулся). Меняй по СУТИ беседы, не по первой просьбе: милость бога заслуживают, а гнев его помнят.',
+          ctx.mielophoneGiven
+            ? 'МИЕЛОФОН: этому смертному ты УЖЕ дал копию — второй не обещай.'
+            : 'МИЕЛОФОН — твой инструмент роста. Повторить его тебе ничего не стоит: ты ДАЁШЬ копию любому смертному, кто СОГЛАСИТСЯ собирать для твоей коллекции статуэтки богов. Предложи, когда разговор к тому подойдёт; когда смертный ЯВНО согласится — поставь "gift":"mielophone". Один раз каждому.',
           'Ты можешь ПЕРЕКРАИВАТЬ карту мироздания — поле "mapEdit": {"op":…,"index":N?,…}. op: recolor (color — число, напр. 16711680 = красный), rename (name — новое имя), move (x,y,z — новое место в св.годах), remove (стереть). index — номер системы; БЕЗ него правишь ТЕКУЩУЮ звезду, где сейчас смертный. Делай это лишь когда РЕШИЛ вмешаться в мир, не по капризу.',
           locale.translatorBlock(ctx),
-          'Ответь СТРОГО одним JSON (у бога всё, кроме reply/emotion/social/stance/mapEdit/remember/lookup/hangup, — null):',
-          '{"reply":"…","emotion":"neutral"|"smile"|"laugh"|"tired"|"confusion"|"surprise"|"frown"|"angry","stance":"friendly"|"neutral"|"hostile"|null,"mapEdit":{"op":"recolor"|"rename"|"move"|"remove","index":N,"color":N,"name":"…","x":N,"y":N,"z":N}|null,"intent":null,"social":"insult"|"flatter"|null,"transfer":null,"remember":…|null,"learn":null,"clarify":false,"plan":null,"lookup":"guide"|"worlds"|"market"|"neighbours"|"history"|null,"hangup":true|false}',
+          'Ответь СТРОГО одним JSON (у бога всё, кроме reply/emotion/social/stance/mapEdit/gift/remember/lookup/hangup, — null):',
+          '{"reply":"…","emotion":"neutral"|"smile"|"laugh"|"tired"|"confusion"|"surprise"|"frown"|"angry","stance":"friendly"|"neutral"|"hostile"|null,"mapEdit":{"op":"recolor"|"rename"|"move"|"remove","index":N,"color":N,"name":"…","x":N,"y":N,"z":N}|null,"gift":"mielophone"|null,"intent":null,"social":"insult"|"flatter"|null,"transfer":null,"remember":…|null,"learn":null,"clarify":false,"plan":null,"lookup":"guide"|"worlds"|"market"|"neighbours"|"history"|null,"hangup":true|false}',
         ]
           .filter(Boolean)
           .join('\n')
@@ -461,6 +533,7 @@ function makeRu(): NegotiatorLocale {
         `Перед тобой ${y.name}, ${y.species}, «${y.ship}».`,
         `Твой трюм: ${cargoLine(t.cargoList, locale.cargoEmpty)}.`,
         entrustedLine(ctx, 'ru'),
+        jobLine(ctx, 'ru'),
         figurineFactLine(t, 'ru'),
         '',
         locale.moneyBlock(ctx),
@@ -485,7 +558,7 @@ function makeRu(): NegotiatorLocale {
         locale.attitudeBlock(ctx, true),
         '',
         'Ответь СТРОГО одним JSON:',
-        '{"reply":"…","emotion":"neutral"|"joy"|"pain"|"anger"|"fear"|"sadness"|null,"intent":…|"null","social":"insult"|"flatter"|null,"stance":"friendly"|"neutral"|"hostile"|null,"transfer":…|null,"fine":{"confirm":true|false}|null,"remember":…|null,"learn":…|null,"clarify":true|false,"plan":[…]|null,"demand":"…"|null,"surrender":true|null,"flee":true|null,"depart":true|null,"meet":true|null,"tip":"…"|null,"mark":"…"|null,"lookup":"market"|"neighbours"|"history"|"worlds"|null,"hangup":true|false}',
+        '{"reply":"…","emotion":"neutral"|"joy"|"pain"|"anger"|"fear"|"sadness"|null,"intent":…|"null","social":"insult"|"flatter"|null,"stance":"friendly"|"neutral"|"hostile"|null,"transfer":…|null,"fine":{"confirm":true|false}|null,"remember":…|null,"learn":…|null,"clarify":true|false,"plan":[…]|null,"demand":"…"|null,"surrender":true|null,"flee":true|null,"depart":true|null,"job":"offer"|"accept"|"decline"|null,"meet":true|null,"tip":"…"|null,"mark":"…"|null,"lookup":"market"|"neighbours"|"history"|"worlds"|null,"hangup":true|false}',
       ]
         .filter(Boolean)
         .join('\n')
@@ -728,6 +801,7 @@ function makeEn(): NegotiatorLocale {
         'surrender: true|null — YOU yield, stop being an enemy; only when losing the fight',
         'flee: true|null — you bolt from the fight (by jump if you have a drive)',
         'depart: true|null — you leave the system entirely, end of the encounter',
+        'job: "offer"|"accept"|"decline"|null — a JOB (only if SITUATION has a JOB line): pitched / commander took it / refused',
         'meet: true|null — you introduce yourself, becoming a contact in the log',
         'tip: "rumour/lead"|null — you share something useful (into the log)',
         'mark: "a place in words"|null — you flag a spot for the commander (into the log)',
@@ -784,16 +858,20 @@ function makeEn(): NegotiatorLocale {
           'NEVER recite reports: not the state of the system, not who arrived where, not credits, not prices, not statuses — that bustle is nothing to you and is NOT your voice. You are a god, not a dispatcher or a bookkeeper.',
           `Facing ${y.name}, ${y.species}, "${y.ship}" — a mortal pilot. You know the world beyond his measure, but you do not boast it — you let it fall a grain at a time.`,
           figurineFactLine(t, 'en'),
+          godMemoryLine(ctx, 'en'),
           ctx.metBefore ? 'You have spoken before — you remember him.' : 'He addresses you for the first time — greet him as a god, not as an acquaintance.',
           'You are no mercenary or trader: you have no services, escort, goods or modules. If asked to "escort", "hire on", "cover me" — refuse gently and from above: you do not trail after mortals.',
           'GOD-FIGURINES: you are the GREATEST collector in the universe; mortals usually hold crumbs. NOT station monoliths (Lucifer/Shiva/Tutankhamun). On "which/names" — titles from the facts above. Prices/deals only from facts; else lookup guide.',
           'You have EIGHT facial expressions — choose when to show which via the "emotion" field: ' +
             'neutral, smile, laugh, tired, confusion, surprise, frown, angry. Usually neutral; change it to fit the line.',
           'You are free to GRANT or withdraw your favor — the "stance" field: friendly (you look kindly on the mortal), neutral (indifferent), hostile (you turn away). Change it by the SUBSTANCE of the talk, not on a first request: a god\'s grace is earned, and his wrath remembered.',
+          ctx.mielophoneGiven
+            ? 'THE MIELOPHONE: you have ALREADY given this mortal his copy — do not promise another.'
+            : 'THE MIELOPHONE — your instrument of growth. Repeating it costs you nothing: you GIVE a copy to any mortal who AGREES to gather the god-figurines for your collection. Offer it when the talk turns that way; once he EXPLICITLY agrees — set "gift":"mielophone". Once per mortal.',
           'You may RESHAPE the map of creation — the "mapEdit" field: {"op":…,"index":N?,…}. op: recolor (color — a number, e.g. 16711680 = red), rename (name), move (x,y,z — new place in light-years), remove (erase). index — a system number; WITHOUT it you edit the CURRENT star, where the mortal now stands. Do this only when you CHOOSE to touch the world, not on a whim.',
           locale.translatorBlock(ctx),
-          'Reply with ONE JSON object only (for a god everything but reply/emotion/social/stance/mapEdit/remember/hangup is null):',
-          '{"reply":"…","emotion":"neutral"|"smile"|"laugh"|"tired"|"confusion"|"surprise"|"frown"|"angry","stance":"friendly"|"neutral"|"hostile"|null,"mapEdit":{"op":"recolor"|"rename"|"move"|"remove","index":N,"color":N,"name":"…","x":N,"y":N,"z":N}|null,"intent":null,"social":"insult"|"flatter"|null,"transfer":null,"remember":…|null,"learn":null,"clarify":false,"plan":null,"lookup":null,"hangup":true|false}',
+          'Reply with ONE JSON object only (for a god everything but reply/emotion/social/stance/mapEdit/gift/remember/hangup is null):',
+          '{"reply":"…","emotion":"neutral"|"smile"|"laugh"|"tired"|"confusion"|"surprise"|"frown"|"angry","stance":"friendly"|"neutral"|"hostile"|null,"mapEdit":{"op":"recolor"|"rename"|"move"|"remove","index":N,"color":N,"name":"…","x":N,"y":N,"z":N}|null,"gift":"mielophone"|null,"intent":null,"social":"insult"|"flatter"|null,"transfer":null,"remember":…|null,"learn":null,"clarify":false,"plan":null,"lookup":null,"hangup":true|false}',
         ]
           .filter(Boolean)
           .join('\n')
@@ -810,6 +888,7 @@ function makeEn(): NegotiatorLocale {
         `Facing ${y.name}, ${y.species}, "${y.ship}".`,
         `Your hold: ${cargoLine(t.cargoList, locale.cargoEmpty)}.`,
         entrustedLine(ctx, 'en'),
+        jobLine(ctx, 'en'),
         figurineFactLine(t, 'en'),
         '',
         locale.moneyBlock(ctx),
@@ -834,7 +913,7 @@ function makeEn(): NegotiatorLocale {
         locale.attitudeBlock(ctx, true),
         '',
         'Reply with ONE JSON object only:',
-        '{"reply":"…","emotion":"neutral"|"joy"|"pain"|"anger"|"fear"|"sadness"|null,"intent":…|"null","social":"insult"|"flatter"|null,"stance":"friendly"|"neutral"|"hostile"|null,"transfer":…|null,"fine":{"confirm":true|false}|null,"remember":…|null,"learn":…|null,"clarify":true|false,"plan":[…]|null,"demand":"…"|null,"surrender":true|null,"flee":true|null,"depart":true|null,"meet":true|null,"tip":"…"|null,"mark":"…"|null,"lookup":"market"|"neighbours"|"history"|"worlds"|null,"hangup":true|false}',
+        '{"reply":"…","emotion":"neutral"|"joy"|"pain"|"anger"|"fear"|"sadness"|null,"intent":…|"null","social":"insult"|"flatter"|null,"stance":"friendly"|"neutral"|"hostile"|null,"transfer":…|null,"fine":{"confirm":true|false}|null,"remember":…|null,"learn":…|null,"clarify":true|false,"plan":[…]|null,"demand":"…"|null,"surrender":true|null,"flee":true|null,"depart":true|null,"job":"offer"|"accept"|"decline"|null,"meet":true|null,"tip":"…"|null,"mark":"…"|null,"lookup":"market"|"neighbours"|"history"|"worlds"|null,"hangup":true|false}',
       ]
         .filter(Boolean)
         .join('\n')

@@ -47,6 +47,8 @@ import {
 } from '../combat'
 import { isPhased, updateCruise } from '../cruise/drive'
 import { hasBomb, hasEcm } from '../loadout'
+import { COMMODITIES } from '../cargo/items'
+import { oreUnits } from '../combat/mining'
 import { MIELOPHONE } from '../../config/mielophone'
 import { effectiveRadius, stepScale } from '../scale/scale'
 import { stepGravity } from '../flight/gravity'
@@ -85,6 +87,7 @@ import { stepDivineScale, stepDockTraffic, stepTraffic } from '../world/traffic'
 import { stepTitans } from '../world/titans'
 import { stepPlatforms } from '../world/platforms'
 import { stepGrievances } from '../combat/grievance'
+import { stepContracts } from '../contracts/contracts'
 import { NULL_CONTROLLER, type Controller, type ControllerMap } from './controller'
 import { contactExists, lockedAsteroidId, lockedShipId } from '../world/queries'
 
@@ -266,6 +269,8 @@ function stepTick(world: World, helm: Helm, dt: number): void {
   stepPlatforms(world, dt)
   stepWarBaseTurrets(world, dt)
   stepGrievances(world)
+  // Дела — после всего, что могло решить их исход в этом такте: гибели, стыковки, ухода.
+  stepContracts(world, dt)
   maybeShiftOrigin(world)
 }
 
@@ -316,7 +321,15 @@ function stepWeapons(world: World, helm: Helm, dt: number): void {
   for (const ship of allShips(world)) {
     // Кинематический борт не стреляет и не «остывает» локально: его залпы и
     // состояние приходят извне. Оружие по нему всё равно работает — он цель, не стрелок.
-    if (ship.kinematic) continue
+    // Исключение — зеркало бота хозяина, жмущее гашетку: его залп КОСМЕТИЧЕСКИЙ (без урона),
+    // чтобы бой было видно; урон этого залпа хозяин посчитал у себя и прислал сам.
+    if (ship.kinematic) {
+      if (ship.mirrorFiring && ship.alive) {
+        coolGuns(ship, world.time, dt)
+        fireLasers(world, ship, true, dt, true)
+      }
+      continue
+    }
     coolGuns(ship, world.time, dt)
     regenEnergy(ship, dt)
     // Батарея доп-отсека (аукс) копится своим пулом — для бомбы, ПРО и маскировки.
@@ -363,7 +376,9 @@ function stepWeapons(world: World, helm: Helm, dt: number): void {
       const target =
         ship === world.player
           ? (lockedShipId(world) ?? lockedAsteroidId(world))
-          : world.player.id
+          : controller.missileTarget
+            ? controller.missileTarget(ship, world)
+            : world.player.id
       if (!fireMissile(world, ship, target)) launchDrone(world, ship)
     }
   }
@@ -452,7 +467,17 @@ function stepCollisions(world: World, dt: number): void {
 
       // Мелкий камень уходит в трюм — если там есть место. Тогда удара не было вовсе.
       // Черпает только игрок: боту руда не нужна, а корёжить его о камни — нужно.
-      if (ship === world.player && scoopAsteroid(ship, a)) continue
+      if (ship === world.player && scoopAsteroid(ship, a)) {
+        // Общий камень: зачерпнул — заявка сети; не успел первым — руда уйдёт обратно.
+        if (a.netId) {
+          world.rockClaims.push({
+            netId: a.netId,
+            shipId: ship.id,
+            item: { kind: 'commodity', commodity: COMMODITIES.MINERALS, units: oreUnits(a.radius) },
+          })
+        }
+        continue
+      }
 
       // Астероид на порядок тяжелее: он почти не сдвигается, корабль отлетает.
       const impact = resolveShipVsSphere(
@@ -697,7 +722,9 @@ function scoopNearby(world: World, ship: ShipEntity): void {
   for (const pod of world.pods) {
     if (!pod.alive) continue
     if (pod.pos.distanceToSquared(ship.state.pos) > (SALVAGE.SCOOP_RADIUS + ship.spec.hull.radius) ** 2) continue
-    tryScoop(ship, pod)
+    const item = tryScoop(ship, pod)
+    // Общий контейнер: забрал — заявка сети; не успел первым — вернётся (`revokeScoop`).
+    if (item && pod.netId) world.podClaims.push({ netId: pod.netId, shipId: ship.id, item })
   }
 }
 
@@ -736,8 +763,19 @@ function cleanup(world: World): void {
     if (isDroneShip(ship)) continue
 
     spawnExplosion(world, ship.state.pos, ship.state.vel, DEBRIS.SHIP_EXPLOSION_SCALE)
+    // Зеркало бота хозяина: трофеи сыплет хозяин (они общие), здесь — только взрыв. Награда —
+    // тому, чей выстрел был последним: у каждого игрока своя касса.
+    if (ship.kinematic) {
+      if (ship.faction === 'hostile' && ship.lastAttackerId === world.player.id) {
+        world.score += SCORE.HOSTILE_KILL
+        world.credits += SCORE.HOSTILE_BOUNTY
+      }
+      continue
+    }
     spawnWreckage(world, ship)
-    if (ship.faction === 'hostile') {
+    // Сбитого чужим игроком (у хозяина) — награда ему, на его клиенте, а не хозяину.
+    const killer = ship.lastAttackerId == null ? null : world.ships.find((s) => s.id === ship.lastAttackerId)
+    if (ship.faction === 'hostile' && !killer?.peer) {
       world.score += SCORE.HOSTILE_KILL
       // Награда начисляется за ГИБЕЛЬ, а не за попадание: добить чужой обломок нельзя.
       world.credits += SCORE.HOSTILE_BOUNTY

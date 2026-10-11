@@ -45,7 +45,7 @@ export function muzzleWorldPos(e: ShipEntity, mountIndex: number, out: Vector3):
  * Лазер выпускает БОЛТ (снаряд), а не бьёт мгновенно: попадание случится позже, в
  * `stepBolts`, когда болт долетит. Здесь только рождается снаряд и тратится ствол.
  */
-export function fireLasers(world: World, e: ShipEntity, hostile: boolean, dt: number): boolean {
+export function fireLasers(world: World, e: ShipEntity, hostile: boolean, dt: number, cosmetic = false): boolean {
   if (!e.alive) return false
   // Фаза: ушёл в «большой мир» (крупнее кораблей) — стрелять уже не в кого, лазер молчит.
   // Болт в реальных метрах у центра гиганта всё равно был бы невидимой бессмыслицей.
@@ -69,7 +69,8 @@ export function fireLasers(world: World, e: ShipEntity, hostile: boolean, dt: nu
     if (!gun || gun.heat >= 1 || gun.overheatUntil > world.time) return
 
     const laser = mount.weapon
-    const amp = e.state.scale * (e.loadout.chassis.laserAmp ?? 1)
+    // Косметический залп зеркала: болт летит и искрит, но урона не несёт (урон — у хозяина).
+    const amp = cosmetic ? 0 : e.state.scale * (e.loadout.chassis.laserAmp ?? 1)
 
     /**
      * НЕПРЕРЫВНЫЙ ЛУЧ. Не очередь снарядов, а струя: пока держат гашетку, она льётся,
@@ -161,7 +162,7 @@ function pourBeam(
   // `share` = 0 в шагах между тиками: струя рисуется, но урон и события не идут.
   if (struck && share > 0) {
     _beamHit.copy(_muzzle).addScaledVector(_dir, hit.distance)
-    resolveLaserHit(world, _beamHit, hit, laser.damage * share, hostile)
+    resolveLaserHit(world, _beamHit, hit, laser.damage * share, hostile, e.id)
   }
 
   // Рендеру: стрелок и связанное смещение, а не мировая точка, — струя держится у дула,

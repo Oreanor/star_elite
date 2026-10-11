@@ -42,6 +42,7 @@ export function resolveLaserHit(
   hit: ReturnType<typeof castLaser>,
   damage: number,
   hostile: boolean,
+  shooterId: number | null = null,
 ): void {
   if (hit.ship) {
     /**
@@ -55,6 +56,11 @@ export function resolveLaserHit(
     }
     spawnExplosion(world, hitPos, hit.ship.state.vel, 0.6)
     if (hit.ship.kinematic) {
+      if (damage <= 0) return // косметический выстрел зеркала: искра, и только
+      // Урон применит владелец, а подпись стрелка — здесь: по ней зеркало знает, чей был
+      // последний выстрел (награда за сбитого зеркального пирата — тому, кто добил).
+      hit.ship.lastAttackerId = shooterId
+      hit.ship.lastHitAt = world.time
       // HP кинематического (чужого) борта живёт на ЕГО клиенте — локально урон не наносим,
       // а РЕГИСТРИРУЕМ попадание, чтобы сеть переслала его владельцу (авторитет над своим HP).
       // Ни урона, ни обиды: это не наш бот, а внешний игрок; его реакция — на его стороне.
@@ -63,7 +69,7 @@ export function resolveLaserHit(
       // Щит ДО удара: по нему решается, изнашивается ли сам щит (цел) или ломается
       // деталь (пробит). Считаем до applyDamage — оно этот щит и просадит.
       const shieldUp = hit.ship.shield > 0
-      applyDamage(hit.ship, damage, world.time, { kind: 'laser', name: '' })
+      applyDamage(hit.ship, damage, world.time, { kind: 'laser', name: '' }, shooterId)
       // Поломка снаряжения — только у игрока (боты не чинятся). Враг ли стрелял, не
       // важно: попали по игроку — железо под ударом. Кинематический борт (чужой) — мимо.
       if (hit.ship.faction === 'player') breakFromHit(hit.ship, shieldUp, world.rng)
@@ -79,7 +85,13 @@ export function resolveLaserHit(
   } else if (hit.warBaseFixture) {
     // Отстрел детали: искра в точке удара; гибель детали — своя вспышка в `damageWarBaseFixture`.
     spawnExplosion(world, hitPos, _still, 0.5)
-    damageWarBaseFixture(world, hit.warBaseFixture.base, hit.warBaseFixture.fixture, damage)
+    // Базы колет хозяин системы: у остальных удар уходит ему, гибель детали придёт от него.
+    if (world.trafficRole === 'mirror') {
+      const { base, fixture } = hit.warBaseFixture
+      if (damage > 0) world.structHits.push({ kind: 'fixture', base: world.warBases.indexOf(base), fixture: base.fixtures.indexOf(fixture) })
+    } else {
+      damageWarBaseFixture(world, hit.warBaseFixture.base, hit.warBaseFixture.fixture, damage)
+    }
   } else if (hit.warBase) {
     // Удар в ОБШИВКУ урона не наносит: живучесть базы — её детали (`damageWarBaseFixture`),
     // и снос — это счёт сбитых турелей, а не измор невидимой копилки. Только искра.
@@ -91,7 +103,12 @@ export function resolveLaserHit(
   } else if (hit.platform) {
     // Ядро платформы принимает урон корпусом: щита у гнезда нет. Гибель, взрыв и
     // металл — забота `stepPlatforms`, когда прочность уйдёт в ноль.
-    hit.platform.hull = Math.max(0, hit.platform.hull - damage)
+    // Копия гнезда хозяина: урон уходит ему, прочность придёт обратно.
+    if (hit.platform.kinematic) {
+      if (hit.platform.netId && damage > 0) world.structHits.push({ kind: 'platform', netId: hit.platform.netId, damage })
+    } else {
+      hit.platform.hull = Math.max(0, hit.platform.hull - damage)
+    }
     spawnExplosion(world, hitPos, _still, 0.6)
   } else if (hit.station) {
     // Станция неуязвима: болт гаснет о защитное поле голубой вспышкой. Ни урона, ни
@@ -129,7 +146,7 @@ export function stepBolts(world: World, dt: number): void {
     bolt.muzzle = undefined
 
     if (hit.distance < reach) {
-      resolveLaserHit(world, _hitPos, hit, bolt.damage, bolt.hostile)
+      resolveLaserHit(world, _hitPos, hit, bolt.damage, bolt.hostile, bolt.ownerId)
       bolt.alive = false
       continue
     }

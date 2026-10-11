@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { applyPilotProfile, hailPoliceForFine, interlocutor, jumpBlock, lockShipContact, markPoliceFineHail, pendingHail, pendingPoliceFineHail, serializePlayer, stationInterlocutor, undock, type JumpBlock, type PilotProfile, type PlayerSave, type World } from '@elite/sim'
+import { applyPilotProfile, offerHail, hailPoliceForFine, interlocutor, jumpBlock, lockShipContact, markPoliceFineHail, pendingHail, pendingPoliceFineHail, serializePlayer, stationInterlocutor, undock, type JumpBlock, type PilotProfile, type PlayerSave, type World } from '@elite/sim'
 import { GameProvider, useSession } from '../session/GameContext'
 import { closePortal, freshPortalKeyDown, jumpPortal, openPortal, portalActive, portalOpen } from '../session/jumpPortal'
 import { disposeJumpPortalWorld, resetJumpPortalWorlds } from '../render/scene/jumpPortalWorld'
@@ -634,7 +634,7 @@ function Shell({ onRestart }: { onRestart: () => void }) {
         // задел), T отвечает ему — наводимся на него и открываем канал, чтобы разрядить
         // претензию, пока она не перелилась во враги.
         if (!interlocutor(session.world)) {
-          const hail = pendingHail(session.world) ?? hailPoliceForFine(session.world)
+          const hail = pendingHail(session.world) ?? offerHail(session.world) ?? hailPoliceForFine(session.world)
           if (!hail) return
           const w = session.world
           lockShipContact(w, hail.id)

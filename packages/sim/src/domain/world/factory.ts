@@ -1,3 +1,4 @@
+import { CONTRACTS } from '../../config/contracts'
 import { Euler, Quaternion, Vector3 } from 'three'
 import { GRAVITY, MOON } from '../../config/bodies'
 import { orbitSec } from '../../config/time'
@@ -109,6 +110,10 @@ export function makeShip(
     // Привод заряжен полностью: первый прыжок доступен без визита к звезде.
     jumpCharge: spec.jumpRange,
     lastHitAt: -1e9,
+    lastAttackerId: null,
+    offer: null,
+    rescueAsked: false,
+    bountyOf: null,
     lastCrashAt: -1e9,
     lastCrashHit: null,
     lastLostAt: -1e9,
@@ -778,6 +783,17 @@ export function createWorld(def: SystemDef = STARTER_SYSTEM, profile?: PilotProf
     calendarTime: 0,
     // Общих часов ещё нет (тест, сервер до синхронизации): календарь стоит, орбиты тоже.
     calendarClock: Number.NaN,
+    trafficRole: 'host',
+    podClaims: [],
+    rockHits: [],
+    rockClaims: [],
+    structHits: [],
+    remoteJobs: [],
+    contracts: [],
+    offerHailTimer: CONTRACTS.FIRST_HAIL,
+    offerHailShipId: null,
+    offerHailAt: -1e9,
+    contractsDockSettled: false,
     player,
     ships,
     asteroids: makeAsteroids(rng, ids, def),

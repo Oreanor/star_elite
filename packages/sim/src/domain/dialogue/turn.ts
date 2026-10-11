@@ -26,9 +26,12 @@ export function dialogueEffects(
   const askEntry = outcomes.find((o) => o.cmd.action === 'ask') ?? null
   const refused = askEntry?.out?.agreed === false
   const spoken = outcomes.map((o) => o.out?.spoken).filter((line): line is string => !!line)
+  // Дело, на которое модель «согласилась», а домен отказал (трюм мал, дела нет): звучит отказ
+  // домена, иначе бот выглядел бы вруном — «по рукам!», а дела нет.
+  const jobRefusal = outcomes.find((o) => (o.cmd.action === 'job' || o.cmd.action === 'gift') && o.out?.agreed === false && o.out.spoken)?.out?.spoken
   const them = refused
     ? (askEntry!.out!.spoken ?? (replyText || (spoken[0] ?? '…')))
-    : (replyText || spoken.join(' ') || '…')
+    : (jobRefusal ?? (replyText || spoken.join(' ') || '…'))
   const system = outcomes.map((o) => o.out?.line).filter((line): line is string => !!line)
 
   let askOutcome: DialogueEffects['askOutcome'] = null

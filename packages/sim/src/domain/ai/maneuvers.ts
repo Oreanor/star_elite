@@ -2,13 +2,86 @@ import { Vector3 } from 'three'
 import { shipAxes } from '../flight/axes'
 import { interceptPoint } from '../flight/steering'
 import type { ShipState } from '../flight/types'
-import type { ShipEntity } from '../world/entities'
+import type { BodyEntity, ShipEntity } from '../world/entities'
+import { AI } from '../../config/ai'
 import type { AIState } from './types'
 
 const _fwd = new Vector3()
 const _right = new Vector3()
 const _up = new Vector3()
 const _toTarget = new Vector3()
+const _seg = new Vector3()
+const _rel = new Vector3()
+const _push = new Vector3()
+const _WORLD_UP = new Vector3(0, 1, 0)
+const _WORLD_X = new Vector3(1, 0, 0)
+
+/**
+ * Обойти тело на пути к точке. Если отрезок «корабль → `aim`» проходит сквозь ближайшее
+ * тело с запасом (`AI.AVOID_MARGIN`), вместо `aim` отдаётся точка сбоку от тела — на
+ * касательной к сфере запаса, со стороны, куда отрезок и так отклонялся. Корабль, уже
+ * прижатый к телу, та же точка выводит наружу: она лежит вне сферы.
+ *
+ * Только руль: решение стрелять меряется до настоящей точки упреждения, а не до обхода —
+ * пока огибает станцию, по ней не палит.
+ */
+/** Радиус сферы запаса вокруг тела: ближе этого бот к нему не правит, м. */
+export function avoidClearance(b: BodyEntity): number {
+  return b.radius + AI.AVOID_MARGIN + Math.min(b.radius * AI.AVOID_MARGIN_FRAC, AI.AVOID_MARGIN_CAP)
+}
+
+/**
+ * Тело, внутри которого лежит точка, или null. Такую точку обход не пустит достичь — бот
+ * кружил бы у тела вечно; прибытием для неё считается подход к телу (`avoidClearance`).
+ */
+export function bodyEnclosing(point: Vector3, bodies: readonly BodyEntity[]): BodyEntity | null {
+  for (const b of bodies) {
+    if (point.distanceToSquared(b.pos) < b.radius * b.radius) return b
+  }
+  return null
+}
+
+export function avoidBodies(pos: Vector3, aim: Vector3, bodies: readonly BodyEntity[], out: Vector3): Vector3 {
+  out.copy(aim)
+  _seg.copy(aim).sub(pos)
+  const len = _seg.length()
+  if (len < 1) return out
+  _seg.divideScalar(len)
+
+  let hit: BodyEntity | null = null
+  let hitAlong = Infinity
+  let hitClear = 0
+  for (const b of bodies) {
+    // Сфера запаса не глотает ни корабль, ни цель: станция у планеты, цель у поверхности —
+    // законны. Иначе обход уводил бы прочь от того, к чему летим, а стоящего у тела — вон.
+    const clear = Math.max(
+      b.radius,
+      Math.min(avoidClearance(b), pos.distanceTo(b.pos) * 0.999, aim.distanceTo(b.pos) * 0.999),
+    )
+    _rel.copy(b.pos).sub(pos)
+    const along = _rel.dot(_seg)
+    // Позади или дальше цели (с запасом) — не мешает.
+    if (along < -clear || along > len + clear) continue
+    const perp2 = _rel.lengthSq() - along * along
+    if (perp2 >= clear * clear) continue
+    if (along < hitAlong) {
+      hit = b
+      hitAlong = along
+      hitClear = clear
+    }
+  }
+  if (!hit) return out
+
+  // Ближайшая к центру тела точка отрезка → направление «прочь от центра» = сторона обхода.
+  _push.copy(_seg).multiplyScalar(Math.max(0, hitAlong)).add(pos).sub(hit.pos)
+  // Летим ровно в центр — сторону выбираем сами, поперёк курса.
+  if (_push.lengthSq() < 1e-6) {
+    _push.crossVectors(_seg, _WORLD_UP)
+    if (_push.lengthSq() < 1e-6) _push.crossVectors(_seg, _WORLD_X)
+  }
+  _push.normalize().multiplyScalar(hitClear * 1.2)
+  return out.copy(hit.pos).add(_push)
+}
 
 /**
  * Точка отрыва: вбок и вверх от противника, но ВПЕРЁД по курсу.

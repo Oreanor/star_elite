@@ -1,3 +1,4 @@
+import { orbitScheme } from './orbitScheme'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef } from 'react'
 import {
@@ -59,17 +60,18 @@ const G_EARTH = 9.80665
 const _sphere = new SphereGeometry(1, 48, 32)
 const ORBIT_DOTS = 180
 const _orbitMaterial = new PointsMaterial({ color: UI.PRIMARY, size: 1.5, sizeAttenuation: false, transparent: true, opacity: 0.35, depthWrite: false })
-const _orbitGeometries = new Map<number, BufferGeometry>()
-const orbitRadius = (i: number) => R * 1.7 + i * R * 0.55
+const _orbitGeometries = new Map<string, BufferGeometry>()
 
 /** Все кольца одним буфером: повторное открытие вкладки не создаёт геометрию заново. */
-function OrbitRings({ count }: { count: number }) {
+function OrbitRings({ radii }: { radii: readonly number[] }) {
+  const count = radii.length
   if (count === 0) return null
-  let geometry = _orbitGeometries.get(count)
+  const key = radii.map((r) => r.toFixed(3)).join(',')
+  let geometry = _orbitGeometries.get(key)
   if (!geometry) {
     const positions = new Float32Array(count * ORBIT_DOTS * 3)
     for (let ring = 0; ring < count; ring++) {
-      const radius = orbitRadius(ring)
+      const radius = radii[ring]! * R
       for (let dot = 0; dot < ORBIT_DOTS; dot++) {
         const angle = dot * Math.PI * 2 / ORBIT_DOTS
         const offset = (ring * ORBIT_DOTS + dot) * 3
@@ -79,7 +81,7 @@ function OrbitRings({ count }: { count: number }) {
     }
     geometry = new BufferGeometry()
     geometry.setAttribute('position', new Float32BufferAttribute(positions, 3))
-    _orbitGeometries.set(count, geometry)
+    _orbitGeometries.set(key, geometry)
   }
   return <points geometry={geometry} material={_orbitMaterial} dispose={null} />
 }
@@ -447,8 +449,9 @@ export function PlanetScreen({ world, planet }: { world: World; planet: BodyEnti
   const mass = bodyMass(planet)
   const gravity = (G * mass) / (planet.radius * planet.radius)
 
-  // Схема вокруг шара: кольца разведены равномерно, а не по настоящим орбитам —
-  // у Луны отношение 60 радиусов, и в кадре остался бы один пиксель планеты.
+  // Схема вокруг шара (см. `orbitScheme`): порядок и шаг колец — от настоящих орбит,
+  // размах сжат, соседи не касаются.
+  const scheme = orbitScheme(planet, station ? [...moons, station] : moons)
 
   return (
     // `overflow-hidden` здесь обязателен: подписи спутников — абсолютные div'ы, которые
@@ -516,34 +519,21 @@ export function PlanetScreen({ world, planet }: { world: World; planet: BodyEnti
           <directionalLight position={[4, 2, 3]} intensity={2.6} />
           <ambientLight intensity={0.22} />
           <group ref={tilt}>
-          <OrbitRings count={moons.length + (station ? 1 : 0)} />
+          <OrbitRings radii={scheme.map((s) => s.ring)} />
           <Globe body={planet} spin={planet.spin >= 0 ? 0.12 : -0.12} radius={R} tilt={tilt} />
-          {moons.map((m, i) => (
+          {scheme.map(({ body, ring, size, rate }) => (
             <Satellite
-              key={m.id}
-              // Спутник мельче планеты, но не пылинка: отношение радиусов сжато корнем.
-              radius={Math.max(R * 0.06, R * Math.sqrt(m.radius / planet.radius) * 0.4)}
-              orbit={orbitRadius(i)}
-              rate={0.25 / (i + 1)}
-              phase={m.orbit?.phase ?? 0}
-              color={m.color}
-              id={m.id}
-              rocky
+              key={body.id}
+              radius={R * size}
+              orbit={R * ring}
+              rate={rate}
+              phase={body.orbit?.phase ?? 0}
+              color={body.kind === 'station' ? 0xffffff : body.color}
+              id={body.id}
+              rocky={body.kind !== 'station'}
               boxes={labels}
             />
           ))}
-          {station && (
-            <Satellite
-              radius={R * 0.05}
-              orbit={orbitRadius(moons.length)}
-              rate={0.5}
-              phase={station.orbit?.phase ?? 0}
-              color={0xffffff}
-              id={station.id}
-              rocky={false}
-              boxes={labels}
-            />
-          )}
           </group>
         </Canvas>
 

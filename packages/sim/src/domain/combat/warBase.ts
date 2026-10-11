@@ -85,6 +85,8 @@ export function stepWarBaseWrecks(world: World): void {
     if (base.alive || base.scattered || base.wreckAt === null) continue
     if (world.time - base.wreckAt < cascadeTime()) continue
     base.scattered = true
+    // Лом сыплет хозяин системы — его контейнеры общие; у остальных был бы второй комплект.
+    if (world.trafficRole === 'mirror') continue
     spawnBlastwave(world, base.pos, base.radius * WARBASE.WAVE_REACH)
     scatterScrap(world, base)
   }
@@ -111,6 +113,19 @@ export function damageWarBaseFixture(world: World, base: WarBaseEntity, fix: War
   fix.lastHitAt = world.time
   fix.hitsLeft -= 1
   if (fix.hitsLeft > 0) return
+  fix.alive = false
+  warBaseFixtureWorldPos(base, fix, world.time, _fixWorld)
+  spawnExplosion(world, _fixWorld, _still, fix.size * 1.2)
+  if (livingFixtures(base) === 0) destroyWarBase(world, base)
+}
+
+/**
+ * У НЕ-ХОЗЯИНА: деталь базы погибла у хозяина — погасить её и здесь (вспышка, и база рушится,
+ * если это была последняя). Счёт попаданий не нужен: исход уже решён.
+ */
+export function killWarBaseFixture(world: World, base: WarBaseEntity, fix: WarBaseFixture): void {
+  if (!fix.alive || !base.alive) return
+  fix.hitsLeft = 0
   fix.alive = false
   warBaseFixtureWorldPos(base, fix, world.time, _fixWorld)
   spawnExplosion(world, _fixWorld, _still, fix.size * 1.2)

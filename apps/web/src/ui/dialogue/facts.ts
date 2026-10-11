@@ -1,4 +1,8 @@
 import {
+  activeContracts,
+  commodityById,
+  type ContractKind,
+  type ContractTerms,
   capitalOf,
   commandableByPlayer,
   COMMODITIES,
@@ -37,6 +41,7 @@ import {
   type World,
 } from '@elite/sim'
 import { chassisName, economyName, governmentName, moduleName, professionName, properName, speciesName } from '../i18n/dataNames'
+import { godHearsOf, godVisitors } from '../../session/net/godMemory'
 import { formatGameDate } from '../i18n/date'
 
 /**
@@ -203,6 +208,20 @@ export interface NegotiationContext {
    * везёт твоё, и «продадим вместе» разваливалось на полпути.
    */
   entrusted: string[]
+  /**
+   * ДЕЛО, которое он может предложить (оферта домена), и дело, которое вы с ним уже ведёте.
+   * Условия и награда — из карточки домена: модель их озвучивает, а не сочиняет.
+   */
+  job: JobFacts | null
+  jobInProgress: JobFacts | null
+  /**
+   * Только для бога: кто ещё из смертных его находил и что между ними было (строки «Имя —
+   * отношение: события»), и кого он знает лишь по имени — в сети, но лично не приходил.
+   */
+  godVisitors: string[]
+  godHearsOf: string[]
+  /** Только для бога: дал ли он уже этому смертному копию миелофона (или она у него есть). */
+  mielophoneGiven: boolean
   /** Деньги и услуги — цифры из домена, чтобы не путать «кто кому платит». */
   economy: EconomySnapshot
   /** Долг местным властям, виден только полицейскому патрулю этой планеты. */
@@ -215,6 +234,50 @@ export interface NegotiationContext {
   forgottenDigests: readonly ContextDigest[]
   /** Подгружены суфлёром или lookup только на эту реплику. */
   freshDigests: readonly ContextDigest[]
+}
+
+/** Отношение бога словом — для строки о другом смертном. */
+const REL_RU: Record<string, string> = { friendly: 'благоволишь', neutral: 'безразличен', hostile: 'гневаешься' }
+
+/** Другие смертные, говорившие с богом: «Имя (благоволишь): дата — событие; …». Свежие — первыми. */
+function godVisitorLines(): string[] {
+  return godVisitors()
+    .slice(0, GOD_VISITORS_SHOWN)
+    .map((v) => `${v.name} (${REL_RU[v.rel] ?? v.rel}): ${historyLines(v.h).join('; ') || 'просто приходил'}`)
+}
+
+/** Сколько других смертных бог держит в уме за раз: промпт не резиновый. */
+const GOD_VISITORS_SHOWN = 12
+
+/** Дело словами для промпта: что, куда, сколько и за сколько. */
+export interface JobFacts {
+  kind: ContractKind
+  /** Награда, кредиты: за тонну (`per: 'ton'`), за голову (`'head'`) или за всё (`null`). */
+  reward: number
+  per: 'ton' | 'head' | null
+  /** Товар (имя по-русски и id), тонны. */
+  commodity: string | null
+  units: number | null
+  /** Куда (имя системы). */
+  to: string | null
+  /** Сколько голов (охота). */
+  heads: number | null
+  /** Срок, игровые сутки; null — здесь и сейчас. */
+  days: number | null
+}
+
+function jobFactsOf(terms: ContractTerms, reward: number, days: number | null): JobFacts {
+  const good = 'commodityId' in terms ? commodityById(terms.commodityId) : null
+  return {
+    kind: terms.kind,
+    reward,
+    per: terms.kind === 'fetch' ? 'ton' : terms.kind === 'hunt' ? 'head' : null,
+    commodity: good ? good.name : null,
+    units: 'units' in terms ? terms.units : null,
+    to: 'toSystemName' in terms ? properName(terms.toSystemName) : null,
+    heads: terms.kind === 'hunt' ? terms.heads : null,
+    days,
+  }
 }
 
 /** Справочники, которые не тащим в каждый запрос — пилот «листает» их по просьбе. */
@@ -713,13 +776,16 @@ function taskHeading(world: World, other: ShipEntity): string | null {
       return body ? `идёшь к «${body.name}» — командир просил туда` : 'идёшь к указанной цели'
     }
     case 'goto':
-      return 'идёшь в назначенную точку'
+      // Свой рейс — не поручение: торговец идёт к точке ухода из системы и дальше прыгнет.
+      return task.own ? 'идёшь своим рейсом — к точке ухода из системы, дальше прыжок' : 'идёшь в назначенную точку'
     case 'collect-cargo':
-      return 'собираешь груз по поручению командира'
+      return task.own ? 'подбираешь брошенный груз' : 'собираешь груз по поручению командира'
     case 'return-to-escort':
       return 'возвращаешься к командиру'
     case 'hold':
       return 'держишь позицию и ждёшь'
+    case 'depart':
+      return 'уходишь из системы прыжком'
   }
 }
 
@@ -849,6 +915,17 @@ export function buildContext(
     metBefore: (record?.meetings ?? 0) > 1 || (record?.history.length ?? 0) > 1,
     history: record ? historyLines(record.history) : [],
     entrusted: record ? entrustedLines(record.entrusted) : [],
+    job: other.offer ? jobFactsOf(other.offer, other.offer.reward, other.offer.days) : null,
+    godVisitors: other.divine ? godVisitorLines() : [],
+    godHearsOf: other.divine ? godHearsOf() : [],
+    mielophoneGiven:
+      record?.mielophoneGiven === true ||
+      world.player.hold.items.some((it) => it.kind === 'module' && it.module.kind === 'mielophone') ||
+      [...world.player.loadout.internals].some((m) => m?.kind === 'mielophone'),
+    jobInProgress: (() => {
+      const c = activeContracts(world).find((x) => x.giverId === other.acquaintanceId)
+      return c ? jobFactsOf(c.terms, c.reward, null) : null
+    })(),
     economy: {
       commanderCredits: world.credits,
       escortFee: fee,

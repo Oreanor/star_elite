@@ -125,6 +125,15 @@ export function stepPlatforms(world: World, _dt: number): void {
 
   for (const platform of world.platforms) {
     if (!platform.alive) continue
+    // Копия гнезда хозяина: просыпается и гибнет у него; здесь — только взрыв, без лома и экипажа.
+    if (platform.kinematic) {
+      if (platform.hull <= 0) {
+        platform.alive = false
+        platform.wreckAt = world.time
+        spawnExplosion(world, platform.pos, _still, PLATFORM.EXPLOSION_SCALE)
+      }
+      continue
+    }
 
     // Гибель проверяем ПЕРВОЙ. Если ядро уже уничтожено, будить некого: спящие на
     // борту гибнут в детонации, а кто поднялся ранними попаданиями — уже слетел с
@@ -161,7 +170,8 @@ function despawnPlatforms(world: World): void {
 
   world.platforms = world.platforms.filter((platform) => {
     if (!platform.alive) return platform.wreckAt !== null && now - platform.wreckAt < DEBRIS.WRECK_LIFE
-    if (platform.pos.distanceToSquared(world.player.state.pos) > limitSq) {
+    // Гнездо под заказом на снос держится, пока дело открыто.
+    if (platform.contractId == null && platform.pos.distanceToSquared(world.player.state.pos) > limitSq) {
       removeDormantCrew(world, platform)
       return false
     }

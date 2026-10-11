@@ -1,4 +1,5 @@
 import type { ShipEntity } from '../world/entities'
+import { clearOwnTasks } from './tasks'
 
 /**
  * Приказы игрока СВОЕМУ автоботу — собственному автобою или нанятому эскорту.
@@ -83,6 +84,8 @@ export function commandableByPlayer(ship: ShipEntity, playerId: number): boolean
 export type AIOrder = 'attack' | 'engageAll' | 'hold' | 'standDown' | 'keepBack' | 'resume'
 
 export function applyOrder(ship: ShipEntity, order: AIOrder, targetId: number | null = null): boolean {
+  // Приказ важнее своего промысла: рейс и подбор добычи снимаются, поручения — нет.
+  clearOwnTasks(ship)
   switch (order) {
     case 'attack': return targetId != null ? orderAttack(ship, targetId) : false
     case 'engageAll': return orderEngageAll(ship)

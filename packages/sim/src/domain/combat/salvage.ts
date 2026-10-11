@@ -350,3 +350,65 @@ export function expirePods(world: World): void {
   const now = world.time
   retain(world.pods, (p) => p.alive && now - p.born < SALVAGE.POD_LIFETIME)
 }
+
+/**
+ * ОБЩИЙ контейнер из сети: его выбросил другой игрок (или выпал из бота хозяина). Без разлёта
+ * и наследования — место и скорость пришли готовыми; возраст задан, чтобы срок жизни истёк
+ * у всех разом. Возвращает контейнер.
+ */
+export function spawnNetPod(
+  world: World,
+  netId: string,
+  item: CargoItem,
+  pos: Vector3,
+  vel: Vector3,
+  ageSeconds: number,
+): CargoPodEntity {
+  const pod: CargoPodEntity = {
+    id: world.ids.next(),
+    kind: 'pod',
+    pos: pos.clone(),
+    vel: vel.clone(),
+    quat: new Quaternion(),
+    spin: new Vector3(0.3, 0.2, 0.1),
+    item,
+    born: world.time - Math.max(0, ageSeconds),
+    alive: true,
+    tractored: false,
+    netId,
+  }
+  world.pods.push(pod)
+  return pod
+}
+
+/** Общий контейнер забрал кто-то другой (или он истёк у всех) — убрать здешнюю копию. */
+export function dropNetPod(world: World, netId: string): void {
+  for (const pod of world.pods) if (pod.netId === netId) pod.alive = false
+}
+
+/**
+ * Не успел первым: общий контейнер уже забрал другой. Предмет, оптимистично положенный в
+ * трюм, уходит обратно — ровно столько, сколько было в контейнере.
+ */
+export function revokeScoop(world: World, shipId: number, item: CargoItem): void {
+  const ship = shipId === world.player.id ? world.player : world.ships.find((s) => s.id === shipId)
+  if (!ship) return
+  const items = ship.hold.items
+  if (item.kind === 'module') {
+    const i = items.findIndex((it) => it.kind === 'module' && it.module.id === item.module.id)
+    if (i >= 0) items.splice(i, 1)
+  } else {
+    const stack = items.find(
+      (it): it is Extract<CargoItem, { kind: 'commodity' }> => it.kind === 'commodity' && it.commodity.id === item.commodity.id,
+    )
+    if (stack) {
+      stack.units -= item.units
+      if (item.specimens?.length && stack.specimens) {
+        const gone = new Set(item.specimens.map((sp) => sp.titleId))
+        stack.specimens = stack.specimens.filter((sp) => !gone.has(sp.titleId))
+      }
+      if (stack.units <= 0) items.splice(items.indexOf(stack), 1)
+    }
+  }
+  refreshSpec(ship)
+}

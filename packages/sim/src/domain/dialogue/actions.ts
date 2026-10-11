@@ -239,6 +239,30 @@ const markAction: DialogueAction = {
   },
 }
 
+/**
+ * ДЕЛО: бот ОЗВУЧИЛ свою оферту («offer»), игрок взялся («accept») или отказался
+ * («decline»). Награду и условия модель не сочиняет — они в карточке домена, модель лишь
+ * распознаёт ответ. Пустышка, если оферты у борта нет: шина проверит сама.
+ */
+const jobAction: DialogueAction = {
+  id: 'job',
+  roles: ['bot'],
+  build(o) {
+    return o.job === 'offer' || o.job === 'accept' || o.job === 'decline'
+      ? [{ action: 'job', payload: { answer: o.job } }]
+      : []
+  },
+}
+
+/** Бог дарит копию миелофона тому, кто согласился собирать ему статуи. Можно ли — решит домен. */
+const giftAction: DialogueAction = {
+  id: 'gift',
+  roles: ['god'],
+  build(o) {
+    return o.gift === 'mielophone' ? [{ action: 'gift', payload: { item: 'mielophone' } }] : []
+  },
+}
+
 // ─── Пул и наборы ───────────────────────────────────────────────────────────────
 
 /**
@@ -253,6 +277,8 @@ export const ACTIONS: readonly DialogueAction[] = [
   orderAction,
   transferAction,
   fineAction,
+  jobAction,
+  giftAction,
   demandAction,
   surrenderAction,
   meetAction,

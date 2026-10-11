@@ -19,9 +19,11 @@ export function applyDamage(
   amount: number,
   time: number,
   cause: LossHit = { kind: 'unknown', name: '' },
+  attackerId: number | null = null,
 ): void {
   if (!e.alive || amount <= 0) return
   e.lastHitAt = time
+  e.lastAttackerId = attackerId
 
   let remaining = amount
   if (e.shield > 0) {

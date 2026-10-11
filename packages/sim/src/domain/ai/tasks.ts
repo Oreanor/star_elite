@@ -3,6 +3,8 @@ import { SALVAGE } from '../../config/weapons'
 import { freeCapacity } from '../cargo/hold'
 import { itemMass } from '../cargo/items'
 import type { CargoPodEntity, ShipEntity, World } from '../world/entities'
+import { beginWarpDeparture } from '../world/warp'
+import { avoidClearance, bodyEnclosing } from './maneuvers'
 
 /**
  * ОЧЕРЕДЬ ЗАДАЧ автобота. Договорился с компаньоном — он берёт поручение и уходит его
@@ -18,7 +20,16 @@ import type { CargoPodEntity, ShipEntity, World } from '../world/entities'
  * Домен лишь ведёт корабль и черпает груз; ни рендера, ни сети он не знает.
  */
 
-export type Task =
+export type Task = TaskBody & {
+  /**
+   * СВОЙ промысел, а не поручение: торговец летит по своему рейсу, пират подбирает добычу.
+   * Одна очередь на всё — так у бота одно «чем я занят», — но своё уступает чужой воле:
+   * наём или приказ снимают свои задачи (`clearOwnTasks`), и оценка у них ниже поручений.
+   */
+  own?: boolean
+}
+
+type TaskBody =
   /** Собрать контейнеры в радиусе `radius` от `anchor`, пока не кончатся или не забьётся трюм. */
   | { kind: 'collect-cargo'; anchor: Vector3; radius: number }
   /** Долететь до НЕПОДВИЖНОЙ точки `point` и встать рядом. Для живых целей — задачи ниже. */
@@ -48,6 +59,11 @@ export type Task =
    * там»: конечный член цепочки вроде «лети → купи → жди». Держим через тот же полёт-с-тормозом.
    */
   | { kind: 'hold'; anchor: Vector3; radius: number }
+  /**
+   * Уйти из системы прыжком. Мгновенная: открывает портал и снимается. Конец рейса
+   * торговца — он не кружит вечно там, куда прилетел, а уходит дальше по своим делам.
+   */
+  | { kind: 'depart' }
 
 export type TaskKind = Task['kind']
 
@@ -112,7 +128,11 @@ function runTask(e: ShipEntity, world: World, task: Task): TaskStep {
       return { done: false, intent: { target: pod.pos, scoop: true, arriveRadius: SALVAGE.SCOOP_RADIUS } }
     }
     case 'goto': {
-      const arrived = e.state.pos.distanceTo(task.point) <= task.arriveRadius
+      // Точка внутри тела (рейс выпал на планету) недостижима: прибыли — у его кромки.
+      const inside = bodyEnclosing(task.point, world.bodies)
+      const arrived =
+        e.state.pos.distanceTo(task.point) <= task.arriveRadius ||
+        (inside != null && e.state.pos.distanceTo(inside.pos) <= avoidClearance(inside) * 1.2 + task.arriveRadius)
       if (arrived) return { done: true, intent: null }
       return { done: false, intent: { target: task.point, scoop: false, arriveRadius: task.arriveRadius } }
     }
@@ -143,6 +163,10 @@ function runTask(e: ShipEntity, world: World, task: Task): TaskStep {
       const arrived = e.state.pos.distanceTo(patron.state.pos) <= task.arriveRadius
       if (arrived) return { done: true, intent: null }
       return { done: false, intent: { target: patron.state.pos, scoop: false, arriveRadius: task.arriveRadius } }
+    }
+    case 'depart': {
+      beginWarpDeparture(world, e)
+      return { done: true, intent: null }
     }
     case 'hold': {
       // Никогда не done: держит позицию, пока задачу не снимут. Полёт-с-тормозом сам гасит
@@ -212,6 +236,29 @@ export function assignRendezvous(e: ShipEntity, shipId: number, arriveRadius = 2
 /** Снять все задачи: бот бросает поручение и возвращается к обычному поведению. */
 export function clearTasks(e: ShipEntity): void {
   if (e.ai) e.ai.tasks.length = 0
+}
+
+/** Снять только СВОЙ промысел: наняли или приказали — свой рейс подождёт. */
+export function clearOwnTasks(e: ShipEntity): void {
+  const ai = e.ai
+  if (!ai) return
+  ai.tasks = ai.tasks.filter((t) => !t.own)
+}
+
+/**
+ * Свой рейс: долететь до точки ухода и уйти прыжком. Так трафик не кружит вечно там, куда
+ * прилетел, а проходит систему насквозь — у мира появляется движение, а не хоровод.
+ */
+export function assignVoyage(e: ShipEntity, exit: Vector3, arriveRadius = 400): boolean {
+  if (!e.ai) return false
+  enqueueTask(e, { kind: 'goto', point: exit.clone(), arriveRadius, own: true })
+  enqueueTask(e, { kind: 'depart', own: true })
+  return true
+}
+
+/** Голова очереди — свой промысел (а не поручение)? Пустая очередь — нет. */
+export function onOwnErrand(e: ShipEntity): boolean {
+  return e.ai?.tasks[0]?.own === true
 }
 
 /** Есть ли у бота активное поручение. */

@@ -1,0 +1,242 @@
+import { Vector3 } from 'three'
+import { describe, expect, it } from 'vitest'
+import { CALENDAR_DAY, CONTRACTS } from '../../config/contracts'
+import { declareFoe } from '../ai/targeting'
+import { createWorld, STARTER_SYSTEM, type World } from '../world'
+import type { ShipEntity } from '../world/entities'
+import { acceptBlock, acceptOffer, bindContractTargets, declineOffer, hostOfferTaken, offerHail, stepContracts } from './contracts'
+import { rollOffer } from './offers'
+import type { ContractOffer } from './types'
+
+/**
+ * Дела. Свойства, а не числа: доставка закрывается на станции назначения, «привези» платит
+ * за сданное, премия — только за своего пирата, провал роняет отношение на ступень.
+ */
+
+function worldWith(...factions: ShipEntity['faction'][]): World {
+  const world = createWorld({
+    ...STARTER_SYSTEM,
+    belt: null,
+    patrols: factions.map((f) => ({ count: 1, at: [0, 0, 0] as [number, number, number], spread: 0, faction: f, name: f })),
+  })
+  world.desolate = true
+  world.docked = false
+  world.calendarTime = 1_000_000
+  for (const s of world.ships) s.state.pos.copy(world.player.state.pos).add(new Vector3(0, 0, -1500))
+  return world
+}
+
+function giveOffer(ship: ShipEntity, offer: ContractOffer): void {
+  ship.offer = offer
+}
+
+const relationOf = (world: World, ship: ShipEntity) => world.acquaintances.find((a) => a.id === ship.acquaintanceId)!.relationship
+
+function dockAt(world: World, systemIndex: number): void {
+  world.systemIndex = systemIndex
+  world.docked = true
+  stepContracts(world, 1 / 60)
+  world.docked = false
+  stepContracts(world, 1 / 60)
+}
+
+describe('дела', () => {
+  it('оферта бросается детерминированно: то же зерно — то же дело', () => {
+    const a = worldWith('neutral')
+    const b = worldWith('neutral')
+    for (const w of [a, b]) w.ships[0]!.originKind = 'trader'
+    const offers = [a, b].map((w) => Array.from({ length: 6 }, () => JSON.stringify(rollOffer(w, w.ships[0]!))))
+    expect(offers[0]).toEqual(offers[1])
+  })
+
+  it('доставка: груз в трюм при согласии, плата — на станции назначения', () => {
+    const world = worldWith('neutral')
+    const trader = world.ships[0]!
+    giveOffer(trader, { kind: 'deliver', commodityId: 'metals', units: 4, toSystem: 77, toSystemName: 'X', reward: 900, days: 5, revealed: true })
+    const credits = world.credits
+    const c = acceptOffer(world, trader)!
+    expect(c).not.toBeNull()
+    const tons = () => world.player.hold.items.reduce((s, it) => s + (it.kind === 'commodity' && it.commodity.id === 'metals' ? it.units : 0), 0)
+    expect(tons()).toBe(4)
+
+    dockAt(world, world.systemIndex) // не та система — ничего
+    expect(c.status).toBe('active')
+    dockAt(world, 77)
+    expect(c.status).toBe('done')
+    expect(world.credits).toBe(credits + 900)
+    expect(tons()).toBe(0)
+    expect(relationOf(world, trader)).toBe('friendly')
+  })
+
+  it('«привези» платит за сданное частями; срок с частью — не провал', () => {
+    const world = worldWith('neutral')
+    const trader = world.ships[0]!
+    const home = world.systemIndex
+    giveOffer(trader, { kind: 'fetch', commodityId: 'food', units: 10, reward: 70, days: 2, revealed: true })
+    const c = acceptOffer(world, trader)!
+    world.player.hold.items.push({ kind: 'commodity', commodity: { id: 'food', name: 'Еда', description: '', unitMass: 1, basePrice: 42, tier: 2, contraband: false }, units: 4 })
+    const credits = world.credits
+    dockAt(world, home)
+    expect(world.credits).toBe(credits + 4 * 70)
+    expect(c.status).toBe('active')
+    world.calendarTime += 3 * CALENDAR_DAY
+    stepContracts(world, 1 / 60)
+    expect(c.status).toBe('done')
+    expect(c.end).toBe('partial')
+  })
+
+  it('вышел срок — провал и минус ступень отношения', () => {
+    const world = worldWith('neutral')
+    const trader = world.ships[0]!
+    giveOffer(trader, { kind: 'deliver', commodityId: 'food', units: 2, toSystem: 5, toSystemName: 'Y', reward: 500, days: 1, revealed: true })
+    const c = acceptOffer(world, trader)!
+    world.calendarTime += 2 * CALENDAR_DAY
+    stepContracts(world, 1 / 60)
+    expect(c.status).toBe('failed')
+    expect(relationOf(world, trader)).toBe('hostile')
+  })
+
+  it('охота: премия только за своих; ушедший прыжком — без премии', () => {
+    const world = worldWith('police')
+    const cop = world.ships[0]!
+    giveOffer(cop, { kind: 'hunt', heads: 2, reward: 1000, days: null, revealed: true })
+    const c = acceptOffer(world, cop)!
+    const targets = world.ships.filter((s) => s.bountyOf === c.id)
+    expect(targets).toHaveLength(2)
+    const credits = world.credits
+    targets[0]!.alive = false
+    targets[0]!.lastAttackerId = world.player.id
+    targets[1]!.warpDeparting = true
+    stepContracts(world, 1 / 60)
+    expect(world.credits).toBe(credits + 1000)
+    expect(c.status).toBe('done')
+    expect(c.end).toBe('partial')
+  })
+
+  it('убитый чужими — дело закрывается пустым, отношение не страдает', () => {
+    const world = worldWith('police')
+    const cop = world.ships[0]!
+    giveOffer(cop, { kind: 'hunt', heads: 1, reward: 1000, days: null, revealed: true })
+    const c = acceptOffer(world, cop)!
+    const t = world.ships.find((s) => s.bountyOf === c.id)!
+    t.alive = false
+    t.lastAttackerId = cop.id
+    stepContracts(world, 1 / 60)
+    expect(c.end).toBe('empty')
+    expect(relationOf(world, cop)).toBe('neutral')
+  })
+
+  it('ушёл из системы с делом «здесь и сейчас» — брошено', () => {
+    const world = worldWith('police')
+    const cop = world.ships[0]!
+    giveOffer(cop, { kind: 'demolish', reward: 5000, days: null, revealed: true })
+    const c = acceptOffer(world, cop)!
+    expect(world.platforms.some((p) => p.contractId === c.id)).toBe(true)
+    world.epoch += 1
+    stepContracts(world, 1 / 60)
+    expect(c.end).toBe('abandoned')
+  })
+
+  it('снос: гнездо взорвано — платят целиком', () => {
+    const world = worldWith('police')
+    const cop = world.ships[0]!
+    giveOffer(cop, { kind: 'demolish', reward: 5000, days: null, revealed: true })
+    const c = acceptOffer(world, cop)!
+    const credits = world.credits
+    world.platforms.find((p) => p.contractId === c.id)!.alive = false
+    stepContracts(world, 1 / 60)
+    expect(world.credits).toBe(credits + 5000)
+  })
+
+  it('на мирного напали — он сам зовёт на помощь; отбился — платит', () => {
+    const world = worldWith('neutral', 'hostile')
+    const [trader, pirate] = world.ships as [ShipEntity, ShipEntity]
+    declareFoe(pirate, trader)
+    trader.ai!.foes.push(pirate.id)
+    stepContracts(world, 1 / 60)
+    expect(offerHail(world)?.id).toBe(trader.id)
+    expect(trader.offer?.kind).toBe('rescue')
+    const c = acceptOffer(world, trader)!
+    const credits = world.credits
+    pirate.alive = false
+    stepContracts(world, 1 / 60)
+    expect(c.status).toBe('done')
+    expect(world.credits).toBe(credits + c.reward)
+  })
+
+  it('сопровождение: клиент идёт за тобой и сдан на станции назначения', () => {
+    const world = worldWith('neutral')
+    const trader = world.ships[0]!
+    giveOffer(trader, { kind: 'escort', toSystem: 9, toSystemName: 'Z', reward: 2000, days: 5, revealed: true })
+    const c = acceptOffer(world, trader)!
+    expect(trader.ai!.escortOf).toBe(world.player.id)
+    const rec = world.acquaintances.find((a) => a.id === trader.acquaintanceId)!
+    rec.systemIndex = 9 // перенесён прыжком вместе с игроком
+    dockAt(world, 9)
+    expect(c.status).toBe('done')
+    expect(rec.plan.posture).toBe('idle')
+  })
+
+  it('сами заговаривают по сроку: первый вызов — в первую минуту', () => {
+    const world = worldWith('neutral')
+    const trader = world.ships[0]!
+    giveOffer(trader, { kind: 'fetch', commodityId: 'food', units: 5, reward: 70, days: 5, revealed: false })
+    for (let t = 0; t < CONTRACTS.FIRST_HAIL + 1; t += 1) stepContracts(world, 1)
+    expect(offerHail(world)?.id).toBe(trader.id)
+  })
+
+  it('отказ вспыльчивого в жизненном деле — обида; в торговом — пожал плечами', () => {
+    const world = worldWith('police', 'neutral')
+    const [cop, trader] = world.ships as [ShipEntity, ShipEntity]
+    cop.persona = { ...cop.persona, temperament: 5 }
+    trader.persona = { ...trader.persona, temperament: 5 }
+    giveOffer(cop, { kind: 'hunt', heads: 1, reward: 1, days: null, revealed: true })
+    giveOffer(trader, { kind: 'fetch', commodityId: 'food', units: 5, reward: 70, days: 5, revealed: true })
+    expect(declineOffer(world, cop)).toBe('angry')
+    expect(declineOffer(world, trader)).toBe('shrug')
+    expect(cop.offer).toBeNull()
+  })
+
+  it('охота у бота чужого хозяина: дело ждёт целей, хозяин их рождает, привязка — по копиям', () => {
+    const guest = worldWith('police')
+    const cop = guest.ships[0]!
+    cop.kinematic = true // копия бота хозяина
+    cop.mirror = true
+    giveOffer(cop, { kind: 'hunt', heads: 2, reward: 1000, days: null, revealed: true })
+    const c = acceptOffer(guest, cop)!
+    expect(guest.remoteJobs).toEqual([{ contractId: c.id, shipId: cop.id }])
+    expect(guest.ships.filter((s) => s.bountyOf != null)).toHaveLength(0) // цели не здесь
+    stepContracts(guest, 1 / 60)
+    expect(c.status).toBe('active') // ждёт, а не «пусто»
+
+    const host = worldWith('police')
+    const hostCop = host.ships[0]!
+    giveOffer(hostCop, { kind: 'hunt', heads: 2, reward: 1000, days: null, revealed: false })
+    const res = hostOfferTaken(host, hostCop)
+    expect(hostCop.offer).toBeNull()
+    expect(res.ships).toHaveLength(2)
+
+    // Копии целей у гостя (условно — его борта) — привязываем, убиваем одну своим выстрелом.
+    const [a, b] = [guest.player, guest.player].map(() => {
+      const t = { ...cop, id: guest.ids.next(), alive: true, lastAttackerId: null as number | null }
+      guest.ships.push(t)
+      return t
+    })
+    bindContractTargets(guest, c.id, [a!.id, b!.id], null)
+    a!.alive = false
+    a!.lastAttackerId = guest.player.id
+    b!.alive = false
+    stepContracts(guest, 1 / 60)
+    expect(c.status).toBe('done')
+    expect(c.paid).toBe(1000)
+  })
+
+  it('чужой бот не идёт в сопровождение — он не покинет систему хозяина', () => {
+    const world = worldWith('neutral')
+    const trader = world.ships[0]!
+    trader.kinematic = true
+    trader.mirror = true
+    giveOffer(trader, { kind: 'escort', toSystem: 9, toSystemName: 'Z', reward: 2000, days: 5, revealed: true })
+    expect(acceptBlock(world, trader)).toBe('remote')
+  })
+})

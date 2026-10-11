@@ -13,10 +13,15 @@ export {
 export { breakWaypoint, leadPoint, patrolWaypoint } from './maneuvers'
 export { cowardice, fearLevel, wantsToFlee } from './morale'
 export { aiController } from './pilot'
-export { isHostileTo, selectTarget } from './targeting'
+export { declareFoe, isFoe, isHostileTo, selectTarget } from './targeting'
+export { knowsOf, occluded, sees } from './perception'
+export { choosePrey, yieldChance } from './robbery'
+export { traitsOf, type PilotTraits } from './traits'
 export {
   assignApproach,
   assignCollectRun,
+  assignVoyage,
+  clearOwnTasks,
   clearTasks,
   enqueueTask,
   hasTask,
@@ -25,4 +30,4 @@ export {
   type Task,
   type TaskKind,
 } from './tasks'
-export { createAIState, type AIMode, type AICommand, type AIState } from './types'
+export { createAIState, type AIMode, type AICommand, type AIState, type BehaviorId } from './types'

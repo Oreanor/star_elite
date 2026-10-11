@@ -56,9 +56,12 @@ function findAsteroid(world: World, id: number | null): AsteroidEntity | null {
 function detonate(world: World, m: MissileEntity, victim: ShipEntity | null): void {
   m.alive = false
   spawnExplosion(world, m.pos, m.vel, 2.2)
-  if (victim) {
+  if (victim?.kinematic) {
+    // HP чужого борта живёт на его клиенте: урон регистрируем для пересылки, как у болта.
+    world.remoteHits.push({ targetId: victim.id, damage: m.module.damage })
+  } else if (victim) {
     const shieldUp = victim.shield > 0 // до удара — им решается поломка (см. breakFromHit)
-    applyDamage(victim, m.module.damage, world.time, { kind: 'missile', name: '' })
+    applyDamage(victim, m.module.damage, world.time, { kind: 'missile', name: '' }, m.ownerId)
     if (victim.faction === 'player') breakFromHit(victim, shieldUp, world.rng)
   }
 }
@@ -145,7 +148,7 @@ function steerAt(
 
 export function stepMissiles(world: World, dt: number): void {
   for (const m of world.missiles) {
-    if (!m.alive) continue
+    if (!m.alive || m.kinematic) continue
 
     if (world.time - m.born > m.module.lifetime) {
       detonate(world, m, null)

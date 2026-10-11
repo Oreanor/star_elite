@@ -180,6 +180,7 @@ export function stationStock(world: World): readonly ShipModule[] {
   const settlement = localSettlement(world)
   return MODULE_CATALOGUE.filter((m) => {
     if (m.cost <= 0) return false // бесплатный стартовый хлам не продают
+    if (m.notSold) return false // дар, а не товар (миелофон — только от Слова)
     // Тех-потолок мира: высокий класс на отсталой планете не сделать — его там и не продают.
     if (settlement.techLevel < minTechForClass(m.class)) return false
     const rng = makeRng(world.galaxySeed ^ Math.imul(world.systemIndex + 1, 0x9e3779b1) ^ hashModuleId(m.id))

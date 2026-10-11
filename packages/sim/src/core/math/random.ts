@@ -66,3 +66,14 @@ export function weightedPick<T>(rng: Rng, table: readonly T[], weightOf: (item: 
   }
   return table[table.length - 1]!
 }
+
+/**
+ * Шанс, что событие с темпом `ratePerSecond` (1/с) случится за `seconds` секунд:
+ * 1 − e^(−λt). Решение, принимаемое раз в промежуток произвольной длины, бросает кость с
+ * этим шансом — и итоговая частота событий в секунду не зависит от длины промежутка.
+ * Шанс «за такт» без этого перевода зависел бы от частоты тактов.
+ */
+export function chanceWithin(ratePerSecond: number, seconds: number): number {
+  if (ratePerSecond <= 0 || seconds <= 0) return 0
+  return 1 - Math.exp(-ratePerSecond * seconds)
+}

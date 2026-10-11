@@ -120,7 +120,31 @@ export function stepTitans(world: World, dt: number): void {
   for (const titan of world.titans) titan.pos.addScaledVector(titan.vel, dt)
 
   const limitSq = TITAN.DESPAWN_RANGE * TITAN.DESPAWN_RANGE
+  // Копию кита хозяина убирает хозяин (снимает объявление), а не дальность от меня.
+  const mirror = world.trafficRole === 'mirror'
   world.titans = world.titans.filter(
-    (t) => t.pos.distanceToSquared(world.player.state.pos) <= limitSq,
+    (t) => (mirror && t.netId != null) || t.pos.distanceToSquared(world.player.state.pos) <= limitSq,
   )
+}
+
+/** Кит хозяина системы, объявленный в сети: место, дрейф и облик пришли готовыми. */
+export function spawnNetTitan(
+  world: World,
+  netId: string,
+  init: { variant: number; name: string; pos: Vector3; vel: Vector3; quat: Quaternion; spin: number; radius: number },
+): TitanEntity {
+  const titan: TitanEntity = {
+    id: world.ids.next(),
+    kind: 'titan',
+    variant: init.variant,
+    name: init.name,
+    pos: init.pos.clone(),
+    vel: init.vel.clone(),
+    quat: init.quat.clone(),
+    spin: init.spin,
+    radius: init.radius,
+    netId,
+  }
+  world.titans.push(titan)
+  return titan
 }

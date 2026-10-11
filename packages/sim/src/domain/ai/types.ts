@@ -5,6 +5,24 @@ import type { Task } from './tasks'
 export type AIMode = 'patrol' | 'pursue' | 'attack' | 'break' | 'evade'
 
 /**
+ * Чем бот занят — ровно одно на такт. Выбирает арбитр по оценкам (`behaviors.ts`), а не
+ * порядок `if` в пилоте: раньше «кто победит» решал номер строки, и бот не мог, например,
+ * бросить поручение, когда его самого начали бить.
+ */
+export type BehaviorId =
+  | 'escape' // заряжает прыжок-побег
+  | 'hold' // приказ «стой тут»
+  | 'keep-back' // приказ «держись в хвосте»
+  | 'soft' // автобой по обломку/астероиду
+  | 'plan' // план знакомого
+  | 'tasks' // очередь поручений и свой промысел
+  | 'combat' // бой с целью
+  | 'rob' // пират требует груз
+  | 'search' // ищет потерянную цель
+  | 'dock' // очередь к причалу
+  | 'patrol' // ничего не надо — кружит у дома
+
+/**
  * Фаза стыковки трафика. null — корабль не стыкуется вовсе.
  *   inbound  — заходит на причал (или ждёт очередь, если он занят);
  *   berthed  — стоит у причала положенное время;
@@ -17,6 +35,8 @@ export type DockPhase = 'inbound' | 'berthed' | 'done' | null
  * что и игрок мышью. Всё, что он умеет, физически доступно и тебе.
  */
 export interface AIState {
+  /** Текущее поведение, выбранное арбитром. */
+  behavior: BehaviorId
   mode: AIMode
   /** Кого атакуем. null — цели нет. Выбирается по фракции, а не «это всегда игрок»:
    *  иначе полиция никогда не подерётся с пиратами. */
@@ -42,6 +62,12 @@ export interface AIState {
 
   /** До следующего пересмотра решения. Это и есть время реакции. */
   thinkTimer: number
+  /**
+   * Длина ТЕКУЩЕГО такта размышления, с. Решения с темпом в секундах (пуск ракеты, побег)
+   * переводят темп в шанс именно за этот промежуток — иначе пилот, думающий реже,
+   * решался бы реже, и выучка незаметно меняла бы частоту, а не только реакцию.
+   */
+  thinkSpan: number
   /** Сколько бот уже в текущем режиме. */
   modeTimer: number
 
@@ -59,6 +85,31 @@ export interface AIState {
   missileCooldown: number
   /** Жать ли ПРО. Тоже решение такта размышления: бот видит ракету не мгновенно. */
   wantsEcm: boolean
+  /**
+   * Наибольший id ракеты, о которой бот уже решил, сбивать ли её. Решение — одно на ракету:
+   * кость за такт копила бы шанс со временем подлёта (см. `AI.ECM_CHANCE`).
+   */
+  ecmSeenId: number
+
+  /**
+   * ЛИЧНЫЕ враги: id бортов, с которыми у этого пилота война помимо фракций. Пират,
+   * которому торговец отказал в грузе, и торговец, на которого напали, — враги друг другу,
+   * хотя их фракции не воюют. Взаимно: достаточно записи у одного из двоих.
+   */
+  foes: number[]
+  /**
+   * Память о цели, потерянной из виду (зашла за планету, ушла за радиус). Пока свежа —
+   * бот идёт туда, где видел её в последний раз, а не забывает в тот же миг.
+   */
+  lastSeenId: number | null
+  lastSeenPos: Vector3
+  lastSeenVel: Vector3
+  lastSeenAt: number
+
+  /** Кого пират собрался грабить. null — никого. */
+  preyId: number | null
+  /** Когда выставлено требование сбросить груз (`world.time`); −1 — ещё не требовал. */
+  demandAt: number
 
   /**
    * Кого сопровождает. null — никого.
@@ -139,6 +190,7 @@ export type AICommand = 'default' | 'attack' | 'engageAll' | 'hold' | 'standDown
 
 export function createAIState(home: Vector3, rng: Rng): AIState {
   return {
+    behavior: 'patrol',
     mode: 'patrol',
     targetId: null,
     orderedTargetId: null,
@@ -146,6 +198,7 @@ export function createAIState(home: Vector3, rng: Rng): AIState {
     waypoint: home.clone(),
     home: home.clone(),
     thinkTimer: rng() * 0.12,
+    thinkSpan: 0.12,
     modeTimer: 0,
     phase: rng() * Math.PI * 2,
     aimJitter: new Vector3(),
@@ -155,6 +208,14 @@ export function createAIState(home: Vector3, rng: Rng): AIState {
     // Первая ракета не летит в первые же секунды боя: дай игроку осмотреться.
     missileCooldown: 6,
     wantsEcm: false,
+    ecmSeenId: -1,
+    foes: [],
+    lastSeenId: null,
+    lastSeenPos: new Vector3(),
+    lastSeenVel: new Vector3(),
+    lastSeenAt: -1e9,
+    preyId: null,
+    demandAt: -1,
     escortOf: null,
     skill: 1,
     dock: null,
@@ -167,5 +228,21 @@ export function createAIState(home: Vector3, rng: Rng): AIState {
     grievanceAt: -1e9,
     grievanceSince: -1e9,
     strikeCount: 0,
+  }
+}
+
+/**
+ * Сдвинуть все ТОЧКИ пилота вместе с миром при перецентровке плавающего начала
+ * (`maybeShiftOrigin`). Корабли сдвигаются, а их дом, путевая точка, память о цели и точки
+ * поручений — раньше нет: после сдвига бот правил «домой» в пустоту за десятки километров.
+ */
+export function shiftAIState(ai: AIState, shift: Vector3): void {
+  ai.home.add(shift)
+  ai.waypoint.add(shift)
+  ai.lastSeenPos.add(shift)
+  for (const t of ai.tasks) {
+    if (t.kind === 'goto') t.point.add(shift)
+    else if (t.kind === 'collect-cargo') t.anchor.add(shift)
+    else if (t.kind === 'hold') t.anchor.add(shift)
   }
 }

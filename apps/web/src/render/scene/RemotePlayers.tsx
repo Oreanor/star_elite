@@ -8,6 +8,12 @@ import { sendHit, subscribeHits } from '../../session/net/hits'
 import { clearPose, publishPose, selfPose, subscribePoses } from '../../session/net/pose'
 import { remoteTravelerActive } from '../../session/net/portal'
 import { PoseInterp } from '../../session/net/remotePlayers'
+import { peerShips } from '../../session/net/peers'
+import { trafficSync } from '../../session/sharedTraffic'
+import { sharedPods } from '../../session/sharedPods'
+import { sharedRocks } from '../../session/sharedRocks'
+import { sharedStructs } from '../../session/sharedStructs'
+import { sharedTitans } from '../../session/sharedTitans'
 import { GIANT_RENDER_CAP } from '../config'
 import { chassisGeometry } from '../geometry/ships'
 import { hullMaterialFor } from '../materials/materials'
@@ -76,6 +82,13 @@ export function RemotePlayers() {
       const world = session.world
       for (const id of registry.values()) despawnRemotePlayer(world, id)
       registry.clear()
+      peerShips.clear()
+      // Сцена пересобирается на прыжке: роль хозяина в прежней системе отпускаем сразу.
+      trafficSync.detach()
+      sharedPods.detach()
+      sharedRocks.detach()
+      sharedStructs.detach()
+      sharedTitans.detach()
     }
   }, [session])
 
@@ -94,18 +107,32 @@ export function RemotePlayers() {
     const now = performance.now()
     const registry = idByUid.current
 
+    // Общий трафик: роль хозяина/зеркала, кадры и зеркала. Только активный мир — призрак
+    // системы за порталом сетевым авторитетом не бывает.
+    if (activeWorld) {
+      trafficSync.tick(world, dt, session.running)
+      sharedPods.tick(world)
+      sharedRocks.tick(world)
+      sharedStructs.tick(world, dt)
+      sharedTitans.tick(world)
+    }
+
     // 0) Переслать попадания по чужим бортам их владельцам. Домен зарегистрировал урон, но
     //    НЕ применил его (HP чужого — на его клиенте): кладём урон в ящик игрока по uid из
     //    нашего реестра, он применит сам. Затем список чистим — он живёт ровно один кадр.
     const hits = world.remoteHits
     if (activeWorld && hits.length > 0) {
       for (const h of hits) {
+        let sent = false
         for (const [uid, id] of registry) {
           if (id === h.targetId) {
             void sendHit(uid, h.damage)
+            sent = true
             break
           }
         }
+        // Не чужой игрок — значит зеркало бота хозяина системы: урон уходит хозяину.
+        if (!sent) trafficSync.forwardHit(h)
       }
       hits.length = 0
     } else if (!activeWorld && hits.length > 0) {
@@ -142,6 +169,7 @@ export function RemotePlayers() {
       if (!want.has(uid)) {
         despawnRemotePlayer(world, id)
         registry.delete(uid)
+        peerShips.delete(uid)
         interp.drop(uid)
         const born = spawnedAt.current.get(uid)
         spawnedAt.current.delete(uid)
@@ -171,6 +199,7 @@ export function RemotePlayers() {
         quat: _spawnQuat.identity(),
       })
       registry.set(uid, ship.id)
+      peerShips.set(uid, ship.id)
       spawnedAt.current.set(uid, now)
     }
 

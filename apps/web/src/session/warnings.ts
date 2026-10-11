@@ -45,6 +45,9 @@ export type WarnCode =
   | 'dockCorridor'
   | 'orbitExit'
   | 'hail'
+  | 'radio'
+  | 'jobDone'
+  | 'jobFailed'
   | 'refuel'
   | 'bonVoyage'
   | 'noRoom'
@@ -85,6 +88,10 @@ const RANK: Record<WarnCode, number> = {
   gravityBrake: 49,
   playerLeft: 45,
   hail: 44,
+  // Эфир чужого разбоя — ниже вызова: зов о помощи важнее пересказа.
+  radio: 43,
+  jobDone: 66,
+  jobFailed: 66,
   dockReady: 40,
   dockCorridor: 35,
   orbitExit: 43,

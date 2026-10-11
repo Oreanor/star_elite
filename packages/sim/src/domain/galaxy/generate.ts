@@ -88,8 +88,22 @@ function makeStar(rng: Rng): Star {
  * ближе своей планеты, — а пузырь целиком лежит внутри пузыря планеты. Полёт
  * к звезде с лунами занял 253 секунды против 250 без них.
  *
- * Орбита в РАДИУСАХ планеты. Ближе четырёх — предел Роша и кольца вместо луны,
- * дальше — каждая следующая отодвигается, иначе шесть лун слипаются в одну.
+ * Орбита в РАДИУСАХ планеты, и орбиты идут ЛЕСТНИЦЕЙ: каждая следующая дальше
+ * предыдущей в 1.45–2 раза (так разнесены луны Галилея и Сатурна — тесная пара
+ * разваливается) и не ближе, чем позволяют размеры соседей. Раньше орбита была
+ * `4 + rnd·10 + 6i`: диапазоны соседних лун перекрывались, вторая садилась внутрь
+ * первой, и два крупных шара бегали друг по другу. Ближе трёх радиусов — предел Роша.
+ * Скалистая планета держит луну выше: у Марса Фобос на 2.8 R, но это камень в 11 км;
+ * настоящий спутник-мир (наша Луна) — на шестидесяти.
+ *
+ * Размер — ДОЛЯ планеты, а не число из воздуха. Прежде любой планете доставались луны
+ * до 3000 км, и у скалы в 3800 км спутник выходил в 80% её самой. В природе рекорд —
+ * Луна, 27% Земли; у гигантов спутники не больше нескольких процентов (Ганимед — 4%
+ * Юпитера, Тритон — 5.5% Нептуна). Отсюда потолки `MOON_SHARE`: крупной луне нужна
+ * планета, способная её удержать, — иначе выпадает камень.
+ *
+ * Бросков кости на луну ровно три (крупная ли, размер, орбита) — столько же, сколько
+ * было: поток `rng` тот же, и все планеты и станции дальше по галактике не сдвинулись.
  *
  * Размеры двугорбые, и это не украшение распределения. Рендер рисует мелкие
  * луны роем одинаковых шариков, а крупные — как планеты, со складками и картой
@@ -100,18 +114,42 @@ function makeStar(rng: Rng): Star {
  */
 const MOON_MAJOR_CHANCE = 0.12
 
-function makeMoons(rng: Rng, planet: string, type: PlanetType): Moon[] {
+/** Потолок радиуса луны как доля радиуса планеты: крупной и каменной. */
+const MOON_SHARE = {
+  giant: { major: 0.08, minor: 0.04 },
+  icy: { major: 0.15, minor: 0.08 },
+  rocky: { major: 0.3, minor: 0.12 },
+} as const
+/** Радиусы луны в единицах карты (10 км): крупная — мир, каменная — камень. */
+const MOON_MAJOR = { MIN: 220, MAX: 300 }
+const MOON_MINOR = { MIN: 40, MAX: 200 }
+/** Зазор между соседними орбитами — не меньше стольких сумм радиусов соседей. */
+const MOON_GAP_RADII = 6
+
+function makeMoons(rng: Rng, planet: string, type: PlanetType, planetRadius: number): Moon[] {
   const many = type === 'Газовый гигант' || type === 'Ледяная'
   const count = Math.floor(rng() * (many ? 7 : 3))
-  return Array.from({ length: count }, (_, i) => {
-    // Каждая восьмая — свой Ганимед. Радиусы в единицах карты: единица — 10 км.
-    const major = rng() < MOON_MAJOR_CHANCE
-    return {
-      name: moonName(planet, i),
-      radius: Math.round(major ? 220 + rng() * 80 : 40 + rng() * 160),
-      orbit: 4 + rng() * 10 + i * 6,
-    }
-  })
+  const share = type === 'Газовый гигант' ? MOON_SHARE.giant : type === 'Ледяная' ? MOON_SHARE.icy : MOON_SHARE.rocky
+  const majorCap = Math.min(MOON_MAJOR.MAX, planetRadius * share.major)
+  const minorCap = Math.min(MOON_MINOR.MAX, Math.max(MOON_MINOR.MIN * 1.5, planetRadius * share.minor))
+  const moons: Moon[] = []
+  for (let i = 0; i < count; i++) {
+    // Каждая восьмая — свой Ганимед, если планета способна такую удержать.
+    const major = rng() < MOON_MAJOR_CHANCE && majorCap >= MOON_MAJOR.MIN
+    const size = rng()
+    const radius = Math.round(
+      major
+        ? MOON_MAJOR.MIN + size * (majorCap - MOON_MAJOR.MIN)
+        : MOON_MINOR.MIN + size * (minorCap - MOON_MINOR.MIN),
+    )
+    const step = rng()
+    const prev = moons[i - 1]
+    let orbit = prev ? prev.orbit * (1.45 + step * 0.55) : many ? 4 + step * 6 : 6 + step * 24
+    // Соседи не касаются: зазор между орбитами шире суммы их радиусов с запасом.
+    if (prev) orbit = Math.max(orbit, prev.orbit + (MOON_GAP_RADII * (radius + prev.radius)) / planetRadius)
+    moons.push({ name: moonName(planet, i), radius, orbit: Math.round(orbit * 100) / 100 })
+  }
+  return moons
 }
 
 /**
@@ -294,11 +332,13 @@ function makePlanets(rng: Rng, system: string, habitable: boolean, starClass: St
     // Мир, на котором живут, называют, а не нумеруют.
     const name = settled ? systemName(rng) : planetName(system, i)
 
+    // Радиус бросается ДО лун, как и прежде (порядок полей литерала): поток `rng` тот же.
+    const radius = Math.round(type === 'Газовый гигант' ? 1800 + rng() * 2600 : 380 + rng() * 900)
     planets.push({
       name,
       type,
-      radius: Math.round(type === 'Газовый гигант' ? 1800 + rng() * 2600 : 380 + rng() * 900),
-      moons: makeMoons(rng, name, type),
+      radius,
+      moons: makeMoons(rng, name, type, radius),
       // Орбиты расходятся геометрически — как в настоящих системах.
       orbit: Math.round(6000 * 1.7 ** i * (0.85 + rng() * 0.3)),
       settlement,

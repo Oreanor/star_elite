@@ -18,6 +18,8 @@ import { applyOutcome, applySocial, linesFor, say, type Social } from './dialogu
 import { coerceOrder, coerceStance, coerceTopic, coerceTransfer } from './payload'
 import { applyTransfer, type TransferResult } from './transfer'
 import { localFine, payLocalFine } from '../station/legal'
+import { acceptBlock, acceptOffer, declineOffer, revealOffer } from '../contracts/contracts'
+import { giveMielophone } from './divineGift'
 
 /**
  * КОМАНДА боту — единица «что игрок велел / о чём договорились» в диалоге: {действие, груз}.
@@ -389,6 +391,48 @@ function departCommand(world: World, ship: ShipEntity, _payload: unknown): Comma
   return { line: null }
 }
 
+/**
+ * Дело: озвучить оферту, взяться или отказаться. Исход считает домен (`contracts`) — модель
+ * могла «согласиться» за игрока на то, чего нет, или на то, что не влезет в трюм; тогда отказ
+ * обязан ЗВУЧАТЬ, а не пропадать молча.
+ */
+function jobCommand(world: World, ship: ShipEntity, payload: unknown): CommandOutcome | null {
+  const answer = asObject(payload)?.answer
+  if (answer === 'offer') {
+    revealOffer(world, ship)
+    return { line: null }
+  }
+  if (answer === 'decline') {
+    if (!ship.offer) return { line: null }
+    const mood = declineOffer(world, ship)
+    return { line: mood === 'angry' ? 'Отказ от дела. Он недоволен.' : 'Отказ от дела.', agreed: false }
+  }
+  if (answer !== 'accept') return null
+  const block = acceptBlock(world, ship)
+  if (block === 'no-offer') return { line: null, spoken: 'ДЕЛ У МЕНЯ ДЛЯ ТЕБЯ НЕТ.' }
+  if (block === 'hold-full') return { line: 'Трюм не вместит груз.', agreed: false, spoken: 'ТВОЙ ТРЮМ ЭТО НЕ ВОЗЬМЁТ. ОСВОБОДИ МЕСТО.' }
+  if (block === 'busy') return { line: null, agreed: false, spoken: 'СНАЧАЛА ЗАКОНЧИ ПРЕЖНЕЕ.' }
+  if (block === 'remote') return { line: null, agreed: false, spoken: 'НЕ МОГУ УЙТИ С ТОБОЙ — У МЕНЯ ЗДЕСЬ СВОИ.' }
+  const c = acceptOffer(world, ship)
+  return { line: c ? 'Дело принято.' : null, agreed: c != null }
+}
+
+/**
+ * Дар бога. Отказ домена ЗВУЧИТ голосом бога — модель могла пообещать то, чего не будет.
+ */
+function giftCommand(world: World, ship: ShipEntity, _payload: unknown): CommandOutcome | null {
+  const refusal = giveMielophone(world, ship)
+  if (refusal === null) return { line: 'Получен миелофон.', agreed: true }
+  if (refusal === 'not-god') return null
+  const spoken =
+    refusal === 'hostile'
+      ? 'НЕ СЕЙЧАС. ТЫ ЕЩЁ НЕ ЗАСЛУЖИЛ МОЕЙ МИЛОСТИ.'
+      : refusal === 'given'
+        ? 'ОН УЖЕ У ТЕБЯ. ВТОРОЙ ТЕБЕ НИ К ЧЕМУ.'
+        : 'ТВОЙ ТРЮМ ПОЛОН. ОСВОБОДИ МЕСТО — И Я ВЛОЖУ ЕГО ТУДА.'
+  return { line: null, agreed: false, spoken }
+}
+
 /** Знакомство: бот назвался — заводим запись в журнале (идемпотентно). Строку даём лишь на НОВОЕ. */
 function meetCommand(world: World, ship: ShipEntity, _payload: unknown): CommandOutcome | null {
   const wasAcquainted = ship.acquaintanceId != null
@@ -434,13 +478,26 @@ const HANDLERS: Record<string, CommandHandler> = {
   meet: meetCommand,
   tip: tipCommand,
   mark: markCommand,
+  job: jobCommand,
+  gift: giftCommand,
 }
 
 /**
  * Исполнить команду боту. Неизвестный тег — молча null: старый клиент/сеть могут прислать
  * команду, которой этот домен ещё не знает, и это не повод падать. Результат — для ленты.
  */
+/**
+ * Что можно с зеркалом (бортом, которым правит хозяин системы): только слова и память.
+ * Деньги, груз, приказы и дела ушли бы в копию, которой этот клиент не управляет.
+ */
+const MIRROR_SAFE = new Set(['social', 'note', 'meet', 'tip', 'mark', 'stance', 'learn', 'job'])
+
+/** С копией бога можно и божье: правка карты и мимика — это про мир и игрока, не про борт. */
+const DIVINE_MIRROR_SAFE = new Set(['mapEdit', 'emote', 'gift'])
+
 export function applyCommand(world: World, ship: ShipEntity, command: Command): CommandOutcome | null {
+  const foreign = ship.mirror === true || ship.peer === true
+  if (foreign && !MIRROR_SAFE.has(command.action) && !(ship.divine && DIVINE_MIRROR_SAFE.has(command.action))) return null
   const handler = HANDLERS[command.action]
   return handler ? handler(world, ship, command.payload) : null
 }

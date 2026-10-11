@@ -24,6 +24,7 @@ import { PilotIdentity } from '../station/PilotIdentity'
 import { dispatcherFace } from '../dialogue/Dispatcher'
 import { GLASS_PANEL, screenBackground } from '../station/backdrop'
 import { Market } from '../station/Market'
+import { JobsTab } from '../jobs/JobsTab'
 import { ShipScreen } from '../ship/ShipScreen'
 import { SystemMap } from '../map/SystemMap'
 import { GalaxyMap } from '../map/GalaxyMap'
@@ -53,6 +54,8 @@ export type ConsoleTab =
   | 'ship'
   | 'shop'
   | 'people'
+  /** ДЕЛА — взятые контракты и их исход. И у причала, и в полёте. */
+  | 'jobs'
   | 'locator'
   | 'system'
   | 'galaxy'
@@ -146,6 +149,8 @@ export function Console({
     // У причала вкладка — про СТАНЦИЮ: кто здесь, диспетчер, Слово. В полёте станции под
     // тобой нет, и там это знакомые и игроки онлайн — ЛЮДИ.
     { id: 'people', label: t(docked ? 'station.nav.station' : 'station.nav.people') },
+    // ДЕЛА — рядом с людьми: дело всегда от кого-то из них.
+    { id: 'jobs', label: t('station.nav.jobs') },
     // КОРАБЛЬ — и твой борт, и витрина корпусов: у причала под моделью стрелки листают
     // каталог и кнопка покупки. Отдельной «ВЕРФИ» больше нет.
     { id: 'ship', label: t('ship.title') },
@@ -234,6 +239,7 @@ export function Console({
           {tab === 'ship' && <ShipScreen world={world} docked={docked} embedded onChange={bump} onClose={() => onTab('planet')} />}
           {tab === 'shop' && docked && <Market world={world} onChange={bump} />}
           {tab === 'reference' && <Reference />}
+          {tab === 'jobs' && <JobsTab world={world} />}
           {tab === 'people' && (
             <PeopleTab key={peopleRefresh} world={world} docked={docked} onTalk={onTalk} onDispatch={onDispatch} onChat={onChat} />
           )}

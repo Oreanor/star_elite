@@ -13,6 +13,7 @@ export {
   type Social,
   type Topic,
 } from './dialogue'
+export { giveMielophone, type GiftRefusal } from './divineGift'
 export { applyTransfer, type Transfer, type TransferDirection, type TransferResult } from './transfer'
 export {
   applyCommand,

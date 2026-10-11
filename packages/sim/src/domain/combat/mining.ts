@@ -1,4 +1,4 @@
-import { Vector3 } from 'three'
+import { Quaternion, Vector3 } from 'three'
 import { ASTEROID } from '../../config/world'
 import { signed } from '../../core/math'
 import { addCommodity, freeCapacity } from '../cargo/hold'
@@ -47,7 +47,19 @@ export const splittable = (a: AsteroidEntity) => a.radius > ASTEROID.MIN_SPLIT_R
  * Направления разлёта СМЕЩЕНЫ так, чтобы их сумма была нулём. Куски равны по
  * массе, значит центр масс остаётся на месте, а импульс сохраняется точно.
  */
+/**
+ * Общий камень у не-хозяина не колется здесь: удар уходит хозяину (`world.rockHits`), он
+ * расколет и объявит осколки всем. Иначе каждый клиент колол бы по-своему, и пояс у двоих
+ * рядом разошёлся бы с первого выстрела. true — удар отправлен, локально ничего не делать.
+ */
+function forwardRock(world: World, a: AsteroidEntity, damage: number, bomb = false): boolean {
+  if (world.trafficRole !== 'mirror' || !a.netId) return false
+  world.rockHits.push(bomb ? { netId: a.netId, damage, bomb } : { netId: a.netId, damage })
+  return true
+}
+
 export function shatter(world: World, a: AsteroidEntity): void {
+  if (forwardRock(world, a, a.hull + 1)) return
   a.alive = false
   spawnExplosion(world, a.pos, a.vel, a.radius * 0.12)
 
@@ -91,6 +103,7 @@ export function shatter(world: World, a: AsteroidEntity): void {
 /** Урон камню. Один импульс лазера (HULL=1) — раскол или уничтожение мелочи. */
 export function damageAsteroid(world: World, a: AsteroidEntity, amount: number): void {
   if (!a.alive) return
+  if (forwardRock(world, a, amount)) return
   a.hull -= amount
   if (a.hull <= 0) shatter(world, a)
 }
@@ -102,6 +115,7 @@ export function damageAsteroid(world: World, a: AsteroidEntity, amount: number):
  */
 export function bombShatterAsteroid(world: World, a: AsteroidEntity): void {
   if (!a.alive) return
+  if (forwardRock(world, a, a.hull + 1, true)) return
   a.alive = false
   spawnExplosion(world, a.pos, a.vel, a.radius * 0.12)
 
@@ -158,4 +172,50 @@ export function scoopAsteroid(ship: ShipEntity, a: AsteroidEntity): boolean {
   refreshSpec(ship)
   a.alive = false
   return true
+}
+
+/**
+ * ОБЩИЙ камень из сети: место, скорость и возраст пришли от хозяина; дрейф прямой, поэтому
+ * у всех он там же. Вращение — своё (на вид, не на правила).
+ */
+export function spawnNetRock(
+  world: World,
+  netId: string,
+  pos: Vector3,
+  vel: Vector3,
+  radius: number,
+  shape: number,
+): AsteroidEntity {
+  const a: AsteroidEntity = {
+    id: world.ids.next(),
+    kind: 'asteroid',
+    pos: pos.clone(),
+    vel: vel.clone(),
+    quat: new Quaternion(),
+    spin: new Vector3(0.12, 0.08, 0.05),
+    radius,
+    hull: ASTEROID.HULL,
+    shape,
+    alive: true,
+    netId,
+  }
+  world.asteroids.push(a)
+  return a
+}
+
+/** Общий камень расколот или зачерпнут у хозяина — убрать здешнюю копию (со вспышкой, если раскол). */
+export function dropNetRock(world: World, netId: string, burst: boolean): void {
+  for (const a of world.asteroids) {
+    if (a.netId !== netId || !a.alive) continue
+    a.alive = false
+    if (burst) spawnExplosion(world, a.pos, a.vel, a.radius * 0.12)
+  }
+}
+
+/** У ХОЗЯИНА: удар по общему камню, присланный другим игроком. Колет как свой. */
+export function applyRockHit(world: World, netId: string, damage: number, bomb: boolean): void {
+  const a = world.asteroids.find((x) => x.netId === netId && x.alive)
+  if (!a) return
+  if (bomb) bombShatterAsteroid(world, a)
+  else damageAsteroid(world, a, damage)
 }

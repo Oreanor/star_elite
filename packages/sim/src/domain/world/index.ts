@@ -10,6 +10,9 @@ export {
   type Notice,
   type PlatformEntity,
   type RemoteHit,
+  type PodClaim,
+  type RockHit,
+  type StructHit,
   type CrashHit,
   type CrashHitKind,
   type LossHit,
@@ -83,7 +86,22 @@ export {
 } from './plan'
 export { makePilotName } from './names'
 export { maybeShiftOrigin } from './origin'
-export { spawnRemotePlayer, despawnRemotePlayer, type RemotePlayerInit } from './remote'
+export {
+  applyPeerHit,
+  despawnRemotePlayer,
+  isPersonalShip,
+  promoteMirror,
+  promoteMirrorMissile,
+  promoteMirrorPlatform,
+  spawnMirrorPlatform,
+  applyStructHitAtHost,
+  spawnMirrorMissile,
+  spawnMirrorShip,
+  spawnRemotePlayer,
+  yieldLocalTraffic,
+  type MirrorInit,
+  type RemotePlayerInit,
+} from './remote'
 export { pickFreeSpawn, isFreeSpawn } from './spawn'
 export {
   cycleTarget,
@@ -134,7 +152,7 @@ export {
   despawnDistantAsteroids,
   liveAsteroidCount,
 } from './asteroidEncounter'
-export { spawnTitan, spawnTrafficTitan, stepTitans, titanCount, placeShowcaseTitans } from './titans'
+export { spawnNetTitan, spawnTitan, spawnTrafficTitan, stepTitans, titanCount, placeShowcaseTitans } from './titans'
 export { placeMonoliths, placeWarBases } from './monoliths'
 export {
   placeFigurines,
@@ -154,3 +172,4 @@ export { spawnPlatform, stepPlatforms } from './platforms'
 export { STARTER_SYSTEM, type PatrolDef, type SystemDef } from './system'
 export { findWarBaseFixture, livingFixtures, warBaseFixtureWorldPos, warBaseIntegrity } from './warBase'
 export { renderPos, renderQuat, renderTime, shownPosition, type Posed } from './poseTrail'
+export { SLOVO_KIND, SLOVO_NAME } from './slovo'

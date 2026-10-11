@@ -7,6 +7,7 @@ import {
   incomingMissile,
   landingCue,
   laserOverheated,
+  offerHail,
   pendingHail,
   scooping,
   stationRange,
@@ -174,13 +175,41 @@ export function gatherWarnings(frame: HudFrame): Plate | null {
   // Социальные вести — вызов по связи и гибель/уход знакомого — тем же каналом.
   const hail = pendingHail(world)
   if (hail) pushWarning('hail', now, { label: t('hud.hail', { name: properName(hail.name).toUpperCase() }) })
+  // Сам заговорил с делом — тот же канал вызова; зов о помощи — громче.
+  const job = hail ? null : offerHail(world)
+  if (job) {
+    const name = properName(job.name).toUpperCase()
+    pushWarning('hail', now, { label: t(job.offer?.kind === 'rescue' ? 'hud.hailRescue' : 'hud.hailJob', { name }) })
+  }
 
   const notice = world.notices[world.notices.length - 1]
   if (notice) {
-    const left = notice.kind === 'player-left'
-    pushWarning(left ? 'playerLeft' : 'contactLost', now, {
-      label: t(left ? 'hud.playerLeft' : 'hud.contactLost', { name: properName(notice.name).toUpperCase() }),
-    })
+    const name = properName(notice.name).toUpperCase()
+    const other = notice.other ? properName(notice.other).toUpperCase() : ''
+    switch (notice.kind) {
+      case 'player-left':
+        pushWarning('playerLeft', now, { label: t('hud.playerLeft', { name }) })
+        break
+      case 'contact-lost':
+        pushWarning('contactLost', now, { label: t('hud.contactLost', { name }) })
+        break
+      // Эфир: чужой разбой слышен — повод вмешаться.
+      case 'demand':
+        pushWarning('radio', now, { label: t('hud.radioDemand', { name, other }) })
+        break
+      case 'yielded':
+        pushWarning('radio', now, { label: t('hud.radioYield', { name }) })
+        break
+      case 'refused':
+        pushWarning('radio', now, { label: t('hud.radioRefuse', { name }) })
+        break
+      case 'contract-done':
+        pushWarning('jobDone', now, { label: t('hud.jobDone', { amount: notice.amount ?? 0 }) })
+        break
+      case 'contract-failed':
+        pushWarning('jobFailed', now, { label: t('hud.jobFailed', { name }) })
+        break
+    }
   }
 
   // ── Показываем самую важную живую плашку ────────────────────────────────────

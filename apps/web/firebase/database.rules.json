@@ -60,6 +60,84 @@
           ".validate": "newData.hasChildren(['dmg', 'from']) && newData.child('dmg').isNumber() && newData.child('from').val() === auth.uid"
         }
       }
+    },
+    "traffic": {
+      ".read": "auth != null",
+      "$key": {
+        "host": {
+          ".write": "auth != null && (!data.exists() || data.child('uid').val() === auth.uid || data.child('t').val() < now - 4500)",
+          ".validate": "!newData.exists() || (newData.hasChildren(['uid', 't']) && newData.child('uid').val() === auth.uid)"
+        },
+        "hits": {
+          "$owner": {
+            "$hid": {
+              ".write": "auth != null && ((!data.exists() && newData.child('from').val() === auth.uid) || auth.uid === $owner)",
+              ".validate": "!newData.exists() || (newData.hasChildren(['hid', 'dmg', 'from']) && newData.child('dmg').isNumber() && newData.child('from').val() === auth.uid)"
+            }
+          }
+        },
+        "pods": {
+          "$pid": {
+            ".write": "auth != null && (!data.exists() ? newData.child('by').val() === auth.uid : (!newData.exists() || (!data.hasChild('taken') && newData.child('taken').val() === auth.uid)))",
+            ".validate": "!newData.exists() || newData.hasChildren(['i', 'p', 'v', 't', 'by'])"
+          }
+        },
+        "own": {
+          "$uid": {
+            ".write": "auth != null && auth.uid === $uid"
+          }
+        },
+        "rocks": {
+          "$rid": {
+            ".write": "auth != null",
+            ".validate": "!newData.exists() || newData.hasChildren(['p', 'v', 't', 'r', 'sh'])"
+          }
+        },
+        "rockhits": {
+          "$hid": {
+            ".write": "auth != null && (!data.exists() ? newData.child('from').val() === auth.uid : !newData.exists())",
+            ".validate": "!newData.exists() || (newData.hasChildren(['rid', 'dmg', 'from']) && newData.child('dmg').isNumber())"
+          }
+        },
+        "bases": {
+          ".write": "auth != null && root.child('traffic').child($key).child('host').child('uid').val() === auth.uid"
+        },
+        "plats": {
+          ".write": "auth != null && root.child('traffic').child($key).child('host').child('uid').val() === auth.uid"
+        },
+        "structhits": {
+          "$hid": {
+            ".write": "auth != null && (!data.exists() ? newData.child('from').val() === auth.uid : !newData.exists())",
+            ".validate": "!newData.exists() || newData.hasChildren(['kind', 'from'])"
+          }
+        },
+        "jobreq": {
+          "$owner": {
+            "$id": {
+              ".write": "auth != null && ((!data.exists() && newData.child('from').val() === auth.uid) || auth.uid === $owner)"
+            }
+          }
+        },
+        "jobresp": {
+          "$to": {
+            "$id": {
+              ".write": "auth != null && ((!data.exists() && newData.child('owner').val() === auth.uid) || auth.uid === $to)"
+            }
+          }
+        },
+        "titans": {
+          ".write": "auth != null && root.child('traffic').child($key).child('host').child('uid').val() === auth.uid"
+        }
+      }
+    },
+    "god": {
+      ".read": "auth != null",
+      "$seed": {
+        "$uid": {
+          ".write": "auth != null && auth.uid === $uid",
+          ".validate": "!newData.exists() || newData.hasChildren(['name', 'rel', 'at'])"
+        }
+      }
     }
   }
 }

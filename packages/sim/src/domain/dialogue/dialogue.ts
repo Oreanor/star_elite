@@ -1,6 +1,7 @@
 import { DIALOGUE } from '../../config/dialogue'
 import { clamp } from '../../core/math'
 import { createAIState } from '../ai/types'
+import { clearOwnTasks } from '../ai/tasks'
 import { healthFraction, shieldFraction } from '../combat/damage'
 import { defuseGrievance, provoke } from '../combat/grievance'
 import { jettisonCargo, jettisonWeapons } from '../combat/salvage'
@@ -156,6 +157,9 @@ export function linesFor(world: World, other: ShipEntity): Line[] {
   // Бог Слово вне торга и приказов: ни найма, ни грабежа, ни мольбы — только СВОБОДНАЯ БЕСЕДА.
   // Кнопок-интентов у него нет; он не наёмник и не мишень, он просто говорит.
   if (other.divine) return []
+  // Борт чужого хозяина системы (зеркало) ведёт не этот клиент: нанять, ограбить или взять
+  // его в плен отсюда нельзя — сделка ушла бы в копию, которой никто не управляет.
+  if (other.mirror || other.peer) return []
 
   const all: Line[] = (() => {
     if (other.faction === 'hostile') {
@@ -233,6 +237,9 @@ function hireEscortEffect(world: World, other: ShipEntity): boolean {
   world.credits -= fee
   other.ai ??= createAIState(other.state.pos, world.rng)
   other.ai.escortOf = world.player.id
+  // Нанят — свой рейс и свой разбой подождут: теперь он ведомый.
+  clearOwnTasks(other)
+  other.ai.preyId = null
   other.ai.skill = DIALOGUE.ESCORT_SKILL
   other.ai.targetId = null
   other.ai.orderedTargetId = null

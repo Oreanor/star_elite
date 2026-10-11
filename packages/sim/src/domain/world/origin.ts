@@ -2,6 +2,7 @@ import { Vector3 } from 'three'
 import { PHYSICS } from '../../config/physics'
 import type { World } from './entities'
 import { shiftTrail } from './poseTrail'
+import { shiftAIState } from '../ai/types'
 
 /**
  * Плавающее начало координат.
@@ -36,6 +37,8 @@ export function maybeShiftOrigin(world: World): void {
 
   pos.set(0, 0, 0)
   shiftTrail(world.player.state, _shift)
+  // У игрока пилот бывает тоже — автобой.
+  if (world.player.ai) shiftAIState(world.player.ai, _shift)
 
   /**
    * Сдвинуть обязано ВСЁ, у чего есть место в мире. Список тут — ручной, и это его слабость:
@@ -48,6 +51,7 @@ export function maybeShiftOrigin(world: World): void {
   for (const s of world.ships) {
     s.state.pos.add(_shift)
     shiftTrail(s.state, _shift)
+    if (s.ai) shiftAIState(s.ai, _shift)
   }
   for (const a of world.asteroids) {
     a.pos.add(_shift)

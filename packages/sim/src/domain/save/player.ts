@@ -1,7 +1,9 @@
+import { isPortable } from '../contracts/contracts'
+import type { Contract } from '../contracts/types'
 import { findChassis } from '../../config/chassis'
 import { findModule } from '../../config/modules'
 import { addItem, createHold } from '../cargo/hold'
-import { COMMODITIES, type Commodity } from '../cargo/items'
+import { COMMODITIES, type CargoItem, type Commodity, type FigurineSpecimen } from '../cargo/items'
 import { createLoadout, isWeapon, NO_HULL_UPGRADES, type HullUpgrades, type Loadout, type ShipModule, type WeaponModule } from '../loadout'
 import { refreshSpec } from '../world/factory'
 import type { Acquaintance } from '../world/acquaintance'
@@ -68,6 +70,12 @@ export interface PlayerSave {
   acquaintances: Acquaintance[]
   /** Местные штрафы; старые сейвы загружаются без долгов. */
   fines?: FineRecord[]
+  /**
+   * Дела. Хранятся только те, что переживают прыжок (доставка, «привези», сопровождение), и
+   * закрытые — для истории. Дела «здесь и сейчас» (спасти, охота, снос) привязаны к целям в
+   * этой системе: перезагрузка их не воскрешает. Необязательно: старые сейвы — без дел.
+   */
+  contracts?: Contract[]
   loadout: SavedLoadout
   /** Разовые прокачки собственных х-к рамы. Необязательно: старые сейвы — заводская рама. */
   hullUp?: HullUpgrades
@@ -110,6 +118,34 @@ function rehydrateModule(saved: SavedModule): ShipModule | null {
   return saved.upgrade !== undefined ? { ...base, upgrade: saved.upgrade } : base
 }
 
+/**
+ * Предмет из трюма/контейнера в плоские данные и обратно — для ОБЩИХ контейнеров: что
+ * выбросил один игрок, подбирает другой. Цену входа (`costBasis`) не несём: она личная.
+ */
+export type SavedCargoItem =
+  | { kind: 'commodity'; commodity: string; units: number; specimens?: FigurineSpecimen[] }
+  | { kind: 'module'; module: SavedModule }
+
+export function serializeCargoItem(item: CargoItem): SavedCargoItem {
+  if (item.kind === 'module') return { kind: 'module', module: serializeModule(item.module) }
+  const out: SavedCargoItem = { kind: 'commodity', commodity: item.commodity.id, units: item.units }
+  if (item.specimens?.length) out.specimens = item.specimens.map((sp) => ({ ...sp }))
+  return out
+}
+
+/** null — неизвестный товар/модуль (другая версия каталога): такой контейнер пропускаем. */
+export function rehydrateCargoItem(saved: SavedCargoItem): CargoItem | null {
+  if (saved.kind === 'module') {
+    const module = rehydrateModule(saved.module)
+    return module ? { kind: 'module', module } : null
+  }
+  const commodity = COMMODITY_BY_ID.get(saved.commodity)
+  if (!commodity || !(saved.units > 0)) return null
+  return saved.specimens?.length
+    ? { kind: 'commodity', commodity, units: saved.units, specimens: saved.specimens.map((sp) => ({ ...sp })) }
+    : { kind: 'commodity', commodity, units: saved.units }
+}
+
 export function serializeLoadout(l: Loadout): SavedLoadout {
   return {
     chassis: l.chassis.id,
@@ -140,6 +176,11 @@ export function rehydrateLoadout(saved: SavedLoadout): Loadout {
 }
 
 /** Снять сейв с текущего состояния мира. Чистое чтение — ничего не меняет. */
+/** Глубокая копия дела: сейв не должен держать ссылки на живой мир, и наоборот. */
+function cloneContract(c: Contract): Contract {
+  return JSON.parse(JSON.stringify(c)) as Contract
+}
+
 export function serializePlayer(world: World): PlayerSave {
   const p = world.player
   const hold: SavedStack[] = []
@@ -175,6 +216,7 @@ export function serializePlayer(world: World): PlayerSave {
       entrusted: a.entrusted.map((e) => ({ ...e })),
     })),
     fines: world.fines.map((fine) => ({ ...fine })),
+    contracts: world.contracts.filter((c) => c.status !== 'active' || isPortable(c)).map(cloneContract),
     loadout: serializeLoadout(p.loadout),
     hullUp: { ...p.hullUp },
     hold,
@@ -214,6 +256,7 @@ export function applyPlayerSave(world: World, save: PlayerSave): void {
     entrusted: a.entrusted ? a.entrusted.map((e) => ({ ...e })) : [],
   }))
   world.fines = save.fines ? save.fines.map((fine) => ({ ...fine })) : []
+  world.contracts = save.contracts ? save.contracts.map(cloneContract) : []
 
   const p = world.player
   // Имя игрока открыто — это он сам. Ставим и отображаемое, и истинное.

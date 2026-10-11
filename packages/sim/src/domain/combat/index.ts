@@ -10,6 +10,9 @@ export { chargeHyperdrive, scooping, starExposure, stepStarHeat } from './starhe
 export {
   asteroidMass,
   bombShatterAsteroid,
+  applyRockHit,
+  dropNetRock,
+  spawnNetRock,
   damageAsteroid,
   oreFits,
   oreUnits,
@@ -17,7 +20,7 @@ export {
   shatter,
   splittable,
 } from './mining'
-export { destroyWarBase, damageWarBaseFixture, stepWarBaseWrecks, warBaseWreckDone } from './warBase'
+export { destroyWarBase, damageWarBaseFixture, killWarBaseFixture, stepWarBaseWrecks, warBaseWreckDone } from './warBase'
 export { stepWarBaseTurrets } from './warBaseGuns'
 export { stepMissiles } from './missiles'
 export { assessThreat, threatLevel, type ThreatAssessment, type ThreatLevel } from './threat'
@@ -38,6 +41,9 @@ export {
   spawnWreckage,
   tractorPods,
   tryScoop,
+  spawnNetPod,
+  dropNetPod,
+  revokeScoop,
   type ScoopBlock,
 } from './salvage'
 export {

@@ -2,6 +2,7 @@ import { MODULE_CATALOGUE, findModule } from '../../config/modules'
 import { CONTACTS } from '../../config/contacts'
 import { DIALOGUE } from '../../config/dialogue'
 import { createAIState } from '../ai/types'
+import { clearOwnTasks } from '../ai/tasks'
 import type { SavedLoadout } from '../save/player'
 import { rehydrateLoadout, serializeLoadout } from '../save/player'
 import {
@@ -93,6 +94,7 @@ export function applyPosture(world: World, record: Acquaintance, ship: ShipEntit
   ship.ai ??= createAIState(ship.state.pos, world.rng)
   ship.ai.escortOf = record.plan.patronId
   ship.ai.command = 'default'
+  clearOwnTasks(ship)
   ship.ai.skill = Math.max(ship.ai.skill, DIALOGUE.ESCORT_SKILL)
   ship.ai.targetId = null
   ship.ai.orderedTargetId = null

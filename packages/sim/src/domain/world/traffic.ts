@@ -11,12 +11,16 @@ import { randomUnit, signed, weightedPick, type Rng } from '../../core/math'
 import { countWhere, retain } from '../../core/list'
 import type { Loadout } from '../loadout'
 import { createAIState } from '../ai/types'
+import { assignVoyage } from '../ai/tasks'
+import { rollOffer } from '../contracts/offers'
+import { CONTRACTS } from '../../config/contracts'
+import { declareFoe } from '../ai/targeting'
 import { residentAcquaintances } from './acquaintance'
 import { SLOVO_KIND, SLOVO_NAME, SLOVO_PERSONA } from './slovo'
 import { rehydrateContactShip } from './plan'
 import { spawnPlatform } from './platforms'
 import { beginWarpArrival } from './warp'
-import { addCommodity } from '../cargo/hold'
+import { addCommodity, freeCapacity } from '../cargo/hold'
 import { COMMODITIES } from '../cargo/items'
 import { isDroneShip } from '../combat/drones'
 import { makeShip, refreshSpec } from './factory'
@@ -208,9 +212,33 @@ function spawnOne(world: World, kind: EncounterKind, pos: Vector3, home: Vector3
   // значит корабль сперва долетит до цели, а уже там начнёт кружить.
   ship.ai = createAIState(home, world.rng)
   ship.controls.throttle = 0.7
+  // Дело — бросок при рождении: у тех же бортов те же оферты (таблица ролей в `offers.ts`).
+  ship.offer = rollOffer(world, ship)
 
   world.ships.push(ship)
   return ship
+}
+
+/**
+ * НАЗВАННЫЕ ЦЕЛИ ОХОТЫ рождаются вместе с делом: заказчик говорит, кого именно, — их и убирай,
+ * а не первых встречных. Держатся в мире, пока дело не закрыто (`bountyOf`), имя открыто сразу.
+ * Сходятся с кромки радара в стороне от игрока: их надо найти, а не ждать у причала.
+ */
+export function spawnBountyPirates(world: World, count: number, contractId: number): ShipEntity[] {
+  const kind = ENCOUNTERS.find((k) => k.id === 'raider') ?? ENCOUNTERS[0]!
+  randomUnit(world.rng, _scratch)
+  const [lo, hi] = CONTRACTS.HUNT_SITE
+  const site = new Vector3().copy(world.player.state.pos).addScaledVector(_scratch, lo + world.rng() * (hi - lo))
+  const born: ShipEntity[] = []
+  for (let i = 0; i < count; i++) {
+    randomUnit(world.rng, _offset).multiplyScalar(world.rng() * TRAFFIC.GROUP_SPREAD)
+    const ship = spawnOne(world, kind, _site.copy(site).add(_offset), site)
+    ship.offer = null
+    ship.bountyOf = contractId
+    ship.name = ship.pilotName
+    born.push(ship)
+  }
+  return born
 }
 
 /**
@@ -278,6 +306,8 @@ function stockFreighter(world: World, ship: ShipEntity, tons: number): void {
   const goods = [COMMODITIES.MINERALS, COMMODITIES.METALS, COMMODITIES.MACHINERY, COMMODITIES.FOOD, COMMODITIES.ELECTRONICS]
   const a = goods[Math.floor(world.rng() * goods.length)]!
   const b = goods[Math.floor(world.rng() * goods.length)]!
+  // Не больше, чем влезет: у торговца трюм мал, у баржи велик — число тонн одно на вид.
+  tons = Math.min(tons, freeCapacity(ship.hold))
   addCommodity(ship.hold, a, Math.floor((tons * 0.6) / a.unitMass))
   addCommodity(ship.hold, b, Math.floor((tons * 0.4) / b.unitMass))
   refreshSpec(ship)
@@ -457,6 +487,9 @@ function bornEncounter(world: World): ShipEntity[] {
     const home = dock ? station!.pos : transitHome
     const ship = spawnOne(world, kind, _scratch.copy(centre).add(_offset), home)
     if (dock && ship.ai) ship.ai.dock = 'inbound'
+    // Мирный транзит идёт СВОИМ РЕЙСОМ: долетел до точки назначения — уходит прыжком, а не
+    // кружит там вечно. Стыкующийся получит рейс, отстояв у причала (`flyDock`).
+    else if (kind.faction === 'neutral' && !kind.approach) assignVoyage(ship, home)
     born.push(ship)
   }
 
@@ -465,7 +498,8 @@ function bornEncounter(world: World): ShipEntity[] {
   // нужен пилот, иначе звено молча дрейфует.
   const patron = born[0]
   if (patron) {
-    if (kind.cargo) for (const ship of born) stockFreighter(world, ship, kind.cargo)
+    const tons = kind.cargo ?? (kind.faction === 'neutral' ? TRAFFIC.TRADER_CARGO : 0)
+    if (tons > 0) for (const ship of born) stockFreighter(world, ship, tons)
     if (kind.escort) born.push(...spawnEscort(world, kind.escort, patron))
   }
 
@@ -611,8 +645,16 @@ function spawnSkirmish(world: World): ShipEntity[] {
   const victimId = world.rng() < 0.5 ? 'police' : 'trader'
   const victimKind = ENCOUNTERS.find((k) => k.id === victimId)!
   const victims = victimKind.min + Math.floor(world.rng() * (victimKind.max - victimKind.min + 1))
+  const raiderShips = born.slice()
   for (let i = 0; i < victims && trafficCount(world) < TRAFFIC.MAX; i++) {
-    born.push(spawnOne(world, victimKind, nearCentre(), centre))
+    const victim = spawnOne(world, victimKind, nearCentre(), centre)
+    // Бой УЖЕ идёт: требование было и отвергнуто до прихода игрока. Без личной вражды
+    // пираты и торговец мирно кружили бы рядом — фракции их не ссорят (`isHostileTo`).
+    for (const raider of raiderShips) {
+      declareFoe(raider, victim)
+      declareFoe(victim, raider)
+    }
+    born.push(victim)
   }
   return born
 }
@@ -635,6 +677,8 @@ function despawnDistant(world: World): void {
     if (s.divine) return true
     if (s.id === lockedShipId(world)) return true
     if (s.ai?.escortOf != null) return true
+    // Названная цель охоты держится, пока дело не закрыто: иначе премия растворялась бы за горизонтом.
+    if (s.bountyOf != null) return true
     // ЗНАКОМЫЙ (с ним говорили) не растворяется, как прочий трафик: он отслеживается,
     // помечен на картах и всегда на связи. Прохожие копятся и гибнут — знакомые живут.
     if (s.acquaintanceId != null) return true
@@ -687,6 +731,8 @@ export function stepTraffic(world: World, dt: number): ShipEntity[] {
   // Пустынная система: трафика нет вовсе — ни встреч, ни завсегдатаев у причала.
   // Выходим ДО despawnDistant: чистить некого, а спавнить тем более. Только бог и звезда.
   if (world.desolate) return []
+  // Трафик ведёт хозяин системы: здесь его борта — зеркала, свой не рождается и не убирается.
+  if (world.trafficRole === 'mirror') return []
   despawnDistant(world)
   despawnDistantAsteroids(world)
 

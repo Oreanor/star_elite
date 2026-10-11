@@ -55,6 +55,10 @@ const STYLE: Record<WarnCode, Style> = {
   gravityBrake: { color: UI.WARN, hz: 2, key: 'hud.gravityBrake' },
   playerLeft: { color: UI.WARN, hz: 0, key: 'hud.playerLeft' },
   hail: { color: UI.PRIMARY, hz: 1.5, key: 'hud.hail' },
+  // Эфир: чужой разбой слышен — жёлтый, ровный, это весть, а не угроза тебе.
+  radio: { color: UI.WARN, hz: 0, key: 'hud.radioDemand' },
+  jobDone: { color: UI.PRIMARY, hz: 0, key: 'hud.jobDone' },
+  jobFailed: { color: UI.DANGER, hz: 0, key: 'hud.jobFailed' },
   dockReady: { color: UI.PRIMARY, hz: 2, key: 'hud.dockReady' },
   dockCorridor: { color: UI.PRIMARY, hz: 0, key: 'hud.dockCorridor' },
   orbitExit: { color: UI.PRIMARY, hz: 0, key: 'hud.orbitExit' },

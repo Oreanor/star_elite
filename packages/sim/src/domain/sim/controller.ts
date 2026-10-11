@@ -20,6 +20,11 @@ export interface Controller {
    * (на пилонах один тип за раз). Боты тоже через это.
    */
   wantsMissile?(ship: ShipEntity, world: World): boolean
+  /**
+   * В кого пускать ракету. Нет метода — в игрока: так было, пока у ботов не было своих
+   * целей, и бот, дерущийся с полицией, пускал ракету в игрока на другом краю системы.
+   */
+  missileTarget?(ship: ShipEntity, world: World): number | null
   /** Хочет ли пустить противоракетный импульс. */
   wantsEcm?(ship: ShipEntity, world: World): boolean
   /** Хочет ли подорвать энергетическую бомбу. Боты не умеют — и не надо. */
