@@ -138,10 +138,10 @@ export function ShipScreen({
               осей. Раньше это был ряд кнопок под характеристиками — он занимал полколонки
               и висел там даже тогда, когда чинить и качать нечего. Корабль сам себе кнопка. */}
           <div
-            // Чуть ниже 4:3 (на 15%) и без подложки: корабль висит прямо на стекле панели,
-            // а под ним целиком влезают характеристики. На низком окне потолок по высоте
+            // 16:9 и без подложки: корабль висит прямо на стекле панели, а под ним целиком
+            // влезают характеристики и кнопка покупки. На низком окне потолок по высоте
             // экрана сжимает превью первым — характеристики важнее простора вокруг модели.
-            className={`relative aspect-[80/51] max-h-[40vh] w-full ${hullWorkshop ? 'cursor-pointer' : ''}`}
+            className={`relative aspect-[16/9] max-h-[39vh] w-full ${hullWorkshop ? 'cursor-pointer' : ''}`}
             onClick={hullWorkshop ? () => setHullOpen(true) : undefined}
           >
             <Blueprint chassisId={shownId} />
@@ -162,23 +162,6 @@ export function ShipScreen({
               </>
             )}
 
-            {/* Покупка — под кораблём, снизу по центру: отдельной строкой она съедала
-                высоту, нужную характеристикам. Свой корпус обозначен неактивной кнопкой.
-                Клик открывает модалку сделки: зачёт старого, груз-осадок, доплата. */}
-            {docked && (
-              <button
-                type="button"
-                disabled={owned}
-                onClick={(e) => {
-                  e.stopPropagation()
-                  setBuyingHull(true)
-                }}
-                className="absolute bottom-1.5 left-1/2 -translate-x-1/2 cursor-pointer border bg-black/40 px-4 py-1.5 text-sm tracking-[0.2em] whitespace-nowrap backdrop-blur-sm transition-colors enabled:hover:bg-[#7fd6ff] enabled:hover:text-black disabled:cursor-default disabled:opacity-50"
-                style={{ borderColor: ACCENT, color: ACCENT }}
-              >
-                {owned ? t('ship.alreadyOwned') : tm('ship.buyHull', { price: <Money amount={offer.cost} /> })}
-              </button>
-            )}
           </div>
 
           {/* Характеристики. У чужого корпуса — со стрелками сравнения с текущим: белая
@@ -188,6 +171,23 @@ export function ShipScreen({
             name={chassisName((owned ? player.loadout.chassis : offer.chassis).name)}
             baseline={docked && !owned ? player.spec : null}
           />
+
+          {/* Покупка с ценой — ПОД характеристиками, по центру: сперва смотришь, что за корпус,
+              потом решаешь. Свой корпус обозначен неактивной кнопкой. Клик открывает модалку
+              сделки: зачёт старого, груз-осадок, доплата. */}
+          {docked && (
+            <div className="flex justify-center">
+              <button
+                type="button"
+                disabled={owned}
+                onClick={() => setBuyingHull(true)}
+                className="cursor-pointer border px-5 py-2 text-sm tracking-[0.2em] whitespace-nowrap transition-colors enabled:hover:bg-[#7fd6ff] enabled:hover:text-black disabled:cursor-default disabled:opacity-50"
+                style={{ borderColor: ACCENT, color: ACCENT }}
+              >
+                {owned ? t('ship.alreadyOwned') : tm('ship.buyHull', { price: <Money amount={offer.cost} /> })}
+              </button>
+            </div>
+          )}
 
         </div>
 

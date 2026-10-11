@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { signIn, signUp } from '../../session/net/account'
+import { resetPassword, signIn, signUp } from '../../session/net/account'
 import { t, useLang } from '../i18n'
 
 /**
@@ -36,6 +36,21 @@ export function AuthScreen() {
     // Успех входа снимет гейт сам (подписка на сессию). При регистрации сессии может
     // ещё не быть (требуется подтверждение почты) — тогда покажем подсказку.
     if (register) setNotice(t('auth.confirm'))
+  }
+
+  // Забыл пароль: письмо со ссылкой на введённую почту. Пароль для этого не нужен.
+  const forgot = async () => {
+    if (busy || !email.trim()) {
+      setError(t('auth.resetNeedEmail'))
+      return
+    }
+    setBusy(true)
+    setError(null)
+    setNotice(null)
+    const res = await resetPassword(email.trim())
+    setBusy(false)
+    if (res.ok) setNotice(t('auth.resetSent'))
+    else setError(res.error)
   }
 
   return (
@@ -113,6 +128,16 @@ export function AuthScreen() {
           >
             {t(register ? 'auth.toLogin' : 'auth.toRegister')}
           </button>
+
+          {!register && (
+            <button
+              type="button"
+              onClick={() => void forgot()}
+              className="cursor-pointer text-center text-xs tracking-widest text-[#3f7391] hover:text-[#7fd6ff]"
+            >
+              {t('auth.forgot')}
+            </button>
+          )}
         </form>
       </div>
     </div>

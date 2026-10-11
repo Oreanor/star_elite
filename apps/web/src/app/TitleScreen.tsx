@@ -843,8 +843,9 @@ export function Paused({
       <TitleLogo launching={waiting} imgRef={logoRef} onReady={measureVanish} />
 
       {/* Главное меню — просто кнопки на фоне корабля, без плашки: обводка тут ни к чему.
-          Клавиши и настройки не живут на этом экране, а всплывают поверх отдельной панелью. */}
-      <div className="absolute inset-0 flex flex-col items-center justify-start pt-[calc(32vh+40px)]">
+          Клавиши и настройки не живут на этом экране, а всплывают поверх отдельной панелью.
+          Сдвиг 8.25rem — два шага кнопки (кнопка 50 px + зазор 16): первая встала туда, где была третья. */}
+      <div className="absolute inset-0 flex flex-col items-center justify-start pt-[calc(32vh+40px+8.25rem)]">
         {waiting ? (
           /* Идёт загрузка/старт: вместо кнопок — один центрованный индикатор. На первом
              старте (не пауза) он уезжает к середине под улетающий корабль; на паузе стоит. */

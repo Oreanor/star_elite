@@ -124,11 +124,8 @@ export function Hold({
         {t('ship.cargo.used', { used: Math.round(cargoMass(hold)), cap: hold.capacity })}
       </p>
 
-      {hold.items.length === 0 ? (
-        <p className="text-sm" style={{ color: DIM }}>
-          {t('station.hold.empty')}
-        </p>
-      ) : (
+      {/* Пустой отсек — просто пусто: «занято 0 из N» выше уже всё сказало. */}
+      {hold.items.length === 0 ? null : (
         <>
           <Table
             columns={columns}

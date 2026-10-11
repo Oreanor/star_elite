@@ -1,6 +1,7 @@
 import {
   createUserWithEmailAndPassword,
   onAuthStateChanged,
+  sendPasswordResetEmail,
   signInWithEmailAndPassword,
   signOut as fbSignOut,
 } from 'firebase/auth'
@@ -49,6 +50,19 @@ export async function signUp(email: string, password: string): Promise<AuthResul
 export async function signIn(email: string, password: string): Promise<AuthResult> {
   try {
     await signInWithEmailAndPassword(requireAuth(), email, password)
+    return { ok: true, error: null }
+  } catch (e) {
+    return { ok: false, error: reason(e) }
+  }
+}
+
+/**
+ * Забыл пароль: Firebase шлёт на почту письмо со ссылкой, по ней задают новый. Сам пароль
+ * мы не видим и не храним — всё на их стороне, как и вход.
+ */
+export async function resetPassword(email: string): Promise<AuthResult> {
+  try {
+    await sendPasswordResetEmail(requireAuth(), email)
     return { ok: true, error: null }
   } catch (e) {
     return { ok: false, error: reason(e) }

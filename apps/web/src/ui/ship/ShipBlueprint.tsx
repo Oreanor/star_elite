@@ -49,6 +49,9 @@ export function ArrowButton({
   )
 }
 
+/** Насколько выше центра модели смотрит камера, доля дистанции: корабль ниже середины кадра. */
+const LOOK_LIFT = 0.02
+
 /** Пределы зума колеса: ближе половины кадрирующей дистанции корабль упрётся в near. */
 const ZOOM_MIN = 0.45
 
@@ -106,14 +109,15 @@ export function Blueprint({ chassisId }: { chassisId: string }) {
   return (
     <div
       ref={box}
-      className="h-full w-full cursor-grab touch-none active:cursor-grabbing"
+      // Во ВСЮ площадь контейнера, абсолютно: высота превью задана пропорцией (aspect-ratio),
+      // и «h-full» от неё не считалась — холст выходил короче места, снизу зиял зазор.
+      className="absolute inset-0 cursor-grab touch-none active:cursor-grabbing"
       onPointerDown={onDown}
       onPointerMove={onMove}
       onPointerUp={onUp}
       onPointerLeave={onUp}
     >
       <Canvas
-        style={{ transform: 'translateY(-30px)' }}
         gl={{ antialias: true, alpha: true }}
         camera={{ fov: FOV, position: camPos }}
         onCreated={({ camera }) => camera.lookAt(0, 0, 0)}
@@ -180,7 +184,10 @@ function SpinningShip({
     }
     // Камеру ведёт кадр, а не проп: зум живёт в ref, React о нём не знает.
     state.camera.position.copy(base).multiplyScalar(d.zoom)
-    state.camera.lookAt(0, 0, 0)
+    // Смотрим чуть ВЫШЕ центра модели — корабль садится ниже середины кадра: сверху над ним
+    // кнопки и воздух, а снизу плашка характеристик, и по центру он казался подвешенным.
+    // Сдвиг — доля дистанции, поэтому одинаков для «Осы» и Атласа и при любом зуме.
+    state.camera.lookAt(0, distance * LOOK_LIFT * d.zoom, 0)
   })
   return (
     <group ref={ref}>
