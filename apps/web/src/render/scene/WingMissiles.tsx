@@ -3,7 +3,7 @@ import { useMemo, useRef } from 'react'
 import { InstancedMesh, Object3D, Quaternion, Vector3 } from 'three'
 import { hardpointIndices, isMissile, shipAxes, renderPos, renderQuat } from '@elite/sim'
 import { useSession } from '../../session/GameContext'
-import { missileGeometry } from '../geometry/ships'
+import { chassisMissileScale, missileGeometry } from '../geometry/ships'
 import { missileMaterial } from '../materials/materials'
 
 /**
@@ -70,6 +70,8 @@ export function WingMissiles() {
 
       _dummy.position.copy(_pos)
       _dummy.quaternion.copy(_shownQuat)
+      // Размер ракет — свой у корпуса (см. `missileScale` в ships.ts).
+      _dummy.scale.setScalar(chassisMissileScale(player.loadout.chassis.id))
       _dummy.updateMatrix()
       mesh.setMatrixAt(count, _dummy.matrix)
       count++

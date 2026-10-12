@@ -1,3 +1,4 @@
+import { rigOf } from './rig'
 import type { Chassis } from './schema'
 
 /**
@@ -218,6 +219,15 @@ export const ATLAS: Chassis = {
     { kind: 'aux', maxClass: 3 },
   ],
   cost: 480_000,
+}
+
+/**
+ * Оснастка из редактора (`rig.json`) перекрывает заводскую раскладку дул и подвесов. Делается
+ * ОДИН раз при загрузке конфига, до того как каталог кто-то прочтёт: дальше это обычные данные.
+ */
+for (const chassis of [SPIRITUS_SANCTUS, AURORA_ONE, HERMES, PERSEUS, PEGASUS, ORION, THESEUS, ATHENA, ICARUS, ATLAS]) {
+  const rig = rigOf(chassis.id)
+  if (rig?.hardpoints) chassis.hardpoints = rig.hardpoints
 }
 
 export const CHASSIS_CATALOGUE: readonly Chassis[] = [

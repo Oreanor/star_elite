@@ -1,5 +1,6 @@
 import { BufferGeometry, Matrix4, type Material, type Mesh } from 'three'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
+import { rigOf } from '@elite/sim'
 import { MATERIAL, PALETTE } from '../config'
 import { buildGeometry, quad, symmetric, tri, type Triangle, type Vec3 } from './build'
 import { bell, panel } from './parts'
@@ -186,6 +187,12 @@ interface GlbHullDef {
    * движков, а не с концов крыла (куда авто-разнос его унёс). Нет поля — берётся `tailNozzles`.
    */
   readonly nozzles?: readonly Nozzle[]
+  /**
+   * Размер ракет на подвесах ЭТОГО корпуса, множитель к заводской игле. Один на корабль:
+   * на мелком истребителе ракета не должна торчать за крыло, на тяжёлом — теряться под ним.
+   * Подбирается в редакторе оснастки (`/rig.html`).
+   */
+  readonly missileScale?: number
 }
 
 /**
@@ -458,9 +465,18 @@ export function chassisMeshScale(id: string): number {
 }
 
 /** Срезы сопел корпуса по id шасси. Правка редактора важнее реестра; дальше GLB и процедуры. */
+/** Размер ракет на подвесах корпуса (множитель к игле), 1 — заводской. */
+export function chassisMissileScale(id: string): number {
+  // Записанное редактором оснастки (`rig.json`) важнее строки корпуса здесь.
+  return rigOf(id)?.missileScale ?? GLB_HULLS.find((d) => d.id === id)?.missileScale ?? 1
+}
+
 export function chassisNozzles(id: string): readonly Nozzle[] {
   const override = nozzleOverrides.get(id)
   if (override) return override
+  // Сопла из редактора оснастки (`rig.json`) — важнее заводских и угаданных по габариту.
+  const rigged = rigOf(id)?.nozzles
+  if (rigged) return rigged
   const glb = glbNozzles(id)
   if (glb) return glb
   if (id === 'drone') return DRONE_NOZZLES
