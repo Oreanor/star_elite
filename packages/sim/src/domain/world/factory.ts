@@ -788,7 +788,6 @@ export function createWorld(def: SystemDef = STARTER_SYSTEM, profile?: PilotProf
     rockHits: [],
     rockClaims: [],
     structHits: [],
-    remoteJobs: [],
     contracts: [],
     offerHailTimer: CONTRACTS.FIRST_HAIL,
     offerHailShipId: null,

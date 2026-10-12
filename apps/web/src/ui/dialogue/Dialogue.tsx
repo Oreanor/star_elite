@@ -26,6 +26,7 @@ import { DIALOGUE_REACTION_MS, dialogueBaseline, dialogueReaction } from './dial
 import { Money, tm } from '../station/Money'
 import { offerText } from '../jobs/jobText'
 import { publishGodMemory, watchGodMemory } from '../../session/net/godMemory'
+import { trafficSync } from '../../session/sharedTraffic'
 
 /** Суфлёр: тихая подгрузка справочников в промпт — без паузы в ленте. */
 
@@ -119,6 +120,20 @@ export function Dialogue({
   useEffect(() => {
     if (other) setFaceEmo(dialogueBaseline(world, other))
   }, [world, other])
+
+  // Заговорил — борт твой: копию просим у владельца, свой не отдаём, пока канал открыт.
+  useEffect(() => {
+    if (!other) return
+    trafficSync.engage(other)
+    return () => trafficSync.disengage()
+  }, [other?.id])
+
+  // Копию ещё не отдали — кнопки появятся, когда отдадут; ждём, перерисовывая окно.
+  useEffect(() => {
+    if (!other?.mirror) return
+    const id = window.setInterval(bump, 200)
+    return () => window.clearInterval(id)
+  }, [other?.id, other?.mirror])
 
   // Бог помнит всех, кто его находил: в разговоре с ним слушаем общую память галактики.
   useEffect(() => {
@@ -341,6 +356,11 @@ export function Dialogue({
               <Button small onClick={onClose}>
                 {t('dialogue.end')}
               </Button>
+              {other.mirror && !offer?.revealed && trafficSync.claimState(other.id) === 'refused' && (
+                <span className="max-w-[11rem] text-right text-[0.65rem] leading-snug tracking-widest" style={{ color: UI.DIM }}>
+                  {t('job.block.remote')}
+                </span>
+              )}
               {hireLine?.blocked && (
                 <span className="max-w-[11rem] text-right text-[0.65rem] leading-snug tracking-widest" style={{ color: UI.DIM }}>
                   {hireLine.blocked}

@@ -4,7 +4,7 @@ import { CALENDAR_DAY, CONTRACTS } from '../../config/contracts'
 import { declareFoe } from '../ai/targeting'
 import { createWorld, STARTER_SYSTEM, type World } from '../world'
 import type { ShipEntity } from '../world/entities'
-import { acceptBlock, acceptOffer, bindContractTargets, declineOffer, hostOfferTaken, offerHail, stepContracts } from './contracts'
+import { acceptBlock, acceptOffer, declineOffer, offerHail, stepContracts } from './contracts'
 import { rollOffer } from './offers'
 import type { ContractOffer } from './types'
 
@@ -197,46 +197,13 @@ describe('дела', () => {
     expect(cop.offer).toBeNull()
   })
 
-  it('охота у бота чужого хозяина: дело ждёт целей, хозяин их рождает, привязка — по копиям', () => {
-    const guest = worldWith('police')
-    const cop = guest.ships[0]!
-    cop.kinematic = true // копия бота хозяина
-    cop.mirror = true
-    giveOffer(cop, { kind: 'hunt', heads: 2, reward: 1000, days: null, revealed: true })
-    const c = acceptOffer(guest, cop)!
-    expect(guest.remoteJobs).toEqual([{ contractId: c.id, shipId: cop.id }])
-    expect(guest.ships.filter((s) => s.bountyOf != null)).toHaveLength(0) // цели не здесь
-    stepContracts(guest, 1 / 60)
-    expect(c.status).toBe('active') // ждёт, а не «пусто»
-
-    const host = worldWith('police')
-    const hostCop = host.ships[0]!
-    giveOffer(hostCop, { kind: 'hunt', heads: 2, reward: 1000, days: null, revealed: false })
-    const res = hostOfferTaken(host, hostCop)
-    expect(hostCop.offer).toBeNull()
-    expect(res.ships).toHaveLength(2)
-
-    // Копии целей у гостя (условно — его борта) — привязываем, убиваем одну своим выстрелом.
-    const [a, b] = [guest.player, guest.player].map(() => {
-      const t = { ...cop, id: guest.ids.next(), alive: true, lastAttackerId: null as number | null }
-      guest.ships.push(t)
-      return t
-    })
-    bindContractTargets(guest, c.id, [a!.id, b!.id], null)
-    a!.alive = false
-    a!.lastAttackerId = guest.player.id
-    b!.alive = false
-    stepContracts(guest, 1 / 60)
-    expect(c.status).toBe('done')
-    expect(c.paid).toBe(1000)
-  })
-
-  it('чужой бот не идёт в сопровождение — он не покинет систему хозяина', () => {
+  it('копия чужого борта дел не даёт, пока владелец её не отдал — любых, не только сопровождения', () => {
     const world = worldWith('neutral')
     const trader = world.ships[0]!
     trader.kinematic = true
     trader.mirror = true
-    giveOffer(trader, { kind: 'escort', toSystem: 9, toSystemName: 'Z', reward: 2000, days: 5, revealed: true })
+    giveOffer(trader, { kind: 'fetch', commodityId: 'food', units: 5, reward: 70, days: 5, revealed: true })
     expect(acceptBlock(world, trader)).toBe('remote')
+    expect(acceptOffer(world, trader)).toBeNull()
   })
 })

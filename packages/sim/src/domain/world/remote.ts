@@ -116,22 +116,25 @@ export function promoteMirrorMissile(world: World, m: MissileEntity): void {
 }
 
 /**
- * Стал зеркалом: СВОЙ трафик уходит — его теперь ведёт хозяин, и двойников быть не должно.
- * Остаётся своё: наёмники и попутчики, знакомые, цели твоих дел, гнёзда под твоим заказом.
- * Возвращает id убранных бортов.
- */
-/**
  * ЛИЧНЫЙ борт игрока — его, а не трафика системы: наёмник и попутчик, знакомый, цель его дела,
- * его дрон. Им владеет этот клиент при любой роли; трафиком — хозяин системы.
+ * его дрон, борт, взятый у другого (`claimed`). Им владеет этот клиент при любой роли;
+ * трафиком — хозяин системы.
  */
 export function isPersonalShip(world: World, s: ShipEntity): boolean {
   const playerId = world.player.id
   // Бог — часть мира, а не чей-то знакомый: им владеет хозяин системы, иначе у знакомого с
   // ним гостя по небу ходили бы два Слова.
   if (s.divine) return false
-  return s.ai?.escortOf === playerId || s.acquaintanceId != null || s.bountyOf != null || s.droneOf === playerId
+  return (
+    s.ai?.escortOf === playerId || s.acquaintanceId != null || s.bountyOf != null || s.droneOf === playerId || s.claimed === true
+  )
 }
 
+/**
+ * Стал зеркалом: СВОЙ трафик уходит — его теперь ведёт хозяин, и двойников быть не должно.
+ * Остаётся своё: наёмники и попутчики, знакомые, цели твоих дел, гнёзда под твоим заказом.
+ * Возвращает id убранных бортов.
+ */
 export function yieldLocalTraffic(world: World): number[] {
   const removed: number[] = []
   world.ships = world.ships.filter((s) => {
@@ -149,14 +152,15 @@ export function yieldLocalTraffic(world: World): number[] {
 }
 
 /**
- * У ХОЗЯИНА: чужой игрок попал по его боту (урон прислал клиент стрелка). Урон ложится с
- * подписью стрелка — бот знает, откуда стреляли, и отвечает ему. Мирный, по которому стрелял
- * живой игрок, берёт его в личные враги сразу: претензию-по-связи ведёт только свой игрок.
+ * У ВЛАДЕЛЬЦА: чужой игрок попал по его боту (урон прислал клиент стрелка). Урон ложится с
+ * подписью стрелка — бот знает, откуда стреляли, и отвечает ему. `yields` — борт уходит к
+ * стрелку (`peerHitYields`), и обиду по общим правилам поведёт уже тот клиент; иначе мирный
+ * берёт стрелка в личные враги сразу.
  */
-export function applyPeerHit(world: World, ship: ShipEntity, damage: number, attacker: ShipEntity | null): void {
+export function applyPeerHit(world: World, ship: ShipEntity, damage: number, attacker: ShipEntity | null, yields = false): void {
   if (!ship.alive || ship.kinematic) return
   applyDamage(ship, damage, world.time, { kind: 'laser', name: attacker?.name ?? '' }, attacker?.id ?? null)
-  if (attacker && ship.faction === 'neutral') declareFoe(ship, attacker)
+  if (attacker && ship.faction === 'neutral' && !yields) declareFoe(ship, attacker)
 }
 
 /**

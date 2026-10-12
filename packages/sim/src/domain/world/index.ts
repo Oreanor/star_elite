@@ -102,6 +102,7 @@ export {
   type MirrorInit,
   type RemotePlayerInit,
 } from './remote'
+export { adoptShip, captureHandoff, isBoundShip, peerHitYields, releaseShip, type ShipHandoff } from './handoff'
 export { pickFreeSpawn, isFreeSpawn } from './spawn'
 export {
   cycleTarget,

@@ -2,8 +2,6 @@ export {
   acceptBlock,
   acceptOffer,
   activeContracts,
-  bindContractTargets,
-  hostOfferTaken,
   contractGiver,
   declineOffer,
   isPortable,

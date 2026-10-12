@@ -517,7 +517,7 @@ export const IT: Record<keyof typeof RU, string> = {
   'job.decline': "NON FA PER ME",
   'job.block.hold': "STIVA TROPPO PICCOLA",
   'job.block.busy': "PRIMA FINISCI L'INCARICO IN CORSO",
-  'job.block.remote': "NON LASCERÀ IL SISTEMA",
+  'job.block.remote': "OCCUPATO CON UN ALTRO PILOTA",
   'job.none': "Niente lavoro per te. Buon volo.",
   'job.offer.deliver': "Bisogna portare {commodity} ×{units} t alla stazione di {to}. Pago {reward} cr. Scadenza — {days} giorni.",
   'job.offer.fetch': "Porta {commodity} ×{units} t alla stazione locale. {reward} cr a tonnellata, anche a rate. Scadenza — {days} giorni.",

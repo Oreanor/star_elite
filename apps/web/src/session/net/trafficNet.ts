@@ -19,7 +19,8 @@ import type { RosterEntry, TrafficFrame } from './trafficWire'
  *
  *   host        — {uid, t}: кто хозяин и когда последний раз подтвердил это (пульс);
  *   own/{uid}   — борта владельца: реестр и кадр поз (см. `armOwnCleanup`);
- *   hits/{uid}  — урон по бортам владельца от остальных; pods — общие контейнеры.
+ *   hits/{uid}  — урон по бортам владельца от остальных; pods — общие контейнеры;
+ *   here/{uid}  — кто в системе; claim/grant — передача борта другому владельцу.
  *
  * Хозяина выбирает ТРАНЗАКЦИЯ: занять роль можно, только если её нет, она твоя или пульс
  * хозяина протух. Двое разом не станут хозяевами — сервер пропустит одну запись.
@@ -165,55 +166,85 @@ export function subscribeBotHits(key: string, cb: (shipId: number, damage: numbe
 }
 
 /**
- * ДЕЛА У БОТОВ ВЛАДЕЛЬЦА. Гость взялся за дело копии — просит владельца снять оферту и (для
- * охоты и сноса) родить цели; владелец отвечает, какие борта и гнездо — цели. Ящики расходуемые.
+ * КТО В СИСТЕМЕ: `here/{uid}`. Ставит каждый на входе, снимает на выходе и обрыве. Отличает
+ * «владелец сам убрал борт» (он здесь) от «владелец ушёл» (его нет) — во втором случае борта
+ * трафика подхватывает хозяин, а не теряет. Док и пауза — тоже «здесь».
  */
-export interface JobRequest {
-  hid: number
-  cid: number
-  from: string
-}
-export interface JobReply {
-  cid: number
-  /** Кто родил цели — по нему гость найдёт их копии (`владелец:id`). */
-  owner: string
-  ships: number[]
-  /** Сетевой ключ гнезда или пусто. */
-  plat: string
+export function markHere(key: string): void {
+  if (!rtdb) return
+  const me = currentUserId()
+  if (!me) return
+  const node = ref(rtdb, path(key, `here/${me}`))
+  void onDisconnect(node).remove()
+  void set(node, true).catch(() => {})
 }
 
-export async function sendJobRequest(key: string, owner: string, req: Omit<JobRequest, 'from'>): Promise<void> {
+export async function clearHere(key: string): Promise<void> {
+  if (!rtdb) return
+  const me = currentUserId()
+  if (!me) return
+  await remove(ref(rtdb, path(key, `here/${me}`))).catch(() => {})
+}
+
+export function subscribeHere(key: string, cb: (uids: Set<string>) => void): () => void {
+  if (!rtdb) return () => {}
+  return onValue(
+    ref(rtdb, path(key, 'here')),
+    (snap) => cb(new Set(Object.keys((snap.val() ?? {}) as Record<string, unknown>))),
+    () => cb(new Set()),
+  )
+}
+
+/**
+ * ПЕРЕДАЧА БОРТА. `claim/{владелец}` — «отдай мне борт hid» (с ним заговорили); `grant/{кому}` —
+ * ответ или передача без спроса (задел огнём, владелец ушёл в док). Передача несёт снимок
+ * состояния (`ShipHandoff`); без снимка — отказ: борт занят у владельца. Ящики расходуемые.
+ */
+export interface ClaimRequest {
+  hid: number
+  from: string
+}
+export interface Grant {
+  hid: number
+  from: string
+  /** JSON снимка; нет — отказ. */
+  h?: string
+}
+
+export async function sendClaim(key: string, owner: string, hid: number): Promise<void> {
   if (!rtdb) return
   const from = currentUserId()
   if (!from) return
-  await push(ref(rtdb, path(key, `jobreq/${owner}`)), { ...req, from }).catch(() => {})
+  await push(ref(rtdb, path(key, `claim/${owner}`)), { hid, from }).catch(() => {})
 }
 
-export function subscribeJobRequests(key: string, cb: (req: JobRequest) => void): () => void {
+export function subscribeClaims(key: string, cb: (req: ClaimRequest) => void): () => void {
   if (!rtdb) return () => {}
   const me = currentUserId()
   if (!me) return () => {}
-  return onChildAdded(ref(rtdb, path(key, `jobreq/${me}`)), (snap) => {
-    const v = snap.val() as Partial<JobRequest> | null
+  return onChildAdded(ref(rtdb, path(key, `claim/${me}`)), (snap) => {
+    const v = snap.val() as Partial<ClaimRequest> | null
     void remove(snap.ref).catch(() => {})
-    if (v && typeof v.hid === 'number' && typeof v.cid === 'number' && typeof v.from === 'string') cb(v as JobRequest)
+    if (v && typeof v.hid === 'number' && typeof v.from === 'string') cb({ hid: v.hid, from: v.from })
   })
 }
 
-export async function sendJobReply(key: string, to: string, reply: JobReply): Promise<void> {
+export async function sendGrant(key: string, to: string, hid: number, handoff: unknown): Promise<void> {
   if (!rtdb) return
-  await push(ref(rtdb, path(key, `jobresp/${to}`)), { ...reply, ships: reply.ships.length ? reply.ships : null }).catch(() => {})
+  const from = currentUserId()
+  if (!from) return
+  const g: Grant = { hid, from }
+  if (handoff != null) g.h = JSON.stringify(handoff)
+  await push(ref(rtdb, path(key, `grant/${to}`)), g).catch(() => {})
 }
 
-export function subscribeJobReplies(key: string, cb: (reply: JobReply) => void): () => void {
+export function subscribeGrants(key: string, cb: (g: Grant) => void): () => void {
   if (!rtdb) return () => {}
   const me = currentUserId()
   if (!me) return () => {}
-  return onChildAdded(ref(rtdb, path(key, `jobresp/${me}`)), (snap) => {
-    const v = snap.val() as Partial<JobReply> | null
+  return onChildAdded(ref(rtdb, path(key, `grant/${me}`)), (snap) => {
+    const v = snap.val() as Partial<Grant> | null
     void remove(snap.ref).catch(() => {})
-    if (v && typeof v.cid === 'number' && typeof v.owner === 'string') {
-      cb({ cid: v.cid, owner: v.owner, ships: Array.isArray(v.ships) ? v.ships : [], plat: typeof v.plat === 'string' ? v.plat : '' })
-    }
+    if (v && typeof v.hid === 'number' && typeof v.from === 'string') cb({ hid: v.hid, from: v.from, h: typeof v.h === 'string' ? v.h : undefined })
   })
 }

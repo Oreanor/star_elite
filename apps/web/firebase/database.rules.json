@@ -103,25 +103,36 @@
           ".write": "auth != null && root.child('traffic').child($key).child('host').child('uid').val() === auth.uid"
         },
         "plats": {
-          ".write": "auth != null && root.child('traffic').child($key).child('host').child('uid').val() === auth.uid"
-        },
-        "structhits": {
-          "$hid": {
-            ".write": "auth != null && (!data.exists() ? newData.child('from').val() === auth.uid : !newData.exists())",
-            ".validate": "!newData.exists() || newData.hasChildren(['kind', 'from'])"
+          "$pid": {
+            ".write": "auth != null && ($pid.beginsWith(auth.uid + ':') || root.child('traffic').child($key).child('host').child('uid').val() === auth.uid)"
           }
         },
-        "jobreq": {
+        "structhits": {
           "$owner": {
-            "$id": {
-              ".write": "auth != null && ((!data.exists() && newData.child('from').val() === auth.uid) || auth.uid === $owner)"
+            "$hid": {
+              ".write": "auth != null && ((!data.exists() && newData.child('from').val() === auth.uid) || (auth.uid === $owner && !newData.exists()))",
+              ".validate": "!newData.exists() || newData.hasChildren(['kind', 'from'])"
             }
           }
         },
-        "jobresp": {
+        "here": {
+          "$uid": {
+            ".write": "auth != null && auth.uid === $uid"
+          }
+        },
+        "claim": {
+          "$owner": {
+            "$id": {
+              ".write": "auth != null && ((!data.exists() && newData.child('from').val() === auth.uid) || (auth.uid === $owner && !newData.exists()))",
+              ".validate": "!newData.exists() || (newData.hasChildren(['hid', 'from']) && newData.child('hid').isNumber())"
+            }
+          }
+        },
+        "grant": {
           "$to": {
             "$id": {
-              ".write": "auth != null && ((!data.exists() && newData.child('owner').val() === auth.uid) || auth.uid === $to)"
+              ".write": "auth != null && ((!data.exists() && newData.child('from').val() === auth.uid) || (auth.uid === $to && !newData.exists()))",
+              ".validate": "!newData.exists() || (newData.hasChildren(['hid', 'from']) && newData.child('hid').isNumber())"
             }
           }
         },

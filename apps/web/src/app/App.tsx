@@ -12,7 +12,8 @@ import { KeyHelp } from './KeyHelp'
 import { Paused, GameOver } from './TitleScreen'
 import { clearServerSave, loadServerSave, onAuthChange, signOut } from '../session/net/account'
 import { online } from '../session/net/firebase'
-import { clearPresence, publishPresence, selfPresence } from '../session/net/presence'
+import { clearPresence, publishPresence, selfPresence, subscribeOnline } from '../session/net/presence'
+import { peerUidOf } from '../session/net/peers'
 import { clearSave, persistSave } from '../session/save/saveStore'
 import { input, releaseLock, requestLock } from '../platform/input/input'
 import { AuthScreen } from '../ui/auth/AuthScreen'
@@ -210,6 +211,10 @@ function Shell({ onRestart }: { onRestart: () => void }) {
   // подписки: иначе onChildAdded переигрывал бы при каждом изменении состояния.
   const busyRef = useRef(false)
   const chatUidRef = useRef<string | null>(null)
+  // Кто в сети — для T по захваченному игроку. В ref, а не в state: App не перерисовывается
+  // на каждый пульс присутствия.
+  const onlineRef = useRef<OnlinePlayer[]>([])
+  useEffect(() => (online ? subscribeOnline((players) => (onlineRef.current = players)) : undefined), [])
   const waitingRef = useRef<OnlinePlayer | null>(null)
   useEffect(() => {
     busyRef.current = talking || chatWith !== null || dispatching
@@ -633,7 +638,15 @@ function Shell({ onRestart }: { onRestart: () => void }) {
         // Иначе говорим с ЗАХВАЧЕННЫМ бортом. Но если по связи вызывает обиженный (ты его
         // задел), T отвечает ему — наводимся на него и открываем канал, чтобы разрядить
         // претензию, пока она не перелилась во враги.
-        if (!interlocutor(session.world)) {
+        // Захвачен ЖИВОЙ игрок — канал с ним, а не с ботом: отвечает человек, не модель.
+        const locked = interlocutor(session.world)
+        if (locked?.peer) {
+          const uid = peerUidOf(locked.id)
+          const player = uid ? onlineRef.current.find((p) => p.uid === uid) : undefined
+          if (player) hail(player)
+          return
+        }
+        if (!locked) {
           const hail = pendingHail(session.world) ?? offerHail(session.world) ?? hailPoliceForFine(session.world)
           if (!hail) return
           const w = session.world

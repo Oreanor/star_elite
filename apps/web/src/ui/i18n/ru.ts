@@ -540,7 +540,7 @@ export const RU = {
   'job.decline': "НЕ ВОЗЬМУСЬ",
   'job.block.hold': "ТРЮМ НЕ ВМЕСТИТ ГРУЗ",
   'job.block.busy': "СНАЧАЛА ЗАКОНЧИ ПРЕЖНЕЕ ДЕЛО С НИМ",
-  'job.block.remote': "ОН НЕ УЙДЁТ ИЗ СИСТЕМЫ",
+  'job.block.remote': "ЗАНЯТ ДРУГИМ ПИЛОТОМ",
   'job.none': "Работы для тебя нет. Лети с миром.",
   'job.offer.deliver': "Нужно отвезти {commodity} ×{units} т на станцию системы {to}. Заплачу {reward} кр. Срок — {days} сут.",
   'job.offer.fetch': "Привези {commodity} ×{units} т на здешнюю станцию. Плачу {reward} кр за тонну, можно частями. Срок — {days} сут.",

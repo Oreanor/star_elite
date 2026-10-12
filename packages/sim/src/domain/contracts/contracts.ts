@@ -35,8 +35,9 @@ export function acceptBlock(world: World, ship: ShipEntity): AcceptBlock | null 
   const offer = offerOf(ship)
   if (!offer) return 'no-offer'
   if (offer.kind === 'deliver' && freeCapacity(world.player.hold) < offer.units) return 'hold-full'
-  // Бот чужого хозяина системы не уйдёт за тобой в другую систему: там у него другой хозяин.
-  if (ship.mirror && offer.kind === 'escort') return 'remote'
+  // Копия борта другого клиента: правит им пока он. Разговор уже попросил борт себе
+  // (`trafficSync.engage`); как отдадут — дело берётся здесь, как у своего.
+  if (ship.mirror) return 'remote'
   // Один заказчик — одно дело: второе от него же, пока первое висит, путает обоих.
   if (activeContracts(world).some((c) => c.giverId === ship.acquaintanceId)) return 'busy'
   return null
@@ -93,23 +94,16 @@ export function acceptOffer(world: World, ship: ShipEntity): Contract | null {
       progress = { kind: 'rescue', epoch: world.epoch, clientShipId: ship.id }
       break
     case 'hunt': {
-      // Бот хозяина системы: цели родит хозяин, у себя; здесь — ждать, какие (`bindContractTargets`).
-      if (ship.mirror) {
-        progress = { kind: 'hunt', epoch: world.epoch, targets: [], resolved: [], kills: 0, pending: true }
-        break
-      }
       const targets = spawnBountyPirates(world, offer.heads, id)
       progress = { kind: 'hunt', epoch: world.epoch, targets: targets.map((t) => t.id), resolved: [], kills: 0 }
       break
     }
     case 'demolish': {
-      if (ship.mirror) {
-        progress = { kind: 'demolish', epoch: world.epoch, platformId: -1, pending: true }
-        break
-      }
       spawnPlatform(world)
       const platform = world.platforms[world.platforms.length - 1]!
       platform.contractId = id
+      // Экипаж гнезда — тоже цель дела: держится, пока дело открыто, и ведёт его тот, кто взялся.
+      for (const ship of world.ships) if (platform.crew.includes(ship.id)) ship.bountyOf = id
       progress = { kind: 'demolish', epoch: world.epoch, platformId: platform.id }
       break
     }
@@ -134,8 +128,6 @@ export function acceptOffer(world: World, ship: ShipEntity): Contract | null {
     paid: 0,
   }
   world.contracts.push(contract)
-  // Бот чужого хозяина: оферту снимет и цели родит он (см. `hostOfferTaken`).
-  if (ship.mirror) world.remoteJobs.push({ contractId: id, shipId: ship.id })
   ship.offer = null
   if (world.offerHailShipId === ship.id) world.offerHailShipId = null
   recordEvent(world, ship, { kind: 'asked', topic: 'job', agreed: true })
@@ -274,7 +266,6 @@ function checkContract(world: World, c: Contract): void {
     }
     case 'hunt': {
       if (p.epoch !== world.epoch) return close(world, c, 'failed', 'abandoned')
-      if (p.pending) return
       for (const id of p.targets) {
         if (p.resolved.includes(id)) continue
         const ship = world.ships.find((s) => s.id === id)
@@ -294,7 +285,6 @@ function checkContract(world: World, c: Contract): void {
     }
     case 'demolish': {
       if (p.epoch !== world.epoch) return close(world, c, 'failed', 'abandoned')
-      if (p.pending) return
       const platform = world.platforms.find((x) => x.id === p.platformId)
       if (!platform || !platform.alive) {
         // Разрушение платят ЦЕЛИКОМ: смысл заказа — чтобы гнездо взорвалось.
@@ -460,45 +450,6 @@ function stepMirrorRescueHails(world: World): void {
     s.rescueAsked = true
     hail(world, s)
   }
-}
-
-/**
- * Хозяин системы назвал цели дела, взятого у его бота: какие копии — пираты охоты, какая —
- * гнездо на снос. До этого дело ждёт (`pending`) и не закрывается.
- */
-export function bindContractTargets(world: World, contractId: number, shipIds: readonly number[], platformId: number | null): void {
-  const c = world.contracts.find((x) => x.id === contractId)
-  if (!c || c.status !== 'active') return
-  const p = c.progress
-  if (p.kind === 'hunt' && p.pending) {
-    p.targets = [...shipIds]
-    p.pending = false
-  } else if (p.kind === 'demolish' && p.pending && platformId != null) {
-    p.platformId = platformId
-    p.pending = false
-  }
-}
-
-/**
- * У ХОЗЯИНА: гость взялся за дело его бота. Оферта снимается (второму не достанется), а для
- * охоты и сноса цели рождаются здесь, у хозяина, — гость увидит их копиями. Возвращает id
- * рождённых пиратов и гнезда (`-1` — гнезда нет).
- */
-export function hostOfferTaken(world: World, ship: ShipEntity): { ships: number[]; platform: number } {
-  const offer = ship.offer
-  ship.offer = null
-  if (world.offerHailShipId === ship.id) world.offerHailShipId = null
-  if (offer?.kind === 'hunt') {
-    // Метка дела −1: дела у хозяина нет (оно у гостя), но цели держатся, пока не убиты.
-    return { ships: spawnBountyPirates(world, offer.heads, -1).map((s) => s.id), platform: -1 }
-  }
-  if (offer?.kind === 'demolish') {
-    spawnPlatform(world)
-    const platform = world.platforms[world.platforms.length - 1]!
-    platform.contractId = -1
-    return { ships: [], platform: platform.id }
-  }
-  return { ships: [], platform: -1 }
 }
 
 /** Знакомый-заказчик, если есть запись. Для экрана «ДЕЛА». */

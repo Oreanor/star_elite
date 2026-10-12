@@ -1,12 +1,15 @@
 import { Quaternion, Vector3 } from 'three'
 import {
+  adoptShip,
   applyPeerHit,
-  bindContractTargets,
-  hostOfferTaken,
+  captureHandoff,
   findModule,
+  isBoundShip,
   isMissile,
   isPersonalShip,
+  peerHitYields,
   promoteMirror,
+  releaseShip,
   promoteMirrorMissile,
   spawnMirrorMissile,
   spawnMirrorShip,
@@ -15,6 +18,7 @@ import {
   type MissileEntity,
   type RemoteHit,
   type ShipEntity,
+  type ShipHandoff,
   type World,
 } from '@elite/sim'
 import { currentUserId } from './net/account'
@@ -24,25 +28,28 @@ import { PoseInterp } from './net/remotePlayers'
 import {
   armOwnCleanup,
   claimHost,
+  clearHere,
   clearOwn,
   heartbeat,
   hostStale,
+  markHere,
   publishFrame,
   publishRosterEntry,
   releaseHost,
   sendBotHit,
-  sendJobReply,
-  sendJobRequest,
+  sendClaim,
+  sendGrant,
   subscribeBotHits,
-  subscribeJobReplies,
-  subscribeJobRequests,
+  subscribeClaims,
   subscribeFrame,
+  subscribeGrants,
+  subscribeHere,
   subscribeHost,
   subscribeRoster,
   trafficKey,
+  type ClaimRequest,
+  type Grant,
   type HostInfo,
-  type JobReply,
-  type JobRequest,
 } from './net/trafficNet'
 import { decodeShip, encodeShip, missileTargetRef, rosterOf, type MissilePose, type RosterEntry, type ShipPose, type TrafficFrame } from './net/trafficWire'
 
@@ -54,6 +61,11 @@ import { decodeShip, encodeShip, missileTargetRef, rosterOf, type MissilePose, t
  *     и копии трафика у него ОЖИВАЮТ с того же места (`promoteMirror`), ракеты долетают.
  *   • КАЖДЫЙ ИГРОК владеет своими наёмниками, попутчиками, целями своих дел (`isPersonalShip`)
  *     — их видят все, при любой роли.
+ *   • Бот уходит к тому, кто с ним ИМЕЕТ ДЕЛО: заговорил (`engage`) или задел огнём мирного.
+ *     Владелец отдаёт его со снимком состояния (`claim`/`grant`), и у нового всё как у хозяина:
+ *     нанять, ограбить, взять дело. Кто первым вошёл в систему, на геймплей не влияет.
+ *     Не привязанное к игроку (`isBoundShip`) возвращается хозяину, когда мир владельца встал
+ *     (док, пауза) или владелец ушёл из системы.
  *
  * Владелец публикует свои борта (реестр — кто, кадр — где), пока в системе есть кому смотреть.
  * Урон по копии уходит владельцу, он применит его у себя (`applyPeerHit`) — бот ответит стрелку.
@@ -74,6 +86,10 @@ const ROLE_EVERY = 1
  * породит трафик заново.
  */
 const ORPHAN_MS = 9000
+/** Сколько ждать, пока новый владелец подхватит отданный борт; не подхватил — забрать назад, мс. */
+const HANDOFF_MS = 10_000
+/** Мир стоит (док, пауза) дольше этого — свободные борта уходят хозяину, мс. */
+const IDLE_RELEASE_MS = 5000
 
 const _pos = new Vector3()
 const _vel = new Vector3()
@@ -87,6 +103,8 @@ interface Mirror {
   traffic: boolean
   /** Владелец перестал о ней говорить (мс `performance.now`); null — на связи. */
   orphanSince: number | null
+  /** Мой борт, отданный другому: ждёт, пока тот подхватит (мс `performance.now`). */
+  handing?: number
 }
 
 interface OwnerFeed {
@@ -125,16 +143,23 @@ export class TrafficSync {
   private consumed = new Set<string>()
   /** Кому оферту я подставил: пропала здесь, а у владельца жива — значит отказ или согласие. */
   private offered = new Set<string>()
-  /** Гости просят снять оферту моего бота и родить цели. */
-  private jobRequests: JobRequest[] = []
-  /** Ответы владельцев на мои дела: какие копии — цели. Ждут, пока копии появятся. */
-  private jobReplies: { reply: JobReply; since: number }[] = []
+  /** Кто в системе (`here`); до первого ответа неизвестно — никого не считаем ушедшим. */
+  private here: Set<string> | null = null
+  /** Бывшие хозяева: uid → когда отдали роль. Их пропавший трафик — сирота, а не убран. */
+  private prevHosts = new Map<string, number>()
+  /** Просят мои борта; отдали мне борта. */
+  private claimsIn: ClaimRequest[] = []
+  private grantsIn: Grant[] = []
+  /** Мои просьбы: id копии → ждём или отказано. */
+  private claimsOut = new Map<number, 'pending' | 'refused'>()
+  /** С кем сейчас говорю: его не отдаю. */
+  private engagedId: number | null = null
+  private idleSince: number | null = null
 
   /** Кадр. `running` — мир сейчас идёт (не пауза), только тогда можно быть хозяином. */
   tick(world: World, dt: number, running: boolean): void {
     if (!rtdb || !currentUserId()) {
       world.trafficRole = 'host'
-      world.remoteJobs.length = 0
       return
     }
     const key = trafficKey(world.galaxySeed, world.systemIndex)
@@ -157,10 +182,60 @@ export class TrafficSync {
     }
 
     this.applyHits(world)
-    this.serveJobs(world)
+    this.serveClaims(world)
+    this.releaseIdle(world, alive)
     this.publish(world, dt)
     this.materialize(world)
-    this.bindJobs(world)
+  }
+
+  /**
+   * Открыт разговор с бортом. Свой — помечается взятым (останется у меня, даже если роль хозяина
+   * уйдёт); копию — просим у владельца. Пока не отдали, сделки с ней ждут (`acceptBlock`).
+   */
+  engage(ship: ShipEntity): void {
+    this.engagedId = ship.id
+    if (ship.divine || ship.peer) return
+    if (!ship.mirror) {
+      ship.claimed = true
+      return
+    }
+    if (!this.key || this.claimsOut.get(ship.id) === 'pending') return
+    for (const m of this.mirrors.values()) {
+      if (m.localId !== ship.id) continue
+      this.claimsOut.set(ship.id, 'pending')
+      void sendClaim(this.key, m.owner, m.hid)
+      return
+    }
+  }
+
+  disengage(): void {
+    this.engagedId = null
+  }
+
+  /** Действующий хозяин системы (пульс свеж); null — нет или я один. */
+  hostUid(): string | null {
+    return this.host && !hostStale(this.host) ? this.host.uid : null
+  }
+
+  /** Владелец ушёл из системы (или отвалился). До первого списка `here` — никто не ушёл. */
+  ownerLeft(uid: string): boolean {
+    return this.here != null && !this.here.has(uid)
+  }
+
+  /** Владелец только что отдал роль хозяина: брошенный им трафик — сирота, а не убран. */
+  ownerYielded(uid: string): boolean {
+    const at = this.prevHosts.get(uid)
+    return at != null && performance.now() - at < ORPHAN_MS * 2
+  }
+
+  /** Его трафик — сирота: ушёл или отдал роль. */
+  ownerGone(uid: string): boolean {
+    return this.ownerLeft(uid) || this.ownerYielded(uid)
+  }
+
+  /** Как идёт просьба отдать копию: ждём, отказано или ничего не просили. */
+  claimState(shipId: number): 'pending' | 'refused' | null {
+    return this.claimsOut.get(shipId) ?? null
   }
 
   /** Попадание по копии — её владельцу. true — это была копия, и попадание ушло. */
@@ -183,6 +258,7 @@ export class TrafficSync {
     if (this.key) {
       if (this.role === 'host') void releaseHost(this.key)
       void clearOwn(this.key)
+      void clearHere(this.key)
     }
     this.key = null
     this.host = null
@@ -192,8 +268,12 @@ export class TrafficSync {
     this.pendingHits.length = 0
     this.consumed.clear()
     this.offered.clear()
-    this.jobRequests.length = 0
-    this.jobReplies.length = 0
+    this.here = null
+    this.prevHosts.clear()
+    this.claimsIn.length = 0
+    this.grantsIn.length = 0
+    this.claimsOut.clear()
+    this.idleSince = null
   }
 
   // ─── Роль ──────────────────────────────────────────────────────────────────
@@ -205,13 +285,18 @@ export class TrafficSync {
     this.role = 'host'
     world.trafficRole = 'host'
     armOwnCleanup(key)
+    markHere(key)
     this.unsub.push(
       subscribeHost(key, (h) => {
+        if (this.host && this.host.uid !== h?.uid) this.prevHosts.set(this.host.uid, performance.now())
         this.host = h
       }),
+      subscribeHere(key, (uids) => {
+        this.here = uids
+      }),
       subscribeBotHits(key, (hid, dmg, from) => this.pendingHits.push({ hid, dmg, from })),
-      subscribeJobRequests(key, (req) => this.jobRequests.push(req)),
-      subscribeJobReplies(key, (reply) => this.jobReplies.push({ reply, since: performance.now() })),
+      subscribeClaims(key, (req) => this.claimsIn.push(req)),
+      subscribeGrants(key, (g) => this.grantsIn.push(g)),
     )
     this.roleAcc = ROLE_EVERY
   }
@@ -272,8 +357,9 @@ export class TrafficSync {
     }
     // Стал хозяином: копии ТРАФИКА оживают с того места и той скоростью, что пришли последними;
     // в реестр они уйдут со ссылкой на прежний ключ — у остальных копия не мигнёт.
+    // Только трафик прежнего хозяина: свободные борта гостей ведут гости, пока они здесь.
     for (const [k, m] of [...this.mirrors]) {
-      if (!m.traffic) continue
+      if (!m.traffic || m.owner !== this.formerHost) continue
       const ship = world.ships.find((s) => s.id === m.localId)
       if (ship?.alive) promoteMirror(world, ship, k)
       this.mirrors.delete(k)
@@ -295,7 +381,11 @@ export class TrafficSync {
       const ship = world.ships.find((s) => s.id === h.hid)
       const attackerId = peerShips.get(h.from)
       const attacker = attackerId != null ? (world.ships.find((s) => s.id === attackerId) ?? null) : null
-      if (ship) applyPeerHit(world, ship, h.dmg, attacker)
+      if (!ship) continue
+      // Задел мирного — мирный уходит к стрелку: обида пойдёт по тем же правилам, что у своего.
+      const yields = attacker != null && ship.id !== this.engagedId && peerHitYields(world, ship)
+      applyPeerHit(world, ship, h.dmg, attacker, yields)
+      if (yields) this.give(world, ship, h.from)
     }
     this.pendingHits.length = 0
   }
@@ -328,8 +418,11 @@ export class TrafficSync {
       const sig = `${s.alive ? 1 : 0}|${s.offer ? `${s.offer.kind}:${s.offer.reward}` : ''}`
       if (this.published.get(s.id) === sig) continue
       this.published.set(s.id, sig)
-      void publishRosterEntry(key, s.id, rosterOf(s, !isPersonalShip(world, s)))
+      // Трафик — всё, что не держит игрок: уйдёт владелец — подхватит хозяин, а не потеряет.
+      void publishRosterEntry(key, s.id, rosterOf(s, !(isPersonalShip(world, s) && isBoundShip(world, s))))
     }
+    // Отданное держим в реестре, пока новый владелец не подхватит: копии у остальных не мигнут.
+    for (const m of this.mirrors.values()) if (m.owner === this.me && m.handing != null) seen.add(m.hid)
     for (const id of [...this.published.keys()]) {
       if (seen.has(id)) continue
       this.published.delete(id)
@@ -393,7 +486,7 @@ export class TrafficSync {
         if (entry.w && this.mirrors.has(entry.w)) {
           const m = this.mirrors.get(entry.w)!
           this.mirrors.delete(entry.w)
-          this.mirrors.set(k, { ...m, owner, hid: Number(hidKey), orphanSince: null, traffic: entry.tr === 1 })
+          this.mirrors.set(k, { ...m, owner, hid: Number(hidKey), orphanSince: null, traffic: entry.tr === 1, handing: undefined })
           continue
         }
         // Это мой же борт, ушедший к новому хозяину и вернувшийся копией? Нет — свой узел я не читаю.
@@ -427,12 +520,19 @@ export class TrafficSync {
       }
       const feed = this.feeds.get(m.owner)
       const entry = feed?.roster[String(m.hid)]
+      if (m.handing != null) {
+        // Мой, отданный: ждёт подхвата. Не подхватили — забираю назад, с той же памятью.
+        if (now - m.handing < HANDOFF_MS) continue
+        if (ship.alive) promoteMirror(world, ship)
+        this.mirrors.delete(k)
+        this.interp.drop(k)
+        continue
+      }
       if (!listed.has(k) || !entry) {
-        // Владелец замолчал о борте. Действующий хозяин убрал свой трафик сам (ушёл прыжком,
-        // за горизонт) — копия уходит сразу. Но трафик, брошенный НЕ хозяином (прежний хозяин
-        // отдал роль или пропал), ждёт подхвата новым хозяином; личное — уходит.
-        const intentional = m.owner === this.host?.uid && this.feeds.has(m.owner)
-        if (m.traffic && !intentional) {
+        // Владелец замолчал о борте. Он здесь — значит, убрал сам (прыжок, за горизонт): копия
+        // уходит сразу. Ушёл из системы или только что отдал роль хозяина — трафик ждёт
+        // подхвата хозяином; привязанное к игроку уходит вместе с ним.
+        if (m.traffic && this.ownerGone(m.owner)) {
           m.orphanSince ??= now
           if (this.role === 'host' && this.host?.uid === this.me) {
             if (ship.alive) promoteMirror(world, ship, k)
@@ -501,44 +601,78 @@ export class TrafficSync {
     this.offered.add(k)
   }
 
-  /** Я взял дело у копии — владелец снимет оферту и, если надо, родит цели. Ответ придёт. */
-  private serveJobs(world: World): void {
-    if (!this.key) return
-    for (const job of world.remoteJobs) {
-      for (const [k, m] of this.mirrors) {
-        if (m.localId !== job.shipId) continue
-        this.consumed.add(k)
-        void sendJobRequest(this.key, m.owner, { hid: m.hid, cid: job.contractId })
-        break
-      }
-    }
-    world.remoteJobs.length = 0
-    // Ко мне: гость взялся за дело моего бота — снять оферту, родить цели, ответить.
-    for (const req of this.jobRequests) {
-      const ship = world.ships.find((s) => s.id === req.hid && !s.kinematic)
-      if (!ship) continue
-      const res = hostOfferTaken(world, ship)
-      let plat = ''
-      if (res.platform >= 0) {
-        const p = world.platforms.find((x) => x.id === res.platform)
-        if (p) plat = p.netId ??= `${this.me}:${p.id}`
-      }
-      void sendJobReply(this.key, req.from, { cid: req.cid, owner: this.me!, ships: res.ships, plat })
-    }
-    this.jobRequests.length = 0
+  // ─── Передача бортов ───────────────────────────────────────────────────────
+
+  /** Отдать мой борт `to`: здесь он становится копией, туда уходит снимок состояния. */
+  private give(world: World, ship: ShipEntity, to: string): void {
+    if (!this.key || !this.me) return
+    const handoff = captureHandoff(world, ship, (id) => this.refOf(world, id))
+    releaseShip(ship)
+    this.mirrors.set(mirrorKey(this.me, ship.id), {
+      owner: this.me,
+      hid: ship.id,
+      localId: ship.id,
+      traffic: true,
+      orphanSince: null,
+      handing: performance.now(),
+    })
+    if (world.offerHailShipId === ship.id) world.offerHailShipId = null
+    void sendGrant(this.key, to, ship.id, handoff)
   }
 
-  /** Владелец назвал цели моего дела — найти их копии и привязать. Ждём до 15 с, пока придут. */
-  private bindJobs(world: World): void {
+  /** Просьбы отдать мои борта — и борта, отданные мне. */
+  private serveClaims(world: World): void {
+    if (!this.key) return
+    for (const req of this.claimsIn) {
+      const ship = world.ships.find((s) => s.id === req.hid && s.alive && !s.kinematic)
+      if (ship && ship.id !== this.engagedId && this.owns(world, ship) && !isBoundShip(world, ship)) this.give(world, ship, req.from)
+      else void sendGrant(this.key, req.from, req.hid, null)
+    }
+    this.claimsIn.length = 0
+
+    for (const g of this.grantsIn) {
+      const k = mirrorKey(g.from, g.hid)
+      const m = this.mirrors.get(k)
+      if (!m) continue
+      if (!g.h) {
+        this.claimsOut.set(m.localId, 'refused')
+        continue
+      }
+      const ship = world.ships.find((s) => s.id === m.localId && s.mirror)
+      if (!ship) continue
+      let handoff: ShipHandoff
+      try {
+        handoff = JSON.parse(g.h) as ShipHandoff
+      } catch {
+        continue
+      }
+      adoptShip(world, ship, handoff, k, (ref) => this.resolveTarget(world, ref))
+      this.mirrors.delete(k)
+      this.interp.drop(k)
+      this.consumed.delete(k)
+      this.offered.delete(k)
+      this.claimsOut.delete(ship.id)
+    }
+    this.grantsIn.length = 0
+  }
+
+  /**
+   * Мой мир стоит (док, пауза) — свободные борта, кроме собеседника, уходят хозяину: застывший
+   * у меня торговец застыл бы и у всех. Привязанные к игроку (наёмник, попутчик) ждут его.
+   */
+  private releaseIdle(world: World, alive: boolean): void {
     const now = performance.now()
-    this.jobReplies = this.jobReplies.filter(({ reply, since }) => {
-      const ids = reply.ships.map((h) => this.mirrors.get(mirrorKey(reply.owner, h))?.localId)
-      const plat = reply.plat ? world.platforms.find((p) => p.netId === reply.plat) : undefined
-      const ready = ids.every((id) => id != null) && (!reply.plat || plat != null)
-      if (!ready && now - since < 15_000) return true
-      bindContractTargets(world, reply.cid, ids.filter((id): id is number => id != null), plat?.id ?? null)
-      return false
-    })
+    if (alive) {
+      this.idleSince = null
+      return
+    }
+    this.idleSince ??= now
+    const h = this.host
+    if (now - this.idleSince < IDLE_RELEASE_MS || !h || h.uid === this.me || hostStale(h)) return
+    for (const s of [...world.ships]) {
+      if (s.kinematic || !s.alive || s.id === this.engagedId) continue
+      if (isPersonalShip(world, s) && !isBoundShip(world, s)) this.give(world, s, h.uid)
+    }
   }
 
   /** Ракеты владельцев: видно и тревогу слышно; ведёт и взрывает их владелец. */

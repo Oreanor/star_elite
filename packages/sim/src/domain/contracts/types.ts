@@ -61,10 +61,8 @@ export type ContractProgress =
       targets: number[]
       resolved: number[]
       kills: number
-      /** Цели рождает хозяин системы (дело взято у его бота) — ждём, пока он скажет, какие. */
-      pending?: boolean
     }
-  | { kind: 'demolish'; epoch: number; platformId: number; pending?: boolean }
+  | { kind: 'demolish'; epoch: number; platformId: number }
 
 export interface Contract {
   id: number
