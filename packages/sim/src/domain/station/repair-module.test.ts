@@ -22,7 +22,9 @@ function breakInternal(world: ReturnType<typeof createWorld>, pick: (m: ShipModu
 type ShipModuleLike = ReturnType<typeof createWorld>['player']['loadout']['internals'][number]
 
 describe('поломка детали и её ремонт', () => {
-  it('поломка на 50% срезает половину характеристики (base × (1−fault))', () => {
+  // Раньше полная поломка глушила деталь в ноль: два попадания по маневровым — и посреди
+  // боя корабль не разворачивался. Сломанная деталь обязана слабеть, но тянуть.
+  it('поломка ослабляет деталь, но даже полная не глушит её в ноль', () => {
     const world = createWorld()
     const stockId = world.player.loadout.internals.find(isShield)!.id
     const base = findModule(stockId)!
@@ -30,12 +32,12 @@ describe('поломка детали и её ремонт', () => {
 
     const half = breakInternal(world, isShield, 0.5)
     if (half.kind !== 'shield') throw new Error('щит остаётся щитом')
-    expect(half.capacity).toBeCloseTo(base.capacity * 0.5, 5)
+    expect(half.capacity).toBeLessThan(base.capacity)
 
-    // На 100% — деталь молчит совсем.
     const dead = breakInternal(world, isShield, 0.5)
     if (dead.kind !== 'shield') throw new Error('щит остаётся щитом')
-    expect(dead.capacity).toBeCloseTo(0, 5)
+    expect(dead.capacity).toBeLessThan(half.capacity)
+    expect(dead.capacity).toBeGreaterThan(0)
   })
 
   it('целую деталь чинить нечего — «nothing», денег не трогает', () => {

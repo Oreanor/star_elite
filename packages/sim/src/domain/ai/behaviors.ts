@@ -1,5 +1,5 @@
 import { Vector3 } from 'three'
-import { AI, PERCEPTION, ROBBERY, UTILITY } from '../../config/ai'
+import { AI, ESCORT, PERCEPTION, ROBBERY, UTILITY } from '../../config/ai'
 import { NPC_DOCK } from '../../config/station'
 import { TRAFFIC } from '../../config/world'
 import { findStation } from '../station/docking'
@@ -245,6 +245,47 @@ const rob: Behavior = {
   },
 }
 
+// ─── Эскорт ────────────────────────────────────────────────────────────────────
+
+const _toPatron = new Vector3()
+const _nose = new Vector3()
+
+/**
+ * Отставший эскорт идёт к нанимателю полным газом с форсажем, а на большом разрыве просит
+ * крейсер-защёлку. Множитель пропорционален разрыву, поэтому ход гаснет сам по мере
+ * сближения. Массовая блокировка и выход у звезды — правила `updateCruise`, общие с игроком:
+ * рядом с врагом бот крейсер не получит, как и ты.
+ */
+const rejoin: Behavior = {
+  id: 'rejoin',
+  score({ e, ai, world }) {
+    if (ai.command !== 'default' || ai.dock === 'berthed') return 0
+    const patron = patronOf(e, world)
+    if (!patron) return 0
+    // Гистерезис: начинает догонять дальше REJOIN_RANGE, бросает только ближе REJOIN_DONE.
+    const range = ai.behavior === 'rejoin' ? ESCORT.REJOIN_DONE : ESCORT.REJOIN_RANGE
+    return e.state.pos.distanceToSquared(patron.state.pos) > range * range ? UTILITY.REJOIN : 0
+  },
+  run({ e, ai, world }) {
+    const patron = patronOf(e, world)
+    if (!patron) return false
+    // Сорвался из очереди к причалу — освободи причал, иначе он заперт навсегда.
+    if (ai.dock === 'inbound') {
+      if (world.dockOccupantId === e.id) world.dockOccupantId = null
+      ai.dock = null
+    }
+    ai.home.copy(patron.state.pos)
+    const gap = drive(e, world, patron.state.pos, driveOpts({ throttle: 1, boost: AI.ESCAPE_BOOST, arriveRadius: ESCORT.REJOIN_DONE }))
+    quiet(ai)
+
+    _toPatron.copy(patron.state.pos).sub(e.state.pos).divideScalar(Math.max(gap, 1))
+    _nose.set(0, 0, -1).applyQuaternion(e.state.quat)
+    const factor = gap / (e.spec.tuning.MAX_SPEED * ESCORT.CATCHUP_TIME)
+    if (factor > 1 && _nose.dot(_toPatron) > ESCORT.CRUISE_ALIGN) ai.cruiseHold = factor
+    return true
+  },
+}
+
 // ─── Мирная жизнь ──────────────────────────────────────────────────────────────
 
 /** Очередь к причалу и стоянка. */
@@ -268,7 +309,7 @@ const patrolling: Behavior = {
 }
 
 /** Порядок — только для ничьей: при равных оценках побеждает стоящий раньше. */
-const BEHAVIORS: readonly Behavior[] = [escape, hold, keepBack, soft, plan, tasks, combat, rob, search, dock, patrolling]
+const BEHAVIORS: readonly Behavior[] = [escape, hold, keepBack, soft, plan, tasks, combat, rejoin, rob, search, dock, patrolling]
 
 /**
  * Выбрать поведение. `skip` — битовая маска уже отказавшихся в этом такте (их `run` вернул

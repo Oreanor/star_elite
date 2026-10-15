@@ -628,6 +628,16 @@ function Shell({ onRestart }: { onRestart: () => void }) {
 
       if (e.code === 'KeyT') {
         if (docked || tab !== null || talking || chatWith || dispatching) return
+        // Входящий вызов — первым. HUD пишет «◄ … ВЫЗЫВАЕТ · T — ОТВЕТИТЬ» по тому же
+        // `pendingHail ?? offerHail`, и T обязана исполнять обещанное на плашке: прежде
+        // захваченная цель (станция, пират) перехватывала T, и ответить каравану было нельзя.
+        const calling = pendingHail(session.world) ?? offerHail(session.world)
+        if (calling) {
+          lockShipContact(session.world, calling.id)
+          setTalking(true)
+          releaseLock()
+          return
+        }
         // Захвачена СТАНЦИЯ — T вызывает её диспетчера (свой оверлей). Проверяем первой:
         // станция на связи — это нав-цель, а не контакт, так что с бортами это не конфликтует.
         if (stationInterlocutor(session.world)) {
@@ -635,9 +645,7 @@ function Shell({ onRestart }: { onRestart: () => void }) {
           releaseLock()
           return
         }
-        // Иначе говорим с ЗАХВАЧЕННЫМ бортом. Но если по связи вызывает обиженный (ты его
-        // задел), T отвечает ему — наводимся на него и открываем канал, чтобы разрядить
-        // претензию, пока она не перелилась во враги.
+        // Иначе говорим с ЗАХВАЧЕННЫМ бортом.
         // Захвачен ЖИВОЙ игрок — канал с ним, а не с ботом: отвечает человек, не модель.
         const locked = interlocutor(session.world)
         if (locked?.peer) {
@@ -647,7 +655,7 @@ function Shell({ onRestart }: { onRestart: () => void }) {
           return
         }
         if (!locked) {
-          const hail = pendingHail(session.world) ?? offerHail(session.world) ?? hailPoliceForFine(session.world)
+          const hail = hailPoliceForFine(session.world)
           if (!hail) return
           const w = session.world
           lockShipContact(w, hail.id)

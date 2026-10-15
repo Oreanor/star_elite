@@ -1,6 +1,7 @@
 import { MIELOPHONE } from '../../config/mielophone'
 import { findModule } from '../../config/modules'
 import { SERVICE } from '../../config/station'
+import { BREAKAGE } from '../../config/weapons'
 import { clamp } from '../../core/math'
 import { type ShipModule, type WeaponModule, isArmour, isCargo, isCloak, isDrone, isEngine, isHyperdrive, isLaser, isMissile, isShield, isThrusters } from '../loadout'
 import { ShipEntity, World } from '../world/entities'
@@ -126,12 +127,12 @@ export function scaleToBase(m: ShipModule, base: ShipModule, k: number): void {
 
 /**
  * Общий множитель характеристики экземпляра: прокачка усиливает, поломка ослабляет.
- * base × (1+upgrade) × (1−fault). Печём ОБА через один `scaleToBase` от стока —
+ * base × (1+upgrade) × (1−fault·FAULT_PENALTY). Печём ОБА через один `scaleToBase` от стока —
  * иначе прокачка сломанной детали или поломка прокачанной считались бы друг от друга
  * с накоплением ошибок. Поломка ракеты/контейнера не бывает (fault=0) — множитель их не трогает.
  */
 export function combinedScale(m: ShipModule): number {
-  return (1 + (m.upgrade ?? 0)) * (1 - (m.fault ?? 0))
+  return (1 + (m.upgrade ?? 0)) * (1 - (m.fault ?? 0) * BREAKAGE.FAULT_PENALTY)
 }
 
 /** Собственный прокачанный экземпляр модуля. Конфиг не трогаем — он общий на всех. */

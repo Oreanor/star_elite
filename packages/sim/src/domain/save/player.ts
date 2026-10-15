@@ -6,6 +6,7 @@ import { addItem, createHold } from '../cargo/hold'
 import { COMMODITIES, type CargoItem, type Commodity, type FigurineSpecimen } from '../cargo/items'
 import { createLoadout, isWeapon, NO_HULL_UPGRADES, type HullUpgrades, type Loadout, type ShipModule, type WeaponModule } from '../loadout'
 import { refreshSpec } from '../world/factory'
+import { combinedScale, scaleToBase } from '../station/moduleState'
 import type { Acquaintance } from '../world/acquaintance'
 import { emptyPlan } from '../world/contactPlan'
 import type { Persona } from '../world/persona'
@@ -30,10 +31,11 @@ const FALLBACK_CHASSIS = 'aurora_one'
  * сети: и там, и тут правда выводится из сида/каталога, а не возится байтами.
  */
 
-/** Модуль в сейве: id из каталога + прокачка ЭТОГО экземпляра (живёт на борту, не в каталоге). */
+/** Модуль в сейве: id из каталога + прокачка и поломка ЭТОГО экземпляра (живут на борту, не в каталоге). */
 export interface SavedModule {
   id: string
   upgrade?: number
+  fault?: number
 }
 
 export interface SavedLoadout {
@@ -102,20 +104,29 @@ const COMMODITY_BY_ID: ReadonlyMap<string, Commodity> = new Map(
 )
 
 function serializeModule(m: ShipModule): SavedModule {
-  // Прокачку пишем, только если она есть: заводской модуль остаётся коротким `{id}`.
-  return m.upgrade !== undefined ? { id: m.id, upgrade: m.upgrade } : { id: m.id }
+  // Прокачку и поломку пишем, только если они есть: заводской модуль остаётся коротким `{id}`.
+  const out: SavedModule = { id: m.id }
+  if (m.upgrade !== undefined) out.upgrade = m.upgrade
+  if (m.fault) out.fault = m.fault
+  return out
 }
 
 /**
- * Восстановить модуль из каталога. Прокачанный КЛОНИРУЕМ, прежде чем ставить
- * `upgrade`: `findModule` возвращает синглтон каталога, и запись в него усилила бы
- * такой же модуль у всех прочих. Неизвестный id (модуль вырезали из игры) —
- * `null`: пропускаем, а не роняем всю загрузку.
+ * Восстановить модуль из каталога. Прокачанный/сломанный КЛОНИРУЕМ: `findModule`
+ * возвращает синглтон каталога, и запись в него задела бы такой же модуль у всех прочих.
+ * Характеристики ПЕРЕСЧИТЫВАЕМ от стока: одна метка `upgrade` без `scaleToBase` оставляла
+ * заводские числа — прокачка после перезагрузки молча пропадала. Неизвестный id (модуль
+ * вырезали из игры) — `null`: пропускаем, а не роняем всю загрузку.
  */
 function rehydrateModule(saved: SavedModule): ShipModule | null {
   const base = findModule(saved.id)
   if (!base) return null
-  return saved.upgrade !== undefined ? { ...base, upgrade: saved.upgrade } : base
+  if (saved.upgrade === undefined && !saved.fault) return base
+  const clone: ShipModule = { ...base }
+  if (saved.upgrade !== undefined) clone.upgrade = saved.upgrade
+  if (saved.fault) clone.fault = saved.fault
+  scaleToBase(clone, base, combinedScale(clone))
+  return clone
 }
 
 /**

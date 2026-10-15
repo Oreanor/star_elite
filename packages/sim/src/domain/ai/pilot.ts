@@ -49,10 +49,12 @@ export const aiController: Controller = {
       ai.wantsFire = false
       ai.wantsMissile = false
       ai.wantsEcm = false
+      ai.cruiseHold = 0
       return
     }
 
     ai.modeTimer += dt
+    ai.cruiseHold = 0
     ai.wantsFire = false
     ai.wantsMissile = false
     ai.missileCooldown = Math.max(0, ai.missileCooldown - dt)
@@ -87,6 +89,11 @@ export const aiController: Controller = {
 
   wantsEcm(e: ShipEntity): boolean {
     return e.ai?.wantsEcm ?? false
+  },
+
+  wantsCruise(e: ShipEntity): boolean | number {
+    const hold = e.ai?.cruiseHold ?? 0
+    return hold > 1 ? hold : false
   },
 
   missileTarget(e: ShipEntity): number | null {

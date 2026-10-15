@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { findModule } from '../../config/modules'
 import { addItem } from '../cargo/hold'
 import { COMMODITIES } from '../cargo/items'
-import { isShield } from '../loadout'
+import { isEngine, isShield, isThrusters } from '../loadout'
+import { withFault, withUpgrade } from '../station/moduleState'
 import { createWorld, STARTER_SYSTEM, type World } from '../world'
 import { refreshSpec } from '../world/factory'
 import type { Acquaintance } from '../world/acquaintance'
@@ -28,7 +29,7 @@ function playedWorld(): World {
   // Прокачка ЭКЗЕМПЛЯРА: клонируем модуль сборки, не трогая синглтон каталога.
   const shieldIdx = p.loadout.internals.findIndex(isShield)
   const shield = p.loadout.internals[shieldIdx]!
-  p.loadout.internals[shieldIdx] = { ...shield, upgrade: 0.5 }
+  p.loadout.internals[shieldIdx] = withUpgrade(shield, 0.5)
 
   // Груз с личной ценой входа (costBasis) и без неё (трофей).
   addItem(p.hold, { kind: 'commodity', commodity: COMMODITIES.FOOD, units: 7, costBasis: 300 })
@@ -144,6 +145,29 @@ describe('round-trip сейва игрока', () => {
     // И после round-trip каталог по-прежнему чист.
     applyPlayerSave(createWorld(STARTER_SYSTEM), serializePlayer(src))
     expect(findModule(upgraded.id)?.upgrade).toBeUndefined()
+  })
+})
+
+describe('прокачка и поломка переживают сохранение', () => {
+  // Раньше сейв нёс только метку `upgrade`, не пересчитывая от неё числа, а поломку не нёс
+  // вовсе: после перезагрузки прокачанный двигатель тянул как заводской, сломанный — как целый.
+  it('сломанные маневровые и прокачанный двигатель после загрузки те же, что до', () => {
+    const src = createWorld(STARTER_SYSTEM)
+    const p = src.player
+    const ti = p.loadout.internals.findIndex(isThrusters)
+    const ei = p.loadout.internals.findIndex(isEngine)
+    p.loadout.internals[ti] = withFault(p.loadout.internals[ti]!, 0.5)
+    p.loadout.internals[ei] = withUpgrade(p.loadout.internals[ei]!, 0.5)
+    refreshSpec(p)
+    const stock = createWorld(STARTER_SYSTEM).player.spec.tuning
+    expect(p.spec.tuning.PITCH_RATE).toBeLessThan(stock.PITCH_RATE)
+    expect(p.spec.tuning.THRUST).toBeGreaterThan(stock.THRUST)
+
+    const dst = createWorld(STARTER_SYSTEM)
+    applyPlayerSave(dst, serializePlayer(src))
+    expect(dst.player.spec.tuning.PITCH_RATE).toBeCloseTo(p.spec.tuning.PITCH_RATE)
+    expect(dst.player.spec.tuning.THRUST).toBeCloseTo(p.spec.tuning.THRUST)
+    expect(dst.player.loadout.internals[ti]!.fault).toBe(0.5)
   })
 })
 
