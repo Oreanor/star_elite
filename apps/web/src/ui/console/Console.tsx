@@ -4,6 +4,7 @@ import {
   contactTravelEta,
   contactWhereabouts,
   findStation,
+  stationHost,
   dispatcherName,
   dispatcherPersona,
   generateSystem,
@@ -96,7 +97,7 @@ function fallbackView(bush: boolean, giant: boolean): MapView {
 export function Console({
   world,
   docked,
-  tab,
+  tab: requestedTab,
   onTab,
   onClose,
   onTalk,
@@ -136,7 +137,13 @@ export function Console({
   }, [docked, world])
 
   const station = findStation(world)
-  const planet = capitalWorld(world)
+  // У причала «где я» — планета ЭТОЙ станции, а не столица: станций в системе по одной на
+  // населённый мир, и шапка прежде клеила аванпост одной планеты к имени другой.
+  // Станция не на орбите (монумент «Крест») — место это лишь звёздная система: планеты нет,
+  // и вкладки ПЛАНЕТА тоже. В полёте «где я» — столица системы.
+  const planet = docked ? (station ? stationHost(world, station) : null) : capitalWorld(world)
+  // ПЛАНЕТА — вкладка «по умолчанию» у вызывающих; без планеты на её месте СТАНЦИЯ (люди).
+  const tab: ConsoleTab = requestedTab === 'planet' && !planet ? 'people' : requestedTab
 
   // Верфь и магазин — только у причала: в полёте оснастку не сменить и не поторговать.
   // Вкладка корабля зовётся «КОРАБЛЬ» и там, и там — это один и тот же экран; у причала
@@ -144,7 +151,7 @@ export function Console({
   const tabs: { id: ConsoleTab; label: string; active?: boolean }[] = [
     // У причала первая вкладка — СТАНЦИЯ (шапка места + кто пристыкован); в полёте
     // станции под тобой нет, и та же вкладка показывает паспорт мира — ПЛАНЕТА.
-    { id: 'planet', label: t('station.nav.planet') },
+    ...(planet ? [{ id: 'planet' as const, label: t('station.nav.planet') }] : []),
     // ЛЮДИ — сразу за местом: кто здесь и с кем связаться. Есть и у причала, и в полёте.
     // У причала вкладка — про СТАНЦИЮ: кто здесь, диспетчер, Слово. В полёте станции под
     // тобой нет, и там это знакомые и игроки онлайн — ЛЮДИ.
@@ -188,7 +195,7 @@ export function Console({
               {docked && station
                 ? planet
                   ? t('station.atPlanet', { station: properName(station.name), planet: properName(planet.name) })
-                  : properName(station.name)
+                  : t('station.atSystem', { station: properName(station.name), system: properName(world.systemName) })
                 : `${t('station.system')}: ${properName(world.systemName).toUpperCase()}`}
             </h1>
           <div className="ml-auto flex shrink-0 items-center gap-8">
@@ -564,7 +571,7 @@ function DockPlaque({ ship, you, world, onTalk }: { ship: ShipEntity; you: boole
   )
 }
 
-/** Столица системы — самое населённое тело; к ней привязаны и рынок, и причал. */
+/** Столица системы — самое населённое тело: «где я» в полёте, пока ни к какому причалу не привязан. */
 function capitalWorld(world: World): BodyEntity | null {
   let best: BodyEntity | null = null
   for (const b of world.bodies) {

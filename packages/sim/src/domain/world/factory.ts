@@ -41,7 +41,7 @@ import {
   stepOrbits,
   stepOrbitsOnBodies,
 } from './orbits'
-import type { SystemDef, StarCompanionDef, BlackHoleCompanionDef } from './system'
+import type { SystemDef, StarCompanionDef, BlackHoleCompanionDef, StationDef } from './system'
 import { STARTER_SYSTEM } from './system'
 import { emptyDelta } from '../galaxy/delta'
 import { stationSeat } from '../galaxy/arrival'
@@ -470,61 +470,45 @@ function makeBodies(ids: IdSource, def: SystemDef): BodyEntity[] {
     bodies.push(planet, ...makeMoonBodies(ids, planet, p))
   }
 
-  let station: BodyEntity | null = null
-  if (def.station) {
-    const hostIdx = stationSeat(def)
-    const planets = bodies.filter((b) => b.kind === 'planet')
-    const host = hostIdx >= 0 ? planets[hostIdx] : null
-    const stationPos = new Vector3(...def.station.pos)
-    const stationOrbit = host
-      ? orbitFromOffset(
-          host.id,
-          host.pos,
-          stationPos,
-          moonOrbitRate(host.radius, host.surface === 'Газовый гигант', stationPos.distanceTo(host.pos)),
-        )
-      : null
-
-    station = {
+  /**
+   * Станция — одним путём для основной и дополнительных. Прежде их было два: основная шла
+   * по орбите хозяина, а дополнительные стояли «на месте» без хозяина — планета уходила по
+   * календарю, причал оставался висеть в пустоте (аванпост «Саррэль» вдали от своей Ардин),
+   * и у дополнительных терялся облик (`model`).
+   */
+  const planets = bodies.filter((b) => b.kind === 'planet')
+  const makeStation = (s: StationDef, host: BodyEntity | null): BodyEntity => {
+    const pos = new Vector3(...s.pos)
+    return {
       id: ids.next(),
       kind: 'station',
-      name: def.station.name,
-      pos: stationPos.clone(),
-      radius: def.station.radius,
+      name: s.name,
+      pos: pos.clone(),
+      radius: s.radius,
       color: 0x9fb3c8,
       surface: null,
       population: 0,
       settlement: null,
       // Крест — монумент, не крутится. Тор/веер — как раньше.
-      spin: def.station.style === 'cross' ? 0 : 0.08,
+      spin: s.style === 'cross' ? 0 : 0.08,
       spinAxis: new Vector3(0, 0, 1),
-      orbit: stationOrbit,
-      stationStyle: def.station.style,
-      stationModel: def.station.model,
+      orbit: host
+        ? orbitFromOffset(host.id, host.pos, pos, moonOrbitRate(host.radius, host.surface === 'Газовый гигант', pos.distanceTo(host.pos)))
+        : null,
+      stationStyle: s.style,
+      stationModel: s.model,
     }
+  }
+  const planetAt = (index: number | undefined) => (index != null && index >= 0 ? (planets[index] ?? null) : null)
+
+  let station: BodyEntity | null = null
+  if (def.station) {
+    // Хозяин назван — он; ручное описание без номера — ближайшая планета, как и прежде.
+    station = makeStation(def.station, planetAt(def.station.planet ?? stationSeat(def)))
     bodies.push(station)
   }
-
-  // Дополнительные станции: стоят телами на месте (орбиты нет), свой облик. Основной трафик
-  // их не ведёт, но док по близости работает — как у любой станции.
-  for (const extra of def.extraStations ?? []) {
-    bodies.push({
-      id: ids.next(),
-      kind: 'station',
-      name: extra.name,
-      pos: new Vector3(...extra.pos),
-      radius: extra.radius,
-      color: 0x9fb3c8,
-      surface: null,
-      population: 0,
-      settlement: null,
-      // Крест НЕ вращается — это монумент-храм, а не крутящийся тор. Прочие extra — как обычно.
-      spin: extra.style === 'cross' ? 0 : 0.08,
-      spinAxis: new Vector3(0, 0, 1),
-      orbit: null,
-      stationStyle: extra.style,
-    })
-  }
+  // Дополнительные: хозяин — только названный. Без него станция ничья (монумент «Крест»).
+  for (const extra of def.extraStations ?? []) bodies.push(makeStation(extra, planetAt(extra.planet)))
 
   // (военные базы — не тела, см. `placeWarBases`: у них ни гравитации, ни орбиты.)
   for (const hole of def.blackHoles ?? []) {

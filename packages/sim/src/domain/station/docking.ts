@@ -18,6 +18,16 @@ const _noseRest = new Vector3(0, 0, -1)
  * автопилот дёргают не ту, а стыковка «триггерится» у обеих разом. Ближайшая — та, к
  * которой ты и подлетаешь.
  */
+/**
+ * Планета, у которой висит станция (`orbit.parentId`). В системе бывает по причалу у каждого
+ * населённого мира, и «где я» у причала — это ЕГО планета, а не столица системы: прежде
+ * шапка консоли склеивала аванпост одной планеты с именем другой. null — станция без хозяина.
+ */
+export function stationHost(world: World, station: BodyEntity): BodyEntity | null {
+  const parentId = station.orbit?.parentId
+  return parentId == null ? null : (world.bodies.find((b) => b.id === parentId) ?? null)
+}
+
 export function findStation(world: World): BodyEntity | null {
   const from = world.player.state.pos
   let best: BodyEntity | null = null
@@ -120,9 +130,7 @@ export function undock(world: World): void {
 
   const player = world.player
 
-  const host = station.orbit?.parentId == null
-    ? null
-    : world.bodies.find((body) => body.id === station.orbit!.parentId)
+  const host = stationHost(world, station)
   // Выходим наружу от планеты-хозяина. Старое положение игрока использовать
   // нельзя: после обновления календарной орбиты оно может быть в миллионах км.
   _toStation.copy(station.pos).sub(host?.pos ?? player.state.pos)

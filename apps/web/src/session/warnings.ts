@@ -146,6 +146,17 @@ export function pushWarning(code: WarnCode, now: number, opts: PushOpts = {}): v
   active.set(code, { code, rank: RANK[code], born: now, label: opts.label, hz: opts.hz })
 }
 
+/**
+ * Смена обстановки (стыковка): ситуативные плашки полёта на станцию не переходят. У причала
+ * мир стоит, и время плашки стоит вместе с ним: жёлтая, загоревшаяся перед заходом (удар о
+ * поле, «посадка»), дожигала остаток жизни после вылета — мелькала перед «доброго пути».
+ * Кулдауны тоже сбрасываем: что повторится уже в полёте — должно показаться сразу.
+ */
+export function clearWarnings(): void {
+  active.clear()
+  lastFired.clear()
+}
+
 /** Самый важный ЖИВОЙ сигнал (просроченные попутно выметаются). null — тихо. */
 export function activeWarning(now: number): Warning | null {
   let best: Warning | null = null

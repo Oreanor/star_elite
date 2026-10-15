@@ -299,6 +299,7 @@ export const EN: Record<keyof typeof RU, string> = {
   'station.nav.map': 'MAP',
   'station.nav.ref': 'HANDBOOK',
   'station.atPlanet': '{station} (planet {planet})',
+  'station.atSystem': '{station} (system {system})',
   'ref.col.tech': 'TECH',
   // Three buttons inside the MAP tab.
   'map.view.locator': 'LOCATOR',

@@ -301,6 +301,7 @@ export const ES: Record<keyof typeof RU, string> = {
   'station.nav.map': 'MAPA',
   'station.nav.ref': 'GUÍA',
   'station.atPlanet': '{station} (planeta {planet})',
+  'station.atSystem': '{station} (sistema {system})',
   'ref.col.tech': 'TEC',
   // Tres botones dentro de la pestaña MAPA.
   'map.view.locator': 'LOCALIZADOR',

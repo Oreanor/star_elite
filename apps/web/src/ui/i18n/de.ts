@@ -301,6 +301,7 @@ export const DE: Record<keyof typeof RU, string> = {
   'station.nav.map': 'KARTE',
   'station.nav.ref': 'HANDBUCH',
   'station.atPlanet': '{station} (Planet {planet})',
+  'station.atSystem': '{station} (System {system})',
   'ref.col.tech': 'TECH',
   // Three buttons inside the MAP tab.
   'map.view.locator': 'ORTER',

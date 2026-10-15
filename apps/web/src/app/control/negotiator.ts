@@ -2,6 +2,7 @@ import { commodityBuyPrice, commoditySellPrice, commodityStock, dispatcherBriefi
 import type { ChatTurn, ContextDigest, NegotiationContext, NegotiatorReply } from '../../ui/dialogue/facts'
 import { currentLang } from '../../ui/i18n/i18n'
 import { negotiatorLocale } from './negotiatorLocale'
+import { chatMessages } from './chatMessages'
 
 /**
  * Переговорщик: превращает СНИМОК МИРА и историю болтовни в реплику собеседника
@@ -90,17 +91,22 @@ function locale() {
 
 function chatRecap(turns: ChatTurn[]): string {
   if (turns.length <= CHAT_RECENT) return ''
-  const old = turns.slice(0, -CHAT_RECENT).filter((t) => t.who !== 'system')
+  const old = turns.slice(0, -CHAT_RECENT)
   if (!old.length) return ''
   const en = currentLang() === 'en'
   const snippet = old.slice(-8).map((t) => {
-    const tag = t.who === 'you' ? (en ? 'them' : 'он') : en ? 'you' : 'ты'
+    const tag = t.who === 'system' ? factTag() : t.who === 'you' ? (en ? 'them' : 'он') : en ? 'you' : 'ты'
     const text = t.text.length > 36 ? `${t.text.slice(0, 33)}…` : t.text
     return `${tag}: «${text}»`
   })
   return en
     ? `EARLIER IN THIS COMMS (compressed):\n${snippet.join(' · ')}`
     : `РАНЬШЕ В ЭТОМ РАЗГОВОРЕ (сжато):\n${snippet.join(' · ')}`
+}
+
+/** Пометка исхода из канала («· Зачислено: 100 кр ·»): что ПРОИЗОШЛО, а не что сказано. */
+function factTag(): string {
+  return currentLang() === 'en' ? 'COMMS FACT' : 'ФАКТ КАНАЛА'
 }
 
 function buildMessages(ctx: NegotiationContext, history: ChatTurn[], userText: string) {
@@ -114,12 +120,10 @@ function buildMessages(ctx: NegotiationContext, history: ChatTurn[], userText: s
 
   if (chars >= PROMPT_SOFT_CHARS) system += `\n\n${L.channelPressureHint()}`
 
-  const msgs: { role: 'system' | 'user' | 'assistant'; content: string }[] = [{ role: 'system', content: system }]
-  for (const turn of recent) {
-    if (turn.who === 'you') msgs.push({ role: 'user', content: turn.text })
-    else if (turn.who === 'them') msgs.push({ role: 'assistant', content: turn.text })
-  }
-  msgs.push({ role: 'user', content: `${L.attitudeStamp(ctx)}\n${userText}` })
+  const msgs = [
+    { role: 'system' as const, content: system },
+    ...chatMessages(recent, `${L.attitudeStamp(ctx)}\n${userText}`, factTag()),
+  ]
   if (chars >= PROMPT_SOFT_CHARS) chars += L.channelPressureHint().length
 
   return { messages: msgs, chars }

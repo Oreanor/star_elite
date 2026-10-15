@@ -162,6 +162,7 @@ export function systemDefOf(system: StarSystem, galaxySeed: number, seatOverride
         pos: [start[0], start[1], start[2] - 2_000] as [number, number, number],
         radius: STATION_RADIUS,
         model: stationModel,
+        planet: seat,
       }
     : null
 
@@ -186,6 +187,7 @@ export function systemDefOf(system: StarSystem, galaxySeed: number, seatOverride
         pos: [planet.pos[0] + planet.radius + altitude, planet.pos[1], planet.pos[2]] as [number, number, number],
         radius: STATION_RADIUS,
         model: Math.floor(makeRng(seed ^ (0x53_54_4e + i))() * 5),
+        planet: i,
       },
     ]
   })

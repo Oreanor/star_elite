@@ -300,6 +300,7 @@ export const FR: Record<keyof typeof RU, string> = {
   'station.nav.map': 'CARTE',
   'station.nav.ref': 'GUIDE',
   'station.atPlanet': '{station} (planète {planet})',
+  'station.atSystem': '{station} (système {system})',
   'ref.col.tech': 'TECH',
   // Trois boutons dans l'onglet CARTE.
   'map.view.locator': 'LOCALISATEUR',

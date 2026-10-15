@@ -292,6 +292,7 @@ function makeRu(): NegotiatorLocale {
         'Покупка/продажа: в ОДНОМ transfer и commodityId+units, и credits — деньги идут НАВСТРЕЧУ грузу (купил статуэтку: toYou + figurine + credits=цена).',
         'После сделки смотри свой трюм в фактах следующего хода — не продавай то, чего уже нет, и не обещай то, что уже отдал.',
         'transfer=null если сделки нет. intent=escort — игра спишет плату сама, transfer.credits не ставь.',
+        'Отдаёт деньги или груз — СТАВЬ transfer: без него ничего не переходит, сколько ни говори «принял». Что перешло НА САМОМ ДЕЛЕ — только строки [ФАКТ КАНАЛА]; нет факта — не пришло, так и скажи.',
       ].join('\n')
     },
     cargoEmpty: 'пусто',
@@ -681,6 +682,7 @@ function makeEn(): NegotiatorLocale {
         'Your own money is your business and you cannot name an exact sum. Never pass his balance off as yours.',
         escort,
         'transfer.direction — where CARGO goes: toYou = them→you, toThem = you→them. Credits alone follow the same direction.',
+        'They hand over money or cargo — SET transfer: without it nothing moves, however much you say "received". What REALLY moved is only the [COMMS FACT] lines; no fact — nothing arrived, say so.',
         'Buy/sell: one transfer with BOTH commodityId+units AND credits — money flows OPPOSITE the cargo (buy a figurine: toYou + figurine + credits=price).',
         'After a deal, trust the next-turn hold facts — do not re-sell what you already gave, or promise what you no longer have.',
         'transfer=null if no deal. intent=escort — game deducts fee; do not set transfer.credits.',

@@ -1,11 +1,13 @@
-import { findStation } from './docking'
+import { findStation, stationHost } from './docking'
 import type { Commodity } from '../cargo/items'
 import type { FineRecord, ShipEntity, World } from '../world/entities'
 import { DIALOGUE } from '../../config/dialogue'
 
 /** Идентификатор местной власти: станция привязана к конкретной планете. */
 export function localAuthorityId(world: World): number | null {
-  return findStation(world)?.orbit?.parentId ?? findStation(world)?.id ?? null
+  const station = findStation(world)
+  if (!station) return null
+  return stationHost(world, station)?.id ?? station.id
 }
 
 export function localFine(world: World): FineRecord | null {

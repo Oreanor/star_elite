@@ -318,6 +318,7 @@ export const RU = {
   'station.nav.map': 'КАРТА',
   'station.nav.ref': 'СПРАВОЧНИК',
   'station.atPlanet': '{station} (планета {planet})',
+  'station.atSystem': '{station} (система {system})',
   'ref.col.tech': 'ТЕХ',
   // Три кнопки внутри вкладки КАРТА.
   'map.view.locator': 'ЛОКАТОР',

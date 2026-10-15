@@ -60,7 +60,7 @@ import { TORUS } from '../config'
 import { persistSave } from '../../session/save/saveStore'
 import { clearPresses, consumePress, input, isHeld, releaseLock } from '../../platform/input/input'
 import { gameTimeSec } from '../../session/net/worldClock'
-import { pushWarning } from '../../session/warnings'
+import { clearWarnings, pushWarning } from '../../session/warnings'
 
 /** Миелофон «есть у игрока», если он в аукс-слоте ИЛИ лежит в трюме: дев-выдача кладёт
  *  его в ТРЮМ, а не в слот, поэтому проверка только по слоту давала ложное «прибор не
@@ -271,8 +271,14 @@ export function Simulation() {
         if (rigEditorActive()) toggleRigEditor(world)
         if (session.mode === 'autodock') setPilot(session, 'manual')
         releaseLock()
-        // Автосейв — ТОЛЬКО на станции, и это единственная его точка (ТЗ): пристыковался
-        // → прогресс записан. В космосе не сохраняемся. Онлайн — на сервер, офлайн — в кэш.
+        // Плашки полёта на станцию не переходят: их время встало бы вместе с миром.
+        clearWarnings()
+        // Автосейв — на станции (ТЗ): пристыковался → прогресс записан. Онлайн — на сервер,
+        // офлайн — в кэш.
+        persistSave(serializePlayer(world))
+      } else {
+        // И на отчаливании: заход пишет сейв ДО покупок, и без этой записи всё купленное,
+        // проданное и оговорённое у причала откатывалось рефрешем к моменту стыковки.
         persistSave(serializePlayer(world))
       }
       session.onDockChange?.(world.docked)

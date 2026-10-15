@@ -15,7 +15,7 @@ import {
   Vector3,
   type Texture,
 } from 'three'
-import { bodyMass, findStation, type BodyEntity, type World } from '@elite/sim'
+import { bodyMass, stationHost, type BodyEntity, type World } from '@elite/sim'
 import { loadPlanetTexture, pickVariant, planetLook, planetSeed } from '../../render/sky/planets'
 import { loadRockTexture, rockTextureOf } from '../../render/materials/rockTextures'
 import { t, useLang } from '../i18n'
@@ -96,8 +96,8 @@ const _plane = new Plane(new Vector3(0, 1, 0), 0)
 /** Спутники этого мира и его причал — по родителю орбиты, а не по близости. */
 function satellitesOf(world: World, planet: BodyEntity): { moons: BodyEntity[]; station: BodyEntity | null } {
   const moons = world.bodies.filter((b) => b.kind === 'moon' && b.orbit?.parentId === planet.id)
-  const own = world.bodies.find((b) => b.kind === 'station' && b.orbit?.parentId === planet.id)
-  return { moons, station: own ?? (findStation(world)?.orbit?.parentId === planet.id ? findStation(world) : null) }
+  const station = world.bodies.find((b) => b.kind === 'station' && stationHost(world, b) === planet) ?? null
+  return { moons, station }
 }
 
 /** Кратчайшая разность углов, рад: −π…π. Иначе догон шёл бы «через весь круг». */

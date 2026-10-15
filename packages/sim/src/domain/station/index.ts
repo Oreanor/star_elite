@@ -10,7 +10,7 @@ export {
   type HullFit,
   type HullPurchase,
 } from './shipyard'
-export { canDockAt, dock, findStation, startDocked, stationRange, stepDocking, undock } from './docking'
+export { canDockAt, dock, findStation, startDocked, stationHost, stationRange, stepDocking, undock } from './docking'
 export {
   stationInterlocutor,
   dispatcherName,
