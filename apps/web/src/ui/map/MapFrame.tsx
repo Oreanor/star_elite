@@ -252,7 +252,7 @@ export function SortToggle({ value, onChange }: { value: ListSort; onChange: (v:
             type="button"
             onClick={() => onChange(k)}
             aria-current={on ? 'true' : undefined}
-            className="cursor-pointer border px-3 py-1 text-xs tracking-[0.2em] transition-colors hover:bg-[#7fd6ff] hover:text-black"
+            className="cursor-pointer border px-3 py-1 text-xs tracking-[0.2em] transition-colors ui-btn"
             style={{ borderColor: on ? UI.PRIMARY : UI.DIM, backgroundColor: on ? UI.PRIMARY : 'transparent', color: on ? '#000' : UI.DIM }}
           >
             {t(k === 'dist' ? 'locator.sort.dist' : 'locator.sort.type')}

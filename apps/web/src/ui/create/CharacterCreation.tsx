@@ -193,7 +193,7 @@ function Choice({
     <button
       type="button"
       onClick={onClick}
-      className="shrink-0 cursor-pointer border px-5 py-2 text-xs uppercase tracking-[0.25em] transition-colors hover:bg-[#7fd6ff] hover:text-black"
+      className="shrink-0 cursor-pointer border px-5 py-2 text-xs uppercase tracking-[0.25em] transition-colors ui-btn"
       style={{
         borderColor: active ? ACCENT : DIM,
         backgroundColor: active ? ACCENT : 'transparent',
@@ -212,7 +212,7 @@ function Nudge({ onClick, children }: { onClick: () => void; children: React.Rea
       type="button"
       onClick={onClick}
       className="flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center border text-base leading-none tracking-[0.2em]
-                 transition-colors hover:bg-[#7fd6ff] hover:text-black"
+                 transition-colors ui-btn"
       style={{ borderColor: ACCENT, color: ACCENT }}
     >
       {children}

@@ -93,7 +93,7 @@ export function HullModal({
               disabled={!active}
               onClick={() => doUpgrade(stat)}
               className={`flex w-full items-center justify-between border px-4 py-2 text-sm tracking-[0.15em] transition-colors ${
-                active ? 'cursor-pointer hover:bg-[#7fd6ff] hover:text-black' : 'cursor-not-allowed opacity-40'
+                active ? 'cursor-pointer ui-btn' : 'cursor-not-allowed opacity-40'
               }`}
               style={{ borderColor: done ? DIM : ACCENT, color: done ? DIM : ACCENT }}
             >

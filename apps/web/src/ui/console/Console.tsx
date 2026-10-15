@@ -194,7 +194,7 @@ export function Console({
           <div className="ml-auto flex shrink-0 items-center gap-8">
             <div
               className="flex items-center gap-5 rounded-lg border px-4 py-2 text-sm tracking-widest"
-              style={{ borderColor: DIM, color: DIM, background: 'rgba(8,22,42,0.3)' }}
+              style={{ borderColor: DIM, color: DIM, background: 'rgba(8,22,42,0.75)' }}
             >
               {/* Дата мира — общий календарь для всех игроков (`worldClock`). */}
               <span className="whitespace-nowrap">{currentGameDate()}</span>
@@ -218,7 +218,7 @@ export function Console({
                 // КАРТА, уже открытая, не сбрасывает выбранный вид: клик по ней остаётся на нём.
                 onClick={() => onTab(item.active ? tab : item.id)}
                 aria-current={on ? 'page' : undefined}
-                className="cursor-pointer border px-5 py-2 text-xs tracking-[0.25em] transition-colors hover:bg-[#7fd6ff] hover:text-black"
+                className="cursor-pointer border px-5 py-2 text-xs tracking-[0.25em] transition-colors ui-btn"
                 style={{
                   borderColor: on ? ACCENT : DIM,
                   backgroundColor: on ? ACCENT : 'transparent',
@@ -266,7 +266,7 @@ export function Console({
                       onClick={disabled ? undefined : () => onTab(v)}
                       disabled={disabled}
                       aria-current={on ? 'page' : undefined}
-                      className="border px-4 py-1.5 text-xs tracking-[0.25em] transition-colors disabled:cursor-not-allowed enabled:cursor-pointer enabled:hover:bg-[#7fd6ff] enabled:hover:text-black"
+                      className="border px-4 py-1.5 text-xs tracking-[0.25em] transition-colors disabled:cursor-not-allowed enabled:cursor-pointer ui-btn"
                       style={{
                         borderColor: on ? ACCENT : DIM,
                         backgroundColor: on ? ACCENT : 'transparent',

@@ -41,7 +41,7 @@ export function ArrowButton({
       onClick={onClick}
       // Полупрозрачный фон: стрелка лежит ПОВЕРХ корабля, и без подложки её грань
       // теряется на светлом борту.
-      className="cursor-pointer border bg-black/40 px-3 py-1 text-sm backdrop-blur-sm transition-colors hover:bg-[#7fd6ff] hover:text-black"
+      className="cursor-pointer border bg-black/40 px-3 py-1 text-sm backdrop-blur-sm transition-colors ui-btn"
       style={{ borderColor: DIM, color: ACCENT }}
     >
       {dir === 'left' ? '◄' : '►'}

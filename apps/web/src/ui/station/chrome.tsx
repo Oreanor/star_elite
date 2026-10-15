@@ -67,7 +67,7 @@ export function Button({
       onClick={onClick}
       disabled={disabled}
       className={`border tracking-[0.2em] transition-colors ${small ? 'px-3 py-1 text-xs' : 'mt-4 px-6 py-2 text-sm'} ${
-        disabled ? 'cursor-not-allowed opacity-35' : 'cursor-pointer hover:bg-[#7fd6ff] hover:text-black'
+        disabled ? 'cursor-not-allowed opacity-35' : 'cursor-pointer ui-btn'
       }`}
       style={{
         borderColor: disabled ? DIM : ACCENT,
@@ -105,7 +105,7 @@ export function Tabs<T extends string>({
             type="button"
             onClick={() => onSelect(tab)}
             aria-current={on ? 'page' : undefined}
-            className="cursor-pointer border px-5 py-2 text-xs tracking-[0.25em] transition-colors hover:bg-[#7fd6ff] hover:text-black"
+            className="cursor-pointer border px-5 py-2 text-xs tracking-[0.25em] transition-colors ui-btn"
             style={{
               borderColor: on ? ACCENT : DIM,
               backgroundColor: on ? ACCENT : 'transparent',
@@ -146,7 +146,7 @@ export function SideTabs<T extends string>({
             disabled={disabled}
             onClick={() => onSelect(id)}
             aria-current={on ? 'page' : undefined}
-            className="whitespace-nowrap border px-3 py-1.5 text-left text-xs tracking-[0.2em] transition-colors enabled:cursor-pointer enabled:hover:bg-[#7fd6ff] enabled:hover:text-black disabled:cursor-not-allowed disabled:opacity-35"
+            className="whitespace-nowrap border px-3 py-1.5 text-left text-xs tracking-[0.2em] transition-colors enabled:cursor-pointer ui-btn disabled:cursor-not-allowed disabled:opacity-35"
             style={{
               borderColor: on ? ACCENT : DIM,
               backgroundColor: on ? ACCENT : 'transparent',

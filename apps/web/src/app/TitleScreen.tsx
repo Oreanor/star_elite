@@ -100,7 +100,7 @@ function MenuPanel({
       // Скролла в норме нет — плашка просто становится выше; overflow ниже лишь страховка.
       className={`flex max-h-[92vh] w-auto min-w-[34rem] max-w-[92vw] flex-col
                  rounded-2xl border p-8 backdrop-blur-md`}
-      style={{ borderColor: 'rgba(63,115,145,0.7)', background: 'rgba(20,44,74,0.38)' }}
+      style={{ borderColor: 'rgba(63,115,145,0.7)', background: 'rgba(10,26,47,0.82)' }}
     >
       {/* ШАПКА: заголовок модалки, отделён линией, прижат к верху. */}
       {title && (
@@ -145,7 +145,7 @@ function MenuButton({
       // контраст на любом фоне. Наведение по-прежнему заливает кнопку целиком.
       className="min-w-56 w-max cursor-pointer whitespace-nowrap border border-[#7fd6ff] bg-[#0a1a2f]/[0.82] px-8 py-3 text-base
                  backdrop-blur-md tracking-[0.3em] text-[#7fd6ff] transition-colors
-                 hover:bg-[#7fd6ff] hover:text-black
+                 ui-btn
                  disabled:cursor-wait disabled:border-[#3f7391] disabled:bg-[#0a1a2f]/[0.7]
                  disabled:text-[#8fb4cc]"
     >
@@ -1080,7 +1080,7 @@ export function GameOver({ score, onRestart }: { score: number; onRestart: () =>
           type="button"
           onClick={onRestart}
           className="cursor-pointer border border-[#7fd6ff] px-8 py-3 text-base tracking-[0.3em] text-[#7fd6ff]
-                     transition-colors hover:bg-[#7fd6ff] hover:text-black"
+                     transition-colors ui-btn"
         >
           {t('menu.restart')}
         </button>

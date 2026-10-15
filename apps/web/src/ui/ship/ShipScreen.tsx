@@ -121,7 +121,7 @@ export function ShipScreen({
           <button
             type="button"
             onClick={onClose}
-            className="cursor-pointer border px-4 py-2 text-sm tracking-[0.3em] transition-colors hover:bg-[#7fd6ff] hover:text-black"
+            className="cursor-pointer border px-4 py-2 text-sm tracking-[0.3em] transition-colors ui-btn"
             style={{ borderColor: ACCENT }}
           >
             {docked ? t('menu.back') : `I — ${t('ship.close')}`}
@@ -181,7 +181,7 @@ export function ShipScreen({
                 type="button"
                 disabled={owned}
                 onClick={() => setBuyingHull(true)}
-                className="cursor-pointer border px-5 py-2 text-sm tracking-[0.2em] whitespace-nowrap transition-colors enabled:hover:bg-[#7fd6ff] enabled:hover:text-black disabled:cursor-default disabled:opacity-50"
+                className="cursor-pointer border px-5 py-2 text-sm tracking-[0.2em] whitespace-nowrap transition-colors ui-btn disabled:cursor-default disabled:opacity-50"
                 style={{ borderColor: ACCENT, color: ACCENT }}
               >
                 {owned ? t('ship.alreadyOwned') : tm('ship.buyHull', { price: <Money amount={offer.cost} /> })}

@@ -67,7 +67,7 @@ export function AuthScreen() {
             void submit()
           }}
           className="flex w-full max-w-[26rem] flex-col gap-5 rounded-2xl border p-8 backdrop-blur-md"
-          style={{ borderColor: 'rgba(63,115,145,0.7)', background: 'rgba(20,44,74,0.42)' }}
+          style={{ borderColor: 'rgba(63,115,145,0.7)', background: 'rgba(10,26,47,0.82)' }}
         >
           <h1 className="text-center text-lg tracking-[0.4em]">{t(register ? 'auth.register' : 'auth.login')}</h1>
 
@@ -110,8 +110,8 @@ export function AuthScreen() {
           <button
             type="submit"
             disabled={busy || !email.trim() || !password}
-            className="mt-1 self-center border border-[#7fd6ff] bg-[#142c4a]/[0.38] px-10 py-3 text-base tracking-[0.3em]
-                       text-[#7fd6ff] transition-colors hover:bg-[#7fd6ff] hover:text-black
+            className="mt-1 self-center border border-[#7fd6ff] bg-[#0a1a2f]/[0.82] px-10 py-3 text-base tracking-[0.3em]
+                       text-[#7fd6ff] transition-colors ui-btn
                        disabled:cursor-not-allowed disabled:border-[#3f7391] disabled:bg-transparent disabled:text-[#3f7391]"
           >
             {busy ? t('auth.wait') : t(register ? 'auth.create' : 'auth.enter')}

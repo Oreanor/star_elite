@@ -54,7 +54,7 @@ export function KeyHelp() {
     <div className="absolute inset-0 z-[70] flex items-center justify-center bg-black/60 font-mono" onPointerDown={close}>
       <div
         className="flex max-h-[94vh] w-[94vw] max-w-[1700px] flex-col rounded-2xl border p-6 backdrop-blur-md"
-        style={{ borderColor: 'rgba(63,115,145,0.7)', background: 'rgba(20,44,74,0.55)' }}
+        style={{ borderColor: 'rgba(63,115,145,0.7)', background: 'rgba(10,26,47,0.82)' }}
         onPointerDown={(e) => e.stopPropagation()}
       >
         <div className="mb-4 shrink-0 border-b border-[#3f7391]/40 pb-3 text-center text-lg tracking-[0.35em] text-[#7fd6ff]">

@@ -93,7 +93,7 @@ export function Market({ world, onChange }: { world: World; onChange: () => void
             type="button"
             onClick={() => setSection(s)}
             aria-current={on ? 'page' : undefined}
-            className="cursor-pointer border px-4 py-1.5 text-xs tracking-[0.25em] transition-colors hover:bg-[#7fd6ff] hover:text-black"
+            className="cursor-pointer border px-4 py-1.5 text-xs tracking-[0.25em] transition-colors ui-btn"
             style={{ borderColor: on ? ACCENT : DIM, backgroundColor: on ? ACCENT : 'transparent', color: on ? '#000' : DIM }}
           >
             {t(s === 'goods' ? 'station.market.title' : 'station.outfit.title')}
