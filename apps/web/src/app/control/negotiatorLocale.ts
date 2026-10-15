@@ -113,6 +113,14 @@ function jobLine(ctx: NegotiationContext, lang: 'ru' | 'en'): string {
         ? `Командир УЖЕ взялся за твоё дело: ${describe(ctx.jobInProgress)}. Помни об этом.`
         : `The commander ALREADY took your job: ${describe(ctx.jobInProgress)}. Remember it.`,
     )
+    const p = ctx.jobInProgress.progress
+    if (p) {
+      lines.push(
+        lang === 'ru'
+          ? `Ход дела прямо сейчас: снято ${p.done} из ${p.of}, осталось ${p.of - p.done}. Плату за сделанное домен начисляет сам — сверх этого не обещай.`
+          : `Job status right now: ${p.done} of ${p.of} down, ${p.of - p.done} left. The game pays for what is done by itself — promise nothing beyond that.`,
+      )
+    }
   }
   return lines.join('\n')
 }

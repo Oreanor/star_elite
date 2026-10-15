@@ -296,21 +296,26 @@ export const flyToController: Controller = {
    * Охрана: место затормозить, нос наведён; в системе ещё путь чист от тел.
    * `updateCruise` добавит массовую блокировку / выход у звезды — здесь лишь просьба.
    */
-  wantsCruise(ship: ShipEntity, world: World): boolean {
+  wantsCruise(ship: ShipEntity, world: World): boolean | number {
     const dest = destination(world)
     if (!dest) return false
     const distance = approachDist(ship.state.pos, dest)
     if (distance <= 0) return false
 
+    // В системе — множитель по дистанции (см. AUTOPILOT.CRUISE_APPROACH_RATE). Меньше ×2 —
+    // крейсер ни к чему: обычный ход уже подходит, а фаза без столкновений у цели вредна.
+    let want: boolean | number = true
     if (dest.galaxy) {
       // Тормозной путь крейсера ∝ scale превышает ly кадра — режем по BRAKE_LY.
       const distLy = distance / metersPerLy(ship.state.scale)
       if (distLy <= GALAXY_FLIGHT.BRAKE_LY * AUTOPILOT.CRUISE_BRAKE_MARGIN) return false
     } else {
-      const cruiseSpeed =
-        ship.spec.tuning.MAX_SPEED * CRUISE.MAX_FACTOR * speedScaleFactor(ship.state.scale)
-      const brakeDist = cruiseSpeed / CRUISE.DECAY_RATE
-      if (distance <= brakeDist * AUTOPILOT.CRUISE_BRAKE_MARGIN) return false
+      const top = ship.spec.tuning.MAX_SPEED * speedScaleFactor(ship.state.scale)
+      const factor = Math.min(CRUISE.MAX_FACTOR, (distance * AUTOPILOT.CRUISE_APPROACH_RATE) / Math.max(top, 1))
+      if (factor < 2) return false
+      // Разгон — обычный экспоненциальный (true), а дойдя до нужного — защёлка: множитель
+      // стоит и тает вместе с дистанцией, поэтому подход сам замедляется к цели.
+      want = ship.cruise.factor < factor ? true : factor
     }
 
     // Нос уже на цели — иначе сверхсвет уносит боком. Нос корабля смотрит в −Z.
@@ -322,7 +327,7 @@ export const flyToController: Controller = {
 
     // В системе — не крейсерить в обход планеты. У галактики тел на луче нет.
     if (!dest.galaxy && aimAround(ship, world, dest.pos, dest.bodyId, _aim)) return false
-    return true
+    return want
   },
 }
 

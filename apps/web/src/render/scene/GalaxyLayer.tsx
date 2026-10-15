@@ -16,7 +16,7 @@ import {
 } from 'three'
 import { applyDelta, GALAXY, generateGalaxy, SCALE, renderTime, type BodyEntity } from '@elite/sim'
 import { useSession } from '../../session/GameContext'
-import { GALAXY_LAYER } from '../config'
+import { GALAXY_LAYER, RENDER } from '../config'
 import {
   createGalaxyStarDiscMaterial,
   createGalaxyStarShellMaterial,
@@ -536,11 +536,11 @@ export function GalaxyLayer() {
         ? 0
         : Math.log(effScale / fade) / Math.log(lock / fade)
     const u = Math.min(1, Math.max(0, t))
-    const viewFrac =
-      GALAXY_LAYER.RANGE_LY_START_FRAC
-      + (GALAXY_LAYER.RANGE_LY_END_FRAC - GALAXY_LAYER.RANGE_LY_START_FRAC) * u
-    const viewLy = GALAXY.RADIUS_LY * viewFrac
-    const radiusM = viewLy * layerScale
+    // Всё, что камера способна показать: вся галактика, если влезает в дальнюю плоскость.
+    const radiusM = Math.min(
+      GALAXY.RADIUS_LY * GALAXY_LAYER.RANGE_COVER_FRAC * layerScale,
+      RENDER.FAR * GALAXY_LAYER.RANGE_FAR_REACH,
+    )
     const edgeM = radiusM * GALAXY_LAYER.SPHERE_EDGE_FRAC
     material.uniforms.uRadius!.value = radiusM
     material.uniforms.uEdge!.value = edgeM

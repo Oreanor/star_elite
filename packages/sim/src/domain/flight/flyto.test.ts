@@ -7,6 +7,8 @@ import { placeSystem } from '../galaxy/shape'
 import { createWorld, STARTER_SYSTEM } from '../world'
 import { canEngageFlyTo, flyToArrived, flyToController } from './flyto'
 import { lockContact, lockedShipId } from '../world/queries'
+import { stepWorld } from '../sim'
+import { NULL_CONTROLLER } from '../sim/controller'
 
 const _nose = new Vector3(0, 0, -1)
 const _to = new Vector3()
@@ -212,5 +214,20 @@ describe('автопилот-к-цели', () => {
     flyToController.update(player, world, 1 / 60)
 
     expect(player.controls.throttle).toBeGreaterThan(0)
+  })
+})
+
+describe('автопилот пользуется форсажем на системных дистанциях', () => {
+  // Пойманный баг: крейсер включался только дальше полного тормозного пути на МАКСИМУМЕ
+  // (≈7.7 млн км), и к цели в сотнях тысяч километров J полз на боевых 220 м/с — сутками.
+  it('цель в 200 000 км — долетает за минуту-полторы и останавливается у неё', () => {
+    const { world, target } = withTarget(2e8)
+    faceToward(world, target.state.pos)
+    target.ai = null // цель стоит: проверяем подход, а не погоню
+    const controllers = new Map([[world.player.id, flyToController]])
+    for (let i = 0; i < 90 * 60 && !flyToArrived(world); i++) {
+      stepWorld(world, 1 / 60, controllers, { unassigned: NULL_CONTROLLER })
+    }
+    expect(world.player.state.pos.distanceTo(target.state.pos)).toBeLessThan(AUTOPILOT.ARRIVE_RANGE * 3)
   })
 })

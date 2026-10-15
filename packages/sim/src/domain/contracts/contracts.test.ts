@@ -207,3 +207,25 @@ describe('дела', () => {
     expect(acceptOffer(world, trader)).toBeNull()
   })
 })
+
+describe('заказчик помнит дело', () => {
+  // Пойманный баг: бот знал о деле, лишь пока оно активно. Перебили пиратов — дело закрылось,
+  // и при следующем разговоре заказчик «знать не знал ни о какой миссии». Взятое и его исход
+  // обязаны лечь в журнал знакомства — в ту же память, что и сделки с просьбами.
+  it('взятое дело и его исход с выплатой — в журнале заказчика', () => {
+    const world = worldWith('police')
+    const cop = world.ships[0]!
+    giveOffer(cop, { kind: 'hunt', heads: 2, reward: 1000, days: null, revealed: true })
+    const c = acceptOffer(world, cop)!
+    const record = world.acquaintances.find((a) => a.id === cop.acquaintanceId)!
+    expect(record.history.some((e) => e.kind === 'job' && e.outcome === 'taken')).toBe(true)
+
+    for (const t of world.ships.filter((s) => s.bountyOf === c.id)) {
+      t.alive = false
+      t.lastAttackerId = world.player.id
+    }
+    stepContracts(world, 1 / 60)
+    const closed = record.history.find((e) => e.kind === 'job' && e.outcome !== 'taken')
+    expect(closed).toMatchObject({ kind: 'job', job: 'hunt', outcome: 'completed', paid: 2000 })
+  })
+})

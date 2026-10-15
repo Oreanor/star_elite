@@ -1,6 +1,7 @@
 import {
   activeContracts,
   commodityById,
+  type Contract,
   type ContractKind,
   type ContractTerms,
   capitalOf,
@@ -264,6 +265,12 @@ export interface JobFacts {
   heads: number | null
   /** Срок, игровые сутки; null — здесь и сейчас. */
   days: number | null
+  /**
+   * Ход взятого дела — только у `jobInProgress`: сколько целей уже снято и сколько всего
+   * (охота — головы, спасение — нападавшие). Без него бот посреди боя знал условия,
+   * но не знал, что одного ты уже сбил.
+   */
+  progress: { done: number; of: number } | null
 }
 
 function jobFactsOf(terms: ContractTerms, reward: number, days: number | null): JobFacts {
@@ -277,7 +284,20 @@ function jobFactsOf(terms: ContractTerms, reward: number, days: number | null): 
     to: 'toSystemName' in terms ? properName(terms.toSystemName) : null,
     heads: terms.kind === 'hunt' ? terms.heads : null,
     days,
+    progress: null,
   }
+}
+
+/** Сколько целей взятого дела уже нет в живых (охота, спасение); иначе null. */
+function contractProgress(world: World, c: Contract): { done: number; of: number } | null {
+  const p = c.progress
+  if (p.kind === 'hunt') return { done: p.kills, of: p.targets.length }
+  if (c.terms.kind === 'rescue') {
+    const ids = c.terms.attackers
+    const alive = ids.filter((id) => world.ships.some((s) => s.id === id && s.alive && !s.warpDeparting)).length
+    return { done: ids.length - alive, of: ids.length }
+  }
+  return null
 }
 
 /** Справочники, которые не тащим в каждый запрос — пилот «листает» их по просьбе. */
@@ -610,7 +630,33 @@ function eventPhrase(ev: AcquaintanceEvent): string {
       return ev.text.startsWith('МЕТА:')
         ? `выучил смысл: ${ev.text.slice(5).trim()}`
         : `ты просил запомнить: ${ev.text}`
+    case 'job': {
+      const what = JOB_RU[ev.job] ?? `дело (${ev.job})`
+      if (ev.outcome === 'taken') return `командир взялся за твоё дело: ${what}`
+      const how = JOB_END_RU[ev.outcome] ?? ev.outcome
+      return `твоё дело «${what}» — ${how}${ev.paid > 0 ? `, ты заплатил ${ev.paid} кр` : ''}`
+    }
   }
+}
+
+/** Вид дела словами для журнала. */
+const JOB_RU: Record<string, string> = {
+  deliver: 'отвезти груз',
+  fetch: 'привезти товар',
+  escort: 'проводить тебя',
+  rescue: 'отбить тебя от пиратов',
+  hunt: 'убрать пиратов',
+  demolish: 'снести пиратское гнездо',
+}
+
+/** Исход дела словами (`ContractEnd`). */
+const JOB_END_RU: Record<string, string> = {
+  completed: 'выполнено',
+  partial: 'выполнено частично',
+  expired: 'провалено: вышел срок',
+  abandoned: 'брошено: командир ушёл из системы',
+  'client-lost': 'сорвалось: ты погиб',
+  empty: 'сорвалось: цели ушли или их убрал другой',
 }
 
 /** Доверенное готовыми строками: «Руда ×6». Имя товара — из каталога, не из id. */
@@ -924,7 +970,7 @@ export function buildContext(
       [...world.player.loadout.internals].some((m) => m?.kind === 'mielophone'),
     jobInProgress: (() => {
       const c = activeContracts(world).find((x) => x.giverId === other.acquaintanceId)
-      return c ? jobFactsOf(c.terms, c.reward, null) : null
+      return c ? { ...jobFactsOf(c.terms, c.reward, null), progress: contractProgress(world, c) } : null
     })(),
     economy: {
       commanderCredits: world.credits,

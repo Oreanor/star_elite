@@ -55,6 +55,16 @@ export type AcquaintanceEvent =
   | { kind: 'order'; at: number; order: string } // приказ нанятому эскорту (attack/hold/…)
   | { kind: 'social'; at: number; tone: 'insult' | 'flatter' } // игрок нахамил или польстил
   | { kind: 'note'; at: number; text: string } // произвольный факт, который игрок ПОПРОСИЛ запомнить
+  | {
+      kind: 'job' // дело с ним: взялся или чем кончилось
+      at: number
+      /** Вид дела (`ContractKind`). Строкой — домен `world` не тянет тип из `contracts`. */
+      job: string
+      /** 'taken' — взялся; иначе исход закрытия (`ContractEnd`: completed/partial/expired/…). */
+      outcome: string
+      /** Выплачено по делу на момент записи, кредиты. */
+      paid: number
+    }
 
 export interface Acquaintance {
   /** Стабильный id ЗНАКОМСТВА, не корабля: корабль эфемерен, знакомство — нет. */
@@ -239,7 +249,14 @@ export const NOTE_MAX_CHARS = 280
  */
 export function recordEvent(world: World, ship: ShipEntity, event: WithoutAt<AcquaintanceEvent>): void {
   const record = world.acquaintances.find((a) => a.id === ship.acquaintanceId)
-  if (!record) return
+  if (record) recordJournal(world, record, event)
+}
+
+/**
+ * То же по ЗАПИСИ, а не по борту: дело закрывается и тогда, когда заказчика в системе нет
+ * (срок вышел, ты улетел), — а помнить исход он обязан при следующей встрече.
+ */
+export function recordJournal(world: World, record: Acquaintance, event: WithoutAt<AcquaintanceEvent>): void {
   // Спред восстанавливает конкретный член объединения; TS этого не выводит — приводим.
   record.history.push({ ...event, at: journalTime(world) } as AcquaintanceEvent)
 }

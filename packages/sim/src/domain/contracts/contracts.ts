@@ -4,7 +4,7 @@ import { signed } from '../../core/math'
 import { isFoe } from '../ai/targeting'
 import { addCommodity, freeCapacity } from '../cargo/hold'
 import { applyPosture, acquaintanceOf } from '../world/plan'
-import { recordEvent, rememberPilot, type Acquaintance, type Relationship } from '../world/acquaintance'
+import { recordEvent, recordJournal, rememberPilot, type Acquaintance, type Relationship } from '../world/acquaintance'
 import type { ShipEntity, World } from '../world/entities'
 import { refreshSpec } from '../world/factory'
 import { spawnPlatform } from '../world/platforms'
@@ -128,6 +128,10 @@ export function acceptOffer(world: World, ship: ShipEntity): Contract | null {
     paid: 0,
   }
   world.contracts.push(contract)
+  // Уговор — в общую память: без этого бот знал о деле, лишь пока оно активно, а закрытое
+  // (перебили пиратов, ушёл из системы) забывал начисто — «знать не знаю ни о какой миссии».
+  const giver = recordOf(world, giverId)
+  if (giver) recordJournal(world, giver, { kind: 'job', job: terms.kind, outcome: 'taken', paid: 0 })
   ship.offer = null
   if (world.offerHailShipId === ship.id) world.offerHailShipId = null
   recordEvent(world, ship, { kind: 'asked', topic: 'job', agreed: true })
@@ -171,6 +175,7 @@ function close(world: World, c: Contract, status: 'done' | 'failed', end: Contra
   c.end = end
   c.closedAt = world.calendarTime
   const rec = recordOf(world, c.giverId)
+  if (rec) recordJournal(world, rec, { kind: 'job', job: c.terms.kind, outcome: end, paid: c.paid })
   if (status === 'done') stepRelation(rec, 1)
   // Подвёл — минус ступень. Но не за то, в чём не виноват: клиент погиб, цель ушла сама.
   else if (end === 'expired' || end === 'abandoned') stepRelation(rec, -1)
