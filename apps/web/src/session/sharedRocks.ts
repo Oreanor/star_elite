@@ -33,6 +33,8 @@ interface RockNode {
   t: number
   r: number
   sh: number
+  /** Поколение раскола: без него осколок у нового хозяина снова кололся бы как целый камень. */
+  g?: number
   taken?: string
 }
 
@@ -80,7 +82,7 @@ export class SharedRocks {
       const age = Math.max(0, (serverNow() - node.t) / 1000)
       _vel.set(node.v[0]!, node.v[1]!, node.v[2]!)
       _pos.set(node.p[0]! - o.x, node.p[1]! - o.y, node.p[2]! - o.z).addScaledVector(_vel, age)
-      spawnNetRock(world, id, _pos, _vel, node.r, node.sh)
+      spawnNetRock(world, id, _pos, _vel, node.r, node.sh, typeof node.g === 'number' ? node.g : 0)
     }
     this.incoming.length = 0
 
@@ -105,6 +107,7 @@ export class SharedRocks {
             t: serverTimestamp(),
             r: a.radius,
             sh: a.shape,
+            g: a.gen ?? 0,
           }
         }
         if (Object.keys(batch).length > 0) void update(ref(rtdb, base), batch).catch(() => {})

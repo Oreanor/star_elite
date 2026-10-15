@@ -135,6 +135,10 @@ function pruneFoes(ai: AIState, world: World): void {
  */
 function considerEscape(e: ShipEntity, ai: AIState, world: World): void {
   if (ai.warpTimer >= 0 || e.spec.jumpRange <= 0) return
+  // Автобой — бот за штурвалом ИГРОКА: уйти из системы решает только сам игрок. Прежде
+  // пилот под огнём заряжал побег, `beginWarpDeparture` замораживал корабль, а портал
+  // (ищет борт в `world.ships`) игрока не находил — флаг ухода висел вечно, корабль стоял.
+  if (e === world.player) return
   if (ai.command !== 'default' || ai.escortOf != null || ai.orderedSoft) return
   if (ai.tasks.length > 0 && !ai.tasks[0]!.own) return
   if (e.acquaintanceId != null) return

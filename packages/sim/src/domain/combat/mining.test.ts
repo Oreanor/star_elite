@@ -175,3 +175,36 @@ describe('зачерпывание камня', () => {
     expect(pebble.alive).toBe(true)
   })
 })
+
+describe('раскол ограничен и заметен', () => {
+  // Пойманный баг: предел был только по метрам (10 м), а раскол уменьшает радиус на треть —
+  // глыба рассыпалась на (R/8)³ камешков: сотни со стометровой, миллион с исполина.
+  it('камень любого размера, расстрелянный до конца, даёт ограниченное число кусков', () => {
+    const world = empty()
+    rock(world, ASTEROID.RADIUS_MAX)
+    let shots = 0
+    for (;;) {
+      const next = world.asteroids.find((a) => a.alive)
+      if (!next) break
+      damageAsteroid(world, next, ASTEROID.HULL)
+      shots++
+    }
+    const cap = ASTEROID.SPLIT_MAX
+    // Целый + осколки каждого поколения: 1 + 4 + 16 при двух поколениях и четырёх кусках.
+    let bound = 0
+    for (let g = 0; g <= ASTEROID.SPLIT_MAX_GEN; g++) bound += cap ** g
+    expect(shots).toBeLessThanOrEqual(bound)
+  })
+
+  // Постоянные 7 м/с у крупной глыбы не видны: куски висели слипшимся комом. Осколки
+  // крупного камня обязаны разлетаться быстрее, чем осколки мелкого.
+  it('осколки крупного камня разлетаются быстрее, чем мелкого', () => {
+    const spread = (radius: number) => {
+      const world = empty()
+      shatter(world, rock(world, radius))
+      const pieces = world.asteroids.filter((a) => a.alive)
+      return pieces.reduce((s, a) => s + a.vel.length(), 0) / pieces.length
+    }
+    expect(spread(300)).toBeGreaterThan(spread(30) * 2)
+  })
+})

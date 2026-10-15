@@ -169,3 +169,24 @@ describe('автобой', () => {
     expect(autofightActive(world)).toBe(true)
   })
 })
+
+describe('автобой не уводит игрока прыжком', () => {
+  // Пойманный баг: бот за штурвалом игрока под огнём решал «сбежать прыжком», как пират.
+  // `beginWarpDeparture` обнулял ход и ставил `warpDeparting`, а портал ищет борт в
+  // `world.ships`, где игрока нет: прыжок не завершался, флаг висел вечно, шаг пропускал
+  // контроллер игрока — корабль стоял, и снятие автобоя (P) уже не помогало.
+  it('под огнём автобой не заряжает побег, и корабль остаётся управляемым', () => {
+    const world = withEnemy()
+    expect(world.player.spec.jumpRange).toBeGreaterThan(0)
+    lockContact(world, 'ship', world.ships[0]!.id)
+    world.targetFocus = 'contact'
+    expect(engageAutofight(world)).toBe(true)
+
+    const controllers = new Map([[world.player.id, aiController]])
+    for (let i = 0; i < 60 * 60 && world.player.alive; i++) {
+      world.player.lastHitAt = world.time // всё время «под огнём»
+      stepWorld(world, 1 / 60, controllers, { unassigned: aiController })
+      expect(world.player.warpDeparting).toBe(false)
+    }
+  })
+})

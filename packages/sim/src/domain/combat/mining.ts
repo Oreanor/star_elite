@@ -37,8 +37,17 @@ export function asteroidMass(radius: number): number {
 /** Радиус куска, который несёт заданную долю объёма исходного камня. */
 const radiusForShare = (radius: number, share: number) => radius * Math.cbrt(share)
 
-/** Можно ли расколоть дальше: мельче MIN_SPLIT — только уничтожение. */
-export const splittable = (a: AsteroidEntity) => a.radius > ASTEROID.MIN_SPLIT_RADIUS
+/** Можно ли расколоть дальше: мельче MIN_SPLIT или последнее поколение — только в руду. */
+export const splittable = (a: AsteroidEntity) =>
+  a.radius > ASTEROID.MIN_SPLIT_RADIUS && (a.gen ?? 0) < ASTEROID.SPLIT_MAX_GEN
+
+/** Скорость разлёта осколков камня этого радиуса, м/с. */
+const splitSpeed = (radius: number) => ASTEROID.SPLIT_SPEED + radius * ASTEROID.SPLIT_SPEED_PER_RADIUS
+
+/** Рассыпать камень в руду: по объёму, но не больше контейнера (остальное — пыль). */
+function crumble(world: World, a: AsteroidEntity): void {
+  spawnOrePod(world, a.pos, a.vel, Math.min(oreUnits(a.radius), ASTEROID.ORE_POD_MAX))
+}
 
 /**
  * Расколоть или уничтожить. Крупный → осколки (объём поровну); мелочь ≤ MIN_SPLIT
@@ -64,7 +73,7 @@ export function shatter(world: World, a: AsteroidEntity): void {
   spawnExplosion(world, a.pos, a.vel, a.radius * 0.12)
 
   if (!splittable(a)) {
-    spawnOrePod(world, a.pos, a.vel, oreUnits(a.radius))
+    crumble(world, a)
     return
   }
 
@@ -84,17 +93,20 @@ export function shatter(world: World, a: AsteroidEntity): void {
   _mean.divideScalar(pieces)
   for (const dir of dirs) dir.sub(_mean)
 
+  const speed = splitSpeed(a.radius)
+  const gen = (a.gen ?? 0) + 1
   for (const dir of dirs) {
     world.asteroids.push({
       id: world.ids.next(),
       kind: 'asteroid',
       pos: a.pos.clone().addScaledVector(dir, a.radius - radius),
-      vel: a.vel.clone().addScaledVector(dir, ASTEROID.SPLIT_SPEED),
+      vel: a.vel.clone().addScaledVector(dir, speed),
       quat: a.quat.clone(),
       spin: new Vector3(signed(rng), signed(rng), signed(rng)).multiplyScalar(0.35),
       radius,
       hull: ASTEROID.HULL,
       shape: Math.floor(rng() * ASTEROID.SHAPES),
+      gen,
       alive: true,
     })
   }
@@ -120,8 +132,9 @@ export function bombShatterAsteroid(world: World, a: AsteroidEntity): void {
   spawnExplosion(world, a.pos, a.vel, a.radius * 0.12)
 
   const half = Math.floor(a.radius / 2)
-  if (half < ASTEROID.MIN_SPLIT_RADIUS) {
-    spawnOrePod(world, a.pos, a.vel, oreUnits(a.radius))
+  const gen = (a.gen ?? 0) + 1
+  if (half < ASTEROID.MIN_SPLIT_RADIUS || gen > ASTEROID.SPLIT_MAX_GEN) {
+    crumble(world, a)
     return
   }
 
@@ -136,12 +149,13 @@ export function bombShatterAsteroid(world: World, a: AsteroidEntity): void {
       id: world.ids.next(),
       kind: 'asteroid',
       pos: a.pos.clone().addScaledVector(dir, a.radius - half),
-      vel: a.vel.clone().addScaledVector(dir, ASTEROID.SPLIT_SPEED),
+      vel: a.vel.clone().addScaledVector(dir, splitSpeed(a.radius)),
       quat: a.quat.clone(),
       spin: new Vector3(signed(rng), signed(rng), signed(rng)).multiplyScalar(0.35),
       radius: half,
       hull: ASTEROID.HULL,
       shape: Math.floor(rng() * ASTEROID.SHAPES),
+      gen,
       alive: true,
     })
   }
@@ -185,6 +199,7 @@ export function spawnNetRock(
   vel: Vector3,
   radius: number,
   shape: number,
+  gen = 0,
 ): AsteroidEntity {
   const a: AsteroidEntity = {
     id: world.ids.next(),
@@ -196,6 +211,7 @@ export function spawnNetRock(
     radius,
     hull: ASTEROID.HULL,
     shape,
+    gen,
     alive: true,
     netId,
   }
