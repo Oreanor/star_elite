@@ -243,11 +243,13 @@ export const NOTE_MAX_CHARS = 280
  * бота (сделка, приказ, просьба, факт…) идут через шину `applyCommand`, а она — сюда;
  * отдельных `remember*` на каждый вид нет, событие описывается данными `{kind, …}`.
  *
- * Момент штампуем сами (`calendarTime`), чтобы `at` не забыли на месте вызова. С безымянным
- * прохожим память не заводится — записи у него нет, событие молча гаснет (как и
- * `rememberPilot` пропускает чужого).
+ * Момент штампуем сами (`calendarTime`), чтобы `at` не забыли на месте вызова. Есть что
+ * помнить — значит, вы знакомы: запись знакомства заводится здесь же. Раньше у безымянного
+ * прохожего событие молча гасло — «запомни пароль» модель подтверждала, а писать было некуда,
+ * и после станции бот не помнил ничего. Так терялось любое событие любой команды.
  */
 export function recordEvent(world: World, ship: ShipEntity, event: WithoutAt<AcquaintanceEvent>): void {
+  rememberPilot(world, ship)
   const record = world.acquaintances.find((a) => a.id === ship.acquaintanceId)
   if (record) recordJournal(world, record, event)
 }

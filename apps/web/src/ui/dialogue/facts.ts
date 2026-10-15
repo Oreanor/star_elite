@@ -202,6 +202,8 @@ export interface NegotiationContext {
    * сверху. Бот обязан это помнить: без журнала он «забывал» только что данные деньги.
    */
   history: string[]
+  /** Записи бота: просили запомнить, выучил. В справочнике «история», рядом с событиями. */
+  remembered: string[]
   /**
    * ЧТО ТЫ ЕМУ ДОВЕРИЛ и он ещё не вернул: «Руда ×6». Отдельно от журнала нарочно — журнал
    * показывается хвостом последних событий и уходит из окна, а обязательство обязано висеть
@@ -590,6 +592,8 @@ function figurineSnapshot(ship: ShipEntity): FigurineHobbySnapshot {
  * Дату выводим из `at` (общий `calendarTime`) тем же календарём, что HUD.
  */
 const HISTORY_SHOWN = 8
+/** Сколько последних заметок держит память бота: она не резиновая, но и не лента из восьми. */
+const NOTES_KEPT = 20
 
 const ASK_PAST_RU: Record<string, string> = {
   surrender: 'требовал сдаться',
@@ -667,11 +671,20 @@ function entrustedLines(entrusted: readonly { commodityId: string; units: number
   })
 }
 
+const journalLine = (ev: AcquaintanceEvent) => `${formatGameDate(TIME.EPOCH_MS + ev.at * 1000 * TIME.SCALE)} — ${eventPhrase(ev)}`
+
+/** «Что между вами было» — СОБЫТИЯ, последние HISTORY_SHOWN. Справочник: может и забыться. */
 function historyLines(history: AcquaintanceEvent[]): string[] {
-  return history.slice(-HISTORY_SHOWN).map((ev) => {
-    const date = formatGameDate(TIME.EPOCH_MS + ev.at * 1000 * TIME.SCALE)
-    return `${date} — ${eventPhrase(ev)}`
-  })
+  return history.filter((ev) => ev.kind !== 'note').slice(-HISTORY_SHOWN).map(journalLine)
+}
+
+/**
+ * ЗАПИСИ бота — заметки журнала (просили запомнить, выучил, узнал). Отдельно от событий: в
+ * общей ленте из восьми их выталкивали сделки и дела, и записанный пароль пропадал. Лежат в
+ * том же справочнике «история» — бот ищет в них по `lookup`, а не носит всё в голове.
+ */
+function rememberedLines(history: AcquaintanceEvent[]): string[] {
+  return history.filter((ev) => ev.kind === 'note').slice(-NOTES_KEPT).map(journalLine)
 }
 
 function party(ship: ShipEntity, role: string): PartySnapshot {
@@ -960,6 +973,7 @@ export function buildContext(
     // сверх самого знакомства (сделка, просьба, факт) — тогда встреча памятная.
     metBefore: (record?.meetings ?? 0) > 1 || (record?.history.length ?? 0) > 1,
     history: record ? historyLines(record.history) : [],
+    remembered: record ? rememberedLines(record.history) : [],
     entrusted: record ? entrustedLines(record.entrusted) : [],
     job: other.offer ? jobFactsOf(other.offer, other.offer.reward, other.offer.days) : null,
     godVisitors: other.divine ? godVisitorLines() : [],

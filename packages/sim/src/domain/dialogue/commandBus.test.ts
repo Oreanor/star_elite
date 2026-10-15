@@ -60,6 +60,23 @@ describe('шина команд боту', () => {
     expect(note).toEqual({ kind: 'note', at: world.calendarTime, text: 'торгует рудой в системе Лейв' })
   })
 
+  // Пойманный баг: «запомни пароль» незнакомому боту — модель отвечала «запомнил», а записи
+  // знакомства не было, и `recordEvent` молча гасил факт. После станции бот не помнил ничего.
+  it('«запомни» незнакомому заводит знакомство и не теряет факт', () => {
+    const world = createWorld({
+      ...STARTER_SYSTEM,
+      belt: null,
+      patrols: [{ count: 1, at: [0, 0, -200], spread: 0, faction: 'neutral', name: 'Кто-то' }],
+    })
+    const ship = world.ships[0]!
+    expect(ship.acquaintanceId).toBeNull()
+
+    applyCommand(world, ship, { action: 'note', payload: { text: 'пароль — синий кит' } })
+
+    const rec = world.acquaintances.find((a) => a.id === ship.acquaintanceId)
+    expect(rec?.history.some((e) => e.kind === 'note' && e.text === 'пароль — синий кит')).toBe(true)
+  })
+
   it('stance меняет отношение в записи знакомого, а «hostile» делает мирного врагом', () => {
     const { world, ship } = withAcquaintance()
     const rec = world.acquaintances.find((a) => a.id === ship.acquaintanceId)!

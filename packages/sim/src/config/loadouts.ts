@@ -177,15 +177,6 @@ export function theseusLoadout(): Loadout {
   return fighterLoadout(THESEUS)
 }
 
-/** «Атлас» — корабль поколений: два лазера на оборону, два пилона, огромный трюм. */
-export function atlasLoadout(): Loadout {
-  return createLoadout(
-    ATLAS,
-    [ENGINE_STANDARD, RCS_STANDARD, SHIELD_STANDARD, ARMOUR_PLATE, CARGO_LARGE, HYPERDRIVE_BASIC],
-    [PULSE_LASER, PULSE_LASER, MISSILE_PYLON, MISSILE_PYLON],
-  )
-}
-
 /**
  * Каталог верфи: какие корпуса можно взять на станции и с какой сборкой. Цена пока
  * ноль — «дают погонять». Новый корабль — новая строка, а не ветка в коде (OCP):
@@ -206,7 +197,8 @@ export const SHIPYARD: readonly HullOffer[] = [
   { chassis: THESEUS, loadout: theseusLoadout, cost: THESEUS.cost },
   { chassis: ATHENA, loadout: athenaLoadout, cost: ATHENA.cost },
   { chassis: ICARUS, loadout: icarusLoadout, cost: ICARUS.cost },
-  { chassis: ATLAS, loadout: atlasLoadout, cost: ATLAS.cost },
+  // «Атлас» не продаётся: это кит — корабль поколений, город (см. `TITAN`). Его шасси живёт
+  // только в трафике как рейсовый грузовик (`freighterLoadout`).
   // Все корпуса теперь — загруженные GLB-модели. Процедурные (Мк III, Арес, Аполлон, Артемида,
   // Афина, Икар, Каркинос, Деметра) сняты из игры. «Каллиопа» (DRONE) корпусом не продаётся —
   // она спасательная капсула (аукс) и шасси боевого роя (`combat/drones.ts`), к верфи не относится.

@@ -27,7 +27,7 @@ describe('верфь корпусов', () => {
     // Ставим лёгкую сборку истребителя (с приводом): она заведомо влезет в грузовик,
     // и «успешную» смену не сорвёт грузоподъёмность — это проверяет отдельный тест.
     world.player.loadout = SHIPYARD.find((o) => o.chassis.id === 'hermes')!.loadout()
-    const freighter = SHIPYARD.find((o) => o.chassis.id === 'atlas')!
+    const freighter = SHIPYARD.find((o) => o.chassis.id === 'orion')!
 
     // В пустоте корпус не сменить: верфь есть только у станции.
     world.docked = false
@@ -37,7 +37,7 @@ describe('верфь корпусов', () => {
     world.docked = true
     world.player.hull = 1
     expect(swapHull(world, freighter.chassis, 0)).toBeNull()
-    expect(world.player.loadout.chassis.id).toBe('atlas')
+    expect(world.player.loadout.chassis.id).toBe('orion')
     // Свежий корабль заправлен под завязку: корпус, щит и заряд привода — на максимум.
     expect(world.player.hull).toBe(world.player.spec.hull.hull)
     expect(world.player.jumpCharge).toBe(world.player.spec.jumpRange)
@@ -49,7 +49,7 @@ describe('верфь корпусов', () => {
     const world = createWorld()
     world.docked = true
     world.credits = 0
-    const demeter = SHIPYARD.find((o) => o.chassis.id === 'atlas')!
+    const demeter = SHIPYARD.find((o) => o.chassis.id === 'orion')!
     expect(swapHull(world, demeter.chassis, 1)).toBe('no-money')
     // Игрок стартует на Spiritus Sanctus — корпус не сменился, денег нет.
     expect(world.player.loadout.chassis.id).toBe('aurora_one')

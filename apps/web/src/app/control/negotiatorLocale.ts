@@ -215,7 +215,7 @@ function makeRu(): NegotiatorLocale {
   const digestLabel: Record<ContextDigest, string> = {
     market: 'местные цены',
     neighbours: 'соседние системы',
-    history: 'журнал встреч',
+    history: 'журнал встреч и записи',
     worlds: 'планеты системы',
     guide: 'устройство мира',
   }
@@ -333,9 +333,15 @@ function makeRu(): NegotiatorLocale {
       return locale.digestStub('neighbours', digestForgotten(ctx, 'neighbours'))
     },
     historyBlock(ctx) {
-      if (!ctx.history.length) return ''
+      if (!ctx.history.length && !ctx.remembered.length) return ''
       if (digestLoaded(ctx, 'history')) {
-        return 'ЧТО МЕЖДУ ВАМИ БЫЛО:\n' + ctx.history.map((h) => `• ${h}`).join('\n')
+        // Записи — отдельно от событий: «помнишь пароль?» ищут здесь, и лента их не вытесняет.
+        return [
+          ctx.history.length ? 'ЧТО МЕЖДУ ВАМИ БЫЛО:\n' + ctx.history.map((h) => `• ${h}`).join('\n') : '',
+          ctx.remembered.length
+            ? 'ТВОИ ЗАПИСИ (просили запомнить, узнал сам). Чего здесь нет — того ты не помнишь:\n' + ctx.remembered.map((h) => `• ${h}`).join('\n')
+            : 'ТВОИ ЗАПИСИ: пусто — запомнить тебя ни о чём не просили.',
+        ].filter(Boolean).join('\n')
       }
       return locale.digestStub('history', digestForgotten(ctx, 'history'))
     },
@@ -605,7 +611,7 @@ function makeEn(): NegotiatorLocale {
   const digestLabel: Record<ContextDigest, string> = {
     market: 'local prices',
     neighbours: 'neighbour systems',
-    history: 'meeting log',
+    history: 'meeting log and notes',
     worlds: 'system worlds',
     guide: 'how the world works',
   }
@@ -719,9 +725,14 @@ function makeEn(): NegotiatorLocale {
       return locale.digestStub('neighbours', digestForgotten(ctx, 'neighbours'))
     },
     historyBlock(ctx) {
-      if (!ctx.history.length) return ''
+      if (!ctx.history.length && !ctx.remembered.length) return ''
       if (digestLoaded(ctx, 'history')) {
-        return 'BETWEEN YOU:\n' + ctx.history.map((h) => `• ${h}`).join('\n')
+        return [
+          ctx.history.length ? 'BETWEEN YOU:\n' + ctx.history.map((h) => `• ${h}`).join('\n') : '',
+          ctx.remembered.length
+            ? 'YOUR NOTES (asked to remember, learned yourself). What is not here, you do not remember:\n' + ctx.remembered.map((h) => `• ${h}`).join('\n')
+            : 'YOUR NOTES: empty — nobody asked you to remember anything.',
+        ].filter(Boolean).join('\n')
       }
       return locale.digestStub('history', digestForgotten(ctx, 'history'))
     },

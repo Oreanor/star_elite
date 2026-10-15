@@ -43,6 +43,8 @@ import { galaxyRadar, resetGalaxyRadar } from './galaxyRadar'
  * Буфер: сначала главные (индекс = systemIndex), затем спутники двойных.
  */
 const vertex = /* glsl */ `
+#include <common>
+#include <logdepthbuf_pars_vertex>
 attribute float size; // радиус в св.г слоя = R·STAR_INFLATE / LY_TO_M
 attribute float boost; // 0 = спокойная, 1 = активная (jumpTarget)
 attribute float lod;   // 1 = рисует меш — точку гасим
@@ -72,6 +74,7 @@ void main() {
   vT = clamp((uRadius - dist) / max(uEdge, 1.0), 0.0, 1.0);
   vec4 mv = viewMatrix * world;
   gl_Position = projectionMatrix * mv;
+  #include <logdepthbuf_vertex>
 
   if (lod > 0.5 || vT <= 0.0) {
     gl_PointSize = 0.0;
@@ -91,6 +94,8 @@ void main() {
 `
 
 const fragment = /* glsl */ `
+#include <common>
+#include <logdepthbuf_pars_fragment>
 
 uniform float uTime;
 uniform float uTwinkleAmp;
@@ -111,6 +116,7 @@ varying float vPhase;
 varying float vBoost;
 
 void main() {
+  #include <logdepthbuf_fragment>
   if (vT <= 0.0) discard;
   vec2 pc = gl_PointCoord - vec2(0.5);
   float r = length(pc) * 2.0;
@@ -355,7 +361,10 @@ export function GalaxyLayer() {
           uTwinkleSpread: { value: GALAXY_LAYER.TWINKLE_SPEED_SPREAD },
         },
         transparent: true,
-        depthTest: false,
+        // Тест глубины ВКЛЮЧЁН: прозрачное three рисует после непрозрачного, как ни ставь
+        // renderOrder, — без теста звёзды ложились поверх корабля. Глубина — логарифмическая,
+        // как у всей сцены (`logdepthbuf_*` в шейдерах): иначе с кораблём она несравнима.
+        depthTest: true,
         depthWrite: false,
         vertexColors: true,
         blending: AdditiveBlending,
@@ -367,7 +376,6 @@ export function GalaxyLayer() {
 
   const backgroundGlowMaterial = useMemo(() => {
     const glow = material.clone()
-    glow.depthTest = true
     glow.uniforms.uSpeckPx!.value = 1
     glow.uniforms.uMaxPx!.value = GALAXY_LAYER.BACKGROUND_GLOW_MAX_PX
     glow.uniforms.uGlowPaddingPx!.value = GALAXY_LAYER.BACKGROUND_GLOW_PADDING_PX

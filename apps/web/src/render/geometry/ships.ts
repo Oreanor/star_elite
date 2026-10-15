@@ -373,7 +373,7 @@ export function preloadHulls(): void {
 }
 
 /** Геометрия GLB-корпуса, если загрузился; иначе null — вызывающий падает на заглушку. */
-function glbGeometry(id: string): BufferGeometry | null {
+export function glbGeometry(id: string): BufferGeometry | null {
   return glbCache.get(id)?.geometry ?? null
 }
 
