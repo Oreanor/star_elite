@@ -180,6 +180,21 @@ function stepBush(session: Session): void {
 }
 
 /**
+ * В КОМНАТЕ корабль стоит в нуле и ПОСЛЕ шага мира. Система, из которой влетел, под тёмным
+ * задником живёт дальше: опорное тело едет по орбите, и такт переносит игрока вместе с ним, а
+ * сдвиг отдаёт камере (`originShift`). Борт `stepBush` прибивал к нулю лишь ДО шага, а камеру
+ * не возвращал никто — её уносило орбитой, пружина держала на пределе отставания (полтора км),
+ * и вход в дыру выглядел как пустота с решёткой где-то вдали. В комнате этого переноса нет.
+ */
+function holdInRoom(session: Session): void {
+  if (!session.bush.active) return
+  const s = session.world.player.state
+  s.pos.set(0, 0, 0)
+  s.vel.set(0, 0, 0)
+  session.world.originShift.set(0, 0, 0)
+}
+
+/**
  * ВЫХОД ИЗ ДЫРЫ В ГАЛАКТИКУ, к которой привёл навигатор.
  *
  * Галактика — это ЗЕРНО (`GalaxyNode.seed`): подменяем его миру, и все 2500 систем выводятся
@@ -309,6 +324,7 @@ export function Simulation() {
       // мышь на меню, пилот не рулит. Ставим ПОСЛЕ syncControllers, чтобы пересборка не вернула ввод.
       controllers.set(world.player.id, helmController(session, true))
       stepWorld(world, dt, controllers, { onTick: torusTick, unassigned: aiController })
+      holdInRoom(session)
       camera.position.add(world.originShift)
       return
     }
@@ -440,6 +456,7 @@ export function Simulation() {
 
     // Накопитель и фиксированный шаг — внутри stepWorld.
     stepWorld(world, dt, controllers, { onTick: torusTick, unassigned: aiController })
+    holdInRoom(session)
 
     // Мир мог сдвинуться (плавающее начало координат). Камера живёт в мировых
     // координатах, и без этой поправки пружина преследования полсекунды тащит её
