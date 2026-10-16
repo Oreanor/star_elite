@@ -220,11 +220,12 @@ export function landingCue(
   if (!p.alive || p.landedOn || p.autoland !== null) return null
   if (!landingScaleOk(p)) return null
 
-  const prompt = nearestLandableWhere(
-    world,
-    p,
-    (altitude) => altitude <= LANDING.PROMPT_HI && altitude >= LANDING.PROMPT_LO,
-  )
+  // Сперва — окно посадки (PROMPT_LO…PROMPT_HI): соседняя глыба внизу не перебивает камень в
+  // полосе высот. Нет никого в окне — годится и ниже него: ховер садит на HOVER_ALT (250 м),
+  // ниже PROMPT_LO, и после отрыва L иначе не брался бы, пока не поднимешься.
+  const prompt =
+    nearestLandableWhere(world, p, (altitude) => altitude <= LANDING.PROMPT_HI && altitude >= LANDING.PROMPT_LO) ??
+    nearestLandableWhere(world, p, (altitude) => altitude < LANDING.PROMPT_LO && altitude >= 0)
   if (prompt) return { ...prompt, phase: 'prompt' }
 
   const approach = nearestLandableWhere(

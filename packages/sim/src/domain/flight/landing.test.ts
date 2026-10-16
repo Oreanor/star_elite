@@ -53,11 +53,17 @@ function moonOf(world: World): BodyEntity {
 }
 
 /** Заводит корабль в окно автопосадки над телом и крутит шаги, пока он не сядет. */
+/**
+ * Откуда жать L — середина окна посадки. Ховер садит НИЖЕ (HOVER_ALT), поэтому стартовать с
+ * самой высоты ховера нельзя: она вне окна, и L там не берётся.
+ */
+const ARM_ALT = (LANDING.PROMPT_LO + LANDING.PROMPT_HI) / 2
+
 function landOn(world: World, body: BodyEntity): void {
   const player = world.player
   player.state.pos
     .copy(body.pos)
-    .add(new Vector3(body.radius + effectiveRadius(player) + LANDING.HOVER_ALT, 0, 0))
+    .add(new Vector3(body.radius + effectiveRadius(player) + ARM_ALT, 0, 0))
   player.state.vel.set(0, 0, 0)
   player.controls.throttle = 0
   if (!armAutoland(world)) throw new Error('автопосадка не в окне высот')
@@ -143,7 +149,7 @@ describe('посадка на поверхность', () => {
     const solid = meshSolidRadius(rock.radius)
     player.state.pos
       .copy(rock.pos)
-      .add(new Vector3(solid + effectiveRadius(player) + LANDING.HOVER_ALT, 0, 0))
+      .add(new Vector3(solid + effectiveRadius(player) + ARM_ALT, 0, 0))
     player.state.vel.set(0, 0, 0)
     player.controls.throttle = 0
     expect(armAutoland(world)).toBe(true)
@@ -181,7 +187,7 @@ describe('посадка на поверхность', () => {
     world.asteroids.push(pebble)
     player.state.pos
       .copy(pebble.pos)
-      .add(new Vector3(meshSolidRadius(pebble.radius) + er + LANDING.HOVER_ALT, 0, 0))
+      .add(new Vector3(meshSolidRadius(pebble.radius) + er + ARM_ALT, 0, 0))
     expect(canAutoland(world)).toBe(false)
   })
 
@@ -199,7 +205,7 @@ describe('посадка на поверхность', () => {
     for (const rock of world.warBases) rock.pos.add(new Vector3(1e9, 0, 0))
     player.state.pos
       .copy(statue!.pos)
-      .add(new Vector3(statue!.radius + effectiveRadius(player) + LANDING.HOVER_ALT, 0, 0))
+      .add(new Vector3(statue!.radius + effectiveRadius(player) + ARM_ALT, 0, 0))
     player.state.vel.set(0, 0, 0)
     expect(canAutoland(world)).toBe(false)
     expect(armAutoland(world)).toBe(false)
@@ -214,7 +220,7 @@ describe('посадка на поверхность', () => {
     const solid = warBaseSolidRadius(rock!.radius)
     player.state.pos
       .copy(rock!.pos)
-      .add(new Vector3(solid + effectiveRadius(player) + LANDING.HOVER_ALT, 0, 0))
+      .add(new Vector3(solid + effectiveRadius(player) + ARM_ALT, 0, 0))
     player.state.vel.set(0, 0, 0)
     player.controls.throttle = 0
     expect(armAutoland(world)).toBe(true)
@@ -241,7 +247,7 @@ describe('посадка на поверхность', () => {
       .add(new Vector3(closeSolid + effectiveRadius(player) + 80, 0, 0))
     inWindow.pos
       .copy(player.state.pos)
-      .add(new Vector3(windowSolid + effectiveRadius(player) + LANDING.HOVER_ALT, 0, 0))
+      .add(new Vector3(windowSolid + effectiveRadius(player) + ARM_ALT, 0, 0))
 
     expect(canAutoland(world)).toBe(true)
     const target = landingPromptTarget(world)
@@ -261,7 +267,7 @@ describe('посадка на поверхность', () => {
     const solid = meshSolidRadius(rock.radius)
     player.state.pos
       .copy(rock.pos)
-      .add(new Vector3(solid + effectiveRadius(player) + LANDING.HOVER_ALT, 0, 0))
+      .add(new Vector3(solid + effectiveRadius(player) + ARM_ALT, 0, 0))
     player.state.vel.set(0, 0, 0)
     expect(armAutoland(world)).toBe(true)
     for (let i = 0; i < 3000 && !player.landedOn; i++) {
@@ -282,7 +288,7 @@ describe('посадка на поверхность', () => {
     const player = world.player
     player.state.pos
       .copy(moon.pos)
-      .add(new Vector3(moon.radius + effectiveRadius(player) + LANDING.HOVER_ALT, 0, 0))
+      .add(new Vector3(moon.radius + effectiveRadius(player) + ARM_ALT, 0, 0))
     player.state.vel.set(0, 0, 0)
     expect(canAutoland(world)).toBe(true)
 
@@ -309,7 +315,7 @@ describe('посадка на поверхность', () => {
 
     rock.pos
       .copy(player.state.pos)
-      .add(new Vector3(solid + er + LANDING.HOVER_ALT, 0, 0))
+      .add(new Vector3(solid + er + ARM_ALT, 0, 0))
     const ready = landingCue(world)
     expect(ready?.phase).toBe('prompt')
     expect(canAutoland(world)).toBe(true)
@@ -322,7 +328,7 @@ describe('посадка на поверхность', () => {
     const solid = meshSolidRadius(rock.radius)
     player.state.pos
       .copy(rock.pos)
-      .add(new Vector3(solid + effectiveRadius(player) + LANDING.HOVER_ALT, 0, 0))
+      .add(new Vector3(solid + effectiveRadius(player) + ARM_ALT, 0, 0))
     player.state.vel.set(0, 0, 0)
     expect(armAutoland(world)).toBe(true)
     for (let i = 0; i < 3000 && !player.landedOn; i++) {
@@ -352,7 +358,7 @@ describe('посадка на поверхность', () => {
     const er = effectiveRadius(player)
     player.state.pos
       .copy(rock.pos)
-      .add(new Vector3(solid + er + LANDING.HOVER_ALT, 0, 0))
+      .add(new Vector3(solid + er + ARM_ALT, 0, 0))
     player.state.vel.set(0, 0, 0)
     expect(armAutoland(world)).toBe(true)
     for (let i = 0; i < 3000 && !player.landedOn; i++) {
