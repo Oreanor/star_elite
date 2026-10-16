@@ -8,18 +8,19 @@ import type { Chassis } from './schema'
  */
 
 /**
- * «Аврора One» — серийный корпус: длинный острый нос, дельта-
+ * «Ника» (id `aurora_one` — прежнее имя «Аврора One», id не меняем ради сейвов и модели) —
+ * СТАРТОВЫЙ корпус, из дешёвых: длинный острый нос, дельта-
  * крыло с поднятыми законцовками, спаренные гондолы и два наклонных киля. Геометрия —
  * НЕ процедурная, а загруженный меш (`aurora_one.glb`), поэтому корпус живёт как обычная
  * запись каталога, а рендер сам знает по id, что грузить сетку, а не собирать из примитивов.
  */
 export const AURORA_ONE: Chassis = {
   id: 'aurora_one',
-  name: 'Аврора One',
+  name: 'Ника',
   class: 3,
   baseMass: 8,
-  baseHull: 225,
-  cargoCapacity: 22,
+  baseHull: 140,
+  cargoCapacity: 18,
   auxCapacity: 100,
   radius: 12,
   inertiaFactor: 1.0,
@@ -55,7 +56,7 @@ export const AURORA_ONE: Chassis = {
     { kind: 'hyperdrive', maxClass: 3 },
     { kind: 'aux', maxClass: 3 },
   ],
-  cost: 150_000,
+  cost: 35_000,
 }
 
 /**
@@ -157,7 +158,7 @@ const FIGHTER_SLOTS: Chassis['slots'] = [
 
 /**
  * Цены корпусов — ЛЕСТНИЦА в разы, а не плюс-минус десять процентов: от «Икара» за 25 тыс до
- * «Гермеса» за 400; «Афина» — стартовый корабль игрока, вторая ступень снизу. Иначе менять корабль незачем — следующий почти не лучше и почти не дороже.
+ * «Гермеса» за 400; «Ника» — стартовый корабль игрока, вторая ступень снизу. Иначе менять корабль незачем — следующий почти не лучше и почти не дороже.
  * Прочность, трюм и аукс растут вместе с ценой.
  *
  * «Гермес» — тяжёлый ВОЕННЫЙ корабль, а не скороход: класс 3, толстая рама, два слота брони
@@ -211,9 +212,9 @@ export const ORION: Chassis = {
  * оснастки (K) — там их и поправят, не трогая ни бой, ни верфь.
  */
 export const ATHENA: Chassis = {
-  id: 'athena', name: 'Афина', class: 2, baseMass: 6, baseHull: 110, cargoCapacity: 14, auxCapacity: 100,
+  id: 'athena', name: 'Афина', class: 2, baseMass: 6, baseHull: 190, cargoCapacity: 18, auxCapacity: 120,
   radius: 8, inertiaFactor: 0.85, assistLateralDamp: 1.25, assistSpeedDamp: 0.35,
-  hardpoints: THESEUS_HARDPOINTS, slots: FIGHTER_SLOTS, cost: 35_000,
+  hardpoints: THESEUS_HARDPOINTS, slots: FIGHTER_SLOTS, cost: 130_000,
 }
 
 /** «Икар» — легче и вёртче «Афины», но и шкура тоньше: скорость вместо брони. */

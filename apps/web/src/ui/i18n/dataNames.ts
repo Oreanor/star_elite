@@ -146,6 +146,7 @@ export function professionName(profession: string | undefined): string {
 const CHASSIS_EN: Record<string, string> = {
   'Аврора Мк III': 'Aurora Mk III',
   'Аврора One': 'Aurora One',
+  'Ника': 'Nike',
   'Арес': 'Ares',
   'Деметра': 'Demeter',
   'Каллиопа': 'Calliope',
