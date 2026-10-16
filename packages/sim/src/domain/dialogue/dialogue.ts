@@ -1,6 +1,6 @@
 import { DIALOGUE } from '../../config/dialogue'
 import { phrase, type Phrase } from './phrase'
-import { clamp } from '../../core/math'
+import { clamp, roundMoney } from '../../core/math'
 import { createAIState } from '../ai/types'
 import { clearOwnTasks } from '../ai/tasks'
 import { healthFraction, shieldFraction } from '../combat/damage'
@@ -138,7 +138,7 @@ export function escortFee(world: World, other: ShipEntity): number | null {
   let factor = 1
   if (other.persona.disposition === 'greedy') factor *= DIALOGUE.ESCORT_FEE_GREEDY
   if (m === 'warm') factor *= DIALOGUE.ESCORT_FEE_FRIENDLY
-  return Math.round(DIALOGUE.ESCORT_FEE * factor)
+  return roundMoney(DIALOGUE.ESCORT_FEE * factor)
 }
 
 /** Реакции «из боя»: угроза, грабёж, мольба. В доке станции им не место (`linesFor`). */

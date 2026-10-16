@@ -9,6 +9,7 @@ import { aiController } from '../ai/pilot'
 import { stepWorld } from '../sim'
 import { NULL_CONTROLLER } from '../sim/controller'
 import { rollOffer } from './offers'
+import { roundMoney } from '../../core/math'
 import type { ContractOffer } from './types'
 
 /**
@@ -50,6 +51,22 @@ describe('дела', () => {
     for (const w of [a, b]) w.ships[0]!.originKind = 'trader'
     const offers = [a, b].map((w) => Array.from({ length: 6 }, () => JSON.stringify(rollOffer(w, w.ships[0]!))))
     expect(offers[0]).toEqual(offers[1])
+  })
+
+  it('награды круглые, как их назвал бы человек', () => {
+    // Пойманное: «проводи — заплачу 3254 кр». Никто так не торгуется; суммы — по `roundMoney`.
+    const w = worldWith('neutral')
+    let seen = 0
+    for (const kind of ['trader', 'miner', 'patrol', 'courier']) {
+      w.ships[0]!.originKind = kind
+      for (let i = 0; i < 200; i++) {
+        const o = rollOffer(w, w.ships[0]!)
+        if (!o) continue
+        seen++
+        expect(roundMoney(o.reward), JSON.stringify(o)).toBe(o.reward)
+      }
+    }
+    expect(seen).toBeGreaterThan(0)
   })
 
   it('доставка: груз в трюм при согласии, плата — на станции назначения', () => {

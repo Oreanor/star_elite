@@ -1,7 +1,7 @@
 import { CONTRACTS } from '../../config/contracts'
 import { CONTACTS } from '../../config/contacts'
 import { CORE_INDEX, GALAXY } from '../../config/galaxy'
-import { weightedPick, type Rng } from '../../core/math'
+import { roundMoney, weightedPick, type Rng } from '../../core/math'
 import { COMMODITIES, type Commodity } from '../cargo/items'
 import { generateSystem } from '../galaxy/generate'
 import { distanceLy, placeSystem, type Spot3 } from '../galaxy/shape'
@@ -95,6 +95,7 @@ export function pickDestination(world: World, rng: Rng): { index: number; name: 
 /** Расстояние для речи и карточки, св.лет: десятые — точнее не говорят. */
 const roundLy = (ly: number) => Math.round(ly * 10) / 10
 
+
 /** Бросить оферту новорождённому борту. null — дела у него нет (так чаще всего). */
 export function rollOffer(world: World, ship: ShipEntity): ContractOffer | null {
   const table = BY_ROLE[ship.originKind ?? '']
@@ -109,7 +110,7 @@ export function rollOffer(world: World, ship: ShipEntity): ContractOffer | null 
       if (!dest) return null
       const good = GOODS[Math.floor(rng() * GOODS.length)]!
       const units = between(rng, CONTRACTS.DELIVER_UNITS)
-      const reward = Math.round(
+      const reward = roundMoney(
         CONTRACTS.DELIVER_BASE + units * good.basePrice * CONTRACTS.DELIVER_CARGO_SHARE + dest.ly * CONTRACTS.DELIVER_PER_LY,
       )
       const days = Math.ceil(CONTRACTS.DAYS_DELIVER + dest.ly * CONTRACTS.DAYS_PER_LY)
@@ -120,13 +121,13 @@ export function rollOffer(world: World, ship: ShipEntity): ContractOffer | null 
       if (!world.bodies.some((b) => b.kind === 'station')) return null
       const good = GOODS[Math.floor(rng() * GOODS.length)]!
       const units = between(rng, CONTRACTS.FETCH_UNITS)
-      const reward = Math.round(good.basePrice * CONTRACTS.FETCH_MARKUP)
+      const reward = roundMoney(good.basePrice * CONTRACTS.FETCH_MARKUP)
       return { kind: 'fetch', commodityId: good.id, units, reward, days: CONTRACTS.DAYS_FETCH, revealed: false }
     }
     case 'escort': {
       const dest = pickDestination(world, rng)
       if (!dest) return null
-      const reward = Math.round(CONTRACTS.ESCORT_BASE + dest.ly * CONTRACTS.ESCORT_PER_LY)
+      const reward = roundMoney(CONTRACTS.ESCORT_BASE + dest.ly * CONTRACTS.ESCORT_PER_LY)
       return { kind: 'escort', toSystem: dest.index, toSystemName: dest.name, ly: roundLy(dest.ly), reward, days: CONTRACTS.DAYS_ESCORT, revealed: false }
     }
     case 'hunt': {

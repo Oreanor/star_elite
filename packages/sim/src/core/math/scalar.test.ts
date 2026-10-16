@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { makeRng } from './random'
 import { deadzoneScale, wrapAround } from './scalar'
+import { roundMoney } from './money'
 
 /**
  * Регрессия рендера, пойманная в полёте. Ближняя пыль оборачивается вокруг игрока
@@ -76,5 +77,18 @@ describe('deadzoneScale', () => {
       expect(command).toBeLessThanOrEqual(1 + 1e-9)
       previous = command
     }
+  })
+})
+
+describe('roundMoney', () => {
+  // Награды и цены найма называют как люди: «три тысячи», «две с половиной», а не 3254.
+  it('крупное — до пятисот, среднее — до сотни, мелочь не слипается в ноль', () => {
+    expect(roundMoney(3254)).toBe(3000)
+    expect(roundMoney(2600)).toBe(2500)
+    expect(roundMoney(1040)).toBe(1000)
+    expect(roundMoney(874)).toBe(850)
+    expect(roundMoney(306)).toBe(300)
+    expect(roundMoney(17)).toBe(17)
+    expect(roundMoney(3)).toBeGreaterThan(0)
   })
 })

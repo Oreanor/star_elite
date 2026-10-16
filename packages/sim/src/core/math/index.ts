@@ -1,6 +1,7 @@
 export { approach, clamp, damp, deadzoneScale, lerp, smoothstep, wrapAngle, wrapAround } from './scalar'
 export { interceptTime, raySphere } from './intersect'
 export { chanceWithin, makeRng, randomUnit, range, signed, weightedPick, type Rng } from './random'
+export { roundMoney } from './money'
 // H³ на гиперболоиде Минковского. Экспортируется наружу, потому что РЕНДЕР куста
 // проецирует узлы вселенной сам (`toBall`), а для этого ему нужна та же алгебра,
 // что у домена: перенести кадр в игрока (`invertLorentz`, `applyMat`) и построить
