@@ -122,3 +122,13 @@ describe('перестановка своего железа', () => {
     if (before) expect(p.hold.items.some((i) => i.kind === 'module' && i.module.id === before.id)).toBe(true)
   })
 })
+
+describe('грузоподъёмность', () => {
+  it('итог трюма — корпус + контейнеры − масса обвеса, а не сумма контейнеров', () => {
+    // Пойманное: «отсеки 19 и 4, а в трюме 17» — итог честный, но без раскладки читался ошибкой.
+    const world = createWorld({ ...STARTER_SYSTEM, patrols: [], belt: null })
+    const { cargoBudget: b, cargoCapacity } = world.player.spec
+    expect(cargoCapacity).toBe(Math.max(0, Math.floor(b.chassis + b.racks - b.equipment)))
+    expect(b.equipment).toBeGreaterThan(0)
+  })
+})

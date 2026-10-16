@@ -61,7 +61,13 @@ export interface ShipSpec {
   mounts: WeaponMount[]
   /** Полная масса со снаряжением и грузом, т. */
   mass: number
+  /** Сколько тонн товара влезет: `cargoBudget` за вычетом, округлено вниз, не меньше нуля. */
   cargoCapacity: number
+  /**
+   * Из чего сложена грузоподъёмность, т: корпус + контейнеры − масса обвеса. Итог не равен
+   * сумме контейнеров, и без раскладки «17 т при отсеках 19 и 4» читалось как ошибка.
+   */
+  cargoBudget: { chassis: number; racks: number; equipment: number }
   /** Дальность прыжка, св. лет. Ноль — привода нет, межзвёздный перелёт невозможен. */
   jumpRange: number
   /** Расход батарей на маскировку, ед/с. Ноль — поля нет, корабль виден всегда. */
@@ -167,13 +173,14 @@ export function deriveShipSpec(loadout: Loadout, cargoMass = 0, up: HullUpgrades
   // массой (без пустой массы корпуса); контейнеры добавляют вместимость (их `capacity` ≈
   // 10× массы); остаток — сколько тонн товара влезет. Пустеет до нуля, но не уходит в минус.
   const equipmentMass = mass - cargoMass - chassis.baseMass // = dryMass − baseMass = обвес
-  let cargoCapacity = chassis.cargoCapacity * statMult(up.cargo) - equipmentMass
-  for (const rack of findCargoRacks(loadout)) cargoCapacity += rack.capacity
+  let racks = 0
+  for (const rack of findCargoRacks(loadout)) racks += rack.capacity
+  const cargoBudget = { chassis: chassis.cargoCapacity * statMult(up.cargo), racks, equipment: equipmentMass }
   // Трюм считается целыми тоннами (товар — целые единицы): округляем ВНИЗ, не в минус.
-  cargoCapacity = Math.max(0, Math.floor(cargoCapacity))
+  const cargoCapacity = Math.max(0, Math.floor(cargoBudget.chassis + racks - equipmentMass))
 
   return {
-    tuning, hull, power, mounts, mass, cargoCapacity,
+    tuning, hull, power, mounts, mass, cargoCapacity, cargoBudget,
     jumpRange: findHyperdrive(loadout)?.jumpRange ?? 0,
     cloakDrain: findCloak(loadout)?.drain ?? 0,
     hasMielophone: findMielophone(loadout) != null,

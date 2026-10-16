@@ -197,7 +197,7 @@ export function ShipScreen({
             slots={slots}
             onOpen={setOpenKey}
             interactive={slotsInteractive}
-            cargoCapacity={(owned ? player.spec : previewSpec).cargoCapacity}
+            cargo={owned ? player.spec : previewSpec}
           />
           {/* ГРУЗ у причала уехал в МАГАЗИН, под товары: там торгуют, и трюм нужен рядом с
               прилавком. В полёте магазина нет, а трюм есть — и он остаётся здесь, под

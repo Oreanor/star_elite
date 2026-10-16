@@ -6,6 +6,7 @@ import {
   type Loadout,
   type ModuleKind,
   type ShipModule,
+  type ShipSpec,
 } from '@elite/sim'
 import { t, type Key } from '../i18n'
 import { UI } from '../theme'
@@ -134,14 +135,14 @@ export function SlotGrid({
   slots,
   onOpen,
   interactive,
-  cargoCapacity,
+  cargo,
 }: {
   /**
    * Вместимость отсека — та же, что у самого отсека (`spec.cargoCapacity`). НЕ сумма
-   * контейнеров: оборудование ест грузоподъёмность корпуса своей массой, и сумма
-   * контейнеров врала бы — карточка 41 т, а в отсеке 33.
+   * контейнеров: оборудование ест грузоподъёмность корпуса своей массой. Потому под отсеком
+   * и раскладка: корпус + контейнеры − обвес — иначе «17 т при отсеках 19 и 4» читалось ошибкой.
    */
-  cargoCapacity: number
+  cargo: Pick<ShipSpec, 'cargoCapacity' | 'cargoBudget'>
   slots: readonly SlotView[]
   onOpen: (key: string) => void
   /** Клик открывает мастерскую только у СВОЕГО борта на верфи. Чужой корпус — на просмотр. */
@@ -155,7 +156,7 @@ export function SlotGrid({
       <div className="grid grid-cols-2 gap-2">
         {cards.map(({ cat, subs }) => {
           const filled = subs.filter((s) => s.module)
-          const cargoTons = cat === 'cargo' ? cargoCapacity : null
+          const cargoTons = cat === 'cargo' ? cargo.cargoCapacity : null
           return (
             <div key={cat} className="flex flex-col gap-1 border px-2.5 py-2" style={{ borderColor: DIM }}>
               {/* Шапка карточки: имя категории и «занято/всего», если под-слотов больше одного. */}
@@ -197,7 +198,10 @@ export function SlotGrid({
                         ? `−${Math.round(moduleFault(s.module) * 100)}%`
                         : s.ammoTotal !== undefined
                           ? formatStat('ammo', s.ammoTotal)
-                          : formatStat('mass', s.module.mass)}
+                          : s.module.kind === 'cargo'
+                            ? // Контейнер — что он ДОБАВЛЯЕТ к трюму, а не своя масса: её и так считает обвес.
+                              `+${formatStat('cargo', s.module.capacity)}`
+                            : formatStat('mass', s.module.mass)}
                     </span>
                   )}
                 </button>
@@ -205,7 +209,7 @@ export function SlotGrid({
               {/* Груз: суммарный тоннаж установленных отсеков — то, что реально влезет. */}
               {cargoTons !== null && filled.length > 0 && (
                 <span className="text-[0.6rem]" style={{ color: DIM }}>
-                  {t('ship.cargoTotal', { tons: formatStat('cargo', cargoTons) })}
+                  {cargoBudgetText(cargo)}
                 </span>
               )}
             </div>
@@ -214,4 +218,15 @@ export function SlotGrid({
       </div>
     </section>
   )
+}
+
+/**
+ * «корпус 22 + отсеки 23 − обвес 28 = 17 т». Обвес — ОСТАТОК суммы до итога, а не своё
+ * округление: иначе три независимо округлённых числа расходились бы с итогом на тонну.
+ */
+function cargoBudgetText({ cargoCapacity, cargoBudget }: Pick<ShipSpec, 'cargoCapacity' | 'cargoBudget'>): string {
+  const chassis = Math.round(cargoBudget.chassis)
+  const racks = Math.round(cargoBudget.racks)
+  const equipment = Math.max(0, chassis + racks - cargoCapacity)
+  return t('ship.cargoBudget', { chassis, racks, equipment, tons: formatStat('cargo', cargoCapacity) })
 }

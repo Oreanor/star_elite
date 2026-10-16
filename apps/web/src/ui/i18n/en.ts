@@ -416,7 +416,7 @@ export const EN: Record<keyof typeof RU, string> = {
   'ship.close': 'CLOSE',
   'ship.tab.modules': 'MODULES',
   'ship.slotEmpty': 'none',
-  'ship.cargoTotal': 'hold {tons}',
+  'ship.cargoBudget': 'hull {chassis} + racks {racks} − fit {equipment} = {tons}',
   'ship.broken': 'BROKEN {pct}%',
   'ship.repair.partRepaired': 'Part restored.',
   'ship.repair.partBotched': 'Botched job: not repaired, and they broke the part further. No charge, but the next repair will cost more.',

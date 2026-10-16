@@ -416,7 +416,7 @@ export const DE: Record<keyof typeof RU, string> = {
   'ship.close': 'SCHLIESSEN',
   'ship.tab.modules': 'MODULE',
   'ship.slotEmpty': 'keins',
-  'ship.cargoTotal': 'Laderaum {tons}',
+  'ship.cargoBudget': 'Rumpf {chassis} + Module {racks} − Ausrüstung {equipment} = {tons}',
   'ship.broken': 'DEFEKT {pct}%',
   'ship.repair.partRepaired': 'Teil wiederhergestellt.',
   'ship.repair.partBotched': 'Pfusch: nicht repariert und das Teil weiter beschädigt. Kein Entgelt, doch die nächste Reparatur wird teurer.',
