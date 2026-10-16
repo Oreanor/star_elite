@@ -67,6 +67,26 @@ function hold(world: World, seconds: number): void {
 }
 
 describe('лучи-переделки', () => {
+  it('статую-исполина лучи достают с сотен км — и уменьшают, и увеличивают', () => {
+    // Пойманное: дальность была 10 км. Статуя радиусом 50 км — пару раз ужал изнутри её сферы,
+    // вышел наружу, и луч больше не доставал; увеличивать с сотен км не удавалось вовсе.
+    for (const [ray, grows] of [[SHRINK_RAY, false], [GROW_RAY, true]] as const) {
+      const world = scene()
+      world.ships = []
+      const statue = {
+        id: world.ids.next(), kind: 'monolith' as const, variant: 0, pos: new Vector3(0, 60_000, -300_000),
+        spinAxis: new Vector3(0, 1, 0), spin: 0, radius: 50_000,
+      }
+      world.monoliths = [statue]
+      arm(world, ray)
+      // В стороне от причала, что стоит у начала координат прямо по курсу.
+      world.player.state.pos.set(0, 60_000, 0)
+      hold(world, 4)
+      if (grows) expect(statue.radius).toBeGreaterThan(50_000 * 1.5)
+      else expect(statue.radius).toBeLessThan(50_000 / 1.5)
+    }
+  })
+
   it('размер течёт плавно: каждый шаг в луче — свой маленький шаг масштаба, без ступеней', () => {
     // Пойманный баг: переделка шла тиками боя (`BEAM_TICK`, 0.25 с) — размер прыгал на 19%
     // четыре раза в секунду, а между тиками стоял. Теперь каждый такт в луче меняет масштаб.
