@@ -3,7 +3,9 @@ import { AI } from '../../config/ai'
 import { isEngageable } from '../combat/engage'
 import { findShip } from '../world/queries'
 import { findWarBaseFixture, warBaseFixtureWorldPos } from '../world/warBase'
-import type { World } from '../world/entities'
+import type { ShipEntity, World } from '../world/entities'
+import { lockContact } from '../world/queries'
+import { isFoe } from './targeting'
 import { createAIState } from './types'
 import { lockedShipId, lockedPodId, lockedAsteroidId, lockedFixtureId } from '../world/queries'
 
@@ -83,6 +85,33 @@ export function engageAutofight(world: World): boolean {
   // фора бессмысленна: пилот уже в бою и ракеты — его, а не против него.
   ai.missileCooldown = 0
   player.ai = ai
+  return true
+}
+
+/**
+ * Цель убита, а бой не кончен: взять СЛЕДУЮЩЕГО — ближайшего врага в поле зрения (`AWARENESS`).
+ * Прежде автобой после первого убийства отдавал штурвал посреди свалки, и пилот, пока жал P
+ * заново, ловил очередь от соседей. Новая цель встаёт и в захват — HUD показывает, кого бьём.
+ * Возвращает false — врагов рядом нет, бой окончен.
+ */
+export function retargetAutofight(world: World): boolean {
+  const player = world.player
+  const ai = player.ai
+  if (!ai || ai.orderedSoft || !player.alive) return false
+  let best: ShipEntity | null = null
+  let bestD = AI.AWARENESS * AI.AWARENESS
+  for (const s of world.ships) {
+    if (!s.alive || !isEngageable(s) || !isFoe(player, s)) continue
+    const d = s.state.pos.distanceToSquared(player.state.pos)
+    if (d < bestD) {
+      bestD = d
+      best = s
+    }
+  }
+  if (!best) return false
+  ai.orderedTargetId = best.id
+  ai.targetId = best.id
+  lockContact(world, 'ship', best.id)
   return true
 }
 

@@ -14,6 +14,7 @@ import {
   deadzoneScale,
   disengageAutofight,
   engageAutofight,
+  retargetAutofight,
   manoeuvreHoldsCamera as holdsCamera,
   manoeuvring as busy,
   stepManoeuvre,
@@ -263,8 +264,9 @@ function pollAutofight(world: World, intent: PlayerIntent): boolean {
 
   if (!autofightActive(world)) return false
 
-  // Цель погибла, ушла за горизонт или мы сами мертвы — штурвал возвращается.
-  if (autofightSpent(world)) {
+  // Цель погибла, ушла за горизонт или мы сами мертвы: рядом есть ещё враг — бьём следующего
+  // (`retargetAutofight`), нет — штурвал возвращается.
+  if (autofightSpent(world) && !retargetAutofight(world)) {
     disengageAutofight(world)
     return false
   }

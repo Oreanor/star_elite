@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { COMMODITIES } from '../cargo/items'
 import { createWorld, STARTER_SYSTEM, type World } from '../world'
 import { stepWorld } from '../sim'
-import { autofightActive, autofightSpent, disengageAutofight, engageAutofight } from './autofight'
+import { autofightActive, autofightSpent, disengageAutofight, engageAutofight, retargetAutofight } from './autofight'
 import { aiController } from './pilot'
 import { lockContact } from '../world/queries'
 
@@ -188,5 +188,33 @@ describe('автобой не уводит игрока прыжком', () => {
       stepWorld(world, 1 / 60, controllers, { unassigned: aiController })
       expect(world.player.warpDeparting).toBe(false)
     }
+  })
+})
+
+describe('автобой: следующая цель', () => {
+  it('убил цель — берёт ближайшего врага рядом; врагов нет — бой окончен', () => {
+    // Пойманное: после первого убийства автобой отдавал штурвал посреди свалки.
+    const world = createWorld({
+      ...STARTER_SYSTEM,
+      belt: null,
+      patrols: [{ count: 2, at: [0, 0, 0], spread: 0, faction: 'hostile', name: 'Пират' }],
+    })
+    const p = world.player
+    p.state.pos.set(30_000, 0, 0)
+    const [a, b] = world.ships
+    a!.state.pos.copy(p.state.pos).add(new Vector3(0, 0, -300))
+    b!.state.pos.copy(p.state.pos).add(new Vector3(200, 0, -400))
+    lockContact(world, 'ship', a!.id)
+    world.targetFocus = 'contact'
+    expect(engageAutofight(world)).toBe(true)
+
+    a!.alive = false
+    expect(autofightSpent(world)).toBe(true)
+    expect(retargetAutofight(world)).toBe(true)
+    expect(p.ai!.orderedTargetId).toBe(b!.id)
+    expect(autofightSpent(world)).toBe(false)
+
+    b!.alive = false
+    expect(retargetAutofight(world)).toBe(false)
   })
 })
