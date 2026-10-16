@@ -70,6 +70,8 @@ const STICK_DEADZONE = 0.02
 const AIM_RATE = 1.1
 const AIM_LIMIT = 0.4
 const AIM_RETURN = 2.5
+/** Возврат прицела к горизонту над поверхностью, когда ручка в центре, рад/с. */
+const AIM_RECENTER = 0.35
 
 /**
  * Фигуры пилотажа — двойное нажатие клавиши.
@@ -446,6 +448,9 @@ export function createPlayerController(intent: PlayerIntent): Controller {
        */
       if (ship.landedOn !== null) {
         c.aimPitch = clamp(c.aimPitch + c.pitch * AIM_RATE * dt, -AIM_LIMIT, AIM_LIMIT)
+        // Ручка в центре — прицел плавно уходит к горизонту: по умолчанию бьёшь далеко перед
+        // собой, а ближе к себе — держа мышь от себя (нос «ныряет», см. `gunQuat`).
+        if (c.pitch === 0) c.aimPitch = approach(c.aimPitch, 0, AIM_RECENTER * dt)
         c.pitch = 0
       } else if (c.aimPitch !== 0) {
         // Оторвались — линия огня возвращается к носу: в космосе целятся кораблём.

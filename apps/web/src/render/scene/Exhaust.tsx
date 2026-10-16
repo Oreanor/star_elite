@@ -3,6 +3,7 @@ import { useLayoutEffect, useMemo, useRef } from 'react'
 import { AdditiveBlending, InstancedMesh, MeshBasicMaterial, Object3D, Quaternion, Vector3 } from 'three'
 import { clamp, CRUISE, shipAxes, renderPos, renderQuat, renderTime, type ShipEntity } from '@elite/sim'
 import { useSession } from '../../session/GameContext'
+import { shownShipQuat } from '../shownPose'
 import { EXHAUST, GIANT_RENDER_CAP } from '../config'
 import { flameGeometry } from '../geometry/flame'
 import { chassisNozzles, MISSILE_NOZZLE, type Nozzle } from '../geometry/ships'
@@ -197,7 +198,7 @@ function Flames({ cone }: { cone: Cone }) {
       // без этого выше потолка меш замирает, а факел растёт дальше — и сопла «отрываются»
       // назад от замёрзшего корпуса. С зажимом струя остаётся приклеена к дюзам.
       // Факел крепится к ПОКАЗАННОМУ корпусу (между тактами), иначе отклеивается от дюз.
-      emit(renderPos(world, ship.state, _shownAt), renderQuat(world, ship.state, _shownQuat), nozzlesFor(ship), length, Math.min(ship.state.scale, GIANT_RENDER_CAP), fade)
+      emit(renderPos(world, ship.state, _shownAt), shownShipQuat(world, ship, _shownQuat), nozzlesFor(ship), length, Math.min(ship.state.scale, GIANT_RENDER_CAP), fade)
     }
 
     // Корабль игрока канул в кольцо — гасим и его факел вместе с корпусом.

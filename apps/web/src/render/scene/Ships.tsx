@@ -13,6 +13,7 @@ import {
   type ShipEntity,
 } from '@elite/sim'
 import { useSession } from '../../session/GameContext'
+import { shownShipQuat } from '../shownPose'
 import { jumpPortal, portalOpen } from '../../session/jumpPortal'
 import { GIANT_HIDE, GIANT_RENDER_CAP } from '../config'
 import { chassisGeometry, chassisSizeMul, droneGeometry, placeholderGeometry } from '../geometry/ships'
@@ -74,7 +75,8 @@ export function PlayerShip() {
     // в лог-буфере глубины. По игре ты растёшь дальше — просто на экране размер замирает.
     const capped = Math.min(player.state.scale, GIANT_RENDER_CAP)
     // Поза для показа — между тактами (см. `poseTrail`), как и у камеры.
-    renderQuat(session.world, player.state, mesh.quaternion)
+    // С наклоном за прицелом над поверхностью (`shownShipQuat`): нос ныряет вслед за линией огня.
+    shownShipQuat(session.world, player, mesh.quaternion)
     renderPos(session.world, player.state, mesh.position)
 
     // Гигант-режим: выше GIANT_HIDE.START свой корпус тает НА МЕСТЕ (масштаб → 0).

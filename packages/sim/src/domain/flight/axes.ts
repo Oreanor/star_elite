@@ -42,3 +42,20 @@ export function aimDirection(q: Quaternion, aimPitch: number, out: Vector3): Vec
   _aimAxis.set(1, 0, 0).applyQuaternion(q)
   return out.applyQuaternion(_aimTurn.setFromAxisAngle(_aimAxis, aimPitch))
 }
+
+const _gunAxis = new Vector3()
+const _gunTurn = new Quaternion()
+
+/**
+ * ПОЗА СТВОЛОВ И КОРПУСА НА ВИД: поза корабля, довёрнутая на `aimPitch` вокруг его поперечной
+ * оси — та же, что у линии огня (`aimDirection`). Над поверхностью корпус в физике держится
+ * ровно (тяга вдоль сферы), а целятся линией огня; рисовать при этом ровный фюзеляж с лучами,
+ * бьющими вниз из-под брюха, — неправда. По этой позе считаются дула, рисуются корпус и
+ * факелы: нос «ныряет» за прицелом, лучи соосны фюзеляжу. Полёт её не видит.
+ */
+export function gunQuat(q: Quaternion, aimPitch: number, out: Quaternion): Quaternion {
+  out.copy(q)
+  if (aimPitch === 0) return out
+  _gunAxis.set(1, 0, 0).applyQuaternion(q)
+  return out.premultiply(_gunTurn.setFromAxisAngle(_gunAxis, aimPitch))
+}

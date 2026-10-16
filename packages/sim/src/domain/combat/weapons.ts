@@ -1,6 +1,6 @@
 import { Quaternion, Vector3 } from 'three'
 import { GUNNERY } from '../../config/weapons'
-import { aimDirection, shipAxes } from '../flight/axes'
+import { aimDirection, gunQuat, shipAxes } from '../flight/axes'
 import { phasedOut } from '../scale/scale'
 import { isLaser, isMissile, type LaserModule } from '../loadout'
 import type { BoltEntity, MissileEntity, ShipEntity, World } from '../world/entities'
@@ -11,6 +11,7 @@ import { castLaser } from './raycast'
 const _fwd = new Vector3()
 const _right = new Vector3()
 const _up = new Vector3()
+const _gunQ = new Quaternion()
 const _muzzle = new Vector3()
 const _convergence = new Vector3()
 const _aim = new Vector3()
@@ -36,7 +37,8 @@ function offsetToWorld(e: ShipEntity, offset: readonly [number, number, number],
 export function muzzleWorldPos(e: ShipEntity, mountIndex: number, out: Vector3): Vector3 {
   const mount = e.spec.mounts[mountIndex]
   if (!mount) return out.copy(e.state.pos)
-  shipAxes(e.state.quat, _fwd, _right, _up)
+  // Дула — по позе стволов: над поверхностью они наклонены за прицелом вместе с носом.
+  shipAxes(gunQuat(e.state.quat, e.controls.aimPitch, _gunQ), _fwd, _right, _up)
   return offsetToWorld(e, mount.hardpoint.offset, out)
 }
 
@@ -54,7 +56,8 @@ export function fireLasers(world: World, e: ShipEntity, hostile: boolean, dt: nu
   // Болт в реальных метрах у центра гиганта всё равно был бы невидимой бессмыслицей.
   if (phasedOut(e.state.scale)) return false
 
-  shipAxes(e.state.quat, _fwd, _right, _up)
+  // Дула — по позе стволов: над поверхностью они наклонены за прицелом вместе с носом.
+  shipAxes(gunQuat(e.state.quat, e.controls.aimPitch, _gunQ), _fwd, _right, _up)
   // Сводим стволы в точку ПРИЦЕЛА, а не жёстко по носу: над поверхностью корпус держат
   // ровным ради тяги вдоль сферы, и целятся линией огня (`aimPitch`). При нулевом
   // прицеле — тот же вектор носа, что и был, поэтому в космосе ничего не меняется.
