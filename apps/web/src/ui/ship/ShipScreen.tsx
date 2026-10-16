@@ -81,7 +81,8 @@ export function ShipScreen({
   // и что пусто) по примерке — но только на просмотр, оснащать чужой корабль нельзя.
   const shownLoadout = docked && !owned ? fit.loadout : player.loadout
   const slots = buildSlots(shownLoadout)
-  const slotsInteractive = docked && owned
+  // Свой борт интерактивен всегда: в полёте — переставить своё железо из трюма, у причала — верфь.
+  const slotsInteractive = owned
   const openSlot = slotsInteractive ? slots.find((s) => s.key === openKey) ?? null : null
   // Покупка корпуса идёт через модалку подтверждения: там зачёт старого, доплата и
   // предупреждение о перегрузе. Пролистнул каталог — модалку гасим.
@@ -205,9 +206,9 @@ export function ShipScreen({
         </div>
       </div>
 
-      {/* Модалка — ТОЛЬКО у причала: там она мастерская (варианты + действия). В полёте
-          карточки самодостаточны (харка и вес прямо на них), и клик ничего не открывает. */}
-      {docked && openSlot && (
+      {/* Модалка слота: у причала — мастерская (магазин, ремонт, улучшение), в полёте —
+          перестановка своего железа (снять в трюм, поставить из трюма). */}
+      {openSlot && (
         <SlotModal world={world} docked={docked} slot={openSlot} onChange={refresh} onClose={() => setOpenKey(null)} />
       )}
 

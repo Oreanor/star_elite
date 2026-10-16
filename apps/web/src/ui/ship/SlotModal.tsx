@@ -145,7 +145,7 @@ export function SlotModal({
       actions: [
         {
           label: t('station.fit'),
-          run: () => (isMissileSlot ? armMissilesFromHold(player, holdIndex) : fitFromHold(player, holdIndex)),
+          run: () => (isMissileSlot ? armMissilesFromHold(player, holdIndex) : fitFromHold(player, holdIndex, slot.hardpointIndex)),
           stay: true,
         },
       ],
@@ -260,6 +260,7 @@ export function SlotModal({
           <>
             <ActionBar
               world={world}
+              docked
               module={module}
               onStrip={() =>
                 module && commit(() => (isMissileSlot ? stripMissiles(player) : unfitModule(player, module)))
@@ -291,7 +292,30 @@ export function SlotModal({
               </VariantColumn>
             </div>
           </>
-        ) : null}
+        ) : (
+          /* В ПОЛЁТЕ верфи нет, а своё железо пилот переставляет сам: снять в трюм и поставить
+             из трюма. Купить, продать, чинить и качать — только у причала. */
+          <>
+            <ActionBar
+              world={world}
+              docked={false}
+              module={module}
+              onStrip={() =>
+                module && commit(() => (isMissileSlot ? stripMissiles(player) : unfitModule(player, module)))
+              }
+              onRepair={doRepair}
+              onUpgrade={askUpgrade}
+              onSell={() => {}}
+            />
+            <div className="mt-6">
+              <VariantColumn title={t('ship.col.hold')} empty={t('ship.noneHold')}>
+                {holdOptions.map(({ it, i }) => (
+                  <VariantRow key={`${it.module.id}-${i}`} world={world} module={it.module} onClick={() => askFit(i, it.module)} />
+                ))}
+              </VariantColumn>
+            </div>
+          </>
+        )}
 
         {confirm && (
           <ConfirmBox
@@ -316,6 +340,7 @@ export function SlotModal({
  *  на потолке прокачки. Числа берём из домена, чтобы гашение не разошлось с делом. */
 function ActionBar({
   world,
+  docked,
   module,
   onStrip,
   onRepair,
@@ -323,6 +348,8 @@ function ActionBar({
   onSell,
 }: {
   world: World
+  /** Не у причала — только «снять в трюм»: прочее (деньги и мастерская) живёт на верфи. */
+  docked: boolean
   module: ShipModule | null
   onStrip: () => void
   onRepair: () => void
@@ -332,7 +359,7 @@ function ActionBar({
   const player = world.player
   const essential = module ? isEssential(module) : false
   const noRoom = module ? freeCapacity(player.hold) < module.mass : true
-  const repair = module ? repairInfoFor(world, module) : { price: 0, can: false, refused: false }
+  const repair = docked && module ? repairInfoFor(world, module) : { price: 0, can: false, refused: false }
   const maxed = module ? canUpgrade(world, player, module, true) === 'maxed' : true
   // «Ремонт» значит РАЗНОЕ по виду: у бронеплиты латает КОРПУС корабля (общий), у
   // пусковой — ДОЗАРЯДКА ракет, у прочего железа — чинит ПОЛОМКУ самой детали.
@@ -349,6 +376,8 @@ function ActionBar({
         <Button small variant="primary" disabled={!module || essential || noRoom} onClick={onStrip}>
           {t('station.strip')}
         </Button>
+        {docked && (
+        <>
         <Button small variant="primary" disabled={!repair.can} onClick={onRepair}>
           {repair.price > 0 ? (
             <>
@@ -364,9 +393,11 @@ function ActionBar({
         <Button small variant="primary" disabled={!module || essential} onClick={onSell}>
           {module ? tm('station.sellModule', { value: <Money amount={moduleResaleValue(player, module)} /> }) : t('station.sell')}
         </Button>
+        </>
+        )}
       </div>
       {/* Захолустная мастерская за такой корпус не берётся — так и говорим, а не молчим кнопкой. */}
-      {repair.refused && (
+      {docked && repair.refused && (
         <p className="mt-2 text-xs" style={{ color: DIM }}>
           {t('ship.repair.tooComplex')}
         </p>

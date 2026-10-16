@@ -7,11 +7,12 @@ import {
   ECM_UNIT,
   SHIELD_HEAVY,
   SHIELD_STANDARD,
+  SHRINK_RAY,
 } from '../../config/modules'
 import { addCommodity, addItem } from '../cargo/hold'
 import { COMMODITIES } from '../cargo/items'
 import { canInstallInternal, createLoadout, hasBomb, hasEcm } from '../loadout'
-import { createWorld } from '../world'
+import { createWorld, STARTER_SYSTEM } from '../world'
 import { fitDeltas, fitFromHold } from './shop'
 
 /**
@@ -102,5 +103,22 @@ describe('способности требуют аукс-модуль', () => {
     const armed = createLoadout(AURORA_ONE, [ECM_UNIT, BOMB_UNIT], [])
     expect(hasEcm(armed)).toBe(true)
     expect(hasBomb(armed)).toBe(true)
+  })
+})
+
+describe('перестановка своего железа', () => {
+  it('лазер из трюма встаёт в ВЫБРАННУЮ точку подвески, снятый — в трюм', () => {
+    // Пойманное: установка из трюма брала первую подходящую точку, а не ту, что кликнул
+    // игрок, — менять лазеры в полёте поштучно было нельзя.
+    const world = createWorld({ ...STARTER_SYSTEM, patrols: [], belt: null })
+    const p = world.player
+    const guns = p.loadout.chassis.hardpoints.map((h, i) => ({ h, i })).filter(({ h }) => h.kind === 'gun')
+    if (guns.length < 2) return
+    const target = guns[guns.length - 1]!.i
+    const before = p.loadout.weapons[target]
+    addItem(p.hold, { kind: 'module', module: SHRINK_RAY, costBasis: 0 })
+    expect(fitFromHold(p, p.hold.items.length - 1, target)).toBeNull()
+    expect(p.loadout.weapons[target]?.id).toBe(SHRINK_RAY.id)
+    if (before) expect(p.hold.items.some((i) => i.kind === 'module' && i.module.id === before.id)).toBe(true)
   })
 })

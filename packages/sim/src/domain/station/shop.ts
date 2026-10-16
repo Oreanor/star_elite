@@ -249,15 +249,16 @@ export function canFit(ship: ShipEntity, module: ShipModule, hardpointIndex?: nu
  * обломков или снятое ранее. Вытесненное уходит НЕ на продажу, а обратно в трюм:
  * это перестановка своего добра, а не апгрейд за деньги (тем занят `buy`).
  *
- * Только на верфи: менять оснастку в пути немыслимо, и это правило держит UI —
- * домен же просто исполняет операцию, когда его позвали.
+ * Работает и в полёте: своё железо из трюма переставляет сам пилот, верфь нужна лишь там,
+ * где платят (купить, продать, чинить, качать). Оружие встаёт в УКАЗАННУЮ точку подвески —
+ * ту, что выбрал игрок; без неё — в первую подходящую (пустая предпочтительнее).
  */
-export function fitFromHold(ship: ShipEntity, holdIndex: number): FitError | null {
+export function fitFromHold(ship: ShipEntity, holdIndex: number, hardpointIndex?: number): FitError | null {
   const item = ship.hold.items[holdIndex]
   if (!item || item.kind !== 'module') return 'not-a-module'
   const module = item.module
 
-  const slot = isWeapon(module) ? autoHardpoint(ship, module) : undefined
+  const slot = isWeapon(module) ? (hardpointIndex ?? autoHardpoint(ship, module)) : undefined
   const error = canFit(ship, module, slot)
   if (error) return error
 
