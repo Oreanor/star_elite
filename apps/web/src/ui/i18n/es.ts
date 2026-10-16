@@ -254,7 +254,6 @@ export const ES: Record<keyof typeof RU, string> = {
   'station.market.title': 'MERCANCÍAS',
   'station.outfit.title': 'EQUIPO',
   'station.outfit.empty': 'No hay equipo a la venta',
-  'station.col.compare': 'CARACT.',
   'station.buyFit': 'COMPRAR E INSTALAR',
   'ship.confirm.buyPlain': '¿Comprar «{name}» por {price}?',
   'station.buy': 'COMPRAR',

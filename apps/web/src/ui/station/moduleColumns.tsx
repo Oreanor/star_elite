@@ -19,10 +19,11 @@ export function moduleColumns(
   opts: { hardpointIndex?: number; price?: (m: ShipModule) => React.ReactNode; rows?: readonly ShipModule[] } = {},
 ): Column<ShipModule>[] {
   const compareOf = (m: ShipModule) => headlineCompare(world, m, opts.hardpointIndex)
-  // Шапка сравнения — САМА характеристика («ЩИТ», «УРОН»), если у всех строк она одна; у
-  // смешанного списка (доп. оборудование: ECM, бомба, маскировка) — общее «Х-КА».
+  // Шапка сравнения — САМА характеристика («ЩИТ», «УРОН»). У смешанного списка (доп.
+  // оборудование: ECM, бомба, маскировка) одной на всех нет — тогда она в каждой ячейке.
   const keys = new Set((opts.rows ?? []).map((m) => compareOf(m)?.key ?? moduleStat(m).key))
-  const compareHeader = keys.size === 1 ? statLabel([...keys][0]!) : t('station.col.compare')
+  const mixed = keys.size !== 1
+  const compareHeader = mixed ? '' : statLabel([...keys][0]!)
   const columns: Column<ShipModule>[] = [
     // Ширин колонкам НЕ задаём: таблица сама отдаёт каждой ширину по содержимому. Все числа
     // в одну строку, переносится лишь название — и только когда места правда не хватает.
@@ -40,6 +41,7 @@ export function moduleColumns(
         const tone = trend(cmp.better)
         return (
           <span className="whitespace-nowrap">
+            {mixed && <span style={{ color: DIM }}>{statLabel(cmp.key)} </span>}
             {/* Единица — один раз, в конце, у нового значения. Равное — без цвета и со «=». */}
             <span style={{ color: DIM }}>{statNumber(cmp.key, cmp.from)} → </span>
             <span style={{ color: same ? DIM : tone.color }}>
