@@ -2,6 +2,7 @@ import { useCallback, useEffect, useReducer, useRef, useState } from 'react'
 import {
   acceptBlock,
   acceptOffer,
+  activeContracts,
   declineOffer,
   dialogueEffects,
   escortFee,
@@ -203,7 +204,15 @@ export function Dialogue({
     rememberPilot(world, other)
     push({ who: 'you', text: t('job.ask') })
     const offer = revealOffer(world, other)
-    push({ who: 'them', text: offer ? offerText(offer) : t('job.none') })
+    // «Лети с миром» уместно чужому. Тот, кто летит с тобой — ведомый или заказчик, чьё
+    // дело ты уже ведёшь, — отвечает как напарник, а не прощается.
+    const none =
+      other.ai?.escortOf === world.player.id
+        ? t('job.none.wing')
+        : activeContracts(world).some((c) => c.giverId === other.acquaintanceId)
+          ? t('job.none.ours')
+          : t('job.none')
+    push({ who: 'them', text: offer ? offerText(offer) : none })
     bump()
   }
   const jobAccept = () => {

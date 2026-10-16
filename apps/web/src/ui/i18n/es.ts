@@ -524,6 +524,8 @@ export const ES: Record<keyof typeof RU, string> = {
   'job.block.busy': "TERMINA ANTES EL ENCARGO ACTUAL",
   'job.block.remote': "OCUPADO CON OTRO PILOTO",
   'job.none': "No hay trabajo para ti. Buen vuelo.",
+  'job.none.wing': 'Ya volamos juntos: estoy contigo. Si surge trabajo, te lo diré.',
+  'job.none.ours': 'Ya tenemos un trato. Terminémoslo primero.',
   'job.offer.deliver': "Hay que llevar {commodity} ×{units} t a la estación de la estrella {to}{hop}. Pago {reward} cr. Plazo — {days} días.",
   'job.offer.fetch': "Trae {commodity} ×{units} t a la estación local. {reward} cr por tonelada, vale por partes. Plazo — {days} días.",
   'job.offer.escort': "Escóltame hasta la estación de la estrella {to}{hop} — solo es peligroso. Salto primero, tú me sigues. {reward} cr. Plazo — {days} días.",
