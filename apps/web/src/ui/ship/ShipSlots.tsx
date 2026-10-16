@@ -224,7 +224,7 @@ export function SlotGrid({
  * «корпус 22 + отсеки 23 − обвес 28 = 17 т». Обвес — ОСТАТОК суммы до итога, а не своё
  * округление: иначе три независимо округлённых числа расходились бы с итогом на тонну.
  */
-function cargoBudgetText({ cargoCapacity, cargoBudget }: Pick<ShipSpec, 'cargoCapacity' | 'cargoBudget'>): string {
+export function cargoBudgetText({ cargoCapacity, cargoBudget }: Pick<ShipSpec, 'cargoCapacity' | 'cargoBudget'>): string {
   const chassis = Math.round(cargoBudget.chassis)
   const racks = Math.round(cargoBudget.racks)
   const equipment = Math.max(0, chassis + racks - cargoCapacity)

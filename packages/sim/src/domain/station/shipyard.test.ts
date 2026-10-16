@@ -4,7 +4,8 @@ import { deriveShipSpec } from '../loadout'
 import { addCommodity } from '../cargo/hold'
 import { COMMODITIES } from '../cargo/items'
 import { createWorld } from '../world'
-import { fitOntoChassis, swapHull } from './shipyard'
+import { fitOntoChassis, hullPurchase, swapHull } from './shipyard'
+import { CARGO_LARGE, CARGO_SMALL } from '../../config/modules'
 
 /**
  * Верфь — правило, а не кнопка. Проверяем без рендера.
@@ -94,5 +95,36 @@ describe('верфь корпусов', () => {
       // Всё вместилось — тогда хотя бы обвес не потерялся (переехал в слоты/трюм).
       expect(result).toBeNull()
     }
+  })
+
+  it('у каждого корпуса три грузовых слота — контейнеры при пересадке переезжают все', () => {
+    // Пойманное: у истребителей грузовой слот был один, и второй контейнер при пересадке
+    // уезжал в трюм грузом — торговцу сменить корабль значило потерять трюм.
+    for (const offer of SHIPYARD) {
+      expect(offer.chassis.slots.filter((x) => x.kind === 'cargo').length, offer.chassis.name).toBe(3)
+    }
+    const world = createWorld()
+    const lo = world.player.loadout
+    const withRacks = { ...lo, internals: [...lo.internals.filter((m) => m.kind !== 'cargo'), CARGO_SMALL, CARGO_LARGE] }
+    for (const offer of SHIPYARD) {
+      const fit = fitOntoChassis(withRacks, offer.chassis)
+      expect(fit.overflow.some((m) => m.kind === 'cargo'), offer.chassis.name).toBe(false)
+    }
+  })
+
+  it('не вставшее в слоты можно продать в сделке: в трюм не едет, цена — в зачёт', () => {
+    const world = createWorld()
+    world.docked = true
+    const small = SHIPYARD.find((o) => o.chassis.id === 'hermes')!
+    const keep = hullPurchase(world, small.chassis, false)
+    if (keep.overflow.length === 0) return
+    const sell = hullPurchase(world, small.chassis, true)
+    expect(sell.net).toBe(keep.net - keep.overflowValue)
+    expect(sell.loadAfter).toBeLessThan(keep.loadAfter)
+
+    world.credits = Math.max(0, sell.net) + 1
+    const modulesBefore = world.player.hold.items.filter((i) => i.kind === 'module').length
+    expect(swapHull(world, small.chassis, sell.net, true)).toBeNull()
+    expect(world.player.hold.items.filter((i) => i.kind === 'module').length).toBe(modulesBefore)
   })
 })

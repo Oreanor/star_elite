@@ -222,8 +222,8 @@ export function ShipScreen({
         <HullBuyModal
           world={world}
           chassis={offer.chassis}
-          onConfirm={(net) => {
-            if (swapHull(world, offer.chassis, net) === null) {
+          onConfirm={(net, sellOverflow) => {
+            if (swapHull(world, offer.chassis, net, sellOverflow) === null) {
               refresh()
               setBuyingHull(false)
             }

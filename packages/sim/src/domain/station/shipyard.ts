@@ -15,6 +15,7 @@ import {
 import { refreshSpec } from '../world'
 import type { ShipEntity, World } from '../world/entities'
 import { masterClass, type MasterClass } from './repair'
+import { moduleResaleValue } from './shop'
 import { localSettlement } from './trade'
 
 /**
@@ -43,7 +44,10 @@ export interface HullFit {
  * `overflow`: у нового корпуса их могло оказаться меньше, чем железа на старом.
  */
 export function fitOntoChassis(current: Loadout, chassis: Chassis): HullFit {
-  const pool = [...current.internals]
+  // Контейнеры — от самого вместительного: грузовых слотов у новой рамы может быть меньше,
+  // и в слот обязан встать тот, что даёт трюму больше, а не первый попавшийся. Прочее — в
+  // прежнем порядке (сортировка устойчивая, у не-контейнеров ключ один — ноль).
+  const pool = [...current.internals].sort((a, b) => rackCapacity(b) - rackCapacity(a))
   const fitted: ShipModule[] = []
   for (const slot of chassis.slots) {
     // По КАТЕГОРИИ (аукс делят разные виды) и по классу корпуса, не слота.
@@ -62,6 +66,10 @@ export function fitOntoChassis(current: Loadout, chassis: Chassis): HullFit {
   })
 
   return { loadout: createLoadout(chassis, fitted, weapons), overflow: [...pool, ...guns] }
+}
+
+function rackCapacity(m: ShipModule): number {
+  return m.kind === 'cargo' ? m.capacity : 0
 }
 
 /** Доля уцелевшего корпуса, 0..1 — «поломка» рамы, которую верфь видит при зачёте. */
@@ -104,11 +112,20 @@ export interface HullPurchase {
   oldChassis: Chassis
   /** Доля уцелевшего HP старого корпуса, 0..1 — показать поломку при зачёте. */
   oldCondition: number
-  /** Обвес, которому в новой раме места в слотах нет: уедет в грузовой отсек. */
+  /** Обвес, которому в новой раме места в слотах нет: уедет в грузовой отсек (или продан). */
   overflow: ShipModule[]
-  /** Грузоподъёмность новой рамы, т. */
+  /** Выкупная цена этого обвеса здесь — столько даст верфь, если продать его в сделке. */
+  overflowValue: number
+  /** Продаётся ли не вставшее в сделке (тогда оно не едет в трюм, а идёт в зачёт). */
+  sellOverflow: boolean
+  /** Грузоподъёмность новой рамы, т, и из чего она сложена. */
   newCapacity: number
-  /** Сколько тонн придётся везти в новой раме: текущий груз + перенесённый обвес. */
+  newBudget: { chassis: number; racks: number; equipment: number }
+  /** Груз, что уже в трюме, т. */
+  cargoLoad: number
+  /** Масса не вставшего обвеса, т (в трюм — если не продаётся). */
+  overflowMass: number
+  /** Сколько тонн придётся везти в новой раме: груз + не вставший обвес (если не продан). */
   loadAfter: number
   /** Влезает ли это в новую раму. false — покупка не состоится, сперва продай лишнее. */
   fits: boolean
@@ -119,19 +136,28 @@ export interface HullPurchase {
  * в грузовой отсек) и хватит ли на всё это грузоподъёмности. Ничего не мутирует — это витрина
  * для модалки; саму сделку исполняет `swapHull` с той же `net`.
  */
-export function hullPurchase(world: World, chassis: Chassis): HullPurchase {
+export function hullPurchase(world: World, chassis: Chassis, sellOverflow = false): HullPurchase {
   const player = world.player
   const { loadout, overflow } = fitOntoChassis(player.loadout, chassis)
-  const newCapacity = deriveShipSpec(loadout).cargoCapacity
+  const spec = deriveShipSpec(loadout)
+  const newCapacity = spec.cargoCapacity
   const overflowMass = overflow.reduce((m, x) => m + x.mass, 0)
-  const loadAfter = usedCapacityOf(player.hold) + overflowMass
+  const overflowValue = overflow.reduce((v, x) => v + moduleResaleValue(player, x), 0)
+  const cargoLoad = usedCapacityOf(player.hold)
+  // Проданное в сделке в трюм не едет — оно уходит верфи и идёт в зачёт.
+  const loadAfter = cargoLoad + (sellOverflow ? 0 : overflowMass)
   const price = chassis.cost
   const tradeIn = hullTradeIn(world, player)
   return {
     chassis,
     price,
     tradeIn,
-    net: price - tradeIn,
+    net: price - tradeIn - (sellOverflow ? overflowValue : 0),
+    overflowValue,
+    sellOverflow,
+    newBudget: spec.cargoBudget,
+    cargoLoad,
+    overflowMass,
     master: masterClass(localSettlement(world)),
     oldChassis: player.loadout.chassis,
     oldCondition: hullCondition(player),
@@ -147,7 +173,7 @@ export function hullPurchase(world: World, chassis: Chassis): HullPurchase {
  * текущий груз плюс всё, что не влезло в слоты: интерфейс попросит сперва продать лишнее.
  * Свежая рама заправлена под завязку (корпус, щит, заряд привода): купил — и в путь.
  */
-export function swapHull(world: World, chassis: Chassis, cost: number): HullError | null {
+export function swapHull(world: World, chassis: Chassis, cost: number, sellOverflow = false): HullError | null {
   if (!world.docked) return 'not-docked'
   if (world.credits < cost) return 'no-money'
 
@@ -155,9 +181,10 @@ export function swapHull(world: World, chassis: Chassis, cost: number): HullErro
   const { loadout, overflow } = fitOntoChassis(player.loadout, chassis)
 
   // Грузоподъёмность НОВОГО корпуса против того, что придётся в нём везти: уже лежащий
-  // груз плюс перенесённый в трюм обвес. Не влезло — смену отклоняем целиком, мир не тронут.
+  // груз плюс перенесённый в трюм обвес (если его не продают в сделке). Не влезло — смену
+  // отклоняем целиком, мир не тронут.
   const capacity = deriveShipSpec(loadout).cargoCapacity
-  const overflowMass = overflow.reduce((m, x) => m + x.mass, 0)
+  const overflowMass = sellOverflow ? 0 : overflow.reduce((m, x) => m + x.mass, 0)
   if (usedCapacityOf(player.hold) + overflowMass > capacity) return 'no-room'
 
   world.credits -= cost
@@ -165,7 +192,8 @@ export function swapHull(world: World, chassis: Chassis, cost: number): HullErro
   // Новый корпус — заводской: прокачки копятся на КОНКРЕТНОЙ раме и не переезжают.
   player.hullUp = { ...NO_HULL_UPGRADES }
   refreshSpec(player) // пересчитает и вместимость трюма — под неё и кладём overflow
-  for (const module of overflow) addItem(player.hold, { kind: 'module', module })
+  // Не вставшее — в трюм, либо продано верфи: его цена уже в `cost` (см. `hullPurchase`).
+  if (!sellOverflow) for (const module of overflow) addItem(player.hold, { kind: 'module', module })
   player.hull = player.spec.hull.hull
   player.shield = player.spec.hull.shield
   player.jumpCharge = player.spec.jumpRange

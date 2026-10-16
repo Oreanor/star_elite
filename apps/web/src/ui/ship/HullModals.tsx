@@ -20,6 +20,8 @@ import { ACCENT, Button, DIM, Modal } from '../station/chrome'
 import { formatStat, statLabel, statNumber } from '../station/format'
 import { chassisName } from '../i18n/dataNames'
 import { Money } from '../station/Money'
+import { cargoBudgetText } from './ShipSlots'
+import { displayName } from '../station/Equipment'
 
 /**
  * Окна корпуса: смена рамы на верфи и покупка нового корпуса.
@@ -129,11 +131,14 @@ export function HullBuyModal({
 }: {
   world: World
   chassis: Chassis
-  onConfirm: (net: number) => void
+  onConfirm: (net: number, sellOverflow: boolean) => void
   onClose: () => void
 }) {
   useLang()
-  const q: HullPurchase = hullPurchase(world, chassis)
+  // Не вставшее в слоты — в трюм (по умолчанию) или продать верфи прямо в сделке: тогда оно
+  // не занимает отсек, а его цена идёт в зачёт. Это и выход из перегруза без похода в магазин.
+  const [sell, setSell] = useState(false)
+  const q: HullPurchase = hullPurchase(world, chassis, sell)
   const overflowTons = Math.max(0, Math.ceil(q.loadAfter - q.newCapacity))
   const canBuy = q.fits && world.credits >= q.net
 
@@ -164,12 +169,33 @@ export function HullBuyModal({
         </span>
       </div>
 
-      {/* Что не влезло в слоты нового корпуса — уедет в грузовой отсек (если по массе влезет). */}
-      {q.fits && q.overflow.length > 0 && (
-        <p className="mt-3 text-xs leading-relaxed" style={{ color: DIM }}>
-          {t('ship.hullBuy.overflow', { n: q.overflow.length })}
-        </p>
+      {/* Что не встаёт в слоты новой рамы — поимённо, с массой; и выбор: в трюм или продать. */}
+      {q.overflow.length > 0 && (
+        <div className="mt-3 text-xs" style={{ color: DIM }}>
+          <div className="tracking-[0.15em]">{t('ship.hullBuy.overflowList')}</div>
+          {q.overflow.map((m, i) => (
+            <div key={`${m.id}-${i}`} className="flex justify-between gap-3">
+              <span className="truncate">{displayName(m)}</span>
+              <span>{formatStat('mass', m.mass)}</span>
+            </div>
+          ))}
+          <label className="mt-2 flex cursor-pointer items-center justify-between gap-3" style={{ color: ACCENT }}>
+            <span className="flex items-center gap-2">
+              <input type="checkbox" checked={sell} onChange={(e) => setSell(e.target.checked)} />
+              {t('ship.hullBuy.sell')}
+            </span>
+            <span style={{ color: UI.ALLY }}>
+              <Money amount={q.overflowValue} sign="+" />
+            </span>
+          </label>
+        </div>
       )}
+
+      {/* Отсек новой рамы: из чего сложен (контейнеры переезжают) и сколько в нём повезёшь. */}
+      <div className="mt-3 text-xs" style={{ color: q.fits ? DIM : UI.WARN }}>
+        <div>{cargoBudgetText({ cargoCapacity: q.newCapacity, cargoBudget: q.newBudget })}</div>
+        <div>{t('ship.hullBuy.load', { load: Math.ceil(q.loadAfter), cap: q.newCapacity })}</div>
+      </div>
 
       {q.fits ? (
         <div className="mt-4 border-t pt-3 text-center" style={{ borderColor: DIM }}>
@@ -188,7 +214,7 @@ export function HullBuyModal({
       )}
 
       <div className="mt-5 flex justify-center gap-2">
-        <Button small variant="primary" disabled={!canBuy} onClick={() => onConfirm(q.net)}>
+        <Button small variant="primary" disabled={!canBuy} onClick={() => onConfirm(q.net, sell)}>
           {t('ship.ok')}
         </Button>
         <Button small variant="secondary" onClick={onClose}>

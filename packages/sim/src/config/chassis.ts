@@ -47,8 +47,11 @@ export const AURORA_ONE: Chassis = {
     { kind: 'shield', maxClass: 3 },
     { kind: 'armour', maxClass: 2 },
     { kind: 'armour', maxClass: 2 },
+    // Три грузовых слота у КАЖДОГО корпуса: контейнеры бесклассовые и переезжают при смене
+    // рамы все, а не «сколько влезло» — торговцу пересесть на другой корпус не наказание.
     { kind: 'cargo', maxClass: 3 },
-    { kind: 'cargo', maxClass: 2 },
+    { kind: 'cargo', maxClass: 3 },
+    { kind: 'cargo', maxClass: 3 },
     { kind: 'hyperdrive', maxClass: 3 },
     { kind: 'aux', maxClass: 3 },
   ],
@@ -130,6 +133,9 @@ const FIGHTER_SLOTS: Chassis['slots'] = [
   { kind: 'thrusters', maxClass: 3 },
   { kind: 'shield', maxClass: 2 },
   { kind: 'armour', maxClass: 2 },
+  // Три грузовых, как у всех (см. «Аврору»).
+  { kind: 'cargo', maxClass: 1 },
+  { kind: 'cargo', maxClass: 1 },
   { kind: 'cargo', maxClass: 1 },
   { kind: 'hyperdrive', maxClass: 2 },
   { kind: 'aux', maxClass: 2 },
@@ -281,6 +287,10 @@ export const DRONE: Chassis = {
     // скорострельный скаут, и улететь на нём из системы должно быть можно.
     { kind: 'hyperdrive', maxClass: 1 },
     { kind: 'aux', maxClass: 1 },
+    // Три грузовых, как у всех (см. «Аврору»).
+    { kind: 'cargo', maxClass: 1 },
+    { kind: 'cargo', maxClass: 1 },
+    { kind: 'cargo', maxClass: 1 },
   ],
   cost: 9_000,
 }
