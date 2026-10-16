@@ -30,7 +30,7 @@ describe('прокачка модуля', () => {
     expect(upgradeModule(world, world.player, playerShield(world), true)).toBeNull()
 
     // Защита выросла примерно в полтора раза — считается через spec, не назначается.
-    expect(world.player.spec.hull.shield).toBeCloseTo(before * 1.5, 5)
+    expect(world.player.spec.hull.shield).toBe(Math.round(before * 1.5))
     // Копия ушла из трюма: ею и заплатили.
     expect(world.player.hold.items.length).toBe(holdBefore - 1)
     expect(upgradeLevel(playerShield(world))).toBeCloseTo(0.5, 5)
@@ -44,7 +44,7 @@ describe('прокачка модуля', () => {
 
     expect(upgradeModule(world, world.player, playerShield(world), false)).toBeNull()
 
-    expect(world.player.spec.hull.shield).toBeCloseTo(before * 1.25, 5)
+    expect(world.player.spec.hull.shield).toBe(Math.round(before * 1.25))
     expect(world.credits).toBeLessThan(money)
   })
 
@@ -70,7 +70,7 @@ describe('прокачка модуля', () => {
       expect(upgradeModule(world, world.player, playerShield(world), false), `шаг ${i + 1}`).toBeNull()
     }
     // Три денежных шага по +25% — от стока, а не процент от процента.
-    expect(playerShield(world).capacity).toBeCloseTo(base * 1.75, 3)
+    expect(playerShield(world).capacity).toBe(Math.round(base * 1.75))
     // Каждый следующий шаг дороже предыдущего.
     expect(costs[1]!).toBeGreaterThan(costs[0]!)
     expect(costs[2]!).toBeGreaterThan(costs[1]!)

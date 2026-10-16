@@ -106,25 +106,28 @@ export function upgradeLevel(module: ShipModule): number {
  * правде, а не накопленной дроби с округлениями. Момент и лимиты множатся целиком:
  * разворот растёт по всем осям. У маскировки растёт не расход, а экономичность —
  * потому делится, а не множится: меньше жрёт батарей значит лучше.
+ *
+ * Показываемые числом характеристики (тяга, щит, броня, урон, прыжок, ёмкость) — ЦЕЛЫЕ:
+ * «щит 250 → 312», а не «312.5». Угловые и темповые (рад/с, ед/с) дробны по своей природе.
  */
 export function scaleToBase(m: ShipModule, base: ShipModule, k: number): void {
-  if (isEngine(m) && isEngine(base)) { m.thrust = base.thrust * k; m.maxSpeed = base.maxSpeed * k; return }
+  if (isEngine(m) && isEngine(base)) { m.thrust = Math.round(base.thrust * k); m.maxSpeed = base.maxSpeed * k; return }
   if (isThrusters(m) && isThrusters(base)) {
     m.torque = [base.torque[0] * k, base.torque[1] * k, base.torque[2] * k]
     m.maxRate = [base.maxRate[0] * k, base.maxRate[1] * k, base.maxRate[2] * k]
     return
   }
-  if (isShield(m) && isShield(base)) { m.capacity = base.capacity * k; m.regen = base.regen * k; return }
-  if (isArmour(m) && isArmour(base)) { m.hull = base.hull * k; return }
+  if (isShield(m) && isShield(base)) { m.capacity = Math.round(base.capacity * k); m.regen = base.regen * k; return }
+  if (isArmour(m) && isArmour(base)) { m.hull = Math.round(base.hull * k); return }
   // Технический (горный) лазер качается в КПД добычи, а не в урон: инструмент, не оружие.
   // Потолок — вся руда камня; поломка тот же КПД роняет.
   if (isLaser(m) && isLaser(base) && base.effect === 'cut') { m.oreYield = Math.min(1, (base.oreYield ?? 1) * k); return }
-  if (isLaser(m) && isLaser(base)) { m.damage = base.damage * k; return }
+  if (isLaser(m) && isLaser(base)) { m.damage = Math.round(base.damage * k); return }
   // Ракета — расходник: её не чинят, но пусковую УЛУЧШАЮТ бо́льшим боезапасом (не уроном).
   if (isMissile(m) && isMissile(base)) { m.ammo = Math.round(base.ammo * k); return }
   if (isDrone(m) && isDrone(base)) { m.ammo = Math.round(base.ammo * k); return }
   if (isCargo(m) && isCargo(base)) { m.capacity = Math.round(base.capacity * k); return }
-  if (isHyperdrive(m) && isHyperdrive(base)) { m.jumpRange = base.jumpRange * k; return }
+  if (isHyperdrive(m) && isHyperdrive(base)) { m.jumpRange = Math.round(base.jumpRange * k); return }
   if (isCloak(m) && isCloak(base)) { m.drain = base.drain / k }
 }
 

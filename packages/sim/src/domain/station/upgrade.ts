@@ -1,4 +1,5 @@
 import { SHOP } from '../../config/station'
+import { roundMoney } from '../../core/math'
 import { cargoMass, removeItem } from '../cargo/hold'
 import {
   deriveShipSpec,
@@ -37,7 +38,8 @@ export function upgradeCopyIndex(ship: ShipEntity, module: ShipModule): number |
  */
 export function upgradeCashCost(module: ShipModule): number {
   const base = Math.max(module.cost, SHOP.UPGRADE_MIN_BASE) * SHOP.UPGRADE_CASH_FRACTION
-  return Math.ceil(base * (upgradeSteps(module) + 1))
+  // Сумма по-человечески («10 000», а не «10 133»), как у наград за дела.
+  return roundMoney(base * (upgradeSteps(module) + 1))
 }
 
 
