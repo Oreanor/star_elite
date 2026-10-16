@@ -12,7 +12,7 @@ import {
   PlaneGeometry,
   Vector3,
 } from 'three'
-import { GUNNERY, renderPos, renderQuat, renderTime, type Tracer, type World } from '@elite/sim'
+import { GUNNERY, MODULE_CATALOGUE, renderPos, renderQuat, renderTime, type Tracer, type World } from '@elite/sim'
 import { shownShipPoint } from '../shownPose'
 import { useSession } from '../../session/GameContext'
 import { EXPLOSION, LASER, LASER_CLASS_WIDTH, LASER_SCHOOL_GLOW, MUZZLE, SHIELD_FLASH, WARP_FLASH } from '../config'
@@ -162,8 +162,22 @@ const classOf = (weapon: string): 1 | 2 | 3 => laserLook(weapon).cls
 /** Три класса лазеров: у каждого своя толщина луча. */
 const LASER_CLASSES = [1, 2, 3] as const
 
-/** Партии следов: ШКОЛА даёт цвет ореола, КЛАСС — толщину. Пары — раз на модуль, не в кадре. */
-const TRACER_GROUPS = LASER_SCHOOLS.flatMap((school) => LASER_CLASSES.map((cls) => ({ school, cls })))
+/**
+ * Партии следов: ШКОЛА даёт цвет ореола, КЛАСС — толщину. Только сочетания, что ЕСТЬ в каталоге
+ * (каждая партия в кадре перебирает все следы — пустые незачем), плюс военный класса 1 — облик
+ * неизвестного ствола (турели базы). Собираются раз на модуль, не в кадре.
+ */
+const TRACER_GROUPS = (() => {
+  const keys = new Set<string>(['military:1'])
+  for (const m of MODULE_CATALOGUE) {
+    if (m.kind !== 'laser') continue
+    const look = laserLook(m.id)
+    keys.add(`${look.school}:${look.cls}`)
+  }
+  return LASER_SCHOOLS.flatMap((school) =>
+    LASER_CLASSES.filter((cls) => keys.has(`${school}:${cls}`)).map((cls) => ({ school, cls })),
+  )
+})()
 
 /**
  * Ядро у всех лазеров белое, цветной только ореол. Цвет — по ШКОЛЕ ствола (военный красный,

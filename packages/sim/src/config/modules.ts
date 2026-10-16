@@ -615,7 +615,8 @@ export const SHRINK_RAY: LaserModule = {
   salvageChance: 0,
   beam: true,
   damage: 0,
-  range: 3000,
+  // Достаёт до корпуса базы, кита и статуи — их радиус сам километры; 3 км не доставали.
+  range: 10_000,
   cooldown: 0,
   heatPerShot: 0.12,
   heatCool: 0.2,
@@ -635,7 +636,8 @@ export const GROW_RAY: LaserModule = {
   salvageChance: 0,
   beam: true,
   damage: 0,
-  range: 3000,
+  // Достаёт до корпуса базы, кита и статуи — их радиус сам километры; 3 км не доставали.
+  range: 10_000,
   cooldown: 0,
   heatPerShot: 0.12,
   heatCool: 0.2,
@@ -654,7 +656,8 @@ export const HOLD_RAY: LaserModule = {
   salvageChance: 0,
   beam: true,
   damage: 0,
-  range: 3000,
+  // Достаёт до корпуса базы, кита и статуи — их радиус сам километры; 3 км не доставали.
+  range: 10_000,
   cooldown: 0,
   heatPerShot: 0.1,
   heatCool: 0.25,
