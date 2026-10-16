@@ -211,7 +211,7 @@ export const RU = {
   'stat.hull': 'КОРПУС',
   'stat.speed': 'СКОРОСТЬ',
   'stat.turn': 'РАЗВОРОТ',
-  'stat.cargo': 'ГРУЗОВОЙ ОТСЕК',
+  'stat.cargo': 'ОТСЕК',
   'stat.jump': 'ПРЫЖОК',
   'stat.thrust': 'ТЯГА',
   'stat.damage': 'УРОН',
