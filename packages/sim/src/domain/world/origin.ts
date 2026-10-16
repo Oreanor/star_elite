@@ -2,7 +2,7 @@ import { Vector3 } from 'three'
 import { PHYSICS } from '../../config/physics'
 import type { World } from './entities'
 import { shiftTrail } from './poseTrail'
-import { shiftAIState } from '../ai/types'
+import { translateNeighborhood, translatePlayer } from './frame'
 
 /**
  * Плавающее начало координат.
@@ -35,75 +35,17 @@ export function maybeShiftOrigin(world: World): void {
   world.originOffset.sub(_shift)
   world.originShift.add(_shift)
 
-  pos.set(0, 0, 0)
-  shiftTrail(world.player.state, _shift)
-  // У игрока пилот бывает тоже — автобой.
-  if (world.player.ai) shiftAIState(world.player.ai, _shift)
-
-  /**
-   * Сдвинуть обязано ВСЁ, у чего есть место в мире. Список тут — ручной, и это его слабость:
-   * заведёшь новый список в `World` и забудешь строку здесь — объекты молча останутся в старых
-   * координатах, то есть окажутся за километры от того места, где им положено быть. Так и
-   * случилось со статуями: их поставили у причала, а после первого же сдвига они уехали за
-   * пол-а.е. Аудит по этому следу вскрыл, что так же забыты были болты, платформы, варп-вспышки,
-   * порталы и вспышки поля. НОВЫЙ СПИСОК С `pos` — НОВАЯ СТРОКА ЗДЕСЬ.
-   */
-  for (const s of world.ships) {
-    s.state.pos.add(_shift)
-    shiftTrail(s.state, _shift)
-    if (s.ai) shiftAIState(s.ai, _shift)
-  }
-  for (const a of world.asteroids) {
-    a.pos.add(_shift)
-    shiftTrail(a, _shift)
-  }
-  for (const p of world.pods) {
-    p.pos.add(_shift)
-    shiftTrail(p, _shift)
-  }
-  for (const m of world.missiles) {
-    m.pos.add(_shift)
-    shiftTrail(m, _shift)
-  }
-  // Болты — снаряды в полёте. Сдвиг случается и посреди боя: без него очередь teleportируется.
-  for (const b of world.bolts) {
-    b.pos.add(_shift)
-    shiftTrail(b, _shift)
-  }
+  translatePlayer(world, _shift)
+  translateNeighborhood(world, _shift)
+  // Перецентровка двигает ВСЁ: кроме окрестности — тела, статуи двора, базы и статуэтки.
   for (const b of world.bodies) {
     b.pos.add(_shift)
     shiftTrail(b, _shift)
   }
-  for (const t of world.titans) {
-    t.pos.add(_shift)
-    shiftTrail(t, _shift)
-  }
   for (const m of world.monoliths) m.pos.add(_shift)
+  for (const r of world.warBases) r.pos.add(_shift)
   for (const f of world.figurines) {
     f.pos.add(_shift)
     shiftTrail(f, _shift)
   }
-  for (const r of world.warBases) r.pos.add(_shift)
-  // Платформы-гнёзда стоят на месте — тем заметнее был бы их прыжок.
-  for (const p of world.platforms) {
-    p.pos.add(_shift)
-    shiftTrail(p, _shift)
-  }
-  for (const t of world.tracers) {
-    t.from.add(_shift)
-    t.to.add(_shift)
-  }
-  for (const e of world.explosions) e.pos.add(_shift)
-  // Ударная волна сноса базы живёт секунды и в километровом масштабе — сдвиг её не минует.
-  for (const w of world.blastwaves) w.pos.add(_shift)
-  // Живут доли секунды, но сдвиг может прийтись ровно на них — и вспышка мигнёт не там.
-  for (const w of world.warps) w.pos.add(_shift)
-  for (const p of world.warpPortals) p.pos.add(_shift)
-  for (const gate of world.jumpGates) gate.pos.add(_shift)
-  for (const f of world.shieldFlashes) {
-    f.pos.add(_shift)
-    f.center.add(_shift)
-  }
-  // `shockwaves` здесь нет намеренно: у вспышки бомбы нет места в мире — это экранный эффект,
-  // а не тело. `muzzleFlashes` тоже: они держатся за id стрелка и едут вместе с ним сами.
 }

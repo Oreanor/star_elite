@@ -4,6 +4,7 @@ import { SCALE } from '../../config/galaxy'
 import { orbitSec } from '../../config/time'
 import type { BodyEntity, OrbitDef, World } from './entities'
 import { shiftTrail } from './poseTrail'
+import { translateNeighborhood, translatePlayer } from './frame'
 
 /**
  * Орбиты тел: угол = phase + rate·t, позиция считается заново каждый шаг.
@@ -20,9 +21,7 @@ const _radial = /* @__PURE__ */ new Vector3()
 const _out = /* @__PURE__ */ new Vector3()
 const _bary = /* @__PURE__ */ new Vector3()
 const _offset = /* @__PURE__ */ new Vector3()
-const _stationBefore = /* @__PURE__ */ new Vector3()
 const _stationShift = /* @__PURE__ */ new Vector3()
-const _playerReferenceBefore = /* @__PURE__ */ new Vector3()
 const _playerReferenceShift = /* @__PURE__ */ new Vector3()
 
 /** Момент для орбит: общие физические секунды с серверного якоря. */
@@ -131,147 +130,104 @@ export function stepOrbitsOnBodies(bodies: BodyEntity[], originOffset: Vector3, 
   }
 }
 
-/** Расставить орбиты на `orbitTime(world)`. */
+/**
+ * Места тел ДО шага орбит — чтобы знать, на сколько уехало каждое. Буфер растёт до числа тел
+ * один раз и дальше переиспользуется: шаг идёт каждый такт.
+ */
+const _before: Vector3[] = []
+
+/** Сдвиг тела `index` за этот шаг орбит. Звать после `stepOrbitsOnBodies`. */
+function bodyShift(world: World, index: number, out: Vector3): Vector3 {
+  const body = world.bodies[index]
+  const before = _before[index]
+  return body && before ? out.copy(body.pos).sub(before) : out.set(0, 0, 0)
+}
+
+/**
+ * С каким телом едет игрок — индекс в `world.bodies`, −1 — ни с каким.
+ *
+ * Сел — с тем, на чём сидит: тело — само тело, военная база — причал (базы стоят у него).
+ * Летит — с ближайшим по поверхности: после взлёта ни станция, ни планета не убегают
+ * со своей орбитальной скоростью, недостижимой в локальном полёте. Камень опорой не бывает:
+ * он сам часть окрестности и едет с той же опорой.
+ */
+function playerFrameIndex(world: World, stationIndex: number): number {
+  const landedId = world.player.landedOn?.bodyId ?? null
+  if (landedId !== null) {
+    const body = world.bodies.findIndex((b) => b.id === landedId)
+    if (body >= 0) return body
+    if (world.warBases.some((r) => r.id === landedId)) return stationIndex
+  }
+  let best = -1
+  let bestSurface = Infinity
+  const pos = world.player.state.pos
+  for (let i = 0; i < world.bodies.length; i++) {
+    const body = world.bodies[i]!
+    const surface = body.pos.distanceTo(pos) - body.radius
+    if (surface < bestSurface) {
+      bestSurface = surface
+      best = i
+    }
+  }
+  return best
+}
+
+/**
+ * Расставить орбиты на `orbitTime(world)` и провезти всё, что едет с телами.
+ *
+ * СИСТЕМЫ ОТСЧЁТА — одно правило: каждый объект едет с телом, к которому привязан.
+ *  • ПРИЧАЛ (первая станция системы): статуи двора и военные базы стоят у него.
+ *  • ЯКОРЬ статуэтки (`anchorId`): поставленная из трюма едет с телом, у которого её поставили;
+ *    без якоря — висит в системе звезды, как и родилась.
+ *  • ОПОРА ИГРОКА (`playerFrameIndex`): игрок и вся окрестность (`translateNeighborhood`) —
+ *    они рождаются и живут вокруг него и обязаны ехать с ним одной системой отсчёта.
+ *
+ * Прежде окрестность ехала с первой станцией, а игрок — со своей опорой: у аванпоста со своей
+ * орбитой всё вокруг проносилось мимо с разницей в сотни километров за такт.
+ */
 export function stepOrbits(world: World, time = orbitTime(world)): void {
-  // Игрок наследует движение ближайшего тела. У станции это станция, у поверхности
-  // планеты — планета: после взлёта ни одна из них не убегает со своей орбитальной
-  // скоростью, которая в локальном полёте была бы недостижима.
-  const station = world.bodies.find((body) => body.kind === 'station')
-  if (station) _stationBefore.copy(station.pos)
-  const landingId = world.player.landedOn?.bodyId ?? null
-  const boundBody = landingId !== null
-    ? world.bodies.find((body) => body.id === landingId) ?? null
-    : null
-  // Сидим на статуе — она не body; едет со станцией, игрок должен получить ТОТ ЖЕ сдвиг.
-  const boundMonolith = landingId !== null && !boundBody
-    ? world.monoliths.find((m) => m.id === landingId) ?? null
-    : null
-  let playerReference = boundBody ?? null
-  if (!playerReference && !boundMonolith) {
-    let bestSurface = Infinity
-    for (const body of world.bodies) {
-      const surface = body.pos.distanceTo(world.player.state.pos) - body.radius
-      if (surface < bestSurface) {
-        bestSurface = surface
-        playerReference = body
-      }
-    }
-  }
-  if (playerReference) _playerReferenceBefore.copy(playerReference.pos)
+  const bodies = world.bodies
+  while (_before.length < bodies.length) _before.push(new Vector3())
+  for (let i = 0; i < bodies.length; i++) _before[i]!.copy(bodies[i]!.pos)
+  const stationIndex = bodies.findIndex((b) => b.kind === 'station')
+  const frame = playerFrameIndex(world, stationIndex)
 
-  stepOrbitsOnBodies(world.bodies, world.originOffset, time)
+  stepOrbitsOnBodies(bodies, world.originOffset, time)
 
-  if (playerReference) {
-    _playerReferenceShift.copy(playerReference.pos).sub(_playerReferenceBefore)
-    world.player.state.pos.add(_playerReferenceShift)
-    /**
-     * Перенос опорой — СМЕНА СИСТЕМЫ ОТСЧЁТА, а не ход корабля: следы поз едут вместе с ним
-     * (как при перецентровке начала координат). Камера получает этот сдвиг сразу целиком
-     * (`originShift`), и покажи рендер его с отставанием на долю такта — корабль у станции
-     * дёргался бы вбок на десятки метров: орбита здесь — десятки км/с. Опорное тело едет
-     * тем же сдвигом, поэтому и его след сдвигаем: относительно игрока оно стоит.
-     */
-    shiftTrail(world.player.state, _playerReferenceShift)
-    /**
-     * Устье гиперпортала открывается В ОКРЕСТНОСТИ ИГРОКА (сотня метров перед носом) и
-     * ехать обязано С ЕГО ОПОРОЙ, а не со станцией. Пока оно ехало со станцией, у планеты
-     * или в открытом космосе опоры расходились, и кольцо уносило РАЗНОСТЬЮ орбитальных
-     * скоростей: время сжато, это десятки км/с, то есть сотни метров за кадр. Пилот стоял
-     * на месте и не находил кольца — оно было уже в километре, а через несколько секунд
-     * в сотнях километров.
-     */
-    for (const gate of world.jumpGates) gate.pos.add(_playerReferenceShift)
-    // Игрок сдвинут НЕ своей скоростью, а орбитой опорного тела (десятки км/с у станции).
-    // Камера живёт в мировых координатах и об этом сдвиге не знает — без поправки она
-    // отстаёт на километры за кадр, и корабль уходит за кромку. Пишем сдвиг в тот же
-    // канал `originShift`, которым камера догоняет перецентровку начала координат.
-    world.originShift.add(_playerReferenceShift)
-  }
-
-  /**
-   * ДВЕ СИСТЕМЫ ОТСЧЁТА окрестности — у каждой свои объекты.
-   *
-   *  • ПРИЧАЛЬНАЯ — первая станция системы: статуи двора и военные базы стоят у неё и едут с ней.
-   *  • МЕСТНАЯ — опора игрока: трафик, камни, контейнеры, ракеты, болты, киты, гнёзда, вспышки
-   *    рождаются и живут ВОКРУГ ИГРОКА и обязаны ехать с ним одной системой отсчёта.
-   *
-   * Прежде всё ехало со станцией. Пока причал в системе был один, это совпадало с опорой игрока.
-   * Но станций по одной на обитаемый мир, у каждой своя орбита: у аванпоста игрока несло 333 км
-   * за такт, а окрестность — 160 км (с главным причалом), и всё вокруг проносилось мимо с
-   * разницей — корабль «тянуло назад», мир трясло, а камень мог прилететь как планета. То же
-   * было и у поверхности планеты, где опора — планета, а окрестность ехала со станцией.
-   */
-  if (station) _stationShift.copy(station.pos).sub(_stationBefore)
-  else _stationShift.set(0, 0, 0)
-
-  if (station && _stationShift.lengthSq() >= 1e-12) {
-    // Статуи стоят У ПРИЧАЛА — без этой строки они и отставали на пол-системы.
-    for (const monolith of world.monoliths) monolith.pos.add(_stationShift)
-    // Пояс глыб держится за Люцифера — едет вместе с причалом и статуями.
-    for (const rock of world.warBases) rock.pos.add(_stationShift)
-    // Сели на статую — едем её сдвигом станции, а не орбитой чужой планеты рядом.
-    if (boundMonolith) {
-      world.player.state.pos.add(_stationShift)
-      shiftTrail(world.player.state, _stationShift)
-      world.originShift.add(_stationShift)
+  // Причал: статуи двора и пояс баз Люцифера.
+  if (stationIndex >= 0) {
+    bodyShift(world, stationIndex, _stationShift)
+    if (_stationShift.lengthSq() >= 1e-12) {
+      for (const monolith of world.monoliths) monolith.pos.add(_stationShift)
+      for (const rock of world.warBases) rock.pos.add(_stationShift)
     }
   }
 
-  // Местная система отсчёта — та, в которой едет игрок: на статуе — причальная, иначе опора.
-  const local = boundMonolith ? _stationShift : playerReference ? _playerReferenceShift : null
-  if (!local || local.lengthSq() < 1e-12) return
+  // Статуэтки с якорем — ходом своего тела (это и есть их ход, его показ интерполирует след).
+  for (const figurine of world.figurines) {
+    if (figurine.anchorId == null) continue
+    const anchor = bodies.findIndex((b) => b.id === figurine.anchorId)
+    if (anchor >= 0) figurine.pos.add(bodyShift(world, anchor, _offset))
+  }
+
+  if (frame < 0) return
+  const local = bodyShift(world, frame, _playerReferenceShift)
+  if (local.lengthSq() < 1e-12) return
   /**
-   * Следы ВСЕХ тел — этим же сдвигом. Игрок с камерой переезжают его разом (`originShift`),
-   * значит и тела обязаны показывать между тактами лишь ход ОТНОСИТЕЛЬНО опоры. Прежде сдвиг
-   * получали только опора и причал: прочие тела тянули его долей такта, и относительно камеры
-   * их носило пилой на сотни метров за такт — дыра «Дверь» в 60 км от причала дрожала на
-   * неровных кадрах. Причал без своего сдвига, наоборот, шёл рывками, когда опорой была планета.
+   * Перенос опорой — СМЕНА СИСТЕМЫ ОТСЧЁТА, а не ход: игрок и окрестность едут с опорой разом,
+   * и следы поз — вместе с ними. Камера живёт в мировых координатах и об этом не знает: сдвиг
+   * идёт ей тем же каналом `originShift`, что и перецентровка начала координат.
    */
-  for (const body of world.bodies) shiftTrail(body, local)
+  translatePlayer(world, local)
+  translateNeighborhood(world, local)
+  world.originShift.add(local)
   /**
-   * Список ручной — и это ВТОРАЯ такая ловушка после `maybeShiftOrigin`. Забудешь сюда новый
-   * список — его объекты останутся в старых координатах, пока игрок уходит по орбите вокруг
-   * звезды. Время в игре сжато, поэтому «отстал» означает не метры, а АСТРОНОМИЧЕСКУЮ ЕДИНИЦУ.
+   * Следы ВСЕХ тел — этим же сдвигом. Игрок с камерой переезжают его разом, значит и тела
+   * обязаны показывать между тактами лишь ход ОТНОСИТЕЛЬНО опоры. Прежде сдвиг получали
+   * только опора и причал: прочие тела тянули его долей такта, и относительно камеры их
+   * носило пилой на сотни метров за такт — дыра «Дверь» в 60 км от причала дрожала.
    */
-  for (const ship of world.ships) {
-    ship.state.pos.add(local)
-    shiftTrail(ship.state, local)
-  }
-  for (const asteroid of world.asteroids) {
-    asteroid.pos.add(local)
-    shiftTrail(asteroid, local)
-  }
-  for (const pod of world.pods) {
-    pod.pos.add(local)
-    shiftTrail(pod, local)
-  }
-  for (const missile of world.missiles) {
-    missile.pos.add(local)
-    shiftTrail(missile, local)
-  }
-  for (const bolt of world.bolts) {
-    bolt.pos.add(local)
-    shiftTrail(bolt, local)
-  }
-  for (const titan of world.titans) {
-    titan.pos.add(local)
-    shiftTrail(titan, local)
-  }
-  for (const platform of world.platforms) {
-    platform.pos.add(local)
-    shiftTrail(platform, local)
-  }
-  for (const tracer of world.tracers) {
-    tracer.from.add(local)
-    tracer.to.add(local)
-  }
-  for (const explosion of world.explosions) explosion.pos.add(local)
-  for (const wave of world.blastwaves) wave.pos.add(local)
-  for (const warp of world.warps) warp.pos.add(local)
-  for (const portal of world.warpPortals) portal.pos.add(local)
-  // Гиперпортала здесь НЕТ намеренно: он едет с опорой игрока выше (`jumpGates`).
-  for (const flash of world.shieldFlashes) {
-    flash.pos.add(local)
-    flash.center.add(local)
-  }
+  for (const body of bodies) shiftTrail(body, local)
+  // Статуэтки — так же, как тела: между тактами виден лишь их ход относительно опоры.
+  for (const figurine of world.figurines) shiftTrail(figurine, local)
 }

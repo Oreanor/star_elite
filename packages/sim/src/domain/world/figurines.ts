@@ -259,6 +259,20 @@ export function scoopFigurinesNear(world: World, ship: ShipEntity): void {
  * `null` — не статуэтка / нет предмета / стыковка. Пересечение — `blocked` (молча);
  * тесный зазор или низкая орбита — `no-room` (HUD скажет жёлтым).
  */
+/** Ближайшее по поверхности тело — то же правило, по которому выбирается опора игрока. */
+function nearestBodyId(world: World, pos: Vector3): number | undefined {
+  let best: number | undefined
+  let bestSurface = Infinity
+  for (const body of world.bodies) {
+    const surface = body.pos.distanceTo(pos) - body.radius
+    if (surface < bestSurface) {
+      bestSurface = surface
+      best = body.id
+    }
+  }
+  return best
+}
+
 export function placeFigurineFromHold(
   world: World,
   ship: ShipEntity,
@@ -294,6 +308,8 @@ export function placeFigurineFromHold(
     spinAxis,
     spin: FIGURINE.SPIN * (0.7 + rng() * 0.6),
     radius: specimen.radius,
+    // Ставят у пилота — и едет она с ТЕМ ЖЕ телом, что и он (иначе уплыла бы орбитой).
+    anchorId: nearestBodyId(world, _deploy),
     alive: true,
   })
 
