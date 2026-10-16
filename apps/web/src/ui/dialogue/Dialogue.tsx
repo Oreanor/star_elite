@@ -200,20 +200,27 @@ export function Dialogue({
 
   // ─ Дело: кнопки зовут домен напрямую (правило одно — в `contracts`), слова — из словаря.
   const jobAsk = () => {
-    if (ended) return
+    if (ended || busy) return
     rememberPilot(world, other)
-    push({ who: 'you', text: t('job.ask') })
+    // Что предложить — решает домен (оферта открывается здесь), а ГОЛОС — бот: он видит
+    // оферту и взятое дело в фактах и ответит в своём нраве, ведомому — как напарник.
     const offer = revealOffer(world, other)
+    if (chatAvailable) {
+      void converse(t('job.ask'), () => cannedJobReply(offer))
+      return
+    }
+    push({ who: 'you', text: t('job.ask') })
+    push({ who: 'them', text: cannedJobReply(offer) })
+    bump()
+  }
+  /** Заготовка — только когда живой модели нет: без ключа или канал отвалился. */
+  const cannedJobReply = (offer: ReturnType<typeof revealOffer>): string => {
+    if (offer) return offerText(offer)
     // «Лети с миром» уместно чужому. Тот, кто летит с тобой — ведомый или заказчик, чьё
     // дело ты уже ведёшь, — отвечает как напарник, а не прощается.
-    const none =
-      other.ai?.escortOf === world.player.id
-        ? t('job.none.wing')
-        : activeContracts(world).some((c) => c.giverId === other.acquaintanceId)
-          ? t('job.none.ours')
-          : t('job.none')
-    push({ who: 'them', text: offer ? offerText(offer) : none })
-    bump()
+    if (other.ai?.escortOf === world.player.id) return t('job.none.wing')
+    if (activeContracts(world).some((c) => c.giverId === other.acquaintanceId)) return t('job.none.ours')
+    return t('job.none')
   }
   const jobAccept = () => {
     if (ended || acceptBlock(world, other) !== null) return
@@ -272,10 +279,18 @@ export function Dialogue({
     bump()
   }
 
-  const send = async () => {
+  const send = () => {
     const text = input.trim()
     if (!text || busy || ended) return
     setInput('')
+    void converse(text)
+  }
+
+  /**
+   * Реплика игрока → модель → ответ в ленту. `canned` — запасная реплика, если ответила
+   * не модель: у кнопок с фактом (работа) локальная болтовня-заглушка хуже заготовки.
+   */
+  const converse = async (text: string, canned?: () => string) => {
     push({ who: 'you', text })
     setBusy(true)
 
@@ -297,7 +312,12 @@ export function Dialogue({
       reply = await negotiate(ctx, [...turns, { who: 'you', text }], text)
     }
 
-    deliverReply(reply)
+    if (canned && reply.source === 'fallback') {
+      push({ who: 'them', text: canned() })
+      bump()
+    } else {
+      deliverReply(reply)
+    }
     pinMutatingDigests(mem)
     setBusy(false)
     // Поле было disabled на время ответа — фокус слетел. Возвращаем его, чтобы можно
