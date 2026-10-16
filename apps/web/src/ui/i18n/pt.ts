@@ -319,8 +319,7 @@ export const PT: Record<keyof typeof RU, string> = {
   // Navegação a partir da tela inicial da estação.
   'station.nav.planet': 'PLANETA',
   'station.nav.shop': 'MERCADO',
-  'station.nav.people': 'PESSOAS',
-  'station.nav.station': 'ESTAÇÃO',
+  'station.nav.comms': 'CONTATOS',
   'station.nav.map': 'MAPA',
   'station.nav.ref': 'GUIA',
   'station.atPlanet': '{station} (planeta {planet})',

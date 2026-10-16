@@ -317,8 +317,7 @@ export const RU = {
   // Навигация со стартового экрана станции.
   'station.nav.planet': 'ПЛАНЕТА',
   'station.nav.shop': 'ТОРГОВЛЯ',
-  'station.nav.people': 'ЛЮДИ',
-  'station.nav.station': 'СТАНЦИЯ',
+  'station.nav.comms': 'СВЯЗЬ',
   'station.nav.map': 'КАРТА',
   'station.nav.ref': 'СПРАВОЧНИК',
   'station.atPlanet': '{station} (планета {planet})',
