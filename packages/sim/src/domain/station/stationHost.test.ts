@@ -7,6 +7,8 @@ import { localSettlement } from './trade'
 import { SHARED_START_INDEX } from '../galaxy/sharedStart'
 import { Quaternion, Vector3 } from 'three'
 import { orbitTime, stepOrbits } from '../world/orbits'
+import { beginTrailTick, endTrailFrame, renderPos } from '../world/poseTrail'
+import { PHYSICS } from '../../config/physics'
 
 /**
  * «Где я» у причала — планета ЭТОЙ станции. Станций в системе по одной на населённый мир,
@@ -76,5 +78,40 @@ describe('окрестность едет с игроком', () => {
     if (ship) expect(ship.state.pos.clone().sub(p.state.pos).distanceTo(near)).toBeLessThan(1)
     // И сама станция-опора стоит рядом, как стояла.
     expect(outpost.pos.distanceTo(p.state.pos)).toBeCloseTo(outpost.radius * 3, -1)
+  })
+})
+
+describe('тела между тактами — в системе отсчёта игрока', () => {
+  // Пойманный баг: игрок с камерой переезжают с опорой разом, а прочие тела тянули этот перенос
+  // долей такта. Чёрную дыру «Дверь» в 60 км от причала носило относительно камеры пилой на
+  // сотни метров за такт — на неровных кадрах она дрожала. Показ между тактами обязан вести
+  // лишь ход ОТНОСИТЕЛЬНО опоры: на любой доле такта — между «до» и «после».
+  it('у причала показанная дыра относительно игрока идёт ровно от прежнего места к новому', () => {
+    const world = createWorld({ ...systemDefFor(SHARED_START_INDEX, GALAXY.SEED), patrols: [], belt: null })
+    const station = world.bodies.find((b) => b.kind === 'station')!
+    const hole = world.bodies.find((b) => b.kind === 'blackhole')!
+    const p = world.player
+    p.state.pos.copy(station.pos).add(new Vector3(0, 0, station.radius * 3))
+    const t0 = orbitTime(world)
+    stepOrbits(world, t0)
+    beginTrailTick(world)
+    endTrailFrame(world)
+    const before = hole.pos.clone().sub(p.state.pos)
+
+    beginTrailTick(world)
+    stepOrbits(world, t0 + PHYSICS.FIXED_DT * 20)
+    endTrailFrame(world)
+    const after = hole.pos.clone().sub(p.state.pos)
+    // Сам перенос велик — иначе тест ничего не ловит.
+    expect(station.pos.distanceTo(p.state.pos)).toBeLessThan(station.radius * 4)
+
+    const h = new Vector3()
+    const me = new Vector3()
+    for (const alpha of [0, 0.25, 0.5, 1]) {
+      world.renderAlpha = alpha
+      const shown = renderPos(world, hole, h).sub(renderPos(world, p.state, me))
+      const want = before.clone().lerp(after, alpha)
+      expect(shown.distanceTo(want), `alpha ${alpha}`).toBeLessThan(1)
+    }
   })
 })

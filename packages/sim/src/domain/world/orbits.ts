@@ -172,7 +172,6 @@ export function stepOrbits(world: World, time = orbitTime(world)): void {
      * тем же сдвигом, поэтому и его след сдвигаем: относительно игрока оно стоит.
      */
     shiftTrail(world.player.state, _playerReferenceShift)
-    shiftTrail(playerReference, _playerReferenceShift)
     /**
      * Устье гиперпортала открывается В ОКРЕСТНОСТИ ИГРОКА (сотня метров перед носом) и
      * ехать обязано С ЕГО ОПОРОЙ, а не со станцией. Пока оно ехало со станцией, у планеты
@@ -206,8 +205,6 @@ export function stepOrbits(world: World, time = orbitTime(world)): void {
   else _stationShift.set(0, 0, 0)
 
   if (station && _stationShift.lengthSq() >= 1e-12) {
-    // Следы причала: сдвиг — смена системы отсчёта, интерполируется только собственный ход.
-    if (station !== playerReference) shiftTrail(station, _stationShift)
     // Статуи стоят У ПРИЧАЛА — без этой строки они и отставали на пол-системы.
     for (const monolith of world.monoliths) monolith.pos.add(_stationShift)
     // Пояс глыб держится за Люцифера — едет вместе с причалом и статуями.
@@ -223,6 +220,14 @@ export function stepOrbits(world: World, time = orbitTime(world)): void {
   // Местная система отсчёта — та, в которой едет игрок: на статуе — причальная, иначе опора.
   const local = boundMonolith ? _stationShift : playerReference ? _playerReferenceShift : null
   if (!local || local.lengthSq() < 1e-12) return
+  /**
+   * Следы ВСЕХ тел — этим же сдвигом. Игрок с камерой переезжают его разом (`originShift`),
+   * значит и тела обязаны показывать между тактами лишь ход ОТНОСИТЕЛЬНО опоры. Прежде сдвиг
+   * получали только опора и причал: прочие тела тянули его долей такта, и относительно камеры
+   * их носило пилой на сотни метров за такт — дыра «Дверь» в 60 км от причала дрожала на
+   * неровных кадрах. Причал без своего сдвига, наоборот, шёл рывками, когда опорой была планета.
+   */
+  for (const body of world.bodies) shiftTrail(body, local)
   /**
    * Список ручной — и это ВТОРАЯ такая ловушка после `maybeShiftOrigin`. Забудешь сюда новый
    * список — его объекты останутся в старых координатах, пока игрок уходит по орбите вокруг
