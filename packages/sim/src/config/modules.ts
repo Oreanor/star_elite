@@ -52,7 +52,7 @@ export const ENGINE_STANDARD: EngineModule = {
   mass: 2.0,
   cost: 18000,
   salvageChance: 0.35,
-  thrust: 260,
+  thrust: 312,
   maxSpeed: 220,
   optimalMass: 13,
   boostMult: 2.4,
@@ -68,7 +68,7 @@ export const ENGINE_MILITARY: EngineModule = {
   mass: 3.4, // тяжёлый: часть выигрыша съедает собственная масса
   cost: 76000,
   salvageChance: 0.15,
-  thrust: 380,
+  thrust: 551,
   maxSpeed: 265,
   optimalMass: 16,
   boostMult: 2.8,
@@ -105,7 +105,7 @@ const ENGINE_STANDARD_B: EngineModule = {
   mass: 2.4,
   cost: 34000,
   salvageChance: 0.3,
-  thrust: 300,
+  thrust: 360,
   maxSpeed: 240,
   optimalMass: 14,
   boostMult: 2.5,
@@ -124,7 +124,7 @@ const ENGINE_SWIFT: EngineModule = {
   mass: 1.7, // легче даже стокового 2C — в этом весь смысл линии
   cost: 52000,
   salvageChance: 0.25,
-  thrust: 290,
+  thrust: 348,
   maxSpeed: 245,
   optimalMass: 14,
   boostMult: 2.6,
@@ -142,7 +142,7 @@ const ENGINE_SWIFT_B: EngineModule = {
   mass: 2.9,
   cost: 124000,
   salvageChance: 0.1,
-  thrust: 360,
+  thrust: 522,
   maxSpeed: 270,
   optimalMass: 15,
   boostMult: 2.9,
@@ -161,7 +161,7 @@ const ENGINE_MILITARY_C: EngineModule = {
   mass: 3.2,
   cost: 54000,
   salvageChance: 0.18,
-  thrust: 340,
+  thrust: 493,
   maxSpeed: 250,
   optimalMass: 15,
   boostMult: 2.6,
@@ -323,8 +323,8 @@ export const SHIELD_STANDARD: ShieldModule = {
   mass: 1.2,
   cost: 21000,
   salvageChance: 0.3,
-  capacity: 250,
-  regen: 4.5,
+  capacity: 325,
+  regen: 5.85,
   regenDelay: 4,
 }
 
@@ -337,8 +337,8 @@ export const SHIELD_HEAVY: ShieldModule = {
   mass: 2.6,
   cost: 88000,
   salvageChance: 0.12,
-  capacity: 440,
-  regen: 6.0,
+  capacity: 748,
+  regen: 10.2,
   regenDelay: 4.5,
 }
 
@@ -366,8 +366,8 @@ const SHIELD_STANDARD_B: ShieldModule = {
   mass: 1.6,
   cost: 40000,
   salvageChance: 0.28,
-  capacity: 285,
-  regen: 5.2,
+  capacity: 370,
+  regen: 6.76,
   regenDelay: 3.8,
 }
 
@@ -382,8 +382,8 @@ const SHIELD_MIRAGE: ShieldModule = {
   mass: 0.9, // легче стокового 2C
   cost: 52000,
   salvageChance: 0.22,
-  capacity: 200, // чуть меньше 2C: линия берёт не ёмкостью
-  regen: 6.5, // зато отходит вдвое быстрее
+  capacity: 260, // чуть меньше 2C: линия берёт не ёмкостью
+  regen: 8.45, // зато отходит вдвое быстрее
   regenDelay: 3.0,
 }
 
@@ -395,8 +395,8 @@ const SHIELD_MIRAGE_B: ShieldModule = {
   mass: 1.9, // легче «Бастиона», оттого и манёвр щадит
   cost: 130000,
   salvageChance: 0.1,
-  capacity: 355, // ёмкости меньше топового «Бастиона»
-  regen: 9.0, // но регенерация лучшая в каталоге
+  capacity: 604, // ёмкости меньше топового «Бастиона»
+  regen: 15.3, // но регенерация лучшая в каталоге
   regenDelay: 3.2,
 }
 
@@ -410,8 +410,8 @@ const SHIELD_HEAVY_C: ShieldModule = {
   mass: 2.3,
   cost: 60000,
   salvageChance: 0.15,
-  capacity: 335,
-  regen: 5.0,
+  capacity: 570,
+  regen: 8.5,
   regenDelay: 4.6,
 }
 
@@ -436,7 +436,7 @@ export const ARMOUR_COMPOSITE: ArmourModule = {
   mass: 2.2,
   cost: 34000,
   salvageChance: 0.4,
-  hull: 210,
+  hull: 273,
 }
 
 // «Сталь» — дешёвый мясистый прокат: прочности за кредит много, но масса зверская.
@@ -450,7 +450,7 @@ const ARMOUR_STEEL_2: ArmourModule = {
   mass: 3.2, // тяжелее композита в полтора раза
   cost: 22000, // и заметно дешевле его
   salvageChance: 0.45,
-  hull: 275,
+  hull: 358,
 }
 
 export const ARMOUR_STEEL_3: ArmourModule = {
@@ -461,7 +461,7 @@ export const ARMOUR_STEEL_3: ArmourModule = {
   mass: 4.5, // самый прочный корпус в каталоге и самый тяжёлый
   cost: 55000,
   salvageChance: 0.2,
-  hull: 450,
+  hull: 720,
 }
 
 // «Композит» — сбалансированная середина. 2B поверх стокового композита: чуть
@@ -474,7 +474,7 @@ const ARMOUR_COMPOSITE_B: ArmourModule = {
   mass: 2.5,
   cost: 48000,
   salvageChance: 0.35,
-  hull: 260,
+  hull: 338,
 }
 
 // «Керамет» — лёгкая дорогая линия. Прочности на тонну больше, чем у стали, но и
@@ -498,7 +498,7 @@ const ARMOUR_CERAMET_2: ArmourModule = {
   mass: 1.9, // легче даже стокового композита
   cost: 52000,
   salvageChance: 0.3,
-  hull: 250,
+  hull: 325,
 }
 
 const ARMOUR_CERAMET_3: ArmourModule = {
@@ -509,7 +509,7 @@ const ARMOUR_CERAMET_3: ArmourModule = {
   mass: 2.6, // вдвое легче стального 3C при корпусе лишь немногим меньше
   cost: 78000,
   salvageChance: 0.15,
-  hull: 375,
+  hull: 600,
 }
 
 // ─── Лазеры ──────────────────────────────────────────────────────────────────
@@ -1008,6 +1008,12 @@ const MISSILE_SLEDGE: MissileModule = {
   seekerRate: 1.3, // выше turnRate, но едва: самая срываемая головка в каталоге
   lifetime: 15,
 }
+
+// ЛЕСТНИЦА КЛАССОВ. Щиты, броня и двигатели 2-го и 3-го класса усилены против 1-го
+// (щит ×1.3/×1.7, броня ×1.3/×1.6, тяга ×1.2/×1.45): прежде
+// класс 3 был лишь на 10–40% сильнее первого при цене в 5–15 раз — копить было не на что.
+// Потолок скорости двигателей не трогали: темп боя держится им, а не тягой. Маневровые —
+// тоже: резче разворот = вертлявее нос, а наводиться и так непросто.
 
 // ─── Трюм ────────────────────────────────────────────────────────────────────
 //
