@@ -16,6 +16,7 @@ import {
   Explosions,
   ExplosionChunks,
   Missiles,
+  MissileGlows,
   MuzzleFlashes,
   StationShields,
   TractorBeam,
@@ -96,6 +97,7 @@ export function WorldVisuals() {
         <CargoPods />
         <TractorBeam />
         <Missiles />
+        <MissileGlows />
 
         <Exhaust />
         <Tracers />

@@ -15,7 +15,7 @@ import {
 import { GUNNERY, MODULE_CATALOGUE, renderPos, renderQuat, renderTime, type Tracer, type World } from '@elite/sim'
 import { shownShipPoint } from '../shownPose'
 import { useSession } from '../../session/GameContext'
-import { EXPLOSION, LASER, LASER_CLASS_WIDTH, LASER_SCHOOL_GLOW, MUZZLE, SHIELD_FLASH, WARP_FLASH } from '../config'
+import { EXPLOSION, LASER, LASER_CLASS_WIDTH, LASER_SCHOOL_GLOW, MISSILE_GLOW, MUZZLE, SHIELD_FLASH, WARP_FLASH } from '../config'
 import { LASER_SCHOOLS, laserLook, laserSchool } from '../laserSchool'
 import {
   explosionMaterial,
@@ -592,6 +592,65 @@ export function Missiles() {
   return (
     <instancedMesh ref={ref} args={[missileGeometry(), missileMaterial(), MAX_MISSILES]} frustumCulled={false} />
   )
+}
+
+const _missileTail = /* @__PURE__ */ new Vector3()
+const _missileTint = /* @__PURE__ */ new Color()
+const _missileBase = /* @__PURE__ */ new Color(MISSILE_GLOW.COLOR)
+
+/**
+ * Огонь ракеты: вспышка пуска и ровный огонёк двигателя за кормой — тем же круглым
+ * аддитивным шаром, что у дульных вспышек. Один InstancedMesh, ноль аллокаций в кадре.
+ */
+export function MissileGlows() {
+  const session = useSession()
+  const ref = useRef<InstancedMesh>(null)
+  const geometry = useMemo(() => new PlaneGeometry(1, 1), [])
+  const material = useMemo(muzzleFlashMaterial, [])
+  const colors = useMemo(() => new InstancedBufferAttribute(new Float32Array(MAX_MISSILES * 3), 3), [])
+
+  useEffect(() => {
+    const mesh = ref.current
+    if (mesh) mesh.instanceColor = colors
+  }, [colors])
+
+  useFrame((state) => {
+    const mesh = ref.current
+    if (!mesh) return
+    const world = session.world
+    const now = renderTime(world)
+    const cam = state.camera
+    let count = 0
+    for (const missile of world.missiles) {
+      if (!missile.alive || count >= MAX_MISSILES) continue
+      renderPos(world, missile, _dummy.position)
+      renderQuat(world, missile, _dummy.quaternion)
+      // За кормой: нос ракеты — −z, огонь — по +z.
+      _missileTail.set(0, 0, MISSILE_GLOW.TAIL).applyQuaternion(_dummy.quaternion).add(_dummy.position)
+
+      // Вспышка пуска гаснет за LAUNCH_TIME; дальше — ровный огонёк двигателя.
+      const age = now - missile.born
+      const launch = age >= 0 && age < MISSILE_GLOW.LAUNCH_TIME ? 1 - age / MISSILE_GLOW.LAUNCH_TIME : 0
+      const radius = MISSILE_GLOW.ENGINE_RADIUS + (MISSILE_GLOW.LAUNCH_RADIUS - MISSILE_GLOW.ENGINE_RADIUS) * launch * launch
+      // Не мельче заданного угла — иначе вдали ракета пропадает из вида совсем.
+      const minR = cam.position.distanceTo(_missileTail) * MISSILE_GLOW.MIN_ANGULAR
+      _missileTint.copy(_missileBase).lerp(_white, 0.35 + 0.5 * launch)
+      _missileTint.multiplyScalar(MISSILE_GLOW.ENGINE_BRIGHTNESS * (1 + launch))
+
+      _dummy.position.copy(_missileTail)
+      _dummy.quaternion.copy(cam.quaternion)
+      _dummy.scale.setScalar(Math.max(radius, minR))
+      _dummy.updateMatrix()
+      mesh.setMatrixAt(count, _dummy.matrix)
+      mesh.setColorAt(count, _missileTint)
+      count++
+    }
+    mesh.count = count
+    mesh.instanceMatrix.needsUpdate = true
+    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true
+  })
+
+  return <instancedMesh ref={ref} args={[geometry, material, MAX_MISSILES]} frustumCulled={false} />
 }
 
 /**
