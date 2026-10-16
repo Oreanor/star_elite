@@ -5,6 +5,8 @@ import { createWorld } from '../world'
 import { stationHost } from './docking'
 import { localSettlement } from './trade'
 import { SHARED_START_INDEX } from '../galaxy/sharedStart'
+import { Quaternion, Vector3 } from 'three'
+import { orbitTime, stepOrbits } from '../world/orbits'
 
 /**
  * «Где я» у причала — планета ЭТОЙ станции. Станций в системе по одной на населённый мир,
@@ -47,5 +49,32 @@ describe('рынок причала', () => {
       expect(own).not.toBeNull()
       expect(localSettlement(world)).toBe(own)
     }
+  })
+})
+
+describe('окрестность едет с игроком', () => {
+  // Пойманный баг: местная динамика (трафик, камни) ехала с ПЕРВОЙ станцией системы, а игрок —
+  // со своей опорой. У аванпоста с его собственной орбитой всё вокруг проносилось мимо с
+  // разницей в сотни километров за такт: корабль «тянуло назад», мир трясло.
+  it('у второй станции корабль и камень рядом не уезжают от игрока по орбите', () => {
+    const world = createWorld({ ...systemDefFor(SHARED_START_INDEX, GALAXY.SEED), patrols: [], belt: null })
+    const stations = world.bodies.filter((b) => b.kind === 'station')
+    const outpost = stations[1]!
+    expect(stations[0]).not.toBe(outpost)
+    const p = world.player
+    p.state.pos.copy(outpost.pos).add(new Vector3(0, 0, outpost.radius * 3))
+    const ship = world.ships[0] ?? null
+    const near = new Vector3(0, 0, 500)
+    if (ship) ship.state.pos.copy(p.state.pos).add(near)
+    const rock = { id: world.ids.next(), kind: 'asteroid' as const, pos: p.state.pos.clone().add(new Vector3(800, 0, 0)), vel: new Vector3(), quat: new Quaternion(), spin: new Vector3(), radius: 20, hull: 1, shape: 0, alive: true }
+    world.asteroids.push(rock)
+    const rockRel = rock.pos.clone().sub(p.state.pos)
+
+    stepOrbits(world, orbitTime(world) + 60)
+
+    expect(rock.pos.clone().sub(p.state.pos).distanceTo(rockRel)).toBeLessThan(1)
+    if (ship) expect(ship.state.pos.clone().sub(p.state.pos).distanceTo(near)).toBeLessThan(1)
+    // И сама станция-опора стоит рядом, как стояла.
+    expect(outpost.pos.distanceTo(p.state.pos)).toBeCloseTo(outpost.radius * 3, -1)
   })
 })

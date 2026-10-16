@@ -189,73 +189,84 @@ export function stepOrbits(world: World, time = orbitTime(world)): void {
     world.originShift.add(_playerReferenceShift)
   }
 
-  // Остальная динамическая окрестность по-прежнему рождена у станции и живёт
-  // в её поступательной системе отсчёта.
-  if (station) {
-    _stationShift.copy(station.pos).sub(_stationBefore)
-    if (_stationShift.lengthSq() < 1e-12) return
-    /**
-     * Список ручной — и это ВТОРАЯ такая ловушка после `maybeShiftOrigin`. Забудешь сюда новый
-     * список — его объекты останутся в старых координатах, пока причал уходит по орбите вокруг
-     * звезды. Время в игре сжато, поэтому «отстал» означает не метры, а АСТРОНОМИЧЕСКУЮ ЕДИНИЦУ:
-     * ровно так статуи, поставленные в двадцати километрах от причала, оказывались в 500
-     * световых секундах. Всё, что живёт в окрестности станции, обязано ехать вместе с ней.
-     */
-    // Окрестность едет со станцией — это тоже смена системы отсчёта, следы поз едут с ней
-    // (см. перенос игрока выше): интерполируется только собственный ход, не орбита причала.
+  /**
+   * ДВЕ СИСТЕМЫ ОТСЧЁТА окрестности — у каждой свои объекты.
+   *
+   *  • ПРИЧАЛЬНАЯ — первая станция системы: статуи двора и военные базы стоят у неё и едут с ней.
+   *  • МЕСТНАЯ — опора игрока: трафик, камни, контейнеры, ракеты, болты, киты, гнёзда, вспышки
+   *    рождаются и живут ВОКРУГ ИГРОКА и обязаны ехать с ним одной системой отсчёта.
+   *
+   * Прежде всё ехало со станцией. Пока причал в системе был один, это совпадало с опорой игрока.
+   * Но станций по одной на обитаемый мир, у каждой своя орбита: у аванпоста игрока несло 333 км
+   * за такт, а окрестность — 160 км (с главным причалом), и всё вокруг проносилось мимо с
+   * разницей — корабль «тянуло назад», мир трясло, а камень мог прилететь как планета. То же
+   * было и у поверхности планеты, где опора — планета, а окрестность ехала со станцией.
+   */
+  if (station) _stationShift.copy(station.pos).sub(_stationBefore)
+  else _stationShift.set(0, 0, 0)
+
+  if (station && _stationShift.lengthSq() >= 1e-12) {
+    // Следы причала: сдвиг — смена системы отсчёта, интерполируется только собственный ход.
     if (station !== playerReference) shiftTrail(station, _stationShift)
-    for (const ship of world.ships) {
-      ship.state.pos.add(_stationShift)
-      shiftTrail(ship.state, _stationShift)
-    }
-    for (const asteroid of world.asteroids) {
-      asteroid.pos.add(_stationShift)
-      shiftTrail(asteroid, _stationShift)
-    }
-    for (const pod of world.pods) {
-      pod.pos.add(_stationShift)
-      shiftTrail(pod, _stationShift)
-    }
-    for (const missile of world.missiles) {
-      missile.pos.add(_stationShift)
-      shiftTrail(missile, _stationShift)
-    }
-    for (const bolt of world.bolts) {
-      bolt.pos.add(_stationShift)
-      shiftTrail(bolt, _stationShift)
-    }
-    for (const titan of world.titans) {
-      titan.pos.add(_stationShift)
-      shiftTrail(titan, _stationShift)
-    }
     // Статуи стоят У ПРИЧАЛА — без этой строки они и отставали на пол-системы.
     for (const monolith of world.monoliths) monolith.pos.add(_stationShift)
     // Пояс глыб держится за Люцифера — едет вместе с причалом и статуями.
     for (const rock of world.warBases) rock.pos.add(_stationShift)
-    for (const platform of world.platforms) {
-      platform.pos.add(_stationShift)
-      shiftTrail(platform, _stationShift)
-    }
-    for (const tracer of world.tracers) {
-      tracer.from.add(_stationShift)
-      tracer.to.add(_stationShift)
-    }
-    for (const explosion of world.explosions) explosion.pos.add(_stationShift)
-    for (const wave of world.blastwaves) wave.pos.add(_stationShift)
-    for (const warp of world.warps) warp.pos.add(_stationShift)
-    for (const portal of world.warpPortals) portal.pos.add(_stationShift)
-    // Гиперпортала здесь НЕТ намеренно: он едет с опорой ИГРОКА (см. выше). У причала
-    // это та же станция, а у планеты и в открытом космосе — другое тело, и сдвиг станции
-    // уносил бы кольцо от корабля. Двух сдвигов подряд оно тоже не переживёт.
-    for (const flash of world.shieldFlashes) {
-      flash.pos.add(_stationShift)
-      flash.center.add(_stationShift)
-    }
     // Сели на статую — едем её сдвигом станции, а не орбитой чужой планеты рядом.
     if (boundMonolith) {
       world.player.state.pos.add(_stationShift)
       shiftTrail(world.player.state, _stationShift)
       world.originShift.add(_stationShift)
     }
+  }
+
+  // Местная система отсчёта — та, в которой едет игрок: на статуе — причальная, иначе опора.
+  const local = boundMonolith ? _stationShift : playerReference ? _playerReferenceShift : null
+  if (!local || local.lengthSq() < 1e-12) return
+  /**
+   * Список ручной — и это ВТОРАЯ такая ловушка после `maybeShiftOrigin`. Забудешь сюда новый
+   * список — его объекты останутся в старых координатах, пока игрок уходит по орбите вокруг
+   * звезды. Время в игре сжато, поэтому «отстал» означает не метры, а АСТРОНОМИЧЕСКУЮ ЕДИНИЦУ.
+   */
+  for (const ship of world.ships) {
+    ship.state.pos.add(local)
+    shiftTrail(ship.state, local)
+  }
+  for (const asteroid of world.asteroids) {
+    asteroid.pos.add(local)
+    shiftTrail(asteroid, local)
+  }
+  for (const pod of world.pods) {
+    pod.pos.add(local)
+    shiftTrail(pod, local)
+  }
+  for (const missile of world.missiles) {
+    missile.pos.add(local)
+    shiftTrail(missile, local)
+  }
+  for (const bolt of world.bolts) {
+    bolt.pos.add(local)
+    shiftTrail(bolt, local)
+  }
+  for (const titan of world.titans) {
+    titan.pos.add(local)
+    shiftTrail(titan, local)
+  }
+  for (const platform of world.platforms) {
+    platform.pos.add(local)
+    shiftTrail(platform, local)
+  }
+  for (const tracer of world.tracers) {
+    tracer.from.add(local)
+    tracer.to.add(local)
+  }
+  for (const explosion of world.explosions) explosion.pos.add(local)
+  for (const wave of world.blastwaves) wave.pos.add(local)
+  for (const warp of world.warps) warp.pos.add(local)
+  for (const portal of world.warpPortals) portal.pos.add(local)
+  // Гиперпортала здесь НЕТ намеренно: он едет с опорой игрока выше (`jumpGates`).
+  for (const flash of world.shieldFlashes) {
+    flash.pos.add(local)
+    flash.center.add(local)
   }
 }
