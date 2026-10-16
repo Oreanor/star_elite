@@ -256,7 +256,7 @@ export function SlotModal({
   const holdColumns = moduleColumns(world, { hardpointIndex: slot.hardpointIndex })
 
   return (
-    <Modal onClose={onClose} wide>
+    <Modal onClose={onClose} fit>
         {/* Шапка: вид слота словом и кнопка закрытия. */}
         <div className="flex items-start justify-between gap-4">
           <h3 className="text-sm tracking-[0.25em]" style={{ color: DIM }}>
@@ -312,7 +312,7 @@ export function SlotModal({
 
             {/* Варианты — ТЕ ЖЕ таблицы, что в торговле (`moduleColumns`): магазин слева, твой
                 трюм справа. Клик по строке сам спрашивает и ставит; заголовки сортируют. */}
-            <div className="grid grid-cols-1 gap-x-8 lg:grid-cols-2">
+            <div className="grid grid-cols-[auto_auto] gap-x-10">
             <OptionTable
               title={t('ship.col.shop')}
               empty={t('ship.noneShop')}

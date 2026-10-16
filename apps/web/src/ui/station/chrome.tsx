@@ -289,6 +289,7 @@ export function Modal({
   children,
   wide,
   medium,
+  fit,
   z = 50,
 }: {
   onClose: () => void
@@ -296,6 +297,8 @@ export function Modal({
   wide?: boolean
   /** Средняя ширина: вопрос с несколькими кнопками в одну строку («купить / купить и поставить / отмена»). */
   medium?: boolean
+  /** По содержимому: окно ровно такой ширины, чтобы таблицы влезли без переносов (до края экрана). */
+  fit?: boolean
   z?: number
 }) {
   return (
@@ -305,7 +308,7 @@ export function Modal({
       onClick={onClose}
     >
       <div
-        className={`w-full rounded-2xl border p-6 backdrop-blur-md ${wide ? 'max-h-[85vh] max-w-6xl overflow-y-auto' : medium ? 'max-w-lg' : 'max-w-sm'}`}
+        className={`rounded-2xl border p-6 backdrop-blur-md ${fit ? 'max-h-[85vh] w-max max-w-[95vw] overflow-y-auto' : `w-full ${wide ? 'max-h-[85vh] max-w-6xl overflow-y-auto' : medium ? 'max-w-lg' : 'max-w-sm'}`}`}
         onClick={(e) => e.stopPropagation()}
         style={GLASS_PANEL}
       >
