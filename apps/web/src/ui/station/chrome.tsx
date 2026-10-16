@@ -305,7 +305,7 @@ export function Modal({
       onClick={onClose}
     >
       <div
-        className={`w-full rounded-2xl border p-6 backdrop-blur-md ${wide ? 'max-h-[85vh] max-w-4xl overflow-y-auto' : medium ? 'max-w-lg' : 'max-w-sm'}`}
+        className={`w-full rounded-2xl border p-6 backdrop-blur-md ${wide ? 'max-h-[85vh] max-w-6xl overflow-y-auto' : medium ? 'max-w-lg' : 'max-w-sm'}`}
         onClick={(e) => e.stopPropagation()}
         style={GLASS_PANEL}
       >
@@ -400,7 +400,10 @@ export function Table<Row>({
   const showHead = columns.some((c) => c.header !== '')
 
   return (
-    <table className="w-full border-collapse text-sm">
+    // Без переносов: строка таблицы — одна строка экрана (имя «Лучевой лазер 3 «Клинок»» в две
+    // строки ломало ритм списка). Не влезло — таблица прокручивается вбок, а не ломает строки.
+    <div className="overflow-x-auto">
+    <table className="w-full border-collapse whitespace-nowrap text-sm">
       {/* Ширины — колонкам, а не заголовкам: заголовок может накрывать несколько колонок. */}
       <colgroup>
         {columns.map((c) => (
@@ -495,5 +498,6 @@ export function Table<Row>({
         })}
       </tbody>
     </table>
+    </div>
   )
 }

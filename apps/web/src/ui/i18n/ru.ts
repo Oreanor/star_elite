@@ -264,7 +264,7 @@ export const RU = {
   'station.market.title': 'ТОВАРЫ',
   'station.outfit.title': 'ОБОРУДОВАНИЕ',
   'station.outfit.empty': 'Оборудования в продаже нет',
-  'station.col.compare': 'БЫЛО → СТАНЕТ',
+  'station.col.compare': 'Х-КА',
   'station.buyFit': 'КУПИТЬ И УСТАНОВИТЬ',
   'ship.confirm.buyPlain': 'Купить «{name}» за {price}?',
   'station.buy': 'КУПИТЬ',
