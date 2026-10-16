@@ -102,30 +102,42 @@ function rollLoot(rng: Rng): CargoItem | null {
 export function spawnWreckage(world: World, wreck: ShipEntity): void {
   const rng = world.rng
 
-  const survivors = allModules(wreck.loadout).filter((m) => rng() < m.salvageChance)
-  // Иначе с крупного корабля высыпается десяток контейнеров и сцена превращается в свалку.
-  survivors.length = Math.min(survivors.length, SALVAGE.MAX_MODULES_PER_WRECK)
-
-  for (const module of survivors) {
+  /**
+   * СКОЛЬКО выпадает — числом, а не «всё, что уцелело»: 1–2 модуля и 2–3 контейнера груза
+   * (`SALVAGE.WRECK_MODULES` / `WRECK_CARGO`). Прежде трюм и обвес сыпались целиком, и с
+   * пары пиратов пилот богател быстрее, чем с торговли.
+   */
+  const [modLo, modHi] = SALVAGE.WRECK_MODULES
+  const modCount = modLo + Math.floor(rng() * (modHi - modLo + 1))
+  const modules = allModules(wreck.loadout).filter((m) => m.salvageChance > 0)
+  // Уцелевшее — по шансу модуля (дорогое чаще сгорает); не хватило — добираем любым.
+  const survivors = modules.filter((m) => rng() < m.salvageChance)
+  for (const m of modules) {
+    if (survivors.length >= modCount) break
+    if (!survivors.includes(m)) survivors.push(m)
+  }
+  for (const module of survivors.slice(0, modCount)) {
     spawnPod(world, wreck.state.pos, wreck.state.vel, { kind: 'module', module })
   }
 
-  // Груз из трюма переживает гибель корабля целиком.
-  for (const item of wreck.hold.items) {
+  // Груз: трюм, добыча пирата (трюм у него симуляцией не заполняется) и лом корпуса — из них
+  // выпадает 2–3 контейнера, остальное сгорает с кораблём.
+  const cargo: CargoItem[] = [...wreck.hold.items]
+  const loot = rollLoot(rng)
+  if (loot) cargo.push(loot)
+  cargo.push({ kind: 'commodity', commodity: COMMODITIES.SCRAP, units: 1 + Math.floor(rng() * 3) })
+  const [cargoLo, cargoHi] = SALVAGE.WRECK_CARGO
+  const cargoCount = cargoLo + Math.floor(rng() * (cargoHi - cargoLo + 1))
+  // Перемешиваем (Фишер–Йейтс на костях мира) и берём первые: что именно уцелеет — случай.
+  for (let i = cargo.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1))
+    const t = cargo[i]!
+    cargo[i] = cargo[j]!
+    cargo[j] = t
+  }
+  for (const item of cargo.slice(0, cargoCount)) {
     spawnPod(world, wreck.state.pos, wreck.state.vel, item)
   }
-
-  // Добыча пирата: трюм у него не заполняется симуляцией, но возил он не воздух.
-  const loot = rollLoot(rng)
-  if (loot) spawnPod(world, wreck.state.pos, wreck.state.vel, loot)
-
-  // Обломки: что-то ценное было и в самом корпусе.
-  const scrap = 1 + Math.floor(rng() * 3)
-  spawnPod(world, wreck.state.pos, wreck.state.vel, {
-    kind: 'commodity',
-    commodity: COMMODITIES.SCRAP,
-    units: scrap,
-  })
 }
 
 /**

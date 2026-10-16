@@ -2,6 +2,7 @@ import { Vector3 } from 'three'
 import { describe, expect, it } from 'vitest'
 import { SCORE } from '../../config/world'
 import { SALVAGE } from '../../config/weapons'
+import { makeRng } from '../../core/math'
 import { cargoMass } from '../cargo/hold'
 import { stepWorld, type Controller } from '../sim'
 import { createWorld, STARTER_SYSTEM, type World } from '../world'
@@ -83,6 +84,22 @@ describe('трофеи', () => {
       world.pods.filter((p) => p.item.kind === 'commodity').map((p) => (p.item.kind === 'commodity' ? p.item.commodity.id : '')),
     )
     expect(kinds.size).toBeGreaterThan(1)
+  })
+
+  it('с обломка — 1–2 модуля и 2–3 контейнера груза, а не весь трюм и обвес', () => {
+    // Пойманное: трюм и обвес сыпались целиком — с пары пиратов богатели быстрее торговли.
+    for (let i = 0; i < 10; i++) {
+      const world = quiet()
+      const pirate = withPirate(world)
+      world.rng = makeRng(i)
+      spawnWreckage(world, pirate)
+      const modules = world.pods.filter((p) => p.item.kind === 'module').length
+      const cargo = world.pods.filter((p) => p.item.kind === 'commodity').length
+      expect(modules).toBeGreaterThanOrEqual(1)
+      expect(modules).toBeLessThanOrEqual(2)
+      expect(cargo).toBeGreaterThanOrEqual(2)
+      expect(cargo).toBeLessThanOrEqual(3)
+    }
   })
 
   /** Одно зерно — один набор трофеев. Сломается — не будет ни сохранений, ни сети. */
