@@ -74,7 +74,6 @@ export function FlightCamera() {
 
   /** Множитель крейсера в прошлом кадре: по его росту и виден разгон. */
   const previousFactor = useRef(1)
-  /** Были ли на поверхности в прошлом кадре — чтобы один раз зафиксировать ракурс при посадке. */
 
   /**
    * Ориентация камеры хранится РАЗОБРАННОЙ — курс с тангажом отдельно, крен
@@ -130,6 +129,15 @@ export function FlightCamera() {
     const sizeFactor = clamp(player.loadout.chassis.radius / CAMERA.SIZE_REF, 1, CAMERA.SIZE_PULLBACK_MAX)
 
     /**
+     * Время сглаживания камеры ЗАЖАТО сверху — ОДНО на позицию и на ориентацию. На кадровом
+     * хитче (подгрузка GLB, GC) экспонента при большом dt подскочила бы к цели за один кадр.
+     * Прежде зажим был только у позиции, а курс с креном брали голый dt: на хитче камера
+     * разом доворачивалась, а место догоняла медленно — кадр дёргало. Обычный кадр не тронут.
+     */
+    const camDt = Math.min(dt, 0.05)
+    const view = cameraView()
+
+    /**
      * ВЫЛЕТ СО СТАНЦИИ: камера ведёт кино. Стартует ВПЕРЕДИ носа и смотрит наружу —
      * корабль позади неё, вне кадра. За ~3 с смещение по скрипту едет от `UNDOCK_AHEAD`
      * к обычному `CHASE_OFFSET`, ускоряясь к финалу: камера откатывается за корму, а
@@ -146,13 +154,26 @@ export function FlightCamera() {
 
       const off = CAMERA.CHASE_OFFSET
       const ah = CAMERA.UNDOCK_AHEAD
+      /**
+       * Финал кино — ТА ЖЕ поза, что у погони, включая пользовательский ракурс (наезд и облёт
+       * стрелками). Прежде кино приходило к стандартной позе, а погоня ставила зум с облётом —
+       * и в последний кадр вылета камера прыгала на выставленный игроком ракурс.
+       */
+      // Те же правила, что у погони ниже: ось облёта — вертикаль курса камеры, база смещения
+      // при облёте — курс камеры, иначе борт. Тогда в последний кадр позы совпадают точно.
+      const zoom = 1 + (view.distance - 1) * k
+      const orbitingNow = Math.abs(view.azimuth) > 1e-3
+      _camRot.copy(camSwing).multiply(camTwist)
+      _up.set(0, 1, 0).applyQuaternion(_camRot)
+      _orbit.setFromAxisAngle(_up, view.azimuth * k)
       _offset
         .set(ah[0] + (off[0] - ah[0]) * k, ah[1] + (off[1] - ah[1]) * k, ah[2] + (off[2] - ah[2]) * k)
-        .multiplyScalar(sizeFactor)
-        .applyQuaternion(state.quat)
+        .multiplyScalar(sizeFactor * zoom)
+        .applyQuaternion(orbitingNow ? _camRot : state.quat)
+        .applyQuaternion(_orbit)
       _target.copy(state.pos).add(_offset)
 
-      _desiredQuat.copy(camSwing).multiply(camTwist).multiply(_pitchDown)
+      _desiredQuat.copy(camSwing).multiply(camTwist).multiply(_pitchDown).premultiply(_orbit)
       camera.position.copy(_target)
       camera.quaternion.copy(_desiredQuat)
       // HUD проецирует маркеры в этом же useFrame-цикле, до WebGL-рендера.
@@ -211,10 +232,7 @@ export function FlightCamera() {
      * от КУРСА КАМЕРЫ (`camSwing`) — устойчивого к крену; разворот на 180° лишь зеркально
      * перебросит камеру в хвост, но не опрокинет. Дефолтный ракурс (азимут 0) не затронут.
      */
-    const view = cameraView()
     const orbiting = Math.abs(view.azimuth) > 1e-3
-    // Ховер — полёт по сфере: камера как в обычной погоне (облёт стрелками).
-    const stableChase = orbiting
 
     const offset = CAMERA.CHASE_OFFSET
     _offset.set(offset[0], offset[1], offset[2]).multiplyScalar(sizeFactor)
@@ -241,10 +259,11 @@ export function FlightCamera() {
       _camRot.copy(camSwing).multiply(camTwist)
       _offset.applyQuaternion(_camRot)
     } else {
-      // При облёте / на поверхности база смещения — от сглаженного курса камеры, а не от
-      // сырого quat борта (на грунте тот крутится со спином тела).
+      // При облёте база смещения — от сглаженного курса камеры, а не от сырого quat борта:
+      // иначе камера кувыркалась бы вслед за креном. В обычной погоне (и над поверхностью —
+      // там камера тоже ничего особенного не делает, см. ниже) — от борта.
       _camRot.copy(camSwing).multiply(camTwist)
-      _offset.applyQuaternion(stableChase ? _camRot : state.quat)
+      _offset.applyQuaternion(orbiting ? _camRot : state.quat)
     }
     // Миелофон: камера отъезжает НА ТОТ ЖЕ множитель, что и размер борта. Оттого свой
     // корабль на экране всегда одного размера, а мир вокруг «уменьшается» — не «я расту».
@@ -280,10 +299,6 @@ export function FlightCamera() {
     _orbit.setFromAxisAngle(_up, view.azimuth)
     _offset.applyQuaternion(_orbit)
 
-    // dt сглаживания камеры ЗАЖАТ сверху: на кадровом хитче (подгрузка GLB, GC) экспонента при
-    // большом dt подскочила бы к цели за один кадр — виден «скачок на пропущенный шаг». Обычный
-    // кадр (dt < порога) не трогается вовсе, только редкий спайк не даёт щелчка.
-    const camDt = Math.min(dt, 0.05)
     // Цель слежения — точка за кормой. Упреждение и пружину добавим НИЖЕ, после обновления
     // ориентации: камера «плавает» за кораблём, как шарик на нитке, а не приколочена к нему.
     const chaseAlpha = 1 - Math.exp(-CAMERA.CHASE_STIFFNESS * camDt)
@@ -334,13 +349,13 @@ export function FlightCamera() {
       // рыскáнием вокруг собственной вертикали борта (см. `_orbit` выше). Потому и крен здесь
       // обновляется всегда: он часть осей борта, от которых облёт и считается. Отдельной ветки
       // облёта больше нет — оттого при азимуте 0 виды тождественны и на входе нет рывка.
-      const rot = 1 - Math.exp(-CAMERA.CHASE_ROT_STIFFNESS * dt)
+      const rot = 1 - Math.exp(-CAMERA.CHASE_ROT_STIFFNESS * camDt)
       // Кратчайший поворот (parallel transport) — не выдумывает крен в вираже.
       _camFwd.set(0, 0, -1).applyQuaternion(camSwing)
       _deltaRot.setFromUnitVectors(_camFwd, _noseFwd)
       camSwing.premultiply(_identity.identity().slerp(_deltaRot, rot)).normalize()
       residualTwist(state.quat, camSwing, _twist)
-      camTwist.slerp(_twist, 1 - Math.exp(-CAMERA.ROLL_STIFFNESS * dt))
+      camTwist.slerp(_twist, 1 - Math.exp(-CAMERA.ROLL_STIFFNESS * camDt))
     } else {
       // Стоящий мир: камера строго за носом, крен — по кораблю.
       camSwing.setFromUnitVectors(_refFwd, _noseFwd)
@@ -432,7 +447,7 @@ export function FlightCamera() {
     const baseFov = RENDER.FOV_CHASE
     const wantFov = baseFov + RENDER.FOV_CRUISE_BOOST * cruiseFraction
     if (Math.abs(camera.fov - wantFov) > 0.01) {
-      camera.fov = running ? camera.fov + (wantFov - camera.fov) * (1 - Math.exp(-6 * dt)) : wantFov
+      camera.fov = running ? camera.fov + (wantFov - camera.fov) * (1 - Math.exp(-6 * camDt)) : wantFov
       camera.updateProjectionMatrix()
     }
     camera.updateMatrixWorld(true)
