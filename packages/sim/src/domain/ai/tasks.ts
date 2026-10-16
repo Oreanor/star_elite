@@ -64,6 +64,23 @@ type TaskBody =
    * торговца — он не кружит вечно там, куда прилетел, а уходит дальше по своим делам.
    */
   | { kind: 'depart' }
+  /**
+   * ПОВЕСТИ ЗА СОБОЙ прыжком (дело «проводи меня»). Клиент ведёт сам: держится у `anchor`,
+   * в `announceAt` зовёт по связи («прыгаю к такой-то — за мной») и метит звезду целью
+   * прыжка игрока, в `jumpAt` уходит порталом — и его запись знакомства уже в системе
+   * назначения: прилетишь следом — он там. Прежде клиент вставал в строй ЗА игроком и ждал,
+   * что тот сам догадается, куда прыгать, — со стороны это выглядело «медленно летит куда-то».
+   * Моменты — по `world.time`: таймер такта, от частоты кадров не зависит.
+   */
+  | {
+      kind: 'lead-jump'
+      toSystem: number
+      toName: string
+      anchor: Vector3
+      announceAt: number
+      jumpAt: number
+      announced: boolean
+    }
 
 export type TaskKind = Task['kind']
 
@@ -168,6 +185,26 @@ function runTask(e: ShipEntity, world: World, task: Task): TaskStep {
       beginWarpDeparture(world, e)
       return { done: true, intent: null }
     }
+    case 'lead-jump': {
+      if (!task.announced && world.time >= task.announceAt) {
+        task.announced = true
+        world.notices.push({ kind: 'lead-jump', name: e.name, other: task.toName, at: world.time })
+        // Звезда — сразу целью прыжка игрока: «за мной» значит одно нажатие, а не поиск по карте.
+        world.jumpTargetIndex = task.toSystem
+      }
+      if (world.time >= task.jumpAt) {
+        // Запись — уже там: портал уносит борт, а знакомство живёт в системе назначения,
+        // и при прибытии игрока его выставят на радар (`spawnResidentContacts`).
+        const record = world.acquaintances.find((a) => a.id === e.acquaintanceId)
+        if (record) {
+          record.systemIndex = task.toSystem
+          record.boundFor = null
+        }
+        beginWarpDeparture(world, e)
+        return { done: true, intent: null }
+      }
+      return { done: false, intent: { target: task.anchor, scoop: false, arriveRadius: LEAD_HOLD_RADIUS } }
+    }
     case 'hold': {
       // Никогда не done: держит позицию, пока задачу не снимут. Полёт-с-тормозом сам гасит
       // ход у точки, и бот висит в радиусе, а не нарезает круги.
@@ -201,6 +238,9 @@ export function enqueueTask(e: ShipEntity, task: Task): boolean {
   e.ai.tasks.push(task)
   return true
 }
+
+/** Радиус, в котором клиент держится перед прыжком, м: висит на месте, а не кружит. */
+const LEAD_HOLD_RADIUS = 300
 
 const _approach = new Vector3()
 /** Точка подлёта, пересчитываемая каждый шаг. Пилот копирует её себе — наружу не утекает. */

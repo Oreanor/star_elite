@@ -12,11 +12,12 @@ export type ContractKind = 'rescue' | 'deliver' | 'fetch' | 'escort' | 'hunt' | 
 /** Что именно предлагается — общее для оферты и дела. */
 export type ContractTerms =
   /** Взять у него груз и отвезти на станцию в системе `toSystem`. Награда — за всю партию. */
-  | { kind: 'deliver'; commodityId: string; units: number; toSystem: number; toSystemName: string }
+  | { kind: 'deliver'; commodityId: string; units: number; toSystem: number; toSystemName: string; ly?: number }
   /** Привезти товар на станцию этой системы. Награда — ЗА ТОННУ, сдают частями. */
   | { kind: 'fetch'; commodityId: string; units: number }
   /** Довести его самого до станции в системе `toSystem`, прикрывая в пути. */
-  | { kind: 'escort'; toSystem: number; toSystemName: string }
+  /** `ly` — до звезды назначения, св.лет (всегда в один прыжок; старые сейвы — без поля). */
+  | { kind: 'escort'; toSystem: number; toSystemName: string; ly?: number }
   /** Спасти его от нападающих прямо сейчас. */
   | { kind: 'rescue'; attackers: number[] }
   /** Убрать названных пиратов в этой системе. Награда — ЗА ГОЛОВУ. */

@@ -209,6 +209,9 @@ export function gatherWarnings(frame: HudFrame): Plate | null {
       case 'contract-failed':
         pushWarning('jobFailed', now, { label: t('hud.jobFailed', { name }) })
         break
+      case 'lead-jump':
+        pushWarning('leadJump', now, { label: t('hud.leadJump', { name, other }) })
+        break
     }
   }
 

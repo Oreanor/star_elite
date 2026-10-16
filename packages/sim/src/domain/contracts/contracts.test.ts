@@ -5,6 +5,9 @@ import { declareFoe } from '../ai/targeting'
 import { createWorld, STARTER_SYSTEM, type World } from '../world'
 import type { ShipEntity } from '../world/entities'
 import { acceptBlock, acceptOffer, declineOffer, offerHail, stepContracts } from './contracts'
+import { aiController } from '../ai/pilot'
+import { stepWorld } from '../sim'
+import { NULL_CONTROLLER } from '../sim/controller'
 import { rollOffer } from './offers'
 import type { ContractOffer } from './types'
 
@@ -227,5 +230,31 @@ describe('заказчик помнит дело', () => {
     stepContracts(world, 1 / 60)
     const closed = record.history.find((e) => e.kind === 'job' && e.outcome !== 'taken')
     expect(closed).toMatchObject({ kind: 'job', job: 'hunt', outcome: 'completed', paid: 2000 })
+  })
+})
+
+describe('клиент сопровождения ведёт прыжком', () => {
+  // Пойманный баг: клиент вставал в строй ЗА игроком и ждал, что тот сам догадается, куда
+  // прыгать, — «медленно-медленно куда-то полетел». Клиент обязан позвать за собой, отметить
+  // звезду целью прыжка и уйти порталом первым; его запись — уже в системе назначения.
+  it('зовёт за собой, метит звезду и уходит прыжком туда', () => {
+    const world = worldWith('neutral')
+    const trader = world.ships[0]!
+    giveOffer(trader, { kind: 'escort', toSystem: 9, toSystemName: 'Z', ly: 7.5, reward: 2000, days: 5, revealed: true })
+    acceptOffer(world, trader)
+    const rec = world.acquaintances.find((a) => a.id === trader.acquaintanceId)!
+    const controllers = new Map([[world.player.id, NULL_CONTROLLER]])
+
+    const step = (seconds: number) => {
+      for (let i = 0; i < seconds * 60; i++) stepWorld(world, 1 / 60, controllers, { unassigned: aiController })
+    }
+    step(CONTRACTS.LEAD_ANNOUNCE + 0.5)
+    expect(world.notices.some((n) => n.kind === 'lead-jump' && n.other === 'Z')).toBe(true)
+    expect(world.jumpTargetIndex).toBe(9)
+    expect(rec.systemIndex).not.toBe(9) // ещё здесь: позвал и ждёт
+
+    step(CONTRACTS.LEAD_JUMP + 1)
+    expect(rec.systemIndex).toBe(9)
+    expect(trader.warpDeparting || trader.warpedOut).toBe(true)
   })
 })

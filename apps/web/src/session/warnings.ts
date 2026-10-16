@@ -48,6 +48,7 @@ export type WarnCode =
   | 'radio'
   | 'jobDone'
   | 'jobFailed'
+  | 'leadJump'
   | 'refuel'
   | 'bonVoyage'
   | 'noRoom'
@@ -92,6 +93,8 @@ const RANK: Record<WarnCode, number> = {
   radio: 43,
   jobDone: 66,
   jobFailed: 66,
+  // Клиент зовёт за собой в прыжок — важнее эфира и вызова: пропустишь — потеряешь клиента.
+  leadJump: 67,
   dockReady: 40,
   dockCorridor: 35,
   orbitExit: 43,

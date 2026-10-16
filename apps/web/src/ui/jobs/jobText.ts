@@ -13,12 +13,18 @@ function goodName(terms: ContractTerms): string {
   return good ? commodityName(good) : ''
 }
 
+/** «(7.5 св.л., один прыжок)» — у старых дел без расстояния пусто, не «( св.л.)». */
+function hopText(terms: ContractTerms): string {
+  return 'ly' in terms && typeof terms.ly === 'number' ? t('job.hop', { ly: terms.ly }) : ''
+}
+
 /** Что говорит заказчик, предлагая дело. */
 export function offerText(offer: ContractOffer): string {
   return t(`job.offer.${offer.kind}` as Key, {
     commodity: goodName(offer),
     units: 'units' in offer ? offer.units : 0,
     to: 'toSystemName' in offer ? properName(offer.toSystemName) : '',
+    hop: hopText(offer),
     heads: offer.kind === 'hunt' ? offer.heads : 0,
     reward: offer.reward,
     days: offer.days ?? 0,
@@ -37,6 +43,7 @@ export function goalText(c: Contract): string {
     commodity: goodName(terms),
     units: 'units' in terms ? terms.units : 0,
     to: 'toSystemName' in terms ? properName(terms.toSystemName) : '',
+    hop: hopText(terms),
     system: properName(c.systemName),
     name: properName(c.giverName),
     done: p.kind === 'fetch' ? p.delivered : 0,

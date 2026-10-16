@@ -2,6 +2,7 @@ import { CALENDAR_DAY, CONTRACTS } from '../../config/contracts'
 import { DIALOGUE } from '../../config/dialogue'
 import { signed } from '../../core/math'
 import { isFoe } from '../ai/targeting'
+import { enqueueTask } from '../ai/tasks'
 import { addCommodity, freeCapacity } from '../cargo/hold'
 import { applyPosture, acquaintanceOf } from '../world/plan'
 import { recordEvent, recordJournal, rememberPilot, type Acquaintance, type Relationship } from '../world/acquaintance'
@@ -87,6 +88,17 @@ export function acceptOffer(world: World, ship: ShipEntity): Contract | null {
       rec.plan.posture = 'escort'
       rec.roaming = false
       applyPosture(world, rec, ship)
+      // Ведёт КЛИЕНТ: позовёт за собой и прыгнет первым (см. `lead-jump`). Задача поручения
+      // выше следования за нанимателем, поэтому он сперва ведёт, а там — снова в строю.
+      enqueueTask(ship, {
+        kind: 'lead-jump',
+        toSystem: offer.toSystem,
+        toName: offer.toSystemName,
+        anchor: ship.state.pos.clone(),
+        announceAt: world.time + CONTRACTS.LEAD_ANNOUNCE,
+        jumpAt: world.time + CONTRACTS.LEAD_ANNOUNCE + CONTRACTS.LEAD_JUMP,
+        announced: false,
+      })
       progress = { kind: 'escort' }
       break
     }

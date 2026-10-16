@@ -59,6 +59,7 @@ const STYLE: Record<WarnCode, Style> = {
   radio: { color: UI.WARN, hz: 0, key: 'hud.radioDemand' },
   jobDone: { color: UI.PRIMARY, hz: 0, key: 'hud.jobDone' },
   jobFailed: { color: UI.DANGER, hz: 0, key: 'hud.jobFailed' },
+  leadJump: { color: UI.PRIMARY, hz: 1.5, key: 'hud.leadJump' },
   dockReady: { color: UI.PRIMARY, hz: 2, key: 'hud.dockReady' },
   dockCorridor: { color: UI.PRIMARY, hz: 0, key: 'hud.dockCorridor' },
   orbitExit: { color: UI.PRIMARY, hz: 0, key: 'hud.orbitExit' },

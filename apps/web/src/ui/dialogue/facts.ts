@@ -261,8 +261,10 @@ export interface JobFacts {
   /** Товар (имя по-русски и id), тонны. */
   commodity: string | null
   units: number | null
-  /** Куда (имя системы). */
+  /** Куда (имя системы = её звезды). */
   to: string | null
+  /** До звезды назначения, св.лет — всегда в один прыжок. null — дело на месте. */
+  ly: number | null
   /** Сколько голов (охота). */
   heads: number | null
   /** Срок, игровые сутки; null — здесь и сейчас. */
@@ -284,6 +286,7 @@ function jobFactsOf(terms: ContractTerms, reward: number, days: number | null): 
     commodity: good ? good.name : null,
     units: 'units' in terms ? terms.units : null,
     to: 'toSystemName' in terms ? properName(terms.toSystemName) : null,
+    ly: 'ly' in terms && typeof terms.ly === 'number' ? terms.ly : null,
     heads: terms.kind === 'hunt' ? terms.heads : null,
     days,
     progress: null,
@@ -845,6 +848,10 @@ function taskHeading(world: World, other: ShipEntity): string | null {
       return 'держишь позицию и ждёшь'
     case 'depart':
       return 'уходишь из системы прыжком'
+    case 'lead-jump':
+      return task.announced
+        ? `уже позвал командира и сейчас прыгаешь к звезде ${properName(task.toName)} — он прыгнет следом`
+        : `ведёшь командира к звезде ${properName(task.toName)}: вот-вот позовёшь его и прыгнешь первым`
   }
 }
 

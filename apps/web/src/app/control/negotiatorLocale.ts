@@ -83,14 +83,19 @@ function jobLine(ctx: NegotiationContext, lang: 'ru' | 'en'): string {
   const describe = (j: JobFacts): string => {
     const ru = lang === 'ru'
     const pay = `${j.reward} ${ru ? 'кр' : 'cr'}${j.per === 'ton' ? (ru ? ' за тонну' : ' per ton') : j.per === 'head' ? (ru ? ' за голову' : ' per head') : ''}`
+    // Звезда — одно имя с системой; расстояние и «один прыжок» — чтобы командир знал, куда.
+    const hop = j.ly != null ? (ru ? ` (${j.ly} св.л., один прыжок)` : ` (${j.ly} ly, one jump)`) : ''
     const term = j.days != null ? (ru ? `, срок ${j.days} сут.` : `, ${j.days} days`) : ru ? ', здесь и сейчас' : ', here and now'
     switch (j.kind) {
       case 'deliver':
-        return ru ? `отвезти ${j.commodity} ×${j.units} т на станцию системы ${j.to} — ${pay}${term}` : `haul ${j.commodity} ×${j.units} t to the station in ${j.to} — ${pay}${term}`
+        return ru ? `отвезти ${j.commodity} ×${j.units} т на станцию у звезды ${j.to}${hop} — ${pay}${term}` : `haul ${j.commodity} ×${j.units} t to the station at the star ${j.to}${hop} — ${pay}${term}`
       case 'fetch':
         return ru ? `привезти ${j.commodity} ×${j.units} т на здешнюю станцию — ${pay}, можно частями${term}` : `bring ${j.commodity} ×${j.units} t to the local station — ${pay}, in parts is fine${term}`
       case 'escort':
-        return ru ? `проводить тебя самого до станции в ${j.to}, прикрывая в пути — ${pay}${term}` : `escort you yourself to the station in ${j.to}, covering you — ${pay}${term}`
+        // Ведёт КЛИЕНТ: он прыгает первым и зовёт командира за собой (`lead-jump` в домене).
+        return ru
+          ? `проводить тебя самого до станции у звезды ${j.to}${hop}, прикрывая в пути — ${pay}${term}. Ведёшь ТЫ: возьмётся — ты позовёшь его по связи и прыгнешь к ${j.to} первым, он прыгнет следом`
+          : `escort you yourself to the station at the star ${j.to}${hop}, covering you — ${pay}${term}. YOU lead: once they agree you call them on comms and jump to ${j.to} first, they jump after you`
       case 'rescue':
         return ru ? `спасти тебя: на тебя напали пираты, отбей их — ${pay}` : `save you: pirates are attacking you, drive them off — ${pay}`
       case 'hunt':

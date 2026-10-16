@@ -802,8 +802,9 @@ export interface Notice {
    * `demand` / `yielded` / `refused` — ЭФИР: пират `name` требует груз у `other`; `name`
    * уступил / отказал пирату `other`. Чужой разбой слышен — это повод вмешаться.
    * `contract-done` / `contract-failed` — дело `other` от `name` закрыто или провалено.
+   * `lead-jump` — клиент `name` прыгает к звезде `other` и зовёт за собой.
    */
-  kind: 'contact-lost' | 'player-left' | 'demand' | 'yielded' | 'refused' | 'contract-done' | 'contract-failed'
+  kind: 'contact-lost' | 'player-left' | 'demand' | 'yielded' | 'refused' | 'contract-done' | 'contract-failed' | 'lead-jump'
   /** Имя, которое игрок знал. Данные, не перевод: подставляется в шаблон HUD. */
   name: string
   /** Второе имя или подпись для вестей о двоих (эфир) и о делах. */

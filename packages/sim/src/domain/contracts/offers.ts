@@ -92,6 +92,9 @@ export function pickDestination(world: World, rng: Rng): { index: number; name: 
   return null
 }
 
+/** Расстояние для речи и карточки, св.лет: десятые — точнее не говорят. */
+const roundLy = (ly: number) => Math.round(ly * 10) / 10
+
 /** Бросить оферту новорождённому борту. null — дела у него нет (так чаще всего). */
 export function rollOffer(world: World, ship: ShipEntity): ContractOffer | null {
   const table = BY_ROLE[ship.originKind ?? '']
@@ -110,7 +113,7 @@ export function rollOffer(world: World, ship: ShipEntity): ContractOffer | null 
         CONTRACTS.DELIVER_BASE + units * good.basePrice * CONTRACTS.DELIVER_CARGO_SHARE + dest.ly * CONTRACTS.DELIVER_PER_LY,
       )
       const days = Math.ceil(CONTRACTS.DAYS_DELIVER + dest.ly * CONTRACTS.DAYS_PER_LY)
-      return { kind: 'deliver', commodityId: good.id, units, toSystem: dest.index, toSystemName: dest.name, reward, days, revealed: false }
+      return { kind: 'deliver', commodityId: good.id, units, toSystem: dest.index, toSystemName: dest.name, ly: roundLy(dest.ly), reward, days, revealed: false }
     }
     case 'fetch': {
       // Привезти можно лишь туда, где есть причал: сдают на станции этой системы.
@@ -124,7 +127,7 @@ export function rollOffer(world: World, ship: ShipEntity): ContractOffer | null 
       const dest = pickDestination(world, rng)
       if (!dest) return null
       const reward = Math.round(CONTRACTS.ESCORT_BASE + dest.ly * CONTRACTS.ESCORT_PER_LY)
-      return { kind: 'escort', toSystem: dest.index, toSystemName: dest.name, reward, days: CONTRACTS.DAYS_ESCORT, revealed: false }
+      return { kind: 'escort', toSystem: dest.index, toSystemName: dest.name, ly: roundLy(dest.ly), reward, days: CONTRACTS.DAYS_ESCORT, revealed: false }
     }
     case 'hunt': {
       const heads = between(rng, CONTRACTS.HUNT_HEADS)
