@@ -118,6 +118,26 @@ describe('закулисная жизнь знакомых', () => {
     expect(died).toBe(true)
   })
 
+  it('заказчик за кулисами не гибнет: при тех же костях, что губят прочих', () => {
+    // Решение игрока: давший дело — нить сюжета, без тебя он пропадать не должен.
+    let spared = 0
+    for (let i = 0; i < 500; i++) {
+      const plain = withContact(100).world
+      plain.rng = makeRng(i)
+      driftContacts(plain)
+      if (plain.acquaintances[0]!.alive) continue
+      const client = withContact(100, {
+        history: [{ kind: 'met', at: 0 }, { kind: 'job', at: 1, job: 'escort', outcome: 'completed', paid: 100 }],
+      }).world
+      client.rng = makeRng(i)
+      driftContacts(client)
+      expect(client.acquaintances[0]!.alive).toBe(true)
+      expect(client.notices).toHaveLength(0)
+      spared++
+    }
+    expect(spared).toBeGreaterThan(0)
+  })
+
   it('детерминизм: то же зерно и та же галактика — тот же ход', () => {
     const a = withContact(100)
     const b = withContact(100)

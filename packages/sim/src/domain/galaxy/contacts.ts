@@ -94,7 +94,11 @@ export function driftContacts(world: World): void {
     if (c.systemIndex === world.systemIndex) continue
 
     // Кость гибели — до перемещения: мёртвому лететь уже некуда, и весть уходит игроку.
-    if (rng() < CONTACTS.DEATH_CHANCE) {
+    // Заказчик (хоть раз давал дело) за кулисами не гибнет: он нить сюжета, а не фон, и
+    // пропадать без тебя ему незачем — сбить его можно только у тебя на глазах. Кость
+    // бросаем всё равно: тогда статус контакта не сдвигает броски остальных.
+    const doomed = rng() < CONTACTS.DEATH_CHANCE
+    if (doomed && !isClient(c)) {
       markContactLost(world, c)
       continue
     }
@@ -104,6 +108,11 @@ export function driftContacts(world: World): void {
 
     stepContactPlanOffScreen(world, c)
   }
+}
+
+/** Давал ли этот знакомый игроку дело — по его личному журналу. */
+function isClient(c: Acquaintance): boolean {
+  return c.history.some((e) => e.kind === 'job')
 }
 
 /** Где контакт находится — с точностью до системы и приметного места в ней. */
