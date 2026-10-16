@@ -33,6 +33,7 @@ export type { BlackHoleParams }
 
 const _axis = new Vector3()
 const _cam = new Vector3()
+const _shown = new Vector3()
 
 function paramsFromHorizon(horizon: number, body: BodyEntity): BlackHoleParams {
   _axis.copy(body.spinAxis)
@@ -106,7 +107,10 @@ function BlackHoleInstance({ body }: { body: BodyEntity }) {
     }
     const rs = horizon * shrink
 
-    _cam.copy(camera.position).sub(body.pos)
+    // Дистанция — от ПОКАЗАННОЙ позиции (между тактами), как и всё ниже: от голой `body.pos`
+    // она прыгала потактно, а с ней размер линзы (`dist·0.88`) — дыра мелко дрожала даже на 60 FPS.
+    renderPos(session.world, body, _shown)
+    _cam.copy(camera.position).sub(_shown)
     const dist = _cam.length()
 
     // Издали сфера примерно равна средней звезде. При подлёте она плавно сжимается,
