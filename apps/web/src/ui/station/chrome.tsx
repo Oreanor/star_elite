@@ -146,7 +146,7 @@ export function SideTabs<T extends string>({
             disabled={disabled}
             onClick={() => onSelect(id)}
             aria-current={on ? 'page' : undefined}
-            className="whitespace-nowrap border px-3 py-1.5 text-left text-xs tracking-[0.2em] transition-colors enabled:cursor-pointer ui-btn disabled:cursor-not-allowed disabled:opacity-35"
+            className="whitespace-nowrap border px-2 py-1.5 text-left text-xs tracking-[0.08em] transition-colors enabled:cursor-pointer ui-btn disabled:cursor-not-allowed disabled:opacity-35"
             style={{
               borderColor: on ? ACCENT : DIM,
               backgroundColor: on ? ACCENT : 'transparent',

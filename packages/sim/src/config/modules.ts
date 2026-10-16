@@ -33,7 +33,7 @@ export const ENGINE_CIVILIAN: EngineModule = {
   name: 'Двигатель 1E «Гражданский»',
   kind: 'engine',
   class: 1,
-  mass: 1.4,
+  mass: 1,
   cost: 0,
   salvageChance: 0.5,
   thrust: 190,
@@ -49,7 +49,7 @@ export const ENGINE_STANDARD: EngineModule = {
   name: 'Двигатель 2C «Стандарт»',
   kind: 'engine',
   class: 2,
-  mass: 2.0,
+  mass: 2,
   cost: 18000,
   salvageChance: 0.35,
   thrust: 312,
@@ -65,7 +65,7 @@ export const ENGINE_MILITARY: EngineModule = {
   name: 'Двигатель 3A «Военный»',
   kind: 'engine',
   class: 3,
-  mass: 3.4, // тяжёлый: часть выигрыша съедает собственная масса
+  mass: 3, // тяжёлый: часть выигрыша съедает собственная масса
   cost: 76000,
   salvageChance: 0.15,
   thrust: 551,
@@ -84,7 +84,7 @@ const ENGINE_CIVILIAN_D: EngineModule = {
   name: 'Двигатель 1D «Гражданский»',
   kind: 'engine',
   class: 1,
-  mass: 1.7, // тяжелее 1E: дешевизна оплачена массой
+  mass: 2, // тяжелее 1E: дешевизна оплачена массой
   cost: 6500,
   salvageChance: 0.5,
   thrust: 215,
@@ -102,7 +102,7 @@ const ENGINE_STANDARD_B: EngineModule = {
   name: 'Двигатель 2B «Стандарт»',
   kind: 'engine',
   class: 2,
-  mass: 2.4,
+  mass: 2,
   cost: 34000,
   salvageChance: 0.3,
   thrust: 360,
@@ -121,7 +121,7 @@ const ENGINE_SWIFT: EngineModule = {
   name: 'Двигатель 2A «Стриж»',
   kind: 'engine',
   class: 2,
-  mass: 1.7, // легче даже стокового 2C — в этом весь смысл линии
+  mass: 2, // легче даже стокового 2C — в этом весь смысл линии
   cost: 52000,
   salvageChance: 0.25,
   thrust: 348,
@@ -139,7 +139,7 @@ const ENGINE_SWIFT_B: EngineModule = {
   class: 3,
   // Легче военного 3A (3.4), но не легче собственного младшего 2A: старший класс —
   // более крупное железо. Премиальность линии оплачивается ценой, а не нарушением массы.
-  mass: 2.9,
+  mass: 3,
   cost: 124000,
   salvageChance: 0.1,
   thrust: 522,
@@ -158,7 +158,7 @@ const ENGINE_MILITARY_C: EngineModule = {
   name: 'Двигатель 3C «Военный»',
   kind: 'engine',
   class: 3,
-  mass: 3.2,
+  mass: 3,
   cost: 54000,
   salvageChance: 0.18,
   thrust: 493,
@@ -183,7 +183,7 @@ export const RCS_CIVILIAN: ThrusterModule = {
   name: 'Маневровые 1E',
   kind: 'thrusters',
   class: 1,
-  mass: 0.7,
+  mass: 1,
   cost: 0,
   salvageChance: 0.5,
   lateralThrust: 170,
@@ -197,7 +197,7 @@ export const RCS_STANDARD: ThrusterModule = {
   name: 'Маневровые 2C',
   kind: 'thrusters',
   class: 2,
-  mass: 1.0,
+  mass: 1,
   cost: 14000,
   salvageChance: 0.35,
   lateralThrust: 240,
@@ -211,7 +211,7 @@ export const RCS_MILITARY: ThrusterModule = {
   name: 'Маневровые 3A «Военные»',
   kind: 'thrusters',
   class: 3,
-  mass: 1.9,
+  mass: 2,
   cost: 62000,
   salvageChance: 0.15,
   lateralThrust: 340,
@@ -227,7 +227,7 @@ const RCS_CIVILIAN_D: ThrusterModule = {
   name: 'Маневровые 1D «Гражданский»',
   kind: 'thrusters',
   class: 1,
-  mass: 0.85,
+  mass: 1,
   cost: 5500,
   salvageChance: 0.5,
   lateralThrust: 195,
@@ -242,7 +242,7 @@ const RCS_STANDARD_B: ThrusterModule = {
   name: 'Маневровые 2B «Стандарт»',
   kind: 'thrusters',
   class: 2,
-  mass: 1.25,
+  mass: 1,
   cost: 30000,
   salvageChance: 0.3,
   lateralThrust: 275,
@@ -260,7 +260,7 @@ const RCS_VORTEX: ThrusterModule = {
   name: 'Маневровые 2A «Вихрь»',
   kind: 'thrusters',
   class: 2,
-  mass: 0.8, // легче стокового 2C — в этом весь смысл
+  mass: 1, // легче стокового 2C — в этом весь смысл
   cost: 46000,
   salvageChance: 0.25,
   lateralThrust: 260,
@@ -274,7 +274,7 @@ const RCS_VORTEX_B: ThrusterModule = {
   name: 'Маневровые 3B «Вихрь»',
   kind: 'thrusters',
   class: 3,
-  mass: 1.5, // легче военных 3C/3A, оттого и вертче при том же классе
+  mass: 2, // легче военных 3C/3A, оттого и вертче при том же классе
   cost: 108000,
   salvageChance: 0.1,
   lateralThrust: 320,
@@ -291,7 +291,7 @@ const RCS_MILITARY_C: ThrusterModule = {
   name: 'Маневровые 3C «Военные»',
   kind: 'thrusters',
   class: 3,
-  mass: 1.7,
+  mass: 2,
   cost: 48000,
   salvageChance: 0.18,
   lateralThrust: 310,
@@ -307,7 +307,7 @@ export const SHIELD_LIGHT: ShieldModule = {
   name: 'Щит 1E',
   kind: 'shield',
   class: 1,
-  mass: 0.6,
+  mass: 1,
   cost: 0,
   salvageChance: 0.5,
   capacity: 170,
@@ -320,7 +320,7 @@ export const SHIELD_STANDARD: ShieldModule = {
   name: 'Щит 2C',
   kind: 'shield',
   class: 2,
-  mass: 1.2,
+  mass: 1,
   cost: 21000,
   salvageChance: 0.3,
   capacity: 325,
@@ -334,7 +334,7 @@ export const SHIELD_HEAVY: ShieldModule = {
   kind: 'shield',
   class: 3,
   // Вдвое тяжелее стандартного: заметно съедает манёвренность.
-  mass: 2.6,
+  mass: 3,
   cost: 88000,
   salvageChance: 0.12,
   capacity: 748,
@@ -349,7 +349,7 @@ const SHIELD_LIGHT_D: ShieldModule = {
   name: 'Щит 1D',
   kind: 'shield',
   class: 1,
-  mass: 0.85,
+  mass: 1,
   cost: 8000,
   salvageChance: 0.5,
   capacity: 190,
@@ -363,7 +363,7 @@ const SHIELD_STANDARD_B: ShieldModule = {
   name: 'Щит 2B',
   kind: 'shield',
   class: 2,
-  mass: 1.6,
+  mass: 2,
   cost: 40000,
   salvageChance: 0.28,
   capacity: 370,
@@ -379,7 +379,7 @@ const SHIELD_MIRAGE: ShieldModule = {
   name: 'Щит 2A «Мираж»',
   kind: 'shield',
   class: 2,
-  mass: 0.9, // легче стокового 2C
+  mass: 1, // легче стокового 2C
   cost: 52000,
   salvageChance: 0.22,
   capacity: 260, // чуть меньше 2C: линия берёт не ёмкостью
@@ -392,7 +392,7 @@ const SHIELD_MIRAGE_B: ShieldModule = {
   name: 'Щит 3B «Мираж»',
   kind: 'shield',
   class: 3,
-  mass: 1.9, // легче «Бастиона», оттого и манёвр щадит
+  mass: 2, // легче «Бастиона», оттого и манёвр щадит
   cost: 130000,
   salvageChance: 0.1,
   capacity: 604, // ёмкости меньше топового «Бастиона»
@@ -407,7 +407,7 @@ const SHIELD_HEAVY_C: ShieldModule = {
   name: 'Щит 3C «Бастион»',
   kind: 'shield',
   class: 3,
-  mass: 2.3,
+  mass: 2,
   cost: 60000,
   salvageChance: 0.15,
   capacity: 570,
@@ -422,7 +422,7 @@ export const ARMOUR_PLATE: ArmourModule = {
   name: 'Бронеплиты',
   kind: 'armour',
   class: 1,
-  mass: 1.5,
+  mass: 2,
   cost: 9000,
   salvageChance: 0.6,
   hull: 100,
@@ -433,7 +433,7 @@ export const ARMOUR_COMPOSITE: ArmourModule = {
   name: 'Композитная броня',
   kind: 'armour',
   class: 2,
-  mass: 2.2,
+  mass: 2,
   cost: 34000,
   salvageChance: 0.4,
   hull: 273,
@@ -447,7 +447,7 @@ const ARMOUR_STEEL_2: ArmourModule = {
   name: 'Броня 2D «Сталь»',
   kind: 'armour',
   class: 2,
-  mass: 3.2, // тяжелее композита в полтора раза
+  mass: 3, // тяжелее композита в полтора раза
   cost: 22000, // и заметно дешевле его
   salvageChance: 0.45,
   hull: 358,
@@ -458,7 +458,7 @@ export const ARMOUR_STEEL_3: ArmourModule = {
   name: 'Броня 3C «Сталь»',
   kind: 'armour',
   class: 3,
-  mass: 4.5, // самый прочный корпус в каталоге и самый тяжёлый
+  mass: 5, // самый прочный корпус в каталоге и самый тяжёлый
   cost: 55000,
   salvageChance: 0.2,
   hull: 720,
@@ -471,7 +471,7 @@ const ARMOUR_COMPOSITE_B: ArmourModule = {
   name: 'Броня 2B «Композит»',
   kind: 'armour',
   class: 2,
-  mass: 2.5,
+  mass: 3,
   cost: 48000,
   salvageChance: 0.35,
   hull: 338,
@@ -484,7 +484,7 @@ const ARMOUR_CERAMET_1: ArmourModule = {
   name: 'Броня 1C «Керамет»',
   kind: 'armour',
   class: 1,
-  mass: 1.3, // легче «Бронеплит» при большем корпусе
+  mass: 1, // легче «Бронеплит» при большем корпусе
   cost: 24000,
   salvageChance: 0.45,
   hull: 140,
@@ -495,7 +495,7 @@ const ARMOUR_CERAMET_2: ArmourModule = {
   name: 'Броня 2A «Керамет»',
   kind: 'armour',
   class: 2,
-  mass: 1.9, // легче даже стокового композита
+  mass: 2, // легче даже стокового композита
   cost: 52000,
   salvageChance: 0.3,
   hull: 325,
@@ -506,7 +506,7 @@ const ARMOUR_CERAMET_3: ArmourModule = {
   name: 'Броня 3A «Керамет»',
   kind: 'armour',
   class: 3,
-  mass: 2.6, // вдвое легче стального 3C при корпусе лишь немногим меньше
+  mass: 3, // вдвое легче стального 3C при корпусе лишь немногим меньше
   cost: 78000,
   salvageChance: 0.15,
   hull: 600,
@@ -524,7 +524,7 @@ export const PULSE_LASER_WORN: LaserModule = {
   name: 'Импульсный лазер 0 «Изношенный»',
   kind: 'laser',
   class: 1,
-  mass: 0.3,
+  mass: 1,
   cost: 0,
   salvageChance: 0.7,
   damage: 6,
@@ -539,7 +539,7 @@ export const PULSE_LASER: LaserModule = {
   name: 'Импульсный лазер 1',
   kind: 'laser',
   class: 1,
-  mass: 0.3,
+  mass: 1,
   cost: 3000,
   salvageChance: 0.55,
   damage: 8,
@@ -562,7 +562,7 @@ export const PULSE_LASER_CENTRAL: LaserModule = {
   name: 'Плазменный лучемёт 1 «Столб»',
   kind: 'laser',
   class: 1,
-  mass: 0.5,
+  mass: 1,
   cost: 0,
   salvageChance: 0.4,
   // НЕПРЕРЫВНЫЙ: числа секундные, а не за выстрел. Ствол — обычной силы; вдвое больнее
@@ -586,7 +586,7 @@ export const MINING_LASER: LaserModule = {
   name: 'Горный лазер 1',
   kind: 'laser',
   class: 1,
-  mass: 0.35,
+  mass: 1,
   cost: 6000,
   salvageChance: 0.5,
   damage: 5,
@@ -609,7 +609,7 @@ export const SHRINK_RAY: LaserModule = {
   name: 'Уменьшающий луч',
   kind: 'laser',
   class: 2,
-  mass: 0.4,
+  mass: 1,
   cost: 60000,
   notSold: true,
   salvageChance: 0,
@@ -630,7 +630,7 @@ export const GROW_RAY: LaserModule = {
   name: 'Увеличивающий луч',
   kind: 'laser',
   class: 2,
-  mass: 0.4,
+  mass: 1,
   cost: 60000,
   notSold: true,
   salvageChance: 0,
@@ -650,7 +650,7 @@ export const HOLD_RAY: LaserModule = {
   name: 'Удерживающий луч',
   kind: 'laser',
   class: 2,
-  mass: 0.4,
+  mass: 1,
   cost: 60000,
   notSold: true,
   salvageChance: 0,
@@ -671,7 +671,7 @@ export const BURST_LASER: LaserModule = {
   name: 'Импульсный лазер 2',
   kind: 'laser',
   class: 2,
-  mass: 0.5,
+  mass: 1,
   cost: 16000,
   salvageChance: 0.35,
   damage: 13,
@@ -686,7 +686,7 @@ export const BEAM_LASER: LaserModule = {
   name: 'Лучевой лазер 2',
   kind: 'laser',
   class: 2,
-  mass: 0.8,
+  mass: 1,
   cost: 60000,
   salvageChance: 0.2,
   beam: true,
@@ -705,7 +705,7 @@ const PULSE_LASER_FINE: LaserModule = {
   name: 'Импульсный лазер 1A',
   kind: 'laser',
   class: 1,
-  mass: 0.35,
+  mass: 1,
   cost: 7000,
   salvageChance: 0.5,
   damage: 10,
@@ -728,7 +728,7 @@ const BEAM_LASER_LIGHT: LaserModule = {
   name: 'Лучевой лазер 1',
   kind: 'laser',
   class: 1,
-  mass: 0.6,
+  mass: 1,
   cost: 22000,
   salvageChance: 0.4,
   beam: true,
@@ -747,7 +747,7 @@ export const BEAM_LASER_HEAVY: LaserModule = {
   name: 'Лучевой лазер 3 «Клинок»',
   kind: 'laser',
   class: 3,
-  mass: 1.1,
+  mass: 1,
   cost: 140000,
   salvageChance: 0.14,
   beam: true,
@@ -766,7 +766,7 @@ const ROTARY_LASER: LaserModule = {
   name: 'Роторный лазер 1 «Овод»',
   kind: 'laser',
   class: 1,
-  mass: 0.5,
+  mass: 1,
   cost: 9000,
   salvageChance: 0.4,
   damage: 4,
@@ -782,7 +782,7 @@ const ROTARY_LASER_B: LaserModule = {
   name: 'Роторный лазер 2 «Шквал»',
   kind: 'laser',
   class: 2,
-  mass: 0.75,
+  mass: 1,
   cost: 30000,
   salvageChance: 0.3,
   damage: 6,
@@ -800,7 +800,7 @@ const PLASMA_GUN: LaserModule = {
   name: 'Плазменное орудие 2 «Гарпун»',
   kind: 'laser',
   class: 2,
-  mass: 0.9,
+  mass: 1,
   cost: 30000,
   salvageChance: 0.25,
   damage: 45, // тяжёлый одиночный удар, но раз в полсекунды
@@ -816,7 +816,7 @@ const PLASMA_GUN_HEAVY: LaserModule = {
   name: 'Плазменное орудие 3 «Таран»',
   kind: 'laser',
   class: 3,
-  mass: 1.4,
+  mass: 1,
   cost: 90000,
   salvageChance: 0.12,
   damage: 80,
@@ -877,7 +877,7 @@ const MISSILE_HOMING: MissileModule = {
   name: 'Ракета «Искатель»',
   kind: 'missile',
   class: 1,
-  mass: 0.9,
+  mass: 1,
   cost: 12000,
   salvageChance: 0.3,
   ammo: 6,
@@ -896,7 +896,7 @@ const MISSILE_HEAVY: MissileModule = {
   name: 'Ракета «Молот»',
   kind: 'missile',
   class: 2,
-  mass: 1.6,
+  mass: 2,
   cost: 39000,
   salvageChance: 0.18,
   ammo: 4,
@@ -919,7 +919,7 @@ const MISSILE_STING: MissileModule = {
   name: 'Ракета 1E «Жало»',
   kind: 'missile',
   class: 1,
-  mass: 0.3,
+  mass: 1,
   cost: 2200,
   salvageChance: 0.4,
   ammo: 2,
@@ -937,7 +937,7 @@ const MISSILE_WASP: MissileModule = {
   name: 'Ракета 1A «Оса»',
   kind: 'missile',
   class: 1,
-  mass: 0.4,
+  mass: 1,
   cost: 6000,
   salvageChance: 0.32,
   ammo: 2,
@@ -958,7 +958,7 @@ const MISSILE_SWARM: MissileModule = {
   name: 'Ракета 1E «Свора»',
   kind: 'missile',
   class: 1,
-  mass: 0.8,
+  mass: 1,
   cost: 8000,
   salvageChance: 0.32,
   ammo: 5,
@@ -976,7 +976,7 @@ const MISSILE_HOUND: MissileModule = {
   name: 'Ракета 1B «Гончая»',
   kind: 'missile',
   class: 1,
-  mass: 1.0,
+  mass: 1,
   cost: 19000,
   salvageChance: 0.28,
   ammo: 6,
@@ -996,7 +996,7 @@ const MISSILE_SLEDGE: MissileModule = {
   name: 'Ракета 2A «Кувалда»',
   kind: 'missile',
   class: 2,
-  mass: 1.9,
+  mass: 2,
   cost: 58000,
   salvageChance: 0.14,
   ammo: 3,
@@ -1021,7 +1021,7 @@ const MISSILE_SLEDGE: MissileModule = {
 // 10 / 20 / 30 / 50 / 100 т: в магазине прежде было три линии с буквами (стандарт, «Композит»,
 // «Балкер»), и выбрать трюм было нельзя без таблицы. Теперь разница только в размере, а
 // крупный выгоднее: тонна вместимости дешевеет с ростом контейнера. Сам контейнер весит
-// (`mass` — 5% вместимости) и ест бюджет корпуса, как и всё оборудование.
+// (целыми тоннами, как всё оборудование) и ест бюджет корпуса.
 // (Поле `class` держим на 1, чтобы контейнер влезал в слот любого класса.)
 
 export const CARGO_SMALL: CargoModule = {
@@ -1029,7 +1029,7 @@ export const CARGO_SMALL: CargoModule = {
   name: 'Грузовой контейнер 10 т',
   kind: 'cargo',
   class: 1,
-  mass: 0.5,
+  mass: 1,
   cost: 4000, // 400 кр/т
   salvageChance: 0.7,
   capacity: 10,
@@ -1051,7 +1051,7 @@ export const CARGO_LARGE: CargoModule = {
   name: 'Грузовой контейнер 30 т',
   kind: 'cargo',
   class: 1,
-  mass: 1.5,
+  mass: 2,
   cost: 10500, // 350 кр/т
   salvageChance: 0.5,
   capacity: 30,
@@ -1062,7 +1062,7 @@ export const CARGO_HUGE: CargoModule = {
   name: 'Грузовой контейнер 50 т',
   kind: 'cargo',
   class: 1,
-  mass: 2.5,
+  mass: 3,
   cost: 16000, // 320 кр/т
   salvageChance: 0.4,
   capacity: 50,
@@ -1094,7 +1094,7 @@ export const HYPERDRIVE_BASIC: HyperdriveModule = {
   kind: 'hyperdrive',
   class: 1,
   // Полторы тонны: заметно, но с ним и взлетают. Стоит как половина корабля.
-  mass: 1.6,
+  mass: 2,
   cost: 45000,
   salvageChance: 0.2,
   jumpRange: GALAXY.BASE_JUMP_RANGE,
@@ -1105,7 +1105,7 @@ const HYPERDRIVE_LONG: HyperdriveModule = {
   name: 'Гиперпривод 2C «Меридиан»',
   kind: 'hyperdrive',
   class: 2,
-  mass: 2.8,
+  mass: 3,
   cost: 155000,
   salvageChance: 0.12,
   jumpRange: 48,
@@ -1117,7 +1117,7 @@ export const HYPERDRIVE_DEEP: HyperdriveModule = {
   kind: 'hyperdrive',
   class: 3,
   /** Пять тонн на восьмитонной «Авроре». Дальний рейс покупается манёвренностью. */
-  mass: 5.0,
+  mass: 5,
   cost: 420000,
   salvageChance: 0.06,
   jumpRange: 84,
@@ -1131,7 +1131,7 @@ export const HYPERDRIVE_COMPACT: HyperdriveModule = {
   name: 'Гиперпривод 1C «Стриж»',
   kind: 'hyperdrive',
   class: 1,
-  mass: 1.1, // против полутора тонн «Аркана»
+  mass: 1, // против полутора тонн «Аркана»
   cost: 72000,
   salvageChance: 0.18,
   jumpRange: 28,
@@ -1142,7 +1142,7 @@ const HYPERDRIVE_COMPACT_B: HyperdriveModule = {
   name: 'Гиперпривод 2A «Стриж»',
   kind: 'hyperdrive',
   class: 2,
-  mass: 2.0, // легче «Меридиана» при той же дальности
+  mass: 2, // легче «Меридиана» при той же дальности
   cost: 240000,
   salvageChance: 0.1,
   jumpRange: 50,
@@ -1156,7 +1156,7 @@ const HYPERDRIVE_HAULER: HyperdriveModule = {
   name: 'Гиперпривод 2E «Тягач»',
   kind: 'hyperdrive',
   class: 2,
-  mass: 3.6, // тяжелее «Меридиана»
+  mass: 4, // тяжелее «Меридиана»
   cost: 95000, // но заметно дешевле его
   salvageChance: 0.14,
   jumpRange: 45,
@@ -1167,7 +1167,7 @@ const HYPERDRIVE_HAULER_B: HyperdriveModule = {
   name: 'Гиперпривод 3E «Тягач»',
   kind: 'hyperdrive',
   class: 3,
-  mass: 6.5, // против пяти тонн «Дальнего» — почти та же дальность за меньшие деньги
+  mass: 7, // против пяти тонн «Дальнего» — почти та же дальность за меньшие деньги
   cost: 300000,
   salvageChance: 0.06,
   jumpRange: 80,
@@ -1208,7 +1208,7 @@ export const DRONE_BAY: DroneModule = {
   name: 'Контейнер БПЛА «Рой»',
   kind: 'drone',
   class: 1,
-  mass: 0.9,
+  mass: 1,
   cost: 38000,
   salvageChance: 0.25,
   ammo: 4,
@@ -1224,7 +1224,7 @@ const DRONE_BAY_LIGHT: DroneModule = {
   name: 'Контейнер БПЛА «Звено»',
   kind: 'drone',
   class: 1,
-  mass: 0.7,
+  mass: 1,
   cost: 22000,
   salvageChance: 0.3,
   ammo: 3,
@@ -1239,7 +1239,7 @@ const DRONE_BAY_HEAVY: DroneModule = {
   name: 'Контейнер БПЛА «Легион»',
   kind: 'drone',
   class: 2,
-  mass: 1.4,
+  mass: 1,
   cost: 78000,
   salvageChance: 0.2,
   ammo: 6,
@@ -1263,7 +1263,7 @@ export const CLOAK_FIELD: CloakModule = {
   kind: 'cloak',
   class: 3,
   /** Тяжелее гиперпривода: невидимость оплачивается манёвром, как и всё остальное. */
-  mass: 6.5,
+  mass: 7,
   cost: 260000,
   /** С обломка почти не снимается: сгорает вместе с кораблём, который прятал. */
   salvageChance: 0.04,
@@ -1277,7 +1277,7 @@ const CLOAK_HAZE: CloakModule = {
   name: 'Маскировочное поле «Дымка»',
   kind: 'cloak',
   class: 3,
-  mass: 7.5, // тяжелее «Вуали»
+  mass: 8, // тяжелее «Вуали»
   cost: 150000, // но дешевле её
   salvageChance: 0.05,
   drain: 20, // жаднее: под ним живёшь меньше
@@ -1290,7 +1290,7 @@ const CLOAK_SPECTRE: CloakModule = {
   name: 'Маскировочное поле «Морок»',
   kind: 'cloak',
   class: 3,
-  mass: 5.5, // легче «Вуали» — манёвр щадит
+  mass: 6, // легче «Вуали» — манёвр щадит
   cost: 390000,
   salvageChance: 0.03,
   drain: 12, // экономичнее всех: дольше под полем
@@ -1352,7 +1352,7 @@ const SCOOP_UNIT: ScoopModule = {
   name: 'Топливозаборник «Черпак»',
   kind: 'scoop',
   class: 1,
-  mass: 1.5,
+  mass: 2,
   cost: 18000,
   salvageChance: 0.5,
 }

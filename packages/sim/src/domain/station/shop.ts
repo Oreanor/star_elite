@@ -176,16 +176,41 @@ export function stockChance(module: ShipModule, settlement: Settlement): number 
   return clamp(STOCK.BASE_CHANCE - classPenalty + techBonus, STOCK.MIN_CHANCE, STOCK.MAX_CHANCE)
 }
 
+/**
+ * Витрина станции: на КАЖДЫЙ вид оборудования — 2–4 модели (`STOCK.PER_KIND`), а не всё, что
+ * прошло кость. Прежде каждый модуль бросал свою кость отдельно, и у столицы выходило по 5–7
+ * двигателей и щитов: выбирать было не из чего интересного, а лететь за редкостью — незачем.
+ *
+ * Какие именно — решает тот же шанс `stockChance` (класс вниз, тех вверх) как ВЕС выборки без
+ * повторов. Всё от зерна галактики и номера системы: витрина системы постоянна, а у соседей своя.
+ */
 export function stationStock(world: World): readonly ShipModule[] {
   const settlement = localSettlement(world)
-  return MODULE_CATALOGUE.filter((m) => {
-    if (m.cost <= 0) return false // бесплатный стартовый хлам не продают
-    if (m.notSold) return false // дар, а не товар (миелофон — только от Слова)
+  const seed = world.galaxySeed ^ Math.imul(world.systemIndex + 1, 0x9e3779b1)
+  const byKind = new Map<string, { m: ShipModule; key: number }[]>()
+  for (const m of MODULE_CATALOGUE) {
+    if (m.cost <= 0) continue // бесплатный стартовый хлам не продают
+    if (m.notSold) continue // дар, а не товар (миелофон — только от Слова)
     // Тех-потолок мира: высокий класс на отсталой планете не сделать — его там и не продают.
-    if (settlement.techLevel < minTechForClass(m.class)) return false
-    const rng = makeRng(world.galaxySeed ^ Math.imul(world.systemIndex + 1, 0x9e3779b1) ^ hashModuleId(m.id))
-    return rng() < stockChance(m, settlement)
-  })
+    if (settlement.techLevel < minTechForClass(m.class)) continue
+    // Взвешенная выборка без повторов (Эфраимидис–Спиракис): ключ u^(1/вес), берём старшие.
+    const u = makeRng(seed ^ hashModuleId(m.id))()
+    const key = Math.pow(Math.max(u, 1e-9), 1 / stockChance(m, settlement))
+    // Дрон-ракеты продают в одном ряду с ракетами: это одна ячейка пилонов.
+    const group = m.kind === 'drone' ? 'missile' : slotCategoryOf(m.kind)
+    const list = byKind.get(group) ?? []
+    list.push({ m, key })
+    byKind.set(group, list)
+  }
+  const out: ShipModule[] = []
+  for (const [group, list] of byKind) {
+    const [lo, hi] = STOCK.PER_KIND
+    const count = lo + Math.floor(makeRng(seed ^ hashModuleId(group))() * (hi - lo + 1))
+    list.sort((a, b) => b.key - a.key)
+    for (const x of list.slice(0, count)) out.push(x.m)
+  }
+  // Порядок каталога: витрина читается так же, как и прежде.
+  return MODULE_CATALOGUE.filter((m) => out.includes(m))
 }
 
 // ─── Перестановка железа: установить из трюма, сравнить с установленным ────────

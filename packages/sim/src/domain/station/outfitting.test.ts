@@ -16,7 +16,7 @@ import { addCommodity, addItem } from '../cargo/hold'
 import { COMMODITIES } from '../cargo/items'
 import { canInstallInternal, createLoadout, hasBomb, hasEcm } from '../loadout'
 import { STARTER_SYSTEM } from '../world'
-import { fitDeltas, fitFromHold } from './shop'
+import { fitDeltas, fitFromHold, stationStock } from './shop'
 
 /**
  * Перестановка железа из трюма. Проверяем СВОЙСТВА: установка меняет корабль,
@@ -149,5 +149,19 @@ describe('сравнение оружия в слоте', () => {
     const d = fitDeltas(p, PULSE_LASER, slot).find((x) => x.key === 'damage')!
     expect(d.from).toBe(0)
     expect(d.to).toBeGreaterThan(d.from)
+  })
+})
+
+describe('витрина станции', () => {
+  it('каждого вида оборудования — не больше 2–4 моделей, а не всё подряд', () => {
+    // Пойманное: у столицы было по 5–7 двигателей и щитов — выбирать не из чего интересного.
+    const world = veteranWorld({ ...STARTER_SYSTEM, patrols: [], belt: null })
+    const counts = new Map<string, number>()
+    for (const m of stationStock(world)) {
+      const g = m.kind === 'drone' ? 'missile' : m.kind
+      counts.set(g, (counts.get(g) ?? 0) + 1)
+    }
+    expect(counts.size).toBeGreaterThan(0)
+    for (const [kind, n] of counts) expect(n, kind).toBeLessThanOrEqual(4)
   })
 })
