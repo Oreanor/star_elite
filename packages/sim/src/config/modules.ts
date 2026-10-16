@@ -540,9 +540,9 @@ export const PULSE_LASER: LaserModule = {
   kind: 'laser',
   class: 1,
   mass: 0.3,
-  cost: 0,
+  cost: 3000,
   salvageChance: 0.55,
-  damage: 9,
+  damage: 8,
   range: 4000,
   // 4 выстрела/с. Стояло 0.11 — это девять в секунду, темп пулемёта:
   // пара таких стволов снимала полный щит меньше чем за секунду.
@@ -569,7 +569,7 @@ export const PULSE_LASER_CENTRAL: LaserModule = {
   // и толще его делает НОСОВАЯ ТОЧКА (её калибр), куда он и ставится, — сила у места, а
   // не у покупки. 18/с × калибр 2 = прежние 36/с, секундный урон не изменился.
   beam: true,
-  damage: 18,
+  damage: 40,
   range: 4000,
   cooldown: 0, // струю нечем прерывать: перезаряда у луча нет
   heatPerShot: 0.28, // за СЕКУНДУ огня (было 0.14 за импульс раз в 0.5 с)
@@ -674,7 +674,7 @@ export const BURST_LASER: LaserModule = {
   mass: 0.5,
   cost: 16000,
   salvageChance: 0.35,
-  damage: 14,
+  damage: 13,
   range: 4000,
   cooldown: 0.19,
   heatPerShot: 0.1,
@@ -687,13 +687,14 @@ export const BEAM_LASER: LaserModule = {
   kind: 'laser',
   class: 2,
   mass: 0.8,
-  cost: 47000,
+  cost: 60000,
   salvageChance: 0.2,
-  damage: 22,
+  beam: true,
+  damage: 150,
   range: 4000,
-  cooldown: 0.14,
+  cooldown: 0,
   // Жрёт тепло: очередями не постреляешь, нужен ритм.
-  heatPerShot: 0.11,
+  heatPerShot: 0.22,
   heatCool: 0.24,
 }
 
@@ -707,15 +708,21 @@ const PULSE_LASER_FINE: LaserModule = {
   mass: 0.35,
   cost: 7000,
   salvageChance: 0.5,
-  damage: 11,
+  damage: 10,
   range: 4000,
   cooldown: 0.24,
   heatPerShot: 0.11,
   heatCool: 0.3,
 }
 
-// «Лучевой» — большой урон за выстрел, горячий, дорогой, дальнобойный. 1-й — младший
-// лучевой на класс-1 слот: бьёт сильнее импульсных, но греется и стоит дороже них.
+// ВОЕННЫЕ ЛАЗЕРЫ — четыре семейства с разным ХАРАКТЕРОМ, урон в секунду (DPS):
+//  • импульсные — ровные одиночные выстрелы, как класс СЛАБЕЕ: 32–42 / 68;
+//  • роторные — часто и мелко, долбят очередью: 50 / 100;
+//  • плазменные — редко, тяжёлым сгустком (45 и 80 за выстрел): 50 / 80;
+//  • лучевые — НЕПРЕРЫВНЫЙ луч (`beam`, урон — в секунду), как класс СИЛЬНЕЕ: 70 / 150 / 260,
+//    держат их только нагревом. Плата за класс — цена: лестница в разы, есть ради чего копить.
+//
+// «Лучевой» 1 — младший луч на класс-1 слот.
 const BEAM_LASER_LIGHT: LaserModule = {
   id: 'beam_1',
   name: 'Лучевой лазер 1',
@@ -724,11 +731,12 @@ const BEAM_LASER_LIGHT: LaserModule = {
   mass: 0.6,
   cost: 22000,
   salvageChance: 0.4,
-  damage: 16,
+  beam: true,
+  damage: 70,
   range: 4000,
-  cooldown: 0.22,
+  cooldown: 0,
   // Горячий для класса-1: длинных очередей не даёт.
-  heatPerShot: 0.15,
+  heatPerShot: 0.2,
   heatCool: 0.22,
 }
 
@@ -740,13 +748,14 @@ export const BEAM_LASER_HEAVY: LaserModule = {
   kind: 'laser',
   class: 3,
   mass: 1.1,
-  cost: 98000,
+  cost: 140000,
   salvageChance: 0.14,
-  damage: 30,
+  beam: true,
+  damage: 260,
   range: 4000,
-  cooldown: 0.13,
+  cooldown: 0,
   // Раскаляется так, что непрерывно бить нельзя вовсе: чистый альфа-удар, не поток.
-  heatPerShot: 0.13,
+  heatPerShot: 0.25,
   heatCool: 0.22,
 }
 
@@ -760,9 +769,9 @@ const ROTARY_LASER: LaserModule = {
   mass: 0.5,
   cost: 9000,
   salvageChance: 0.4,
-  damage: 5,
+  damage: 4,
   range: 4000, // близкий бой: на дистанции роторный бесполезен
-  cooldown: 0.1,
+  cooldown: 0.08,
   // Тепла за выстрел больше, чем успевает сброситься: длинная очередь глохнет сама.
   heatPerShot: 0.14,
   heatCool: 0.3,
@@ -774,11 +783,11 @@ const ROTARY_LASER_B: LaserModule = {
   kind: 'laser',
   class: 2,
   mass: 0.75,
-  cost: 28000,
+  cost: 30000,
   salvageChance: 0.3,
-  damage: 7,
+  damage: 6,
   range: 4000,
-  cooldown: 0.08, // пиковый темп в каталоге — и мгновенный перегрев в уплату
+  cooldown: 0.06, // пиковый темп в каталоге — и мгновенный перегрев в уплату
   heatPerShot: 0.12,
   heatCool: 0.32,
 }
@@ -792,11 +801,11 @@ const PLASMA_GUN: LaserModule = {
   kind: 'laser',
   class: 2,
   mass: 0.9,
-  cost: 41000,
+  cost: 30000,
   salvageChance: 0.25,
-  damage: 34, // тяжёлый одиночный удар, но раз в полсекунды
+  damage: 45, // тяжёлый одиночный удар, но раз в полсекунды
   range: 4000,
-  cooldown: 0.55,
+  cooldown: 0.9,
   heatPerShot: 0.3,
   heatCool: 0.2,
 }
@@ -808,11 +817,11 @@ const PLASMA_GUN_HEAVY: LaserModule = {
   kind: 'laser',
   class: 3,
   mass: 1.4,
-  cost: 132000,
+  cost: 90000,
   salvageChance: 0.12,
-  damage: 52,
+  damage: 80,
   range: 4000,
-  cooldown: 0.6,
+  cooldown: 1.0,
   heatPerShot: 0.32,
   heatCool: 0.2,
 }

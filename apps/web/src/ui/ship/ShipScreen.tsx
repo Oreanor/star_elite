@@ -148,7 +148,7 @@ export function ShipScreen({
             className={`relative aspect-[16/9] max-h-[39vh] w-full ${hullWorkshop ? 'cursor-pointer' : ''}`}
             onClick={hullWorkshop ? () => setHullOpen(true) : undefined}
           >
-            <Blueprint chassisId={shownId} />
+            <Blueprint chassisId={shownId} clickable={hullWorkshop} />
 
             {/* Стрелки каталога — на самом контейнере, по бокам и по центру высоты: они
                 листают то, что в нём показано, и отдельной строки под ним не заслуживают.

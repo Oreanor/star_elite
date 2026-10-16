@@ -206,12 +206,14 @@ describe('лазер', () => {
       const p = world.player
       // Клон рамы с заданным калибром носовой точки: каталог (общий синглтон) не трогаем.
       const hardpoints = p.loadout.chassis.hardpoints.map((hp) => (hp.bore ? { ...hp, bore } : hp))
-      p.loadout = { ...p.loadout, chassis: { ...p.loadout.chassis, hardpoints } }
+      // Только носовой ствол: лучи стоят и на крыльях, а тест — про калибр ТОЧКИ.
+      const weapons = p.loadout.weapons.map((w, i) => (p.loadout.chassis.hardpoints[i]?.bore ? w : null))
+      p.loadout = { ...p.loadout, weapons, chassis: { ...p.loadout.chassis, hardpoints } }
       refreshSpec(p)
 
       const before = enemy.shield
       fireLasers(world, p, false, PHYSICS.FIXED_DT)
-      // Считаем только МГНОВЕННЫЙ вклад: носовой ствол лучевой, болты крыльев ещё в пути.
+      // Считаем только МГНОВЕННЫЙ вклад носового луча.
       return before - enemy.shield
     }
     expect(burn(2)).toBeCloseTo(burn(1) * 2, 0)

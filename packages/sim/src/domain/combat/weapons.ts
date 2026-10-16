@@ -99,8 +99,12 @@ export function fireLasers(world: World, e: ShipEntity, hostile: boolean, dt: nu
       const tick = gun.cooldown <= 0
       if (tick) gun.cooldown = GUNNERY.BEAM_TICK
       const bore = mount.hardpoint.bore ?? 1
-      for (const nozzle of mount.hardpoint.nozzles ?? [mount.hardpoint.offset]) {
-        pourBeam(world, e, laser, nozzle, hostile, tick ? amp * GUNNERY.BEAM_TICK * bore : 0, bore, _convergence, amp > 0 ? dt : 0)
+      // Мощность установки делится между дулами поровну — как у импульсных: два дула на
+      // законцовках бьют вместе тем же лучом, а не вдвое. Переделка (`stepSeconds`) — нет:
+      // это время в луче, а не доля мощности.
+      const beamNozzles = mount.hardpoint.nozzles ?? [mount.hardpoint.offset]
+      for (const nozzle of beamNozzles) {
+        pourBeam(world, e, laser, nozzle, hostile, tick ? (amp * GUNNERY.BEAM_TICK * bore) / beamNozzles.length : 0, bore, _convergence, amp > 0 ? dt : 0)
       }
       return
     }
