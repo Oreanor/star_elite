@@ -1071,7 +1071,7 @@ const CARGO_COMPOSITE_2: CargoModule = {
   mass: 0.5,
   cost: 14000,
   salvageChance: 0.5,
-  capacity: 18,
+  capacity: 15,
 }
 
 const CARGO_COMPOSITE_3: CargoModule = {
@@ -1082,7 +1082,7 @@ const CARGO_COMPOSITE_3: CargoModule = {
   mass: 1.0, // против полутора тонн стокового большого отсека
   cost: 42000,
   salvageChance: 0.4,
-  capacity: 43,
+  capacity: 45,
 }
 
 // «Балкер» — дешёвый мясистый трюм: тонн за кредит больше всех, но масса зверская.
@@ -1106,7 +1106,7 @@ const CARGO_BULK_3: CargoModule = {
   mass: 2.4, // против полутора тонн стокового — вся разница в потерянном манёвре
   cost: 12000,
   salvageChance: 0.5,
-  capacity: 87,
+  capacity: 85,
 }
 
 
