@@ -441,6 +441,7 @@ export const RU = {
   'ship.tab.modules': 'МОДУЛИ',
   'ship.slotEmpty': 'нет',
   'ship.cargoBudget': 'корпус {chassis} + отсеки {racks} − обвес {equipment} = {tons}',
+  'ship.free': 'СВОБОДНО',
   'ship.broken': 'СЛОМАНО {pct}%',
   'ship.repair.partRepaired': 'Деталь восстановлена.',
   'ship.repair.partBotched': 'Криворукий мастер: не починил и деталь доломал. Денег не взяли, но следующий ремонт выйдет дороже.',

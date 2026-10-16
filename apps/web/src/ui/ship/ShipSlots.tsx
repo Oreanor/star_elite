@@ -129,20 +129,12 @@ function groupCards(slots: readonly SlotView[]): CategoryCard[] {
  * 1–3 под-слота (лазеры, броня, груз, аукс), куда и ставят конкретные штуки. Под-слот
  * пуст — тускло «нет», занят — ярко краткое имя. Клик по под-слоту у причала открывает
  * мастерскую-модалку (выбрать/заменить/снять/купить); в полёте карточки только читают.
- * У груза под под-слотами — сводка суммарного тоннажа.
  */
 export function SlotGrid({
   slots,
   onOpen,
   interactive,
-  cargo,
 }: {
-  /**
-   * Вместимость отсека — та же, что у самого отсека (`spec.cargoCapacity`). НЕ сумма
-   * контейнеров: оборудование ест грузоподъёмность корпуса своей массой. Потому под отсеком
-   * и раскладка: корпус + контейнеры − обвес — иначе «17 т при отсеках 19 и 4» читалось ошибкой.
-   */
-  cargo: Pick<ShipSpec, 'cargoCapacity' | 'cargoBudget'>
   slots: readonly SlotView[]
   onOpen: (key: string) => void
   /** Клик открывает мастерскую только у СВОЕГО борта на верфи. Чужой корпус — на просмотр. */
@@ -156,7 +148,6 @@ export function SlotGrid({
       <div className="grid grid-cols-2 gap-2">
         {cards.map(({ cat, subs }) => {
           const filled = subs.filter((s) => s.module)
-          const cargoTons = cat === 'cargo' ? cargo.cargoCapacity : null
           return (
             <div key={cat} className="flex flex-col gap-1 border px-2.5 py-2" style={{ borderColor: DIM }}>
               {/* Шапка карточки: имя категории и «занято/всего», если под-слотов больше одного. */}
@@ -206,12 +197,6 @@ export function SlotGrid({
                   )}
                 </button>
               ))}
-              {/* Груз: суммарный тоннаж установленных отсеков — то, что реально влезет. */}
-              {cargoTons !== null && filled.length > 0 && (
-                <span className="text-[0.6rem]" style={{ color: DIM }}>
-                  {cargoBudgetText(cargo)}
-                </span>
-              )}
             </div>
           )
         })}

@@ -4,6 +4,7 @@ import {
 import { DIM } from '../station/chrome'
 import { trend } from '../theme'
 import { StatId, formatStat, statLabel } from '../station/format'
+import { t } from '../i18n'
 
 /**
  * Таблица характеристик корабля: свои силы корпуса и вклад оборудования, со сравнением
@@ -15,6 +16,9 @@ import { StatId, formatStat, statLabel } from '../station/format'
 export interface StatRow {
   id: StatId
   value: number
+  /** Своя подпись и своё значение строки, если общий формат характеристики не годится. */
+  label?: string
+  text?: string
 }
 
 /** У какой характеристики «больше — лучше». По умолчанию да; масса — исключение: лёгкий вёртче. */
@@ -28,7 +32,17 @@ function statRows(spec: ShipSpec): { own: StatRow[]; gear: StatRow[] } {
     // Собственные х-ки корпуса — ровно те оси, что усиливаются на верфи.
     own: [
       { id: 'hull', value: spec.hull.hull },
-      { id: 'cargo', value: spec.cargoCapacity },
+      // Отсек — «СВОБОДНО 26/41 т»: сколько товара реально влезет из того, что дают контейнеры
+      // (обвес ест грузоподъёмность своей массой). Без контейнеров — просто итог.
+      {
+        id: 'cargo',
+        value: spec.cargoCapacity,
+        label: t('ship.free'),
+        text:
+          spec.cargoBudget.racks > 0
+            ? `${spec.cargoCapacity}/${formatStat('cargo', spec.cargoBudget.racks)}`
+            : formatStat('cargo', spec.cargoCapacity),
+      },
       { id: 'aux', value: spec.power.auxCapacity },
     ],
     // Задаются обвесом: щит, движки, привод, реактор и суммарная масса корабля.
@@ -66,9 +80,9 @@ export function Stats({ spec, name, baseline }: { spec: ShipSpec; name: string; 
     const b = baseAll?.find((x) => x.id === r.id)
     return (
       <div key={r.id} className="flex items-baseline justify-between gap-3 py-0.5 text-sm">
-        <span style={{ color: DIM }}>{statLabel(r.id)}</span>
+        <span style={{ color: DIM }}>{r.label ?? statLabel(r.id)}</span>
         <span className="inline-flex items-center gap-1.5">
-          {formatStat(r.id, r.value)}
+          {r.text ?? formatStat(r.id, r.value)}
           {b && <CompareArrow id={r.id} value={r.value} base={b.value} />}
         </span>
       </div>
