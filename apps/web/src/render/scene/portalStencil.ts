@@ -1,3 +1,4 @@
+import { FRONT_FX_LAYER } from '../post/frontFxPass'
 import {
   AdditiveBlending,
   AlwaysDepth,
@@ -350,7 +351,10 @@ export function renderJumpPortalOverlay(
       st.buffers.stencil.setFunc(EqualStencilFunc, 1, 0xff)
       st.buffers.stencil.setOp(KeepStencilOp, KeepStencilOp, KeepStencilOp)
       st.buffers.stencil.setLocked(true)
+      // Факелы живут на своём слое (`FrontFxPass`): в окне той стороны линз нет — рисуем разом.
+      destCam.layers.enable(FRONT_FX_LAYER)
       renderer.render(dest, destCam)
+      destCam.layers.disable(FRONT_FX_LAYER)
       st.buffers.stencil.setLocked(false)
     } else if (destLive && !p.destWarm) {
       // Сцена дальнего мира смонтирована, но кольца ещё нет — рисовать её некуда: без

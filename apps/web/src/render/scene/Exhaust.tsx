@@ -1,5 +1,5 @@
 import { useFrame } from '@react-three/fiber'
-import { useMemo, useRef } from 'react'
+import { useLayoutEffect, useMemo, useRef } from 'react'
 import { AdditiveBlending, InstancedMesh, MeshBasicMaterial, Object3D, Quaternion, Vector3 } from 'three'
 import { clamp, CRUISE, shipAxes, renderPos, renderQuat, renderTime, type ShipEntity } from '@elite/sim'
 import { useSession } from '../../session/GameContext'
@@ -8,6 +8,7 @@ import { flameGeometry } from '../geometry/flame'
 import { chassisNozzles, MISSILE_NOZZLE, type Nozzle } from '../geometry/ships'
 import { nearestStar, starTintHex } from '../starLight'
 import { rigEditorActive } from '../dev/rigEditor'
+import { FRONT_FX_LAYER } from '../post/frontFxPass'
 
 /**
  * Струи из сопел — как у турбо-зажигалки: узкий белый керн внутри голубого факела.
@@ -225,6 +226,9 @@ function Flames({ cone }: { cone: Cone }) {
     mesh.count = count
     mesh.instanceMatrix.needsUpdate = true
   })
+
+  // Свой слой: факел дорисовывается после линз чёрных дыр (`FrontFxPass`), не в основном проходе.
+  useLayoutEffect(() => ref.current?.layers.set(FRONT_FX_LAYER), [])
 
   return <instancedMesh ref={ref} args={[cone.geometry, cone.material, MAX_FLAMES]} frustumCulled={false} />
 }

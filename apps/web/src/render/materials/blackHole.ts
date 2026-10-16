@@ -107,9 +107,12 @@ vec3 sampleSky(vec3 dir) {
     float t = dir.y * 0.5 + 0.5;
     return mix(vec3(0.01, 0.02, 0.06), vec3(0.04, 0.07, 0.14), t);
   }
+  // Та же развёртка, что у фона three (equirectUv): v растёт ВВЕРХ, от asin. Прежде было
+  // acos — небо читалось перевёрнутым, и там, где линза берёт его вместо корпуса игрока
+  // (передний план), под кораблём вставала тёмная «тень» из чужого куска неба.
   float phi = atan(dir.z, dir.x);
-  float theta = acos(clamp(dir.y, -1.0, 1.0));
-  vec2 uv = vec2(phi / (2.0 * PI) + 0.5, theta / PI);
+  float lat = asin(clamp(dir.y, -1.0, 1.0));
+  vec2 uv = vec2(phi / (2.0 * PI) + 0.5, lat / PI + 0.5);
   return texture2D(uSkyMap, uv).rgb * uSkyIntensity;
 }
 
