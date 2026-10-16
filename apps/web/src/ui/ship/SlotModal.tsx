@@ -35,7 +35,7 @@ import {
 import { t, type Key } from '../i18n'
 import { trend, UI } from '../theme'
 import { ACCENT, Button, DIM, Modal } from '../station/chrome'
-import { formatStat, statLabel } from '../station/format'
+import { formatStat, statLabel, statNumber } from '../station/format'
 import { Money, tm } from '../station/Money'
 import { displayName, headlineCompare, headlineNumber, weaponSlot } from '../station/Equipment'
 import { type SlotView } from './ShipSlots'
@@ -180,7 +180,7 @@ export function SlotModal({
     // прирост — показываем абсолютные числа в каждой кнопке, рядом с процентом.
     const stat = moduleStat(module)
     const arrow = (useCopy: boolean) =>
-      `${formatStat(stat.key, stat.value)} → ${formatStat(stat.key, upgradedStatValue(module, useCopy))}`
+      `${statNumber(stat.key, stat.value)} → ${formatStat(stat.key, upgradedStatValue(module, useCopy))}`
     const actions: Confirm['actions'] = []
     // stay: улучшение оставляет модуль в слоте — модалку держим открытой (чини/улучшай подряд).
     if (canUpgrade(world, player, module, true) === null)
