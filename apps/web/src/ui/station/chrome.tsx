@@ -331,6 +331,11 @@ export interface Column<Row> {
    */
   headerSpan?: number
   cell: (row: Row) => React.ReactNode
+  /**
+   * Ключ сортировки. Есть — заголовок кликается: по возрастанию, по убыванию, исходный порядок.
+   * Строки сравниваются по-человечески (`localeCompare`), числа — как числа.
+   */
+  sortValue?: (row: Row) => number | string
 }
 
 const alignClass = (a?: Column<unknown>['align']) =>
@@ -367,6 +372,21 @@ export function Table<Row>({
   rowDisabled?: (row: Row) => boolean
 }) {
   const [open, setOpen] = useState<ReadonlySet<string>>(new Set())
+  // Сортировка по клику на заголовок: колонка и направление; null — исходный порядок данных.
+  const [sort, setSort] = useState<{ key: string; dir: 1 | -1 } | null>(null)
+  const sortCol = sort ? columns.find((c) => c.key === sort.key && c.sortValue) : undefined
+  const shown = sortCol
+    ? [...rows]
+        .map((row, i) => ({ row, i, v: sortCol.sortValue!(row) }))
+        .sort((a, b) => {
+          const d = typeof a.v === 'number' && typeof b.v === 'number' ? a.v - b.v : String(a.v).localeCompare(String(b.v))
+          // Равные — в исходном порядке: строки не прыгают между собой от клика к клику.
+          return d !== 0 ? d * sort!.dir : a.i - b.i
+        })
+        .map((x) => x.row)
+    : rows
+  const cycleSort = (key: string) =>
+    setSort((prev) => (prev?.key !== key ? { key, dir: 1 } : prev.dir === 1 ? { key, dir: -1 } : null))
   const toggle = (k: string) =>
     setOpen((prev) => {
       const next = new Set(prev)
@@ -399,10 +419,12 @@ export function Table<Row>({
                   key={c.key}
                   colSpan={span}
                   // Общий заголовок пары — по ЛЕВОМУ краю, с началом её первой колонки; одиночный — как его колонка.
-                  className={`px-2 pb-1 text-xs font-normal tracking-widest first:pl-0 last:pr-0 ${span > 1 ? 'text-left' : alignClass(c.align)}`}
-                  style={{ color: DIM }}
+                  className={`px-2 pb-1 text-xs font-normal tracking-widest first:pl-0 last:pr-0 ${span > 1 ? 'text-left' : alignClass(c.align)} ${c.sortValue ? 'cursor-pointer select-none hover:text-[#7fd6ff]' : ''}`}
+                  style={{ color: sort?.key === c.key ? ACCENT : DIM }}
+                  onClick={c.sortValue ? () => cycleSort(c.key) : undefined}
                 >
                   {c.header}
+                  {sort?.key === c.key ? (sort.dir === 1 ? ' ▲' : ' ▼') : ''}
                 </th>
               )
             })}
@@ -410,7 +432,7 @@ export function Table<Row>({
         </thead>
       )}
       <tbody>
-        {rows.map((row, index) => {
+        {shown.map((row, index) => {
           const key = rowKey(row, index)
           const card = detail?.(row) ?? null
           const isOpen = card !== null && open.has(key)

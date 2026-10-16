@@ -39,12 +39,6 @@ export function moduleBenefit(module: ShipModule): string {
   return `${statLabel(key)} ${formatStat(key, value)}`
 }
 
-/** Только ЧИСЛО заголовочной характеристики с единицей: «128», «2.60 рад/с²». Для колонки таблицы. */
-export function headlineNumber(module: ShipModule): string {
-  const { key, value } = moduleStat(module)
-  return formatStat(key, value)
-}
-
 /**
  * Сравнение по ЗАГОЛОВОЧНОЙ характеристике: КОНКРЕТНО было → станет. Берём её запись
  * из `fitDeltas`; если заголовочной оси там нет (у двигателя это тяга, а меняется

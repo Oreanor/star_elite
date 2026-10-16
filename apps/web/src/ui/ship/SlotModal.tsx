@@ -33,11 +33,12 @@ import {
   type World,
 } from '@elite/sim'
 import { t, type Key } from '../i18n'
-import { trend, UI } from '../theme'
-import { ACCENT, Button, DIM, Modal } from '../station/chrome'
+import { UI } from '../theme'
+import { ACCENT, Button, DIM, Modal, Table, type Column } from '../station/chrome'
+import { moduleColumns } from '../station/moduleColumns'
 import { formatStat, statLabel, statNumber } from '../station/format'
 import { Money, tm } from '../station/Money'
-import { displayName, headlineCompare, headlineNumber, weaponSlot } from '../station/Equipment'
+import { displayName, weaponSlot } from '../station/Equipment'
 import { type SlotView } from './ShipSlots'
 import { ItemSheet } from '../station/ItemSheet'
 
@@ -229,7 +230,7 @@ export function SlotModal({
   }
 
   const shopOptions = docked
-    ? stationStock(world).filter((m) => kinds.includes(m.kind) && m.id !== module?.id).slice(0, 8)
+    ? stationStock(world).filter((m) => kinds.includes(m.kind) && m.id !== module?.id)
     : []
   const holdOptions = player.hold.items
     .map((it, i) => ({ it, i }))
@@ -237,6 +238,22 @@ export function SlotModal({
       (x): x is { it: Extract<CargoItem, { kind: 'module' }>; i: number } =>
         x.it.kind === 'module' && kinds.includes(x.it.module.kind) && x.it.module.id !== module?.id,
     )
+  const holdModules = holdOptions.map((x) => x.it.module)
+  // Индекс в трюме — по самому объекту модуля: таблица сортирует строки, и позиция в ней
+  // с позицией в трюме больше не совпадает.
+  const pickFromHold = (m: ShipModule) => {
+    const hit = holdOptions.find((x) => x.it.module === m)
+    if (hit) askFit(hit.i, m)
+  }
+  const shopColumns = moduleColumns(world, {
+    hardpointIndex: slot.hardpointIndex,
+    price: (m) => (
+      <span className="whitespace-nowrap">
+        <Money amount={priceOf(m)} />
+      </span>
+    ),
+  })
+  const holdColumns = moduleColumns(world, { hardpointIndex: slot.hardpointIndex })
 
   return (
     <Modal onClose={onClose} wide>
@@ -293,20 +310,22 @@ export function SlotModal({
               </p>
             )}
 
-            {/* Варианты в две колонки: магазин слева, твой трюм справа. Ни колонки
-                «купить», ни раскрытий — клик по строке сам спрашивает и ставит. */}
-            <div className="mt-6 grid grid-cols-1 gap-6 sm:grid-cols-2">
-              <VariantColumn title={t('ship.col.shop')} empty={t('ship.noneShop')}>
-                {shopOptions.map((m) => (
-                  <VariantRow hardpointIndex={slot.hardpointIndex} key={m.id} world={world} module={m} price={priceOf(m)} onClick={() => askBuy(m)} />
-                ))}
-              </VariantColumn>
-              <VariantColumn title={t('ship.col.hold')} empty={t('ship.noneHold')}>
-                {holdOptions.map(({ it, i }) => (
-                  <VariantRow hardpointIndex={slot.hardpointIndex} key={`${it.module.id}-${i}`} world={world} module={it.module} onClick={() => askFit(i, it.module)} />
-                ))}
-              </VariantColumn>
-            </div>
+            {/* Варианты — ТЕ ЖЕ таблицы, что в торговле (`moduleColumns`): магазин, под ним твой
+                трюм. Клик по строке сам спрашивает и ставит; заголовки сортируют. */}
+            <OptionTable
+              title={t('ship.col.shop')}
+              empty={t('ship.noneShop')}
+              rows={shopOptions}
+              columns={shopColumns}
+              onPick={askBuy}
+            />
+            <OptionTable
+              title={t('ship.col.hold')}
+              empty={t('ship.noneHold')}
+              rows={holdModules}
+              columns={holdColumns}
+              onPick={pickFromHold}
+            />
           </>
         ) : (
           /* В ПОЛЁТЕ верфи нет, а своё железо пилот переставляет сам: снять в трюм и поставить
@@ -323,13 +342,13 @@ export function SlotModal({
               onUpgrade={askUpgrade}
               onSell={() => {}}
             />
-            <div className="mt-6">
-              <VariantColumn title={t('ship.col.hold')} empty={t('ship.noneHold')}>
-                {holdOptions.map(({ it, i }) => (
-                  <VariantRow hardpointIndex={slot.hardpointIndex} key={`${it.module.id}-${i}`} world={world} module={it.module} onClick={() => askFit(i, it.module)} />
-                ))}
-              </VariantColumn>
-            </div>
+            <OptionTable
+              title={t('ship.col.hold')}
+              empty={t('ship.noneHold')}
+              rows={holdModules}
+              columns={holdColumns}
+              onPick={pickFromHold}
+            />
           </>
         )}
 
@@ -423,60 +442,33 @@ function ActionBar({
 }
 
 /** Одна колонка вариантов: заголовок и строки. Пусто — честная строка «—», а не провал. */
-function VariantColumn({ title, empty, children }: { title: string; empty: string; children: React.ReactNode }) {
-  const items = Array.isArray(children) ? children : [children]
-  const hasAny = items.some(Boolean)
+/** Раздел окна слота: подпись и таблица модулей (или «нет»), клик по строке — выбрать. */
+function OptionTable({
+  title,
+  empty,
+  rows,
+  columns,
+  onPick,
+}: {
+  title: string
+  empty: string
+  rows: readonly ShipModule[]
+  columns: Column<ShipModule>[]
+  onPick: (m: ShipModule) => void
+}) {
   return (
-    <div>
+    <div className="mt-6">
       <h4 className="mb-2 text-xs tracking-[0.25em]" style={{ color: DIM }}>
         {title}
       </h4>
-      {hasAny ? (
-        <div className="flex flex-col gap-1.5">{children}</div>
+      {rows.length > 0 ? (
+        <Table columns={columns} rows={rows} rowKey={(m, i) => `${m.id}-${i}`} onRowClick={onPick} />
       ) : (
         <p className="text-xs" style={{ color: DIM }}>
           {empty}
         </p>
       )}
     </div>
-  )
-}
-
-/** Кликабельная строка варианта: имя, заголовочное число со стрелкой лучше/хуже
- *  относительно стоящего и — для магазина — цена. Без кнопки: строка И есть кнопка. */
-function VariantRow({
-  world,
-  module,
-  price,
-  hardpointIndex,
-  onClick,
-}: {
-  world: World
-  module: ShipModule
-  price?: number
-  /** Точка подвески открытого слота: сравнение — с тем, что стоит именно в ней. */
-  hardpointIndex?: number
-  onClick: () => void
-}) {
-  const cmp = headlineCompare(world, module, hardpointIndex)
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="flex cursor-pointer items-center justify-between gap-3 border px-3 py-2 text-left text-sm transition-colors ui-row"
-      style={{ borderColor: DIM }}
-    >
-      <span className="min-w-0 truncate">{displayName(module)}</span>
-      <span className="flex shrink-0 items-center gap-2 whitespace-nowrap">
-        <span style={{ color: DIM }}>{headlineNumber(module)}</span>
-        {cmp && <span style={{ color: trend(cmp.better).color }}>{trend(cmp.better).mark}</span>}
-        {price !== undefined && (
-          <span style={{ color: DIM }}>
-            <Money amount={price} />
-          </span>
-        )}
-      </span>
-    </button>
   )
 }
 

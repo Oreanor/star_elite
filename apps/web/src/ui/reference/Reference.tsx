@@ -53,16 +53,17 @@ export function Reference() {
   const extraId = first && extra ? extra(first)?.id ?? null : null
 
   const columns: Column<ShipModule>[] = [
-    { key: 'class', header: t('stat.class').toUpperCase(), width: '3.5rem', cell: (m) => m.class },
-    { key: 'name', header: t('station.col.name'), cell: (m) => moduleName(m) },
-    { key: 'tech', header: t('ref.col.tech'), align: 'right', width: '5rem', cell: (m) => `${minTechForClass(m.class)}+` },
-    { key: 'mass', header: t('station.col.mass'), align: 'right', width: '6rem', cell: (m) => formatStat('mass', m.mass, 1) },
+    { key: 'class', header: t('stat.class').toUpperCase(), width: '3.5rem', sortValue: (m) => m.class, cell: (m) => m.class },
+    { key: 'name', header: t('station.col.name'), sortValue: (m) => moduleName(m), cell: (m) => moduleName(m) },
+    { key: 'tech', header: t('ref.col.tech'), align: 'right', width: '5rem', sortValue: (m) => minTechForClass(m.class), cell: (m) => `${minTechForClass(m.class)}+` },
+    { key: 'mass', header: t('station.col.mass'), align: 'right', width: '6rem', sortValue: (m) => m.mass, cell: (m) => formatStat('mass', m.mass, 1) },
     ...(statId
       ? [{
           key: 'stat',
           header: statLabel(statId),
           align: 'right' as const,
           width: '9rem',
+          sortValue: (m: ShipModule) => moduleStat(m).value,
           cell: (m: ShipModule) => formatStat(statId, moduleStat(m).value),
         }]
       : []),
@@ -72,6 +73,7 @@ export function Reference() {
           header: statLabel(extraId),
           align: 'right' as const,
           width: '7rem',
+          sortValue: (m: ShipModule) => extra(m)?.value ?? -Infinity,
           cell: (m: ShipModule) => {
             const v = extra(m)
             return v ? formatStat(v.id, v.value) : '—'
@@ -83,6 +85,7 @@ export function Reference() {
       header: t('station.col.price'),
       align: 'right',
       width: '9rem',
+      sortValue: (m) => m.cost,
       // Стартовый хлам не продаётся — цены у него нет, а не «0 кр.».
       cell: (m) => (m.cost > 0 ? <Money amount={m.cost} /> : <span style={{ color: DIM }}>—</span>),
     },

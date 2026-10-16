@@ -41,6 +41,7 @@ export function Market({ world, onChange }: { world: World; onChange: () => void
     {
       key: 'name',
       header: t('station.col.name'),
+      sortValue: (c) => commodityName(c),
       cell: (c) => (
         <span>
           {commodityName(c)}
@@ -57,12 +58,14 @@ export function Market({ world, onChange }: { world: World; onChange: () => void
       key: 'mass',
       header: t('station.col.unit'),
       align: 'right',
+      sortValue: (c) => c.unitMass,
       cell: (c) => <span style={{ color: DIM }}>{commodityMass(c)}</span>,
     },
     {
       key: 'price',
       header: t('station.col.price'),
       align: 'right',
+      sortValue: (c) => commodityBuyPrice(world, c),
       cell: (c) => (
         <span style={{ color: DIM }}>
           <Money amount={commodityBuyPrice(world, c)} />
@@ -73,6 +76,7 @@ export function Market({ world, onChange }: { world: World; onChange: () => void
       key: 'stock',
       header: t('station.col.stock'),
       align: 'right',
+      sortValue: (c) => commodityStockAt(world, c),
       cell: (c) => <span style={{ color: DIM }}>{commodityStockAt(world, c)}</span>,
     },
     {

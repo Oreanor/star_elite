@@ -15,7 +15,8 @@ import {
 } from '@elite/sim'
 import { t, useLang, type Key } from '../i18n'
 import { ConfirmBox, type Confirm } from '../ship/SlotModal'
-import { DIM, SideTabs, Table, type Column } from './chrome'
+import { DIM, SideTabs, Table } from './chrome'
+import { moduleColumns } from './moduleColumns'
 import { buyLabel, displayName, headlineCompare, weaponSlot } from './Equipment'
 import { trend } from '../theme'
 import { CATEGORY_ORDER, cardOf, type SlotCard } from '../ship/ShipSlots'
@@ -123,56 +124,19 @@ export function Outfitter({ world, onChange }: { world: World; onChange: () => v
     })
   }
 
-  const columns: Column<ShipModule>[] = [
-    // Ширин колонкам НЕ задаём: таблица сама отдаёт каждой ширину по содержимому. Все числа
-    // в одну строку, переносится лишь название — и только когда места правда не хватает.
-    // Жёсткие ширины раздували таблицу за край на длинных сравнениях (гиперприводы).
-    { key: 'name', header: t('station.col.name'), cell: (m) => displayName(m) },
-    // Сравнение одной ячейкой, прижатой вправо: «156 → 135 м/с ▼». Треугольник — вплотную за
-    // новым значением (отдельной колонкой он отъезжал на её поля). Ширина у него одна, так
-    // что столбик значений по правому краю не гуляет.
-    {
-      key: 'compare',
-      header: t('station.col.compare'),
-      align: 'right',
-      cell: (m) => {
-        const cmp = headlineCompare(world, m)
-        if (!cmp) return <span style={{ color: DIM }}>·</span>
-        const same = cmp.to === cmp.from
-        const tone = trend(cmp.better)
-        return (
-          <span className="whitespace-nowrap">
-            {/* Единица — один раз, в конце, у нового значения. Равное — без цвета и со «=». */}
-            <span style={{ color: DIM }}>{statNumber(cmp.key, cmp.from)} → </span>
-            <span style={{ color: same ? DIM : tone.color }}>
-              {formatStat(cmp.key, cmp.to)} {same ? '=' : tone.mark}
-            </span>
-          </span>
-        )
-      },
+  // Колонки — общие с окном слота (`moduleColumns`); своя здесь лишь ячейка цены: почему
+  // строка погасла — на месте цены, как на кнопках окна слота.
+  const columns = moduleColumns(world, {
+    price: (m) => {
+      const error = canPurchase(world, m)
+      // Цена — всегда, если хоть одной дорогой купить можно; причина — когда никакой.
+      return (
+        <span className="whitespace-nowrap">
+          {error && !canStow(world, m) ? <span style={{ color: DIM }}>{buyLabel(error)}</span> : <Money amount={priceOf(m)} />}
+        </span>
+      )
     },
-    {
-      key: 'mass',
-      header: t('station.col.mass'),
-      align: 'right',
-      cell: (m) => <span className="whitespace-nowrap" style={{ color: DIM }}>{formatStat('mass', m.mass, 1)}</span>,
-    },
-    {
-      key: 'price',
-      header: t('station.col.price'),
-      align: 'right',
-      // Почему строка погасла — на месте цены, как на кнопках окна слота.
-      cell: (m) => {
-        const error = canPurchase(world, m)
-        // Цена — всегда, если хоть одной дорогой купить можно; причина — когда никакой.
-        return (
-          <span className="whitespace-nowrap">
-            {error && !canStow(world, m) ? <span style={{ color: DIM }}>{buyLabel(error)}</span> : <Money amount={priceOf(m)} />}
-          </span>
-        )
-      },
-    },
-  ]
+  })
 
   if (stock.length === 0) {
     return (

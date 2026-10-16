@@ -99,18 +99,22 @@ export function Hold({
     {
       key: 'name',
       header: t('station.col.name'),
+      sortValue: (item) => (item.kind === 'module' ? displayName(item.module) : itemDisplayName(item)),
       cell: (item) => (item.kind === 'module' ? displayName(item.module) : itemDisplayName(item)),
     },
     {
       key: 'mass',
       header: t('station.col.mass'),
       align: 'right',
+      sortValue: (item) => itemMass(item),
       cell: (item) => <span style={{ color: DIM }}>{formatStat('mass', itemMass(item))}</span>,
     },
     {
       key: 'profit',
       header: t('station.col.profit'),
       align: 'right',
+      // Находка (цены входа нет) — в самом низу по возрастанию: сравнивать её не с чем.
+      sortValue: (item) => (item.costBasis === undefined ? -Infinity : itemSellValue(world, item) - item.costBasis),
       cell: (item) => {
         const mark = profitMark(item, itemSellValue(world, item))
         return <span style={{ color: mark.color }}>{mark.text}</span>
