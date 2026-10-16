@@ -164,7 +164,7 @@ export const PT: Record<keyof typeof RU, string> = {
   'hud.portalOpening': 'ABRINDO ANEL HIPER',
   'hud.landApproach': 'PREPARANDO HOVER · {alt}',
   'hud.landPrompt': 'PRESSIONE L · {alt}',
-  'hud.landDetach': 'BOOST ×1000 — SOLTAR · L — LIBERAR',
+  'hud.landDetach': 'BOOST ×10 — SOLTAR · L — LIBERAR',
   'hud.crash': 'COLISÃO',
   'hud.crashHit': 'COLISÃO · {kind} {name}',
   'hud.crashHitAnon': 'COLISÃO · {kind}',

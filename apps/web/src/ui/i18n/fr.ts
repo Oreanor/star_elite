@@ -158,7 +158,7 @@ export const FR: Record<keyof typeof RU, string> = {
   'hud.portalOpening': 'OUVERTURE DE L’ANNEAU',
   'hud.landApproach': 'PRÉPARATION HOVER · {alt}',
   'hud.landPrompt': 'APPUYEZ SUR L · {alt}',
-  'hud.landDetach': 'BOOST ×1000 — DÉCROCHER · L — LÂCHER',
+  'hud.landDetach': 'BOOST ×10 — DÉCROCHER · L — LÂCHER',
   'hud.crash': 'COLLISION',
   'hud.crashHit': 'COLLISION · {kind} {name}',
   'hud.crashHitAnon': 'COLLISION · {kind}',

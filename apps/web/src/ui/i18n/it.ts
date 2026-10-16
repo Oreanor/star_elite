@@ -159,7 +159,7 @@ export const IT: Record<keyof typeof RU, string> = {
   'hud.portalOpening': 'APERTURA ANELLO IPER',
   'hud.landApproach': 'PREPARAZIONE HOVER · {alt}',
   'hud.landPrompt': 'PREMI L · {alt}',
-  'hud.landDetach': 'BOOST ×1000 — STACCO · L — RILASCIA',
+  'hud.landDetach': 'BOOST ×10 — STACCO · L — RILASCIA',
   'hud.crash': 'IMPATTO',
   'hud.crashHit': 'IMPATTO · {kind} {name}',
   'hud.crashHitAnon': 'IMPATTO · {kind}',

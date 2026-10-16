@@ -157,7 +157,7 @@ export const EN: Record<keyof typeof RU, string> = {
   'hud.portalOpening': 'HYPER RING OPENING',
   'hud.landApproach': 'HOVER PREP · {alt}',
   'hud.landPrompt': 'PRESS L · {alt}',
-  'hud.landDetach': 'BOOST ×1000 — BREAK · L — RELEASE',
+  'hud.landDetach': 'BOOST ×10 — BREAK · L — RELEASE',
   'hud.crash': 'CRASH',
   'hud.crashHit': 'CRASH · {kind} {name}',
   'hud.crashHitAnon': 'CRASH · {kind}',

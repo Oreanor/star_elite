@@ -159,7 +159,7 @@ export const DE: Record<keyof typeof RU, string> = {
   'hud.portalOpening': 'HYPERRING ÖFFNET',
   'hud.landApproach': 'HOVER-VORBEREITUNG · {alt}',
   'hud.landPrompt': 'L DRÜCKEN · {alt}',
-  'hud.landDetach': 'BOOST ×1000 — LOS · L — LÖSEN',
+  'hud.landDetach': 'BOOST ×10 — LOS · L — LÖSEN',
   'hud.crash': 'ABSTURZ',
   'hud.crashHit': 'ABSTURZ · {kind} {name}',
   'hud.crashHitAnon': 'ABSTURZ · {kind}',
