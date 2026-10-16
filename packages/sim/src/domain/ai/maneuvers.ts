@@ -15,6 +15,10 @@ const _rel = new Vector3()
 const _push = new Vector3()
 const _WORLD_UP = new Vector3(0, 1, 0)
 const _WORLD_X = new Vector3(1, 0, 0)
+/** Доля дистанции до корабля/цели, до которой ужимается сфера запаса (см. `avoidBodies`). */
+const AVOID_SHRINK = 0.8
+/** Но не меньше самого тела с полосой в 5%: сквозь твердь путь не прокладываем никогда. */
+const AVOID_BODY_FLOOR = 1.05
 
 /**
  * Обойти тело на пути к точке. Если отрезок «корабль → `aim`» проходит сквозь ближайшее
@@ -54,15 +58,22 @@ export function avoidBodies(pos: Vector3, aim: Vector3, bodies: readonly BodyEnt
   for (const b of bodies) {
     // Сфера запаса не глотает ни корабль, ни цель: станция у планеты, цель у поверхности —
     // законны. Иначе обход уводил бы прочь от того, к чему летим, а стоящего у тела — вон.
+    //
+    // Ужимаем её до 80% дистанции, а не до 99.9%. Пойманный баг: бой у станции, оба борта
+    // в паре км от неё — короткая ХОРДА между ними проходит чуть ближе к центру, чем концы,
+    // и при запасе «почти до корабля» любой такой отрезок считался перекрытым. Точку руления
+    // уносило на обход станции, нос бросало туда-сюда, и автобой не мог навестись. С запасом
+    // 0.8 хорда в пару сотен метров чиста, а отрезок, что правда режет станцию, — нет.
     const clear = Math.max(
-      b.radius,
-      Math.min(avoidClearance(b), pos.distanceTo(b.pos) * 0.999, aim.distanceTo(b.pos) * 0.999),
+      b.radius * AVOID_BODY_FLOOR,
+      Math.min(avoidClearance(b), pos.distanceTo(b.pos) * AVOID_SHRINK, aim.distanceTo(b.pos) * AVOID_SHRINK),
     )
     _rel.copy(b.pos).sub(pos)
-    const along = _rel.dot(_seg)
-    // Позади или дальше цели (с запасом) — не мешает.
-    if (along < -clear || along > len + clear) continue
-    const perp2 = _rel.lengthSq() - along * along
+    // Ближайшая к центру тела точка САМОГО ОТРЕЗКА, а не бесконечной прямой. Пойманный баг:
+    // мерили до прямой — короткий отрезок у станции, продолженный за цель, «проходил» рядом
+    // с её центром, и обход срабатывал, хотя станции между кораблём и целью не было.
+    const along = Math.max(0, Math.min(len, _rel.dot(_seg)))
+    const perp2 = _rel.lengthSq() - 2 * along * _rel.dot(_seg) + along * along
     if (perp2 >= clear * clear) continue
     if (along < hitAlong) {
       hit = b

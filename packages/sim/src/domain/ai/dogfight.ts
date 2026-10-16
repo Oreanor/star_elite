@@ -4,6 +4,7 @@ import { GUNNERY } from '../../config/weapons'
 import { chanceWithin, clamp, signed } from '../../core/math'
 import { shipAxes } from '../flight/axes'
 import { isEngageable } from '../combat/engage'
+import { isLaser } from '../loadout'
 import type { ShipEntity, World } from '../world/entities'
 import { breakWaypoint, leadPoint } from './maneuvers'
 import { wantsToFlee } from './morale'
@@ -32,6 +33,27 @@ import type { AIMode, AIState } from './types'
  * поперёк, без упреждения он ляжет позади неё.
  */
 const PURSUIT_HORIZON = 900
+
+/** «Бесконечная» скорость снаряда: луч достаёт мгновенно, упреждать его незачем. */
+const INSTANT = 1e9
+
+/**
+ * Скорость, под которую считать упреждение, — по тому, ЧЕМ корабль бьёт. Болт летит, луч
+ * достаёт сразу: целиться лучом в точку упреждения болта — мазать мимо (этот баг уже ловили,
+ * см. CLAUDE.md). На смешанной установке решает то, что даёт больше урона в секунду.
+ */
+export function aimSpeed(e: ShipEntity): number {
+  let beam = 0
+  let bolt = 0
+  for (const m of e.spec.mounts) {
+    const w = m.weapon
+    if (!isLaser(w)) continue
+    const bore = m.hardpoint.bore ?? 1
+    if (w.beam) beam += w.damage * bore
+    else bolt += (w.damage / Math.max(w.cooldown, 1e-3)) * bore
+  }
+  return beam > bolt ? INSTANT : GUNNERY.BOLT_SPEED
+}
 
 /** Габарит контейнера для конуса огня — у pod нет hull.radius. Метры. */
 const POD_FIRE_RADIUS = 4
@@ -71,9 +93,9 @@ export function fight(e: ShipEntity, ai: AIState, target: ShipEntity, world: Wor
       leadPoint(e, target, PURSUIT_HORIZON, _aim)
       break
     case 'attack':
-      // Лазер — снаряд: ведём нос в точку УПРЕЖДЕНИЯ (куда цель придёт за время
-      // полёта болта), а не в саму цель. Дрожание руки добавляется здесь.
-      leadPoint(e, target, GUNNERY.BOLT_SPEED, _aim)
+      // Болт — снаряд: ведём нос в точку УПРЕЖДЕНИЯ (куда цель придёт за время его полёта);
+      // луч достаёт сразу — в саму цель (`aimSpeed`). Дрожание руки добавляется здесь.
+      leadPoint(e, target, aimSpeed(e), _aim)
       _aim.add(ai.aimJitter)
       // Медленно: ω = v/d, и на боевой скорости цель не удержать в прицеле.
       throttle = distance > AI.ATTACK_SLOW_RANGE ? AI.ATTACK_THROTTLE_FAR : AI.ATTACK_THROTTLE_NEAR
@@ -246,7 +268,7 @@ export function fightSoft(e: ShipEntity, ai: AIState, world: World, dt: number, 
   updateAimJitter(e, ai, world, distance, dt)
 
   // Упреждение по скорости болта — камень и контейнер тоже движутся.
-  const flight = distance / Math.max(GUNNERY.BOLT_SPEED, 1)
+  const flight = distance / Math.max(aimSpeed(e), 1)
   _aim.copy(pos).addScaledVector(vel, flight).add(ai.aimJitter)
 
   const throttle =
