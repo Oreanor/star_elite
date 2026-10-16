@@ -188,7 +188,7 @@ export function SlotModal({
         // Две строки: что станет — и чем платишь. Длинная строка в одну переносилась посреди «15 т → 19 т».
         label: (
           <>
-            <span className="block">{t('station.upgrade')}: {arrow(true)}</span>
+            <span className="block">{statLabel(stat.key)}: {arrow(true)}</span>
             <span className="block">{t('station.byCopy')}</span>
           </>
         ),
@@ -200,7 +200,7 @@ export function SlotModal({
       actions.push({
         label: (
           <>
-            <span className="block">{t('station.upgrade')}: {arrow(false)}</span>
+            <span className="block">{statLabel(stat.key)}: {arrow(false)}</span>
             <span className="block"><Money amount={upgradeCashCost(module)} /></span>
           </>
         ),

@@ -455,7 +455,7 @@ export const IT: Record<keyof typeof RU, string> = {
   'ship.essentialNote': 'Motore e propulsori si possono solo sostituire, non rimuovere.',
   'ship.confirm.fit': 'Installare “{name}” al suo posto?',
   'ship.confirm.buy': 'Comprare “{name}” per {price} e installare?',
-  'ship.confirm.upgrade': 'Come migliorare “{name}”?',
+  'ship.confirm.upgrade': 'Migliorare “{name}”?',
   'ship.confirm.noFunds': 'Crediti insufficienti: servono {price}.',
   'ship.confirm.lowTech': 'Questo mondo è troppo primitivo per tale classe. Serve tec {tech}+ — cercane uno più avanzato.',
   'ship.cancel': 'ANNULLA',

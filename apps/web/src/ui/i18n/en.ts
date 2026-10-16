@@ -455,7 +455,7 @@ export const EN: Record<keyof typeof RU, string> = {
   'ship.essentialNote': 'Drive and thrusters can only be swapped, not removed.',
   'ship.confirm.fit': 'Install “{name}” in its place?',
   'ship.confirm.buy': 'Buy “{name}” for {price} and install?',
-  'ship.confirm.upgrade': 'How to upgrade “{name}”?',
+  'ship.confirm.upgrade': 'Upgrade “{name}”?',
   'ship.confirm.noFunds': 'Not enough credits: {price} needed.',
   'ship.confirm.lowTech': 'This world is too primitive for that class. Needs tech {tech}+ — find a more advanced one.',
   'ship.cancel': 'CANCEL',

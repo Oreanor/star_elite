@@ -455,7 +455,7 @@ export const DE: Record<keyof typeof RU, string> = {
   'ship.essentialNote': 'Antrieb und Steuerdüsen lassen sich nur tauschen, nicht ausbauen.',
   'ship.confirm.fit': '„{name}“ an seinen Platz einbauen?',
   'ship.confirm.buy': '„{name}“ für {price} kaufen und einbauen?',
-  'ship.confirm.upgrade': 'Wie „{name}“ aufrüsten?',
+  'ship.confirm.upgrade': '„{name}“ aufrüsten?',
   'ship.confirm.noFunds': 'Nicht genug Credits: {price} nötig.',
   'ship.confirm.lowTech': 'Diese Welt ist zu primitiv für diese Klasse. Braucht Tech {tech}+ — such eine fortgeschrittenere.',
   'ship.cancel': 'ABBRECHEN',

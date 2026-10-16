@@ -478,7 +478,7 @@ export const RU = {
   'ship.essentialNote': 'Двигатель и маневровые не снять — только заменить.',
   'ship.confirm.fit': 'Установить «{name}» взамен?',
   'ship.confirm.buy': 'Купить «{name}» за {price} и установить?',
-  'ship.confirm.upgrade': 'Как улучшить «{name}»?',
+  'ship.confirm.upgrade': 'Улучшить «{name}»?',
   'ship.confirm.noFunds': 'Не хватает денег: нужно {price}',
   'ship.confirm.lowTech': 'Мир слаб для этого класса. Нужен тех-уровень {tech}+ — ищи развитее.',
   'ship.cancel': 'ОТМЕНА',
