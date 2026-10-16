@@ -46,7 +46,7 @@ describe('редактор оснастки', () => {
   it('печать: исходная оснастка воспроизводится строками конфига', () => {
     const text = printout(fromChassis(aurora, nozzles, 1))
     expect(text).toContain("{ offset: [0, -0.86, 0.53], kind: 'gun', maxClass: 2, nozzles: [[-3.82, -0.86, 0.53], [3.82, -0.86, 0.53]] },")
-    expect(text).toContain("{ offset: [0, -0.87, -8.52], kind: 'gun', maxClass: 3, bore: 2, nozzles: [[0, -0.87, -8.52]] },")
+    expect(text).toContain("{ offset: [0, -0.87, -8.52], kind: 'gun', maxClass: 2, bore: 2, nozzles: [[0, -0.87, -8.52]] },")
     expect(text).toContain("{ offset: [-5, -0.8, 3], kind: 'pylon', maxClass: 1 },")
     expect(text).toContain('nozzles: [{ offset: [-1.5, -0.7, 7.5], radius: 1 }, { offset: [1.5, -0.7, 7.5], radius: 1 }],')
     expect(text).toContain('missileScale: 1,')
@@ -60,7 +60,7 @@ describe('редактор оснастки', () => {
     expect(entry.hardpoints!.map((h) => h.kind)).toEqual(aurora.hardpoints.map((h) => h.kind))
     expect(entry.hardpoints![3]!.offset).toEqual([-6, -0.8, 3]) // −x пары — на своём месте
     expect(entry.hardpoints![4]!.offset).toEqual([6, -0.8, 3])
-    expect(entry.hardpoints![5]!.offset).toEqual(aurora.hardpoints[5]!.offset) // соседняя пара не тронута
+    expect(entry.hardpoints![0]!.offset).toEqual(aurora.hardpoints[0]!.offset) // соседняя точка не тронута
     expect(entry.missileScale).toBe(1)
   })
 })

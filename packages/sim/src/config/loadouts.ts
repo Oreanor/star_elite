@@ -59,21 +59,22 @@ export function playerStartLoadout(): Loadout {
     // Дальний рейс всё равно надо покупать: девять световых лет — это соседи.
     [ENGINE_STANDARD, RCS_STANDARD, SHIELD_STANDARD, ARMOUR_PLATE, CARGO_LARGE, HYPERDRIVE_BASIC],
     // ЗЕЛЁНЫЙ класс 2 на середине крыла, лучевой класс 2 на законцовках, голубой «Столб» в
-    // носу; четыре пилона снаряжены с завода.
-    [BURST_LASER, BEAM_LASER, PULSE_LASER_CENTRAL, MISSILE_PYLON, MISSILE_PYLON, MISSILE_PYLON, MISSILE_PYLON],
+    // носу; пара пилонов снаряжена с завода.
+    [BURST_LASER, BEAM_LASER, PULSE_LASER_CENTRAL, MISSILE_PYLON, MISSILE_PYLON],
   )
 }
 
 /**
- * «Ника» в ПОЛНОЙ боевой сборке — прежний старт: маскировка, «Клинок» третьего
- * класса, четыре пилона по восемь ракет. На старте этого железа больше нет, но это
+ * ПОЛНАЯ боевая сборка на раме класса 3: маскировка, «Клинок» третьего класса, пилоны с
+ * ракетами. На старте этого железа нет, но это
  * эталон для тестов боя, маскировки и ракет — им нужно железо, которого у новичка нет.
  */
 export function auroraVeteranLoadout(): Loadout {
   return createLoadout(
-    AURORA_ONE,
+    // Рама класса 3 с пилонами и аукс-слотом — теперь это «Гермес» («Ника» стала стартовой, класса 2).
+    HERMES,
     [ENGINE_STANDARD, RCS_STANDARD, SHIELD_STANDARD, ARMOUR_PLATE, CARGO_LARGE, HYPERDRIVE_BASIC, CLOAK_FIELD],
-    [BURST_LASER, BEAM_LASER_HEAVY, PULSE_LASER_CENTRAL, MISSILE_PYLON, MISSILE_PYLON, MISSILE_PYLON, MISSILE_PYLON],
+    [BURST_LASER, BEAM_LASER_HEAVY, PULSE_LASER_CENTRAL, MISSILE_PYLON, MISSILE_PYLON],
   )
 }
 
@@ -146,8 +147,8 @@ export function auroraOneLoadout(): Loadout {
   return createLoadout(
     AURORA_ONE,
     [ENGINE_STANDARD, RCS_STANDARD, SHIELD_STANDARD, ARMOUR_PLATE, CARGO_SMALL, HYPERDRIVE_BASIC],
-    // Обе пары пилонов снаряжены: восемь ракет, как и у стартовой сборки.
-    [PULSE_LASER, PULSE_LASER, null, MISSILE_PYLON, MISSILE_PYLON, MISSILE_PYLON, MISSILE_PYLON],
+    // Пара пилонов снаряжена, как и у стартовой сборки.
+    [PULSE_LASER, PULSE_LASER, null, MISSILE_PYLON, MISSILE_PYLON],
   )
 }
 

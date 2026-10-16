@@ -89,7 +89,8 @@ describe('класс корпуса ограничивает железо', () =
  */
 describe('аукс-слот: занятость по категории', () => {
   it('занятый аукс не пускает второе устройство той же категории', () => {
-    const one = createLoadout(AURORA_ONE, [CLOAK_FIELD], [])
+    // Рама с аукс-слотом класса 3 — маскировка третьего класса (у стартовой «Ники» аукс 2-го).
+    const one = createLoadout(HERMES, [CLOAK_FIELD], [])
     expect(canInstallInternal(one, ECM_UNIT)).toBe('no-free-slot')
     expect(canInstallInternal(one, BOMB_UNIT)).toBe('no-free-slot')
   })

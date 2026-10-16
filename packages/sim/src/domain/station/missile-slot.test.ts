@@ -42,8 +42,8 @@ describe('ракетный (мунишн) слот', () => {
    * заряженных. Раньше пилоны были пусты и ракеты приходилось покупать первым делом;
    * теперь боезапас есть сразу, и он честно весит (по тонне на ракету).
    */
-  it('стартовая Аврора вылетает с восемью заряженными ракетами', () => {
-    const world = veteranWorld()
+  it('стартовый корабль вылетает с заряженными пилонами', () => {
+    const world = createWorld()
     const pylons = missilePylonIndices(world.player)
     expect(pylons.length).toBeGreaterThan(0)
     expect(installedMissile(world.player)).not.toBeNull()
@@ -52,7 +52,9 @@ describe('ракетный (мунишн) слот', () => {
       (sum, mount, i) => (isMissile(mount.weapon) ? sum + (world.player.guns[i]?.ammo ?? 0) : sum),
       0,
     )
-    expect(loaded).toBe(8)
+    // Каждый пилон заряжен полностью — число от паспорта ракеты, а не магическое «восемь».
+    const perPylon = installedMissile(world.player)!.kind === 'missile' ? (installedMissile(world.player) as { ammo: number }).ammo : 0
+    expect(loaded).toBe(pylons.length * perPylon)
     // Дрон-ракеты — покупные: их с завода не ставят.
     expect(world.player.loadout.weapons.some((w) => w != null && isDrone(w))).toBe(false)
   })

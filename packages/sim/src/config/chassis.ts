@@ -14,10 +14,30 @@ import type { Chassis } from './schema'
  * НЕ процедурная, а загруженный меш (`aurora_one.glb`), поэтому корпус живёт как обычная
  * запись каталога, а рендер сам знает по id, что грузить сетку, а не собирать из примитивов.
  */
+/**
+ * Слоты прежней «Авроры» класса 3 — их и наследует корабль бога («Святой Дух»): ему нужен
+ * аукс третьего класса под миелофон. Сама «Ника» теперь стартовая, класса 2 (см. ниже).
+ */
+const SANCTUS_SLOTS: Chassis['slots'] = [
+  { kind: 'engine', maxClass: 3 },
+  { kind: 'thrusters', maxClass: 3 },
+  { kind: 'shield', maxClass: 3 },
+  { kind: 'armour', maxClass: 2 },
+  { kind: 'armour', maxClass: 2 },
+  { kind: 'cargo', maxClass: 3 },
+  { kind: 'cargo', maxClass: 3 },
+  { kind: 'cargo', maxClass: 3 },
+  { kind: 'hyperdrive', maxClass: 3 },
+  { kind: 'aux', maxClass: 3 },
+]
+
 export const AURORA_ONE: Chassis = {
   id: 'aurora_one',
   name: 'Ника',
-  class: 3,
+  // СТАРТОВАЯ рама — внизу лестницы корпусов: класс 2, одна броня, одна пара пилонов. Прежде
+  // это была «Аврора» класса 3 с двумя бронями и четырьмя пилонами — за 35 тыс сильнее всех
+  // дешёвых и середины лестницы, и расти было некуда.
+  class: 2,
   baseMass: 8,
   baseHull: 140,
   cargoCapacity: 18,
@@ -33,28 +53,24 @@ export const AURORA_ONE: Chassis = {
     // Координаты дул — в метрах модельного пространства (нос −Z, размах ±X), сняты редактором
     // дул (K) по силуэту меша и согласованы с его масштабом в ships.ts.
     { offset: [0, -0.86, 0.53], kind: 'gun', maxClass: 2, nozzles: [[-3.82, -0.86, 0.53], [3.82, -0.86, 0.53]] },
-    { offset: [0, -1.21, -0.02], kind: 'gun', maxClass: 3, nozzles: [[-7.09, -1.21, -0.02], [7.09, -1.21, -0.02]] },
-    { offset: [0, -0.87, -8.52], kind: 'gun', maxClass: 3, bore: 2, nozzles: [[0, -0.87, -8.52]] },
-    // ДВЕ ПАРЫ пилонов, по две ракеты на каждый: восемь заряженных на вылет. Места пары
-    // подбираются глазами в редакторе оснастки (K) — здесь лишь заводская раскладка.
+    { offset: [0, -1.21, -0.02], kind: 'gun', maxClass: 2, nozzles: [[-7.09, -1.21, -0.02], [7.09, -1.21, -0.02]] },
+    { offset: [0, -0.87, -8.52], kind: 'gun', maxClass: 2, bore: 2, nozzles: [[0, -0.87, -8.52]] },
+    // Одна пара пилонов — стартовой раме хватит.
     { offset: [-5.0, -0.8, 3.0], kind: 'pylon', maxClass: 1 },
     { offset: [5.0, -0.8, 3.0], kind: 'pylon', maxClass: 1 },
-    { offset: [-6.8, -0.8, 4.2], kind: 'pylon', maxClass: 1 },
-    { offset: [6.8, -0.8, 4.2], kind: 'pylon', maxClass: 1 },
   ],
   slots: [
-    { kind: 'engine', maxClass: 3 },
-    { kind: 'thrusters', maxClass: 3 },
-    { kind: 'shield', maxClass: 3 },
-    { kind: 'armour', maxClass: 2 },
+    { kind: 'engine', maxClass: 2 },
+    { kind: 'thrusters', maxClass: 2 },
+    { kind: 'shield', maxClass: 2 },
     { kind: 'armour', maxClass: 2 },
     // Три грузовых слота у КАЖДОГО корпуса: контейнеры бесклассовые и переезжают при смене
     // рамы все, а не «сколько влезло» — торговцу пересесть на другой корпус не наказание.
-    { kind: 'cargo', maxClass: 3 },
-    { kind: 'cargo', maxClass: 3 },
-    { kind: 'cargo', maxClass: 3 },
-    { kind: 'hyperdrive', maxClass: 3 },
-    { kind: 'aux', maxClass: 3 },
+    { kind: 'cargo', maxClass: 2 },
+    { kind: 'cargo', maxClass: 2 },
+    { kind: 'cargo', maxClass: 2 },
+    { kind: 'hyperdrive', maxClass: 2 },
+    { kind: 'aux', maxClass: 2 },
   ],
   cost: 35_000,
 }
@@ -68,6 +84,9 @@ export const SPIRITUS_SANCTUS: Chassis = {
   ...AURORA_ONE,
   id: 'spiritus_sanctus',
   name: 'Spiritus Sanctus',
+  // Класс и слоты — прежней «Авроры»: миелофону нужен аукс третьего класса.
+  class: 3,
+  slots: SANCTUS_SLOTS,
   // Своя раскладка дул (K): силуэт тот же, но сопло одно центральное, и точки садятся
   // иначе. Пилонов нет вовсе — потому и не наследуем их у «Авроры».
   hardpoints: [
