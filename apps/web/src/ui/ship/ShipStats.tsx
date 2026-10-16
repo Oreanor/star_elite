@@ -32,13 +32,17 @@ function statRows(spec: ShipSpec, cargoUsed: number): { own: StatRow[]; gear: St
     // Собственные х-ки корпуса — ровно те оси, что усиливаются на верфи.
     own: [
       { id: 'hull', value: spec.hull.hull },
-      // Отсек — «СВОБОДНО 5/17 т»: сколько ещё влезет из полной вместимости трюма. Груз
-      // переезжает с пилотом, поэтому у примеряемого корпуса — тот же груз в его вместимости.
+      // Отсек — «СВОБОДНО 7/37 т»: знаменатель — вся грузоподъёмность (корпус + контейнеры),
+      // числитель — что осталось после груза И обвеса: оборудование занимает её своей массой.
+      // Груз переезжает с пилотом, поэтому у примеряемого корпуса — тот же груз.
       {
         id: 'cargo',
         value: spec.cargoCapacity,
         label: t('ship.free'),
-        text: `${Math.max(0, Math.floor(spec.cargoCapacity - cargoUsed))}/${formatStat('cargo', spec.cargoCapacity)}`,
+        text: `${Math.max(0, Math.floor(spec.cargoCapacity - cargoUsed))}/${formatStat(
+          'cargo',
+          Math.round(spec.cargoBudget.chassis + spec.cargoBudget.racks),
+        )}`,
       },
       { id: 'aux', value: spec.power.auxCapacity },
     ],
