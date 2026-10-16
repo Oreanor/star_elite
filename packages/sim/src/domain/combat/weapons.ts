@@ -4,7 +4,7 @@ import { aimDirection, shipAxes } from '../flight/axes'
 import { phasedOut } from '../scale/scale'
 import { isLaser, isMissile, type LaserModule } from '../loadout'
 import type { BoltEntity, MissileEntity, ShipEntity, World } from '../world/entities'
-import { resolveLaserHit } from './bolts'
+import { resolveLaserHit, type LaserStrike } from './bolts'
 import { castLaser } from './raycast'
 
 const _fwd = new Vector3()
@@ -17,6 +17,7 @@ const _dir = new Vector3()
 const _beamHit = new Vector3()
 /** Стрелок глазами непрерывного луча: по своему id луч в себя не бьёт (как и болт). */
 const _beamShooter = { id: 0, cloaked: false }
+const _beamStrike: LaserStrike = { effect: 'blast', rate: 0, seconds: 0 }
 
 /** Мировая позиция связанного смещения [x,y,z] (нос в -Z, +z назад). Оси уже посчитаны. */
 function offsetToWorld(e: ShipEntity, offset: readonly [number, number, number], out: Vector3): Vector3 {
@@ -59,14 +60,20 @@ export function fireLasers(world: World, e: ShipEntity, hostile: boolean, dt: nu
   _convergence.copy(e.state.pos).addScaledVector(_aim, GUNNERY.CONVERGENCE)
 
   let fired = false
+  // Перегрет — молчат ВСЕ: шкала общая. Перезаряд проверяем ниже: у непрерывного луча тот же
+  // счётчик работает не задержкой между выстрелами, а темпом попаданий (см. `laser.beam`).
+  const heat = e.laserHeat
+  if (heat.heat >= 1 || heat.overheatUntil > world.time) return false
+  const group = selectedLaser(e)
+  // Доля ствола в общей шкале: залп ВСЕМИ греет ровно как прежде каждый ствол свой, а
+  // стрельба одним — втрое медленнее при трёх лазерах. Отсюда и смысл выбора по X.
+  const share = 1 / Math.max(1, laserMountCount(e))
 
   e.spec.mounts.forEach((mount, i) => {
     if (!isLaser(mount.weapon)) return
+    if (group !== null && i !== group) return
     const gun = e.guns[i]
-    // Перегрет? Ствол молчит: либо докалился до предела, либо ещё в окне отключки охлаждения.
-    // Перезаряд проверяем НИЖЕ: у непрерывного луча тот же счётчик работает не задержкой
-    // между выстрелами, а темпом попаданий (см. ветку `laser.beam`).
-    if (!gun || gun.heat >= 1 || gun.overheatUntil > world.time) return
+    if (!gun || heat.overheatUntil > world.time) return
 
     const laser = mount.weapon
     // Косметический залп зеркала: болт летит и искрит, но урона не несёт (урон — у хозяина).
@@ -78,8 +85,7 @@ export function fireLasers(world: World, e: ShipEntity, hostile: boolean, dt: nu
      * и перегрев глушит ствол ровно так же, как импульсный.
      */
     if (laser.beam) {
-      gun.heat = Math.min(1, gun.heat + laser.heatPerShot * dt * GUNNERY.HEAT_RATE)
-      if (gun.heat >= 1) gun.overheatUntil = world.time + GUNNERY.LASER_OVERHEAT_LOCK
+      addLaserHeat(e, world.time, laser.heatPerShot * dt * GUNNERY.HEAT_RATE * share)
       fired = true
       /**
        * УРОН ПОРЦИЯМИ, а не каждый шаг. Струя выглядит непрерывной, но события боя —
@@ -104,9 +110,7 @@ export function fireLasers(world: World, e: ShipEntity, hostile: boolean, dt: nu
     // одного оружия греются как один. Иначе многодульный лазер стрелял бы вдвое реже.
     // Тепло набирается с глобальным множителем HEAT_RATE (вчетверо медленнее паспортного).
     gun.cooldown = laser.cooldown
-    gun.heat = Math.min(1, gun.heat + laser.heatPerShot * GUNNERY.HEAT_RATE)
-    // Достиг предела — ПЕРЕГРЕВ: глохнет на фиксированные секунды (за них остынет наполовину).
-    if (gun.heat >= 1) gun.overheatUntil = world.time + GUNNERY.LASER_OVERHEAT_LOCK
+    addLaserHeat(e, world.time, laser.heatPerShot * GUNNERY.HEAT_RATE * share)
     fired = true
 
     // Дула установки. Нет списка — одно дуло в `offset`. Общая мощность делится поровну:
@@ -162,7 +166,11 @@ function pourBeam(
   // `share` = 0 в шагах между тиками: струя рисуется, но урон и события не идут.
   if (struck && share > 0) {
     _beamHit.copy(_muzzle).addScaledVector(_dir, hit.distance)
-    resolveLaserHit(world, _beamHit, hit, laser.damage * share, hostile, e.id)
+    // Тик луча длится `BEAM_TICK`: столько времени цель и пробыла под переделкой.
+    _beamStrike.effect = laser.effect ?? 'blast'
+    _beamStrike.rate = laser.effectRate ?? 0
+    _beamStrike.seconds = GUNNERY.BEAM_TICK
+    resolveLaserHit(world, _beamHit, hit, laser.damage * share, hostile, e.id, _beamStrike)
   }
 
   // Рендеру: стрелок и связанное смещение, а не мировая точка, — струя держится у дула,
@@ -267,61 +275,89 @@ export function fireMissile(world: World, e: ShipEntity, targetId: number | null
   return true
 }
 
-/** Остывание и перезарядка. Зовётся каждый шаг для каждого корабля. */
-export function coolGuns(e: ShipEntity, now: number, dt: number): void {
-  e.spec.mounts.forEach((mount, i) => {
-    const gun = e.guns[i]
-    if (!gun) return
-    gun.cooldown = Math.max(0, gun.cooldown - dt)
-    if (!isLaser(mount.weapon)) return
-
-    if (gun.overheatUntil > now) {
-      // ОТКЛЮЧКА: держим нагрев на упоре. Сползающая шкала обещала бы скорый выстрел,
-      // которого не будет, — ствол занят все LOCK секунд, и полоса обязана это показывать.
-      gun.heat = 1
-      return
-    }
-    if (gun.overheatUntil > 0) {
-      // Срок вышел — отпускаем разом: нагрев валится до половины, и это видимый сигнал
-      // «можно снова», а не незаметное продолжение прежнего сползания.
-      gun.overheatUntil = 0
-      gun.heat = GUNNERY.LASER_OVERHEAT_HALF
-      return
-    }
-    gun.heat = Math.max(0, gun.heat - mount.weapon.heatCool * dt)
-  })
+/** Нагреть общую шкалу. Достиг предела — ПЕРЕГРЕВ: все лазеры глохнут на LOCK секунд. */
+function addLaserHeat(e: ShipEntity, now: number, amount: number): void {
+  const heat = e.laserHeat
+  heat.heat = Math.min(1, heat.heat + amount)
+  if (heat.heat >= 1) heat.overheatUntil = now + GUNNERY.LASER_OVERHEAT_LOCK
 }
 
-/** Есть ли ствол в отключке перегрева прямо сейчас — HUD мигает «ОХЛАЖДЕНИЕ». */
-export function laserOverheated(e: ShipEntity, now: number): boolean {
-  return e.guns.some((g) => g.overheatUntil > now)
+/** Сколько лазерных установок на борту. */
+function laserMountCount(e: ShipEntity): number {
+  let n = 0
+  for (const m of e.spec.mounts) if (isLaser(m.weapon)) n++
+  return n
 }
 
-/** Максимальный перегрев среди стволов — то, что показывает HUD. */
-export function peakHeat(e: ShipEntity): number {
-  let max = 0
-  for (const gun of e.guns) if (gun.heat > max) max = gun.heat
-  return max
+/** Выбранная установка — если она ещё лазер; иначе null («все»): оснастку могли сменить. */
+export function selectedLaser(e: ShipEntity): number | null {
+  const g = e.laserGroup
+  return g !== null && e.spec.mounts[g] && isLaser(e.spec.mounts[g].weapon) ? g : null
 }
 
 /**
- * СРЕДНИЙ нагрев по всем стволам — то, что показывает шкала «ЛАЗЕР».
- *
- * Пик врал бы о состоянии батареи стволов: один перегретый ствол из трёх задирал бы полосу
- * на упор, хотя стрелять есть чем. Каждый ствол греется своим шагом (`heatPerShot`), а
- * общая картина — их среднее. Прицел при этом живёт по ПИКУ: он предупреждает, что
- * какой-то ствол вот-вот замолчит.
+ * Следующий выбор по кругу: все → первый лазер → … → последний → все. Один лазер (или ни
+ * одного) — выбирать нечего, остаётся «все». Возвращает новый выбор.
  */
-export function meanHeat(e: ShipEntity): number {
-  let sum = 0
-  let count = 0
+export function cycleLaserGroup(e: ShipEntity): number | null {
+  const lasers: number[] = []
+  e.spec.mounts.forEach((m, i) => {
+    if (isLaser(m.weapon)) lasers.push(i)
+  })
+  const current = selectedLaser(e)
+  if (lasers.length <= 1) e.laserGroup = null
+  else if (current === null) e.laserGroup = lasers[0]!
+  else {
+    const at = lasers.indexOf(current)
+    e.laserGroup = at >= 0 && at < lasers.length - 1 ? lasers[at + 1]! : null
+  }
+  return e.laserGroup
+}
+
+/** Остывание и перезарядка. Зовётся каждый шаг для каждого корабля. */
+export function coolGuns(e: ShipEntity, now: number, dt: number): void {
+  let coolSum = 0
+  let lasers = 0
   e.spec.mounts.forEach((mount, i) => {
     const gun = e.guns[i]
-    if (!gun || !isLaser(mount.weapon)) return
-    sum += gun.heat
-    count++
+    if (gun) gun.cooldown = Math.max(0, gun.cooldown - dt)
+    if (isLaser(mount.weapon)) {
+      coolSum += mount.weapon.heatCool
+      lasers++
+    }
   })
-  return count > 0 ? sum / count : 0
+
+  const heat = e.laserHeat
+  if (heat.overheatUntil > now) {
+    // ОТКЛЮЧКА: держим нагрев на упоре. Сползающая шкала обещала бы скорый выстрел,
+    // которого не будет, — лазеры заняты все LOCK секунд, и полоса обязана это показывать.
+    heat.heat = 1
+    return
+  }
+  if (heat.overheatUntil > 0) {
+    // Срок вышел — отпускаем разом: нагрев валится до половины, и это видимый сигнал
+    // «можно снова», а не незаметное продолжение прежнего сползания.
+    heat.overheatUntil = 0
+    heat.heat = GUNNERY.LASER_OVERHEAT_HALF
+    return
+  }
+  // Остывает со СРЕДНЕЙ скоростью стволов: при залпе всеми шкала живёт как прежде каждый ствол.
+  if (lasers > 0) heat.heat = Math.max(0, heat.heat - (coolSum / lasers) * dt)
+}
+
+/** Лазеры в отключке перегрева прямо сейчас — HUD мигает «ОХЛАЖДЕНИЕ». */
+export function laserOverheated(e: ShipEntity, now: number): boolean {
+  return e.laserHeat.overheatUntil > now
+}
+
+/** Нагрев лазеров — шкала общая, пик и среднее совпали. */
+export function peakHeat(e: ShipEntity): number {
+  return e.laserHeat.heat
+}
+
+/** Шкала «ЛАЗЕР»: общий нагрев (прежде — среднее по стволам, когда шкал было несколько). */
+export function meanHeat(e: ShipEntity): number {
+  return e.laserHeat.heat
 }
 
 /** Осталось ракет всего. */

@@ -7,6 +7,9 @@ import {
   incomingMissile,
   landingCue,
   laserOverheated,
+  isLaser,
+  selectedLaser,
+  type ShipEntity,
   offerHail,
   pendingHail,
   scooping,
@@ -15,7 +18,7 @@ import {
 import { undocking, consumePendingBonVoyage } from '../../session/undockFx'
 import { HUD_COLORS, line } from './draw'
 import { t, type Key } from '../i18n'
-import { properName } from '../i18n/dataNames'
+import { moduleName, properName } from '../i18n/dataNames'
 import { formatDistance } from './project'
 import { activeWarning, pushWarning, WARN_LIFE } from '../../session/warnings'
 import { plateOf, type Plate } from './warningStyle'
@@ -64,6 +67,28 @@ function bracketRect(
  * важная живая плашка по центру-верху: уголковая рамка, полупрозрачный фон в её цвет
  * (~22%) и мигающая надпись. Старые разрозненные строки-предупреждения этим и заменены.
  */
+/**
+ * Выбор лазера (X) сменился — плашка «ЛАЗЕР 2 ИЗ 3 · ИМПУЛЬСНЫЙ» / «ЛАЗЕРЫ: ВСЕ». Смену
+ * ловим по состоянию корабля, а не по клавише: выбор — данные домена, кто бы его ни менял.
+ * Первый взгляд (новый борт) — молча: плашка — ответ на действие, не приветствие.
+ */
+let seenGroup: { shipId: number; group: number | null } | null = null
+function noteLaserGroup(player: ShipEntity, now: number): void {
+  const group = selectedLaser(player)
+  if (seenGroup?.shipId !== player.id) {
+    seenGroup = { shipId: player.id, group }
+    return
+  }
+  if (seenGroup.group === group) return
+  seenGroup.group = group
+  const lasers = player.spec.mounts.map((m, i) => (isLaser(m.weapon) ? i : -1)).filter((i) => i >= 0)
+  const mount = group === null ? null : player.spec.mounts[group]
+  const label = mount
+    ? t('hud.laserOne', { n: lasers.indexOf(group!) + 1, of: lasers.length, name: moduleName(mount.weapon).toUpperCase() })
+    : t('hud.lasersAll')
+  pushWarning('laserGroup', now, { label, repeat: 0 })
+}
+
 /** Собирает живую плашку-предупреждение; рисование — отдельно (`paintWarningPlate`). */
 export function gatherWarnings(frame: HudFrame): Plate | null {
   const { world, autodock } = frame
@@ -82,6 +107,7 @@ export function gatherWarnings(frame: HudFrame): Plate | null {
   if (player.hull / player.spec.hull.hull < 0.25) pushWarning('hullCritical', now)
   // Ствол в отключке перегрева: жёлтая мигающая «ПЕРЕГРЕВ ЛАЗЕРА · ОХЛАЖДЕНИЕ» все 5 секунд.
   if (laserOverheated(player, now)) pushWarning('laserHot', now)
+  noteLaserGroup(player, now)
   if (player.cruise.block === 'mass-lock') pushWarning('massLock', now)
   else if (player.cruise.block === 'proximity') pushWarning('gravityBrake', now)
   if (scooping(player)) pushWarning('refuel', now)

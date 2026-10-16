@@ -72,8 +72,6 @@ export function makeShip(
 
   const guns: GunState[] = spec.mounts.map((mount) => ({
     cooldown: 0,
-    heat: 0,
-    overheatUntil: 0,
     // Боезапас есть у всего, что СХОДИТ с подвески: и у ракеты, и у контейнера
     // БПЛА. Спрашивать «ракета ли это» значило бы оставить контейнер пустым.
     ammo: hasAmmo(mount.weapon) ? mount.weapon.ammo : 0,
@@ -143,6 +141,8 @@ export function makeShip(
     warpedOut: false,
     warpEmerging: false,
     warpDeparting: false,
+    laserHeat: { heat: 0, overheatUntil: 0 },
+    laserGroup: null,
   }
 }
 
@@ -245,8 +245,6 @@ export function refreshSpec(e: ShipEntity): void {
     const prev = wasByHardpoint.get(mount.index)
     return {
       cooldown: 0,
-      heat: prev?.heat ?? 0,
-      overheatUntil: prev?.overheatUntil ?? 0,
       ammo: hasAmmo(mount.weapon) ? (prev?.ammo ?? mount.weapon.ammo) : 0,
     }
   })

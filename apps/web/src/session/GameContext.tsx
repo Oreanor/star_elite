@@ -1,15 +1,12 @@
 import { createContext, useContext, useMemo, type ReactNode } from 'react'
 import { Vector3 } from 'three'
 import {
-  addItem,
   aiController,
   autodockController,
   flyToController,
   applyPlayerSave,
   createWorld,
   enterSystem,
-  findModule,
-  fitFromHold,
   spawnResidentContacts,
   spawnSlovo,
   startDocked,
@@ -33,6 +30,7 @@ import { createIntent, createPlayerController, type PlayerIntent } from './playe
 import { createBushController } from './bushController'
 import { online } from './net/firebase'
 import { loadSave } from './save/saveStore'
+import { grantTestKit } from './testKit'
 
 export type PilotMode = 'manual' | 'autodock' | 'flyto' | 'bush'
 
@@ -150,22 +148,8 @@ function createSession(initialSave?: PlayerSave | null): Session {
   // Пилота накладываем ПОСЛЕ enterSystem: тот пересобирает окружение, но борт игрока
   // не трогает — значит восстановленные корабль/кошелёк/личность не затрутся.
   if (save) applyPlayerSave(world, save)
-  // ПОКА ИДУТ ТЕСТЫ — у ВСЕХ (и в разработке, и в собранной игре): миелофон стоит СРАЗУ — впаян
-  // в аукс-слот, а не валяется в трюме. И у новичка, и у вернувшегося. Аукс-слот один: маскировка
-  // при этом вытесняется в трюм. Купить и снять с обломков его уже нельзя (`notSold`, шанс 0);
-  // когда тесты кончатся — убрать блок, и миелофон останется только даром Слова (`divineGift`).
-  const hasMieloInstalled = world.player.loadout.internals.some((m) => m.kind === 'mielophone')
-  if (!hasMieloInstalled) {
-    let idx = world.player.hold.items.findIndex((it) => it.kind === 'module' && it.module.kind === 'mielophone')
-    if (idx < 0) {
-      const mielophone = findModule('mielophone_1')
-      if (mielophone) {
-        addItem(world.player.hold, { kind: 'module', module: mielophone })
-        idx = world.player.hold.items.length - 1
-      }
-    }
-    if (idx >= 0) fitFromHold(world.player, idx)
-  }
+  // ПОКА ИДУТ ТЕСТЫ — у ВСЕХ: миелофон, лучи-переделки, горный лазер, ракеты (см. `testKit`).
+  grantTestKit(world.player)
   // Старт В ДОКЕ: игра открывается консолью станции, а не километром пустоты рядом с ней.
   // Это и точка возврата (там же оказываешься после стыковки), и безопасное начало — мир
   // на паузе, пока не отчалишь. `startDocked` ставит борт вплотную и стыкует общим путём.

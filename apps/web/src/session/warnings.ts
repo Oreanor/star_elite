@@ -21,6 +21,7 @@ export type WarnCode =
   | 'overheat'
   | 'hullCritical'
   | 'laserHot'
+  | 'laserGroup'
   | 'missileIn'
   | 'contactLost'
   | 'hullHot'
@@ -69,6 +70,8 @@ const RANK: Record<WarnCode, number> = {
   overheat: 100,
   hullCritical: 95,
   laserHot: 90,
+  // Ответ на нажатие X — видно сразу, но любая тревога важнее.
+  laserGroup: 45,
   noRockets: 84,
   noLaser: 84,
   noJump: 84,

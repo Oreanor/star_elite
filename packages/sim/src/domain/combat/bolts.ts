@@ -4,7 +4,10 @@ import { breakFromHit } from './breakage'
 import { applyDamage } from './damage'
 import { spawnExplosion, spawnShieldFlash, spawnTracer } from './effects'
 import { registerPlayerHit } from './grievance'
-import { damageAsteroid } from './mining'
+import { blastAsteroid, damageAsteroid } from './mining'
+import { isRayEffect, rayOnAsteroid, rayOnShip } from './laserEffects'
+import { findModule } from '../../config/modules'
+import type { LaserEffect } from '../../config/schema'
 import { castLaser } from './raycast'
 import { damageWarBaseFixture } from './warBase'
 
@@ -31,10 +34,31 @@ const _still = /* @__PURE__ */ new Vector3()
  */
 const _shooter = { id: 0, cloaked: false }
 
+/** Удар болта: мгновенный (колет или в пыль). Эффект — по лазеру-источнику из каталога. */
+const _boltStrike: LaserStrike = { effect: 'blast', rate: 0, seconds: 0 }
+function boltStrike(weapon: string): LaserStrike | null {
+  const m = findModule(weapon)
+  if (!m || m.kind !== 'laser') return null
+  _boltStrike.effect = m.effect ?? 'blast'
+  _boltStrike.rate = m.effectRate ?? 0
+  return _boltStrike
+}
+
+/**
+ * Чем ударил лазер сверх урона (см. `LaserModule.effect`). `seconds` — сколько времени этот
+ * удар длится: у луча — тик `BEAM_TICK`, у болта — 0 (мгновенный: колет или в пыль).
+ */
+export interface LaserStrike {
+  effect: LaserEffect
+  rate: number
+  seconds: number
+}
+
 /**
  * Что случилось там, куда пришёл лазер. Общая для БОЛТА и НЕПРЕРЫВНОГО ЛУЧА: правила
  * попадания не должны расходиться оттого, что один снаряд летит, а другой достаёт сразу.
- * Урон приходит параметром — у луча это доля за шаг (урон в секунду × dt).
+ * Урон приходит параметром — у луча это доля за шаг (урон в секунду × dt). Эффект луча
+ * (`strike`) ложится тем же путём: одна точка попадания, а не вторая рядом.
  */
 export function resolveLaserHit(
   world: World,
@@ -43,7 +67,10 @@ export function resolveLaserHit(
   damage: number,
   hostile: boolean,
   shooterId: number | null = null,
+  strike: LaserStrike | null = null,
 ): void {
+  const ray = strike && isRayEffect(strike.effect) ? strike : null
+  if (hit.ship && ray) rayOnShip(hit.ship, ray.effect, ray.rate, ray.seconds)
   if (hit.ship) {
     /**
      * БОГ НЕУЯЗВИМ, и это должно быть ВИДНО. Болт гаснет о бесконечное поле голубой
@@ -80,8 +107,12 @@ export function resolveLaserHit(
     }
   } else if (hit.asteroid) {
     spawnExplosion(world, hitPos, hit.asteroid.vel, 0.4)
-    // Камень не исчезает — он раскалывается. Правило дробления живёт в одном месте.
-    damageAsteroid(world, hit.asteroid, damage)
+    // Камень не исчезает — он раскалывается (горный) или рассыпается пылью (военный).
+    // Правило дробления живёт в одном месте — `mining.ts`.
+    if (ray) rayOnAsteroid(hit.asteroid, ray.effect, ray.rate, ray.seconds)
+    else if (strike?.effect === 'cut') damageAsteroid(world, hit.asteroid, damage)
+    // Без удара (не лазер каталога) и по умолчанию — военный: камень в пыль.
+    else blastAsteroid(world, hit.asteroid)
   } else if (hit.warBaseFixture) {
     // Отстрел детали: искра в точке удара; гибель детали — своя вспышка в `damageWarBaseFixture`.
     spawnExplosion(world, hitPos, _still, 0.5)
@@ -146,7 +177,7 @@ export function stepBolts(world: World, dt: number): void {
     bolt.muzzle = undefined
 
     if (hit.distance < reach) {
-      resolveLaserHit(world, _hitPos, hit, bolt.damage, bolt.hostile, bolt.ownerId)
+      resolveLaserHit(world, _hitPos, hit, bolt.damage, bolt.hostile, bolt.ownerId, boltStrike(bolt.weapon))
       bolt.alive = false
       continue
     }

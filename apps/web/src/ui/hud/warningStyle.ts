@@ -28,6 +28,7 @@ const STYLE: Record<WarnCode, Style> = {
   // Перегрев ЛАЗЕРА — жёлтый (осторожность/«нельзя стрелять»), а не угроза жизни: ствол
   // всего лишь глохнет на охлаждение. Мигает все 5 секунд отключки.
   laserHot: { color: UI.WARN, hz: 3, key: 'hud.laserHot' },
+  laserGroup: { color: UI.PRIMARY, hz: 0, key: 'hud.lasersAll' },
   noRockets: { color: UI.WARN, hz: 0, key: 'hud.noRockets' },
   noLaser: { color: UI.WARN, hz: 0, key: 'hud.noLaser' },
   noJump: { color: UI.WARN, hz: 0, key: 'hud.noJump' },

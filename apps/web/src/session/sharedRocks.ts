@@ -47,7 +47,7 @@ export class SharedRocks {
   private unsub: (() => void)[] = []
   private incoming: { id: string; node: RockNode }[] = []
   private gone: { id: string; burst: boolean }[] = []
-  private hits: { id: string; dmg: number; bomb: boolean }[] = []
+  private hits: { id: string; dmg: number; bomb: boolean; blast: boolean }[] = []
   /** Ключи камней, живых в мире на прошлом кадре. У хозяина пропажа = раскол/уход → снять узел. */
   private alive = new Set<string>()
   private wasHost = false
@@ -92,7 +92,7 @@ export class SharedRocks {
 
     if (host) {
       // 3) Хозяин: удары от остальных — колоть у себя.
-      for (const h of this.hits) applyRockHit(world, h.id, h.dmg, h.bomb)
+      for (const h of this.hits) applyRockHit(world, h.id, h.dmg, h.bomb, h.blast)
       this.hits.length = 0
 
       // 4) Объявить новые свои камни (пояс, встречи, осколки) — одной записью. Одному незачем.
@@ -121,7 +121,7 @@ export class SharedRocks {
     } else {
       // Не хозяин: удары — хозяину. Свои пропажи узлов не трогают: колет не он.
       for (const h of world.rockHits) {
-        void push(ref(rtdb, `traffic/${key}/rockhits`), { rid: h.netId, dmg: h.damage, b: h.bomb ? 1 : 0, from: this.me }).catch(() => {})
+        void push(ref(rtdb, `traffic/${key}/rockhits`), { rid: h.netId, dmg: h.damage, b: h.bomb ? 1 : h.blast ? 2 : 0, from: this.me }).catch(() => {})
       }
       this.alive.clear()
       for (const a of world.asteroids) if (a.alive && a.netId) this.alive.add(a.netId)
@@ -185,7 +185,8 @@ export class SharedRocks {
         const v = snap.val() as { rid?: string; dmg?: number; b?: number } | null
         // Удары нужны только хозяину; не хозяин их не трогает — заберёт тот, кто колет.
         if (!this.isHost || !snap.key || !v || typeof v.rid !== 'string' || typeof v.dmg !== 'number') return
-        this.hits.push({ id: v.rid, dmg: v.dmg, bomb: v.b === 1 })
+        // b: 1 — бомба (надвое), 2 — военный лазер (сразу в пыль), иначе обычный удар.
+        this.hits.push({ id: v.rid, dmg: v.dmg, bomb: v.b === 1, blast: v.b === 2 })
         void remove(snap.ref).catch(() => {})
       }),
     )

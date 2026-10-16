@@ -576,6 +576,91 @@ export const PULSE_LASER_CENTRAL: LaserModule = {
   heatCool: 0.28,
 }
 
+/**
+ * ГОРНЫЙ лазер — технический, не боевой. Лазеры по умолчанию военные: камень от них
+ * рассыпается пылью и рудой. Горный же КОЛЕТ камень на осколки — так добывают: руда
+ * собирается с обломков. По кораблям он слаб — инструмент, а не оружие.
+ */
+export const MINING_LASER: LaserModule = {
+  id: 'mining_1',
+  name: 'Горный лазер 1',
+  kind: 'laser',
+  class: 1,
+  mass: 0.35,
+  cost: 6000,
+  salvageChance: 0.5,
+  damage: 5,
+  range: 3000,
+  cooldown: 0.3,
+  heatPerShot: 0.1,
+  heatCool: 0.3,
+  effect: 'cut',
+}
+
+/**
+ * ЛУЧИ-ДИКОВИНЫ: не жгут, а ПЕРЕДЕЛЫВАЮТ цель. Непрерывные (действуют, пока держишь цель в
+ * луче), урона не несут. Уменьшающий и увеличивающий меняют размер цели (корабль, камень),
+ * удерживающий гасит её ход и вращение. Не продаются: вещи редкие, не товар.
+ */
+export const SHRINK_RAY: LaserModule = {
+  id: 'ray_shrink',
+  name: 'Уменьшающий луч',
+  kind: 'laser',
+  class: 2,
+  mass: 0.4,
+  cost: 60000,
+  notSold: true,
+  salvageChance: 0,
+  beam: true,
+  damage: 0,
+  range: 3000,
+  cooldown: 0,
+  heatPerShot: 0.12,
+  heatCool: 0.2,
+  effect: 'shrink',
+  // e-кратно за ~1.4 с: из 30-метрового борта в метровую точку — секунд пять в луче.
+  effectRate: 0.7,
+}
+
+export const GROW_RAY: LaserModule = {
+  id: 'ray_grow',
+  name: 'Увеличивающий луч',
+  kind: 'laser',
+  class: 2,
+  mass: 0.4,
+  cost: 60000,
+  notSold: true,
+  salvageChance: 0,
+  beam: true,
+  damage: 0,
+  range: 3000,
+  cooldown: 0,
+  heatPerShot: 0.12,
+  heatCool: 0.2,
+  effect: 'grow',
+  effectRate: 0.7,
+}
+
+export const HOLD_RAY: LaserModule = {
+  id: 'ray_hold',
+  name: 'Удерживающий луч',
+  kind: 'laser',
+  class: 2,
+  mass: 0.4,
+  cost: 60000,
+  notSold: true,
+  salvageChance: 0,
+  beam: true,
+  damage: 0,
+  range: 3000,
+  cooldown: 0,
+  heatPerShot: 0.1,
+  heatCool: 0.25,
+  effect: 'hold',
+  // Ход гаснет вчетверо быстрее секунды: цель в луче встаёт почти сразу.
+  effectRate: 4,
+}
+
 export const BURST_LASER: LaserModule = {
   id: 'pulse_2',
   name: 'Импульсный лазер 2',
@@ -1317,6 +1402,7 @@ export const MODULE_CATALOGUE: readonly ShipModule[] = [
   BEAM_LASER_LIGHT, BEAM_LASER, BEAM_LASER_HEAVY,
   ROTARY_LASER, ROTARY_LASER_B,
   PLASMA_GUN, PLASMA_GUN_HEAVY,
+  MINING_LASER, SHRINK_RAY, GROW_RAY, HOLD_RAY,
   MISSILE_STING, MISSILE_PYLON, MISSILE_WASP,
   MISSILE_SWARM, MISSILE_HOMING, MISSILE_HOUND,
   MISSILE_HEAVY, MISSILE_SLEDGE,

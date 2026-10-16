@@ -10,6 +10,7 @@ export { chargeHyperdrive, scooping, starExposure, stepStarHeat } from './starhe
 export {
   asteroidMass,
   bombShatterAsteroid,
+  blastAsteroid,
   applyRockHit,
   dropNetRock,
   spawnNetRock,
@@ -51,6 +52,8 @@ export {
   fireLasers,
   fireMissile,
   laserOverheated,
+  cycleLaserGroup,
+  selectedLaser,
   missileAmmo,
   muzzleWorldPos,
   peakHeat,

@@ -9,6 +9,7 @@ import {
   clamp,
   coolManoeuvre,
   createManoeuvre,
+  cycleLaserGroup,
   deadzoneScale,
   disengageAutofight,
   engageAutofight,
@@ -492,6 +493,10 @@ export function createPlayerController(intent: PlayerIntent): Controller {
       // В редакторе сопел Ctrl — модификатор сдвига вдоль корпуса, а не тормоз: иначе каждая
       // правка глубины дёргала бы корабль, и подстраивать устье приходилось бы на торможении.
       c.retro = !inputCaptured() && (isHeld('ControlLeft') || isHeld('ControlRight')) ? 1 : 0
+
+      // X — какой лазер стреляет: все → первый → … → все. Выбор живёт в домене (`laserGroup`),
+      // плашку о нём рисует HUD, заметив смену.
+      if (consumePress('KeyX')) cycleLaserGroup(ship)
 
       // Крейсерский ход («форсаж») — удержание Пробела (разгон к MAX).
       // Alt — защёлка: множитель встаёт; пробел можно отпустить.

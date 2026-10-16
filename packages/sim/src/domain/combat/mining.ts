@@ -3,7 +3,7 @@ import { ASTEROID } from '../../config/world'
 import { signed } from '../../core/math'
 import { addCommodity, freeCapacity } from '../cargo/hold'
 import { COMMODITIES, itemMass } from '../cargo/items'
-import type { AsteroidEntity, ShipEntity, World } from '../world/entities'
+import type { AsteroidEntity, RockHit, ShipEntity, World } from '../world/entities'
 import { refreshSpec } from '../world/factory'
 import { spawnExplosion } from './effects'
 import { spawnOrePod } from './salvage'
@@ -61,10 +61,25 @@ function crumble(world: World, a: AsteroidEntity): void {
  * расколет и объявит осколки всем. Иначе каждый клиент колол бы по-своему, и пояс у двоих
  * рядом разошёлся бы с первого выстрела. true — удар отправлен, локально ничего не делать.
  */
-function forwardRock(world: World, a: AsteroidEntity, damage: number, bomb = false): boolean {
+function forwardRock(world: World, a: AsteroidEntity, damage: number, how: 'laser' | 'bomb' | 'blast' = 'laser'): boolean {
   if (world.trafficRole !== 'mirror' || !a.netId) return false
-  world.rockHits.push(bomb ? { netId: a.netId, damage, bomb } : { netId: a.netId, damage })
+  const hit: RockHit = { netId: a.netId, damage }
+  if (how === 'bomb') hit.bomb = true
+  if (how === 'blast') hit.blast = true
+  world.rockHits.push(hit)
   return true
+}
+
+/**
+ * Удар ВОЕННОГО лазера: камень не колется, а сразу рассыпается пылью и рудой — без осколков,
+ * в отличие от горного (`shatter`). Руды — как у рассыпавшегося (`crumble`, тот же потолок).
+ */
+export function blastAsteroid(world: World, a: AsteroidEntity): void {
+  if (!a.alive) return
+  if (forwardRock(world, a, a.hull + 1, 'blast')) return
+  a.alive = false
+  spawnExplosion(world, a.pos, a.vel, a.radius * 0.12)
+  crumble(world, a)
 }
 
 export function shatter(world: World, a: AsteroidEntity): void {
@@ -127,7 +142,7 @@ export function damageAsteroid(world: World, a: AsteroidEntity, amount: number):
  */
 export function bombShatterAsteroid(world: World, a: AsteroidEntity): void {
   if (!a.alive) return
-  if (forwardRock(world, a, a.hull + 1, true)) return
+  if (forwardRock(world, a, a.hull + 1, 'bomb')) return
   a.alive = false
   spawnExplosion(world, a.pos, a.vel, a.radius * 0.12)
 
@@ -229,9 +244,10 @@ export function dropNetRock(world: World, netId: string, burst: boolean): void {
 }
 
 /** У ХОЗЯИНА: удар по общему камню, присланный другим игроком. Колет как свой. */
-export function applyRockHit(world: World, netId: string, damage: number, bomb: boolean): void {
+export function applyRockHit(world: World, netId: string, damage: number, bomb: boolean, blast = false): void {
   const a = world.asteroids.find((x) => x.netId === netId && x.alive)
   if (!a) return
   if (bomb) bombShatterAsteroid(world, a)
+  else if (blast) blastAsteroid(world, a)
   else damageAsteroid(world, a, damage)
 }

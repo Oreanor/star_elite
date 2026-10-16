@@ -14,7 +14,7 @@ import { stepBolts } from './bolts'
 import { applyDamage, regenShield } from './damage'
 import { fireEcm, regenEnergy } from './ecm'
 import { stepMissiles } from './missiles'
-import { coolGuns, fireLasers, fireMissile, missileAmmo } from './weapons'
+import { coolGuns, cycleLaserGroup, fireLasers, fireMissile, missileAmmo } from './weapons'
 import { quietWorld } from '../../testkit'
 
 /**
@@ -219,8 +219,34 @@ describe('лазер', () => {
   it('перегрев блокирует стрельбу', () => {
     const { world } = withOneEnemy()
     enemyAhead(world, 500)
-    for (const gun of world.player.guns) gun.heat = 1
+    world.player.laserHeat.heat = 1
     expect(fireLasers(world, world.player, false, PHYSICS.FIXED_DT)).toBe(false)
+  })
+
+  // Перегрев ОБЩИЙ: одна шкала на все лазеры. Стрельба одним стволом (выбор по X) греет её
+  // медленнее залпа всеми — в этом и смысл выбора; урон при этом идёт только из выбранного.
+  it('выбор по X: один лазер греет общую шкалу медленнее залпа всеми', () => {
+    const heatAfterVolley = (single: boolean) => {
+      const { world } = withOneEnemy()
+      enemyAhead(world, 500)
+      const p = world.player
+      p.laserGroup = null
+      if (single) cycleLaserGroup(p)
+      fireLasers(world, p, false, PHYSICS.FIXED_DT)
+      return p.laserHeat.heat
+    }
+    const lasers = withOneEnemy().world.player.spec.mounts.filter((m) => isLaser(m.weapon)).length
+    if (lasers < 2) return // стартовая сборка с одним лазером — выбирать нечего
+    expect(heatAfterVolley(true)).toBeLessThan(heatAfterVolley(false))
+  })
+
+  it('X перебирает лазеры по кругу и возвращается к «все»', () => {
+    const p = withOneEnemy().world.player
+    const lasers = p.spec.mounts.map((m, i) => (isLaser(m.weapon) ? i : -1)).filter((i) => i >= 0)
+    p.laserGroup = null
+    const seen: (number | null)[] = []
+    for (let k = 0; k <= lasers.length; k++) seen.push(cycleLaserGroup(p))
+    expect(seen).toEqual(lasers.length > 1 ? [...lasers, null] : lasers.map(() => null).concat([null]))
   })
 })
 

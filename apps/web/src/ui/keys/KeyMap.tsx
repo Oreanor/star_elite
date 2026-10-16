@@ -107,6 +107,7 @@ const CALLOUTS: Callout[] = [
   { keys: ['Space'], rows: [['key.cruise', 'key.cruise.what']] },
   { keys: ['KeyE'], rows: [['key.aux', 'key.aux.what']] },
   { keys: ['KeyR'], rows: [['key.missile', 'key.missile.what']] },
+  { keys: ['KeyX'], rows: [['key.laserGroup', 'key.laserGroup.what']] },
   { keys: ['KeyT'], rows: [['key.talk', 'key.talk.what']] },
   { keys: ['KeyI'], rows: [['key.ship', 'key.ship.what']] },
   { keys: ['KeyP'], rows: [['key.autofight', 'key.autofight.what']] },
