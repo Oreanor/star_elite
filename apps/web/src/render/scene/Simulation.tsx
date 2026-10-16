@@ -1,5 +1,5 @@
 import { useFrame, useThree } from '@react-three/fiber'
-import { useMemo } from 'react'
+import { useMemo, useRef } from 'react'
 import {
   armAutoland,
   releaseLanding,
@@ -196,6 +196,25 @@ function holdInRoom(session: Session): void {
 }
 
 /**
+ * ФАКТЫ МИРА пишутся в сейв СРАЗУ, а не на следующей стыковке. Гибель знакомого, сданное или
+ * проваленное дело — это уже случилось: пилот сбил Дэвида Дэвиса в полёте, перезагрузился, не
+ * заходя на станцию, — и тот был жив, ведь сейв помнил его живым. Сейв хранит систему, а не
+ * точку в ней, поэтому писать его посреди полёта безопасно: вход всё равно на станции.
+ */
+const FACT_NOTICES = new Set(['contact-lost', 'contract-done', 'contract-failed'])
+
+function saveFacts(world: World, lastAt: { value: number }): void {
+  // Новый мир (загрузка, смена галактики) начинает часы заново — отсечку сбрасываем.
+  if (world.time < lastAt.value) lastAt.value = -Infinity
+  let newest = lastAt.value
+  for (const n of world.notices) if (FACT_NOTICES.has(n.kind) && n.at > newest) newest = n.at
+  if (newest > lastAt.value) {
+    lastAt.value = newest
+    persistSave(serializePlayer(world))
+  }
+}
+
+/**
  * ВЫХОД ИЗ ДЫРЫ В ГАЛАКТИКУ, к которой привёл навигатор.
  *
  * Галактика — это ЗЕРНО (`GalaxyNode.seed`): подменяем его миру, и все 2500 систем выводятся
@@ -247,6 +266,8 @@ const BUSH_EXIT_RADII = 100
 
 export function Simulation() {
   const session = useSession()
+  // Отсечка уже сохранённых фактов мира (см. `saveFacts`): время последнего записанного.
+  const lastFact = useRef({ value: -Infinity })
   const camera = useThree((state) => state.camera)
   // Полёт сквозь гипертор идёт по часам мира — в каждом такте, а не раз в кадр из слоя
   // рендера: на паузе он стоит вместе с миром, а темп не зависит от частоты монитора.
@@ -326,6 +347,7 @@ export function Simulation() {
       controllers.set(world.player.id, helmController(session, true))
       stepWorld(world, dt, controllers, { onTick: torusTick, unassigned: aiController })
       holdInRoom(session)
+      saveFacts(world, lastFact.current)
       camera.position.add(world.originShift)
       return
     }
@@ -458,6 +480,7 @@ export function Simulation() {
     // Накопитель и фиксированный шаг — внутри stepWorld.
     stepWorld(world, dt, controllers, { onTick: torusTick, unassigned: aiController })
     holdInRoom(session)
+    saveFacts(world, lastFact.current)
 
     // Мир мог сдвинуться (плавающее начало координат). Камера живёт в мировых
     // координатах, и без этой поправки пружина преследования полсекунды тащит её
