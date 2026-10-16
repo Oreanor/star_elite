@@ -311,6 +311,24 @@ function keepNoseTangent(ship: ShipEntity, normal: Vector3): void {
 }
 
 /**
+ * Поза «брюхом к грунту» для захода: нос — в касательную плоскость, верх — по нормали.
+ * Одна на плавный доворот и на проверку «уже выровнен» — иначе они разошлись бы.
+ */
+function levelTarget(ship: ShipEntity, normal: Vector3, out: Quaternion): Quaternion {
+  shipAxes(ship.state.quat, _forward, _right, _up)
+  _forward.addScaledVector(normal, -_forward.dot(normal))
+  if (_forward.lengthSq() < 1e-9) {
+    _forward.set(0, 1, 0)
+    if (Math.abs(_forward.dot(normal)) > 0.9) _forward.set(1, 0, 0)
+    _forward.addScaledVector(normal, -_forward.dot(normal))
+  }
+  _forward.normalize()
+  _right.crossVectors(_forward, normal).normalize()
+  _back.copy(_forward).negate()
+  return out.setFromRotationMatrix(_basis.makeBasis(_right, normal, _back)).normalize()
+}
+
+/**
  * Шаг автозахода на ховер. Ведём к HOVER_ALT вдоль нормали; у цели — полёт по сфере.
  * true — этот шаг ведём мы (без гравитации/интегратора).
  */
@@ -332,7 +350,16 @@ export function stepAutoland(ship: ShipEntity, world: World, dt: number): boolea
 
   const altitude = surfaceAltitude(ship, surface)
   const err = altitude - LANDING.HOVER_ALT
-  if (Math.abs(err) <= LANDING.HOVER_SNAP) {
+  // Поза «брюхом к грунту» — к ней ведём весь заход (см. доворот ниже).
+  levelTarget(ship, _normal, _targetQuat)
+  /**
+   * Переход в ховер — лишь когда корабль УЖЕ выровнен. Прежде он случался по одной высоте:
+   * короткий спуск кончался раньше доворота, и остаток поворота `enterSurfaceFlight` делал
+   * одним кадром — корабль и камера за кормой рывком «выныривали» сверху-снизу. Теперь у
+   * высоты ховера висим и плавно доворачиваемся, а финал — уже без скачка.
+   */
+  const leveled = ship.state.quat.angleTo(_targetQuat) <= LANDING.LEVEL_SNAP
+  if (Math.abs(err) <= LANDING.HOVER_SNAP && leveled) {
     enterSurfaceFlight(ship, surface)
     ship.autoland = null
     return true
@@ -346,17 +373,6 @@ export function stepAutoland(ship: ShipEntity, world: World, dt: number): boolea
   ship.controls.throttle = 0
 
   // Плавный доворот брюхом к нормали на заходе — дальше пилот крутит сам.
-  shipAxes(ship.state.quat, _forward, _right, _up)
-  _forward.addScaledVector(_normal, -_forward.dot(_normal))
-  if (_forward.lengthSq() < 1e-9) {
-    _forward.set(0, 1, 0)
-    if (Math.abs(_forward.dot(_normal)) > 0.9) _forward.set(1, 0, 0)
-    _forward.addScaledVector(_normal, -_forward.dot(_normal))
-  }
-  _forward.normalize()
-  _right.crossVectors(_forward, _normal).normalize()
-  _back.copy(_forward).negate()
-  _targetQuat.setFromRotationMatrix(_basis.makeBasis(_right, _normal, _back)).normalize()
   ship.state.quat.slerp(_targetQuat, Math.min(1, LANDING.LEVEL_RATE * dt))
 
   return true
