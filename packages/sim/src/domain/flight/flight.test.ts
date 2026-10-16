@@ -388,3 +388,21 @@ describe('bankToward', () => {
     expect(bankToward(tilted, aimWorld)).toBeCloseTo(bankToward(level, aimLocal), 9)
   })
 })
+
+describe('торможение вращения', () => {
+  it('ручка против поворота гасит его быстрее, чем разгоняет: нос бойко возвращается на курс', () => {
+    // Пойманное: торможение было таким же неспешным, как разгон, — потянул мышь обратно, а нос
+    // долго дотягивал прежний поворот.
+    const t = spec().tuning
+    const state = createShipState()
+    const controls = createControls()
+    const dt = 1 / 120
+    controls.yaw = 1
+    let spinUp = 0
+    while (Math.abs(state.angVel.y) < t.YAW_RATE * 0.95 && spinUp < 10) { stepShip(state, controls, t, dt); spinUp += dt }
+    controls.yaw = -1
+    let reverse = 0
+    while (state.angVel.y * -1 < 0 && reverse < 10) { stepShip(state, controls, t, dt); reverse += dt }
+    expect(reverse).toBeLessThan(spinUp * 0.6)
+  })
+})

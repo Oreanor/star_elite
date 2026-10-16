@@ -32,6 +32,12 @@ export function stepShip(s: ShipState, c: ShipControls, t: ShipTuning, dt: numbe
   integrateLinear(s, c, t, dt)
 }
 
+/** Шаг угловой скорости за такт: разгон — обычным ускорением, торможение — в ANGULAR_BRAKE раз резче. */
+function angStep(current: number, target: number, accel: number, dt: number): number {
+  const braking = Math.abs(target) < Math.abs(current) || target * current < 0
+  return accel * dt * (braking ? PHYSICS.ANGULAR_BRAKE : 1)
+}
+
 function integrateAngular(s: ShipState, c: ShipControls, t: ShipTuning, dt: number): void {
   // Ручка задаёт ЖЕЛАЕМУЮ угловую скорость, а не угол.
   // +Y в связанных осях уводит нос влево — отсюда минус у рыскания.
@@ -43,10 +49,12 @@ function integrateAngular(s: ShipState, c: ShipControls, t: ShipTuning, dt: numb
 
   _targetAng.z = desiredRollRate(c, t)
 
-  // Разгон угловой скорости ограничен угловым ускорением — отсюда инерция носа.
-  s.angVel.x = approach(s.angVel.x, _targetAng.x, t.PITCH_ACCEL * dt)
-  s.angVel.y = approach(s.angVel.y, _targetAng.y, t.YAW_ACCEL * dt)
-  s.angVel.z = approach(s.angVel.z, _targetAng.z, t.ROLL_ACCEL * dt)
+  // Разгон угловой скорости ограничен угловым ускорением — отсюда инерция носа. ТОРМОЖЕНИЕ
+  // вращения (ручка против текущего поворота или к нулю) — резче (`ANGULAR_BRAKE`): потянул
+  // мышь обратно — нос возвращается на курс бойко, а не дотягивает прежний поворот.
+  s.angVel.x = approach(s.angVel.x, _targetAng.x, angStep(s.angVel.x, _targetAng.x, t.PITCH_ACCEL, dt))
+  s.angVel.y = approach(s.angVel.y, _targetAng.y, angStep(s.angVel.y, _targetAng.y, t.YAW_ACCEL, dt))
+  s.angVel.z = approach(s.angVel.z, _targetAng.z, angStep(s.angVel.z, _targetAng.z, t.ROLL_ACCEL, dt))
 
   // В вакууме нечему гасить вращение, но без стабилизации корабль неуправляем.
   // Трактуем как работу маневровых двигателей, а не как аэродинамику.

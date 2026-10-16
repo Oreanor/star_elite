@@ -1,3 +1,4 @@
+import { PHYSICS } from '../../config/physics'
 import { MANOEUVRE } from '../../config/manoeuvre'
 import { clamp } from '../../core/math'
 import type { ShipEntity } from '../world/entities'
@@ -137,7 +138,12 @@ function driveBarrel(ship: ShipEntity, m: Manoeuvre, dt: number): void {
   // корабль плавно замедляется и мягко встаёт у ровного, а не клинит на полном
   // ходу. Успел за это время нажать бочку снова (буфер) — торможения нет, добираем
   // оборот на полном ходу и уходим в следующую вплотную (endManoeuvre пустит её).
-  const braking = m.nextKind === null && m.angle > MANOEUVRE.FULL_TURN / 2
+  // Тормозим по ТОРМОЗНОМУ ПУТИ, а не с середины: ω²/(2·α·ANGULAR_BRAKE) — ровно столько крена
+  // нужно на остановку. С середины тормозили, пока торможение было не резче разгона; теперь
+  // маневровые тормозят вращение бойчее, и с середины борт вставал, не докрутив оборот.
+  const omega = Math.abs(ship.state.angVel.z)
+  const stopAngle = (omega * omega) / (2 * ship.spec.tuning.ROLL_ACCEL * PHYSICS.ANGULAR_BRAKE)
+  const braking = m.nextKind === null && m.angle > MANOEUVRE.FULL_TURN / 2 && MANOEUVRE.FULL_TURN - m.angle <= stopAngle
   // Крен НЕ снапаем (в отличие от петли и разворота): сход с линии ∝ времени², и
   // мгновенный разгон ужал бы оборот и обнулил сход. Пусть маневровые раскручиваются.
   c.roll = (braking ? -m.dir : m.dir) * MANOEUVRE.BARREL_ROLL_STICK
