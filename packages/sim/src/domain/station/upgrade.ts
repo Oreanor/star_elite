@@ -110,7 +110,12 @@ export function upgradeModule(
 
 export type HullStat = 'hull' | 'cargo' | 'aux'
 
-export const HULL_STATS: readonly HullStat[] = ['hull', 'cargo', 'aux']
+/**
+ * Что продаёт мастерская рамы. Только ПРОЧНОСТЬ: отсек и аукс растят модули (контейнеры,
+ * батареи), и три кнопки «укрепить» рядом с ними читались загадкой. Купленные прежде усиления
+ * отсека и аукса (`hullUp`) по-прежнему действуют — их просто больше не продают.
+ */
+export const HULL_STATS: readonly HullStat[] = ['hull']
 
 export type HullUpgradeError = 'no-money' | 'already'
 
