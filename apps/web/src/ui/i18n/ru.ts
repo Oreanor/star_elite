@@ -460,8 +460,6 @@ export const RU = {
   'ship.hullBuy.toPay': 'К ОПЛАТЕ',
   'ship.hullBuy.youGet': 'ВЕРФЬ ДОПЛАТИТ',
   'ship.hullBuy.noFit': 'В новый корпус не влезет {tons} т — сперва продайте лишнее',
-  'ship.hullStat': 'УКРЕПИТЬ · {stat}',
-  'ship.hullUpgradeHint': 'Улучшить раму: +25% на ось, разово',
   'hud.boostPlate': 'ФОРСАЖ',
   'hud.cruiseLatch': 'ЗАЩЁЛКА ФОРСАЖА',
   'hud.cruiseUnlatch': 'РУЧНОЕ ТОРМОЖЕНИЕ',

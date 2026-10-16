@@ -3,6 +3,7 @@ import {
   canUpgradeHullStat,
   hullPurchase,
   hullStatUpgradeCost,
+  hullStatPreview,
   hullDamage,
   HULL_STATS,
   repair,
@@ -16,7 +17,7 @@ import {
 import { t, useLang, type Key } from '../i18n'
 import { UI } from '../theme'
 import { ACCENT, Button, DIM, Modal } from '../station/chrome'
-import { statLabel } from '../station/format'
+import { formatStat, statLabel, statNumber } from '../station/format'
 import { chassisName } from '../i18n/dataNames'
 import { Money } from '../station/Money'
 
@@ -80,12 +81,11 @@ export function HullModal({
       </div>
 
       <div className="mt-5 space-y-1">
-        <div className="text-xs tracking-[0.15em]" style={{ color: DIM }}>
-          {t('ship.hullUpgradeHint')}
-        </div>
         {HULL_STATS.map((stat) => {
           const done = player.hullUp[stat]
           const active = canUpgradeHullStat(world, player, stat) === null
+          // Что улучшится — числом: «ОТСЕК 22 → 27 т», а не «укрепить ось». Усилено — итог с галкой.
+          const { from, to } = hullStatPreview(player, stat)
           return (
             <button
               key={stat}
@@ -97,8 +97,10 @@ export function HullModal({
               }`}
               style={{ borderColor: done ? DIM : ACCENT, color: done ? DIM : ACCENT }}
             >
-              <span>{done ? `${statLabel(stat)} ✓` : t('ship.hullStat', { stat: statLabel(stat) })}</span>
-              <span>{done ? '+25%' : <Money amount={cost} />}</span>
+              <span>
+                {statLabel(stat)}: {done ? `${formatStat(stat, from)} ✓` : `${statNumber(stat, from)} → ${formatStat(stat, to)}`}
+              </span>
+              <span>{done ? null : <Money amount={cost} />}</span>
             </button>
           )
         })}

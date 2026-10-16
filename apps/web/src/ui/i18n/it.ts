@@ -437,8 +437,6 @@ export const IT: Record<keyof typeof RU, string> = {
   'ship.hullBuy.toPay': 'DA PAGARE',
   'ship.hullBuy.youGet': 'IL CANTIERE TI PAGA',
   'ship.hullBuy.noFit': 'Il nuovo scafo non regge {tons} t — vendi prima qualcosa',
-  'ship.hullStat': 'POTENZIA · {stat}',
-  'ship.hullUpgradeHint': 'Migliora il telaio: +25% per asse, una tantum',
   'hud.boostPlate': 'POSTBRUCIATORE',
   'hud.cruiseLatch': 'POSTBRUCIATORE BLOCCATO',
   'hud.cruiseUnlatch': 'FRENATA MANUALE',

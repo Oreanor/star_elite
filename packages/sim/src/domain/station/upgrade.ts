@@ -1,6 +1,7 @@
 import { SHOP } from '../../config/station'
-import { removeItem } from '../cargo/hold'
+import { cargoMass, removeItem } from '../cargo/hold'
 import {
+  deriveShipSpec,
   isAux,
   type ShipModule,
   type WeaponModule,
@@ -116,6 +117,19 @@ export type HullUpgradeError = 'no-money' | 'already'
 /** Цена прокачки одной оси рамы — доля цены корпуса. Одна на все оси: рама одна. */
 export function hullStatUpgradeCost(ship: ShipEntity): number {
   return Math.ceil(SHOP.HULL_STAT_COST_FRACTION * ship.loadout.chassis.cost)
+}
+
+/**
+ * Что даст усиление оси: значение сейчас и после, в единицах характеристики (HP, т, ед.).
+ * Считается тем же `deriveShipSpec`, что и сам корабль, — кнопка не обещает чужих чисел.
+ */
+export function hullStatPreview(ship: ShipEntity, stat: HullStat): { from: number; to: number } {
+  const pick = (spec: ReturnType<typeof deriveShipSpec>) =>
+    stat === 'hull' ? spec.hull.hull : stat === 'cargo' ? spec.cargoCapacity : spec.power.auxCapacity
+  const mass = cargoMass(ship.hold)
+  const from = pick(deriveShipSpec(ship.loadout, mass, ship.hullUp))
+  const to = pick(deriveShipSpec(ship.loadout, mass, { ...ship.hullUp, [stat]: true }))
+  return { from, to }
 }
 
 /** Проверка без побочных эффектов: уже усилена — 'already', не хватает денег — 'no-money'. */

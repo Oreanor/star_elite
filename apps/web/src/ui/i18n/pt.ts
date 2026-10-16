@@ -460,8 +460,6 @@ export const PT: Record<keyof typeof RU, string> = {
   'ship.hullBuy.toPay': 'A PAGAR',
   'ship.hullBuy.youGet': 'O ESTALEIRO TE PAGA',
   'ship.hullBuy.noFit': 'O casco novo não comporta {tons} t — venda algo primeiro',
-  'ship.hullStat': 'REFORÇAR · {stat}',
-  'ship.hullUpgradeHint': 'Melhorar a estrutura: +25% por eixo, uma vez',
   'hud.boostPlate': 'PÓS-COMBUSTÃO',
   'hud.cruiseLatch': 'PÓS-COMBUSTÃO TRAVADO',
   'hud.cruiseUnlatch': 'TRAVAGEM MANUAL',

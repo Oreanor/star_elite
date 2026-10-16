@@ -74,6 +74,7 @@ export {
   upgradeModule,
   upgradeHullStat,
   hullStatUpgradeCost,
+  hullStatPreview,
   canUpgradeHullStat,
   HULL_STATS,
   type HullStat,

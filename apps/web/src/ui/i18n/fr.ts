@@ -436,8 +436,6 @@ export const FR: Record<keyof typeof RU, string> = {
   'ship.hullBuy.toPay': 'À PAYER',
   'ship.hullBuy.youGet': 'LE CHANTIER VOUS PAIE',
   'ship.hullBuy.noFit': 'La nouvelle coque ne prend pas {tons} t — vendez d\'abord',
-  'ship.hullStat': 'RENFORCER · {stat}',
-  'ship.hullUpgradeHint': 'Améliorer le châssis : +25% par axe, une seule fois',
   'hud.boostPlate': 'POSTCOMBUSTION',
   'hud.cruiseLatch': 'POSTCOMBUSTION VERROUILLÉE',
   'hud.cruiseUnlatch': 'FREINAGE MANUEL',

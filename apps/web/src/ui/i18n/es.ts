@@ -437,8 +437,6 @@ export const ES: Record<keyof typeof RU, string> = {
   'ship.hullBuy.toPay': 'A PAGAR',
   'ship.hullBuy.youGet': 'EL ASTILLERO TE PAGA',
   'ship.hullBuy.noFit': 'El nuevo casco no admite {tons} t — vende algo primero',
-  'ship.hullStat': 'REFORZAR · {stat}',
-  'ship.hullUpgradeHint': 'Mejora el armazón: +25% por eje, una sola vez',
   'hud.boostPlate': 'POSCOMBUSTIÓN',
   'hud.cruiseLatch': 'POSCOMBUSTIÓN BLOQUEADA',
   'hud.cruiseUnlatch': 'FRENADO MANUAL',

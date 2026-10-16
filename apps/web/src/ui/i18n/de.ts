@@ -437,8 +437,6 @@ export const DE: Record<keyof typeof RU, string> = {
   'ship.hullBuy.toPay': 'ZU ZAHLEN',
   'ship.hullBuy.youGet': 'WERFT ZAHLT DIR',
   'ship.hullBuy.noFit': 'Der neue Rumpf fasst {tons} t nicht — verkauf zuerst etwas',
-  'ship.hullStat': 'VERSTÄRKEN · {stat}',
-  'ship.hullUpgradeHint': 'Rahmen verbessern: +25% pro Achse, einmalig',
   'hud.boostPlate': 'NACHBRENNER',
   'hud.cruiseLatch': 'NACHBRENNER GERASTET',
   'hud.cruiseUnlatch': 'HANDBREMSE',
