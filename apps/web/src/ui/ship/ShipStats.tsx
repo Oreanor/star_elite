@@ -26,22 +26,19 @@ const HIGHER_BETTER: Partial<Record<StatId, boolean>> = { mass: false }
 
 /** Характеристики двумя группами: сперва собственные оси рамы (их и качают на верфи),
  *  потом те, что определяет оборудование. Порядок — как просил пилот: своё вперёд. */
-function statRows(spec: ShipSpec): { own: StatRow[]; gear: StatRow[] } {
+function statRows(spec: ShipSpec, cargoUsed: number): { own: StatRow[]; gear: StatRow[] } {
   const tuning = spec.tuning
   return {
     // Собственные х-ки корпуса — ровно те оси, что усиливаются на верфи.
     own: [
       { id: 'hull', value: spec.hull.hull },
-      // Отсек — «СВОБОДНО 26/41 т»: сколько товара реально влезет из того, что дают контейнеры
-      // (обвес ест грузоподъёмность своей массой). Без контейнеров — просто итог.
+      // Отсек — «СВОБОДНО 5/17 т»: сколько ещё влезет из полной вместимости трюма. Груз
+      // переезжает с пилотом, поэтому у примеряемого корпуса — тот же груз в его вместимости.
       {
         id: 'cargo',
         value: spec.cargoCapacity,
         label: t('ship.free'),
-        text:
-          spec.cargoBudget.racks > 0
-            ? `${spec.cargoCapacity}/${formatStat('cargo', spec.cargoBudget.racks)}`
-            : formatStat('cargo', spec.cargoCapacity),
+        text: `${Math.max(0, Math.floor(spec.cargoCapacity - cargoUsed))}/${formatStat('cargo', spec.cargoCapacity)}`,
       },
       { id: 'aux', value: spec.power.auxCapacity },
     ],
@@ -67,9 +64,20 @@ function CompareArrow({ id, value, base }: { id: StatId; value: number; base: nu
   return <span style={{ color }}>{mark}</span>
 }
 
-export function Stats({ spec, name, baseline }: { spec: ShipSpec; name: string; baseline?: ShipSpec | null }) {
-  const rows = statRows(spec)
-  const base = baseline ? statRows(baseline) : null
+export function Stats({
+  spec,
+  name,
+  baseline,
+  cargoUsed,
+}: {
+  spec: ShipSpec
+  name: string
+  baseline?: ShipSpec | null
+  /** Занято в трюме, т — для «СВОБОДНО x/y». */
+  cargoUsed: number
+}) {
+  const rows = statRows(spec, cargoUsed)
+  const base = baseline ? statRows(baseline, cargoUsed) : null
   const baseAll = base ? [...base.own, ...base.gear] : null
   const all = [...rows.own, ...rows.gear]
   const half = Math.ceil(all.length / 2)

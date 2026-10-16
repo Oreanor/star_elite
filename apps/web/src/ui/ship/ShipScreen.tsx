@@ -4,6 +4,7 @@ import {
   fitOntoChassis,
   SHIPYARD,
   swapHull,
+  usedCapacityOf,
   type World,
 } from '@elite/sim'
 import { t, useLang } from '../i18n'
@@ -171,6 +172,7 @@ export function ShipScreen({
             spec={owned ? player.spec : previewSpec}
             name={chassisName((owned ? player.loadout.chassis : offer.chassis).name)}
             baseline={docked && !owned ? player.spec : null}
+            cargoUsed={usedCapacityOf(player.hold)}
           />
 
           {/* Покупка с ценой — ПОД характеристиками, по центру: сперва смотришь, что за корпус,
