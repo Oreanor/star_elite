@@ -70,6 +70,7 @@ export {
   canUpgrade,
   upgradedStatValue,
   upgradeCashCost,
+  upgradeSteps,
   upgradeCopyIndex,
   upgradeModule,
   upgradeHullStat,

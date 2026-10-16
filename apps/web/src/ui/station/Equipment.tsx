@@ -10,7 +10,7 @@ import {
   isWeapon,
   moduleStat,
   upgradeCashCost,
-  upgradeLevel,
+  upgradeSteps,
   upgradeModule,
   type FitError,
   type PurchaseError,
@@ -212,9 +212,11 @@ export function BuyButton({
  * Имя модуля для показа: у прокачанного — с «+» на конце («Щит 2C+»). Это видимая
  * метка усиления. Само поле `name` в домене не трогаем — плюс живёт только в UI.
  */
+/** Имя со счётом улучшений: «Щит 2C+», «+2», «+3» — сколько шагов уже сделано. */
 export function displayName(module: ShipModule): string {
   const name = moduleName(module)
-  return upgradeLevel(module) > 0 ? `${name}+` : name
+  const steps = upgradeSteps(module)
+  return steps <= 0 ? name : steps === 1 ? `${name}+` : `${name}+${steps}`
 }
 
 /**

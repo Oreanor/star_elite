@@ -12,8 +12,13 @@ import { canServiceHere, moduleStat, upgradeLevel, withUpgrade } from './moduleS
 
 /**
  * Прокачка: модуля (копией из трюма или деньгами) и собственных характеристик корпуса.
- * Однократная — второй раз тот же модуль не растёт.
+ * Модуль улучшают до `SHOP.UPGRADE_MAX_STEPS` раз, шаги складываются.
  */
+
+/** Сколько раз модуль уже улучшали. Старые сейвы без счётчика: прокачан — значит один раз. */
+export function upgradeSteps(module: ShipModule): number {
+  return module.upgrades ?? (upgradeLevel(module) > 1e-6 ? 1 : 0)
+}
 
 export type UpgradeError = 'maxed' | 'no-copy' | 'no-money' | 'low-tech'
 
@@ -26,10 +31,15 @@ export function upgradeCopyIndex(ship: ShipEntity, module: ShipModule): number |
   return i >= 0 ? i : null
 }
 
-/** Цена ОДНОГО денежного шага прокачки. С копией денег не берут — платит трюм. */
+/**
+ * Цена СЛЕДУЮЩЕГО денежного шага прокачки: каждый следующий дороже предыдущего (×1, ×2, ×3
+ * доли цены модуля) — последний процент силы стоит дороже первого. С копией денег не берут.
+ */
 export function upgradeCashCost(module: ShipModule): number {
-  return Math.ceil(Math.max(module.cost, SHOP.UPGRADE_MIN_BASE) * SHOP.UPGRADE_CASH_FRACTION)
+  const base = Math.max(module.cost, SHOP.UPGRADE_MIN_BASE) * SHOP.UPGRADE_CASH_FRACTION
+  return Math.ceil(base * (upgradeSteps(module) + 1))
 }
+
 
 /** Проверка БЕЗ побочных эффектов: ею UI гасит кнопку, ею же `upgradeModule` решает. */
 export function canUpgrade(
@@ -41,8 +51,8 @@ export function canUpgrade(
   // Аукс-устройства не прокачиваются: каждое работает по-своему, «+25% к ECM» бессмыслен.
   // Гасим как «предельный» — отдельного кода в UI заводить незачем.
   if (isAux(module)) return 'maxed'
-  // Каждый модуль улучшается один раз: уже прокачанный дальше не берут.
-  if (upgradeLevel(module) > 1e-6) return 'maxed'
+  // Не больше UPGRADE_MAX_STEPS шагов на экземпляр.
+  if (upgradeSteps(module) >= SHOP.UPGRADE_MAX_STEPS) return 'maxed'
   // Мир не тянет этот класс — прокачать его здесь негде (тот же потолок, что и у витрины).
   if (!canServiceHere(world, module)) return 'low-tech'
   if (useCopy) return upgradeCopyIndex(ship, module) === null ? 'no-copy' : null
@@ -55,8 +65,12 @@ export function canUpgrade(
  * поэтому число в окне не разойдётся с делом.
  */
 export function upgradedStatValue(module: ShipModule, useCopy: boolean): number {
-  const level = useCopy ? SHOP.UPGRADE_COPY_STEP : SHOP.UPGRADE_CASH_STEP
-  return moduleStat(withUpgrade(module, level)).value
+  return moduleStat(withUpgrade(module, nextLevel(module, useCopy))).value
+}
+
+/** Уровень после следующего шага: шаги СКЛАДЫВАЮТСЯ (+25% деньгами, +50% копией). */
+function nextLevel(module: ShipModule, useCopy: boolean): number {
+  return upgradeLevel(module) + (useCopy ? SHOP.UPGRADE_COPY_STEP : SHOP.UPGRADE_CASH_STEP)
 }
 
 /**
@@ -76,9 +90,11 @@ export function upgradeModule(
   const error = canUpgrade(world, ship, module, useCopy)
   if (error) return error
 
-  // Однократно: до сюда доходит только сток (canUpgrade отсекает уже прокачанный).
-  const level = useCopy ? SHOP.UPGRADE_COPY_STEP : SHOP.UPGRADE_CASH_STEP
-  const upgraded = withUpgrade(module, level)
+  // Цена шага — ДО прокачки: она растёт с числом уже сделанных шагов.
+  const cashCost = upgradeCashCost(module)
+  const upgraded = withUpgrade(module, nextLevel(module, useCopy))
+  upgraded.upgrades = upgradeSteps(module) + 1
+  const maxHullBefore = ship.spec.hull.hull
 
   const wi = ship.loadout.weapons.findIndex((w) => w === module)
   if (wi >= 0) {
@@ -93,11 +109,15 @@ export function upgradeModule(
     const idx = upgradeCopyIndex(ship, module) // копия ещё в трюме — она и оплата
     if (idx !== null) removeItem(ship.hold, idx)
   } else {
-    world.credits -= upgradeCashCost(module)
+    world.credits -= cashCost
   }
 
   // Характеристики сменились — пересобираем на СОБЫТИЕ, как и при покупке.
   refreshSpec(ship)
+  // Улучшенная броня поднимает потолок корпуса — прирост отдаём СРАЗУ и даром: иначе после
+  // прокачки плит корпус выглядел «повреждённым», и мастерская просила деньги за ремонт.
+  const gained = ship.spec.hull.hull - maxHullBefore
+  if (gained > 0) ship.hull = Math.min(ship.spec.hull.hull, ship.hull + gained)
   return null
 }
 

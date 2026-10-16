@@ -5,7 +5,7 @@ import { refreshSpec } from '../world/factory'
 import { addItem } from '../cargo/hold'
 import { isMissile, isShield, type MissileModule, type ShieldModule } from '../loadout'
 import { createWorld } from '../world'
-import { canUpgrade, upgradeModule } from './upgrade'
+import { canUpgrade, upgradeCashCost, upgradeModule } from './upgrade'
 import { upgradeLevel } from './moduleState'
 
 /**
@@ -60,15 +60,35 @@ describe('прокачка модуля', () => {
     expect(canUpgrade(world, world.player, playerShield(world), true)).toBe('no-copy')
   })
 
-  it('улучшать можно только раз: повторная прокачка отклонена', () => {
+  it('улучшать можно трижды: шаги складываются, дорожают, четвёртый отклонён', () => {
     const world = createWorld()
     world.credits = 10_000_000
-
-    expect(upgradeModule(world, world.player, playerShield(world), false)).toBeNull()
-    // Второй раз тот же модуль не берут — ни за деньги, ни копией.
+    const base = playerShield(world).capacity
+    const costs: number[] = []
+    for (let i = 0; i < 3; i++) {
+      costs.push(upgradeCashCost(playerShield(world)))
+      expect(upgradeModule(world, world.player, playerShield(world), false), `шаг ${i + 1}`).toBeNull()
+    }
+    // Три денежных шага по +25% — от стока, а не процент от процента.
+    expect(playerShield(world).capacity).toBeCloseTo(base * 1.75, 3)
+    // Каждый следующий шаг дороже предыдущего.
+    expect(costs[1]!).toBeGreaterThan(costs[0]!)
+    expect(costs[2]!).toBeGreaterThan(costs[1]!)
+    // Четвёртый раз — ни за деньги, ни копией.
     expect(canUpgrade(world, world.player, playerShield(world), false)).toBe('maxed')
     expect(canUpgrade(world, world.player, playerShield(world), true)).toBe('maxed')
     expect(upgradeModule(world, world.player, playerShield(world), false)).toBe('maxed')
+  })
+
+  it('улучшенная броня сразу добавляет прочность корпусу — без «ремонта»', () => {
+    const world = createWorld()
+    world.credits = 10_000_000
+    const p = world.player
+    const plate = p.loadout.internals.find((m) => m.kind === 'armour')
+    if (!plate) return
+    expect(p.hull).toBe(p.spec.hull.hull)
+    expect(upgradeModule(world, p, plate, false)).toBeNull()
+    expect(p.hull).toBe(p.spec.hull.hull)
   })
 
   // Ракета — расходник: её не чинят, но пусковую УЛУЧШАЮТ бо́льшим боезапасом, не уроном.

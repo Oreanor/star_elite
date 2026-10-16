@@ -35,6 +35,7 @@ const FALLBACK_CHASSIS = 'aurora_one'
 export interface SavedModule {
   id: string
   upgrade?: number
+  upgrades?: number
   fault?: number
 }
 
@@ -107,6 +108,7 @@ function serializeModule(m: ShipModule): SavedModule {
   // Прокачку и поломку пишем, только если они есть: заводской модуль остаётся коротким `{id}`.
   const out: SavedModule = { id: m.id }
   if (m.upgrade !== undefined) out.upgrade = m.upgrade
+  if (m.upgrades !== undefined) out.upgrades = m.upgrades
   if (m.fault) out.fault = m.fault
   return out
 }
@@ -124,6 +126,7 @@ function rehydrateModule(saved: SavedModule): ShipModule | null {
   if (saved.upgrade === undefined && !saved.fault) return base
   const clone: ShipModule = { ...base }
   if (saved.upgrade !== undefined) clone.upgrade = saved.upgrade
+  if (saved.upgrades !== undefined) clone.upgrades = saved.upgrades
   if (saved.fault) clone.fault = saved.fault
   scaleToBase(clone, base, combinedScale(clone))
   return clone
