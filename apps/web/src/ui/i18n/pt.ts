@@ -307,6 +307,7 @@ export const PT: Record<keyof typeof RU, string> = {
   // ─── Melhoria de módulo ──────────────────────────────────────────────────────
   'station.upgradeCopy': 'MELHORAR (CÓPIA) +50%',
   'station.upgradeCash': 'MELHORAR +25%',
+  'station.byCopy': 'com uma cópia',
   'station.maxed': 'NO MÁXIMO',
 
   // ─── Tela do local (onde você atracou) ───────────────────────────────────────

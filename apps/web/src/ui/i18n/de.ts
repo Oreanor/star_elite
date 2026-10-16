@@ -290,6 +290,7 @@ export const DE: Record<keyof typeof RU, string> = {
 
   'station.upgradeCopy': 'AUFRÜSTEN (KOPIE) +50%',
   'station.upgradeCash': 'AUFRÜSTEN +25%',
+  'station.byCopy': 'mit einer Kopie',
   'station.maxed': 'MAXIMUM',
 
   'station.economy': 'WIRTSCHAFT',

@@ -185,7 +185,13 @@ export function SlotModal({
     // stay: улучшение оставляет модуль в слоте — модалку держим открытой (чини/улучшай подряд).
     if (canUpgrade(world, player, module, true) === null)
       actions.push({
-        label: `${t('station.upgradeCopy')} · ${arrow(true)}`,
+        // Две строки: что станет — и чем платишь. Длинная строка в одну переносилась посреди «15 т → 19 т».
+        label: (
+          <>
+            <span className="block">{t('station.upgrade')}: {arrow(true)}</span>
+            <span className="block">{t('station.byCopy')}</span>
+          </>
+        ),
         // Ракетный слот качаем целиком (все пилоны), прочее — по одному модулю.
         run: () => (isMissileSlot ? upgradeMissiles(world, player, true) : upgradeModule(world, player, module, true)),
         stay: true,
@@ -194,7 +200,8 @@ export function SlotModal({
       actions.push({
         label: (
           <>
-            {t('station.upgradeCash')} · <Money amount={upgradeCashCost(module)} /> · {arrow(false)}
+            <span className="block">{t('station.upgrade')}: {arrow(false)}</span>
+            <span className="block"><Money amount={upgradeCashCost(module)} /></span>
           </>
         ),
         run: () => (isMissileSlot ? upgradeMissiles(world, player, false) : upgradeModule(world, player, module, false)),
