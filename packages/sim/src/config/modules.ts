@@ -189,7 +189,7 @@ export const RCS_CIVILIAN: ThrusterModule = {
   salvageChance: 0.5,
   lateralThrust: 170,
   torque: [36, 22, 98],
-  maxRate: [1.12, 0.64, 2.66],
+  maxRate: [1.57, 0.9, 2.66],
   angDamp: 1.9,
 }
 
@@ -203,7 +203,7 @@ export const RCS_STANDARD: ThrusterModule = {
   salvageChance: 0.35,
   lateralThrust: 240,
   torque: [49, 31, 130],
-  maxRate: [1.33, 0.77, 3.08],
+  maxRate: [1.86, 1.08, 3.08],
   angDamp: 1.9,
 }
 
@@ -217,7 +217,7 @@ export const RCS_MILITARY: ThrusterModule = {
   salvageChance: 0.15,
   lateralThrust: 340,
   torque: [73, 46, 182],
-  maxRate: [1.75, 1.0, 3.78],
+  maxRate: [2.45, 1.4, 3.78],
   angDamp: 2.4,
 }
 
@@ -233,7 +233,7 @@ const RCS_CIVILIAN_D: ThrusterModule = {
   salvageChance: 0.5,
   lateralThrust: 195,
   torque: [41, 26, 110],
-  maxRate: [1.2, 0.7, 2.8],
+  maxRate: [1.68, 0.98, 2.8],
   angDamp: 1.9,
 }
 
@@ -248,7 +248,7 @@ const RCS_STANDARD_B: ThrusterModule = {
   salvageChance: 0.3,
   lateralThrust: 275,
   torque: [57, 36, 150],
-  maxRate: [1.45, 0.85, 3.3],
+  maxRate: [2.03, 1.19, 3.3],
   angDamp: 2.0,
 }
 
@@ -266,7 +266,7 @@ const RCS_VORTEX: ThrusterModule = {
   salvageChance: 0.25,
   lateralThrust: 260,
   torque: [54, 34, 142],
-  maxRate: [1.5, 0.88, 3.4],
+  maxRate: [2.1, 1.23, 3.4],
   angDamp: 2.1,
 }
 
@@ -281,7 +281,7 @@ const RCS_VORTEX_B: ThrusterModule = {
   lateralThrust: 320,
   // Момент почти военный, но лимиты угловой скорости НИЖЕ 3A: потолок держит бой.
   torque: [68, 43, 172],
-  maxRate: [1.68, 0.96, 3.66],
+  maxRate: [2.35, 1.34, 3.66],
   angDamp: 2.3,
 }
 
@@ -297,7 +297,7 @@ const RCS_MILITARY_C: ThrusterModule = {
   salvageChance: 0.18,
   lateralThrust: 310,
   torque: [64, 40, 164],
-  maxRate: [1.58, 0.9, 3.5],
+  maxRate: [2.21, 1.26, 3.5],
   angDamp: 2.2,
 }
 
@@ -1010,6 +1010,9 @@ const MISSILE_SLEDGE: MissileModule = {
   lifetime: 15,
 }
 
+// ПРЕДЕЛЫ РАЗВОРОТА маневровых: тангаж и рыскание ×1.4 против прежних — улучшение их больше
+// не растит (см. `scaleToBase`), а заводские были скромны: нос поворачивал вяло. Крен — прежний.
+//
 // ЛЕСТНИЦА КЛАССОВ. Щиты, броня и двигатели 2-го и 3-го класса усилены против 1-го
 // (щит ×1.3/×1.7, броня ×1.3/×1.6, тяга ×1.2/×1.45): прежде
 // класс 3 был лишь на 10–40% сильнее первого при цене в 5–15 раз — копить было не на что.

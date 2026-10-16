@@ -57,6 +57,9 @@ const REVERSE_FRAC = 0.15
  */
 const STICK_DEADZONE = 0.02
 
+/** Возврат виртуальной ручки к центру, 1/с: отпустил мышь — за полсекунды ручка почти в нуле. */
+const STICK_RETURN = 2.5
+
 /** Возврат линии огня к носу, рад/с: над поверхностью целятся носом, как и в космосе. */
 const AIM_RETURN = 2.5
 
@@ -418,6 +421,11 @@ export function createPlayerController(intent: PlayerIntent): Controller {
        * меньше дрожи руки — уводил нос на 13° за минуту. Зона круглая, поэтому
        * порог одинаков по всем направлениям, а не только по осям.
        */
+      // Ручка сама уходит к центру: перестал вести мышь — нос перестаёт поворачивать, а не
+      // крутится, пока не отведёшь её обратно. Ведёшь — движение мыши перекрывает возврат.
+      const recenter = Math.exp(-STICK_RETURN * dt)
+      input.stickX *= recenter
+      input.stickY *= recenter
       const stick = Math.hypot(input.stickX, input.stickY)
       const scale = deadzoneScale(stick, STICK_DEADZONE)
       c.pitch = input.stickY * scale
