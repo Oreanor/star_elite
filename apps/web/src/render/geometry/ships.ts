@@ -266,7 +266,8 @@ const GLB_HULLS: readonly GlbHullDef[] = [
   // «Афина» и «Икар» — свежие серийные корпуса. Разворот общий; если меш приедет носом
   // не туда, правится он здесь одной строкой, а не в домене.
   { id: 'athena', url: '/models/ships/athena.glb', scale: GLB_SCALE, yaw: GLB_YAW, pitch: GLB_PITCH, roll: GLB_ROLL },
-  { id: 'icarus', url: '/models/ships/icarus.glb', scale: GLB_SCALE, yaw: GLB_YAW, pitch: GLB_PITCH, roll: GLB_ROLL },
+  // «Икар» экспортирован КОРМОЙ вперёд: развернули на 180° — иначе летел задом, сопла на носу.
+  { id: 'icarus', url: '/models/ships/icarus.glb', scale: GLB_SCALE, yaw: GLB_YAW + Math.PI, pitch: GLB_PITCH, roll: GLB_ROLL },
   /**
    * «Атлас» — КОРАБЛЬ ПОКОЛЕНИЙ, и масштаб у него не «побольше прочих», а другого порядка:
    * 120 против 16 у истребителя. Это ковчег, в нём живут, — рядом с ним истребитель обязан
