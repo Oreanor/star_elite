@@ -1008,10 +1008,11 @@ const MISSILE_SLEDGE: MissileModule = {
 // компромисс задаёт масса: набитый тяжёлый трюм режет манёвр, как ему и положено.
 // (Поле `class` держим на 1, чтобы отсек влезал в слот любого класса.)
 //
-// `capacity` — сколько тонн отсек ДОБАВЛЯЕТ к грузоподъёмности корпуса, ≈10× своей массы
-// (нетто +9×: сам он тоже весит и ест бюджет). Базовый трюм даёт корпус (`Chassis.cargoCapacity`),
+// `capacity` — сколько тонн отсек ДОБАВЛЯЕТ к грузоподъёмности корпуса: стандартная линия
+// 10 / 20 / 50 т (прежние 4 / 8 / 15 были слабы — трюм почти не рос); сам отсек тоже весит
+// и ест бюджет. Базовый трюм даёт корпус (`Chassis.cargoCapacity`),
 // контейнеры его расширяют. «Композит» — больше вместимости на тонну (лёгкий, дорогой),
-// «Балкер» — больше на кредит, но тяжёлый. Стандартная линия — ровно ~10× массы.
+// «Балкер» — больше на кредит, но тяжёлый.
 
 export const CARGO_SMALL: CargoModule = {
   id: 'cargo_1',
@@ -1021,7 +1022,7 @@ export const CARGO_SMALL: CargoModule = {
   mass: 0.4,
   cost: 2000,
   salvageChance: 0.7,
-  capacity: 4,
+  capacity: 10,
 }
 
 const CARGO_MEDIUM: CargoModule = {
@@ -1032,7 +1033,7 @@ const CARGO_MEDIUM: CargoModule = {
   mass: 0.8,
   cost: 6500,
   salvageChance: 0.6,
-  capacity: 8,
+  capacity: 20,
 }
 
 export const CARGO_LARGE: CargoModule = {
@@ -1043,9 +1044,9 @@ export const CARGO_LARGE: CargoModule = {
   mass: 1.5,
   cost: 17000,
   salvageChance: 0.5,
-  // Крупнейший стандартный отсек: +15 т к трюму при полутора тоннах массы (~10×).
+  // Крупнейший стандартный отсек: +50 т к трюму при полутора тоннах массы.
   // Пара таких превращает истребитель в сносного торговца, не убивая манёвр.
-  capacity: 15,
+  capacity: 50,
 }
 
 // «Композит» — лёгкая дорогая линия трюма. Вместимости на тонну больше стандартной, а
@@ -1059,7 +1060,7 @@ const CARGO_COMPOSITE_1: CargoModule = {
   mass: 0.25, // легче стандартного при большей вместимости на тонну
   cost: 5000,
   salvageChance: 0.6,
-  capacity: 4,
+  capacity: 10,
 }
 
 const CARGO_COMPOSITE_2: CargoModule = {
@@ -1070,7 +1071,7 @@ const CARGO_COMPOSITE_2: CargoModule = {
   mass: 0.5,
   cost: 14000,
   salvageChance: 0.5,
-  capacity: 7,
+  capacity: 18,
 }
 
 const CARGO_COMPOSITE_3: CargoModule = {
@@ -1081,7 +1082,7 @@ const CARGO_COMPOSITE_3: CargoModule = {
   mass: 1.0, // против полутора тонн стокового большого отсека
   cost: 42000,
   salvageChance: 0.4,
-  capacity: 13,
+  capacity: 43,
 }
 
 // «Балкер» — дешёвый мясистый трюм: тонн за кредит больше всех, но масса зверская.
@@ -1094,7 +1095,7 @@ const CARGO_BULK_2: CargoModule = {
   mass: 1.4, // тяжелее стандартного среднего отсека почти вдвое
   cost: 4500, // и дешевле его
   salvageChance: 0.6,
-  capacity: 14,
+  capacity: 35,
 }
 
 const CARGO_BULK_3: CargoModule = {
@@ -1105,7 +1106,7 @@ const CARGO_BULK_3: CargoModule = {
   mass: 2.4, // против полутора тонн стокового — вся разница в потерянном манёвре
   cost: 12000,
   salvageChance: 0.5,
-  capacity: 26,
+  capacity: 87,
 }
 
 
