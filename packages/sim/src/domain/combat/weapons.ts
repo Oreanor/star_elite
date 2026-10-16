@@ -297,6 +297,7 @@ export function fireMissile(world: World, e: ShipEntity, targetId: number | null
 function addLaserHeat(e: ShipEntity, now: number, amount: number): void {
   const heat = e.laserHeat
   heat.heat = Math.min(1, heat.heat + amount)
+  heat.lastHeatAt = now
   if (heat.heat >= 1) heat.overheatUntil = now + GUNNERY.LASER_OVERHEAT_LOCK
 }
 
@@ -359,6 +360,9 @@ export function coolGuns(e: ShipEntity, now: number, dt: number): void {
     heat.heat = GUNNERY.LASER_OVERHEAT_HALF
     return
   }
+  // Пока стреляешь — не остывает. Прежде остывание шло и под огнём и было быстрее нагрева
+  // (у «Ники» залп всеми +0.08/с против −0.25/с): шкала не росла вовсе, перегрева не было.
+  if (now - heat.lastHeatAt < GUNNERY.COOL_DELAY) return
   // Остывает со СРЕДНЕЙ скоростью стволов: при залпе всеми шкала живёт как прежде каждый ствол.
   if (lasers > 0) heat.heat = Math.max(0, heat.heat - (coolSum / lasers) * dt)
 }

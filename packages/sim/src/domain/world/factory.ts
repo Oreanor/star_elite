@@ -141,7 +141,7 @@ export function makeShip(
     warpedOut: false,
     warpEmerging: false,
     warpDeparting: false,
-    laserHeat: { heat: 0, overheatUntil: 0 },
+    laserHeat: { heat: 0, overheatUntil: 0, lastHeatAt: -Infinity },
     laserGroup: null,
   }
 }

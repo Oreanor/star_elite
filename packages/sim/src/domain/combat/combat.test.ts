@@ -8,7 +8,7 @@ import { ECM, GUNNERY } from '../../config/weapons'
 import { raySphere } from '../../core/math'
 import { auroraOneLoadout } from '../../config/loadouts'
 import { findEcm, isLaser, isMissile } from '../loadout'
-import { STARTER_SYSTEM } from '../world'
+import { createWorld, STARTER_SYSTEM } from '../world'
 import { refreshSpec } from '../world/factory'
 import type { AsteroidEntity, MissileEntity, ShipEntity, World } from '../world/entities'
 import { stepBolts } from './bolts'
@@ -734,5 +734,21 @@ describe('бог неуязвим, но телесен', () => {
     expect(god.hull).toBe(hullBefore)
     expect(god.shield).toBe(shieldBefore)
     expect(world.shieldFlashes.length).toBeGreaterThan(flashesBefore)
+  })
+})
+
+describe('перегрев под огнём', () => {
+  it('залп всеми лазерами стартового корабля перегревает их за секунды, а не никогда', () => {
+    // Пойманное: остывание шло и под огнём и было быстрее нагрева — шкала не росла вовсе.
+    const world = createWorld({ ...STARTER_SYSTEM, belt: null, patrols: [] })
+    const p = world.player
+    let t = 0
+    for (; t < 30 && p.laserHeat.overheatUntil <= world.time; t += PHYSICS.FIXED_DT) {
+      fireLasers(world, p, false, PHYSICS.FIXED_DT)
+      coolGuns(p, world.time, PHYSICS.FIXED_DT)
+      world.time += PHYSICS.FIXED_DT
+    }
+    expect(t).toBeGreaterThan(3)
+    expect(t).toBeLessThan(20)
   })
 })

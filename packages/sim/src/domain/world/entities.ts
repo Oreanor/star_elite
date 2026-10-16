@@ -85,6 +85,11 @@ export interface LaserHeat {
    * наполовину — не «чуть остыл и снова 1», а честное окно охлаждения с пушем на HUD.
    */
   overheatUntil: number
+  /**
+   * Когда лазеры последний раз ГРЕЛИСЬ (стреляли), мировое время. Пока стреляешь — не
+   * остывают: остывание идёт лишь `GUNNERY.COOL_DELAY` спустя (см. `coolGuns`).
+   */
+  lastHeatAt: number
 }
 
 export interface ShipEntity {
