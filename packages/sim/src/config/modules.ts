@@ -1341,7 +1341,7 @@ export const MIELOPHONE_DEVICE: MielophoneModule = {
   name: 'Миелофон',
   kind: 'mielophone',
   class: 3,
-  mass: 8,
+  mass: 1,
   cost: 2_000_000,
   salvageChance: 0,
   notSold: true,
