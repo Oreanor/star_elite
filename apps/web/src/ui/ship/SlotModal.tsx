@@ -181,41 +181,35 @@ export function SlotModal({
     const stat = moduleStat(module)
     const arrow = (useCopy: boolean) =>
       `${statNumber(stat.key, stat.value)} → ${formatStat(stat.key, upgradedStatValue(module, useCopy))}`
-    const actions: Confirm['actions'] = []
+    const byCopy = canUpgrade(world, player, module, true) === null
+    const byCash = canUpgrade(world, player, module, false) === null
     // stay: улучшение оставляет модуль в слоте — модалку держим открытой (чини/улучшай подряд).
-    if (canUpgrade(world, player, module, true) === null)
-      actions.push({
-        // Две строки: что станет — и чем платишь. Длинная строка в одну переносилась посреди «15 т → 19 т».
-        label: (
-          <>
-            <span className="block">{statLabel(stat.key)}: {arrow(true)}</span>
-            <span className="block">{t('station.byCopy')}</span>
-          </>
-        ),
-        // Ракетный слот качаем целиком (все пилоны), прочее — по одному модулю.
-        run: () => (isMissileSlot ? upgradeMissiles(world, player, true) : upgradeModule(world, player, module, true)),
-        stay: true,
+    // Ракетный слот качаем целиком (все пилоны), прочее — по одному модулю.
+    const run = (useCopy: boolean) => () =>
+      isMissileSlot ? upgradeMissiles(world, player, useCopy) : upgradeModule(world, player, module, useCopy)
+    // Всё, что решает, — в теле окна: что станет и почём; на кнопке лишь «ОК». Деньгами — основная
+    // дорога; копия (редкость: нужна такая же деталь в трюме) — вторая кнопка со своим итогом.
+    const main = byCash ? false : byCopy ? true : null
+    if (main !== null) {
+      const actions: Confirm['actions'] = [{ label: t('ship.ok'), run: run(main), stay: true }]
+      if (main === false && byCopy) {
+        actions.push({ label: `${t('station.byCopy').toUpperCase()} · ${arrow(true)}`, run: run(true), stay: true })
+      }
+      setConfirm({
+        message: t('ship.confirm.upgrade', { name: displayName(module) }),
+        detail: `${statLabel(stat.key)}: ${arrow(main)}${main ? ` · ${t('station.byCopy')}` : ''}`,
+        ...(main === false ? { price: upgradeCashCost(module) } : {}),
+        actions,
       })
-    if (canUpgrade(world, player, module, false) === null)
-      actions.push({
-        label: (
-          <>
-            <span className="block">{statLabel(stat.key)}: {arrow(false)}</span>
-            <span className="block"><Money amount={upgradeCashCost(module)} /></span>
-          </>
-        ),
-        run: () => (isMissileSlot ? upgradeMissiles(world, player, false) : upgradeModule(world, player, module, false)),
-        stay: true,
-      })
+      return
+    }
     // Ни одной дороги — почему? Мир не тянет этот класс (нужен развитее) — своя причина;
     // иначе просто нет денег.
     const lowTech = canUpgrade(world, player, module, false) === 'low-tech'
     setConfirm(
-      actions.length > 0
-        ? { message: t('ship.confirm.upgrade', { name: displayName(module) }), actions }
-        : lowTech
-          ? { message: t('ship.confirm.lowTech', { tech: minTechForClass(module.class) }), actions: [] }
-          : { message: tm('ship.confirm.noFunds', { price: <Money amount={upgradeCashCost(module)} /> }), actions: [] },
+      lowTech
+        ? { message: t('ship.confirm.lowTech', { tech: minTechForClass(module.class) }), actions: [] }
+        : { message: tm('ship.confirm.noFunds', { price: <Money amount={upgradeCashCost(module)} /> }), actions: [] },
     )
   }
 
