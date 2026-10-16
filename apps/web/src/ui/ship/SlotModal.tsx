@@ -247,13 +247,14 @@ export function SlotModal({
   }
   const shopColumns = moduleColumns(world, {
     hardpointIndex: slot.hardpointIndex,
+    rows: shopOptions,
     price: (m) => (
       <span className="whitespace-nowrap">
         <Money amount={priceOf(m)} />
       </span>
     ),
   })
-  const holdColumns = moduleColumns(world, { hardpointIndex: slot.hardpointIndex })
+  const holdColumns = moduleColumns(world, { hardpointIndex: slot.hardpointIndex, rows: holdModules })
 
   return (
     <Modal onClose={onClose} fit>

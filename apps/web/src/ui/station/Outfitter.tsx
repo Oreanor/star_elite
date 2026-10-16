@@ -127,6 +127,7 @@ export function Outfitter({ world, onChange }: { world: World; onChange: () => v
   // Колонки — общие с окном слота (`moduleColumns`); своя здесь лишь ячейка цены: почему
   // строка погасла — на месте цены, как на кнопках окна слота.
   const columns = moduleColumns(world, {
+    rows,
     price: (m) => {
       const error = canPurchase(world, m)
       // Цена — всегда, если хоть одной дорогой купить можно; причина — когда никакой.

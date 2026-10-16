@@ -1,9 +1,9 @@
-import { priceOf, type ShipModule, type World } from '@elite/sim'
+import { moduleStat, priceOf, type ShipModule, type World } from '@elite/sim'
 import { t } from '../i18n'
 import { trend } from '../theme'
 import { DIM, type Column } from './chrome'
 import { displayName, headlineCompare } from './Equipment'
-import { formatStat, statNumber } from './format'
+import { formatStat, statLabel, statNumber } from './format'
 
 /**
  * Колонки таблицы ОБОРУДОВАНИЯ — одни на всю игру: магазин в торговле, магазин и трюм в окне
@@ -16,9 +16,13 @@ import { formatStat, statNumber } from './format'
  */
 export function moduleColumns(
   world: World,
-  opts: { hardpointIndex?: number; price?: (m: ShipModule) => React.ReactNode } = {},
+  opts: { hardpointIndex?: number; price?: (m: ShipModule) => React.ReactNode; rows?: readonly ShipModule[] } = {},
 ): Column<ShipModule>[] {
   const compareOf = (m: ShipModule) => headlineCompare(world, m, opts.hardpointIndex)
+  // Шапка сравнения — САМА характеристика («ЩИТ», «УРОН»), если у всех строк она одна; у
+  // смешанного списка (доп. оборудование: ECM, бомба, маскировка) — общее «Х-КА».
+  const keys = new Set((opts.rows ?? []).map((m) => compareOf(m)?.key ?? moduleStat(m).key))
+  const compareHeader = keys.size === 1 ? statLabel([...keys][0]!) : t('station.col.compare')
   const columns: Column<ShipModule>[] = [
     // Ширин колонкам НЕ задаём: таблица сама отдаёт каждой ширину по содержимому. Все числа
     // в одну строку, переносится лишь название — и только когда места правда не хватает.
@@ -26,7 +30,7 @@ export function moduleColumns(
     // Сравнение одной ячейкой, прижатой вправо: «156 → 135 м/с ▼». Сортируется по новому значению.
     {
       key: 'compare',
-      header: t('station.col.compare'),
+      header: compareHeader,
       align: 'right',
       sortValue: (m) => compareOf(m)?.to ?? -Infinity,
       cell: (m) => {
