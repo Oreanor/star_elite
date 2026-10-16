@@ -5,7 +5,7 @@ import { applyDamage } from './damage'
 import { spawnExplosion, spawnShieldFlash, spawnTracer } from './effects'
 import { registerPlayerHit } from './grievance'
 import { blastAsteroid, damageAsteroid } from './mining'
-import { isRayEffect, rayOnAsteroid, rayOnShip, rayOnStatue, rayOnWarBase } from './laserEffects'
+import { isRayEffect, rayOnAsteroid, rayOnShip, rayOnStatue, rayOnTitan, rayOnWarBase } from './laserEffects'
 import { ASTEROID } from '../../config/world'
 import type { LaserEffect } from '../../config/schema'
 import { castLaser } from './raycast'
@@ -138,6 +138,10 @@ export function resolveLaserHit(
     // и снос — это счёт сбитых турелей, а не измор невидимой копилки. Только искра.
     spawnExplosion(world, hitPos, _still, 0.8)
     if (ray) rayOnWarBase(hit.warBase, ray.effect, ray.rate, ray.seconds)
+  } else if (hit.titan) {
+    // Кит неуязвим — город, не мишень: болт гаснет искрой. Луч-переделка меняет его.
+    spawnExplosion(world, hitPos, hit.titan.vel, 0.6)
+    if (ray) rayOnTitan(hit.titan, ray.effect, ray.rate, ray.seconds)
   } else if (hit.statue) {
     // Статуя — твердь: болт гаснет искрой, урона нет. Луч-переделка меняет её размер.
     spawnExplosion(world, hitPos, _still, 0.6)

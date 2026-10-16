@@ -162,7 +162,7 @@ describe('лучи по статуям и военным базам', () => {
     const sizeBefore = fix.size
     const hit = {
       distance: 0, ship: null, asteroid: null, warBase: null, warBaseFixture: { base, fixture: fix },
-      missile: null, platform: null, station: null, statue: null,
+      missile: null, platform: null, station: null, statue: null, titan: null,
     }
     for (let i = 0; i < 20; i++) {
       world.time += 1
@@ -206,7 +206,7 @@ describe('КПД добычи', () => {
     const a = rock(world, ASTEROID.MIN_SPLIT_RADIUS * 0.9)
     const hit = {
       distance: 0, ship: null, asteroid: a, warBase: null, warBaseFixture: null,
-      missile: null, platform: null, station: null, statue: null,
+      missile: null, platform: null, station: null, statue: null, titan: null,
     }
     resolveLaserHit(world, a.pos.clone(), hit, laser.damage, false, world.player.id, {
       effect: laser.effect ?? 'blast',
@@ -228,5 +228,29 @@ describe('КПД добычи', () => {
     if (up.kind !== 'laser') throw new Error('лазер остаётся лазером')
     expect(up.oreYield!).toBeGreaterThan(MINING_LASER.oreYield!)
     expect(up.damage).toBe(MINING_LASER.damage)
+  })
+})
+
+describe('лучи по киту', () => {
+  // Пойманный баг: кита («Атлас») луч не находил вовсе — болты и лучи шли сквозь город-корабль,
+  // и переделки на нём не работали. Кит — твердь и цель для переделок.
+  it('луч находит кита, а увеличивающий его растит', () => {
+    const world = scene()
+    world.ships.length = 0
+    const far = new Vector3(5e9, 0, 0)
+    const titan = {
+      id: world.ids.next(), kind: 'titan' as const, variant: 0, name: '«Атлас»',
+      pos: far.clone().add(new Vector3(0, 0, -2000)), vel: new Vector3(10, 0, 0), quat: new Quaternion(),
+      spin: 0, radius: 1_600,
+    }
+    world.titans.push(titan)
+    const hit = castLaser(world, far, new Vector3(0, 0, -1), { id: world.player.id, cloaked: false }, 4000)
+    expect(hit.titan).toBe(titan)
+    for (let i = 0; i < 8; i++) {
+      resolveLaserHit(world, far.clone(), hit, 0, false, world.player.id, { effect: 'grow', rate: 0.7, seconds: 0.25, oreYield: 1 })
+    }
+    expect(titan.radius).toBeGreaterThan(1_600)
+    resolveLaserHit(world, far.clone(), hit, 0, false, world.player.id, { effect: 'hold', rate: 4, seconds: 2, oreYield: 1 })
+    expect(titan.vel.length()).toBeLessThan(0.01)
   })
 })

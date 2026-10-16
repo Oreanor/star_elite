@@ -1,12 +1,12 @@
 import { RAYS } from '../../config/weapons'
 import { clamp } from '../../core/math'
 import type { LaserEffect } from '../../config/schema'
-import type { AsteroidEntity, FigurineEntity, MonolithEntity, ShipEntity, WarBaseEntity } from '../world/entities'
+import type { AsteroidEntity, FigurineEntity, MonolithEntity, ShipEntity, TitanEntity, WarBaseEntity } from '../world/entities'
 
 /**
  * ЛУЧИ-ПЕРЕДЕЛКИ: что делает с целью луч `shrink` / `grow` / `hold` за `seconds` в луче.
  * Урон — отдельно (у этих лучей его нет); здесь только переделка. Действуют на корабли,
- * камни, статуи и военные базы. Не трогают ни бога (неуязвим), ни чужой кинематический борт
+ * камни, статуи, военные базы и китов. Не трогают ни бога (неуязвим), ни чужой кинематический борт
  * (его тело живёт на ЕГО клиенте), ни станции и тела системы — станция лишь гасит луч щитом,
  * планеты в цели переделки не входят (трафик и орбиты держатся за них).
  *
@@ -67,6 +67,12 @@ export function rayOnStatue(statue: MonolithEntity | FigurineEntity, effect: Las
 export function rayOnWarBase(base: WarBaseEntity, effect: LaserEffect, rate: number, seconds: number): void {
   const k = resize(base, scaleFactor(effect, rate, seconds))
   if (k !== 1) for (const f of base.fixtures) f.size *= k
+}
+
+/** Кит («Атлас»): размер и дрейф. Его поворот — от времени, крутить нечего, но ход гасится. */
+export function rayOnTitan(titan: TitanEntity, effect: LaserEffect, rate: number, seconds: number): void {
+  resize(titan, scaleFactor(effect, rate, seconds))
+  if (effect === 'hold') titan.vel.multiplyScalar(Math.exp(-rate * seconds))
 }
 
 export function rayOnAsteroid(a: AsteroidEntity, effect: LaserEffect, rate: number, seconds: number): void {

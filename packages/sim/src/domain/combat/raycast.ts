@@ -10,6 +10,7 @@ import type {
   BodyEntity,
   FigurineEntity,
   MonolithEntity,
+  TitanEntity,
   MissileEntity,
   PlatformEntity,
   WarBaseEntity,
@@ -37,6 +38,8 @@ export interface LaserHit {
    * нет. Цель лишь для лучей-переделок (размер). Прежде лучи шли сквозь статуи насквозь.
    */
   statue: MonolithEntity | FigurineEntity | null
+  /** Кит — город-корабль: твердь, луч гаснет о него искрой; цель лишь для лучей-переделок. */
+  titan: TitanEntity | null
 }
 
 /**
@@ -79,6 +82,7 @@ export function castLaser(
     platform: null,
     station: null,
     statue: null,
+    titan: null,
   }
   const closer = (t: number): boolean => t >= 0 && t < hit.distance
   const set = (t: number, next: Partial<LaserHit>): void => {
@@ -91,6 +95,7 @@ export function castLaser(
     hit.platform = next.platform ?? null
     hit.station = next.station ?? null
     hit.statue = next.statue ?? null
+    hit.titan = next.titan ?? null
   }
 
   /**
@@ -162,6 +167,12 @@ export function castLaser(
     if (!f.alive || f.pos.distanceToSquared(origin) > (range + f.radius) ** 2) continue
     const t = raySphere(origin, dir, f.pos, f.radius)
     if (closer(t)) set(t, { statue: f })
+  }
+  // Киты — тоже твердь: прежде лучи и болты проходили город-корабль насквозь.
+  for (const titan of world.titans) {
+    if (titan.pos.distanceToSquared(origin) > (range + titan.radius) ** 2) continue
+    const t = raySphere(origin, dir, titan.pos, titan.radius)
+    if (closer(t)) set(t, { titan })
   }
 
   // Астероиды и ракеты замаскированному не цель: под полем режем и их.
