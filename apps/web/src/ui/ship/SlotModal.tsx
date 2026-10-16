@@ -310,8 +310,9 @@ export function SlotModal({
               </p>
             )}
 
-            {/* Варианты — ТЕ ЖЕ таблицы, что в торговле (`moduleColumns`): магазин, под ним твой
-                трюм. Клик по строке сам спрашивает и ставит; заголовки сортируют. */}
+            {/* Варианты — ТЕ ЖЕ таблицы, что в торговле (`moduleColumns`): магазин слева, твой
+                трюм справа. Клик по строке сам спрашивает и ставит; заголовки сортируют. */}
+            <div className="grid grid-cols-1 gap-x-8 lg:grid-cols-2">
             <OptionTable
               title={t('ship.col.shop')}
               empty={t('ship.noneShop')}
@@ -326,6 +327,7 @@ export function SlotModal({
               columns={holdColumns}
               onPick={pickFromHold}
             />
+            </div>
           </>
         ) : (
           /* В ПОЛЁТЕ верфи нет, а своё железо пилот переставляет сам: снять в трюм и поставить
