@@ -171,11 +171,8 @@ function tradeLimits(world: World, c: Commodity): { buyMax: number; held: number
   return { buyMax, held: commodityHeld(world.player, c) }
 }
 
-/** Единица массы товара: обычные — в тоннах, роскошь и наркотики — в килограммах,
- *  иначе их доли тонны читаются как ноль. Масса в домене всегда в тоннах. */
-const KG_GOODS = new Set(['narcotics'])
+/** Масса единицы товара — всегда в тоннах: на вес в игре меряют только тоннами, не килограммами. */
 function commodityMass(c: Commodity): string {
-  if (KG_GOODS.has(c.id)) return `${Math.round(c.unitMass * 1000)} ${t('unit.kg')}`
   return formatStat('mass', c.unitMass)
 }
 
@@ -245,9 +242,7 @@ function TradeModal({
         </h3>
       </div>
 
-      {/* Товар в тоннах — «3 т × цена тонны». Товар в килограммах (роскошь, наркотики) —
-          счётом единиц: «3 × 500 кг × цена единицы». Иначе ползунок по полтонны давал в строке
-          «1.5 т», «2.5 т» — дробные тонны, которых в отсеке никто не считает. */}
+      {/* Товар — в тоннах: «3 т × цена тонны». Единица любого товара — тонна, дробных тонн нет. */}
       <div className="mt-7 flex flex-col gap-2 text-center tabular-nums" style={{ color: ACCENT }}>
         <div className="text-base font-normal leading-7">
             {tm('station.trade.line', {

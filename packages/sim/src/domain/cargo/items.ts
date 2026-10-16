@@ -119,12 +119,12 @@ export const COMMODITIES = {
   MINERALS: { id: 'minerals', name: 'Руда', description: 'Необогащённая порода из поясов астероидов. Сырьё для металлургии.', unitMass: 1, basePrice: 180, tier: 3, contraband: false },
   METALS: { id: 'metals', name: 'Металлы', description: 'Очищенные слитки и сплавы. Хлеб тяжёлой промышленности.', unitMass: 1, basePrice: 420, tier: 6, contraband: false },
   MACHINERY: { id: 'machinery', name: 'Машинерия', description: 'Станки, приводы, запчасти. Дорога там, где нечем строить.', unitMass: 1, basePrice: 640, tier: 8, contraband: false },
-  ELECTRONICS: { id: 'electronics', name: 'Электроника', description: 'Платы и чипы высокого передела. Лёгкая, дорогая, нужна всем.', unitMass: 0.5, basePrice: 980, tier: 11, contraband: false },
+  ELECTRONICS: { id: 'electronics', name: 'Электроника', description: 'Платы и чипы высокого передела. Лёгкая, дорогая, нужна всем.', unitMass: 1, basePrice: 980, tier: 11, contraband: false },
   // Контрабанду плодят беззаконные окраины (низкий tier), а спрос на неё — в богатых
   // законопослушных мирах: оттого её и возят снизу вверх, рискуя штрафом.
   SLAVES: { id: 'slaves', name: 'Рабы', description: 'Живой груз. Торговля ограничена законом, но перевозка разрешена.', unitMass: 1, basePrice: 1240, tier: 3, contraband: true },
   LUXURIES: { id: 'luxuries', name: 'Роскошь', description: 'Редкости для тех, кому некуда девать деньги. Малый вес, крупный навар.', unitMass: 1, basePrice: 3700, tier: 12, contraband: false },
-  NARCOTICS: { id: 'narcotics', name: 'Наркотики', description: 'Химия с ограниченной торговлей. Дорога, компактна и пахнет штрафом.', unitMass: 0.4, basePrice: 2900, tier: 9, contraband: true },
+  NARCOTICS: { id: 'narcotics', name: 'Наркотики', description: 'Химия с ограниченной торговлей. Дорога, компактна и пахнет штрафом.', unitMass: 1, basePrice: 2900, tier: 9, contraband: true },
   /**
    * Статуэтка богов — коллекционная реликвия с орбиты системы.
    * Масса 0: в трюме не весит. Не путать с монолитами у причала.

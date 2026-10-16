@@ -485,7 +485,6 @@ export const RU = {
   'ship.ok': 'ОК',
 
   'unit.pc': 'пк',
-  'unit.kg': 'кг',
 
   'map.close': 'M — ЗАКРЫТЬ',
 
