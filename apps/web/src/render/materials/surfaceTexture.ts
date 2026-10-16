@@ -17,6 +17,10 @@ const ready = new Map<string, Texture>()
 function request(url: string): Promise<Texture | null> {
   let p = pending.get(url)
   if (!p) {
+    // Без DOM картинку взять неоткуда (`TextureLoader` строит <img>) — тот же исход, что 404:
+    // тело на покраске. Иначе прогрев портала в тестах сыпал необработанными отказами и
+    // ронял прогон, хотя сами тесты проходили.
+    if (typeof document === 'undefined') return Promise.resolve(null)
     p = new Promise((resolve) => {
       new TextureLoader().load(
         url,
