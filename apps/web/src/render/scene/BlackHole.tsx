@@ -2,6 +2,7 @@ import { useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef } from 'react'
 import {
   IcosahedronGeometry,
+  Matrix3,
   Mesh,
   MeshBasicMaterial,
   Texture,
@@ -132,8 +133,9 @@ function BlackHoleInstance({ body }: { body: BodyEntity }) {
       lens.scale.setScalar(influence)
       lens.updateMatrixWorld()
       const u = lensMat.uniforms
-      renderPos(session.world, body, u.uBhCenter!.value)
-      u.uCameraPos!.value.copy(camera.position)
+      // Относительно камеры, в double на CPU: шейдер больших чисел не видит (см. `lensVertex`).
+      ;(u.uBhRel!.value as Vector3).copy(_shown).sub(camera.position)
+      ;(u.uViewToWorld!.value as Matrix3).setFromMatrix4(camera.matrixWorld)
       // Аккреционный диск имеет фазу времени мира, а не возраст React-компонента.
       // Поэтому ремоунт после портала не запускает чёрную дыру заново с нуля.
       u.uTime!.value = renderTime(session.world)

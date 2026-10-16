@@ -1,5 +1,6 @@
 import {
   FrontSide,
+  Matrix3,
   Matrix4,
   ShaderMaterial,
   Vector3,
@@ -51,12 +52,20 @@ const lensVertex = /* glsl */ `
 #include <common>
 #include <logdepthbuf_pars_vertex>
 
-varying vec3 vWorldPos;
+/*
+ * Точка сферы ОТНОСИТЕЛЬНО КАМЕРЫ, в мировой ориентации. Не world − cameraPosition на GPU:
+ * дыра за сотни миллионов метров, и во float32 шаг таких чисел — десятки метров; луч
+ * дрожал при малейшем движении камеры (вдали дрожь, вблизи нет). modelViewMatrix
+ * собирает CPU в double — вид-координаты точны; поворотом камеры (uViewToWorld)
+ * возвращаем их в мировую ориентацию, где живут ось диска и небо.
+ */
+uniform mat3 uViewToWorld;
+varying vec3 vRel;
 
 void main() {
-  vec4 world = modelMatrix * vec4(position, 1.0);
-  vWorldPos = world.xyz;
-  gl_Position = projectionMatrix * viewMatrix * world;
+  vec4 view = modelViewMatrix * vec4(position, 1.0);
+  vRel = uViewToWorld * view.xyz;
+  gl_Position = projectionMatrix * view;
   #include <logdepthbuf_vertex>
 }
 `
@@ -65,8 +74,8 @@ const lensFragment = /* glsl */ `
 #include <common>
 #include <logdepthbuf_pars_fragment>
 
-uniform vec3 uBhCenter;
-uniform vec3 uCameraPos;
+/** Центр дыры относительно камеры, мировая ориентация: разность посчитана на CPU в double. */
+uniform vec3 uBhRel;
 uniform float uRs;
 uniform float uInfluence;
 uniform float uVisibleShadow;
@@ -90,7 +99,7 @@ uniform sampler2D uDepthMap;
 uniform bool uHasDepth;
 uniform float uFar;
 
-varying vec3 vWorldPos;
+varying vec3 vRel;
 
 vec3 sampleSky(vec3 dir) {
   dir = normalize(dir);
@@ -133,7 +142,8 @@ vec3 sampleBackdrop(vec3 dir) {
     // расстояние по оси взгляда до нарисованного в этом пикселе.
     float d = texture2D(uDepthMap, clamp(uv, 0.0, 1.0)).x;
     float pixelDist = exp2(d * log2(uFar + 1.0)) - 1.0;
-    float holeDist = -(viewMatrix * vec4(uBhCenter, 1.0)).z;
+    // Только поворот (w = 0): сдвиг камеры уже вычтен в uBhRel.
+    float holeDist = -(viewMatrix * vec4(uBhRel, 0.0)).z;
     if (pixelDist < holeDist) return sky;
   }
 
@@ -190,11 +200,12 @@ vec3 diskColor(vec3 hit, vec3 n, vec3 tangent, vec3 bitangent, vec3 rd, float ra
 void main() {
   #include <logdepthbuf_fragment>
 
-  vec3 ro = uCameraPos - uBhCenter;
-  vec3 rd = normalize(vWorldPos - uCameraPos);
+  // Всё — относительно камеры (см. вершинный шейдер): камера в нуле.
+  vec3 ro = -uBhRel;
+  vec3 rd = normalize(vRel);
   // Начинаем на ПЕРЕДНЕЙ поверхности сферы влияния. Раньше p=ro (камера),
   // и при камере снаружи первый же шаг r>influence завершал трассировку.
-  vec3 p = vWorldPos - uBhCenter;
+  vec3 p = vRel - uBhRel;
 
   vec3 n;
   vec3 tangent;
@@ -328,8 +339,8 @@ export function createBlackHoleMaterial(params: BlackHoleParams, sky: Texture | 
   const influence = params.radius * BLACK_HOLE_DEFAULTS.influenceMultiplier
   return new ShaderMaterial({
     uniforms: {
-      uBhCenter: { value: new Vector3() },
-      uCameraPos: { value: new Vector3() },
+      uBhRel: { value: new Vector3() },
+      uViewToWorld: { value: new Matrix3() },
       uRs: { value: params.radius },
       uInfluence: { value: influence },
       uVisibleShadow: { value: BLACK_HOLE_DEFAULTS.visibleShadow },
