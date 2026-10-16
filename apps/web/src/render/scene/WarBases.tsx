@@ -106,6 +106,34 @@ const TRASH_SINK = 0.55
 /** Пакеты обломков — по одному на облик. Список постоянный, считается один раз. */
 const TRASH_KEYS = Array.from({ length: TRASH_VARIANTS }, (_, i) => i)
 
+/** Насколько деталь УТОПЛЕНА в обшивку, в долях габарита: сидит на ней, а не касается точкой. */
+const DETAIL_SINK = 0.04
+/**
+ * Прогиб граней корпуса под сферой, доля радиуса: икосаэдр детализации 6 — середина грани
+ * ниже вершин примерно на 0.3%. Сажаем деталь на грань, а не на идеальную сферу над ней.
+ */
+const HULL_SAG = 0.004
+
+/**
+ * Дно модели по её «верху» после доворота облика, в долях габарита (отрицательное). Модели
+ * нормированы по описанной сфере, и дно у каждой своё — считаем по вершинам, раз на геометрию.
+ */
+const bottoms = new WeakMap<BufferGeometry, number>()
+const _v = new Vector3()
+function bottomOf(g: BufferGeometry, pre: Quaternion): number {
+  let b = bottoms.get(g)
+  if (b === undefined) {
+    const pos = g.getAttribute('position')
+    b = 0
+    for (let i = 0; i < pos.count; i++) {
+      _v.fromBufferAttribute(pos, i).applyQuaternion(pre)
+      if (_v.y < b) b = _v.y
+    }
+    bottoms.set(g, b)
+  }
+  return b
+}
+
 /** Все ЖИВЫЕ детали одного облика со всех баз — один InstancedMesh. */
 function DetailBatch({ dkey }: { dkey: DetailKey }) {
   const session = useSession()
@@ -134,11 +162,15 @@ function DetailBatch({ dkey }: { dkey: DetailKey }) {
       if (!base.alive) continue
       for (const fix of base.fixtures) {
         if (!fix.alive || keyOf(fix.model) !== dkey || count >= MAX_DETAILS) continue
-        // Точка ровно та же, что видит луч, — иначе стрелял бы мимо нарисованного.
+        // Направление — то же, что видит луч (`warBaseFixtureWorldPos`). А высоту ставим по
+        // НАСТОЯЩЕМУ дну модели: она нормирована по описанной сфере, и у широкой низкой пушки
+        // дно выше «−0.5 габарита», на которое рассчитан центр в домене, — деталь парила.
         warBaseFixtureWorldPos(base, fix, time, _pos)
+        _dir.copy(_pos).sub(base.pos).normalize()
+        const lift = (-bottomOf(g, pre) - DETAIL_SINK) * fix.size
+        _pos.copy(base.pos).addScaledVector(_dir, base.radius * (1 - HULL_SAG) + lift)
         _dummy.position.copy(_pos).sub(base.pos).multiplyScalar(shrink).add(base.pos)
         // Ориентация: доворот облика → «вверх» детали на радиаль → крен по roll.
-        _dir.copy(_pos).sub(base.pos).normalize()
         _align.setFromUnitVectors(_UP, _dir)
         _roll.setFromAxisAngle(_dir, fix.roll)
         _dummy.quaternion.copy(_roll).multiply(_align).multiply(pre)
