@@ -12,11 +12,11 @@ import {
   PlaneGeometry,
   Vector3,
 } from 'three'
-import { findModule, GUNNERY, renderPos, renderQuat, renderTime, type Tracer, type World } from '@elite/sim'
+import { GUNNERY, renderPos, renderQuat, renderTime, type Tracer, type World } from '@elite/sim'
 import { shownShipPoint } from '../shownPose'
 import { useSession } from '../../session/GameContext'
 import { EXPLOSION, LASER, LASER_CLASS_WIDTH, LASER_SCHOOL_GLOW, MUZZLE, SHIELD_FLASH, WARP_FLASH } from '../config'
-import { LASER_SCHOOLS, laserSchool } from '../laserSchool'
+import { LASER_SCHOOLS, laserLook, laserSchool } from '../laserSchool'
 import {
   explosionMaterial,
   missileMaterial,
@@ -156,14 +156,8 @@ function anchoredFrom(world: World, tracer: Tracer): Vector3 | null {
   return shownShipPoint(world, ship, offset[0], offset[1], offset[2], _anchor)
 }
 
-/**
- * Класс ствола по id — рендер узнаёт его из каталога модулей (домен несёт на трассе
- * лишь id). Класс 4 (если появится) читаем как 3; неизвестный id — класс 1 (голубой).
- */
-const classOf = (weapon: string): 1 | 2 | 3 => {
-  const cls = findModule(weapon)?.class ?? 1
-  return (cls >= 3 ? 3 : cls) as 1 | 2 | 3
-}
+/** Класс ствола по id — из кэша облика (`laserLook`), а не поиском по каталогу в кадре. */
+const classOf = (weapon: string): 1 | 2 | 3 => laserLook(weapon).cls
 
 /** Три класса лазеров: у каждого своя толщина луча. */
 const LASER_CLASSES = [1, 2, 3] as const
@@ -182,7 +176,10 @@ export function Tracers() {
       {TRACER_GROUPS.map(({ school, cls }) => {
         const width = LASER_CLASS_WIDTH[cls] ?? 1
         const glow = LASER_SCHOOL_GLOW[school]
-        const accepts = (weapon: string) => classOf(weapon) === cls && laserSchool(weapon) === school
+        const accepts = (weapon: string) => {
+          const look = laserLook(weapon)
+          return look.cls === cls && look.school === school
+        }
         return (
           <Fragment key={`${school}-${cls}`}>
             <TracerBatch accepts={accepts} color={glow} radius={LASER.GLOW_RADIUS * width} opacity={LASER.GLOW_OPACITY} />
