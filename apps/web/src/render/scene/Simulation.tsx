@@ -26,6 +26,7 @@ import {
   enterBush,
   leaveBush,
   enterSystem,
+  enterVoid,
   systemDefFor,
   emptyDelta,
   CORE_INDEX,
@@ -149,9 +150,9 @@ function stepBush(session: Session): void {
     // Влетели снова, не досмотрев прошлый выход (успел долететь до дыры за полторы секунды) —
     // старый переход не должен доигрывать поверх новой комнаты.
     resetBushExit()
-    world.player.state.pos.set(0, 0, 0)
-    world.player.state.vel.set(0, 0, 0)
-    world.player.state.angVel.set(0, 0, 0)
+    // Систему покидаем по-настоящему: под задником она не живёт (см. `enterVoid`).
+    enterVoid(world)
+    session.onSystemChange?.(world.epoch)
     setPilot(session, 'bush')
     pushWarning('bushEnter', world.time, {
       label: universe.nodes[bush.node]?.name ?? '',

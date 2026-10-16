@@ -638,6 +638,55 @@ export function startAtStation(world: World, gap = 2_500, station?: BodyEntity):
   maybeShiftOrigin(world)
 }
 
+/**
+ * ПУСТОТА — мир комнаты-гипертора. Влетев в дыру, игрок ПОКИДАЕТ систему: её тела, трафик и бой
+ * остаются по ту сторону, а не живут невидимо под задником. Прежде система жила дальше — опора
+ * везла игрока орбитой, камеру уносило, а невидимый борт мог врезаться в планету и погибнуть,
+ * пока пилот летал по решётке. Выход из комнаты строит систему заново (`enterSystem`), поэтому
+ * терять тут нечего. Номер системы и знакомства не трогаем: это память игрока, не окрестность.
+ */
+export function enterVoid(world: World): void {
+  world.desolate = true
+  world.epoch += 1
+  world.ships = []
+  world.asteroids = []
+  world.pods = []
+  world.missiles = []
+  world.bolts = []
+  world.bodies = []
+  world.titans = []
+  world.monoliths = []
+  world.figurines = []
+  world.warBases = []
+  world.platforms = []
+  world.tracers = []
+  world.explosions = []
+  world.shockwaves = []
+  world.blastwaves = []
+  world.warps = []
+  world.warpPortals = []
+  world.jumpGates = []
+  world.shieldFlashes = []
+  world.muzzleFlashes = []
+  world.beams = []
+  world.contactLock = null
+  world.navTargetId = null
+  world.jumpTargetIndex = null
+  world.docked = false
+  world.dockOccupantId = null
+  const player = world.player
+  player.ai = null
+  player.landedOn = null
+  player.autoland = null
+  player.state.pos.set(0, 0, 0)
+  player.state.vel.set(0, 0, 0)
+  player.state.angVel.set(0, 0, 0)
+  // Газ в ноль: в комнате ход даёт поток S³, а не тяга борта.
+  player.controls.throttle = 0
+  world.originOffset.set(0, 0, 0)
+  world.originShift.set(0, 0, 0)
+}
+
 export function enterSystem(
   world: World,
   def: SystemDef,

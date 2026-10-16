@@ -30,7 +30,7 @@ export {
   type JumpGate,
   type World,
 } from './entities'
-export { enterSystem, createWorld, layoutSystemBodies, makeShip, refreshSpec, spawnSlovo, startAtStation, applyPilotProfile } from './factory'
+export { enterSystem, enterVoid, createWorld, layoutSystemBodies, makeShip, refreshSpec, spawnSlovo, startAtStation, applyPilotProfile } from './factory'
 export { createIdSource, type IdSource } from './ids'
 export {
   type Persona,
