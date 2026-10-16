@@ -359,7 +359,21 @@ export function attachInput(canvas: HTMLCanvasElement): () => void {
    * переживает закрытие: чинится только перезапуском браузера. Второй, более
    * ранний рубеж стоит одной строки.
    */
-  const onUnload = () => releaseLock()
+  const onUnload = (e: BeforeUnloadEvent) => {
+    /**
+     * В ПОЛЁТЕ (курсор захвачен) — спросить «покинуть сайт?». Ctrl — ручник, W — газ, и
+     * Ctrl+W браузер не отдаёт странице (закрыть вкладку — его зарезервированное сочетание,
+     * `preventDefault` он молча игнорирует): вкладка закрывалась посреди полёта, прогресс с
+     * последней стыковки терялся. Перехватить нельзя — можно переспросить. У причала не
+     * спрашиваем: там сейв уже записан, и обновление страницы не должно мешать.
+     */
+    const flying = document.pointerLockElement !== null
+    releaseLock()
+    if (flying) {
+      e.preventDefault()
+      e.returnValue = ''
+    }
+  }
 
   window.addEventListener('beforeunload', onUnload)
   document.addEventListener('pointerlockerror', onLockError)
