@@ -3,6 +3,8 @@ import { GALAXY } from '../../config/galaxy'
 import { systemDefFor } from '../galaxy/jump'
 import { createWorld } from '../world'
 import { stationHost } from './docking'
+import { localSettlement } from './trade'
+import { SHARED_START_INDEX } from '../galaxy/sharedStart'
 
 /**
  * «Где я» у причала — планета ЭТОЙ станции. Станций в системе по одной на населённый мир,
@@ -29,5 +31,21 @@ describe('станция и её планета', () => {
       expect(hosts.size).toBe(stations.filter((s) => s.stationStyle !== 'cross').length)
     }
     expect(checked).toBeGreaterThan(0)
+  })
+})
+
+describe('рынок причала', () => {
+  // Пойманный баг: рынок брался у столицы системы при любом причале — у аванпоста аграрной
+  // планеты торговля/верфь/ремонт шли по ценам и техом столицы, а ПЛАНЕТА и штрафы — по своей.
+  it('у каждого причала рынок — поселение его планеты, а не столицы', () => {
+    const world = createWorld({ ...systemDefFor(SHARED_START_INDEX, GALAXY.SEED), patrols: [], belt: null })
+    const stations = world.bodies.filter((b) => b.kind === 'station' && stationHost(world, b))
+    expect(stations.length).toBeGreaterThanOrEqual(2)
+    for (const station of stations) {
+      world.player.state.pos.copy(station.pos)
+      const own = stationHost(world, station)!.settlement
+      expect(own).not.toBeNull()
+      expect(localSettlement(world)).toBe(own)
+    }
   })
 })

@@ -1,6 +1,7 @@
 import { addCommodity, freeCapacity, removeItem } from '../cargo/hold'
 import { COMMODITIES, itemValue, type CargoItem, type Commodity } from '../cargo/items'
-import { settlementAt } from '../galaxy/generate'
+import { capitalBody } from '../world/queries'
+import { findStation, stationHost } from './docking'
 import type { Settlement } from '../galaxy/types'
 import type { ShipEntity, World } from '../world/entities'
 import { refreshSpec } from '../world/factory'
@@ -11,17 +12,21 @@ import { issueFine, localFine } from './legal'
  * Торговля грузом на станции: цены от рынка поселения, покупка и продажа товара, стоимость трюма.
  */
 
-/**
- * Поселение-столица, чьей станцией сейчас торгует пилот. Выводится из зерна
- * системы (см. `settlementAt`) — не хранится в мире и оттого одинаково у всех,
- * кто зашёл в ту же систему. На нём и держится будущая сетевая синхронизация цен.
- */
+/** Рынок «ничьей» точки: в системе нет ни причала у мира, ни поселений. */
 export const NEUTRAL_MARKET: Settlement = {
   economy: 'Промышленная', government: 'Многовластие', techLevel: 7, population: 1, species: '—',
 }
 
+/**
+ * Поселение, чьей станцией сейчас пользуется пилот: планета ЭТОЙ станции, без неё — столица.
+ * Прежде — всегда столица системы: у аванпоста аграрной планеты торговля, верфь и ремонт шли
+ * по ценам и техом столицы, а вкладка ПЛАНЕТА и местная власть (штрафы) — по планете причала.
+ * Поселение лежит на теле мира и выводится из зерна системы — одинаково у всех, кто зашёл.
+ */
 export function localSettlement(world: World): Settlement {
-  return settlementAt(world.systemIndex, world.galaxySeed) ?? NEUTRAL_MARKET
+  const station = findStation(world)
+  const host = station ? stationHost(world, station) : null
+  return host?.settlement ?? capitalBody(world)?.settlement ?? NEUTRAL_MARKET
 }
 
 /** Номинальная стоимость трюма по каталогу — грубая прикидка, без учёта рынка. */

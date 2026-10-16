@@ -28,7 +28,7 @@ import { stockSlovoCollection } from './figurines'
 import { pickTrafficVariant } from './trafficVariants'
 import { spawnTrafficTitan, titanCount } from './titans'
 import type { BodyEntity, Faction, ShipEntity, World } from './entities'
-import { lockedShipId } from './queries'
+import { capitalBody, lockedShipId } from './queries'
 
 /**
  * Встречи в космосе.
@@ -443,9 +443,7 @@ export function spawnResidentContacts(world: World): ShipEntity[] {
 function residentAnchor(world: World): Vector3 {
   const station = world.bodies.find((b) => b.kind === 'station')
   if (station) return _anchor.copy(station.pos)
-  let best: BodyEntity | null = null
-  for (const b of world.bodies) if (b.population > 0 && (!best || b.population > best.population)) best = b
-  return _anchor.copy(best ? best.pos : world.player.state.pos)
+  return _anchor.copy(capitalBody(world)?.pos ?? world.player.state.pos)
 }
 
 /** Одна встреча: от одиночки до стаи. Возвращает всех, кому нужен пилот. */

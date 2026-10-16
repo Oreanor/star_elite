@@ -413,7 +413,7 @@ function VariantRow({
     <button
       type="button"
       onClick={onClick}
-      className="flex cursor-pointer items-center justify-between gap-3 border px-3 py-2 text-left text-sm transition-colors hover:border-[#7fd6ff] hover:bg-[#7fd6ff]/10"
+      className="flex cursor-pointer items-center justify-between gap-3 border px-3 py-2 text-left text-sm transition-colors ui-row"
       style={{ borderColor: DIM }}
     >
       <span className="min-w-0 truncate">{displayName(module)}</span>

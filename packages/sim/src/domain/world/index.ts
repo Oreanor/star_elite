@@ -125,6 +125,7 @@ export {
   isStellarNavKind,
   isNavBeltAsteroid,
   findBody,
+  capitalBody,
   findShip,
   hostilesOf,
   isStationBot,

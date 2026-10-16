@@ -199,7 +199,8 @@ function exitBushInto(session: Session, vertex: number): boolean {
 
   world.galaxySeed = galaxy.seed
   // Правки бога принадлежали ТОЙ галактике: перенести их в новую значило бы переставить
-  // звёзды у чужого зерна. Уходим — забываем, вернёмся по сейву.
+  // звёзды у чужого зерна. Уходим — забываем; новая галактика подтянет СВОЙ журнал правок
+  // из сети (`sharedGalaxy` переподпишется по зерну), вернёмся — подтянется наш.
   world.galaxyDelta = emptyDelta()
   world.galaxyEpoch += 1
 

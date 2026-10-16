@@ -54,3 +54,4 @@ export {
   type ParsedModelReply,
 } from './modelReply'
 export { dialogueEffects, type DialogueEffects } from './turn'
+export { joinPhrases, phrase, type Phrase, type PhraseKey, type PhraseParams } from './phrase'

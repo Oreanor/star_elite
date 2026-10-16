@@ -176,7 +176,7 @@ export function SlotGrid({
                   type="button"
                   onClick={interactive ? () => onOpen(s.key) : undefined}
                   className={`flex items-baseline justify-between gap-2 border px-2 py-0.5 text-left transition-colors ${
-                    interactive ? 'cursor-pointer hover:border-[#7fd6ff] hover:bg-[#7fd6ff]/10' : 'cursor-default'
+                    interactive ? 'cursor-pointer ui-row' : 'cursor-default'
                   }`}
                   style={{ borderColor: 'rgba(127,214,255,0.12)' }}
                 >

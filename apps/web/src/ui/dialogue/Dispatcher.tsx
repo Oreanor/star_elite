@@ -27,7 +27,7 @@ export function Dispatcher({ world, onClose, negotiate }: { world: World; onClos
   useEffect(() => {
     if (station && turns.length === 0) {
       const fine = localFine(world)
-      setTurns([{ who: 'them', text: fine ? `Диспетчер на связи. За вами долг ${fine.amount} кредитов местной власти. Если хотите оплатить — скажите прямо.` : 'Диспетчер на связи. Говори.' }])
+      setTurns([{ who: 'them', text: fine ? t('dialogue.dispatcherFine', { amount: fine.amount }) : t('dialogue.dispatcherHello') }])
     }
   }, [station, turns.length])
   useEffect(() => { scroller.current?.scrollTo({ top: scroller.current.scrollHeight }) }, [turns, busy])

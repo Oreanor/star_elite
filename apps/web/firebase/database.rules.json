@@ -149,6 +149,17 @@
           ".validate": "!newData.exists() || newData.hasChildren(['name', 'rel', 'at'])"
         }
       }
+    },
+    "galaxy": {
+      ".read": "auth != null",
+      "$seed": {
+        "edits": {
+          "$eid": {
+            ".write": "auth != null && !data.exists()",
+            ".validate": "newData.hasChild('op') && newData.child('op').isString()"
+          }
+        }
+      }
     }
   }
 }

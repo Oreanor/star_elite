@@ -1,9 +1,10 @@
-import { useEffect, useReducer, type ReactNode } from 'react'
+import { useEffect, useReducer, useSyncExternalStore, type ReactNode } from 'react'
 import {
   MIELOPHONE,
   contactTravelEta,
   contactWhereabouts,
   findStation,
+  capitalBody,
   stationHost,
   dispatcherName,
   dispatcherPersona,
@@ -31,6 +32,8 @@ import { SystemMap } from '../map/SystemMap'
 import { GalaxyMap } from '../map/GalaxyMap'
 import { UniverseMap } from '../map/UniverseMap'
 import { useSession } from '../../session/GameContext'
+import { lastSaveFailed, subscribeSaveStatus } from '../../session/save/saveStore'
+import { UI } from '../theme'
 import { Locator } from '../map/Locator'
 import { PlanetScreen } from '../planet/PlanetScreen'
 import { Reference } from '../reference/Reference'
@@ -136,6 +139,7 @@ export function Console({
     return () => window.clearInterval(id)
   }, [docked, world])
 
+  const saveFailed = useSyncExternalStore(subscribeSaveStatus, lastSaveFailed)
   const station = findStation(world)
   // У причала «где я» — планета ЭТОЙ станции, а не столица: станций в системе по одной на
   // населённый мир, и шапка прежде клеила аванпост одной планеты к имени другой.
@@ -204,6 +208,11 @@ export function Console({
               style={{ borderColor: DIM, color: DIM, background: 'rgba(8,22,42,0.75)' }}
             >
               {/* Дата мира — общий календарь для всех игроков (`worldClock`). */}
+              {saveFailed && (
+                <span className="whitespace-nowrap font-semibold" style={{ color: UI.DANGER }}>
+                  {t('station.saveFailed')}
+                </span>
+              )}
               <span className="whitespace-nowrap">{currentGameDate()}</span>
               <span className="whitespace-nowrap border-l pl-5 font-semibold" style={{ borderColor: DIM, color: '#d9f3ff' }}>
                 <Money amount={world.credits} />
@@ -573,11 +582,8 @@ function DockPlaque({ ship, you, world, onTalk }: { ship: ShipEntity; you: boole
 
 /** Столица системы — самое населённое тело: «где я» в полёте, пока ни к какому причалу не привязан. */
 function capitalWorld(world: World): BodyEntity | null {
-  let best: BodyEntity | null = null
-  for (const b of world.bodies) {
-    if (b.population > 0 && (!best || b.population > best.population)) best = b
-  }
-  if (best) return best
+  const capital = capitalBody(world)
+  if (capital) return capital
   // Необитаемая система: столицы нет, но мир под тобой есть — берём БЛИЖАЙШУЮ планету.
   // Иначе вкладка ПЛАНЕТА пустовала бы там, где смотреть как раз интереснее всего.
   let near: BodyEntity | null = null

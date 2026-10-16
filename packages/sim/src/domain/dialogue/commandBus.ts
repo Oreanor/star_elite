@@ -1,4 +1,5 @@
 import { applyOrder, commandableByPlayer, type AIOrder } from '../ai/commands'
+import { joinPhrases, phrase, type Phrase, type PhraseKey } from './phrase'
 import { assignApproach, assignCollectRun, assignRendezvous, clearTasks } from '../ai/tasks'
 import {
   applyStance,
@@ -41,9 +42,11 @@ export interface Command {
  * `spoken` — что бот ПРОИЗНОСИТ в ответ (канонная реплика домена), если задан.
  */
 export interface CommandOutcome {
-  line: string | null
+  /** Системная строка ленты (сделка, приказ…). Фраза — слова подберёт `ui`. */
+  line: Phrase | null
   agreed?: boolean
-  spoken?: string
+  /** Что звучит голосом собеседника от домена (отказ, подтверждение). */
+  spoken?: Phrase
 }
 
 export type CommandHandler = (world: World, ship: ShipEntity, payload: unknown) => CommandOutcome | null
@@ -68,14 +71,14 @@ function taskCommand(world: World, ship: ShipEntity, payload: unknown): CommandO
    * просто отказал. Теперь игрок слышит причину и понимает, что надо сперва договориться.
    */
   if (!commandableByPlayer(ship, world.player.id)) {
-    return { line: null, spoken: 'МЫ НЕ УГОВАРИВАЛИСЬ. НАЙМИ — ТОГДА ПОЛЕЧУ.' }
+    return { line: null, spoken: phrase('notHired') }
   }
 
   if (kind === 'collect-cargo') {
     if (!o) return null
     const radius = typeof o.radius === 'number' && o.radius > 0 ? o.radius : TASK_COLLECT_RADIUS
     if (!assignCollectRun(ship, ship.state.pos, radius)) return null
-    return { line: null, spoken: 'ПРИНЯЛ. СОБИРАЮ И ИДУ К ТЕБЕ.' }
+    return { line: null, spoken: phrase('taskCollect') }
   }
   if (kind === 'approach-nav') {
     const navId = world.navTargetId
@@ -83,17 +86,17 @@ function taskCommand(world: World, ship: ShipEntity, payload: unknown): CommandO
     // Тело отдаём ПО ID: станция едет по орбите, и бот обязан пересчитывать подлёт на ходу.
     if (!world.bodies.some((b) => b.id === navId)) return null
     if (!assignApproach(ship, navId)) return null
-    return { line: null, spoken: 'ИДУ ТУДА.' }
+    return { line: null, spoken: phrase('taskGoTo') }
   }
   if (kind === 'come-to-me') {
     // «Подлети ко мне» — к ЖИВОМУ игроку, а не к нав-цели: раньше такого приказа не было
     // вовсе, и бот брал `approach-nav`, улетая мимо игрока к станции.
     if (!assignRendezvous(ship, world.player.id)) return null
-    return { line: null, spoken: 'ИДУ К ТЕБЕ.' }
+    return { line: null, spoken: phrase('taskComeTo') }
   }
   if (kind === 'clear-tasks') {
     clearTasks(ship)
-    return { line: null, spoken: 'ОТСТАВИЛ.' }
+    return { line: null, spoken: phrase('taskCancelled') }
   }
   return null
 }
@@ -117,26 +120,26 @@ function taskPayloadFromPlanStep(step: RawPlanStep): Record<string, unknown> | n
   return null
 }
 /** Подтверждение приказа строкой в ленте. Текст — игровой контент, живёт с исполнением. */
-const ORDER_DONE: Record<AIOrder, string> = {
-  attack: 'Приказ: атаковать цель.',
-  engageAll: 'Приказ: огонь по всем врагам.',
-  hold: 'Приказ: ждать на месте.',
-  standDown: 'Приказ: отбой, прекратить огонь.',
-  keepBack: 'Приказ: держаться в хвосте.',
-  resume: 'Приказ: действовать как обычно.',
+const ORDER_DONE: Record<AIOrder, PhraseKey> = {
+  attack: 'orderAttack',
+  engageAll: 'orderEngageAll',
+  hold: 'orderHold',
+  standDown: 'orderStandDown',
+  keepBack: 'orderKeepBack',
+  resume: 'orderResume',
 }
 
 /** Итог сделки строкой для ленты. null — ничего не перешло (обещал, да нечем). */
-function transferLine(r: TransferResult): string | null {
-  const parts: string[] = []
-  if (r.units > 0 && r.commodityName) {
-    parts.push(r.direction === 'toThem' ? `Передано: ${r.commodityName} ×${r.units}` : `Получено: ${r.commodityName} ×${r.units}`)
+function transferLine(r: TransferResult, commodityId: string | null): Phrase | null {
+  const parts: Phrase[] = []
+  if (r.units > 0 && commodityId) {
+    parts.push(phrase(r.direction === 'toThem' ? 'dealGave' : 'dealGot', { commodity: commodityId, units: r.units }))
   }
   if (r.credits > 0) {
     // Покупка: груз toYou, но деньги с игрока — смотрим creditsFromPlayer, не direction.
-    parts.push(r.creditsFromPlayer ? `Списано: ${r.credits} кр` : `Зачислено: ${r.credits} кр`)
+    parts.push(phrase(r.creditsFromPlayer ? 'dealCharged' : 'dealCredited', { credits: r.credits }))
   }
-  return parts.length ? parts.join(' · ') : null
+  return joinPhrases(parts)
 }
 
 // ─── Реализации команд ──────────────────────────────────────────────────────────
@@ -150,11 +153,11 @@ function askCommand(world: World, ship: ShipEntity, payload: unknown): CommandOu
   if (o?.llm === true) {
     const line = linesFor(world, ship).find((l) => l.topic === topic)
     if (!line || line.blocked !== null) {
-      return { line: null, agreed: false, spoken: line?.blocked ?? '…' }
+      return { line: null, agreed: false, spoken: line?.blocked ?? phrase('ellipsis') }
     }
     const agreed = applyOutcome(world, ship, topic)
     if (topic !== 'greet') recordEvent(world, ship, { kind: 'asked', topic, agreed })
-    const spoken = !agreed && topic === 'escort' ? 'ПОКАЖИ ДЕНЬГИ.' : undefined
+    const spoken = !agreed && topic === 'escort' ? phrase('showMoney') : undefined
     return { line: null, agreed, spoken }
   }
 
@@ -173,7 +176,7 @@ function orderCommand(world: World, ship: ShipEntity, payload: unknown): Command
   const target = o && typeof o.target === 'number' ? o.target : null
   if (!applyOrder(ship, order, target)) return null
   recordEvent(world, ship, { kind: 'order', order })
-  return { line: ORDER_DONE[order], spoken: 'ЕСТЬ, КОМАНДИР.' }
+  return { line: phrase(ORDER_DONE[order]), spoken: phrase('orderAck') }
 }
 
 /**
@@ -219,7 +222,9 @@ function mapEditCommand(world: World, ship: ShipEntity, payload: unknown): Comma
 
   pushEdit(world.galaxyDelta, edit)
   world.galaxyEpoch++
-  return { line: 'Воля бога переменила карту мироздания.' }
+  // Правка — достояние галактики, не этого клиента: в общий журнал (см. `galaxyEditsOut`).
+  world.galaxyEditsOut.push({ seed: world.galaxySeed, edit })
+  return { line: phrase('mapEdited') }
 }
 
 /** Соц-тон реплики игрока: нахамил/польстил. Следствие для отношений считает домен. */
@@ -260,21 +265,21 @@ function transferCommand(world: World, ship: ShipEntity, payload: unknown): Comm
     commodityName: r.commodityName,
     units: r.units,
   })
-  return { line: transferLine(r) }
+  return { line: transferLine(r, t.commodityId ?? null) }
 }
 
 /** Местная полиция: сначала называет долг, затем принимает только явное подтверждение. */
 function fineCommand(world: World, ship: ShipEntity, payload: unknown): CommandOutcome | null {
   if (ship.faction !== 'police') return null
   const fine = localFine(world)
-  if (!fine) return { line: null, spoken: 'ПРЕТЕНЗИЙ НЕТ. МЕСТНЫЙ ДОЛГ ОТСУТСТВУЕТ.' }
+  if (!fine) return { line: null, spoken: phrase('fineNone') }
   const o = asObject(payload)
   if (o?.confirm !== true) {
-    return { line: null, spoken: `ШТРАФ СОСТАВЛЯЕТ ${fine.amount} КРЕДИТОВ. ОПЛАТИТЕ ЕГО?` }
+    return { line: null, spoken: phrase('fineQuote', { amount: fine.amount }) }
   }
   const paid = payLocalFine(world)
-  if (!paid.ok) return { line: null, spoken: `НЕДОСТАТОЧНО СРЕДСТВ. ТРЕБУЕТСЯ ${paid.amount} КРЕДИТОВ.` }
-  return { line: `Штраф оплачен: ${paid.amount} кр.`, spoken: 'ПЛАТЁЖ ПРИНЯТ. ПРЕТЕНЗИЙ К ВАМ НЕТ.' }
+  if (!paid.ok) return { line: null, spoken: phrase('fineShort', { amount: paid.amount }) }
+  return { line: phrase('finePaidLine', { amount: paid.amount }), spoken: phrase('finePaid') }
 }
 
 /** Произвольный факт «запомни это» — короткой фразой (режем по `NOTE_MAX_CHARS`). */
@@ -308,34 +313,34 @@ function planCommand(world: World, ship: ShipEntity, payload: unknown): CommandO
 
   const taskSteps = steps.filter(isTaskPlanStep)
   const planSteps = steps.filter((s) => !isTaskPlanStep(s))
-  const spoken: string[] = []
-  const system: string[] = []
+  const spoken: Phrase[] = []
+  const system: Phrase[] = []
 
   for (const ts of taskSteps) {
     const taskPayload = taskPayloadFromPlanStep(ts)
-    if (!taskPayload) return { line: 'Не могу выполнить поручение.' }
+    if (!taskPayload) return { line: phrase('taskCannot') }
     const out = taskCommand(world, ship, taskPayload)
-    if (!out) return { line: 'Не могу выполнить поручение.' }
+    if (!out) return { line: phrase('taskCannot') }
     if (out.spoken) spoken.push(out.spoken)
   }
 
   if (planSteps.length > 0) {
     const result = applyContactPlan(world, ship, planSteps)
     if (!result.accepted && taskSteps.length === 0) {
-      return { line: 'Не могу выполнить: нет условий или непонятный модуль.' }
+      return { line: phrase('taskNoTerms') }
     }
     if (result.accepted) {
       recordEvent(world, ship, { kind: 'note', text: 'принял поручение из разговора' })
       if (result.lines.length) system.push(...result.lines)
-      else system.push('Принято.')
+      else system.push(phrase('taskAccepted'))
     }
   } else if (taskSteps.length > 0) {
     recordEvent(world, ship, { kind: 'note', text: 'принял поручение из разговора' })
   }
 
   return {
-    line: system.length ? system.join(' · ') : null,
-    spoken: spoken.length ? spoken.join(' ') : undefined,
+    line: joinPhrases(system),
+    spoken: joinPhrases(spoken) ?? undefined,
   }
 }
 
@@ -364,7 +369,7 @@ function surrenderCommand(world: World, ship: ShipEntity, _payload: unknown): Co
   if (!line || line.blocked !== null) return null
   applyOutcome(world, ship, 'surrender')
   recordEvent(world, ship, { kind: 'note', text: 'сдался' })
-  return { line: 'Противник сдался.' }
+  return { line: phrase('foeSurrendered') }
 }
 
 /** Бот удирает: уходит в отрыв, гасит огонь и, при наличии привода, заряжает прыжок-побег. */
@@ -405,16 +410,16 @@ function jobCommand(world: World, ship: ShipEntity, payload: unknown): CommandOu
   if (answer === 'decline') {
     if (!ship.offer) return { line: null }
     const mood = declineOffer(world, ship)
-    return { line: mood === 'angry' ? 'Отказ от дела. Он недоволен.' : 'Отказ от дела.', agreed: false }
+    return { line: phrase(mood === 'angry' ? 'jobDeclinedAngry' : 'jobDeclined'), agreed: false }
   }
   if (answer !== 'accept') return null
   const block = acceptBlock(world, ship)
-  if (block === 'no-offer') return { line: null, spoken: 'ДЕЛ У МЕНЯ ДЛЯ ТЕБЯ НЕТ.' }
-  if (block === 'hold-full') return { line: 'Трюм не вместит груз.', agreed: false, spoken: 'ТВОЙ ТРЮМ ЭТО НЕ ВОЗЬМЁТ. ОСВОБОДИ МЕСТО.' }
-  if (block === 'busy') return { line: null, agreed: false, spoken: 'СНАЧАЛА ЗАКОНЧИ ПРЕЖНЕЕ.' }
-  if (block === 'remote') return { line: null, agreed: false, spoken: 'НЕ МОГУ УЙТИ С ТОБОЙ — У МЕНЯ ЗДЕСЬ СВОИ.' }
+  if (block === 'no-offer') return { line: null, spoken: phrase('jobNone') }
+  if (block === 'hold-full') return { line: phrase('jobHoldFullLine'), agreed: false, spoken: phrase('jobHoldFull') }
+  if (block === 'busy') return { line: null, agreed: false, spoken: phrase('jobBusy') }
+  if (block === 'remote') return { line: null, agreed: false, spoken: phrase('jobRemote') }
   const c = acceptOffer(world, ship)
-  return { line: c ? 'Дело принято.' : null, agreed: c != null }
+  return { line: c ? phrase('jobAccepted') : null, agreed: c != null }
 }
 
 /**
@@ -422,14 +427,14 @@ function jobCommand(world: World, ship: ShipEntity, payload: unknown): CommandOu
  */
 function giftCommand(world: World, ship: ShipEntity, _payload: unknown): CommandOutcome | null {
   const refusal = giveMielophone(world, ship)
-  if (refusal === null) return { line: 'Получен миелофон.', agreed: true }
+  if (refusal === null) return { line: phrase('giftReceived'), agreed: true }
   if (refusal === 'not-god') return null
   const spoken =
     refusal === 'hostile'
-      ? 'НЕ СЕЙЧАС. ТЫ ЕЩЁ НЕ ЗАСЛУЖИЛ МОЕЙ МИЛОСТИ.'
+      ? phrase('giftUnworthy')
       : refusal === 'given'
-        ? 'ОН УЖЕ У ТЕБЯ. ВТОРОЙ ТЕБЕ НИ К ЧЕМУ.'
-        : 'ТВОЙ ТРЮМ ПОЛОН. ОСВОБОДИ МЕСТО — И Я ВЛОЖУ ЕГО ТУДА.'
+        ? phrase('giftGiven')
+        : phrase('giftHoldFull')
   return { line: null, agreed: false, spoken }
 }
 
@@ -438,7 +443,7 @@ function meetCommand(world: World, ship: ShipEntity, _payload: unknown): Command
   const wasAcquainted = ship.acquaintanceId != null
   rememberPilot(world, ship)
   const newlyMet = !wasAcquainted && ship.acquaintanceId != null
-  return { line: newlyMet ? `Знакомство: ${ship.name}.` : null }
+  return { line: newlyMet ? phrase('meetLine', { name: ship.name }) : null }
 }
 
 /** Наводка/слух от бота — в журнал знакомого. Сам текст произносит реплика модели. */

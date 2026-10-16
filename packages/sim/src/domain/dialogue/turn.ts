@@ -1,13 +1,17 @@
 import type { ShipEntity, World } from '../world/entities'
 import { applyCommand, type Command } from './commandBus'
 import type { Topic } from './dialogue'
+import { joinPhrases, phrase, type Phrase } from './phrase'
 
 /** Что показать в ленте после исполнения команд (кнопка или LLM — один контур). */
 export interface DialogueEffects {
-  /** Реплика собеседника. */
-  them: string
+  /**
+   * Реплика собеседника: слова модели (строка, уже на языке игрока) или фраза домена —
+   * отказ/подтверждение, которые домен произносит сам (слова подберёт `ui`).
+   */
+  them: string | Phrase
   /** Системные подтверждения (сделка, приказ…). */
-  system: string[]
+  system: Phrase[]
   /** Исход просьбы-действия — для эмоции на портрете. */
   askOutcome: { topic: Topic; agreed: boolean } | null
 }
@@ -25,14 +29,14 @@ export function dialogueEffects(
   const outcomes = commands.map((cmd) => ({ cmd, out: applyCommand(world, ship, cmd) }))
   const askEntry = outcomes.find((o) => o.cmd.action === 'ask') ?? null
   const refused = askEntry?.out?.agreed === false
-  const spoken = outcomes.map((o) => o.out?.spoken).filter((line): line is string => !!line)
+  const spoken = outcomes.map((o) => o.out?.spoken).filter((p): p is Phrase => !!p)
   // Дело, на которое модель «согласилась», а домен отказал (трюм мал, дела нет): звучит отказ
   // домена, иначе бот выглядел бы вруном — «по рукам!», а дела нет.
   const jobRefusal = outcomes.find((o) => (o.cmd.action === 'job' || o.cmd.action === 'gift') && o.out?.agreed === false && o.out.spoken)?.out?.spoken
-  const them = refused
-    ? (askEntry!.out!.spoken ?? (replyText || (spoken[0] ?? '…')))
-    : (jobRefusal ?? (replyText || spoken.join(' ') || '…'))
-  const system = outcomes.map((o) => o.out?.line).filter((line): line is string => !!line)
+  const them: string | Phrase = refused
+    ? (askEntry!.out!.spoken ?? (replyText || (spoken[0] ?? phrase('ellipsis'))))
+    : (jobRefusal ?? (replyText || joinPhrases(spoken) || phrase('ellipsis')))
+  const system = outcomes.map((o) => o.out?.line).filter((p): p is Phrase => !!p)
 
   let askOutcome: DialogueEffects['askOutcome'] = null
   if (askEntry?.out && askEntry.cmd.action === 'ask') {

@@ -21,10 +21,38 @@ const KEY = 'elite.save'
  */
 export function persistSave(save: PlayerSave): void {
   if (online) {
-    void writeServerSave(save).catch((e) => console.warn('Серверный сейв не удался:', e))
+    void writeServerSave(save)
+      .then(() => setSaveFailed(false))
+      .catch((e) => {
+        console.warn('Серверный сейв не удался:', e)
+        setSaveFailed(true)
+      })
   } else {
     writeSave(save)
   }
+}
+
+/**
+ * Исход последней записи сейва. Прежде сбой уходил лишь в консоль браузера — игрок узнавал
+ * о нём после рефреша, по откатившимся деньгам. Сейв пишется у причала, поэтому и сигнал
+ * показывает экран станции (`useSaveFailed`), а не плашка полёта.
+ */
+let saveFailed = false
+const saveListeners = new Set<() => void>()
+
+function setSaveFailed(value: boolean): void {
+  if (saveFailed === value) return
+  saveFailed = value
+  for (const l of saveListeners) l()
+}
+
+export function subscribeSaveStatus(listener: () => void): () => void {
+  saveListeners.add(listener)
+  return () => saveListeners.delete(listener)
+}
+
+export function lastSaveFailed(): boolean {
+  return saveFailed
 }
 
 /** Прочитать сейв. Пусто/битое/чужой версии — как будто сейва нет, а не падение. */
@@ -43,8 +71,10 @@ export function loadSave(): PlayerSave | null {
 export function writeSave(save: PlayerSave): void {
   try {
     localStorage.setItem(KEY, JSON.stringify(save))
+    setSaveFailed(false)
   } catch {
-    // Недоступно/полно — переживём: сохранение не обязано удаться сию секунду.
+    // Недоступно/полно — игру не роняем, но игрок должен знать: прогресс не записан.
+    setSaveFailed(true)
   }
 }
 

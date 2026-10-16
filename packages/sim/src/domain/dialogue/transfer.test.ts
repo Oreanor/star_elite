@@ -27,6 +27,20 @@ const held = (world: World, id: string): number =>
   world.player.hold.items.reduce((n, i) => (i.kind === 'commodity' && i.commodity.id === id ? n + i.units : n), 0)
 
 describe('сделки', () => {
+  // Пойманный баг: сделка по связи двигала груз, но не массу — разгон и разворот оставались
+  // прежними до случайной пересборки. Груз переехал — масса обоих бортов обязана поменяться.
+  it('груз по связи меняет массу обоих бортов', () => {
+    const { world, ship } = scene()
+    addCommodity(ship.hold, COMMODITIES.FOOD, 10)
+    const playerBefore = world.player.spec.mass
+    const shipBefore = ship.spec.mass
+
+    const r = applyTransfer(world, ship, { direction: 'toYou', commodityId: 'food', units: 10 })
+    expect(r.units).toBeGreaterThan(0)
+    expect(world.player.spec.mass).toBeGreaterThan(playerBefore)
+    expect(ship.spec.mass).toBeLessThan(shipBefore + 1e-9)
+  })
+
   it('игрок отдаёт товар — не больше своего запаса и чужого трюма', () => {
     const { world, ship } = scene()
     // Ёмкость трюма игрока задаём явно: тест про правила сделки, а не про тюнинг

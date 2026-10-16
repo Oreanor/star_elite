@@ -2,6 +2,7 @@ import { Quaternion, Vector3 } from 'three'
 import { TITAN } from '../../config/titans'
 import { randomUnit } from '../../core/math'
 import type { BodyEntity, TitanEntity, World } from './entities'
+import { capitalBody } from './queries'
 
 /**
  * Киты — корабли поколений.
@@ -25,13 +26,7 @@ function hangDistance(world: World): number {
 
 function trafficAnchor(world: World): BodyEntity | null {
   const station = world.bodies.find((b) => b.kind === 'station')
-  if (station) return station
-  let best: BodyEntity | null = null
-  for (const body of world.bodies) {
-    if (body.population <= 0) continue
-    if (!best || body.population > best.population) best = body
-  }
-  return best
+  return station ?? capitalBody(world)
 }
 
 function pushTitan(

@@ -8,6 +8,7 @@ import {
   type FigurineSpecimen,
 } from '../cargo'
 import type { ShipEntity, World } from '../world/entities'
+import { refreshSpec } from '../world/factory'
 
 /**
  * СДЕЛКА словами: передача товара и/или денег по итогу разговора.
@@ -103,8 +104,23 @@ function countCommodity(hold: CargoHold, commodityId: string): number {
   return n
 }
 
-/** Применить сделку. Возвращает, что РЕАЛЬНО перешло, — окно покажет это в ленте. */
+/**
+ * Применить сделку. Возвращает, что РЕАЛЬНО перешло, — окно покажет это в ленте.
+ *
+ * Груз имеет массу, масса — манёвренность: переехал товар — пересобираем спецификацию ОБОИХ
+ * бортов здесь же, где он переезжает. Прежде сделка по связи оставляла старую массу до
+ * случайной следующей пересборки — все прочие пути трюма (добыча, подбор, рынок) её делали.
+ */
 export function applyTransfer(world: World, ship: ShipEntity, t: Transfer): TransferResult {
+  const result = moveTransfer(world, ship, t)
+  if (result.units > 0) {
+    refreshSpec(world.player)
+    refreshSpec(ship)
+  }
+  return result
+}
+
+function moveTransfer(world: World, ship: ShipEntity, t: Transfer): TransferResult {
   const player = world.player
   const result: TransferResult = {
     direction: t.direction,

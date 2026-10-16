@@ -14,7 +14,7 @@ import type { IdSource } from './ids'
 import type { Persona } from './persona'
 import type { Acquaintance } from './acquaintance'
 import type { Settlement } from '../galaxy/types'
-import type { GalaxyDelta } from '../galaxy/delta'
+import type { GalaxyDelta, GalaxyEdit } from '../galaxy/delta'
 
 export type Faction = 'player' | 'hostile' | 'neutral' | 'police'
 
@@ -1096,6 +1096,13 @@ export interface World {
   galaxyDelta: GalaxyDelta
   /** Растёт на КАЖДУЮ правку галактики — ключ кэша эффективной галактики (сид+эпоха). */
   galaxyEpoch: number
+  /**
+   * Правки галактики ЭТОГО клиента, ещё не ушедшие в общий журнал (канал «домен → наружу»,
+   * как `rockHits`). Дельта — состояние ГАЛАКТИКИ, не игрока: её видят все, кто в ней, и она
+   * переживает перезагрузку. Сеть забирает очередь и чистит; без сети её некому забрать.
+   * Правка несёт своё зерно: ушёл в другую галактику до отправки — не уйдёт в чужой журнал.
+   */
+  galaxyEditsOut: { seed: number; edit: GalaxyEdit }[]
   /** Индекс текущей системы в галактике. Он же вход генератора. */
   systemIndex: number
   /**

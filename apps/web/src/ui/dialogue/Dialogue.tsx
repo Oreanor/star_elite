@@ -21,6 +21,7 @@ import { clearOutcomeEmotion, markOutcomeEmotion, type DivineEmotion, type Emoti
 import { UI } from '../theme'
 import { chassisName, occupationName } from '../i18n/dataNames'
 import { t, useLang } from '../i18n'
+import { phraseText, utteranceText } from '../i18n/phraseText'
 import { buildContext, createDigestMemory, rememberDigest, sufflerDigestsFor, type ChatTurn, type ContextDigest, type DigestMemory, type NegotiatorReply } from './facts'
 import { DIALOGUE_REACTION_MS, dialogueBaseline, dialogueReaction } from './dialogueFace'
 import { Money, tm } from '../station/Money'
@@ -66,8 +67,8 @@ function applyTurnToChat(
 ): ReturnType<typeof dialogueEffects> {
   push({ who: 'you', text: youText })
   const fx = dialogueEffects(world, other, commands, replyText)
-  push({ who: 'them', text: fx.them })
-  for (const line of fx.system) push({ who: 'system', text: line })
+  push({ who: 'them', text: utteranceText(fx.them) })
+  for (const line of fx.system) push({ who: 'system', text: phraseText(line) })
   return fx
 }
 
@@ -189,7 +190,7 @@ export function Dialogue({
     if (!line || line.blocked) return
     rememberPilot(world, other)
     const cmd: Command = { action: 'ask', payload: { topic } }
-    const fx = applyTurnToChat(push, world, other, line.say, [cmd])
+    const fx = applyTurnToChat(push, world, other, phraseText(line.say, ' '), [cmd])
     reactFace([cmd], fx)
     const emo = outcomeFace(topic, fx.askOutcome?.agreed ?? false)
     if (emo) markOutcomeEmotion(other.id, emo, world.time)
@@ -231,8 +232,8 @@ export function Dialogue({
   const deliverReply = (reply: NegotiatorReply) => {
     rememberPilot(world, other)
     const fx = dialogueEffects(world, other, reply.commands, reply.text)
-    push({ who: 'them', text: fx.them })
-    for (const line of fx.system) push({ who: 'system', text: line })
+    push({ who: 'them', text: utteranceText(fx.them) })
+    for (const line of fx.system) push({ who: 'system', text: phraseText(line) })
     reactFace(reply.commands, fx)
     // Собеседник сам ВЫЗВАЛ выражение лица (поле emotion): у бога — восемь ликов (divineFace),
     // у смертного — шесть (faceEmo). Строка уже провалидирована парсером по роли (`coerceEmotion`).
@@ -363,7 +364,7 @@ export function Dialogue({
               )}
               {hireLine?.blocked && (
                 <span className="max-w-[11rem] text-right text-[0.65rem] leading-snug tracking-widest" style={{ color: UI.DIM }}>
-                  {hireLine.blocked}
+                  {phraseText(hireLine.blocked, ' ')}
                 </span>
               )}
             </div>

@@ -32,7 +32,7 @@ describe('шина команд боту', () => {
     const out = applyCommand(world, ship, { action: 'transfer', payload: { direction: 'toYou', credits: 5000 } })
 
     expect(world.credits).toBe(before + 5000)
-    expect(out?.line).toContain('5000')
+    expect(out?.line).toEqual({ key: 'dealCredited', params: { credits: 5000 } })
     const rec = world.acquaintances.find((a) => a.id === ship.acquaintanceId)!
     const deal = rec.history.find((e) => e.kind === 'deal')
     expect(deal).toEqual({ kind: 'deal', at: world.calendarTime, toPlayer: true, credits: 5000, commodityName: null, units: 0 })
@@ -48,6 +48,16 @@ describe('шина команд боту', () => {
     expect(world.credits).toBe(before)
     const rec = world.acquaintances.find((a) => a.id === ship.acquaintanceId)!
     expect(rec.history.some((e) => e.kind === 'deal')).toBe(false)
+  })
+
+  // Пойманный баг: правки бога жили только в памяти клиента — пропадали на рефреше и не
+  // доходили до других. Правка галактики обязана уйти в общий журнал вместе со своим зерном.
+  it('правка карты богом встаёт в очередь общего журнала галактики', () => {
+    const { world, ship } = withAcquaintance()
+    ship.divine = true
+    applyCommand(world, ship, { action: 'mapEdit', payload: { op: 'rename', index: 3, name: 'Звезда Слова' } })
+    expect(world.galaxyEditsOut).toEqual([{ seed: world.galaxySeed, edit: { op: 'rename', index: 3, name: 'Звезда Слова' } }])
+    expect(world.galaxyDelta.edits).toHaveLength(1)
   })
 
   it('«запомни факт» кладёт заметку в личный журнал знакомого', () => {
@@ -118,7 +128,7 @@ describe('шина команд боту', () => {
     const out = applyCommand(world, ship, { action: 'ask', payload: { topic: 'escort', llm: true } })
 
     expect(out?.agreed).toBe(false)
-    expect(out?.spoken).toBe('НЕ ХВАТАЕТ КРЕДИТОВ')
+    expect(out?.spoken?.key).toBe('blockedNoCredits')
     expect(ship.ai?.escortOf).not.toBe(world.player.id)
   })
 
@@ -159,7 +169,7 @@ describe('шина команд боту', () => {
       payload: { kind: 'collect-cargo', radius: 2000 },
     })
 
-    expect(out?.spoken).toContain('СОБИРАЮ')
+    expect(out?.spoken?.key).toBe('taskCollect')
     expect(ship.ai.tasks.length).toBe(2)
   })
 
@@ -173,7 +183,7 @@ describe('шина команд боту', () => {
       payload: { steps: [{ step: 'collect' }] },
     })
 
-    expect(out?.spoken).toContain('СОБИРАЮ')
+    expect(out?.spoken?.key).toBe('taskCollect')
     expect(ship.ai.tasks.length).toBe(2)
     const rec = world.acquaintances.find((a) => a.id === ship.acquaintanceId)!
     expect(rec.plan.queue).toHaveLength(0)
@@ -239,7 +249,7 @@ describe('шина команд боту', () => {
 
     const out = applyCommand(world, ship, { action: 'surrender', payload: {} })
 
-    expect(out?.line).toContain('сдал')
+    expect(out?.line?.key).toBe('foeSurrendered')
     expect(ship.faction).toBe('neutral')
   })
 
@@ -255,7 +265,7 @@ describe('шина команд боту', () => {
     const out = applyCommand(world, ship, { action: 'meet', payload: {} })
 
     expect(ship.acquaintanceId).not.toBeNull()
-    expect(out?.line).toContain('Знакомство')
+    expect(out?.line).toEqual({ key: 'meetLine', params: { name: ship.name } })
   })
 
   it('реестр открыт: новую команду добавляют регистрацией, не правкой шины', () => {
@@ -263,12 +273,12 @@ describe('шина команд боту', () => {
     let seen: unknown = null
     registerCommand('test-echo', (_w, _s, payload) => {
       seen = payload
-      return { line: 'эхо' }
+      return { line: { key: 'ellipsis' } }
     })
 
     const out = applyCommand(world, ship, { action: 'test-echo', payload: { n: 42 } })
 
-    expect(out?.line).toBe('эхо')
+    expect(out?.line).toEqual({ key: 'ellipsis' })
     expect(seen).toEqual({ n: 42 })
   })
 })

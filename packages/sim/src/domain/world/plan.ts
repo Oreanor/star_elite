@@ -1,4 +1,5 @@
 import { MODULE_CATALOGUE, findModule } from '../../config/modules'
+import { phrase, type Phrase } from '../dialogue/phrase'
 import { CONTACTS } from '../../config/contacts'
 import { DIALOGUE } from '../../config/dialogue'
 import { createAIState } from '../ai/types'
@@ -279,19 +280,19 @@ function runPlanStep(world: World, record: Acquaintance, ship: ShipEntity, step:
 }
 
 /** Исполнить сколько можно прямо сейчас; вернуть строки для ленты. */
-export function advanceContactPlan(world: World, ship: ShipEntity): string[] {
+export function advanceContactPlan(world: World, ship: ShipEntity): Phrase[] {
   const record = acquaintanceOf(world, ship)
   if (!record) return []
-  const lines: string[] = []
+  const lines: Phrase[] = []
 
   while (record.plan.queue.length > 0) {
     const head = record.plan.queue[0]!
     const done = runPlanStep(world, record, ship, head)
     if (!done) break
     record.plan.queue.shift()
-    if (head.kind === 'buy') lines.push(`Установлен модуль: ${head.moduleId}.`)
-    if (head.kind === 'join') lines.push('Встаю в сопровождение.')
-    if (head.kind === 'undock') lines.push('Отчаливаю от причала.')
+    if (head.kind === 'buy') lines.push(phrase('planInstalled', { module: head.moduleId }))
+    if (head.kind === 'join') lines.push(phrase('planJoin'))
+    if (head.kind === 'undock') lines.push(phrase('planUndock'))
   }
 
   if (record.plan.queue.length === 0) applyPosture(world, record, ship)
@@ -324,7 +325,7 @@ export function applyContactPlan(
   world: World,
   ship: ShipEntity,
   raw: readonly RawPlanStep[],
-): { lines: string[]; accepted: boolean } {
+): { lines: Phrase[]; accepted: boolean } {
   const record = acquaintanceOf(world, ship)
   if (!record || raw.length === 0) return { lines: [], accepted: false }
 

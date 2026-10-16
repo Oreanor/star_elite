@@ -26,6 +26,19 @@ export function findBody(world: World, id: number | null): BodyEntity | null {
 }
 
 /**
+ * Столица системы — самое населённое тело; null — система необитаема. ЕДИНСТВЕННОЕ место
+ * правила: прежде его писали заново рынок, киты, трафик и консоль, и стоило поменять одно —
+ * разъехались бы (как разъехались «станция» и «её планета»).
+ */
+export function capitalBody(world: World): BodyEntity | null {
+  let best: BodyEntity | null = null
+  for (const b of world.bodies) {
+    if (b.population > 0 && (!best || b.population > best.population)) best = b
+  }
+  return best
+}
+
+/**
  * Враги, которых видно. Замаскированного в этом списке нет, поэтому его нельзя
  * ни захватить, ни перебрать клавишей: правило видимости одно на всех.
  */

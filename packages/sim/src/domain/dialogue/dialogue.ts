@@ -1,4 +1,5 @@
 import { DIALOGUE } from '../../config/dialogue'
+import { phrase, type Phrase } from './phrase'
 import { clamp } from '../../core/math'
 import { createAIState } from '../ai/types'
 import { clearOwnTasks } from '../ai/tasks'
@@ -28,14 +29,14 @@ export type Topic = 'surrender' | 'mercy' | 'escort' | 'plunder' | 'greet'
 export interface Line {
   topic: Topic
   /** Что говорит игрок. */
-  say: string
+  say: Phrase
   /** Почему реплика недоступна. null — доступна. */
-  blocked: string | null
+  blocked: Phrase | null
 }
 
 export interface Reply {
   /** Что ответил собеседник. */
-  text: string
+  text: Phrase
   /** Согласился ли. */
   agreed: boolean
 }
@@ -166,11 +167,11 @@ export function linesFor(world: World, other: ShipEntity): Line[] {
       return [
         {
           topic: 'surrender',
-          say: 'ПРЕКРАТИ ОГОНЬ, СБРОСЬ ГРУЗ',
+          say: phrase('sayStopFire'),
           // Невредимый пират не бросает добычу. Сначала сбей ему щит.
-          blocked: healthFraction(other) > 0.99 ? 'ОН НЕВРЕДИМ И НЕ СТАНЕТ СЛУШАТЬ' : null,
+          blocked: healthFraction(other) > 0.99 ? phrase('blockedUnharmed') : null,
         },
-        { topic: 'mercy', say: 'ПОЩАДИ, НЕ СТРЕЛЯЙ', blocked: null },
+        { topic: 'mercy', say: phrase('sayMercy'), blocked: null },
       ]
     }
 
@@ -180,16 +181,16 @@ export function linesFor(world: World, other: ShipEntity): Line[] {
     if (other.ai?.escortOf !== player.id) {
       lines.push({
         topic: 'escort',
-        say: fee != null ? `НАНИМАЙСЯ КО МНЕ · ${fee} КР` : 'НАНИМАЙСЯ КО МНЕ',
+        say: fee != null ? phrase('sayHireFee', { fee }) : phrase('sayHire'),
         blocked:
           fee == null
-            ? 'НЕ ПОЙДЁТ С ТОБОЙ — СНАЧАЛА ПОМИРИСЬ'
+            ? phrase('blockedMakePeace')
             : world.credits < fee
-              ? 'НЕ ХВАТАЕТ КРЕДИТОВ'
+              ? phrase('blockedNoCredits')
               : null,
       })
     }
-    lines.push({ topic: 'plunder', say: 'СБРОСЬ ГРУЗ И ОРУЖИЕ', blocked: null })
+    lines.push({ topic: 'plunder', say: phrase('sayPlunder'), blocked: null })
     return lines
   })()
 
@@ -250,10 +251,10 @@ function askSurrender(world: World, other: ShipEntity): Reply {
   // Чем сильнее избит, тем охотнее бросает добычу; но волевой и храбрый упирается
   // дольше, трус ломается раньше — стойкость двигает шанс честно, характером.
   const chance = (1 - healthFraction(other)) * DIALOGUE.SURRENDER_GAIN - nerve(other.persona) * DIALOGUE.NERVE_SWING
-  if (world.rng() >= chance) return { text: 'СНАЧАЛА ПОПРОБУЙ МЕНЯ ВЗЯТЬ.', agreed: false }
+  if (world.rng() >= chance) return { text: phrase('surrenderRefuse'), agreed: false }
 
   surrender(world, other)
-  return { text: 'НЕ СТРЕЛЯЙ! ГРУЗ ТВОЙ, ТОЛЬКО ОТПУСТИ.', agreed: true }
+  return { text: phrase('surrenderAgree'), agreed: true }
 }
 
 /**
@@ -272,12 +273,12 @@ function begMercy(world: World, other: ShipEntity): Reply {
     vigour(player) * DIALOGUE.MERCY_HEALTH_GAIN +
     (laden ? DIALOGUE.MERCY_CARGO_BONUS : 0)
 
-  if (world.rng() >= chance) return { text: 'ПОЗДНО. ТЫ УЖЕ МЁРТВ.', agreed: false }
+  if (world.rng() >= chance) return { text: phrase('mercyRefuse'), agreed: false }
 
   grantMercy(world, other)
   return laden
-    ? { text: 'ГРУЗ ЗА БОРТ — И ЛЕТИ. МНЕ ХВАТИТ.', agreed: true }
-    : { text: 'С ТЕБЯ И ВЗЯТЬ НЕЧЕГО. УБИРАЙСЯ.', agreed: true }
+    ? { text: phrase('mercyCargo'), agreed: true }
+    : { text: phrase('mercyEmpty'), agreed: true }
 }
 
 /**
@@ -294,15 +295,15 @@ function plunder(world: World, other: ShipEntity): Reply {
     provoke(world, other, DIALOGUE.THREAT_WEIGHT)
     return {
       text: other.faction === 'hostile'
-        ? 'ХВАТИТ С МЕНЯ! ОХРАНА, ГРАБЁЖ!' // провокация перелила через край — теперь враг
-        : 'ПОШЁЛ ПРОЧЬ. Я ВЫЗЫВАЮ ОХРАНУ.',
+        ? phrase('plunderGuardsHostile') // провокация перелила через край — теперь враг
+        : phrase('plunderGuards'),
       agreed: false,
     }
   }
 
   const { cargo, guns } = plunderEffect(world, other)
   return {
-    text: cargo + guns > 0 ? 'ЗАБИРАЙ ВСЁ. ТОЛЬКО НЕ СТРЕЛЯЙ.' : 'У МЕНЯ НИЧЕГО НЕТ. ПУСТОЙ ИДУ.',
+    text: cargo + guns > 0 ? phrase('plunderAll') : phrase('plunderNothing'),
     agreed: true,
   }
 }
@@ -313,8 +314,8 @@ function plunder(world: World, other: ShipEntity): Reply {
  * а не бьёт слабее. Слабость пилота, а не поблажка физики.
  */
 function hireEscort(world: World, other: ShipEntity): Reply {
-  if (!hireEscortEffect(world, other)) return { text: 'ПОКАЖИ ДЕНЬГИ.', agreed: false }
-  return { text: 'ДЕНЬГИ ВПЕРЁД — И Я ТВОЙ. ВЕДИ.', agreed: true }
+  if (!hireEscortEffect(world, other)) return { text: phrase('showMoney'), agreed: false }
+  return { text: phrase('hireAgree'), agreed: true }
 }
 
 /**
@@ -324,12 +325,12 @@ function hireEscort(world: World, other: ShipEntity): Reply {
  * реплику желаешь ему доброго пути. Теперь реакция следует за отношением, не сама по себе.
  */
 function greet(world: World, other: ShipEntity): Reply {
-  if (other.ai && other.ai.escortOf === world.player.id) return { text: 'ИДУ ЗА ТОБОЙ, КОМАНДИР.', agreed: true }
+  if (other.ai && other.ai.escortOf === world.player.id) return { text: phrase('greetEscort'), agreed: true }
   switch (moodTo(world, other)) {
-    case 'hostile': return { text: 'НАМ НЕ О ЧЕМ ГОВОРИТЬ. УБИРАЙСЯ.', agreed: false }
-    case 'wary': return { text: 'ЧЕГО НАДО? И ДЕРЖИ ПУШКИ ПОДАЛЬШЕ.', agreed: false }
-    case 'warm': return { text: 'РАД ТЕБЯ ВИДЕТЬ, КОМАНДИР!', agreed: true }
-    case 'neutral': return { text: 'ЧИСТОГО НЕБА, ПИЛОТ.', agreed: true }
+    case 'hostile': return { text: phrase('greetHostile'), agreed: false }
+    case 'wary': return { text: phrase('greetWary'), agreed: false }
+    case 'warm': return { text: phrase('greetWarm'), agreed: true }
+    case 'neutral': return { text: phrase('greetNeutral'), agreed: true }
   }
 }
 
@@ -341,7 +342,7 @@ function greet(world: World, other: ShipEntity): Reply {
  */
 export function say(world: World, other: ShipEntity, topic: Topic): Reply {
   const line = linesFor(world, other).find((l) => l.topic === topic)
-  if (!line || line.blocked !== null) return { text: line?.blocked ?? '…', agreed: false }
+  if (!line || line.blocked !== null) return { text: line?.blocked ?? phrase('ellipsis'), agreed: false }
 
   switch (topic) {
     case 'surrender': return askSurrender(world, other)

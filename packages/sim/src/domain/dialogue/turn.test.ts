@@ -15,8 +15,8 @@ describe('dialogueEffects', () => {
 
     const fx = dialogueEffects(world, ship, [{ action: 'order', payload: { order: 'hold' } }], '')
 
-    expect(fx.them).toBe('ЕСТЬ, КОМАНДИР.')
-    expect(fx.system[0]).toContain('ждать')
+    expect(fx.them).toEqual({ key: 'orderAck' })
+    expect(fx.system[0]).toEqual({ key: 'orderHold' })
   })
 
   it('поручение collect через task — spoken без модели', () => {
@@ -36,7 +36,7 @@ describe('dialogueEffects', () => {
       '',
     )
 
-    expect(fx.them).toContain('СОБИРАЮ')
+    expect(fx.them).toEqual({ key: 'taskCollect' })
     expect(ship.ai!.tasks.length).toBeGreaterThan(0)
   })
 })

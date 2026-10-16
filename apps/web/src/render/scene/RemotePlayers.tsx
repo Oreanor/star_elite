@@ -14,6 +14,7 @@ import { sharedPods } from '../../session/sharedPods'
 import { sharedRocks } from '../../session/sharedRocks'
 import { sharedStructs } from '../../session/sharedStructs'
 import { sharedTitans } from '../../session/sharedTitans'
+import { sharedGalaxy } from '../../session/sharedGalaxy'
 import { GIANT_RENDER_CAP } from '../config'
 import { chassisGeometry } from '../geometry/ships'
 import { hullMaterialFor } from '../materials/materials'
@@ -115,6 +116,8 @@ export function RemotePlayers() {
       sharedRocks.tick(world)
       sharedStructs.tick(world, dt)
       sharedTitans.tick(world)
+      // Журнал правок ГАЛАКТИКИ: подписка живёт поверх прыжков (см. sharedGalaxy), detach не нужен.
+      sharedGalaxy.tick(world)
     }
 
     // 0) Переслать попадания по чужим бортам их владельцам. Домен зарегистрировал урон, но

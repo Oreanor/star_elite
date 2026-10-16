@@ -826,6 +826,7 @@ export function createWorld(def: SystemDef = STARTER_SYSTEM, profile?: PilotProf
     galaxySeed: GALAXY.SEED,
     galaxyDelta: emptyDelta(),
     galaxyEpoch: 0,
+    galaxyEditsOut: [],
     systemIndex: WORLD.HOME_INDEX,
     epoch: 0,
     policeFineHailEpoch: -1,

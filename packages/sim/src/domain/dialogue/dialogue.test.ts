@@ -360,7 +360,7 @@ describe('разговор', () => {
       const fee = escortFee(greedy.world, greedy.other)!
       expect(fee).toBeGreaterThan(DIALOGUE.ESCORT_FEE)
       // Ценник в реплике — торгованный, не базовый.
-      expect(linesFor(greedy.world, greedy.other).find((l) => l.topic === 'escort')!.say).toContain(String(fee))
+      expect(linesFor(greedy.world, greedy.other).find((l) => l.topic === 'escort')!.say).toEqual({ key: 'sayHireFee', params: { fee } })
 
       // Насторожённый (ты ему грозил) не наймётся даже при полном кошельке.
       const wary = withShip('neutral')
