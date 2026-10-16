@@ -55,6 +55,11 @@ export interface Confirm {
   /** Характеристика детали над ценой: что покупаешь, а не только почём. */
   detail?: React.ReactNode
   /**
+   * Что крупнее: цена (покупка — решает «почём») или характеристика (улучшение — решает
+   * прирост, цена при нём мелким шрифтом). По умолчанию — цена.
+   */
+  emphasis?: 'price' | 'detail'
+  /**
    * Карточка предмета вместо сообщения: заголовок и строки «ПОДПИСЬ: значение» (`ItemSheet`),
    * как в окне продажи из отсека. Есть — `message`/`detail`/`price` не рисуются.
    */
@@ -197,7 +202,17 @@ export function SlotModal({
       }
       setConfirm({
         message: t('ship.confirm.upgrade', { name: displayName(module) }),
-        detail: `${statLabel(stat.key)}: ${arrow(main)}${main ? ` · ${t('station.byCopy')}` : ''}`,
+        detail: (
+          <>
+            <div className="text-xs font-normal tracking-[0.2em]" style={{ color: DIM }}>
+              {statLabel(stat.key)}
+              {main ? ` · ${t('station.byCopy')}` : ''}
+            </div>
+            <div>{arrow(main)}</div>
+          </>
+        ),
+        // Решает прирост — он крупно; цена при нём мелко.
+        emphasis: 'detail',
         ...(main === false ? { price: upgradeCashCost(module) } : {}),
         actions,
       })
@@ -480,11 +495,25 @@ export function ConfirmBox({
       ) : (
         <p className={confirm.price !== undefined ? 'text-center text-base' : 'text-sm'}>{confirm.message}</p>
       )}
-      {!confirm.sheet && confirm.detail && <div className="mt-2 text-center text-sm">{confirm.detail}</div>}
+      {!confirm.sheet && confirm.detail && (
+        confirm.emphasis === 'detail' ? (
+          <div className="mt-3 text-center text-2xl font-semibold leading-8 tabular-nums" style={{ color: ACCENT }}>
+            {confirm.detail}
+          </div>
+        ) : (
+          <div className="mt-2 text-center text-sm">{confirm.detail}</div>
+        )
+      )}
       {!confirm.sheet && confirm.price !== undefined && (
-        <div className="mt-3 text-center text-2xl font-semibold leading-8 tabular-nums" style={{ color: ACCENT }}>
-          <Money amount={confirm.price} />
-        </div>
+        confirm.emphasis === 'detail' ? (
+          <div className="mt-2 text-center text-sm tabular-nums" style={{ color: DIM }}>
+            <Money amount={confirm.price} />
+          </div>
+        ) : (
+          <div className="mt-3 text-center text-2xl font-semibold leading-8 tabular-nums" style={{ color: ACCENT }}>
+            <Money amount={confirm.price} />
+          </div>
+        )
       )}
       <div className="mt-6 flex flex-wrap justify-center gap-2">
         {confirm.actions.map((a, i) => (
