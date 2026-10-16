@@ -204,6 +204,7 @@ export const RU = {
   'unit.t': 'т',
   'unit.rads': 'рад/с²',
   'unit.kn': 'кН',
+  'unit.knm': 'кН·м',
   'unit.units': 'ед.',
 
   // ─── Характеристики (ключи moduleStat / fitDeltas) ──────────────────────────
@@ -214,6 +215,7 @@ export const RU = {
   'stat.cargo': 'ОТСЕК',
   'stat.jump': 'ПРЫЖОК',
   'stat.thrust': 'ТЯГА',
+  'stat.torque': 'МОМЕНТ',
   'stat.damage': 'УРОН',
   'stat.ammo': 'БОЕЗАПАС',
   'stat.drain': 'РАСХОД',

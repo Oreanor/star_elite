@@ -28,6 +28,7 @@ const STAT_UNIT: Partial<Record<StatId, Key>> = {
   mass: 'unit.t',
   jump: 'unit.ly',
   thrust: 'unit.kn',
+  torque: 'unit.knm',
   ammo: 'unit.units',
   drain: 'unit.units',
   energy: 'unit.units',

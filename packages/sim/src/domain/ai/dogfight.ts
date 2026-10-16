@@ -108,7 +108,8 @@ export function fight(e: ShipEntity, ai: AIState, target: ShipEntity, world: Wor
 
   const escaping = ai.mode === 'break' || ai.mode === 'evade'
   // Рулим В ОБХОД тел на пути (станция между тобой и целью), стреляем — по `_aim`.
-  drive(e, world, _aim, driveOpts({ throttle, boost: escaping ? AI.ESCAPE_BOOST : 1, separate: false }))
+  // В атаке нос ведём за целью с учётом её хода поперёк (`aimVel`), в манёврах — по точке.
+  drive(e, world, _aim, driveOpts({ throttle, boost: escaping ? AI.ESCAPE_BOOST : 1, separate: false, aimVel: ai.mode === 'attack' ? target.state.vel : null }))
 
   // Уклонение змейкой: прямолинейный бот — мишень.
   if (escaping) {

@@ -206,6 +206,7 @@ export const PT: Record<keyof typeof RU, string> = {
   'unit.t': 't',
   'unit.rads': 'rad/s²',
   'unit.kn': 'kN',
+  'unit.knm': 'kN·m',
   'unit.units': 'un.',
 
   // ─── Atributos (chaves moduleStat / fitDeltas) ───────────────────────────────
@@ -216,6 +217,7 @@ export const PT: Record<keyof typeof RU, string> = {
   'stat.cargo': 'CARGA',
   'stat.jump': 'SALTO',
   'stat.thrust': 'EMPUXO',
+  'stat.torque': 'TORQUE',
   'stat.damage': 'DANO',
   'stat.ammo': 'MUNIÇÃO',
   'stat.drain': 'CONSUMO',

@@ -198,6 +198,7 @@ export const EN: Record<keyof typeof RU, string> = {
   'unit.t': 't',
   'unit.rads': 'rad/s²',
   'unit.kn': 'kN',
+  'unit.knm': 'kN·m',
   'unit.units': 'u.',
 
   'stat.shield': 'SHIELD',
@@ -207,6 +208,7 @@ export const EN: Record<keyof typeof RU, string> = {
   'stat.cargo': 'CARGO',
   'stat.jump': 'JUMP',
   'stat.thrust': 'THRUST',
+  'stat.torque': 'TORQUE',
   'stat.damage': 'DAMAGE',
   'stat.ammo': 'AMMO',
   'stat.drain': 'DRAIN',

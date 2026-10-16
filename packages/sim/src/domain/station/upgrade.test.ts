@@ -111,3 +111,23 @@ describe('прокачка модуля', () => {
     expect(upgraded.damage).toBe(damageBefore) // урон не тронут
   })
 })
+
+describe('маневровые', () => {
+  it('улучшение растит момент, но не предел скорости разворота и крена', () => {
+    // Пойманное: три шага давали +75% к пределу, крен доходил до 4.6 рад/с — корабль
+    // закручивало, нос не держался прямо, целиться не мог ни пилот, ни бот.
+    const world = createWorld()
+    world.credits = 10_000_000
+    const p = world.player
+    const rcs = () => p.loadout.internals.find((m) => m.kind === 'thrusters')!
+    const before = rcs()
+    if (before.kind !== 'thrusters') return
+    const rateBefore = [...before.maxRate]
+    const torqueBefore = before.torque[0]
+    for (let i = 0; i < 3; i++) upgradeModule(world, p, rcs(), false)
+    const after = rcs()
+    if (after.kind !== 'thrusters') return
+    expect(after.torque[0]).toBeGreaterThan(torqueBefore)
+    expect([...after.maxRate]).toEqual(rateBefore)
+  })
+})

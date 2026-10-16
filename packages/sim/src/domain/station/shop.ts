@@ -345,6 +345,13 @@ function withFitted(loadout: Loadout, module: ShipModule): Loadout {
  * Возвращает КЛЮЧИ характеристик; слова к ним подберёт интерфейс.
  */
 export function fitDeltas(ship: ShipEntity, module: ShipModule, hardpointIndex?: number): StatDelta[] {
+  // Маневровые — по моменту, как оружие по урону: их главная ось — модуля, а не корабля.
+  if (module.kind === 'thrusters') {
+    const prev = ship.loadout.internals.find((m) => m.kind === 'thrusters')
+    const from = prev && prev.kind === 'thrusters' ? prev.torque[0] : 0
+    const to = module.torque[0]
+    return from === to ? [] : [{ key: 'torque', from, to, higherBetter: true }]
+  }
   if (isWeapon(module)) {
     // Сравниваем с тем, что стоит В ОТКРЫТОЙ точке подвески. Прежде брали точку, которую
     // выбрала бы автоустановка, — и для удерживающего луча (урон 0) всё в трюме читалось

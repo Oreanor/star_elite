@@ -21,12 +21,13 @@ import { localSettlement } from './trade'
  */
 export type StatKey =
   | 'shield' | 'hull' | 'speed' | 'turn' | 'cargo' | 'jump'
-  | 'thrust' | 'damage' | 'ammo' | 'drain' | 'scale' | 'mass'
+  | 'thrust' | 'torque' | 'damage' | 'ammo' | 'drain' | 'scale' | 'mass'
 
 export function moduleStat(m: ShipModule): { key: StatKey; value: number } {
   switch (m.kind) {
     case 'engine': return { key: 'thrust', value: m.thrust }
-    case 'thrusters': return { key: 'turn', value: m.maxRate[2] }
+    // Маневровые — МОМЕНТ тангажа: его растит улучшение; пределы скорости разворота заводские.
+    case 'thrusters': return { key: 'torque', value: m.torque[0] }
     case 'shield': return { key: 'shield', value: m.capacity }
     case 'armour': return { key: 'hull', value: m.hull }
     case 'laser': return { key: 'damage', value: m.damage }
@@ -113,8 +114,13 @@ export function upgradeLevel(module: ShipModule): number {
 export function scaleToBase(m: ShipModule, base: ShipModule, k: number): void {
   if (isEngine(m) && isEngine(base)) { m.thrust = Math.round(base.thrust * k); m.maxSpeed = base.maxSpeed * k; return }
   if (isThrusters(m) && isThrusters(base)) {
-    m.torque = [base.torque[0] * k, base.torque[1] * k, base.torque[2] * k]
-    m.maxRate = [base.maxRate[0] * k, base.maxRate[1] * k, base.maxRate[2] * k]
+    // Улучшение растит МОМЕНТ (разгон носа), а не ПРЕДЕЛ скорости разворота и крена: прежде
+    // три шага давали +75% к пределу, крен доходил до 4.6 рад/с — нос не держался прямо,
+    // корабль закручивало, целиться не мог ни пилот, ни бот. Предел — не выше заводского;
+    // поломка (k < 1) его по-прежнему роняет.
+    m.torque = [Math.round(base.torque[0] * k), Math.round(base.torque[1] * k), Math.round(base.torque[2] * k)]
+    const cap = Math.min(1, k)
+    m.maxRate = [base.maxRate[0] * cap, base.maxRate[1] * cap, base.maxRate[2] * cap]
     return
   }
   if (isShield(m) && isShield(base)) { m.capacity = Math.round(base.capacity * k); m.regen = base.regen * k; return }
