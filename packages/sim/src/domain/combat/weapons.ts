@@ -4,7 +4,8 @@ import { aimDirection, shipAxes } from '../flight/axes'
 import { phasedOut } from '../scale/scale'
 import { isLaser, isMissile, type LaserModule } from '../loadout'
 import type { BoltEntity, MissileEntity, ShipEntity, World } from '../world/entities'
-import { resolveLaserHit, strikeYield, type LaserStrike } from './bolts'
+import { applyRay, resolveLaserHit, strikeYield, type LaserStrike } from './bolts'
+import { isRayEffect } from './laserEffects'
 import { castLaser } from './raycast'
 
 const _fwd = new Vector3()
@@ -18,6 +19,7 @@ const _beamHit = new Vector3()
 /** Стрелок глазами непрерывного луча: по своему id луч в себя не бьёт (как и болт). */
 const _beamShooter = { id: 0, cloaked: false }
 const _beamStrike: LaserStrike = { effect: 'blast', rate: 0, seconds: 0, oreYield: 1 }
+const _rayStrike: LaserStrike = { effect: 'hold', rate: 0, seconds: 0, oreYield: 1 }
 
 /** Мировая позиция связанного смещения [x,y,z] (нос в -Z, +z назад). Оси уже посчитаны. */
 function offsetToWorld(e: ShipEntity, offset: readonly [number, number, number], out: Vector3): Vector3 {
@@ -98,7 +100,7 @@ export function fireLasers(world: World, e: ShipEntity, hostile: boolean, dt: nu
       if (tick) gun.cooldown = GUNNERY.BEAM_TICK
       const bore = mount.hardpoint.bore ?? 1
       for (const nozzle of mount.hardpoint.nozzles ?? [mount.hardpoint.offset]) {
-        pourBeam(world, e, laser, nozzle, hostile, tick ? amp * GUNNERY.BEAM_TICK * bore : 0, bore, _convergence)
+        pourBeam(world, e, laser, nozzle, hostile, tick ? amp * GUNNERY.BEAM_TICK * bore : 0, bore, _convergence, amp > 0 ? dt : 0)
       }
       return
     }
@@ -154,6 +156,7 @@ function pourBeam(
   share: number,
   bore: number,
   convergence: Vector3,
+  stepSeconds: number,
 ): void {
   offsetToWorld(e, nozzle, _muzzle)
   _dir.copy(convergence).sub(_muzzle).normalize()
@@ -163,13 +166,21 @@ function pourBeam(
   const hit = castLaser(world, _muzzle, _dir, _beamShooter, laser.range)
   const struck = hit.distance < laser.range
 
+  // Переделка — КАЖДЫЙ шаг, своей длительностью: размер течёт плавно, а не ступенями тиков.
+  if (struck && isRayEffect(laser.effect)) {
+    _rayStrike.effect = laser.effect!
+    _rayStrike.rate = laser.effectRate ?? 0
+    _rayStrike.seconds = stepSeconds
+    applyRay(hit, _rayStrike)
+  }
+
   // `share` = 0 в шагах между тиками: струя рисуется, но урон и события не идут.
   if (struck && share > 0) {
     _beamHit.copy(_muzzle).addScaledVector(_dir, hit.distance)
-    // Тик луча длится `BEAM_TICK`: столько времени цель и пробыла под переделкой.
+    // Переделка уже легла пошагово выше; тик несёт лишь урон, искры и события боя.
     _beamStrike.effect = laser.effect ?? 'blast'
     _beamStrike.rate = laser.effectRate ?? 0
-    _beamStrike.seconds = GUNNERY.BEAM_TICK
+    _beamStrike.seconds = 0
     _beamStrike.oreYield = strikeYield(laser.effect, laser.oreYield)
     resolveLaserHit(world, _beamHit, hit, laser.damage * share, hostile, e.id, _beamStrike)
   }

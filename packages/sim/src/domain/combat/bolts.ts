@@ -60,6 +60,21 @@ export interface LaserStrike {
 }
 
 /**
+ * Переделка лучом (`shrink`/`grow`/`hold`) — то, что луч делает с целью за `ray.seconds`.
+ * Отдельно от `resolveLaserHit`: искры и события боя идут тиками луча, а переделка — КАЖДЫЙ
+ * шаг, иначе размер менялся бы ступенями по 19% четыре раза в секунду.
+ */
+export function applyRay(hit: ReturnType<typeof castLaser>, ray: LaserStrike): void {
+  if (ray.seconds <= 0) return
+  if (hit.ship) rayOnShip(hit.ship, ray.effect, ray.rate, ray.seconds)
+  else if (hit.asteroid) rayOnAsteroid(hit.asteroid, ray.effect, ray.rate, ray.seconds)
+  else if (hit.warBaseFixture) rayOnWarBase(hit.warBaseFixture.base, ray.effect, ray.rate, ray.seconds)
+  else if (hit.warBase) rayOnWarBase(hit.warBase, ray.effect, ray.rate, ray.seconds)
+  else if (hit.titan) rayOnTitan(hit.titan, ray.effect, ray.rate, ray.seconds)
+  else if (hit.statue) rayOnStatue(hit.statue, ray.effect, ray.rate, ray.seconds)
+}
+
+/**
  * Что случилось там, куда пришёл лазер. Общая для БОЛТА и НЕПРЕРЫВНОГО ЛУЧА: правила
  * попадания не должны расходиться оттого, что один снаряд летит, а другой достаёт сразу.
  * Урон приходит параметром — у луча это доля за шаг (урон в секунду × dt). Эффект луча
@@ -75,7 +90,7 @@ export function resolveLaserHit(
   strike: LaserStrike | null = null,
 ): void {
   const ray = strike && isRayEffect(strike.effect) ? strike : null
-  if (hit.ship && ray) rayOnShip(hit.ship, ray.effect, ray.rate, ray.seconds)
+  if (ray) applyRay(hit, ray)
   if (hit.ship) {
     /**
      * БОГ НЕУЯЗВИМ, и это должно быть ВИДНО. Болт гаснет о бесконечное поле голубой
@@ -114,15 +129,15 @@ export function resolveLaserHit(
     spawnExplosion(world, hitPos, hit.asteroid.vel, 0.4)
     // Камень не исчезает — он раскалывается (горный) или рассыпается пылью (военный).
     // Правило дробления живёт в одном месте — `mining.ts`.
-    if (ray) rayOnAsteroid(hit.asteroid, ray.effect, ray.rate, ray.seconds)
-    else if (strike?.effect === 'cut') damageAsteroid(world, hit.asteroid, damage, strike.oreYield)
+    if (ray) {
+      // Переделка уже легла выше (`applyRay`); камень не колется и не пылит.
+    } else if (strike?.effect === 'cut') damageAsteroid(world, hit.asteroid, damage, strike.oreYield)
     // По умолчанию — военный: камень в пыль, руды — по КПД удара.
     else blastAsteroid(world, hit.asteroid, strike?.oreYield ?? ASTEROID.BLAST_ORE_YIELD)
   } else if (hit.warBaseFixture && ray) {
     // Луч-переделка меняет базу целиком, а в счёт попаданий НЕ идёт: деталь держит ПОПАДАНИЯ,
     // и тики луча (несколько в секунду) сносили бы турель нулевым уроном за полсекунды.
     spawnExplosion(world, hitPos, _still, 0.3)
-    rayOnWarBase(hit.warBaseFixture.base, ray.effect, ray.rate, ray.seconds)
   } else if (hit.warBaseFixture) {
     // Отстрел детали: искра в точке удара; гибель детали — своя вспышка в `damageWarBaseFixture`.
     spawnExplosion(world, hitPos, _still, 0.5)
@@ -137,15 +152,12 @@ export function resolveLaserHit(
     // Удар в ОБШИВКУ урона не наносит: живучесть базы — её детали (`damageWarBaseFixture`),
     // и снос — это счёт сбитых турелей, а не измор невидимой копилки. Только искра.
     spawnExplosion(world, hitPos, _still, 0.8)
-    if (ray) rayOnWarBase(hit.warBase, ray.effect, ray.rate, ray.seconds)
   } else if (hit.titan) {
     // Кит неуязвим — город, не мишень: болт гаснет искрой. Луч-переделка меняет его.
     spawnExplosion(world, hitPos, hit.titan.vel, 0.6)
-    if (ray) rayOnTitan(hit.titan, ray.effect, ray.rate, ray.seconds)
   } else if (hit.statue) {
     // Статуя — твердь: болт гаснет искрой, урона нет. Луч-переделка меняет её размер.
     spawnExplosion(world, hitPos, _still, 0.6)
-    if (ray) rayOnStatue(hit.statue, ray.effect, ray.rate, ray.seconds)
   } else if (hit.missile) {
     // Ракета не «повреждается»: у неё нет прочности, только боевая часть.
     hit.missile.alive = false

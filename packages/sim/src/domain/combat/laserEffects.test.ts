@@ -67,6 +67,27 @@ function hold(world: World, seconds: number): void {
 }
 
 describe('лучи-переделки', () => {
+  it('размер течёт плавно: каждый шаг в луче — свой маленький шаг масштаба, без ступеней', () => {
+    // Пойманный баг: переделка шла тиками боя (`BEAM_TICK`, 0.25 с) — размер прыгал на 19%
+    // четыре раза в секунду, а между тиками стоял. Теперь каждый такт в луче меняет масштаб.
+    const world = scene()
+    const enemy = world.ships[0]!
+    enemy.state.pos.set(0, 0, -500)
+    enemy.state.vel.set(0, 0, 0)
+    arm(world, GROW_RAY)
+    const dt = PHYSICS.FIXED_DT
+    let prev = enemy.state.scale
+    let maxStep = 0
+    for (let i = 0; i < 60; i++) {
+      hold(world, dt)
+      const k = enemy.state.scale / prev
+      expect(k, `шаг ${i}`).toBeGreaterThan(1)
+      maxStep = Math.max(maxStep, k)
+      prev = enemy.state.scale
+    }
+    expect(maxStep).toBeLessThan(1.05)
+  })
+
   it('уменьшающий луч сжимает корабль в прицеле, но не мельче предела видимости', () => {
     const world = scene()
     const enemy = world.ships[0]!
