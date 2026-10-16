@@ -61,9 +61,9 @@ export interface HeadlineCompare {
   better: boolean
 }
 
-export function headlineCompare(world: World, module: ShipModule): HeadlineCompare | null {
+export function headlineCompare(world: World, module: ShipModule, hardpointIndex?: number): HeadlineCompare | null {
   const { key } = moduleStat(module)
-  const deltas = fitDeltas(world.player, module)
+  const deltas = fitDeltas(world.player, module, hardpointIndex)
   const match = deltas.find((d) => d.key === key)
   const delta = match ?? deltas[0]
   if (!delta) return null

@@ -8,6 +8,8 @@ import {
   SHIELD_HEAVY,
   SHIELD_STANDARD,
   SHRINK_RAY,
+  HOLD_RAY,
+  PULSE_LASER,
 } from '../../config/modules'
 import { addCommodity, addItem } from '../cargo/hold'
 import { COMMODITIES } from '../cargo/items'
@@ -130,5 +132,21 @@ describe('грузоподъёмность', () => {
     const { cargoBudget: b, cargoCapacity } = world.player.spec
     expect(cargoCapacity).toBe(Math.max(0, Math.floor(b.chassis + b.racks - b.equipment)))
     expect(b.equipment).toBeGreaterThan(0)
+  })
+})
+
+describe('сравнение оружия в слоте', () => {
+  it('«лучше/хуже» — против того, что стоит в ОТКРЫТОЙ точке, а не в соседней', () => {
+    // Пойманное: открыл слот удерживающего луча (урон 0) — весь трюм со стрелкой «хуже»:
+    // сравнение шло с точкой автоустановки, где стоял лазер на 30.
+    const world = createWorld({ ...STARTER_SYSTEM, patrols: [], belt: null })
+    const p = world.player
+    const guns = p.loadout.chassis.hardpoints.map((h, i) => ({ h, i })).filter(({ h }) => h.kind === 'gun')
+    if (guns.length < 2) return
+    const slot = guns[guns.length - 1]!.i
+    p.loadout.weapons[slot] = HOLD_RAY
+    const d = fitDeltas(p, PULSE_LASER, slot).find((x) => x.key === 'damage')!
+    expect(d.from).toBe(0)
+    expect(d.to).toBeGreaterThan(d.from)
   })
 })

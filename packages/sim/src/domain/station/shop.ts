@@ -319,9 +319,12 @@ function withFitted(loadout: Loadout, module: ShipModule): Loadout {
  * Для внутренних — разница spec (щит, разворот, трюм…), для оружия — урон.
  * Возвращает КЛЮЧИ характеристик; слова к ним подберёт интерфейс.
  */
-export function fitDeltas(ship: ShipEntity, module: ShipModule): StatDelta[] {
+export function fitDeltas(ship: ShipEntity, module: ShipModule, hardpointIndex?: number): StatDelta[] {
   if (isWeapon(module)) {
-    const slot = autoHardpoint(ship, module)
+    // Сравниваем с тем, что стоит В ОТКРЫТОЙ точке подвески. Прежде брали точку, которую
+    // выбрала бы автоустановка, — и для удерживающего луча (урон 0) всё в трюме читалось
+    // «хуже»: сравнение шло с соседним «Клинком» на 30.
+    const slot = hardpointIndex ?? autoHardpoint(ship, module)
     const prev = slot !== undefined ? ship.loadout.weapons[slot] : null
     const from = prev && 'damage' in prev ? prev.damage : 0
     const to = 'damage' in module ? module.damage : 0

@@ -298,12 +298,12 @@ export function SlotModal({
             <div className="mt-6 grid grid-cols-1 gap-6 sm:grid-cols-2">
               <VariantColumn title={t('ship.col.shop')} empty={t('ship.noneShop')}>
                 {shopOptions.map((m) => (
-                  <VariantRow key={m.id} world={world} module={m} price={priceOf(m)} onClick={() => askBuy(m)} />
+                  <VariantRow hardpointIndex={slot.hardpointIndex} key={m.id} world={world} module={m} price={priceOf(m)} onClick={() => askBuy(m)} />
                 ))}
               </VariantColumn>
               <VariantColumn title={t('ship.col.hold')} empty={t('ship.noneHold')}>
                 {holdOptions.map(({ it, i }) => (
-                  <VariantRow key={`${it.module.id}-${i}`} world={world} module={it.module} onClick={() => askFit(i, it.module)} />
+                  <VariantRow hardpointIndex={slot.hardpointIndex} key={`${it.module.id}-${i}`} world={world} module={it.module} onClick={() => askFit(i, it.module)} />
                 ))}
               </VariantColumn>
             </div>
@@ -326,7 +326,7 @@ export function SlotModal({
             <div className="mt-6">
               <VariantColumn title={t('ship.col.hold')} empty={t('ship.noneHold')}>
                 {holdOptions.map(({ it, i }) => (
-                  <VariantRow key={`${it.module.id}-${i}`} world={world} module={it.module} onClick={() => askFit(i, it.module)} />
+                  <VariantRow hardpointIndex={slot.hardpointIndex} key={`${it.module.id}-${i}`} world={world} module={it.module} onClick={() => askFit(i, it.module)} />
                 ))}
               </VariantColumn>
             </div>
@@ -448,14 +448,17 @@ function VariantRow({
   world,
   module,
   price,
+  hardpointIndex,
   onClick,
 }: {
   world: World
   module: ShipModule
   price?: number
+  /** Точка подвески открытого слота: сравнение — с тем, что стоит именно в ней. */
+  hardpointIndex?: number
   onClick: () => void
 }) {
-  const cmp = headlineCompare(world, module)
+  const cmp = headlineCompare(world, module, hardpointIndex)
   return (
     <button
       type="button"
