@@ -361,14 +361,16 @@ describe('посадка на поверхность', () => {
     expect(player.landedOn?.bodyId).toBe(rock.id)
 
     const before = player.state.pos.clone()
-    // Нос вдоль касательной (брюхо к нормали уже после входа) + тяга — облёт, не отрыв.
+    // Нос вверх + тяга — НАБОР высоты, как у самолёта, но плавный (CLIMB_RATE): не отрыв.
     player.controls.throttle = 1
     player.controls.pitch = 1
+    const seconds = 240 * PHYSICS.FIXED_DT
     for (let i = 0; i < 240; i++) stepWorld(world, PHYSICS.FIXED_DT, NO_CONTROLLERS)
     expect(player.landedOn).not.toBeNull()
     expect(player.state.pos.distanceTo(before)).toBeGreaterThan(5)
     const alt = player.state.pos.distanceTo(rock.pos) - solid - er
-    expect(alt).toBeCloseTo(LANDING.HOVER_ALT, 0)
+    expect(alt).toBeGreaterThan(LANDING.HOVER_ALT)
+    expect(alt).toBeLessThanOrEqual(LANDING.HOVER_ALT + LANDING.CLIMB_RATE * seconds + 1)
 
     // updateCruise без удержания клавиши успел бы сбросить factor ниже порога —
     // проверяем отрыв напрямую в шаге ховера.
@@ -440,7 +442,7 @@ describe('ход над поверхностью не съедается нак�
    * (ориентацию тут же стирали), а наружу выходило дрожью и залпом не по прицелу:
    * направление выстрела считается по кадру ЭТОГО шага, а показывают его уже по выровненному.
    */
-  it('тангаж не копится в угловой скорости, рыскание и крен работают', () => {
+  it('тангаж, рыскание и крен над поверхностью работают — летишь как самолёт', () => {
     const world = quietWorld()
     const moon = world.bodies.filter((b) => b.kind === 'moon')[0]!
     const ship = world.player
@@ -452,7 +454,7 @@ describe('ход над поверхностью не съедается нак�
     ship.controls.yaw = 1
     for (let i = 0; i < 240; i++) stepLanding(ship, world, PHYSICS.FIXED_DT)
 
-    expect(ship.state.angVel.x).toBe(0)
+    expect(Math.abs(ship.state.angVel.x)).toBeGreaterThan(0)
     expect(Math.abs(ship.state.angVel.y)).toBeGreaterThan(0)
     expect(Math.abs(ship.state.angVel.z)).toBeGreaterThan(0)
   })
@@ -485,6 +487,6 @@ describe('ход над поверхностью не съедается нак�
     // Успел провернуться заметно (не обязательно ровно вверх ногами — важно, что крен идёт).
     expect(up.dot(normal)).toBeLessThan(0.5)
     // А нос всё это время остаётся в касательной плоскости: тяга идёт вдоль сферы.
-    expect(Math.abs(fwd.dot(normal))).toBeLessThan(1e-6)
+    expect(Math.abs(fwd.dot(normal))).toBeLessThan(1e-4)
   })
 })

@@ -41,7 +41,8 @@ export function drawRadar(frame: HudFrame): void {
   const FRAME_W = 2 // обод и лучи чуть толще одинарной линии — крупный локатор их держит
 
   // Высотомер — слева вплотную к ободу локатора: приборы «где я» стоят рядом.
-  drawAltimeter(frame, cx - radiusX - 12 * S, cy - radiusY, cy + radiusY)
+  // Лента короче локатора снизу: число высоты под ней не должно уходить за кромку экрана.
+  drawAltimeter(frame, cx - radiusX - 12 * S, cy - radiusY, cy + radiusY * 0.35)
 
   ellipse(ctx, cx, cy, radiusX, radiusY, HUD_COLORS.DIM, FRAME_W)
   ellipse(ctx, cx, cy, radiusX / 2, radiusY / 2, HUD_COLORS.DIM, FRAME_W)

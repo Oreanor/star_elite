@@ -7,14 +7,14 @@ import type {
   BodyEntity,
   WarBaseEntity,
   ShipEntity,
-  SurfaceBinding,
   World,
 } from '../world/entities'
-import type { ShipControls } from './types'
 import { shipAxes } from './axes'
 import { stepShip } from './model'
 
 const _climb = new Vector3()
+const _normalBefore = new Vector3()
+const _transport = new Quaternion()
 const _normal = /* @__PURE__ */ new Vector3()
 const _forward = /* @__PURE__ */ new Vector3()
 const _right = /* @__PURE__ */ new Vector3()
@@ -273,44 +273,6 @@ function levelBelly(ship: ShipEntity, normal: Vector3): void {
 }
 
 /**
- * Держать НОС В КАСАТЕЛЬНОЙ плоскости — и только это.
- *
- * Нос не наклоняем к грунту потому, что иначе тяга уходит в радиаль и ход над поверхностью
- * проседает (регрессия «вперёд лечу плохо», см. тест). Целятся здесь не корпусом, а ЛИНИЕЙ
- * ОГНЯ (`controls.aimPitch`): прицел и камера ходят вверх-вниз, корабль идёт ровно.
- *
- * КРЕН НЕ ТРОГАЕМ. Раньше поза собиралась из базиса `(right, normal, −forward)`, то есть
- * борт насильно ставился брюхом вниз, и A/D над поверхностью ничего не делали. Теперь
- * «верх» берётся у самого корабля — можно идти боком и вверх ногами, как и в космосе:
- * режим ограничивает ровно одну степень свободы, ту, из-за которой проседает тяга.
- */
-function keepNoseTangent(ship: ShipEntity, normal: Vector3): void {
-  shipAxes(ship.state.quat, _forward, _right, _up)
-
-  // Нос — в касательную плоскость.
-  _forward.addScaledVector(normal, -_forward.dot(normal))
-  if (_forward.lengthSq() < 1e-9) {
-    _forward.set(0, 1, 0)
-    if (Math.abs(_forward.dot(normal)) > 0.9) _forward.set(1, 0, 0)
-    _forward.addScaledVector(normal, -_forward.dot(normal))
-  }
-  _forward.normalize()
-
-  // «Верх» корабля — свой собственный, лишь ортогонализованный к новому носу: так крен
-  // сохраняется. Выродился (смотрит вдоль носа) — берём нормаль, чтобы поза осталась
-  // определённой; это единственный случай, когда крен назначаем мы, а не пилот.
-  _up.addScaledVector(_forward, -_up.dot(_forward))
-  if (_up.lengthSq() < 1e-9) {
-    _up.copy(normal).addScaledVector(_forward, -normal.dot(_forward))
-  }
-  _up.normalize()
-
-  _right.crossVectors(_forward, _up).normalize()
-  _back.copy(_forward).negate()
-  ship.state.quat.setFromRotationMatrix(_basis.makeBasis(_right, _up, _back)).normalize()
-}
-
-/**
  * Поза «брюхом к грунту» для захода: нос — в касательную плоскость, верх — по нормали.
  * Одна на плавный доворот и на проверку «уже выровнен» — иначе они разошлись бы.
  */
@@ -427,54 +389,14 @@ export function releaseLanding(ship: ShipEntity, _world: World): boolean {
 
 
 /**
- * Набор и снижение в ховере: `strafeUp` (у игрока — Shift+W/S) ведёт САМУ ВЫСОТУ, а не
- * толкает корабль вверх тягой.
- *
- * Так и должно быть в полёте над поверхностью: пилот выбирает эшелон, а рельс сферы его
- * держит. Толкать маневровыми против притяжения значило бы бороться с ним каждую секунду
- * — ровно то, из-за чего низкий полёт превращался в биение о поверхность.
- *
- * Потолок — тот же, с которого прибор перестаёт быть высотомером; пол — чтобы борт не
- * втёрся брюхом в грунт.
+ * Снять с радиального хода `amount` (по нормали), сохранив ВЕЛИЧИНУ скорости: снятое уходит в
+ * касательную. Подъём или упор в пол/потолок не крадут ход вдоль поверхности.
  */
-function stepHoverAltitude(binding: SurfaceBinding, controls: ShipControls, dt: number): number {
-  if (Math.abs(controls.strafeUp) < 1e-3) return 0
-  const before = binding.altitude
-  const next = binding.altitude + controls.strafeUp * LANDING.ALT_RATE * dt
-  binding.altitude = Math.min(LANDING.ALT_MAX, Math.max(LANDING.ALT_MIN, next))
-  return binding.altitude - before
-}
-
-/**
- * Прижать к сфере ховера: позиция на (R + er + alt), движение — только вдоль поверхности.
- *
- * Радиальную составляющую скорости не ВЫБРАСЫВАЕМ, а КЛАДЁМ в касательную, сохраняя
- * величину. Раньше её просто срезали, и наклон носа съедал ход: пилот целился чуть вниз
- * (естественное движение, когда летишь низко) и терял почти всю тягу — «вперёд лечу
- * плохо». Над поверхностью тяга работает ВДОЛЬ неё, а нос лишь задаёт направление;
- * потерянного хода при этом не появляется и лишнего не берётся.
- */
-function constrainToHoverSphere(
-  ship: ShipEntity,
-  surface: LandableSurface,
-  binding: SurfaceBinding,
-): void {
-  _normal.copy(ship.state.pos).sub(surface.pos)
-  if (_normal.lengthSq() < 1e-9) _normal.set(0, 1, 0)
-  else _normal.normalize()
-  binding.normal.copy(_normal)
-
-  const speed = ship.state.vel.length()
-  const vn = ship.state.vel.dot(_normal)
-  if (Math.abs(vn) > 1e-12) {
-    ship.state.vel.addScaledVector(_normal, -vn)
-    const tangential = ship.state.vel.length()
-    // Ход строго вверх/вниз касательной не имеет — направлять нечего, гасим.
-    if (tangential > 1e-6) ship.state.vel.multiplyScalar(speed / tangential)
-  }
-
-  const radius = surface.radius + effectiveRadius(ship) + binding.altitude
-  ship.state.pos.copy(surface.pos).addScaledVector(_normal, radius)
+function redirectRadial(vel: Vector3, normal: Vector3, amount: number): void {
+  const speed = vel.length()
+  vel.addScaledVector(normal, -amount)
+  const left = vel.length()
+  if (left > 1e-6) vel.multiplyScalar(speed / left)
 }
 
 /**
@@ -513,47 +435,66 @@ export function stepLanding(ship: ShipEntity, world: World, dt: number): boolean
   }
 
   /*
-   * Корпус ДЕРЖИТ БРЮХО к поверхности всё время полёта, а не только на входе.
-   *
-   * Иначе тангаж носа уводил из касательной и тягу, и лётный компьютер: тот гасит снос
-   * ПОПЕРЁК НОСА, а над поверхностью «поперёк носа» — это как раз ход вдоль неё. Пилот
-   * целился чуть вниз (естественное движение на низком полёте) и терял почти всю
-   * скорость: «вперёд лечу плохо». Мышь здесь и задумана как взгляд и рыскание — высоту
-   * ведут Shift+W/S, так что тангажу в этом режиме уводить корабль из плоскости нечего.
-   *
-   * Заодно горизонт перестаёт заваливаться, а это ровно то, что делает низкий полёт
-   * читаемым: земля внизу, небо вверху, поворот — рысканием.
+   * ПОЛЁТ КАК У САМОЛЁТА. Нос ведёт мышь целиком, и тангаж тоже: корабль летит туда, куда
+   * смотрит нос, — опустил нос, снижаешься, задрал — набираешь. Высота — СЛЕДСТВИЕ полёта, а
+   * не рельс. Прежде корпус держали брюхом к грунту, а тангаж уходил в наклон прицела: лететь
+   * носом вверх параллельно поверхности выглядело неправдой, менять высоту можно было лишь
+   * Shift+W/S.
    */
+  _normalBefore.copy(binding.normal)
+  // Shift+W/S здесь двигает эшелон напрямую (ниже), а не тягой маневровых: иначе подъём
+  // считался бы дважды — и рельсом, и вертикальной тягой в физике.
+  const strafeUp = ship.controls.strafeUp
+  ship.controls.strafeUp = 0
   stepShip(ship.state, ship.controls, ship.spec.tuning, dt)
-  keepNoseTangent(ship, binding.normal)
+  ship.controls.strafeUp = strafeUp
+
+  // Высота — из настоящего места после шага; Shift+W/S по-прежнему поднимает/опускает борт.
+  _normal.copy(ship.state.pos).sub(surface.pos)
+  if (_normal.lengthSq() < 1e-9) _normal.set(0, 1, 0)
+  else _normal.normalize()
+  /**
+   * Горизонт ЕДЕТ с кораблём. Притяжения в ховере нет, и полёт по прямой уходил бы от
+   * искривлённой поверхности: «ровно» над астероидом в километр — это прочь от него за минуту.
+   * Самолёт гнёт путь тяготением; здесь — поворотом скорости и позы на тот угол, на который
+   * сместилась вертикаль под бортом. Ровный нос держит высоту, меняет её только тангаж.
+   */
+  _transport.setFromUnitVectors(_normalBefore, _normal)
+  ship.state.vel.applyQuaternion(_transport)
+  ship.state.quat.premultiply(_transport).normalize()
+  binding.normal.copy(_normal)
+  const er = effectiveRadius(ship)
+  let altitude = ship.state.pos.distanceTo(surface.pos) - surface.radius - er
+  const climbed = Math.abs(ship.controls.strafeUp) < 1e-3 ? 0 : ship.controls.strafeUp * LANDING.ALT_RATE * dt
+  altitude += climbed
 
   /**
-   * Тангаж гасим и в УГЛОВОЙ СКОРОСТИ, а не только в ориентации.
-   *
-   * `keepNoseTangent` стирает его из `quat` каждый шаг, но `stepShip` продолжает разгонять
-   * `angVel` — и вращение копилось бы, которого не видно: корпус стоит ровно, а внутри
-   * крутится. Наружу это выходит дрожью и выстрелом не по прицелу: залп считает
-   * направление по кадру ЭТОГО шага, а показывают его уже по выровненному.
-   *
-   * Рыскание (y) и КРЕН (z) не трогаем: ими над поверхностью и рулят — мышь ведёт нос,
-   * A/D вертят борт вокруг него.
+   * НАБОР ВЫСОТЫ — плавный: носом вверх поднимаешься не быстрее CLIMB_RATE, с форсажем (ПКМ)
+   * — CLIMB_RATE_BOOST. Просто так из ховера не улететь: оторваться — разгоном до отрыва
+   * (×ESCAPE) или L. Лишний подъём не пропадает, а уходит в ход вдоль поверхности.
    */
-  ship.state.angVel.x = 0
+  const climbCap = ship.controls.boost > 1 ? LANDING.CLIMB_RATE_BOOST : LANDING.CLIMB_RATE
+  const vn = ship.state.vel.dot(_normal)
+  if (vn > climbCap) redirectRadial(ship.state.vel, _normal, vn - climbCap)
+  // Потолок и пол: выше ALT_MAX и ниже ALT_MIN не пустим — ход за край гасим, вдоль оставляем.
+  if (altitude > LANDING.ALT_MAX || altitude < LANDING.ALT_MIN) {
+    altitude = Math.min(LANDING.ALT_MAX, Math.max(LANDING.ALT_MIN, altitude))
+    const v = ship.state.vel.dot(_normal)
+    if ((altitude >= LANDING.ALT_MAX && v > 0) || (altitude <= LANDING.ALT_MIN && v < 0)) {
+      redirectRadial(ship.state.vel, _normal, v)
+    }
+  }
+  binding.altitude = altitude
+  ship.state.pos.copy(surface.pos).addScaledVector(_normal, surface.radius + er + altitude)
+
   /**
-   * НАБОР И СБРОС ВЫСОТЫ — это движение МИРА, а не корабля.
-   *
-   * Рельс сферы двигает борт по радиали, а камера тянется за ним пружиной и отстаёт: в
-   * кадре получалось, что уезжаешь ты, а грунт стоит. Смещение от смены эшелона идёт тем
-   * же каналом, что орбитальный перенос и перецентровка начала координат (),
-   * — камера повторяет его один в один. Тогда борт стоит на месте, а поверхность
-   * подъезжает или уходит вниз, как и должно быть при наборе высоты.
+   * Подъём Shift+W/S — движение МИРА, а не корабля: камера тянется за бортом пружиной и
+   * отстала бы, будто уезжаешь ты, а грунт стоит. Смещение идёт тем же каналом, что
+   * перецентровка начала координат, — и след позы едет с ним, без отставания.
    */
-  const climbed = stepHoverAltitude(binding, ship.controls, dt)
-  constrainToHoverSphere(ship, surface, binding)
   if (climbed !== 0 && ship === world.player) {
-    world.originShift.addScaledVector(binding.normal, climbed)
-    // Камера получает смену эшелона сразу — значит и след позы едет с ней, без отставания.
-    shiftTrail(ship.state, _climb.copy(binding.normal).multiplyScalar(climbed))
+    world.originShift.addScaledVector(_normal, climbed)
+    shiftTrail(ship.state, _climb.copy(_normal).multiplyScalar(climbed))
   }
 
   // Отпустил газ у поверхности — тормозим ход вдоль сферы к нулю: борт встаёт. Это и есть
