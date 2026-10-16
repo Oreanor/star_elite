@@ -134,8 +134,10 @@ export function ShipScreen({
       {/* Пополам: слева паспорт (корабль крупно, под ним характеристики в две колонки),
           справа — оснастка плиткой. Корабль — главное на экране, ему половина ширины,
           а не узкая полоска над столбцом цифр. */}
+      {/* Колонки — одной высоты (grid тянет обе), а нижние кромки панелей — на одной линии:
+          характеристики прижаты к низу левой, модули растянуты до низа правой. */}
       <div className="mt-1 grid gap-5 lg:grid-cols-2">
-        <div className="space-y-3">
+        <div className="flex flex-col gap-3">
           {/* Клик по вращающемуся кораблю открывает МАСТЕРСКУЮ КОРПУСА: ремонт и усиление
               осей. Раньше это был ряд кнопок под характеристиками — он занимал полколонки
               и висел там даже тогда, когда чинить и качать нечего. Корабль сам себе кнопка. */}
@@ -163,42 +165,49 @@ export function ShipScreen({
                 </div>
               </>
             )}
-
+            {/* Покупка с ценой — на самом чертеже, внизу по центру, над характеристиками: сперва
+                смотришь, что за корпус, решаешь — и кнопка прямо под ним. Свой корпус обозначен
+                неактивной кнопкой. Клик открывает модалку сделки: зачёт старого, груз-осадок, доплата. */}
+            {docked && (
+              <div className="absolute inset-x-0 bottom-1.5 flex justify-center">
+                <button
+                  type="button"
+                  disabled={owned}
+                  onClick={(e) => {
+                    // Клик по кнопке не должен открывать мастерскую корпуса под ней.
+                    e.stopPropagation()
+                    setBuyingHull(true)
+                  }}
+                  className="cursor-pointer border bg-black/40 px-5 py-2 text-sm tracking-[0.2em] whitespace-nowrap backdrop-blur-sm transition-colors ui-btn disabled:cursor-default disabled:opacity-50"
+                  style={{ borderColor: ACCENT, color: ACCENT }}
+                >
+                  {owned ? t('ship.alreadyOwned') : tm('ship.buyHull', { price: <Money amount={offer.cost} /> })}
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Характеристики. У чужого корпуса — со стрелками сравнения с текущим: белая
               вверх — параметр лучше, синяя вниз — хуже. */}
+          <div className="mt-auto">
           <Stats
             spec={owned ? player.spec : previewSpec}
             name={chassisName((owned ? player.loadout.chassis : offer.chassis).name)}
             baseline={docked && !owned ? player.spec : null}
             cargoUsed={usedCapacityOf(player.hold)}
           />
+          </div>
 
-          {/* Покупка с ценой — ПОД характеристиками, по центру: сперва смотришь, что за корпус,
-              потом решаешь. Свой корпус обозначен неактивной кнопкой. Клик открывает модалку
-              сделки: зачёт старого, груз-осадок, доплата. */}
-          {docked && (
-            <div className="flex justify-center">
-              <button
-                type="button"
-                disabled={owned}
-                onClick={() => setBuyingHull(true)}
-                className="cursor-pointer border px-5 py-2 text-sm tracking-[0.2em] whitespace-nowrap transition-colors ui-btn disabled:cursor-default disabled:opacity-50"
-                style={{ borderColor: ACCENT, color: ACCENT }}
-              >
-                {owned ? t('ship.alreadyOwned') : tm('ship.buyHull', { price: <Money amount={offer.cost} /> })}
-              </button>
-            </div>
-          )}
 
         </div>
 
-        <div className="space-y-5">
+        <div className="flex flex-col gap-5">
           <SlotGrid
             slots={slots}
             onOpen={setOpenKey}
             interactive={slotsInteractive}
+            // У причала модули — нижняя панель колонки: тянем её до линии характеристик.
+            grow={docked}
           />
           {/* ГРУЗ у причала уехал в МАГАЗИН, под товары: там торгуют, и трюм нужен рядом с
               прилавком. В полёте магазина нет, а трюм есть — и он остаётся здесь, под
