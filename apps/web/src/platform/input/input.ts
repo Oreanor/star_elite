@@ -44,8 +44,11 @@ export const input: InputState = {
   },
 }
 
-/** Пикселей мыши на полное отклонение ручки. Меньше — острее. */
-const SENSITIVITY = 420
+/**
+ * Пикселей мыши на полное отклонение ручки. Меньше — острее. Было 420: на лёгких корпусах
+ * (быстрый разгон носа) наводиться стало трудно — нос вилял. 600 — на треть спокойнее.
+ */
+const SENSITIVITY = 600
 
 const held = new Set<string>()
 const pressedThisFrame = new Set<string>()
