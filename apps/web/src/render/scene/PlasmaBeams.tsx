@@ -7,6 +7,7 @@ import { useSession } from '../../session/GameContext'
 import { plasmaBeamGeometry } from '../geometry/props'
 import { beamCoreMaterial, beamShellMaterial, stepBeamMaterials } from '../materials/plasmaBeam'
 import { PLASMA } from '../config'
+import { laserSchool } from '../laserSchool'
 
 /**
  * Непрерывные лучи — «Столб» и всё, что домен положит в `world.beams`.
@@ -20,8 +21,12 @@ import { PLASMA } from '../config'
  * а струй в кадре единицы — дешевле держать пару мешей на каждую.
  */
 
-/** Больше и не нужно: у игрока один лучевой ствол, у встречных бортов — по одному. */
-const MAX_BEAMS = 4
+/**
+ * Струй в кадре, не больше. Каждое ДУЛО — своя струя: три луча на крыльях и носу — это уже
+ * 2 + 2 + 1 = 5. Прежде стояло 4, и пятая (носовая, она льётся последней) просто не
+ * рисовалась — «центральный не бьёт». Запас — на несколько бортов с лучами рядом.
+ */
+const MAX_BEAMS = 16
 
 const _pos = new Vector3()
 const _quat = new Quaternion()
@@ -36,7 +41,7 @@ export function PlasmaBeams() {
 
   const geometry = useMemo(plasmaBeamGeometry, [])
   const coreMaterial = useMemo(beamCoreMaterial, [])
-  const shellMaterial = useMemo(beamShellMaterial, [])
+
 
   useFrame(() => {
     const world = session.world
@@ -74,6 +79,9 @@ export function PlasmaBeams() {
       _dummy.scale.set(radius, radius, beam.length)
       _dummy.updateMatrix()
       shell.matrix.copy(_dummy.matrix)
+      // Оболочка — цвета школы ствола; материалы кэшированы, здесь лишь выбор из трёх.
+      const shellMaterial = beamShellMaterial(laserSchool(beam.weapon))
+      if (shell.material !== shellMaterial) shell.material = shellMaterial
       shell.visible = true
 
       count++
@@ -97,7 +105,7 @@ export function PlasmaBeams() {
               shells.current[i] = m
             }}
             geometry={geometry}
-            material={shellMaterial}
+            material={beamShellMaterial('military')}
             matrixAutoUpdate={false}
             frustumCulled={false}
             visible={false}

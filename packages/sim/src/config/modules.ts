@@ -595,6 +595,8 @@ export const MINING_LASER: LaserModule = {
   heatPerShot: 0.1,
   heatCool: 0.3,
   effect: 'cut',
+  // Колет бережно: три четверти руды камня до трюма. Прокачка — к единице.
+  oreYield: 0.75,
 }
 
 /**

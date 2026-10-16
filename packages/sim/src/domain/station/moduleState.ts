@@ -116,6 +116,9 @@ export function scaleToBase(m: ShipModule, base: ShipModule, k: number): void {
   }
   if (isShield(m) && isShield(base)) { m.capacity = base.capacity * k; m.regen = base.regen * k; return }
   if (isArmour(m) && isArmour(base)) { m.hull = base.hull * k; return }
+  // Технический (горный) лазер качается в КПД добычи, а не в урон: инструмент, не оружие.
+  // Потолок — вся руда камня; поломка тот же КПД роняет.
+  if (isLaser(m) && isLaser(base) && base.effect === 'cut') { m.oreYield = Math.min(1, (base.oreYield ?? 1) * k); return }
   if (isLaser(m) && isLaser(base)) { m.damage = base.damage * k; return }
   // Ракета — расходник: её не чинят, но пусковую УЛУЧШАЮТ бо́льшим боезапасом (не уроном).
   if (isMissile(m) && isMissile(base)) { m.ammo = Math.round(base.ammo * k); return }

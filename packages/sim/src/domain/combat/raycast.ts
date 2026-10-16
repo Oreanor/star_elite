@@ -3,10 +3,13 @@ import { GUNNERY } from '../../config/weapons'
 import { SHIELD } from '../../config/station'
 import { raySphere } from '../../core/math'
 import { isStationBot } from '../world/queries'
+import { effectiveRadius } from '../scale/scale'
 import { warBaseFixtureWorldPos } from './warBase'
 import type {
   AsteroidEntity,
   BodyEntity,
+  FigurineEntity,
+  MonolithEntity,
   MissileEntity,
   PlatformEntity,
   WarBaseEntity,
@@ -29,6 +32,11 @@ export interface LaserHit {
   platform: PlatformEntity | null
   /** Станция, о ЩИТ которой погас луч. Урона не наносит — станция неуязвима. */
   station: BodyEntity | null
+  /**
+   * Статуя (монолит у причала, статуэтка на орбите): твердь — луч гаснет о неё искрой, урона
+   * нет. Цель лишь для лучей-переделок (размер). Прежде лучи шли сквозь статуи насквозь.
+   */
+  statue: MonolithEntity | FigurineEntity | null
 }
 
 /**
@@ -70,6 +78,7 @@ export function castLaser(
     missile: null,
     platform: null,
     station: null,
+    statue: null,
   }
   const closer = (t: number): boolean => t >= 0 && t < hit.distance
   const set = (t: number, next: Partial<LaserHit>): void => {
@@ -81,6 +90,7 @@ export function castLaser(
     hit.missile = next.missile ?? null
     hit.platform = next.platform ?? null
     hit.station = next.station ?? null
+    hit.statue = next.statue ?? null
   }
 
   /**
@@ -107,13 +117,17 @@ export function castLaser(
     if (cloaked && !target.ai?.dormant) continue
     // Дешёвая отбраковка до точного теста, как у астероидов/ракет: болт заметает
     // отрезок в 1/120 с (~200 м), большинство кораблей дальше — их не проверяем лучом.
-    if (target.state.pos.distanceToSquared(origin) > (range + target.spec.hull.radius) ** 2) continue
-    const t = raySphere(origin, dir, target.state.pos, target.spec.hull.radius)
+    // Радиус — с МАСШТАБОМ (`effectiveRadius`), как у столкновений и рендера: раздутый лучом
+    // борт ловился бы шариком паспортного размера в центре, а сжатый — пустотой вокруг.
+    const r = effectiveRadius(target)
+    if (target.state.pos.distanceToSquared(origin) > (range + r) ** 2) continue
+    const t = raySphere(origin, dir, target.state.pos, r)
     if (closer(t)) set(t, { ship: target })
   }
   if (!cloaked && shooter.id !== world.player.id && world.player.alive) {
-    if (world.player.state.pos.distanceToSquared(origin) <= (range + world.player.spec.hull.radius) ** 2) {
-      const t = raySphere(origin, dir, world.player.state.pos, world.player.spec.hull.radius)
+    const r = effectiveRadius(world.player)
+    if (world.player.state.pos.distanceToSquared(origin) <= (range + r) ** 2) {
+      const t = raySphere(origin, dir, world.player.state.pos, r)
       if (closer(t)) set(t, { ship: world.player })
     }
   }
@@ -136,6 +150,18 @@ export function castLaser(
     if (b.pos.distanceToSquared(origin) > (range + shieldR) ** 2) continue
     const t = raySphere(origin, dir, b.pos, shieldR)
     if (closer(t)) set(t, { station: b })
+  }
+
+  // Статуи — твердь и для замаскированного: металл не проходит сквозь камень.
+  for (const m of world.monoliths) {
+    if (m.pos.distanceToSquared(origin) > (range + m.radius) ** 2) continue
+    const t = raySphere(origin, dir, m.pos, m.radius)
+    if (closer(t)) set(t, { statue: m })
+  }
+  for (const f of world.figurines) {
+    if (!f.alive || f.pos.distanceToSquared(origin) > (range + f.radius) ** 2) continue
+    const t = raySphere(origin, dir, f.pos, f.radius)
+    if (closer(t)) set(t, { statue: f })
   }
 
   // Астероиды и ракеты замаскированному не цель: под полем режем и их.

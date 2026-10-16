@@ -1,12 +1,12 @@
 import { Vector3 } from 'three'
-import type { World } from '../world/entities'
+import type { BoltEntity, World } from '../world/entities'
 import { breakFromHit } from './breakage'
 import { applyDamage } from './damage'
 import { spawnExplosion, spawnShieldFlash, spawnTracer } from './effects'
 import { registerPlayerHit } from './grievance'
 import { blastAsteroid, damageAsteroid } from './mining'
-import { isRayEffect, rayOnAsteroid, rayOnShip } from './laserEffects'
-import { findModule } from '../../config/modules'
+import { isRayEffect, rayOnAsteroid, rayOnShip, rayOnStatue, rayOnWarBase } from './laserEffects'
+import { ASTEROID } from '../../config/world'
 import type { LaserEffect } from '../../config/schema'
 import { castLaser } from './raycast'
 import { damageWarBaseFixture } from './warBase'
@@ -34,14 +34,17 @@ const _still = /* @__PURE__ */ new Vector3()
  */
 const _shooter = { id: 0, cloaked: false }
 
-/** Удар болта: мгновенный (колет или в пыль). Эффект — по лазеру-источнику из каталога. */
-const _boltStrike: LaserStrike = { effect: 'blast', rate: 0, seconds: 0 }
-function boltStrike(weapon: string): LaserStrike | null {
-  const m = findModule(weapon)
-  if (!m || m.kind !== 'laser') return null
-  _boltStrike.effect = m.effect ?? 'blast'
-  _boltStrike.rate = m.effectRate ?? 0
+/** Удар болта: мгновенный (колет или в пыль). Эффект и КПД — со ствола, что его выпустил. */
+const _boltStrike: LaserStrike = { effect: 'blast', rate: 0, seconds: 0, oreYield: 1 }
+function boltStrike(bolt: BoltEntity): LaserStrike {
+  _boltStrike.effect = bolt.effect ?? 'blast'
+  _boltStrike.oreYield = strikeYield(bolt.effect, bolt.oreYield)
   return _boltStrike
+}
+
+/** КПД добычи удара: свой у ствола, иначе по школе — горный бережёт всё, военный — половину. */
+export function strikeYield(effect: LaserEffect | undefined, oreYield: number | undefined): number {
+  return oreYield ?? (effect === 'cut' ? 1 : ASTEROID.BLAST_ORE_YIELD)
 }
 
 /**
@@ -52,6 +55,8 @@ export interface LaserStrike {
   effect: LaserEffect
   rate: number
   seconds: number
+  /** КПД добычи: доля руды камня, что дойдёт до трюма, когда он рассыпается. */
+  oreYield: number
 }
 
 /**
@@ -110,9 +115,14 @@ export function resolveLaserHit(
     // Камень не исчезает — он раскалывается (горный) или рассыпается пылью (военный).
     // Правило дробления живёт в одном месте — `mining.ts`.
     if (ray) rayOnAsteroid(hit.asteroid, ray.effect, ray.rate, ray.seconds)
-    else if (strike?.effect === 'cut') damageAsteroid(world, hit.asteroid, damage)
-    // Без удара (не лазер каталога) и по умолчанию — военный: камень в пыль.
-    else blastAsteroid(world, hit.asteroid)
+    else if (strike?.effect === 'cut') damageAsteroid(world, hit.asteroid, damage, strike.oreYield)
+    // По умолчанию — военный: камень в пыль, руды — по КПД удара.
+    else blastAsteroid(world, hit.asteroid, strike?.oreYield ?? ASTEROID.BLAST_ORE_YIELD)
+  } else if (hit.warBaseFixture && ray) {
+    // Луч-переделка меняет базу целиком, а в счёт попаданий НЕ идёт: деталь держит ПОПАДАНИЯ,
+    // и тики луча (несколько в секунду) сносили бы турель нулевым уроном за полсекунды.
+    spawnExplosion(world, hitPos, _still, 0.3)
+    rayOnWarBase(hit.warBaseFixture.base, ray.effect, ray.rate, ray.seconds)
   } else if (hit.warBaseFixture) {
     // Отстрел детали: искра в точке удара; гибель детали — своя вспышка в `damageWarBaseFixture`.
     spawnExplosion(world, hitPos, _still, 0.5)
@@ -127,6 +137,11 @@ export function resolveLaserHit(
     // Удар в ОБШИВКУ урона не наносит: живучесть базы — её детали (`damageWarBaseFixture`),
     // и снос — это счёт сбитых турелей, а не измор невидимой копилки. Только искра.
     spawnExplosion(world, hitPos, _still, 0.8)
+    if (ray) rayOnWarBase(hit.warBase, ray.effect, ray.rate, ray.seconds)
+  } else if (hit.statue) {
+    // Статуя — твердь: болт гаснет искрой, урона нет. Луч-переделка меняет её размер.
+    spawnExplosion(world, hitPos, _still, 0.6)
+    if (ray) rayOnStatue(hit.statue, ray.effect, ray.rate, ray.seconds)
   } else if (hit.missile) {
     // Ракета не «повреждается»: у неё нет прочности, только боевая часть.
     hit.missile.alive = false
@@ -177,7 +192,7 @@ export function stepBolts(world: World, dt: number): void {
     bolt.muzzle = undefined
 
     if (hit.distance < reach) {
-      resolveLaserHit(world, _hitPos, hit, bolt.damage, bolt.hostile, bolt.ownerId, boltStrike(bolt.weapon))
+      resolveLaserHit(world, _hitPos, hit, bolt.damage, bolt.hostile, bolt.ownerId, boltStrike(bolt))
       bolt.alive = false
       continue
     }

@@ -9,9 +9,10 @@ import { createWorld, STARTER_SYSTEM, type World } from '../world'
 import type { AsteroidEntity } from '../world/entities'
 import { refreshSpec } from '../world/factory'
 import { coolGuns, fireLasers } from './weapons'
-import { resolveLaserHit } from './bolts'
+import { resolveLaserHit, strikeYield } from './bolts'
+import { withUpgrade } from '../station/moduleState'
 import { castLaser } from './raycast'
-import { rayOnAsteroid, rayOnShip } from './laserEffects'
+import { rayOnAsteroid, rayOnShip, rayOnStatue } from './laserEffects'
 
 /**
  * Лучи-переделки и школы лазеров. Свойства, а не числа: уменьшающий сжимает, но не мельче
@@ -125,6 +126,7 @@ describe('горный и военный лазер по камню', () => {
       effect: laser.effect ?? 'blast',
       rate: 0,
       seconds: 0,
+      oreYield: laser.oreYield ?? 1,
     })
     return { pieces: world.asteroids.filter((x) => x.alive && x !== a).length, pods: world.pods.length }
   }
@@ -138,5 +140,93 @@ describe('горный и военный лазер по камню', () => {
     const r = strikeRock(PULSE_LASER)
     expect(r.pieces).toBe(0)
     expect(r.pods).toBeGreaterThan(0)
+  })
+})
+
+describe('лучи по статуям и военным базам', () => {
+  const baseWorld = () =>
+    createWorld({
+      ...STARTER_SYSTEM,
+      patrols: [],
+      belt: null,
+      warBases: [{ name: 'База', radius: 1_000, stationOffset: [8_000, 0, 0], model: 0 }],
+    })
+
+  // Деталь базы держит ПОПАДАНИЯ, а не урон: тики луча-переделки (несколько в секунду) иначе
+  // сносили бы турели нулевым уроном. Луч меняет базу целиком и в счёт попаданий не идёт.
+  it('луч-переделка по детали базы меняет базу, но турель не сносит', () => {
+    const world = baseWorld()
+    const base = world.warBases[0]!
+    const fix = base.fixtures.find((f) => f.alive)!
+    const hitsBefore = fix.hitsLeft
+    const sizeBefore = fix.size
+    const hit = {
+      distance: 0, ship: null, asteroid: null, warBase: null, warBaseFixture: { base, fixture: fix },
+      missile: null, platform: null, station: null, statue: null,
+    }
+    for (let i = 0; i < 20; i++) {
+      world.time += 1
+      resolveLaserHit(world, base.pos.clone(), hit, 0, false, world.player.id, { effect: 'grow', rate: 0.7, seconds: 0.25, oreYield: 1 })
+    }
+    expect(fix.alive).toBe(true)
+    expect(fix.hitsLeft).toBe(hitsBefore)
+    expect(base.radius).toBeGreaterThan(1_000)
+    // Деталь растёт вместе с корпусом: тот же множитель — на своём месте.
+    expect(fix.size / sizeBefore).toBeCloseTo(base.radius / 1_000)
+  })
+
+  it('статуя меняет размер в пределах от исходного', () => {
+    const statue = { radius: 5_000 } as { radius: number; baseRadius?: number }
+    rayOnStatue(statue as never, 'shrink', 10, 100)
+    expect(statue.radius).toBeCloseTo(5_000 * RAYS.MIN_SCALE)
+  })
+
+  // Пойманный баг: луч искал корабль по ПАСПОРТНОМУ радиусу — раздутый лучом борт ловился
+  // шариком в центре. Радиус цели — с масштабом, как у столкновений и рендера.
+  it('луч попадает в раздутый корабль по его настоящему размеру', () => {
+    const world = scene()
+    const enemy = world.ships[0]!
+    // Вдали от станции и тел системы: тест про корпус, а не про то, что стоит на пути.
+    const far = new Vector3(5e9, 0, 0)
+    enemy.state.pos.copy(far).add(new Vector3(0, 0, -2000))
+    enemy.state.scale = 100
+    const r = enemy.spec.hull.radius * 100
+    // Луч мимо паспортного шарика, но внутри раздутого корпуса.
+    const from = far.clone().add(new Vector3(r * 0.5, 0, 0))
+    const hit = castLaser(world, from, new Vector3(0, 0, -1), { id: world.player.id, cloaked: false }, 4000)
+    expect(hit.ship).toBe(enemy)
+  })
+})
+
+describe('КПД добычи', () => {
+  const podOre = (laser: LaserModule) => {
+    const world = scene()
+    world.ships.length = 0
+    // Мелочь — не колется, сразу рассыпается: руда целиком по КПД ствола.
+    const a = rock(world, ASTEROID.MIN_SPLIT_RADIUS * 0.9)
+    const hit = {
+      distance: 0, ship: null, asteroid: a, warBase: null, warBaseFixture: null,
+      missile: null, platform: null, station: null, statue: null,
+    }
+    resolveLaserHit(world, a.pos.clone(), hit, laser.damage, false, world.player.id, {
+      effect: laser.effect ?? 'blast',
+      rate: 0,
+      seconds: 0,
+      oreYield: strikeYield(laser.effect, laser.oreYield),
+    })
+    return world.pods.reduce((n, p) => n + (p.item.kind === 'commodity' ? p.item.units : 0), 0)
+  }
+
+  // Военный (по умолчанию у всех) рассыпает камень, теряя половину руды пылью; горный бережёт.
+  it('горный приносит руды больше, чем военный', () => {
+    expect(podOre(MINING_LASER)).toBeGreaterThan(podOre(PULSE_LASER))
+  })
+
+  // Технический лазер качается в КПД добычи, а не в урон: инструмент, а не оружие.
+  it('прокачка горного растит КПД, а не урон', () => {
+    const up = withUpgrade(MINING_LASER, 0.25)
+    if (up.kind !== 'laser') throw new Error('лазер остаётся лазером')
+    expect(up.oreYield!).toBeGreaterThan(MINING_LASER.oreYield!)
+    expect(up.damage).toBe(MINING_LASER.damage)
   })
 })

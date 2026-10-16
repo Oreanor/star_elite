@@ -158,6 +158,12 @@ export interface LaserModule extends ModuleBase {
    * ход и вращение цели гаснут как exp(−rate·t). Длящиеся эффекты — только у лучей (`beam`).
    */
   effectRate?: number
+  /**
+   * КПД добычи: доля руды камня, что не уходит в пыль, когда он рассыпается от этого ствола
+   * (0..1). Нет поля — военный: `ASTEROID.BLAST_ORE_YIELD`. У горного прокачка растит именно
+   * его, а не урон (см. `scaleToBase`).
+   */
+  oreYield?: number
 }
 
 /**

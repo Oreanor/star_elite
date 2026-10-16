@@ -1,4 +1,6 @@
 import { AdditiveBlending, BackSide, Color, DoubleSide, ShaderMaterial, type Side } from 'three'
+import { LASER_SCHOOL_GLOW } from '../config'
+import type { LaserSchool } from '../laserSchool'
 
 /**
  * ПЛАЗМЕННАЯ СТРУЯ непрерывного лучемёта. Не тонкая трасса болта, а колонна света в
@@ -103,7 +105,8 @@ function beamMaterial(color: number, fresnel: number, strength: number, side: Si
 }
 
 let core: ShaderMaterial | null = null
-let shell: ShaderMaterial | null = null
+/** Оболочки — по одной на школу ствола: цвет струи говорит, что она делает. */
+const shells = new Map<LaserSchool, ShaderMaterial>()
 
 /** Ядро: почти белое, светит всей толщей. Один материал на все струи в кадре. */
 export function beamCoreMaterial(): ShaderMaterial {
@@ -111,14 +114,18 @@ export function beamCoreMaterial(): ShaderMaterial {
   return core
 }
 
-/** Оболочка: цвет ствола, светится краем. Изнутри (BackSide) — чтобы труба была полой. */
-export function beamShellMaterial(): ShaderMaterial {
-  shell ??= beamMaterial(0x3a9dff, 1, 0.9, BackSide)
-  return shell
+/** Оболочка: цвет ШКОЛЫ ствола, светится краем. Изнутри (BackSide) — чтобы труба была полой. */
+export function beamShellMaterial(school: LaserSchool): ShaderMaterial {
+  let m = shells.get(school)
+  if (!m) {
+    m = beamMaterial(LASER_SCHOOL_GLOW[school], 1, 0.9, BackSide)
+    shells.set(school, m)
+  }
+  return m
 }
 
 /** Обе оболочки живут по общему времени: волна на ядре и на шубе обязана совпадать. */
 export function stepBeamMaterials(time: number): void {
   if (core) core.uniforms.uTime!.value = time
-  if (shell) shell.uniforms.uTime!.value = time
+  for (const m of shells.values()) m.uniforms.uTime!.value = time
 }

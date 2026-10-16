@@ -44,9 +44,13 @@ export const splittable = (a: AsteroidEntity) =>
 /** Скорость разлёта осколков камня этого радиуса, м/с. */
 const splitSpeed = (radius: number) => ASTEROID.SPLIT_SPEED + radius * ASTEROID.SPLIT_SPEED_PER_RADIUS
 
-/** Рассыпать камень в руду: по объёму, но не больше контейнера (остальное — пыль). */
-function crumble(world: World, a: AsteroidEntity): void {
-  spawnOrePod(world, a.pos, a.vel, Math.min(oreUnits(a.radius), ASTEROID.ORE_POD_MAX))
+/**
+ * Рассыпать камень в руду: по объёму, но не больше контейнера (остальное — пыль). `oreYield` —
+ * КПД ствола, что его рассыпал: военный теряет половину пылью, горный бережёт больше.
+ */
+function crumble(world: World, a: AsteroidEntity, oreYield = 1): void {
+  const units = Math.max(1, Math.round(Math.min(oreUnits(a.radius), ASTEROID.ORE_POD_MAX) * oreYield))
+  spawnOrePod(world, a.pos, a.vel, units)
 }
 
 /**
@@ -61,11 +65,12 @@ function crumble(world: World, a: AsteroidEntity): void {
  * расколет и объявит осколки всем. Иначе каждый клиент колол бы по-своему, и пояс у двоих
  * рядом разошёлся бы с первого выстрела. true — удар отправлен, локально ничего не делать.
  */
-function forwardRock(world: World, a: AsteroidEntity, damage: number, how: 'laser' | 'bomb' | 'blast' = 'laser'): boolean {
+function forwardRock(world: World, a: AsteroidEntity, damage: number, how: 'laser' | 'bomb' | 'blast' = 'laser', oreYield = 1): boolean {
   if (world.trafficRole !== 'mirror' || !a.netId) return false
   const hit: RockHit = { netId: a.netId, damage }
   if (how === 'bomb') hit.bomb = true
   if (how === 'blast') hit.blast = true
+  if (oreYield !== 1) hit.oreYield = oreYield
   world.rockHits.push(hit)
   return true
 }
@@ -74,21 +79,21 @@ function forwardRock(world: World, a: AsteroidEntity, damage: number, how: 'lase
  * Удар ВОЕННОГО лазера: камень не колется, а сразу рассыпается пылью и рудой — без осколков,
  * в отличие от горного (`shatter`). Руды — как у рассыпавшегося (`crumble`, тот же потолок).
  */
-export function blastAsteroid(world: World, a: AsteroidEntity): void {
+export function blastAsteroid(world: World, a: AsteroidEntity, oreYield: number = ASTEROID.BLAST_ORE_YIELD): void {
   if (!a.alive) return
-  if (forwardRock(world, a, a.hull + 1, 'blast')) return
+  if (forwardRock(world, a, a.hull + 1, 'blast', oreYield)) return
   a.alive = false
   spawnExplosion(world, a.pos, a.vel, a.radius * 0.12)
-  crumble(world, a)
+  crumble(world, a, oreYield)
 }
 
-export function shatter(world: World, a: AsteroidEntity): void {
-  if (forwardRock(world, a, a.hull + 1)) return
+export function shatter(world: World, a: AsteroidEntity, oreYield = 1): void {
+  if (forwardRock(world, a, a.hull + 1, 'laser', oreYield)) return
   a.alive = false
   spawnExplosion(world, a.pos, a.vel, a.radius * 0.12)
 
   if (!splittable(a)) {
-    crumble(world, a)
+    crumble(world, a, oreYield)
     return
   }
 
@@ -128,11 +133,11 @@ export function shatter(world: World, a: AsteroidEntity): void {
 }
 
 /** Урон камню. Один импульс лазера (HULL=1) — раскол или уничтожение мелочи. */
-export function damageAsteroid(world: World, a: AsteroidEntity, amount: number): void {
+export function damageAsteroid(world: World, a: AsteroidEntity, amount: number, oreYield = 1): void {
   if (!a.alive) return
-  if (forwardRock(world, a, amount)) return
+  if (forwardRock(world, a, amount, 'laser', oreYield)) return
   a.hull -= amount
-  if (a.hull <= 0) shatter(world, a)
+  if (a.hull <= 0) shatter(world, a, oreYield)
 }
 
 /**
@@ -244,10 +249,10 @@ export function dropNetRock(world: World, netId: string, burst: boolean): void {
 }
 
 /** У ХОЗЯИНА: удар по общему камню, присланный другим игроком. Колет как свой. */
-export function applyRockHit(world: World, netId: string, damage: number, bomb: boolean, blast = false): void {
+export function applyRockHit(world: World, netId: string, damage: number, bomb: boolean, blast = false, oreYield = 1): void {
   const a = world.asteroids.find((x) => x.netId === netId && x.alive)
   if (!a) return
   if (bomb) bombShatterAsteroid(world, a)
-  else if (blast) blastAsteroid(world, a)
-  else damageAsteroid(world, a, damage)
+  else if (blast) blastAsteroid(world, a, oreYield)
+  else damageAsteroid(world, a, damage, oreYield)
 }

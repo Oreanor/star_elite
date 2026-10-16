@@ -4,7 +4,7 @@ import { aimDirection, shipAxes } from '../flight/axes'
 import { phasedOut } from '../scale/scale'
 import { isLaser, isMissile, type LaserModule } from '../loadout'
 import type { BoltEntity, MissileEntity, ShipEntity, World } from '../world/entities'
-import { resolveLaserHit, type LaserStrike } from './bolts'
+import { resolveLaserHit, strikeYield, type LaserStrike } from './bolts'
 import { castLaser } from './raycast'
 
 const _fwd = new Vector3()
@@ -17,7 +17,7 @@ const _dir = new Vector3()
 const _beamHit = new Vector3()
 /** Стрелок глазами непрерывного луча: по своему id луч в себя не бьёт (как и болт). */
 const _beamShooter = { id: 0, cloaked: false }
-const _beamStrike: LaserStrike = { effect: 'blast', rate: 0, seconds: 0 }
+const _beamStrike: LaserStrike = { effect: 'blast', rate: 0, seconds: 0, oreYield: 1 }
 
 /** Мировая позиция связанного смещения [x,y,z] (нос в -Z, +z назад). Оси уже посчитаны. */
 function offsetToWorld(e: ShipEntity, offset: readonly [number, number, number], out: Vector3): Vector3 {
@@ -170,6 +170,7 @@ function pourBeam(
     _beamStrike.effect = laser.effect ?? 'blast'
     _beamStrike.rate = laser.effectRate ?? 0
     _beamStrike.seconds = GUNNERY.BEAM_TICK
+    _beamStrike.oreYield = strikeYield(laser.effect, laser.oreYield)
     resolveLaserHit(world, _beamHit, hit, laser.damage * share, hostile, e.id, _beamStrike)
   }
 
@@ -219,6 +220,8 @@ export function spawnBolt(
     alive: true,
     muzzle,
     bore,
+    effect: laser.effect,
+    oreYield: laser.oreYield,
   }
   world.bolts.push(bolt)
 }

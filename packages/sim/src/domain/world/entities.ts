@@ -1,6 +1,7 @@
 import type { Contract, ContractOffer } from '../contracts/types'
 import { Quaternion, Vector3 } from 'three'
 import type { BodyKind } from '../../config/bodies'
+import type { LaserEffect } from '../../config/schema'
 import type { DysonSpec } from '../../config/dyson'
 import type { PlanetType } from '../../config/galaxy'
 import type { Rng } from '../../core/math'
@@ -336,6 +337,8 @@ export interface RockHit {
   bomb?: boolean
   /** Удар военного лазера: камень — сразу в пыль и руду (см. `blastAsteroid`). */
   blast?: boolean
+  /** КПД добычи ствола (`LaserModule.oreYield`); нет — 1. Руду считает хозяин — по нему. */
+  oreYield?: number
 }
 
 /** Контейнер с грузом или снятым модулем. Подбирается сближением на малой скорости. */
@@ -428,6 +431,13 @@ export interface BoltEntity {
   muzzle?: readonly [number, number, number]
   /** Калибр ТОЧКИ, из которой вышел: рендер множит на него толщину следа. */
   bore: number
+  /**
+   * Эффект и КПД добычи СТВОЛА, из которого вышел (`LaserModule.effect` / `oreYield`). Берём
+   * с экземпляра при выстреле, а не из каталога по `weapon`: прокачанный горный — собственный
+   * экземпляр, и каталог о его КПД не знает. Нет — военный по умолчанию.
+   */
+  effect?: LaserEffect
+  oreYield?: number
 }
 
 /**
@@ -541,6 +551,8 @@ export interface MonolithEntity {
   spin: number
   /** Габарит, м. Статуя — километры: её видно с любого конца системы. */
   radius: number
+  /** Радиус до первого луча-переделки, м: от него пределы ×0.04…×1000. Нет — не трогали. */
+  baseRadius?: number
 }
 
 /**
@@ -559,6 +571,8 @@ export interface FigurineEntity {
   spin: number
   /** Габарит, м: десятки километров. */
   radius: number
+  /** Радиус до первого луча-переделки, м: от него пределы ×0.04…×1000. Нет — не трогали. */
+  baseRadius?: number
   alive: boolean
 }
 
@@ -618,6 +632,8 @@ export interface WarBaseEntity {
   spin: number
   /** Радиус корпуса, м. */
   radius: number
+  /** Радиус до первого луча-переделки, м: от него пределы ×0.04…×1000. Нет — не трогали. */
+  baseRadius?: number
   alive: boolean
   /**
    * Момент сноса (`world.time`) или null — жива. База умирает НЕ мгновенно: сперва по её

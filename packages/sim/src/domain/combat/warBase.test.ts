@@ -101,7 +101,7 @@ describe('военная база', () => {
     resolveLaserHit(
       world,
       base.pos.clone(),
-      { distance: 0, ship: null, asteroid: null, warBase: base, warBaseFixture: null, missile: null, platform: null, station: null },
+      { distance: 0, ship: null, asteroid: null, warBase: base, warBaseFixture: null, missile: null, platform: null, station: null, statue: null },
       1e9,
       false,
     )

@@ -65,6 +65,15 @@ export function titleAssetsReady(): boolean {
   return TITLE_ASSETS.every(imageReady)
 }
 
+/**
+ * Распаковать титульную графику ЗАНОВО. Загрузка кэшируется надолго, а распакованные пиксели
+ * браузер выбрасывает из памяти — с первого прогрева могли пройти минуты (вход, создание
+ * пилота), и большая картинка корабля снова шла бы асинхронно, на глазах.
+ */
+export function redecodeTitleAssets(): Promise<void> {
+  return Promise.all(TITLE_ASSETS.map((url) => decodeImage(loadSheet(url)))).then(() => {})
+}
+
 /** Прогрев титульной графики; повторный вызов — тот же Promise. */
 export function preloadTitleAssets(onProgress?: (done: number, total: number) => void): Promise<void> {
   if (titleAssetsReady()) {

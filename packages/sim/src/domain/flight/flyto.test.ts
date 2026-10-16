@@ -231,3 +231,22 @@ describe('автопилот пользуется форсажем на сист
     expect(world.player.state.pos.distanceTo(target.state.pos)).toBeLessThan(AUTOPILOT.ARRIVE_RANGE * 3)
   })
 })
+
+describe('автопилот огибает статуи', () => {
+  // Пойманный баг: обход знал лишь тела системы, а статуи живут своим списком — автопилот вёл
+  // сквозь статую, кора отбрасывала, форсаж гас, и борт висел у неё с вечным «КРУШЕНИЕМ».
+  it('статуя на курсе к цели — облетает её, ни разу не врезавшись', () => {
+    const { world, target } = withTarget(30_000)
+    faceToward(world, target.state.pos)
+    target.ai = null
+    const mid = world.player.state.pos.clone().lerp(target.state.pos, 0.5)
+    world.monoliths.push({ id: world.ids.next(), kind: 'monolith', variant: 0, pos: mid, spinAxis: new Vector3(0, 1, 0), spin: 0, radius: 2_000 })
+    const crashBefore = world.player.lastCrashAt
+    const controllers = new Map([[world.player.id, flyToController]])
+    for (let i = 0; i < 120 * 60 && !flyToArrived(world); i++) {
+      stepWorld(world, 1 / 60, controllers, { unassigned: NULL_CONTROLLER })
+    }
+    expect(world.player.lastCrashAt).toBe(crashBefore)
+    expect(world.player.state.pos.distanceTo(target.state.pos)).toBeLessThan(AUTOPILOT.ARRIVE_RANGE * 3)
+  })
+})

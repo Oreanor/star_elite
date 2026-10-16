@@ -15,7 +15,8 @@ import {
 import { findModule, GUNNERY, renderPos, renderQuat, renderTime, type Tracer, type World } from '@elite/sim'
 import { shownShipPoint } from '../shownPose'
 import { useSession } from '../../session/GameContext'
-import { EXPLOSION, LASER, LASER_CLASS_GLOW, LASER_CLASS_WIDTH, LASER_GLOW_FALLBACK, MUZZLE, SHIELD_FLASH, WARP_FLASH } from '../config'
+import { EXPLOSION, LASER, LASER_CLASS_WIDTH, LASER_SCHOOL_GLOW, MUZZLE, SHIELD_FLASH, WARP_FLASH } from '../config'
+import { LASER_SCHOOLS, laserSchool } from '../laserSchool'
 import {
   explosionMaterial,
   missileMaterial,
@@ -164,23 +165,26 @@ const classOf = (weapon: string): 1 | 2 | 3 => {
   return (cls >= 3 ? 3 : cls) as 1 | 2 | 3
 }
 
-/** Три класса лазеров: у каждого свой цвет ореола и своя толщина луча. */
+/** Три класса лазеров: у каждого своя толщина луча. */
 const LASER_CLASSES = [1, 2, 3] as const
 
+/** Партии следов: ШКОЛА даёт цвет ореола, КЛАСС — толщину. Пары — раз на модуль, не в кадре. */
+const TRACER_GROUPS = LASER_SCHOOLS.flatMap((school) => LASER_CLASSES.map((cls) => ({ school, cls })))
+
 /**
- * Ядро у всех лазеров белое, цветной только ореол. Батчей — по КЛАССУ ствола: цвет
- * (голубой/зелёный/красный) и толщина растут с классом, так что тип оружия читается в
- * бою раньше, чем долетит болт. По два инстанс-меша на класс (ореол + ядро), не по стволу.
+ * Ядро у всех лазеров белое, цветной только ореол. Цвет — по ШКОЛЕ ствола (военный красный,
+ * технический зелёный, специальный голубой): что делает оружие, читается раньше, чем долетит
+ * болт. Толщина — по классу. По два инстанс-меша на пару (ореол + ядро), не по стволу.
  */
 export function Tracers() {
   return (
     <>
-      {LASER_CLASSES.map((cls) => {
+      {TRACER_GROUPS.map(({ school, cls }) => {
         const width = LASER_CLASS_WIDTH[cls] ?? 1
-        const glow = LASER_CLASS_GLOW[cls] ?? LASER_GLOW_FALLBACK
-        const accepts = (weapon: string) => classOf(weapon) === cls
+        const glow = LASER_SCHOOL_GLOW[school]
+        const accepts = (weapon: string) => classOf(weapon) === cls && laserSchool(weapon) === school
         return (
-          <Fragment key={cls}>
+          <Fragment key={`${school}-${cls}`}>
             <TracerBatch accepts={accepts} color={glow} radius={LASER.GLOW_RADIUS * width} opacity={LASER.GLOW_OPACITY} />
             {/* Ядро поверх ореола: раскалённое добела, толщина по тому же классу. */}
             <TracerBatch accepts={accepts} color={LASER.CORE_COLOR} radius={LASER.CORE_RADIUS * width} opacity={1} />
@@ -238,9 +242,9 @@ export function MuzzleFlashes() {
 
       const cls = classOf(flash.weapon)
       const width = (LASER_CLASS_WIDTH[cls] ?? 1) * flash.bore
-      // Добела с лёгким тоном класса; вспыхивает и гаснет (аддитив над космосом → в ноль).
+      // Добела с лёгким тоном школы; вспыхивает и гаснет (аддитив над космосом → в ноль).
       // Кривая «удар»: мгновенный пик, спад ∝ (1−age)^1.5 — резкая молния, а не ровное тление.
-      _muzzleTint.set(LASER_CLASS_GLOW[cls] ?? LASER_GLOW_FALLBACK).lerp(_white, MUZZLE.WHITEN)
+      _muzzleTint.set(LASER_SCHOOL_GLOW[laserSchool(flash.weapon)]).lerp(_white, MUZZLE.WHITEN)
       const fade = (1 - age) * Math.sqrt(1 - age)
       _muzzleTint.multiplyScalar(fade * MUZZLE.BRIGHTNESS)
 

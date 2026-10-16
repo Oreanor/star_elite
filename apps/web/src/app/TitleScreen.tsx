@@ -4,7 +4,7 @@ import { TitleStars } from './TitleStars'
 import { requestLock, setStickSuspended } from '../platform/input/input'
 import { setLang, t, useLang, type Key, type Lang } from '../ui/i18n'
 import { Tabs } from '../ui/station/chrome'
-import { preloadTitleAssets, titleAssetsReady } from '../ui/preload'
+import { preloadTitleAssets, redecodeTitleAssets, titleAssetsReady } from '../ui/preload'
 import { preloadSystemSurfaces } from '../render/materials/surfacePreload'
 
 /**
@@ -237,7 +237,7 @@ function TitleLogo({
   return (
     <div className="pointer-events-none absolute inset-x-0 top-[6vh] mx-auto w-full max-w-[54rem] px-8">
       <div className="relative">
-        <img ref={imgRef} src="/logo.webp" alt="STAR ELITE" onLoad={onReady} className="block w-full" />
+        <img ref={imgRef} src="/logo.webp" alt="STAR ELITE" onLoad={onReady} decoding="sync" className="block w-full" />
         {/* Вспышка старта — БЕЛАЯ НАКЛАДКА по форме букв с анимацией OPACITY (не filter):
             opacity идёт на композиторе и НЕ замирает под блокирующей сборкой сцены — иначе
             вспышка застывала на полусвете. Гаснет в ноль (`forwards`). */}
@@ -545,7 +545,10 @@ function TitleShip({ trembling, launched }: { trembling: boolean; launched: bool
           style={{ animation: 'title-flame-center 0.8s ease-in-out infinite, flame-flicker 0.3s linear infinite' }}
         />
           <div className="relative w-full">
-            <img src="/ship.webp" alt="" aria-hidden className="block w-full" />
+            {/* `decoding="sync"`: распаковать ДО первой отрисовки. Прогрев был давно (вход, создание
+                пилота), браузер успел выбросить распакованный мегабайт из кэша, и большая картинка
+                шла асинхронно — первые кадры взлёта корабля не было, видны одни струи. */}
+            <img src="/ship.webp" alt="" aria-hidden decoding="sync" className="block w-full" />
             {/* Вертикальная растушёвка корпуса: верх чуть темнее, низ чуть светлее — пара
                 процентов объёма. Режим overlay: над чёрным даёт чёрное (тени целы), а средние
                 тона гнёт — тёмный верх гасит, светлый низ поднимает. Статична, маска по силуэту. */}
@@ -621,7 +624,9 @@ export function Paused({
   useLang() // подписка: смена языка перерисует меню
   const session = useSession()
   // Титул не показываем, пока PNG заставки не в кэше — иначе фон и корабль «прогружаются на глазах».
-  const [gfxReady, setGfxReady] = useState(() => titleAssetsReady())
+  // Авто-старт после создания пилота — прогреваем ЗАНОВО: с первого прогрева прошли минуты
+  // (вход, создание), и браузер мог выбросить распакованные картинки из кэша.
+  const [gfxReady, setGfxReady] = useState(() => !auto && titleAssetsReady())
   const [gfxProgress, setGfxProgress] = useState(() =>
     titleAssetsReady() ? 1 : 0,
   )
@@ -635,12 +640,14 @@ export function Paused({
     let alive = true
     preloadTitleAssets((done, total) => {
       if (alive && total > 0) setGfxProgress(done / total)
-    }).then(() => {
-      if (alive) {
-        setGfxProgress(1)
-        setGfxReady(true)
-      }
     })
+      .then(() => (auto ? redecodeTitleAssets() : undefined))
+      .then(() => {
+        if (alive) {
+          setGfxProgress(1)
+          setGfxReady(true)
+        }
+      })
     return () => {
       alive = false
     }

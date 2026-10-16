@@ -108,14 +108,49 @@ function approachDist(from: Vector3, dest: { pos: Vector3; radius: number }): nu
   return Math.max(0, from.distanceTo(dest.pos) - dest.radius)
 }
 
+/** Состояние одного обхода: ближайшее перекрывающее препятствие вдоль курса. */
+let _nearest = Infinity
+let _blocked = false
+
 /**
- * Точка прицеливания в обход тел. Идём вдоль луча к цели; если тело подходит к лучу ближе
- * зазора (радиус×AVOID_CLEARANCE + габарит борта) ДО цели — уводим аим вбок за его сферу,
- * и курс огибает тело. Берём БЛИЖАЙШЕЕ перекрывающее; пересчёт каждый кадр сам доворачивает
- * по мере облёта, а как тело останется позади — аим возвращается на цель.
+ * Проверить одно препятствие-сферу на луче к цели и, если оно ближе прочих перекрывает курс,
+ * увести аим вбок за его зазор. Модульная функция, а не замыкание: обход зовётся каждый кадр.
+ */
+function avoidSphere(pos: Vector3, dist: number, center: Vector3, radius: number, shipRadius: number, out: Vector3): void {
+  _toBody.copy(center).sub(pos)
+  const along = _toBody.dot(_dir)
+  if (along <= 0 || along >= dist) return // препятствие позади борта или дальше цели
+  _closest.copy(pos).addScaledVector(_dir, along) // ближайшая к центру точка луча
+  _lateral.copy(_closest).sub(center)
+  const lat = _lateral.length()
+  const clearance = radius * AUTOPILOT.AVOID_CLEARANCE + shipRadius
+  if (lat >= clearance || along >= _nearest) return
+  _nearest = along
+  _blocked = true
+  if (lat < 1) {
+    // Луч идёт сквозь центр — бокового направления нет, берём любой перпендикуляр курсу.
+    _perp.set(0, 1, 0)
+    if (Math.abs(_dir.y) > 0.9) _perp.set(1, 0, 0)
+    _lateral.copy(_perp).addScaledVector(_dir, -_perp.dot(_dir)).normalize()
+  } else {
+    _lateral.multiplyScalar(1 / lat)
+  }
+  // Аим — точка сбоку, вынесенная ЗА зазор: курс идёт мимо, а не сквозь.
+  out.copy(center).addScaledVector(_lateral, clearance + AUTOPILOT.AVOID_MARGIN)
+}
+
+/**
+ * Точка прицеливания в обход тверди. Идём вдоль луча к цели; если препятствие подходит к лучу
+ * ближе зазора (радиус×AVOID_CLEARANCE + габарит борта) ДО цели — уводим аим вбок за его
+ * сферу, и курс огибает его. Берём БЛИЖАЙШЕЕ перекрывающее; пересчёт каждый кадр сам
+ * доворачивает по мере облёта, а как препятствие останется позади — аим возвращается на цель.
+ *
+ * Препятствия — ВСЯ твердь, а не только тела системы: статуи, статуэтки и военные базы живут
+ * своими списками, и прежде автопилот вёл сквозь них — борт упирался в кору, отскок гасил
+ * форсаж, автопилот тянул обратно, и корабль висел у статуи с вечным «КРУШЕНИЕМ».
  *
  * Возвращает `true`, если путь перекрыт (аим уведён): по нему `wantsCruise` глушит форсаж —
- * сверхсвет в обход планеты недопустим.
+ * сверхсвет в обход тверди недопустим.
  */
 function aimAround(
   ship: ShipEntity,
@@ -131,32 +166,23 @@ function aimAround(
   if (dist < 1) return false
   _dir.multiplyScalar(1 / dist) // единичный курс на цель
 
-  let nearest = Infinity
-  let blocked = false
+  _nearest = Infinity
+  _blocked = false
+  const shipR = ship.spec.hull.radius
   for (const body of world.bodies) {
     if (skipBodyId !== null && body.id === skipBodyId) continue // это и есть цель, не препятствие
-    _toBody.copy(body.pos).sub(pos)
-    const along = _toBody.dot(_dir)
-    if (along <= 0 || along >= dist) continue // тело позади борта или дальше цели
-    _closest.copy(pos).addScaledVector(_dir, along) // ближайшая к телу точка луча
-    _lateral.copy(_closest).sub(body.pos)
-    const lat = _lateral.length()
-    const clearance = body.radius * AUTOPILOT.AVOID_CLEARANCE + ship.spec.hull.radius
-    if (lat >= clearance || along >= nearest) continue
-    nearest = along
-    blocked = true
-    if (lat < 1) {
-      // Луч идёт сквозь центр тела — бокового направления нет, берём любой перпендикуляр курсу.
-      _perp.set(0, 1, 0)
-      if (Math.abs(_dir.y) > 0.9) _perp.set(1, 0, 0)
-      _lateral.copy(_perp).addScaledVector(_dir, -_perp.dot(_dir)).normalize()
-    } else {
-      _lateral.multiplyScalar(1 / lat)
-    }
-    // Аим — точка сбоку от тела, вынесенная ЗА зазор: курс идёт мимо, а не сквозь.
-    out.copy(body.pos).addScaledVector(_lateral, clearance + AUTOPILOT.AVOID_MARGIN)
+    avoidSphere(pos, dist, body.pos, body.radius, shipR, out)
   }
-  return blocked
+  for (const m of world.monoliths) {
+    if (m.id !== skipBodyId) avoidSphere(pos, dist, m.pos, m.radius, shipR, out)
+  }
+  for (const f of world.figurines) {
+    if (f.alive && f.id !== skipBodyId) avoidSphere(pos, dist, f.pos, f.radius, shipR, out)
+  }
+  for (const b of world.warBases) {
+    if (b.alive && b.id !== skipBodyId) avoidSphere(pos, dist, b.pos, b.radius, shipR, out)
+  }
+  return _blocked
 }
 
 /** Газ к галактической звезде: доля потолка от дистанции в св.г, без полного хода. */
