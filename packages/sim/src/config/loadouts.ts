@@ -1,4 +1,5 @@
 import { createLoadout, type Chassis, type Loadout } from './schema'
+import type { Government } from './galaxy'
 import { ATHENA, ATLAS, AURORA_ONE, HERMES, ICARUS, ORION, PEGASUS, PERSEUS, SPIRITUS_SANCTUS, THESEUS } from './chassis'
 import {
   ARMOUR_PLATE,
@@ -193,25 +194,30 @@ export function theseusLoadout(): Loadout {
 }
 
 /**
- * Каталог верфи: какие корпуса можно взять на станции и с какой сборкой. Цена пока
- * ноль — «дают погонять». Новый корабль — новая строка, а не ветка в коде (OCP):
- * рендер знает геометрию по `chassis.id`, домен — как поставить сборку.
+ * Каталог верфи: какие корпуса можно взять на станции и с какой сборкой. Новый корабль —
+ * новая строка, а не ветка в коде (OCP): рендер знает геометрию по `chassis.id`, домен — как
+ * поставить сборку. Порядок — ЛЕСТНИЦА от слабых к сильным: стрелки на верфи листают её.
  */
 export interface HullOffer {
   readonly chassis: Chassis
   readonly loadout: () => Loadout
   readonly cost: number
+  /**
+   * Где продают: правления миров. Нет поля — на любой верфи. «Гермес» — военный корабль, его
+   * отпускают только диктатуры (ближе всего к «военным» из правлений): не из общего ряда.
+   */
+  readonly soldBy?: readonly Government[]
 }
 
 export const SHIPYARD: readonly HullOffer[] = [
-  { chassis: AURORA_ONE, loadout: auroraOneLoadout, cost: AURORA_ONE.cost },
-  { chassis: HERMES, loadout: hermesLoadout, cost: HERMES.cost },
-  { chassis: PERSEUS, loadout: perseusLoadout, cost: PERSEUS.cost },
-  { chassis: PEGASUS, loadout: pegasusLoadout, cost: PEGASUS.cost },
-  { chassis: ORION, loadout: orionLoadout, cost: ORION.cost },
-  { chassis: THESEUS, loadout: theseusLoadout, cost: THESEUS.cost },
-  { chassis: ATHENA, loadout: athenaLoadout, cost: ATHENA.cost },
   { chassis: ICARUS, loadout: icarusLoadout, cost: ICARUS.cost },
+  { chassis: AURORA_ONE, loadout: auroraOneLoadout, cost: AURORA_ONE.cost },
+  { chassis: THESEUS, loadout: theseusLoadout, cost: THESEUS.cost },
+  { chassis: PEGASUS, loadout: pegasusLoadout, cost: PEGASUS.cost },
+  { chassis: PERSEUS, loadout: perseusLoadout, cost: PERSEUS.cost },
+  { chassis: ATHENA, loadout: athenaLoadout, cost: ATHENA.cost },
+  { chassis: ORION, loadout: orionLoadout, cost: ORION.cost },
+  { chassis: HERMES, loadout: hermesLoadout, cost: HERMES.cost, soldBy: ['Диктатура'] },
   // «Атлас» не продаётся: это кит — корабль поколений, город (см. `TITAN`). Его шасси живёт
   // только в трафике как рейсовый грузовик (`freighterLoadout`).
   // Все корпуса теперь — загруженные GLB-модели. Процедурные (Мк III, Арес, Аполлон, Артемида,

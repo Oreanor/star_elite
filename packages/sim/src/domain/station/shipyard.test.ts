@@ -127,4 +127,12 @@ describe('верфь корпусов', () => {
     expect(swapHull(world, small.chassis, sell.net, true)).toBeNull()
     expect(world.player.hold.items.filter((i) => i.kind === 'module').length).toBe(modulesBefore)
   })
+
+  it('ряд корпусов — от дешёвых к дорогим; «Гермес» последний и только у диктатур', () => {
+    for (let i = 1; i < SHIPYARD.length; i++) {
+      expect(SHIPYARD[i]!.cost, SHIPYARD[i]!.chassis.name).toBeGreaterThanOrEqual(SHIPYARD[i - 1]!.cost)
+    }
+    expect(SHIPYARD[SHIPYARD.length - 1]!.chassis.id).toBe('hermes')
+    expect(SHIPYARD.find((o) => o.chassis.id === 'hermes')!.soldBy).toEqual(['Диктатура'])
+  })
 })

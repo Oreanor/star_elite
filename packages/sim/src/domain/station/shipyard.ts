@@ -1,4 +1,5 @@
 import { SHOP } from '../../config/station'
+import { SHIPYARD, type HullOffer } from '../../config/loadouts'
 import { clamp } from '../../core/math'
 import { addItem, usedCapacityOf } from '../cargo/hold'
 import {
@@ -29,7 +30,7 @@ import { localSettlement } from './trade'
  * и трюма не хватает на всё перенесённое — смена не состоится: сперва продай лишнее.
  */
 
-export type HullError = 'not-docked' | 'no-money' | 'no-room'
+export type HullError = 'not-docked' | 'not-sold' | 'no-money' | 'no-room'
 
 /** Результат примерки обвеса на корпус: что встало в слоты и что осталось «на руках». */
 export interface HullFit {
@@ -70,6 +71,16 @@ export function fitOntoChassis(current: Loadout, chassis: Chassis): HullFit {
 
 function rackCapacity(m: ShipModule): number {
   return m.kind === 'cargo' ? m.capacity : 0
+}
+
+/**
+ * Корпуса на верфи ЭТОЙ станции: общий ряд плюс то, что продают лишь при здешнем правлении
+ * (`HullOffer.soldBy` — «Гермес» у диктатур). Свой корпус в списке есть всегда: на нём стоишь.
+ */
+export function shipyardOffers(world: World): readonly HullOffer[] {
+  const government = localSettlement(world).government
+  const own = world.player.loadout.chassis.id
+  return SHIPYARD.filter((o) => !o.soldBy || o.soldBy.includes(government) || o.chassis.id === own)
 }
 
 /** Доля уцелевшего корпуса, 0..1 — «поломка» рамы, которую верфь видит при зачёте. */
@@ -175,6 +186,8 @@ export function hullPurchase(world: World, chassis: Chassis, sellOverflow = fals
  */
 export function swapHull(world: World, chassis: Chassis, cost: number, sellOverflow = false): HullError | null {
   if (!world.docked) return 'not-docked'
+  // Корпус не из ряда этой верфи (военный у не-диктатуры) — сделки нет, кто бы ни просил.
+  if (!shipyardOffers(world).some((o) => o.chassis.id === chassis.id)) return 'not-sold'
   if (world.credits < cost) return 'no-money'
 
   const player = world.player

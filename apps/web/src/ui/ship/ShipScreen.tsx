@@ -2,7 +2,7 @@ import { useEffect, useMemo, useReducer, useState } from 'react'
 import {
   deriveShipSpec,
   fitOntoChassis,
-  SHIPYARD,
+  shipyardOffers,
   swapHull,
   usedCapacityOf,
   type World,
@@ -66,8 +66,10 @@ export function ShipScreen({
   // каталог, под моделью — имя и кнопка «купить». В ПОЛЁТЕ стрелок нет: корпус там
   // не сменить, экран лишь показывает твой корабль.
   const currentId = player.loadout.chassis.id
-  const [browseIdx, setBrowseIdx] = useState(() => Math.max(0, SHIPYARD.findIndex((o) => o.chassis.id === currentId)))
-  const offer = SHIPYARD[browseIdx] ?? SHIPYARD[0]!
+  // Ряд корпусов ЭТОЙ верфи: «Гермес» — только у диктатур (`shipyardOffers`).
+  const offers = shipyardOffers(world)
+  const [browseIdx, setBrowseIdx] = useState(() => Math.max(0, offers.findIndex((o) => o.chassis.id === currentId)))
+  const offer = offers[browseIdx] ?? offers[0]!
   // У причала показываем ВЫБРАННЫЙ стрелками корпус; в полёте — всегда свой.
   const shownId = docked ? offer.chassis.id : currentId
   const owned = shownId === currentId
@@ -89,7 +91,7 @@ export function ShipScreen({
   // предупреждение о перегрузе. Пролистнул каталог — модалку гасим.
   const [buyingHull, setBuyingHull] = useState(false)
   const cycle = (d: number) => {
-    setBrowseIdx((i) => (i + d + SHIPYARD.length) % SHIPYARD.length)
+    setBrowseIdx((i) => (i + d + offers.length) % offers.length)
     setBuyingHull(false)
     setOpenKey(null) // открытый слот своего борта не должен «переехать» на чужой корпус
   }
