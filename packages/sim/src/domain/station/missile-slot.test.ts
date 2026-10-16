@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { veteranWorld } from '../../testkit'
 import { auroraOneLoadout } from '../../config/loadouts'
 import { DRONE_BAY, MISSILE_PYLON } from '../../config/modules'
 import { isDrone, isMissile } from '../loadout'
@@ -29,7 +30,7 @@ function pylonTypes(world: ReturnType<typeof createWorld>): Set<string> {
 
 /** Операции слота — на серийной «Авроре» С УЖЕ ВСТАВЛЕННЫМИ ракетами: стартовая идёт с пустыми пилонами. */
 function missileWorld(): ReturnType<typeof createWorld> {
-  const world = createWorld()
+  const world = veteranWorld()
   world.player.loadout = auroraOneLoadout()
   refreshSpec(world.player)
   return world
@@ -42,7 +43,7 @@ describe('ракетный (мунишн) слот', () => {
    * теперь боезапас есть сразу, и он честно весит (по тонне на ракету).
    */
   it('стартовая Аврора вылетает с восемью заряженными ракетами', () => {
-    const world = createWorld()
+    const world = veteranWorld()
     const pylons = missilePylonIndices(world.player)
     expect(pylons.length).toBeGreaterThan(0)
     expect(installedMissile(world.player)).not.toBeNull()

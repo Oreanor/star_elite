@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
+import { veteranWorld } from '../../testkit'
 import { Vector3 } from 'three'
-import { createWorld, type JumpGate } from '../world'
+import { type JumpGate } from '../world'
 import { LINKED_PORTAL } from '../../config/galaxy'
 import {
   crossedJumpGate,
@@ -21,7 +22,7 @@ const gate = (): JumpGate => ({
 
 describe('твёрдый обод гиперпортала', () => {
   it('ставит устье не ближе 100 м и отодвигает его для крупного корпуса', () => {
-    const ship = createWorld().player
+    const ship = veteranWorld().player
     expect(linkedPortalAhead(ship)).toBeGreaterThanOrEqual(100)
 
     ship.state.scale = 20
@@ -29,7 +30,7 @@ describe('твёрдый обод гиперпортала', () => {
   })
 
   it('за 2.5 с раскрывает чистый проход до заданного числа диаметров корпуса', () => {
-    const ship = createWorld().player
+    const ship = veteranWorld().player
     const target = linkedPortalTargetRadius(ship)
     const opened = stepLinkedPortalRadius(0, target, 1, true, LINKED_PORTAL.OPEN_SECONDS)
     const clearDiameter = (opened - LINKED_PORTAL.TUBE) * 2
@@ -44,7 +45,7 @@ describe('твёрдый обод гиперпортала', () => {
   })
 
   it('защёлкивает почти невидимый остаток кольца в полностью закрытое состояние', () => {
-    const target = linkedPortalTargetRadius(createWorld().player)
+    const target = linkedPortalTargetRadius(veteranWorld().player)
     const radius = target * LINKED_PORTAL.CLOSE_FRACTION * 1.1
     const dt = LINKED_PORTAL.OPEN_SECONDS * LINKED_PORTAL.CLOSE_FRACTION * 0.2
 
@@ -52,7 +53,7 @@ describe('твёрдый обод гиперпортала', () => {
   })
 
   it('отбрасывает от трубы без урона', () => {
-    const world = createWorld()
+    const world = veteranWorld()
     const ship = world.player
     const hull = ship.hull
     ship.state.pos.set(57, 0, 0)
@@ -65,7 +66,7 @@ describe('твёрдый обод гиперпортала', () => {
   })
 
   it('не трогает корабль в центре широкого отверстия', () => {
-    const world = createWorld()
+    const world = veteranWorld()
     const ship = world.player
     ship.state.pos.set(0, 0, 1)
     ship.state.vel.set(0, 0, -100)
@@ -77,7 +78,7 @@ describe('твёрдый обод гиперпортала', () => {
   })
 
   it('считает проход через отверстие в обе стороны', () => {
-    const ship = createWorld().player
+    const ship = veteranWorld().player
     const mouth = gate()
 
     ship.state.pos.set(0, 0, -1)
@@ -91,7 +92,7 @@ describe('твёрдый обод гиперпортала', () => {
   })
 
   it('не пропускает корпус, который центром попал в отверстие, но цепляет трубу', () => {
-    const ship = createWorld().player
+    const ship = veteranWorld().player
     ship.state.pos.set(40, 0, 0)
 
     expect(fitsInsideJumpGate(ship, gate())).toBe(false)

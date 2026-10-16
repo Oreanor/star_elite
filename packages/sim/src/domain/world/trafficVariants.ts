@@ -2,6 +2,7 @@ import {
   auroraOneLoadout,
   freighterLoadout,
   hermesLoadout,
+  icarusLoadout,
   orionLoadout,
   pegasusLoadout,
   perseusLoadout,
@@ -59,15 +60,17 @@ const BY_KIND: Record<string, readonly VariantEntry[]> = {
     { weight: 32, loadout: perseusLoadout, profession: 'military' },
     { weight: 28, loadout: orionLoadout, profession: 'military' },
     { weight: 18, loadout: pirateLeaderLoadout, profession: 'military' },
+    // «Гермес» — тяжёлый военный корабль: у патруля он изредка, у пиратов его нет вовсе.
+    { weight: 10, loadout: hermesLoadout, profession: 'military' },
   ],
   pirate: [
     { weight: 34, loadout: pirateLoadout, profession: 'pirate' },
-    { weight: 26, loadout: hermesLoadout, profession: 'pirate' },
+    { weight: 26, loadout: icarusLoadout, profession: 'pirate' },
     { weight: 22, loadout: theseusLoadout, profession: 'pirate' },
   ],
   gang: [
     { weight: 40, loadout: pirateLoadout, profession: 'pirate' },
-    { weight: 30, loadout: hermesLoadout, profession: 'pirate' },
+    { weight: 30, loadout: pegasusLoadout, profession: 'pirate' },
   ],
   raider: [
     { weight: 38, loadout: pirateLeaderLoadout, profession: 'pirate' },

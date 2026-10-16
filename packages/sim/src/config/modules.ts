@@ -681,7 +681,7 @@ export const BURST_LASER: LaserModule = {
   heatCool: 0.26,
 }
 
-const BEAM_LASER: LaserModule = {
+export const BEAM_LASER: LaserModule = {
   id: 'beam_2',
   name: 'Лучевой лазер 2',
   kind: 'laser',

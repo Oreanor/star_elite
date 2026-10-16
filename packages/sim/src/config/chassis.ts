@@ -55,7 +55,7 @@ export const AURORA_ONE: Chassis = {
     { kind: 'hyperdrive', maxClass: 3 },
     { kind: 'aux', maxClass: 3 },
   ],
-  cost: 82_000,
+  cost: 150_000,
 }
 
 /**
@@ -91,7 +91,7 @@ const FIGHTER_PYLONS: Chassis['hardpoints'] = [
 
 /** «Гермес»: узкий корпус — крыльевые пары сидят тесно, нос приподнят над обводом. */
 const HERMES_HARDPOINTS: Chassis['hardpoints'] = [
-  { offset: [0, -0.78, -6.95], kind: 'gun', maxClass: 2, nozzles: [[-0.74, -0.78, -6.95], [0.74, -0.78, -6.95]] },
+  { offset: [0, -0.78, -6.95], kind: 'gun', maxClass: 3, nozzles: [[-0.74, -0.78, -6.95], [0.74, -0.78, -6.95]] },
   { offset: [0, -0.95, 0.01], kind: 'gun', maxClass: 3, nozzles: [[-2.44, -0.95, 0.01], [2.44, -0.95, 0.01]] },
   { offset: [0, 1.22, -0.47], kind: 'gun', maxClass: 3, bore: 2, nozzles: [[0, 1.22, -0.47]] },
   ...FIGHTER_PYLONS,
@@ -141,32 +141,53 @@ const FIGHTER_SLOTS: Chassis['slots'] = [
   { kind: 'aux', maxClass: 2 },
 ]
 
-/** «Гермес» — лёгкий скороход: мало брони, но вёрткий. */
+/**
+ * Цены корпусов — ЛЕСТНИЦА в разы, а не плюс-минус десять процентов: от «Икара» за 25 тыс до
+ * «Гермеса» за 400; «Афина» — стартовый корабль игрока, вторая ступень снизу. Иначе менять корабль незачем — следующий почти не лучше и почти не дороже.
+ * Прочность, трюм и аукс растут вместе с ценой.
+ *
+ * «Гермес» — тяжёлый ВОЕННЫЙ корабль, а не скороход: класс 3, толстая рама, два слота брони
+ * и щит третьего класса. Платит за это массой и ленью в развороте. Вершина лестницы — корабль
+ * флота, а не первая покупка.
+ */
+const HERMES_SLOTS: Chassis['slots'] = [
+  { kind: 'engine', maxClass: 3 },
+  { kind: 'thrusters', maxClass: 3 },
+  { kind: 'shield', maxClass: 3 },
+  { kind: 'armour', maxClass: 3 },
+  { kind: 'armour', maxClass: 3 },
+  { kind: 'cargo', maxClass: 1 },
+  { kind: 'cargo', maxClass: 1 },
+  { kind: 'cargo', maxClass: 1 },
+  { kind: 'hyperdrive', maxClass: 3 },
+  { kind: 'aux', maxClass: 3 },
+]
+
 export const HERMES: Chassis = {
-  id: 'hermes', name: 'Гермес', class: 2, baseMass: 5, baseHull: 95, cargoCapacity: 12, auxCapacity: 100,
-  radius: 8, inertiaFactor: 0.78, assistLateralDamp: 1.35, assistSpeedDamp: 0.35,
-  hardpoints: HERMES_HARDPOINTS, slots: FIGHTER_SLOTS, cost: 60_000,
+  id: 'hermes', name: 'Гермес', class: 3, baseMass: 12, baseHull: 420, cargoCapacity: 24, auxCapacity: 160,
+  radius: 8, inertiaFactor: 1.15, assistLateralDamp: 1.0, assistSpeedDamp: 0.35,
+  hardpoints: HERMES_HARDPOINTS, slots: HERMES_SLOTS, cost: 400_000,
 }
 
 /** «Персей» — сбалансированный перехватчик. */
 export const PERSEUS: Chassis = {
-  id: 'perseus', name: 'Персей', class: 2, baseMass: 6, baseHull: 120, cargoCapacity: 14, auxCapacity: 100,
+  id: 'perseus', name: 'Персей', class: 2, baseMass: 6, baseHull: 150, cargoCapacity: 16, auxCapacity: 100,
   radius: 9, inertiaFactor: 0.88, assistLateralDamp: 1.2, assistSpeedDamp: 0.35,
-  hardpoints: PERSEUS_HARDPOINTS, slots: FIGHTER_SLOTS, cost: 68_000,
+  hardpoints: PERSEUS_HARDPOINTS, slots: FIGHTER_SLOTS, cost: 90_000,
 }
 
 /** «Пегас» — вёрткий, с чуть большим трюмом. */
 export const PEGASUS: Chassis = {
-  id: 'pegasus', name: 'Пегас', class: 2, baseMass: 6, baseHull: 110, cargoCapacity: 16, auxCapacity: 100,
+  id: 'pegasus', name: 'Пегас', class: 2, baseMass: 6, baseHull: 120, cargoCapacity: 22, auxCapacity: 100,
   radius: 9, inertiaFactor: 0.82, assistLateralDamp: 1.25, assistSpeedDamp: 0.35,
-  hardpoints: PEGASUS_HARDPOINTS, slots: FIGHTER_SLOTS, cost: 66_000,
+  hardpoints: PEGASUS_HARDPOINTS, slots: FIGHTER_SLOTS, cost: 60_000,
 }
 
 /** «Орион» — тяжёлый истребитель: крепче, но вальяжнее. */
 export const ORION: Chassis = {
-  id: 'orion', name: 'Орион', class: 3, baseMass: 8, baseHull: 170, cargoCapacity: 18, auxCapacity: 100,
+  id: 'orion', name: 'Орион', class: 3, baseMass: 8, baseHull: 240, cargoCapacity: 20, auxCapacity: 100,
   radius: 10, inertiaFactor: 0.98, assistLateralDamp: 1.1, assistSpeedDamp: 0.35,
-  hardpoints: ORION_HARDPOINTS, slots: FIGHTER_SLOTS, cost: 78_000,
+  hardpoints: ORION_HARDPOINTS, slots: FIGHTER_SLOTS, cost: 180_000,
 }
 
 /** «Тесей» — ещё один лёгкий истребитель (GLB-меш). */
@@ -176,22 +197,22 @@ export const ORION: Chassis = {
  * оснастки (K) — там их и поправят, не трогая ни бой, ни верфь.
  */
 export const ATHENA: Chassis = {
-  id: 'athena', name: 'Афина', class: 2, baseMass: 6, baseHull: 120, cargoCapacity: 14, auxCapacity: 110,
+  id: 'athena', name: 'Афина', class: 2, baseMass: 6, baseHull: 110, cargoCapacity: 14, auxCapacity: 100,
   radius: 8, inertiaFactor: 0.85, assistLateralDamp: 1.25, assistSpeedDamp: 0.35,
-  hardpoints: THESEUS_HARDPOINTS, slots: FIGHTER_SLOTS, cost: 74_000,
+  hardpoints: THESEUS_HARDPOINTS, slots: FIGHTER_SLOTS, cost: 35_000,
 }
 
 /** «Икар» — легче и вёртче «Афины», но и шкура тоньше: скорость вместо брони. */
 export const ICARUS: Chassis = {
-  id: 'icarus', name: 'Икар', class: 2, baseMass: 4.5, baseHull: 95, cargoCapacity: 11, auxCapacity: 95,
+  id: 'icarus', name: 'Икар', class: 2, baseMass: 4.5, baseHull: 80, cargoCapacity: 10, auxCapacity: 95,
   radius: 7, inertiaFactor: 0.72, assistLateralDamp: 1.45, assistSpeedDamp: 0.35,
-  hardpoints: THESEUS_HARDPOINTS, slots: FIGHTER_SLOTS, cost: 58_000,
+  hardpoints: THESEUS_HARDPOINTS, slots: FIGHTER_SLOTS, cost: 25_000,
 }
 
 export const THESEUS: Chassis = {
   id: 'theseus', name: 'Тесей', class: 2, baseMass: 5, baseHull: 105, cargoCapacity: 13, auxCapacity: 100,
   radius: 8, inertiaFactor: 0.8, assistLateralDamp: 1.3, assistSpeedDamp: 0.35,
-  hardpoints: THESEUS_HARDPOINTS, slots: FIGHTER_SLOTS, cost: 62_000,
+  hardpoints: THESEUS_HARDPOINTS, slots: FIGHTER_SLOTS, cost: 40_000,
 }
 
 /**

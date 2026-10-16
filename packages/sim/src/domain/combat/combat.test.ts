@@ -1,4 +1,5 @@
 import { Quaternion, Vector3 } from 'three'
+import { veteranWorld } from '../../testkit'
 import { describe, expect, it } from 'vitest'
 import { MISSILE_PYLON, MODULE_CATALOGUE } from '../../config/modules'
 import { ASTEROID } from '../../config/world'
@@ -7,7 +8,7 @@ import { ECM, GUNNERY } from '../../config/weapons'
 import { raySphere } from '../../core/math'
 import { auroraOneLoadout } from '../../config/loadouts'
 import { findEcm, isLaser, isMissile } from '../loadout'
-import { createWorld, STARTER_SYSTEM } from '../world'
+import { STARTER_SYSTEM } from '../world'
 import { refreshSpec } from '../world/factory'
 import type { AsteroidEntity, MissileEntity, ShipEntity, World } from '../world/entities'
 import { stepBolts } from './bolts'
@@ -66,7 +67,7 @@ function enemyAhead(world: World, distance: number): ShipEntity {
  * ВПУСТУЮ: цикл по пусковым не делает ни одного витка, а `0 === 0` сходится.
  */
 function withOneEnemy(pylons = false): { world: World; enemy: ShipEntity } {
-  const world = createWorld({
+  const world = veteranWorld({
     ...STARTER_SYSTEM,
     belt: null,
     patrols: [{ count: 1, at: [0, 0, -500], spread: 0, faction: 'hostile', name: 'Пират' }],
@@ -714,7 +715,7 @@ describe('бог неуязвим, но телесен', () => {
    * как о щит станции: ни урона, ни поломок, ни обиды.
    */
   it('болт гаснет о его поле вспышкой, а не пролетает насквозь', () => {
-    const world = createWorld({
+    const world = veteranWorld({
       ...STARTER_SYSTEM,
       belt: null,
       patrols: [{ count: 1, at: [0, 0, -300], spread: 0, faction: 'neutral', name: 'Слово' }],

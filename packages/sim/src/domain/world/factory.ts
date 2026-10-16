@@ -781,7 +781,12 @@ export function applyPilotProfile(player: ShipEntity, profile: PilotProfile): vo
   player.persona = { ...profile.persona }
 }
 
-export function createWorld(def: SystemDef = STARTER_SYSTEM, profile?: PilotProfile): World {
+export function createWorld(
+  def: SystemDef = STARTER_SYSTEM,
+  profile?: PilotProfile,
+  /** Сборка игрока на старте. По умолчанию — стартовая; тесты боя берут полную «Аврору». */
+  start: Loadout = playerStartLoadout(),
+): World {
   const rng = makeRng(def.seed)
   const ids = createIdSource()
 
@@ -789,7 +794,7 @@ export function createWorld(def: SystemDef = STARTER_SYSTEM, profile?: PilotProf
     ids,
     'player',
     'Аврора',
-    playerStartLoadout(),
+    start,
     new Vector3(...def.playerStart),
     new Quaternion(),
     rng,

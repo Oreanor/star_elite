@@ -1,9 +1,10 @@
 import { Vector3 } from 'three'
+import { veteranWorld } from '../../testkit'
 import { describe, expect, it } from 'vitest'
 import { selectTarget } from '../ai/targeting'
 import { createAIState } from '../ai'
 import { cycleTarget } from '../world/queries'
-import { createWorld, STARTER_SYSTEM, type World } from '../world'
+import { STARTER_SYSTEM, type World } from '../world'
 import type { ShipEntity } from '../world/entities'
 import { canCloak, hasCloak, isVisible, stepCloak, toggleCloak } from './cloak'
 
@@ -14,7 +15,7 @@ import { canCloak, hasCloak, isVisible, stepCloak, toggleCloak } from './cloak'
 
 /** Мир с одним пиратом в двухстах метрах от игрока. */
 function withPirate(): { world: World; pirate: ShipEntity } {
-  const world = createWorld({
+  const world = veteranWorld({
     ...STARTER_SYSTEM,
     belt: null,
     patrols: [{ count: 1, at: [0, 0, -200], spread: 0, faction: 'hostile', name: 'Пират' }],

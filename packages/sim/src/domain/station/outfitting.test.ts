@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { AURORA_ONE, HERMES } from '../../config/chassis'
+import { veteranWorld } from '../../testkit'
+import { AURORA_ONE, HERMES, PERSEUS } from '../../config/chassis'
 import {
   BOMB_UNIT,
   CARGO_LARGE,
@@ -14,7 +15,7 @@ import {
 import { addCommodity, addItem } from '../cargo/hold'
 import { COMMODITIES } from '../cargo/items'
 import { canInstallInternal, createLoadout, hasBomb, hasEcm } from '../loadout'
-import { createWorld, STARTER_SYSTEM } from '../world'
+import { STARTER_SYSTEM } from '../world'
 import { fitDeltas, fitFromHold } from './shop'
 
 /**
@@ -24,7 +25,7 @@ import { fitDeltas, fitFromHold } from './shop'
 
 describe('перестановка железа из трюма', () => {
   it('установка из трюма усиливает щит, а снятое уходит обратно в трюм', () => {
-    const world = createWorld()
+    const world = veteranWorld()
     const player = world.player
     const before = player.spec.hull.shield // стартовый SHIELD_STANDARD
     addItem(player.hold, { kind: 'module', module: SHIELD_HEAVY })
@@ -39,7 +40,7 @@ describe('перестановка железа из трюма', () => {
   })
 
   it('сравнение сразу показывает плюс: тяжёлый щит поднимает защиту', () => {
-    const world = createWorld()
+    const world = veteranWorld()
     const shield = fitDeltas(world.player, SHIELD_HEAVY).find((d) => d.key === 'shield')
     expect(shield).toBeDefined()
     expect(shield!.to).toBeGreaterThan(shield!.from)
@@ -47,13 +48,13 @@ describe('перестановка железа из трюма', () => {
   })
 
   it('тот же модуль, что уже стоит, ставить незачем — отказ', () => {
-    const world = createWorld()
+    const world = veteranWorld()
     addItem(world.player.hold, { kind: 'module', module: SHIELD_STANDARD })
     expect(fitFromHold(world.player, world.player.hold.items.length - 1)).toBe('already-installed')
   })
 
   it('обычный груз, а не модуль, на корабль не поставить', () => {
-    const world = createWorld()
+    const world = veteranWorld()
     addCommodity(world.player.hold, COMMODITIES.FOOD, 1)
     expect(fitFromHold(world.player, world.player.hold.items.length - 1)).toBe('not-a-module')
   })
@@ -66,7 +67,7 @@ describe('перестановка железа из трюма', () => {
  */
 describe('класс корпуса ограничивает железо', () => {
   it('модуль класса выше корпуса — отказ, свой класс и ниже — встаёт', () => {
-    const bare = createLoadout(HERMES, [], []) // класс корпуса 2
+    const bare = createLoadout(PERSEUS, [], []) // класс корпуса 2
     // SHIELD_STANDARD класса 2 — ровно по корпусу, слот щита есть.
     expect(canInstallInternal(bare, SHIELD_STANDARD)).toBeNull()
     // SHIELD_HEAVY класса 3 — выше класса «Ареса», не по корпусу.
@@ -112,7 +113,7 @@ describe('перестановка своего железа', () => {
   it('лазер из трюма встаёт в ВЫБРАННУЮ точку подвески, снятый — в трюм', () => {
     // Пойманное: установка из трюма брала первую подходящую точку, а не ту, что кликнул
     // игрок, — менять лазеры в полёте поштучно было нельзя.
-    const world = createWorld({ ...STARTER_SYSTEM, patrols: [], belt: null })
+    const world = veteranWorld({ ...STARTER_SYSTEM, patrols: [], belt: null })
     const p = world.player
     const guns = p.loadout.chassis.hardpoints.map((h, i) => ({ h, i })).filter(({ h }) => h.kind === 'gun')
     if (guns.length < 2) return
@@ -128,7 +129,7 @@ describe('перестановка своего железа', () => {
 describe('грузоподъёмность', () => {
   it('итог трюма — корпус + контейнеры − масса обвеса, а не сумма контейнеров', () => {
     // Пойманное: «отсеки 19 и 4, а в трюме 17» — итог честный, но без раскладки читался ошибкой.
-    const world = createWorld({ ...STARTER_SYSTEM, patrols: [], belt: null })
+    const world = veteranWorld({ ...STARTER_SYSTEM, patrols: [], belt: null })
     const { cargoBudget: b, cargoCapacity } = world.player.spec
     expect(cargoCapacity).toBe(Math.max(0, Math.floor(b.chassis + b.racks - b.equipment)))
     expect(b.equipment).toBeGreaterThan(0)
@@ -139,7 +140,7 @@ describe('сравнение оружия в слоте', () => {
   it('«лучше/хуже» — против того, что стоит в ОТКРЫТОЙ точке, а не в соседней', () => {
     // Пойманное: открыл слот удерживающего луча (урон 0) — весь трюм со стрелкой «хуже»:
     // сравнение шло с точкой автоустановки, где стоял лазер на 30.
-    const world = createWorld({ ...STARTER_SYSTEM, patrols: [], belt: null })
+    const world = veteranWorld({ ...STARTER_SYSTEM, patrols: [], belt: null })
     const p = world.player
     const guns = p.loadout.chassis.hardpoints.map((h, i) => ({ h, i })).filter(({ h }) => h.kind === 'gun')
     if (guns.length < 2) return

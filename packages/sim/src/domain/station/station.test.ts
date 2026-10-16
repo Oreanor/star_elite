@@ -19,7 +19,7 @@ import {
   commoditySellPrice,
   sellItem,
 } from './trade'
-import { quietWorld } from '../../testkit'
+import { quietVeteranWorld, quietWorld } from '../../testkit'
 
 /** Ставит игрока в метре от причального кольца и гасит скорость. */
 function atDock(world: World): void {
@@ -289,7 +289,7 @@ describe('магазин', () => {
    * а не назначается, и потому переживёт любую перебалансировку.
    */
   it('тяжёлое железо режет манёвренность', () => {
-    const world = quietWorld()
+    const world = quietVeteranWorld()
     const player = world.player
     world.credits = 1_000_000
 
@@ -308,7 +308,7 @@ describe('магазин', () => {
    * апгрейд вытесняет старое железо, а станция забирает его с зачётом.
    */
   it('апгрейд вытесняет установленный модуль и возвращает часть цены', () => {
-    const world = quietWorld()
+    const world = quietVeteranWorld()
     world.credits = 1_000_000
     const player = world.player
 
@@ -323,7 +323,7 @@ describe('магазин', () => {
   })
 
   it('второй такой же модуль не продают и денег не списывают', () => {
-    const world = quietWorld()
+    const world = quietVeteranWorld()
     world.credits = 1_000_000
     const player = world.player
 

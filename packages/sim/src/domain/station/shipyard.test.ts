@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
+import { veteranWorld } from '../../testkit'
 import { SHIPYARD } from '../../config/loadouts'
 import { deriveShipSpec } from '../loadout'
 import { addCommodity } from '../cargo/hold'
 import { COMMODITIES } from '../cargo/items'
-import { createWorld } from '../world'
 import { fitOntoChassis, hullPurchase, swapHull } from './shipyard'
 import { CARGO_LARGE, CARGO_SMALL } from '../../config/modules'
 
@@ -24,7 +24,7 @@ describe('верфь корпусов', () => {
   })
 
   it('сменил корпус — обвес переехал, рама заправлена; только у причала', () => {
-    const world = createWorld()
+    const world = veteranWorld()
     // Ставим лёгкую сборку истребителя (с приводом): она заведомо влезет в грузовик,
     // и «успешную» смену не сорвёт грузоподъёмность — это проверяет отдельный тест.
     world.player.loadout = SHIPYARD.find((o) => o.chassis.id === 'hermes')!.loadout()
@@ -47,7 +47,7 @@ describe('верфь корпусов', () => {
   })
 
   it('не хватает денег — корпус не меняется', () => {
-    const world = createWorld()
+    const world = veteranWorld()
     world.docked = true
     world.credits = 0
     const demeter = SHIPYARD.find((o) => o.chassis.id === 'orion')!
@@ -62,7 +62,7 @@ describe('верфь корпусов', () => {
    * грузом. Проверяем поведение (железо не исчезло), а не конкретные числа.
    */
   it('лишнее железо переезжает в трюм, если у корпуса нет под него слота', () => {
-    const world = createWorld()
+    const world = veteranWorld()
     world.docked = true
     const start = world.player.loadout
     const fit = fitOntoChassis(start, SHIPYARD.find((o) => o.chassis.id === 'hermes')!.chassis)
@@ -79,7 +79,7 @@ describe('верфь корпусов', () => {
    * чтобы места на overflow не осталось.
    */
   it('не хватает грузоподъёмности на перенос — смена отклонена, мир не тронут', () => {
-    const world = createWorld()
+    const world = veteranWorld()
     world.docked = true
     // Забиваем трюм под завязку рудой: места на вытесненные модули не останется.
     addCommodity(world.player.hold, COMMODITIES.MINERALS, 100_000)
@@ -103,7 +103,7 @@ describe('верфь корпусов', () => {
     for (const offer of SHIPYARD) {
       expect(offer.chassis.slots.filter((x) => x.kind === 'cargo').length, offer.chassis.name).toBe(3)
     }
-    const world = createWorld()
+    const world = veteranWorld()
     const lo = world.player.loadout
     const withRacks = { ...lo, internals: [...lo.internals.filter((m) => m.kind !== 'cargo'), CARGO_SMALL, CARGO_LARGE] }
     for (const offer of SHIPYARD) {
@@ -113,7 +113,7 @@ describe('верфь корпусов', () => {
   })
 
   it('не вставшее в слоты можно продать в сделке: в трюм не едет, цена — в зачёт', () => {
-    const world = createWorld()
+    const world = veteranWorld()
     world.docked = true
     const small = SHIPYARD.find((o) => o.chassis.id === 'hermes')!
     const keep = hullPurchase(world, small.chassis, false)

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { createWorld, STARTER_SYSTEM, rememberPilot, type World } from '../world'
+import { veteranWorld } from '../../testkit'
+import { STARTER_SYSTEM, rememberPilot, type World } from '../world'
 import type { ShipEntity } from '../world/entities'
 import { applyCommand, registerCommand } from './commandBus'
 import { escortFee } from './dialogue'
@@ -13,7 +14,7 @@ import { addCommodity, COMMODITIES } from '../cargo'
  */
 
 function withAcquaintance(): { world: World; ship: ShipEntity } {
-  const world = createWorld({
+  const world = veteranWorld({
     ...STARTER_SYSTEM,
     belt: null,
     patrols: [{ count: 1, at: [0, 0, -200], spread: 0, faction: 'neutral', name: 'Кто-то' }],
@@ -73,7 +74,7 @@ describe('шина команд боту', () => {
   // Пойманный баг: «запомни пароль» незнакомому боту — модель отвечала «запомнил», а записи
   // знакомства не было, и `recordEvent` молча гасил факт. После станции бот не помнил ничего.
   it('«запомни» незнакомому заводит знакомство и не теряет факт', () => {
-    const world = createWorld({
+    const world = veteranWorld({
       ...STARTER_SYSTEM,
       belt: null,
       patrols: [{ count: 1, at: [0, 0, -200], spread: 0, faction: 'neutral', name: 'Кто-то' }],
@@ -254,7 +255,7 @@ describe('шина команд боту', () => {
   })
 
   it('meet заводит знакомство с ещё безымянным бортом и даёт строку о нём', () => {
-    const world = createWorld({
+    const world = veteranWorld({
       ...STARTER_SYSTEM,
       belt: null,
       patrols: [{ count: 1, at: [0, 0, -200], spread: 0, faction: 'neutral', name: 'Кто-то' }],
@@ -294,16 +295,17 @@ describe('доверенный груз', () => {
     const { world, ship } = withAcquaintance()
     addCommodity(world.player.hold, COMMODITIES.MINERALS, 10)
     const record = world.acquaintances[0]!
+    // Партия меньше трюма лёгкого борта (5 т): тест про учёт, а не про нехватку места.
 
     applyCommand(world, ship, {
       action: 'transfer',
-      payload: { direction: 'toThem', commodityId: 'minerals', units: 6 },
+      payload: { direction: 'toThem', commodityId: 'minerals', units: 4 },
     })
-    expect(record.entrusted).toEqual([{ commodityId: 'minerals', units: 6 }])
+    expect(record.entrusted).toEqual([{ commodityId: 'minerals', units: 4 }])
 
     applyCommand(world, ship, {
       action: 'transfer',
-      payload: { direction: 'toYou', commodityId: 'minerals', units: 6 },
+      payload: { direction: 'toYou', commodityId: 'minerals', units: 4 },
     })
     expect(record.entrusted).toEqual([])
   })

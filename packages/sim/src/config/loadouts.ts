@@ -2,6 +2,7 @@ import { createLoadout, type Chassis, type Loadout } from './schema'
 import { ATHENA, ATLAS, AURORA_ONE, HERMES, ICARUS, ORION, PEGASUS, PERSEUS, SPIRITUS_SANCTUS, THESEUS } from './chassis'
 import {
   ARMOUR_PLATE,
+  BEAM_LASER,
   BEAM_LASER_HEAVY,
   BURST_LASER,
   CLOAK_FIELD,
@@ -46,30 +47,43 @@ export function godLoadout(): Loadout {
 }
 
 /**
- * КОРАБЛЬ ИГРОКА — «Аврора One», его собственная рама с полным набором точек подвески
- * (у Святого Духа пилонов нет вовсе).
+ * КОРАБЛЬ ИГРОКА — «Афина»: серийный истребитель из ДЕШЁВЫХ. Начинаешь снизу лестницы корпусов,
+ * чтобы было куда расти: «Аврора», «Орион», «Гермес» — уже покупки. Класс корпуса 2, поэтому
+ * железо — не выше второго класса (маскировка и «Клинок» третьего на старте не встанут).
  */
 export function playerStartLoadout(): Loadout {
   return createLoadout(
-    AURORA_ONE,
+    ATHENA,
     // Базовый гиперпривод стоит с завода: без него не улететь из системы вообще,
     // а «заработай сорок пять тысяч, чтобы впервые куда-то полететь» — не начало игры.
     // Дальний рейс всё равно надо покупать: девять световых лет — это соседи.
+    [ENGINE_STANDARD, RCS_STANDARD, SHIELD_STANDARD, ARMOUR_PLATE, CARGO_LARGE, HYPERDRIVE_BASIC],
+    // Точки «Афины»: середина крыла, законцовки, нос (калибр вдвое) и два пилона. ЗЕЛЁНЫЙ
+    // класс 2 на крыле, лучевой класс 2 на законцовках, голубой «Столб» в носу.
+    [BURST_LASER, BEAM_LASER, PULSE_LASER_CENTRAL, MISSILE_PYLON, MISSILE_PYLON],
+  )
+}
+
+/**
+ * «Аврора One» в ПОЛНОЙ боевой сборке — прежний стартовый корабль: маскировка, «Клинок» третьего
+ * класса, четыре пилона по восемь ракет. На старте её больше нет (начинают с «Афины»), но это
+ * эталон для тестов боя, маскировки и ракет — им нужно железо, которого у новичка нет.
+ */
+export function auroraVeteranLoadout(): Loadout {
+  return createLoadout(
+    AURORA_ONE,
     [ENGINE_STANDARD, RCS_STANDARD, SHIELD_STANDARD, ARMOUR_PLATE, CARGO_LARGE, HYPERDRIVE_BASIC, CLOAK_FIELD],
-    // ТРИ лазера (класс задаёт цвет луча): ЗЕЛЁНЫЙ класс 2 на СЕРЕДИНЕ крыла, КРАСНЫЙ
-    // класс 3 на ЗАКОНЦОВКАХ (по краям), голубой класс 1 «Столб» в ЦЕНТРЕ (носа) — бьёт вдвое
-    // реже, но луч втрое толще. ЧЕТЫРЕ пилона снаряжены с завода: 8 ракет на каждом — 32
-    // на вылет. Тридцать две тонны боезапаса пилот чувствует рулями, и это честная плата.
     [BURST_LASER, BEAM_LASER_HEAVY, PULSE_LASER_CENTRAL, MISSILE_PYLON, MISSILE_PYLON, MISSILE_PYLON, MISSILE_PYLON],
   )
 }
 
-/** Рядовой пират на лёгком «Гермесе»: слабее игрока по железу, опасен числом. */
+/** Рядовой пират на лёгком «Икаре»: слабее игрока по железу, опасен числом. */
 export function pirateLoadout(): Loadout {
   return createLoadout(
     // РЭБ в аукс-слоте: пират глушит налетающие ракеты, как и раньше (теперь это модуль,
-    // а не врождённая способность — гейт в step одинаков для игрока и бота).
-    HERMES,
+    // а не врождённая способность — гейт в step одинаков для игрока и бота). «Гермес» —
+    // тяжёлый военный корабль, рядовому пирату не по карману.
+    ICARUS,
     [ENGINE_CIVILIAN, RCS_CIVILIAN, SHIELD_LIGHT, ECM_UNIT],
     [PULSE_LASER_WORN],
   )
