@@ -353,13 +353,13 @@ export function drawAltimeter(frame: HudFrame, cx: number, top: number, bottom: 
   if (!near || near.altitude > LANDING.ALTIMETER_HI) return
 
   const altitude = Math.max(0, near.altitude)
-  const t = Math.min(1, Math.sqrt(altitude / LANDING.ALTIMETER_HI))
+  const t = Math.min(1, Math.sqrt(altitude / LANDING.ALTIMETER_SCALE))
   const y = bottom - (bottom - top) * t
   // Земля внизу — сплошная черта: от неё и отсчитывается всё остальное.
   line(ctx, cx, top, cx, bottom, HUD_COLORS.DIM)
   line(ctx, cx - 3 * S, bottom, cx + 3 * S, bottom, HUD_COLORS.DIM)
   // Окно входа в ховер (400…600 м) — засечка: пилот видит, где нажимать L.
-  const promptY = bottom - (bottom - top) * Math.sqrt(LANDING.HOVER_ALT / LANDING.ALTIMETER_HI)
+  const promptY = bottom - (bottom - top) * Math.min(1, Math.sqrt(LANDING.PROMPT_LO / LANDING.ALTIMETER_SCALE))
   line(ctx, cx - 2 * S, promptY, cx + 2 * S, promptY, HUD_COLORS.DIM)
 
   // Ниже окна посадки — жёлтая: это уже не «лечу», а «сейчас коснусь».
