@@ -5,6 +5,7 @@ import {
   autofightActive,
   autofightSpent,
   beginManoeuvre,
+  canAerobatics,
   boostMult,
   clamp,
   coolManoeuvre,
@@ -351,7 +352,8 @@ export function createPlayerController(intent: PlayerIntent): Controller {
       // Опрос двойного тапа — ПЕРВЫМ делом: он взводит окно и, если тап сложился,
       // начинает фигуру, чтобы газ и крен ниже уже видели «идёт манёвр».
       const tap = pollTap(intent, dt)
-      if (tap) beginManoeuvre(intent.manoeuvre, tap.kind, tap.dir)
+      // Крупному военному корпусу фигуры пилотажа не положены (`aerobatics: false`).
+      if (tap && canAerobatics(ship)) beginManoeuvre(intent.manoeuvre, tap.kind, tap.dir)
 
       /**
        * Копим, сколько КАЖДАЯ тап-клавиша зажата без отрыва. Непрерывное действие

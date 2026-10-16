@@ -416,6 +416,11 @@ export interface Chassis {
    * при той же массе.
    */
   inertiaFactor: number
+  /**
+   * Фигуры пилотажа по двойному нажатию (бочка, петля). `false` — нет: крупному военному
+   * кораблю они смешны и неправдоподобны. Нет поля — можно (истребители).
+   */
+  aerobatics?: boolean
   /** Лётный компьютер: гашение сноса и подтяжка скорости, 1/с. */
   assistLateralDamp: number
   assistSpeedDamp: number

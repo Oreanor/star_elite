@@ -89,13 +89,27 @@ const FIGHTER_PYLONS: Chassis['hardpoints'] = [
   { offset: [3.2, -0.5, 2.5], kind: 'pylon', maxClass: 1 },
 ]
 
-/** «Гермес»: узкий корпус — крыльевые пары сидят тесно, нос приподнят над обводом. */
-const HERMES_HARDPOINTS: Chassis['hardpoints'] = [
-  { offset: [0, -0.78, -6.95], kind: 'gun', maxClass: 3, nozzles: [[-0.74, -0.78, -6.95], [0.74, -0.78, -6.95]] },
-  { offset: [0, -0.95, 0.01], kind: 'gun', maxClass: 3, nozzles: [[-2.44, -0.95, 0.01], [2.44, -0.95, 0.01]] },
-  { offset: [0, 1.22, -0.47], kind: 'gun', maxClass: 3, bore: 2, nozzles: [[0, 1.22, -0.47]] },
-  ...FIGHTER_PYLONS,
-]
+/**
+ * «Гермес»: узкий корпус — крыльевые пары сидят тесно, нос приподнят над обводом. Тяжёлый
+ * военный корабль ВТРОЕ крупнее истребителей (`HERMES_SIZE`): точки сняты редактором дул на
+ * меше истребительного размера и масштабированы тем же множителем, что и сам меш в рендере.
+ */
+export const HERMES_SIZE = 3
+const scaleHardpoints = (hps: Chassis['hardpoints'], k: number): Chassis['hardpoints'] =>
+  hps.map((hp) => ({
+    ...hp,
+    offset: [hp.offset[0] * k, hp.offset[1] * k, hp.offset[2] * k] as const,
+    ...(hp.nozzles ? { nozzles: hp.nozzles.map((n) => [n[0] * k, n[1] * k, n[2] * k] as const) } : {}),
+  }))
+const HERMES_HARDPOINTS: Chassis['hardpoints'] = scaleHardpoints(
+  [
+    { offset: [0, -0.78, -6.95], kind: 'gun', maxClass: 3, nozzles: [[-0.74, -0.78, -6.95], [0.74, -0.78, -6.95]] },
+    { offset: [0, -0.95, 0.01], kind: 'gun', maxClass: 3, nozzles: [[-2.44, -0.95, 0.01], [2.44, -0.95, 0.01]] },
+    { offset: [0, 1.22, -0.47], kind: 'gun', maxClass: 3, bore: 2, nozzles: [[0, 1.22, -0.47]] },
+    ...FIGHTER_PYLONS,
+  ],
+  HERMES_SIZE,
+)
 
 /** «Персей»: законцовки отнесены назад по стреловидности, нос длинный. */
 const PERSEUS_HARDPOINTS: Chassis['hardpoints'] = [
@@ -164,8 +178,8 @@ const HERMES_SLOTS: Chassis['slots'] = [
 ]
 
 export const HERMES: Chassis = {
-  id: 'hermes', name: 'Гермес', class: 3, baseMass: 12, baseHull: 420, cargoCapacity: 24, auxCapacity: 160,
-  radius: 8, inertiaFactor: 1.15, assistLateralDamp: 1.0, assistSpeedDamp: 0.35,
+  id: 'hermes', name: 'Гермес', class: 3, baseMass: 24, baseHull: 420, cargoCapacity: 24, auxCapacity: 160,
+  radius: 8 * HERMES_SIZE, inertiaFactor: 1.15, aerobatics: false, assistLateralDamp: 1.0, assistSpeedDamp: 0.35,
   hardpoints: HERMES_HARDPOINTS, slots: HERMES_SLOTS, cost: 400_000,
 }
 

@@ -1,6 +1,6 @@
 import { BufferGeometry, Matrix4, type Material, type Mesh } from 'three'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
-import { rigOf } from '@elite/sim'
+import { HERMES_SIZE, rigOf } from '@elite/sim'
 import { MATERIAL, PALETTE } from '../config'
 import { buildGeometry, quad, symmetric, tri, type Triangle, type Vec3 } from './build'
 import { bell, panel } from './parts'
@@ -256,7 +256,8 @@ const GLB_HULLS: readonly GlbHullDef[] = [
   // к устьям движков (z 8.5, не 11 — иначе плюмаж отрывался от кормы) и опущены на ось тубусов.
   { id: 'aurora_one', url: '/models/ships/aurora_one.glb', scale: GLB_SCALE, yaw: GLB_YAW, pitch: GLB_PITCH, roll: GLB_ROLL,
     nozzles: [{ offset: [-1.5, -0.7, 7.5], radius: 1 }, { offset: [1.5, -0.7, 7.5], radius: 1 }] },
-  { id: 'hermes', url: '/models/ships/hermes.glb', scale: GLB_SCALE, yaw: GLB_YAW, pitch: GLB_PITCH, roll: GLB_ROLL },
+  // «Гермес» — тяжёлый военный, втрое крупнее истребителей: тот же множитель, что у его точек.
+  { id: 'hermes', url: '/models/ships/hermes.glb', scale: GLB_SCALE * HERMES_SIZE, yaw: GLB_YAW, pitch: GLB_PITCH, roll: GLB_ROLL },
   { id: 'perseus', url: '/models/ships/perseus.glb', scale: GLB_SCALE, yaw: GLB_YAW, pitch: GLB_PITCH, roll: GLB_ROLL },
   { id: 'pegasus', url: '/models/ships/pegasus.glb', scale: GLB_SCALE, yaw: GLB_YAW, pitch: GLB_PITCH, roll: GLB_ROLL },
   { id: 'orion', url: '/models/ships/orion.glb', scale: GLB_SCALE, yaw: GLB_YAW, pitch: GLB_PITCH, roll: GLB_ROLL },

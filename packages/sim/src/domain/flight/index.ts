@@ -1,5 +1,6 @@
 export {
   beginManoeuvre,
+  canAerobatics,
   coolManoeuvre,
   createManoeuvre,
   loopThrottle,

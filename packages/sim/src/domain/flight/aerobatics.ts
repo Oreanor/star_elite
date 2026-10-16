@@ -68,6 +68,11 @@ function startManoeuvre(m: Manoeuvre, kind: ManoeuvreKind, dir: -1 | 1): void {
  * освободится штурвал. Последний заказ вытесняет прежний — в буфере всегда самое
  * свежее намерение пилота, а не то, что он передумал.
  */
+/** Умеет ли корпус фигуры пилотажа — данные корпуса, а не `if` по имени корабля. */
+export function canAerobatics(ship: ShipEntity): boolean {
+  return ship.loadout.chassis.aerobatics !== false
+}
+
 export function beginManoeuvre(m: Manoeuvre, kind: ManoeuvreKind, dir: -1 | 1): boolean {
   if (m.kind !== null || m.cooldown > 0) {
     m.nextKind = kind
