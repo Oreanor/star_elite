@@ -33,10 +33,19 @@ export function moduleColumns(
       key: 'compare',
       header: compareHeader,
       align: 'right',
-      sortValue: (m) => compareOf(m)?.to ?? -Infinity,
+      sortValue: (m) => compareOf(m)?.to ?? moduleStat(m).value,
       cell: (m) => {
         const cmp = compareOf(m)
-        if (!cmp) return <span style={{ color: DIM }}>·</span>
+        // Сравнить не с чем (пустой слот, другой вид) — просто значение модуля.
+        if (!cmp) {
+          const own = moduleStat(m)
+          return (
+            <span className="whitespace-nowrap" style={{ color: DIM }}>
+              {mixed && `${statLabel(own.key)} `}
+              {formatStat(own.key, own.value)}
+            </span>
+          )
+        }
         const same = cmp.to === cmp.from
         const tone = trend(cmp.better)
         return (

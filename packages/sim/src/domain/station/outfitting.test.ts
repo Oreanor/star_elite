@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { refreshSpec } from '../world/factory'
 import { veteranWorld } from '../../testkit'
 import { AURORA_ONE, HERMES, PERSEUS } from '../../config/chassis'
 import {
@@ -163,5 +164,18 @@ describe('витрина станции', () => {
     }
     expect(counts.size).toBeGreaterThan(0)
     for (const [kind, n] of counts) expect(n, kind).toBeLessThanOrEqual(4)
+  })
+})
+
+describe('сравнение «было → станет» с усиленной рамой', () => {
+  it('доп. оборудование не «срезает» корпус на купленное усиление рамы', () => {
+    // Пойманное: «после» считалось на голой раме — у «Гермеса» с усилением любой модуль
+    // в пустом аукс-слоте показывал «КОРПУС 1288 → 1183 ▼».
+    const world = veteranWorld({ ...STARTER_SYSTEM, patrols: [], belt: null })
+    const p = world.player
+    p.hullUp = { ...p.hullUp, hull: true }
+    refreshSpec(p)
+    const hull = fitDeltas(p, ECM_UNIT).find((d) => d.key === 'hull')
+    expect(hull).toBeUndefined()
   })
 })

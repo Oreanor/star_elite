@@ -356,7 +356,9 @@ export function fitDeltas(ship: ShipEntity, module: ShipModule, hardpointIndex?:
     return from === to ? [] : [{ key: 'damage', from, to, higherBetter: true }]
   }
 
-  const after = deriveShipSpec(withFitted(ship.loadout, module), cargoMass(ship.hold))
+  // С усилениями ЭТОЙ рамы (`hullUp`): без них «после» считалось на голой раме, и любой модуль
+  // показывал падение корпуса ровно на купленное усиление (у «Гермеса» −105).
+  const after = deriveShipSpec(withFitted(ship.loadout, module), cargoMass(ship.hold), ship.hullUp)
   const out: StatDelta[] = []
   for (const f of SPEC_FIELDS) {
     const from = f.get(ship.spec)

@@ -58,8 +58,9 @@ export interface HeadlineCompare {
 export function headlineCompare(world: World, module: ShipModule, hardpointIndex?: number): HeadlineCompare | null {
   const { key } = moduleStat(module)
   const deltas = fitDeltas(world.player, module, hardpointIndex)
-  const match = deltas.find((d) => d.key === key)
-  const delta = match ?? deltas[0]
+  // Только по ГЛАВНОЙ характеристике модуля. Чужая ось (у маскировки — «отсек» от её массы)
+  // читалась как суть модуля: «КОРПУС 1288 → 1183 ▼» у любого доп. оборудования.
+  const delta = deltas.find((d) => d.key === key)
   if (!delta) return null
   const better = delta.higherBetter ? delta.to > delta.from : delta.to < delta.from
   return { key: delta.key, from: delta.from, to: delta.to, better }
