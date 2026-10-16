@@ -9,11 +9,13 @@ import type {
   ShipEntity,
   World,
 } from '../world/entities'
-import { shipAxes } from './axes'
+import { forward, shipAxes } from './axes'
 import { stepShip } from './model'
 
 const _climb = new Vector3()
 const _normalBefore = new Vector3()
+const _noseDir = new Vector3()
+const _side = new Vector3()
 const _transport = new Quaternion()
 const _normal = /* @__PURE__ */ new Vector3()
 const _forward = /* @__PURE__ */ new Vector3()
@@ -389,6 +391,26 @@ export function releaseLanding(ship: ShipEntity, _world: World): boolean {
 
 
 /**
+ * Над поверхностью летят как САМОЛЁТ: скорость быстро ложится вдоль носа, величина не теряется.
+ * Обычный лётный компьютер гасит снос неспешно (так в космосе и надо), и после рыскания борт
+ * долго шёл боком, а камера с упреждением по скорости держала его сбоку от центра кадра.
+ * Только с ассистентом: без него — ньютоновский полёт и здесь.
+ */
+function alignToNose(ship: ShipEntity, dt: number): void {
+  if (!ship.controls.flightAssist) return
+  const v = ship.state.vel
+  const speed = v.length()
+  if (speed < 1e-3) return
+  forward(ship.state.quat, _noseDir)
+  const along = v.dot(_noseDir)
+  // Задний ход (нос от скорости) не переворачиваем: гасим лишь поперечное.
+  _side.copy(v).addScaledVector(_noseDir, -along)
+  v.addScaledVector(_side, -(1 - Math.exp(-LANDING.ALIGN_RATE * dt)))
+  const left = v.length()
+  if (left > 1e-6) v.multiplyScalar(speed / left)
+}
+
+/**
  * Снять с радиального хода `amount` (по нормали), сохранив ВЕЛИЧИНУ скорости: снятое уходит в
  * касательную. Подъём или упор в пол/потолок не крадут ход вдоль поверхности.
  */
@@ -448,6 +470,7 @@ export function stepLanding(ship: ShipEntity, world: World, dt: number): boolean
   ship.controls.strafeUp = 0
   stepShip(ship.state, ship.controls, ship.spec.tuning, dt)
   ship.controls.strafeUp = strafeUp
+  alignToNose(ship, dt)
 
   // Высота — из настоящего места после шага; Shift+W/S по-прежнему поднимает/опускает борт.
   _normal.copy(ship.state.pos).sub(surface.pos)

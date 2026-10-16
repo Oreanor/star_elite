@@ -490,3 +490,26 @@ describe('ход над поверхностью не съедается нак�
     expect(Math.abs(fwd.dot(normal))).toBeLessThan(1e-4)
   })
 })
+
+describe('над поверхностью без заноса', () => {
+  it('после поворота носа скорость быстро ложится вдоль него — борт не идёт боком', () => {
+    // Пойманное: снос гасился неспешно, как в космосе, — после рыскания борт долго шёл боком,
+    // и камера с упреждением по скорости держала его сбоку от центра кадра.
+    const world = quietWorld()
+    const moon = world.bodies.filter((b) => b.kind === 'moon')[0]!
+    const ship = world.player
+    ship.state.pos.copy(moon.pos).add(new Vector3(0, moon.radius + LANDING.HOVER_ALT, 0))
+    landShip(ship, moon)
+    ship.controls.throttle = 0.5
+    for (let i = 0; i < 120; i++) stepLanding(ship, world, PHYSICS.FIXED_DT)
+    // Резко повернули нос на 60° вокруг вертикали.
+    const up = ship.landedOn!.normal.clone()
+    ship.state.quat.premultiply(new Quaternion().setFromAxisAngle(up, Math.PI / 3))
+    for (let i = 0; i < 120; i++) stepLanding(ship, world, PHYSICS.FIXED_DT)
+    const nose = new Vector3(0, 0, -1).applyQuaternion(ship.state.quat)
+    const dir = ship.state.vel.clone().normalize()
+    // Через секунду снос почти погашен: скорость вдоль носа с точностью до нескольких градусов.
+    expect(nose.dot(dir)).toBeGreaterThan(Math.cos(0.1))
+  })
+})
+
