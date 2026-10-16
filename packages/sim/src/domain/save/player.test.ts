@@ -195,3 +195,12 @@ describe('модули в трюме переживают сохранение',
     expect(dst.player.hold.items.some((i) => i.kind === 'module')).toBe(false)
   })
 })
+
+describe('снятые из каталога модули', () => {
+  it('старый «Композит» и «Балкер» из сейва поднимаются ближайшим контейнером, а не исчезают', () => {
+    for (const id of ['cargo_1a', 'cargo_2a', 'cargo_3a', 'cargo_2h', 'cargo_3h']) {
+      const m = findModule(id)
+      expect(m?.kind, id).toBe('cargo')
+    }
+  })
+})

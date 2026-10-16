@@ -1002,113 +1002,67 @@ const MISSILE_SLEDGE: MissileModule = {
 
 // ─── Трюм ────────────────────────────────────────────────────────────────────
 //
-// Контейнеры БЕСКЛАССОВЫ: любой грузовой слот принимает любой отсек. Различаются
-// они лишь ВМЕСТИМОСТЬЮ, ВЕСОМ и ценой — а не «размером под слот». Оттого крупная
-// стойка не вылетает при пересадке на корпус с мелким грузовым слотом, а честный
-// компромисс задаёт масса: набитый тяжёлый трюм режет манёвр, как ему и положено.
-// (Поле `class` держим на 1, чтобы отсек влезал в слот любого класса.)
-//
-// `capacity` — сколько тонн отсек ДОБАВЛЯЕТ к грузоподъёмности корпуса: стандартная линия
-// 10 / 20 / 50 т (прежние 4 / 8 / 15 были слабы — трюм почти не рос); сам отсек тоже весит
-// и ест бюджет. Базовый трюм даёт корпус (`Chassis.cargoCapacity`),
-// контейнеры его расширяют. «Композит» — больше вместимости на тонну (лёгкий, дорогой),
-// «Балкер» — больше на кредит, но тяжёлый.
+// Контейнеры БЕСКЛАССОВЫ: любой грузовой слот принимает любой. Линейка ОДНА и простая —
+// 10 / 20 / 30 / 50 / 100 т: в магазине прежде было три линии с буквами (стандарт, «Композит»,
+// «Балкер»), и выбрать трюм было нельзя без таблицы. Теперь разница только в размере, а
+// крупный выгоднее: тонна вместимости дешевеет с ростом контейнера. Сам контейнер весит
+// (`mass` — 5% вместимости) и ест бюджет корпуса, как и всё оборудование.
+// (Поле `class` держим на 1, чтобы контейнер влезал в слот любого класса.)
 
 export const CARGO_SMALL: CargoModule = {
   id: 'cargo_1',
-  name: 'Грузовой контейнер 1',
+  name: 'Грузовой контейнер 10 т',
   kind: 'cargo',
   class: 1,
-  mass: 0.4,
-  cost: 2000,
+  mass: 0.5,
+  cost: 4000, // 400 кр/т
   salvageChance: 0.7,
   capacity: 10,
 }
 
-const CARGO_MEDIUM: CargoModule = {
+export const CARGO_MEDIUM: CargoModule = {
   id: 'cargo_2',
-  name: 'Грузовой контейнер 2',
+  name: 'Грузовой контейнер 20 т',
   kind: 'cargo',
   class: 1,
-  mass: 0.8,
-  cost: 6500,
+  mass: 1,
+  cost: 7500, // 375 кр/т
   salvageChance: 0.6,
   capacity: 20,
 }
 
 export const CARGO_LARGE: CargoModule = {
   id: 'cargo_3',
-  name: 'Грузовой контейнер 3',
+  name: 'Грузовой контейнер 30 т',
   kind: 'cargo',
   class: 1,
   mass: 1.5,
-  cost: 17000,
+  cost: 10500, // 350 кр/т
   salvageChance: 0.5,
-  // Крупнейший стандартный отсек: +50 т к трюму при полутора тоннах массы.
-  // Пара таких превращает истребитель в сносного торговца, не убивая манёвр.
+  capacity: 30,
+}
+
+export const CARGO_HUGE: CargoModule = {
+  id: 'cargo_4',
+  name: 'Грузовой контейнер 50 т',
+  kind: 'cargo',
+  class: 1,
+  mass: 2.5,
+  cost: 16000, // 320 кр/т
+  salvageChance: 0.4,
   capacity: 50,
 }
 
-// «Композит» — лёгкая дорогая линия трюма. Вместимости на тонну больше стандартной, а
-// массы меньше: отсек для боевого торговца, которому нельзя терять манёвр под грузом.
-// Платят кредитами. Композитный держит почти столько же, что стоковый, вдвое легче.
-const CARGO_COMPOSITE_1: CargoModule = {
-  id: 'cargo_1a',
-  name: 'Грузовой отсек 1A «Композит»',
+export const CARGO_GIANT: CargoModule = {
+  id: 'cargo_5',
+  name: 'Грузовой контейнер 100 т',
   kind: 'cargo',
   class: 1,
-  mass: 0.25, // легче стандартного при большей вместимости на тонну
-  cost: 5000,
-  salvageChance: 0.6,
-  capacity: 10,
+  mass: 5,
+  cost: 28000, // 280 кр/т
+  salvageChance: 0.3,
+  capacity: 100,
 }
-
-const CARGO_COMPOSITE_2: CargoModule = {
-  id: 'cargo_2a',
-  name: 'Грузовой отсек 2A «Композит»',
-  kind: 'cargo',
-  class: 1,
-  mass: 0.5,
-  cost: 14000,
-  salvageChance: 0.5,
-  capacity: 15,
-}
-
-const CARGO_COMPOSITE_3: CargoModule = {
-  id: 'cargo_3a',
-  name: 'Грузовой отсек 3A «Композит»',
-  kind: 'cargo',
-  class: 1,
-  mass: 1.0, // против полутора тонн стокового большого отсека
-  cost: 42000,
-  salvageChance: 0.4,
-  capacity: 45,
-}
-
-// «Балкер» — дешёвый мясистый трюм: тонн за кредит больше всех, но масса зверская.
-// Отсек для баржи, которой манёвр и так не нужен, а на боевом корпусе он гиря.
-const CARGO_BULK_2: CargoModule = {
-  id: 'cargo_2h',
-  name: 'Грузовой трюм 2E «Балкер»',
-  kind: 'cargo',
-  class: 1,
-  mass: 1.4, // тяжелее стандартного среднего отсека почти вдвое
-  cost: 4500, // и дешевле его
-  salvageChance: 0.6,
-  capacity: 35,
-}
-
-const CARGO_BULK_3: CargoModule = {
-  id: 'cargo_3h',
-  name: 'Грузовой трюм 3E «Балкер»',
-  kind: 'cargo',
-  class: 1,
-  mass: 2.4, // против полутора тонн стокового — вся разница в потерянном манёвре
-  cost: 12000,
-  salvageChance: 0.5,
-  capacity: 85,
-}
-
 
 // ─── Гипердвигатели ──────────────────────────────────────────────────────────
 //
@@ -1412,9 +1366,7 @@ export const MODULE_CATALOGUE: readonly ShipModule[] = [
   MISSILE_STING, MISSILE_PYLON, MISSILE_WASP,
   MISSILE_SWARM, MISSILE_HOMING, MISSILE_HOUND,
   MISSILE_HEAVY, MISSILE_SLEDGE,
-  CARGO_SMALL, CARGO_MEDIUM, CARGO_LARGE,
-  CARGO_COMPOSITE_1, CARGO_COMPOSITE_2, CARGO_COMPOSITE_3,
-  CARGO_BULK_2, CARGO_BULK_3,
+  CARGO_SMALL, CARGO_MEDIUM, CARGO_LARGE, CARGO_HUGE, CARGO_GIANT,
   HYPERDRIVE_BASIC, HYPERDRIVE_LONG, HYPERDRIVE_DEEP,
   HYPERDRIVE_COMPACT, HYPERDRIVE_COMPACT_B,
   HYPERDRIVE_HAULER, HYPERDRIVE_HAULER_B,
@@ -1424,6 +1376,19 @@ export const MODULE_CATALOGUE: readonly ShipModule[] = [
   ECM_UNIT, BOMB_UNIT, SCOOP_UNIT,
 ]
 
+/**
+ * Снятые из каталога модули → их замена. Сейв хранит id: без этой карты старый «Композит»
+ * в трюме или в слоте просто исчез бы при загрузке. Ведём по ближайшей вместимости.
+ */
+const RETIRED_MODULES: Readonly<Record<string, string>> = {
+  cargo_1a: 'cargo_1',
+  cargo_2a: 'cargo_2',
+  cargo_3a: 'cargo_4',
+  cargo_2h: 'cargo_3',
+  cargo_3h: 'cargo_5',
+}
+
 export function findModule(id: string): ShipModule | null {
-  return MODULE_CATALOGUE.find((m) => m.id === id) ?? null
+  const live = RETIRED_MODULES[id] ?? id
+  return MODULE_CATALOGUE.find((m) => m.id === live) ?? null
 }
