@@ -54,7 +54,7 @@ function integrateAngular(s: ShipState, c: ShipControls, t: ShipTuning, dt: numb
   // мышь обратно — нос возвращается на курс бойко, а не дотягивает прежний поворот.
   s.angVel.x = approach(s.angVel.x, _targetAng.x, angStep(s.angVel.x, _targetAng.x, t.PITCH_ACCEL, dt))
   s.angVel.y = approach(s.angVel.y, _targetAng.y, angStep(s.angVel.y, _targetAng.y, t.YAW_ACCEL, dt))
-  s.angVel.z = approach(s.angVel.z, _targetAng.z, angStep(s.angVel.z, _targetAng.z, t.ROLL_ACCEL, dt))
+  s.angVel.z = approach(s.angVel.z, _targetAng.z, angStep(s.angVel.z, _targetAng.z, t.ROLL_ACCEL * c.thrusterBoost, dt))
 
   // В вакууме нечему гасить вращение, но без стабилизации корабль неуправляем.
   // Трактуем как работу маневровых двигателей, а не как аэродинамику.
@@ -120,7 +120,8 @@ function integrateLinear(s: ShipState, c: ShipControls, t: ShipTuning, dt: numbe
   const lateral = Math.hypot(c.strafe, c.strafeUp)
   if (lateral > 1e-6) {
     // Зажимаем в круг, а не в квадрат: по диагонали тяга не должна быть больше.
-    const scale = (t.STRAFE_THRUST * grow) / (t.MASS * Math.max(1, lateral))
+    // Форсаж маневровых (фигура пилотажа) усиливает и их: двигатели те же, что у крена.
+    const scale = (t.STRAFE_THRUST * grow * c.thrusterBoost) / (t.MASS * Math.max(1, lateral))
     _accel.addScaledVector(_right, c.strafe * scale)
     _accel.addScaledVector(_up, c.strafeUp * scale)
   }

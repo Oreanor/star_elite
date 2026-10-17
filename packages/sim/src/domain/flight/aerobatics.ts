@@ -104,6 +104,7 @@ export function coolManoeuvre(m: Manoeuvre, dt: number): void {
 function endManoeuvre(ship: ShipEntity, m: Manoeuvre): void {
   const c = ship.controls
   c.roll = 0
+  c.thrusterBoost = 1
   c.pitch = 0
   c.strafe = 0
   c.strafeUp = 0
@@ -142,17 +143,18 @@ function driveBarrel(ship: ShipEntity, m: Manoeuvre, dt: number): void {
   // нужно на остановку. С середины тормозили, пока торможение было не резче разгона; теперь
   // маневровые тормозят вращение бойчее, и с середины борт вставал, не докрутив оборот.
   const omega = Math.abs(ship.state.angVel.z)
-  const stopAngle = (omega * omega) / (2 * ship.spec.tuning.ROLL_ACCEL * PHYSICS.ANGULAR_BRAKE)
+  const stopAngle = (omega * omega) / (2 * ship.spec.tuning.ROLL_ACCEL * MANOEUVRE.BARREL_THRUSTER_BOOST * PHYSICS.ANGULAR_BRAKE)
   const braking = m.nextKind === null && m.angle > MANOEUVRE.FULL_TURN / 2 && MANOEUVRE.FULL_TURN - m.angle <= stopAngle
   // Крен НЕ снапаем (в отличие от петли и разворота): сход с линии ∝ времени², и
   // мгновенный разгон ужал бы оборот и обнулил сход. Пусть маневровые раскручиваются.
   c.roll = (braking ? -m.dir : m.dir) * MANOEUVRE.BARREL_ROLL_STICK
+  c.thrusterBoost = MANOEUVRE.BARREL_THRUSTER_BOOST
   m.angle += Math.abs(ship.state.angVel.z) * dt
 
   const theta = m.angle * m.dir
-  // Тяга уклонения тем же форсажем: на быстром обороте сход с линии иначе исчезает.
-  c.strafe = Math.cos(theta) * m.dir * MANOEUVRE.BARREL_STRAFE_STICK
-  c.strafeUp = -Math.sin(theta) * m.dir * MANOEUVRE.BARREL_STRAFE_STICK
+  // Тяга уклонения на упоре; сход с линии держит форсаж маневровых (`thrusterBoost`).
+  c.strafe = Math.cos(theta) * m.dir
+  c.strafeUp = -Math.sin(theta) * m.dir
 
   // Конец: добрали оборот (при заказанной следующей endManoeuvre пустит её встык),
   // либо на торможении крен сошёл почти в ноль — мягко встали, не уйдя в реверс.
@@ -241,6 +243,8 @@ function driveReversal(ship: ShipEntity, m: Manoeuvre, dt: number): void {
  * Зовётся ПОСЛЕ того, как пилот выставил ручку: фигура её перебивает.
  */
 export function stepManoeuvre(ship: ShipEntity, m: Manoeuvre, dt: number): boolean {
+  // Форсаж крена — только на время бочки: каждый такт с нуля, фигура включит его сама.
+  ship.controls.thrusterBoost = 1
   if (m.kind === null) return false
 
   m.elapsed += dt
