@@ -24,7 +24,6 @@ const _target = new Vector3()
  * корабль рисуется в ней же, и ведомая по голой позе такта камера дёргалась бы относительно
  * него на 144 Гц, где такт есть не в каждом кадре.
  */
-const _prevShip = new Vector3()
 const _shown = { pos: new Vector3(), quat: new Quaternion() }
 const _offset = new Vector3()
 /** Скорость для упреждения, обрезанная базовым MAX_SPEED: см. врезку у addScaledVector. */
@@ -90,7 +89,6 @@ export function FlightCamera() {
    * замороженной точки. `null` — бочки нет.
    */
   const frozen = useRef<{ offset: Vector3; quat: Quaternion } | null>(null)
-  const prevShipPos = useRef(new Vector3())
 
   useFrame((_, dt) => {
     /**
@@ -111,9 +109,6 @@ export function FlightCamera() {
     const state = _shown
     renderPos(session.world, player.state, state.pos)
     renderQuat(session.world, player.state, state.quat)
-    // Где корабль был в ПРОШЛОМ кадре — тот, относительно которого стоит камера сейчас.
-    _prevShip.copy(prevShipPos.current)
-    prevShipPos.current.copy(state.pos)
 
     // JumpDirector уже перенёс саму камеру. Переносим тем же поворотом её скрытый базис,
     // иначе следующий кадр пружины пересчитывает старый курс и создаёт видимый рывок.
@@ -216,10 +211,7 @@ export function FlightCamera() {
       const f =
         frozen.current ??
         (frozen.current = {
-          // Смещение — от корабля ПРОШЛОГО кадра: камера ещё стоит там, куда её поставили
-          // тогда. От текущей позиции (корабль уже пролетел кадр) в смещение вмерзал кадр
-          // пути — борт рывком уходил вперёд на метр-два, а после бочки плавно возвращался.
-          offset: _rel.copy(camera.position).sub(_prevShip).clone(),
+          offset: _rel.copy(camera.position).sub(state.pos).clone(),
           quat: camera.quaternion.clone(),
         })
       camera.position.copy(state.pos).add(f.offset)
