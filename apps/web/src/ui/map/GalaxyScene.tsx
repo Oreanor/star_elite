@@ -1,9 +1,11 @@
 import { useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef } from 'react'
 import {
+  AdditiveBlending,
   BufferAttribute,
   BufferGeometry,
   Color,
+  DoubleSide,
   Group,
   LineBasicMaterial,
   LineDashedMaterial,
@@ -11,15 +13,18 @@ import {
   Mesh,
   MeshBasicMaterial,
   PerspectiveCamera,
+  Quaternion,
   RingGeometry,
   ShaderMaterial,
   Vector3,
 } from 'three'
 import {
+  GALAXY,
   STAR_CLASSES,
   type StarSystem,
 } from '@elite/sim'
 import { UI } from '../theme'
+import { beamCone, beamFade } from '../../render/scene/StarBeams'
 import { t } from '../i18n'
 
 /**
@@ -307,6 +312,105 @@ export function YouAreHere({ at }: { at: Vector3 }) {
     if (ref.current) ref.current.quaternion.copy(state.camera.quaternion)
   })
   return <mesh ref={ref} geometry={youMarkerGeometry} material={material} position={[at.x, at.y, at.z]} raycast={() => null} />
+}
+
+/**
+ * ДЖЕТЫ КВАЗАРА на карте галактики: два столба из ядра вдоль оси активной дыры. Видны сразу,
+ * как открыл карту, — галактика с активным ядром отличается с первого взгляда. Ось та же, что
+ * у дыры в самом Ядре (`quasarOf`): на карте и в полёте джеты смотрят в одну сторону.
+ */
+export function GalaxyJets({ axis }: { axis: readonly [number, number, number] }) {
+  const material = useMemo(
+    () =>
+      new MeshBasicMaterial({
+        color: 0x9fd0ff,
+        alphaMap: beamFade,
+        transparent: true,
+        opacity: 0.55,
+        blending: AdditiveBlending,
+        depthWrite: false,
+        side: DoubleSide,
+        toneMapped: false,
+      }),
+    [],
+  )
+  useEffect(() => () => material.dispose(), [material])
+  const quats = useMemo(() => {
+    const dir = new Vector3(axis[0], axis[1], axis[2]).normalize()
+    const up = new Vector3(0, 1, 0)
+    return [new Quaternion().setFromUnitVectors(up, dir), new Quaternion().setFromUnitVectors(up, dir.clone().negate())]
+  }, [axis])
+  const length = GALAXY.RADIUS_LY * GALAXY_JET_LENGTH
+  const width = GALAXY.RADIUS_LY * GALAXY_JET_WIDTH
+  return (
+    <>
+      {quats.map((q, i) => (
+        <mesh key={i} geometry={beamCone} material={material} quaternion={q} scale={[width, length, width]} raycast={() => null} renderOrder={1} />
+      ))}
+    </>
+  )
+}
+
+/** Длина и ширина джета на карте — в радиусах галактики: столб выходит далеко за диск. */
+const GALAXY_JET_LENGTH = 1.1
+const GALAXY_JET_WIDTH = 0.045
+
+/** Луч искры пульсара на карте, пикс.: постоянный размер на экране при любом зуме. */
+const PULSAR_MARK_PX = 3.5
+const _markRight = new Vector3()
+const _markUp = new Vector3()
+const _markAt = new Vector3()
+
+/**
+ * ПУЛЬСАРЫ на карте — четырёхлучевые искры поверх точек. Сам пульсар — крошечная звезда,
+ * среди тысяч таких же её не отличить; искра постоянного экранного размера видна при любом
+ * зуме. Ставится лишь у звёзд, прошедших фильтр: отсеянное не отвлекает.
+ */
+/** Отрезок искры через `_markAt` вдоль `axis` ± `len`. Без массивов-литералов: это кадр. */
+function writeRay(arr: Float32Array, v: number, axis: Vector3, len: number): number {
+  arr[v * 3] = _markAt.x - axis.x * len
+  arr[v * 3 + 1] = _markAt.y - axis.y * len
+  arr[v * 3 + 2] = _markAt.z - axis.z * len
+  arr[v * 3 + 3] = _markAt.x + axis.x * len
+  arr[v * 3 + 4] = _markAt.y + axis.y * len
+  arr[v * 3 + 5] = _markAt.z + axis.z * len
+  return v + 2
+}
+
+export function PulsarMarks({ systems, visible }: { systems: StarSystem[]; visible: boolean[] }) {
+  const indices = useMemo(() => systems.map((s, i) => (s.star.class === 'N' ? i : -1)).filter((i) => i >= 0), [systems])
+  const geometry = useMemo(() => {
+    const g = new BufferGeometry()
+    g.setAttribute('position', new BufferAttribute(new Float32Array(indices.length * 4 * 3), 3))
+    g.setDrawRange(0, 0)
+    return g
+  }, [indices])
+  const material = useMemo(() => new LineBasicMaterial({ color: 0xbfe6ff, transparent: true, opacity: 0.6, depthTest: false, toneMapped: false }), [])
+  useEffect(() => () => {
+    geometry.dispose()
+    material.dispose()
+  }, [geometry, material])
+
+  useFrame(({ camera, size }) => {
+    const pos = geometry.getAttribute('position') as BufferAttribute
+    const arr = pos.array as Float32Array
+    _markRight.setFromMatrixColumn(camera.matrixWorld, 0)
+    _markUp.setFromMatrixColumn(camera.matrixWorld, 1)
+    const p11 = camera.projectionMatrix.elements[5]!
+    let v = 0
+    for (const i of indices) {
+      if (!visible[i]) continue
+      const s = systems[i]!
+      _markAt.set(s.x, s.z, s.y) // экран: Y вверх, диск лежит в XZ — как у точек звёзд
+      const len = (PULSAR_MARK_PX * camera.position.distanceTo(_markAt)) / (p11 * (size.height / 2))
+      v = writeRay(arr, v, _markRight, len)
+      v = writeRay(arr, v, _markUp, len)
+    }
+    pos.needsUpdate = true
+    geometry.setDrawRange(0, v)
+  })
+
+  return <lineSegments geometry={geometry} material={material} frustumCulled={false} renderOrder={2} raycast={() => null} />
 }
 
 /** Кольцо единичного радиуса; размер на экране задаёт кадр (`StarRing`). Одно на модуль. */

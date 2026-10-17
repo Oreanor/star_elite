@@ -219,7 +219,8 @@ export const STAR_CLASSES = [
   { id: 'R', name: 'Красный сверхгигант', color: 0xff5a3a, radius: 165000, massSolar: 15, voidLy: 4.5, scoopable: true, weight: 1 },
   // Не звёзды главной последовательности: топливо не зачерпнуть, это ловушка маршрута.
   { id: 'T', name: 'Коричневый карлик', color: 0x8b4a3a, radius: 120, massSolar: 0.05, voidLy: 0, scoopable: false, weight: 6 },
-  { id: 'N', name: 'Нейтронная звезда', color: 0xd8f0ff, radius: 40, massSolar: 1.4, voidLy: 0, scoopable: false, weight: 2 },
+  // Нейтронная звезда, и у нас всякая такая — пульсар: два луча-маяка (`lightOf`, `PULSAR`).
+  { id: 'N', name: 'Пульсар', color: 0xd8f0ff, radius: 40, massSolar: 1.4, voidLy: 0, scoopable: false, weight: 2 },
   /**
    * Вес НОЛЬ: взвешенный выбор её никогда не вернёт. Чёрная дыра ровно одна и
    * стоит в центре галактики — это не класс светила, а ворота в следующую.

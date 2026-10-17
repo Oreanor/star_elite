@@ -8,7 +8,7 @@ import {
   Texture,
   Vector3,
 } from 'three'
-import { renderPos, renderTime } from '@elite/sim'
+import { QUASAR, renderPos, renderTime } from '@elite/sim'
 import type { BodyEntity } from '@elite/sim'
 import { useSession } from '../../session/GameContext'
 import {
@@ -46,7 +46,8 @@ function paramsFromHorizon(horizon: number, body: BodyEntity): BlackHoleParams {
     diskInnerRadius: BLACK_HOLE_DEFAULTS.diskInner,
     diskOuterRadius: BLACK_HOLE_DEFAULTS.diskOuter,
     coronaIntensity: BLACK_HOLE_DEFAULTS.coronaIntensity,
-    diskIntensity: BLACK_HOLE_DEFAULTS.diskIntensity,
+    // Квазар — то же ядро, но жрущее вещество: диск горит ярче (`QUASAR.DISK_BOOST`).
+    diskIntensity: BLACK_HOLE_DEFAULTS.diskIntensity * (body.beams ? QUASAR.DISK_BOOST : 1),
     rotationSpeed: BLACK_HOLE_DEFAULTS.rotationSpeed,
     quality: BLACK_HOLE_DEFAULTS.quality,
   }

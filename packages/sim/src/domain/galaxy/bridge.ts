@@ -3,6 +3,8 @@ import { PLANET_COLORS, SCALE } from '../../config/galaxy'
 import { makeRng } from '../../core/math'
 import { STATION_RADIUS } from '../world/system'
 import type { PatrolDef, SystemDef } from '../world/system'
+import { PULSAR } from '../../config/beams'
+import { quasarOf } from './quasar'
 import { capitalOf, type Planet, type StarSystem } from './types'
 
 /**
@@ -95,6 +97,46 @@ function moonsOf(planet: Planet, radius: number): SystemDef['planets'][number]['
     phase: i * GOLDEN_ANGLE,
     tilt: MOON.MAX_TILT * ((i + 1) / (planet.moons.length + 1)),
   }))
+}
+
+/**
+ * Особое светило: чёрная дыра ядра (класс H) или пульсар (класс N). Обычным звёздам — ничего.
+ *
+ * Дыра ядра квазарной галактики (`quasarOf`) получает джеты вдоль оси диска; у спокойной ось
+ * диска фиксированная, чуть наклонённая: ребром диск не виден вовсе, плашмя — плоская шайба,
+ * а под углом читается и диск, и тень.
+ *
+ * Пульсар: ось вращения и наклонённая к ней магнитная ось, вдоль которой бьют лучи; период —
+ * из своего подзерна системы, чтобы бросок не сдвигал остальную случайность системы.
+ */
+function lightOf(system: StarSystem, galaxySeed: number): Pick<SystemDef['star'], 'blackHole' | 'pulsar'> {
+  if (system.star.class === 'H') {
+    const jets = quasarOf(galaxySeed)
+    return { blackHole: jets ? { diskAxis: jets, jets: true } : { diskAxis: [0.25, 1, 0.15] } }
+  }
+  if (system.star.class !== 'N') return {}
+  const rng = makeRng((galaxySeed ^ Math.imul(system.index + 1, 0x50554c53)) >>> 0)
+  // Ось вращения — случайная по сфере; магнитная — отклонена от неё на угол наклона.
+  const z = rng() * 2 - 1
+  const a = rng() * Math.PI * 2
+  const r = Math.sqrt(1 - z * z)
+  const spin: [number, number, number] = [r * Math.cos(a), z, r * Math.sin(a)]
+  // Любой вектор, не параллельный оси, — для перпендикуляра.
+  const ref: [number, number, number] = Math.abs(spin[1]) < 0.9 ? [0, 1, 0] : [1, 0, 0]
+  const px = spin[1] * ref[2] - spin[2] * ref[1]
+  const py = spin[2] * ref[0] - spin[0] * ref[2]
+  const pz = spin[0] * ref[1] - spin[1] * ref[0]
+  const pl = Math.hypot(px, py, pz)
+  const inc = PULSAR.INCLINATION_MIN + rng() * (PULSAR.INCLINATION_MAX - PULSAR.INCLINATION_MIN)
+  const c = Math.cos(inc)
+  const sn = Math.sin(inc)
+  const beam: [number, number, number] = [
+    spin[0] * c + (px / pl) * sn,
+    spin[1] * c + (py / pl) * sn,
+    spin[2] * c + (pz / pl) * sn,
+  ]
+  const period = PULSAR.PERIOD_MIN + rng() * (PULSAR.PERIOD_MAX - PULSAR.PERIOD_MIN)
+  return { pulsar: { spinAxis: spin, beamAxis: beam, period } }
 }
 
 /**
@@ -201,9 +243,7 @@ export function systemDefOf(system: StarSystem, galaxySeed: number, seatOverride
       radius: starRadius,
       color: system.star.color,
       massSolar: system.star.massSolar,
-      // Класс H — чёрная дыра ядра. Ось диска чуть наклонена к плоскости галактики: ребром
-      // диск не виден вовсе, плашмя — плоская шайба; под углом читается и диск, и тень.
-      ...(system.star.class === 'H' ? { blackHole: { diskAxis: [0.25, 1, 0.15] as const } } : {}),
+      ...lightOf(system, galaxySeed),
     },
     companion,
     dyson: system.dyson,

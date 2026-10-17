@@ -11,7 +11,7 @@ import {
   SphereGeometry,
   Vector3,
 } from 'three'
-import { GALAXY } from '@elite/sim'
+import { GALAXY, quasarOf } from '@elite/sim'
 import { useSession } from '../../session/GameContext'
 import {
   selectTorusTarget,
@@ -21,7 +21,7 @@ import {
 import { torusView } from '../../session/torusFlight'
 import { TORUS } from '../../render/config'
 import { GRID } from '../../render/scene/HypertorusLayer'
-import { nameOfVertex, vertexOfNode } from '../../render/scene/torusNodes'
+import { nameOfVertex, nodeOfVertex, vertexOfNode } from '../../render/scene/torusNodes'
 import { placeTorusAtVertex } from '../../render/scene/HypertorusLayer'
 import { UI } from '../theme'
 import { properName } from '../i18n/dataNames'
@@ -60,12 +60,14 @@ interface Item {
   gamma: number
   /** Единичное направление в МИРОВЫХ осях — куда поворачивать нос. */
   dir: Vector3
+  /** Активное ядро — квазар (`quasarOf` по зерну галактики): ориентир клубка. */
+  quasar: boolean
 }
 
 const _q = new Quaternion()
 
 /** Снимок вселенной вокруг игрока: направление и дальность каждой галактики. */
-function snapshot(names: (i: number) => string): Item[] {
+function snapshot(names: (i: number) => string, quasar: (i: number) => boolean): Item[] {
   const view = torusView()
   const out: Item[] = []
   for (let i = 0; i < GRID.vertCount; i++) {
@@ -86,6 +88,7 @@ function snapshot(names: (i: number) => string): Item[] {
       name: names(i),
       gamma: Math.acos(Math.min(1, Math.max(-1, -rw))),
       dir,
+      quasar: quasar(i),
     })
   }
   return out
@@ -97,6 +100,8 @@ function place(item: Item, out: Vector3): Vector3 {
 }
 
 const _base = new Color(0x4d7fa8)
+/** Квазар — ярче и холоднее прочих: ориентир, видный среди семисот точек. */
+const _quasar = new Color(0xd6eeff)
 const _sel = new Color(UI.TARGET)
 const _home = new Color(0x7fd6ff)
 const _cross = new Color(0xffffff)
@@ -154,7 +159,9 @@ function Field({
             ? _cross
             : it.vertex === homeVertex
               ? _home
-              : _base
+              : it.quasar
+                ? _quasar
+                : _base
       col[i * 3] = c.r
       col[i * 3 + 1] = c.g
       col[i * 3 + 2] = c.b
@@ -386,7 +393,13 @@ export function UniverseMap({ onClose }: { onClose: () => void }) {
   // сделает вход в дыру, так что карта показывает ровно то, что увидишь, влетев.
   const items = useMemo(() => {
     if (!inRoom) placeTorusAtVertex(homeVertex)
-    return snapshot((i) => nameOfVertex(universe, i))
+    return snapshot(
+      (i) => nameOfVertex(universe, i),
+      (i) => {
+        const node = universe.nodes[nodeOfVertex(i)]
+        return node != null && i !== TORUS.MONUMENT_NODE && quasarOf(node.seed) !== null
+      },
+    )
   }, [universe, inRoom, homeVertex])
   const nose = useMemo(() => {
     _q.copy(session.world.player.state.quat)
@@ -441,7 +454,8 @@ export function UniverseMap({ onClose }: { onClose: () => void }) {
                 name={
                   properName(it.name).toUpperCase() +
                   (it.vertex === homeVertex ? ' ·ДОМ' : '') +
-                  (it.vertex === TORUS.MONUMENT_NODE ? ' ·КРЕСТ' : '')
+                  (it.vertex === TORUS.MONUMENT_NODE ? ' ·КРЕСТ' : '') +
+                  (it.quasar ? ` ·${t('map.quasar')}` : '')
                 }
                 meta={`${Math.round((it.gamma * 180) / Math.PI)}°`}
                 color={UI.PRIMARY}
@@ -519,6 +533,7 @@ export function UniverseMap({ onClose }: { onClose: () => void }) {
                 `${t('map.distance')}: ${Math.round((inspectedItem.gamma * 180) / Math.PI)}°`,
                 inspectedItem.vertex === homeVertex ? 'ДОМ' : null,
                 inspectedItem.vertex === TORUS.MONUMENT_NODE ? 'КРЕСТЫ' : null,
+                inspectedItem.quasar ? t('map.quasar') : null,
               ]}
               action={{
                 selected: inspectedItem.vertex === selected,

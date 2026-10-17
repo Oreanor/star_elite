@@ -11,6 +11,7 @@ import { Blastwaves } from './Blastwaves'
 import { DockingCorridor } from './DockingCorridor'
 import { Dyson } from './Dyson'
 import { BlackHole } from './BlackHole'
+import { StarBeams } from './StarBeams'
 import {
   CargoPods,
   Explosions,
@@ -79,6 +80,7 @@ export function WorldVisuals() {
 
         <Bodies />
         <BlackHole />
+        <StarBeams />
         <Dyson />
         <AsteroidField />
         <Titans />

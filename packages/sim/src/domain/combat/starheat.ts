@@ -2,6 +2,7 @@ import { HYPERDRIVE, STAR_HEAT } from '../../config/heat'
 import { clamp } from '../../core/math'
 import type { ShipEntity, World } from '../world/entities'
 import { applyDamage } from './damage'
+import { beamExposure, beamSourceName } from '../world/beams'
 
 /**
  * Что делает с кораблём близкая звезда: греет корпус и заряжает гипердвигатель.
@@ -60,7 +61,10 @@ function nearestStarName(ship: ShipEntity, world: World): string {
 export function stepStarHeat(ship: ShipEntity, world: World, dt: number): void {
   if (!ship.alive) return
 
-  const target = starExposure(ship, world)
+  // Корпус один — калится от того, что жжёт сильнее: корона звезды или луч (джет, маяк).
+  const fromStar = starExposure(ship, world)
+  const fromBeam = beamExposure(ship, world)
+  const target = Math.max(fromStar, fromBeam)
   const rate = target > ship.hullHeat ? STAR_HEAT.RISE_RATE : STAR_HEAT.COOL_RATE
   // Устойчивое экспоненциальное приближение: не зависит от величины шага.
   ship.hullHeat += (target - ship.hullHeat) * (1 - Math.exp(-rate * dt))
@@ -69,7 +73,8 @@ export function stepStarHeat(ship: ShipEntity, world: World, dt: number): void {
   if (ship.hullHeat >= STAR_HEAT.DESTROY) {
     applyDamage(ship, ship.shield + ship.hull + 1, world.time, {
       kind: 'heat',
-      name: nearestStarName(ship, world),
+      // Сгорел в луче — назван источник луча (дыра, пульсар), а не дальняя звезда.
+      name: fromBeam > fromStar ? beamSourceName(ship, world) : nearestStarName(ship, world),
     })
   }
 }

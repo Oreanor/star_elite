@@ -4,6 +4,7 @@ import {
   arrivalBounds,
   jumpBlock,
   jumpDistance,
+  quasarOf,
   stationsOf,
   systemDefFor,
   systemLife,
@@ -126,7 +127,7 @@ export function SystemPopup({
               label={t('map.class')}
               value={`${system.star.class} · ${starClassName(system.star)}${
                 system.companion ? ` · ${t('map.binary')}` : ''
-              }`}
+              }${core && quasarOf(world.galaxySeed) ? ` · ${t('map.quasar')}` : ''}`}
             />
             <Row label={t('map.planets')} value={String(system.planets.length)} />
             <Row label={t('map.distance')} value={formatRange(distance)} />

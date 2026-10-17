@@ -4,6 +4,7 @@ import { GRAVITY, MOON } from '../../config/bodies'
 import { orbitSec } from '../../config/time'
 import { godLoadout, pirateLeaderLoadout, pirateLoadout, playerStartLoadout } from '../../config/loadouts'
 import { ARRIVAL, GALAXY, HUMAN_SPECIES } from '../../config/galaxy'
+import { PULSAR, QUASAR } from '../../config/beams'
 import { FIGURINE } from '../../config/figurines'
 import { ASTEROID, TRAFFIC, WORLD } from '../../config/world'
 import { makeRng, range, signed, type Rng } from '../../core/math'
@@ -386,6 +387,7 @@ function makeBodies(ids: IdSource, def: SystemDef): BodyEntity[] {
   const m2 = comp ? companionMass(comp) : 0
 
   const hole = def.star.blackHole
+  const pulsar = def.star.pulsar
   const primary: BodyEntity = {
     id: ids.next(),
     // Ядро галактики — чёрная дыра, а не звезда (см. `SystemDef.star.blackHole`).
@@ -397,9 +399,20 @@ function makeBodies(ids: IdSource, def: SystemDef): BodyEntity[] {
     surface: null,
     population: 0,
     settlement: null,
-    spin: 0,
-    // У дыры ось — это ось аккреционного диска; у звезды ось не видна, пусть будет вверх.
-    spinAxis: hole ? new Vector3(...hole.diskAxis).normalize() : new Vector3(0, 1, 0),
+    // Пульсар вертится по-настоящему: угол — `spin · time`, им же вертятся и его лучи.
+    spin: pulsar ? (Math.PI * 2) / pulsar.period : 0,
+    // У дыры ось — это ось аккреционного диска; у пульсара — ось вращения; у звезды не видна.
+    spinAxis: hole
+      ? new Vector3(...hole.diskAxis).normalize()
+      : pulsar
+        ? new Vector3(...pulsar.spinAxis).normalize()
+        : new Vector3(0, 1, 0),
+    // Лучи: джеты квазара вдоль оси диска или маяк пульсара вдоль магнитной оси.
+    ...(hole?.jets
+      ? { beams: { axis: new Vector3(...hole.diskAxis).normalize(), length: QUASAR.JET_LENGTH, halfAngle: QUASAR.JET_HALF_ANGLE } }
+      : pulsar
+        ? { beams: { axis: new Vector3(...pulsar.beamAxis).normalize(), length: PULSAR.BEAM_LENGTH, halfAngle: PULSAR.BEAM_HALF_ANGLE } }
+        : {}),
     // Одиночная стоит в центре; главная звезда двойной обращается вокруг барицентра.
     orbit: comp ? binaryOrbit(m1, m2, comp.separation, 0) : null,
   }

@@ -88,7 +88,20 @@ export interface SystemDef {
      * отрисовка с аккреционным диском, «чёрная дыра» на HUD, вход в клубок галактик.
      * `radius` — горизонт; `diskAxis` — ось диска.
      */
-    blackHole?: { diskAxis: readonly [number, number, number] }
+    blackHole?: {
+      diskAxis: readonly [number, number, number]
+      /** Квазар: диск ярче и два джета вдоль оси диска (`quasarOf`). */
+      jets?: boolean
+    }
+    /**
+     * Пульсар: лучи вдоль магнитной оси, наклонённой к оси вращения, — маяк.
+     * Обе оси единичные; `period` — секунд на оборот.
+     */
+    pulsar?: {
+      spinAxis: readonly [number, number, number]
+      beamAxis: readonly [number, number, number]
+      period: number
+    }
   }
   /**
    * Спутник двойной: вторая звезда или чёрная дыра (барицентр, `separation`, орбита).

@@ -1,6 +1,7 @@
 import { useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef } from 'react'
 import {
+  AdditiveBlending,
   BackSide,
   BufferAttribute,
   BufferGeometry,
@@ -8,6 +9,8 @@ import {
   Group,
   InstancedBufferAttribute,
   InstancedMesh,
+  LineBasicMaterial,
+  LineSegments,
   Mesh,
   MeshBasicMaterial,
   Object3D,
@@ -15,12 +18,12 @@ import {
   Points,
   SphereGeometry,
 } from 'three'
-import { smoothstep, renderTime } from '@elite/sim'
+import { quasarOf, smoothstep, renderTime } from '@elite/sim'
 import { useSession } from '../../session/GameContext'
 import { placeTorusAt, torusView } from '../../session/torusFlight'
 import { setTorusNav, torusAutopilotActive, torusTargetVertex } from '../../session/torusAutopilot'
 import { bushExitScale } from '../../session/bushExit'
-import { nameOfVertex, vertexOfNode } from './torusNodes'
+import { nameOfVertex, nodeOfVertex, vertexOfNode } from './torusNodes'
 import { TORUS } from '../config'
 import { crossNeonTubesGeometry } from '../geometry/props'
 import { crossNeonLampMaterial, tickCrossPortal } from '../materials/crossPortal'
@@ -88,6 +91,14 @@ const MAX_DOTS = GRID.edgeCount * DPE
 
 const _dummy = new Object3D()
 const _base = new Color(TORUS.PUFF_COLOR)
+/**
+ * КВАЗАРЫ в клубке — ориентиры: пуф ярче, холоднее и крупнее, и сквозь него два луча-джета.
+ * Остальные семьсот узлов одинаковы, и без ориентиров комната S³ читается как однородная каша.
+ */
+const _quasarTint = new Color(0xd6eeff)
+const QUASAR_PUFF_GROW = 1.7
+/** Длина джета — в радиусах пуфа: столб заметно длиннее самой галактики. */
+const QUASAR_JET_PUFFS = 6
 const _p = { x: 0, y: 0, z: 0, depth: 0 }
 const _rot = new Float64Array(GRID.vertCount * 4)
 const _s4 = new Float64Array(4)
@@ -197,6 +208,33 @@ export function HypertorusLayer() {
   }, [])
   const dotMat = useMemo(torusDotMaterial, [])
 
+  // Квазар ли узел и ось его джета — один раз на вселенную: зерно галактики не меняется.
+  const quasarAxes = useMemo(() => {
+    const axes: (readonly [number, number, number] | null)[] = []
+    for (let v = 0; v < GRID.vertCount; v++) {
+      const node = session.universe.nodes[nodeOfVertex(v)]
+      axes.push(node && v !== TORUS.MONUMENT_NODE ? quasarOf(node.seed) : null)
+    }
+    return axes
+  }, [session.universe])
+  const jetGeo = useMemo(() => {
+    const n = quasarAxes.filter(Boolean).length
+    const g = new BufferGeometry()
+    g.setAttribute('position', new BufferAttribute(new Float32Array(Math.max(1, n) * 2 * 3), 3))
+    g.setAttribute('color', new BufferAttribute(new Float32Array(Math.max(1, n) * 2 * 3), 3))
+    g.setDrawRange(0, 0)
+    return g
+  }, [quasarAxes])
+  const jetMat = useMemo(
+    () => new LineBasicMaterial({ vertexColors: true, transparent: true, blending: AdditiveBlending, depthWrite: false, toneMapped: false, fog: false }),
+    [],
+  )
+  useEffect(() => () => {
+    jetGeo.dispose()
+    jetMat.dispose()
+  }, [jetGeo, jetMat])
+  const jetRef = useRef<LineSegments>(null)
+
   const backdropGeo = useMemo(() => new SphereGeometry(1, 16, 12), [])
   const backdropMat = useMemo(
     () => new MeshBasicMaterial({ color: 0x000306, side: BackSide, fog: false, depthWrite: true }),
@@ -231,6 +269,7 @@ export function HypertorusLayer() {
     if (!on) {
       puffs.count = 0
       dots.geometry.setDrawRange(0, 0)
+      jetGeo.setDrawRange(0, 0)
       return
     }
 
@@ -255,6 +294,9 @@ export function HypertorusLayer() {
     const tint = tintAttr.array as Float32Array
     const fogArr = fogAttr.array as Float32Array
     let count = 0
+    const jetPos = jetGeo.getAttribute('position').array as Float32Array
+    const jetCol = jetGeo.getAttribute('color').array as Float32Array
+    let jv = 0
     for (let i = 0; i < GRID.vertCount; i++) {
       const o = i * 4
       const w = _rot[o + 3]!
@@ -263,14 +305,34 @@ export function HypertorusLayer() {
       const dist = Math.hypot(_p.x, _p.y, _p.z)
       const fog = brightnessOf(dist)
       if (fog < 0.02) continue
+      const jet = quasarAxes[i]
+      const radius = puffRadius(w) * (jet ? QUASAR_PUFF_GROW : 1)
+      const colour = jet ? _quasarTint : _base
       _dummy.position.set(_p.x, _p.y, _p.z)
-      _dummy.scale.setScalar(puffRadius(w))
+      _dummy.scale.setScalar(radius)
       _dummy.quaternion.copy(camera.quaternion)
       _dummy.updateMatrix()
       puffs.setMatrixAt(count, _dummy.matrix)
-      tint[count * 3] = _base.r
-      tint[count * 3 + 1] = _base.g
-      tint[count * 3 + 2] = _base.b
+      tint[count * 3] = colour.r
+      tint[count * 3 + 1] = colour.g
+      tint[count * 3 + 2] = colour.b
+      // Джет — отрезок сквозь пуф вдоль оси квазара; яркость гасит тот же туман, что и пуф.
+      if (jet) {
+        const len = radius * QUASAR_JET_PUFFS
+        const o3 = jv * 3
+        jetPos[o3] = _p.x - jet[0] * len
+        jetPos[o3 + 1] = _p.y - jet[1] * len
+        jetPos[o3 + 2] = _p.z - jet[2] * len
+        jetPos[o3 + 3] = _p.x + jet[0] * len
+        jetPos[o3 + 4] = _p.y + jet[1] * len
+        jetPos[o3 + 5] = _p.z + jet[2] * len
+        for (let k = 0; k < 6; k += 3) {
+          jetCol[o3 + k] = _quasarTint.r * fog
+          jetCol[o3 + k + 1] = _quasarTint.g * fog
+          jetCol[o3 + k + 2] = _quasarTint.b * fog
+        }
+        jv += 2
+      }
       fogArr[count] = fog
       count++
 
@@ -295,6 +357,9 @@ export function HypertorusLayer() {
       }
     }
     puffs.count = count
+    jetGeo.getAttribute('position').needsUpdate = true
+    jetGeo.getAttribute('color').needsUpdate = true
+    jetGeo.setDrawRange(0, jv)
     // Слоты заполнялись в произвольном порядке — упорядочиваем по возрастанию w, то есть от
     // ближней галактики к дальней: в этом порядке Tab их и листает.
     const slots = _order
@@ -407,6 +472,7 @@ export function HypertorusLayer() {
       <group ref={groupRef} frustumCulled={false} visible={false}>
         <instancedMesh ref={puffRef} args={[puffGeo, puffMat, GRID.vertCount]} frustumCulled={false} />
         <points ref={dotRef} geometry={dotGeo} material={dotMat} frustumCulled={false} />
+        <lineSegments ref={jetRef} geometry={jetGeo} material={jetMat} frustumCulled={false} />
         <mesh ref={crossRef} geometry={crossGeo} material={crossMat} frustumCulled={false} visible={false} />
       </group>
     </>

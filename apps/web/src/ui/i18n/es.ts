@@ -464,6 +464,7 @@ export const ES: Record<keyof typeof RU, string> = {
   'map.block.scaled': 'EL HIPERSALTO REQUIERE ESCALA 1×',
   'map.pickStation': '{n} muelles — elige dónde llegar',
   'map.select': 'ELEGIR',
+  'map.quasar': 'CUÁSAR',
   'map.unselect': 'QUITAR',
   'planet.surface.rocky': 'rocosa',
   'planet.surface.ice': 'helada',

@@ -143,7 +143,7 @@ export const DATA: LangData = {
     "R": "Supergigante vermelha",
     "D": "Anã branca",
     "T": "Anã marrom",
-    "N": "Estrela de nêutrons",
+    "N": "Pulsar",
     "H": "Buraco negro"
   },
   "galaxyShape": {

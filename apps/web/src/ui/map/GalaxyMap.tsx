@@ -14,6 +14,7 @@ import {
   isInhabited,
   jumpBlock,
   jumpDistance,
+  quasarOf,
   stationSeat,
   stationsOf,
   systemDefFor,
@@ -25,7 +26,7 @@ import { UI } from '../theme'
 import { t, useLang } from '../i18n'
 import { properName } from '../i18n/dataNames'
 import { CONTACT_MAP, ContactLabels, ContactStars, PLAYER_MAP, PlayerLabels, PlayerStars, contactSystemsOf, playerSystemsOf } from './GalaxyPeople'
-import { JumpSphere, OrbitCamera, Route, StarLabel, StarRing, Stars, YouAreHere, YouLabel, formatStarSize, positionOf } from './GalaxyScene'
+import { GalaxyJets, JumpSphere, OrbitCamera, PulsarMarks, Route, StarLabel, StarRing, Stars, YouAreHere, YouLabel, formatStarSize, positionOf } from './GalaxyScene'
 import { SystemPopup, formatRange } from './SystemPopup'
 
 const _origin = /* @__PURE__ */ new Vector3()
@@ -300,6 +301,8 @@ function GalaxyMapImpl({ onClose, embedded = false }: { onClose: () => void; emb
   control.current.target = searchPos ?? _origin
 
   const here = positionOf(systems[world.systemIndex]!)
+  // Квазар ли эта галактика — по её зерну, как и в самом Ядре.
+  const quasar = quasarOf(world.galaxySeed)
   // Наведён курсор → он; иначе найденное поиском; иначе выбранная цель прыжка.
   const marked = hovered ?? searchIndex ?? selected
   const picked: Picked | null =
@@ -428,6 +431,9 @@ function GalaxyMapImpl({ onClose, embedded = false }: { onClose: () => void; emb
             onHover={setHovered}
             onSelect={card.inspect}
           />
+          {/* Квазар — ядро светит двумя джетами; пульсары помечены искрами (видно при любом зуме). */}
+          {quasar && <GalaxyJets axis={quasar} />}
+          <PulsarMarks systems={systems} visible={visible} />
           <JumpSphere at={here} charge={world.player.jumpCharge} max={world.player.spec.jumpRange} />
           <YouAreHere at={here} />
           {/* Обводки: где ты сам (фосфор, как «ВЫ») и куда прыгаешь (цвет навигации, как метка

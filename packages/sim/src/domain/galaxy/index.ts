@@ -7,6 +7,7 @@ export {
   type Point3,
 } from './arrival'
 export { systemDefOf } from './bridge'
+export { quasarOf } from './quasar'
 export {
   commitPreparedJump,
   jump,
