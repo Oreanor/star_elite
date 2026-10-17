@@ -1,14 +1,13 @@
 import { DIALOGUE } from '../../config/dialogue'
 import { phrase, type Phrase } from './phrase'
-import { clamp, roundMoney } from '../../core/math'
+import { roundMoney } from '../../core/math'
 import { createAIState } from '../ai/types'
 import { clearOwnTasks } from '../ai/tasks'
-import { healthFraction, shieldFraction } from '../combat/damage'
-import { defuseGrievance, provoke } from '../combat/grievance'
+import { healthFraction } from '../combat/damage'
+import { nerve, react, vigour } from './temper'
 import { jettisonCargo, jettisonWeapons } from '../combat/salvage'
 import type { Relationship } from '../world/acquaintance'
 import type { ShipEntity, World } from '../world/entities'
-import type { Persona } from '../world/persona'
 import { lockedShipId } from '../world/queries'
 
 /**
@@ -55,19 +54,6 @@ export function interlocutor(world: World): ShipEntity | null {
   return ship
 }
 
-/** Полное здоровье: щит и корпус вместе. Именно его и видит собеседник. */
-const vigour = (e: ShipEntity) => (shieldFraction(e) + healthFraction(e)) / 2
-
-/**
- * Стойкость собеседника −1..+1: насколько он НЕ склонен сломаться. Волевой и
- * храбрый держится (плюс), трус и слабовольный подаётся (минус). Двигает шансы
- * сдачи и сопротивления грабежу — честно характером, а не заниженным здоровьем.
- */
-function nerve(p: Persona): number {
-  const will = (p.willpower - 3) / 2 // 1..5 → −1..+1
-  const grit = p.disposition === 'brave' ? 0.5 : p.disposition === 'cowardly' ? -0.5 : 0
-  return clamp(will + grit, -1, 1)
-}
 
 /** Настроение собеседника к игроку — единственный источник тона реплик. */
 export type Mood = 'warm' | 'neutral' | 'wary' | 'hostile'
@@ -82,6 +68,8 @@ export type Mood = 'warm' | 'neutral' | 'wary' | 'hostile'
 export function moodTo(world: World, other: ShipEntity): Mood {
   if (other.faction === 'hostile') return 'hostile'
   if ((other.ai?.grievance ?? 0) > 0) return 'wary'
+  // Нагрубил или пригрозил словом — насторожён, пока разговор не остынет (`temper.ts`).
+  if ((other.ai?.tension ?? 0) >= DIALOGUE.TENSION.WARY_AT) return 'wary'
   const rec = world.acquaintances.find((a) => a.id === other.acquaintanceId)
   if (rec?.relationship === 'friendly') return 'warm'
   if (rec?.relationship === 'hostile') return 'hostile'
@@ -106,24 +94,6 @@ export function stanceTo(world: World, other: ShipEntity): Relationship {
   if (rec) return rec.relationship
   if (other.faction === world.player.faction) return 'friendly'
   return 'neutral'
-}
-
-/** Соц-жест игрока в свободной речи: то, что домен из текста не вычленит сам. */
-export type Social = 'insult' | 'flatter'
-
-/**
- * Соц-реакция. Тон реплики (нахамил / польстил) РАСПОЗНАЁТ модель и шлёт триггером —
- * а СЛЕДСТВИЕ считает движок, детерминированно, в данных:
- *
- * - `insult` копит претензию как угроза (`provoke`): нейтрала может перелить во враги,
- *   и тогда `applyStance` сам рвёт эскорт и договорённости. Оскорбление имеет цену.
- * - `flatter` гасит претензию (`defuseGrievance`) — лесть успокаивает насторожённого.
- *   Но дружбы даром не даёт: расположить к себе можно ДЕЛОМ (эскорт, пощада), не словом,
- *   иначе целого пирата уболтали бы в друзья в обход честной сдачи.
- */
-export function applySocial(world: World, other: ShipEntity, social: Social): void {
-  if (social === 'insult') provoke(world, other, DIALOGUE.INSULT_WEIGHT)
-  else defuseGrievance(other)
 }
 
 /**
@@ -304,14 +274,16 @@ function plunder(world: World, other: ShipEntity): Reply {
   // Целого не запугать; но стойкий сопротивляется даже избитым, трус пасует раньше.
   const fear = DIALOGUE.PIRACY_FEAR_THRESHOLD - nerve(other.persona) * DIALOGUE.NERVE_SWING
   if (vigour(other) > fear) {
-    // Требование сбросить груз — это УГРОЗА, а не слова. Целый торговец не только
-    // откажет, но и затаит: повторишь — вызовет охрану и встанет на бой. Решает это
-    // движок отношений (`provoke` копит претензию до порога), а не тон реплики.
-    provoke(world, other, DIALOGUE.THREAT_WEIGHT)
+    // Требование сбросить груз — это УГРОЗА, а не слова. Целый торговец не сдаётся, а
+    // реагирует по нраву — тем же путём, что и на угрозу в свободной речи (`temper.ts`):
+    // храбрый или сильный встаёт на бой, трус уходит.
+    const reaction = react(world, other, 'threat')
     return {
-      text: other.faction === 'hostile'
-        ? phrase('plunderGuardsHostile') // провокация перелила через край — теперь враг
-        : phrase('plunderGuards'),
+      text: reaction === 'fight'
+        ? phrase('plunderGuardsHostile')
+        : reaction === 'flee'
+          ? phrase('plunderFlee')
+          : phrase('plunderGuards'),
       agreed: false,
     }
   }

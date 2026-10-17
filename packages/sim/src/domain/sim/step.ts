@@ -84,6 +84,7 @@ import { stepDivineScale, stepDockTraffic, stepTraffic } from '../world/traffic'
 import { stepTitans } from '../world/titans'
 import { stepPlatforms } from '../world/platforms'
 import { stepGrievances } from '../combat/grievance'
+import { stepTension } from '../dialogue/temper'
 import { stepContracts } from '../contracts/contracts'
 import { NULL_CONTROLLER, type Controller, type ControllerMap } from './controller'
 import { contactExists, lockedAsteroidId, lockedShipId } from '../world/queries'
@@ -266,6 +267,7 @@ function stepTick(world: World, helm: Helm, dt: number): void {
   stepPlatforms(world, dt)
   stepWarBaseTurrets(world, dt)
   stepGrievances(world)
+  stepTension(world, dt)
   // Дела — после всего, что могло решить их исход в этом такте: гибели, стыковки, ухода.
   stepContracts(world, dt)
   maybeShiftOrigin(world)

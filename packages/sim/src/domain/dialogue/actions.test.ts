@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { actionsForRole } from './actions'
+import { actionsForRole, buildCommands } from './actions'
 import { parseModelReply } from './modelReply'
 
 /**
@@ -12,7 +12,7 @@ describe('пул экшнов и наборы ролей', () => {
     const bot = actionsForRole('bot').map((a) => a.id)
     const god = actionsForRole('god').map((a) => a.id)
     expect(bot).toEqual(expect.arrayContaining(['ask', 'order', 'transfer', 'plan', 'stance']))
-    expect(god).toEqual(expect.arrayContaining(['stance', 'social', 'note']))
+    expect(god).toEqual(expect.arrayContaining(['stance', 'act', 'note']))
     expect(god).not.toContain('plan')
     expect(god).not.toContain('order')
     expect(god).not.toContain('transfer')
@@ -86,5 +86,13 @@ describe('пул экшнов и наборы ролей', () => {
     for (const before of ['ask', 'transfer', 'demand', 'surrender', 'plan']) {
       expect(ids.indexOf(before)).toBeLessThan(last)
     }
+  })
+})
+
+describe('вражду на угрозу решает нрав, а не stance модели', () => {
+  /** Пойманное: модель ставила stance:hostile рядом с угрозой — трус, которому велено бежать, становился врагом. */
+  it('stance:hostile в реплике с угрозой не собирается в команду', () => {
+    const cmds = buildCommands({ act: 'threat', stance: 'hostile' }, 'bot', { allowedTopics: [] })
+    expect(cmds.map((c) => c.action)).toEqual(['act'])
   })
 })

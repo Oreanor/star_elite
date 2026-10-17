@@ -175,6 +175,12 @@ export interface AIState {
   grievanceSince: number
   /** Засчитанные попадания игрока в текущей серии (включая прощённые). */
   strikeCount: number
+  /**
+   * Напряжённость РАЗГОВОРА с командиром: угрозы и хамство копят, лесть и извинение гасят,
+   * остывает минутами (`DIALOGUE.TENSION`). Отдельно от `grievance` — тот про попадания и
+   * живёт секундами боя. Реакцию на разрыве решает `dialogue/temper.ts`.
+   */
+  tension: number
 }
 
 /**
@@ -234,6 +240,7 @@ export function createAIState(home: Vector3, rng: Rng): AIState {
     grievance: 0,
     grievanceAt: -1e9,
     grievanceSince: -1e9,
+    tension: 0,
     strikeCount: 0,
   }
 }

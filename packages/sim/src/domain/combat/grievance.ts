@@ -25,7 +25,7 @@ function beginGrievance(ai: NonNullable<ShipEntity['ai']>, time: number): void {
   if (ai.grievance === 0) ai.grievanceSince = time
 }
 
-function escalateToHostile(world: World, ship: ShipEntity): void {
+export function escalateToHostile(world: World, ship: ShipEntity): void {
   applyStance(world, ship, 'hostile')
   const ai = ship.ai
   if (!ai) return

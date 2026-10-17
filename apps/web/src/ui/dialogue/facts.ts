@@ -40,6 +40,9 @@ import {
   type StarSystem,
   type Topic,
   type World,
+  reactionCard,
+  type Reaction,
+  type SpeechAct,
 } from '@elite/sim'
 import { chassisName, economyName, governmentName, moduleName, professionName, properName, speciesName } from '../i18n/dataNames'
 import { godHearsOf, godVisitors } from '../../session/net/godMemory'
@@ -229,6 +232,11 @@ export interface NegotiationContext {
   economy: EconomySnapshot
   /** Долг местным властям, виден только полицейскому патрулю этой планеты. */
   localFineAmount: number | null
+  /**
+   * Как собеседник ответит на каждый речевой акт — решено доменом по нраву (`reactionCard`),
+   * кладётся в промпт заранее. null — у бога (его ведёт свой промпт).
+   */
+  reactions: Record<SpeechAct, Reaction> | null
   /** Станция системы: что можно у причала и кто сейчас у дока. */
   station: StationSnapshot
   /** Справочники с полным текстом в промпте (не больше MAX_ACTIVE_DIGESTS). */
@@ -986,6 +994,7 @@ export function buildContext(
       canAffordEscort: fee != null && world.credits >= fee,
     },
     localFineAmount: fine,
+    reactions: other.divine ? null : reactionCard(world, other),
     station: buildStationSnapshot(world, at.docked),
     activeDigests: [...active],
     forgottenDigests: [...forgotten],

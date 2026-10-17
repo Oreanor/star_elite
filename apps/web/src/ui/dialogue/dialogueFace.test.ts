@@ -2,14 +2,16 @@ import { describe, expect, it } from 'vitest'
 import { dialogueBaseline, dialogueReaction } from './dialogueFace'
 
 describe('dialogueFace', () => {
-  it('insult даёт злость, flatter — радость', () => {
-    expect(dialogueReaction([{ action: 'social', payload: { tone: 'insult' } }], { askOutcome: null })).toBe('anger')
-    expect(dialogueReaction([{ action: 'social', payload: { tone: 'flatter' } }], { askOutcome: null })).toBe('joy')
+  it('лицо — по РЕАКЦИИ нрава: бежит — страх, огрызается или дерётся — злость, оттаял — радость', () => {
+    expect(dialogueReaction({ askOutcome: null, reaction: 'flee' })).toBe('fear')
+    expect(dialogueReaction({ askOutcome: null, reaction: 'bristle' })).toBe('anger')
+    expect(dialogueReaction({ askOutcome: null, reaction: 'fight' })).toBe('anger')
+    expect(dialogueReaction({ askOutcome: null, reaction: 'soften' })).toBe('joy')
   })
 
   it('отказ просьбы — злость, согласие на эскорт — радость', () => {
-    expect(dialogueReaction([], { askOutcome: { topic: 'escort', agreed: false } })).toBe('anger')
-    expect(dialogueReaction([], { askOutcome: { topic: 'escort', agreed: true } })).toBe('joy')
+    expect(dialogueReaction({ askOutcome: { topic: 'escort', agreed: false }, reaction: null })).toBe('anger')
+    expect(dialogueReaction({ askOutcome: { topic: 'escort', agreed: true }, reaction: null })).toBe('joy')
   })
 
   it('baseline: warm — радость, претензия не влияет на базу', () => {

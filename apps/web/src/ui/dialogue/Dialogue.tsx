@@ -111,8 +111,8 @@ export function Dialogue({
     setDivineFace(null)
   }, [world, other])
 
-  const reactFace = useCallback((commands: Command[], fx: ReturnType<typeof dialogueEffects>) => {
-    const hit = dialogueReaction(commands, fx)
+  const reactFace = useCallback((fx: ReturnType<typeof dialogueEffects>) => {
+    const hit = dialogueReaction(fx)
     if (!hit) return
     setFaceEmo(hit)
     if (faceDecay.current !== null) window.clearTimeout(faceDecay.current)
@@ -192,7 +192,7 @@ export function Dialogue({
     rememberPilot(world, other)
     const cmd: Command = { action: 'ask', payload: { topic } }
     const fx = applyTurnToChat(push, world, other, phraseText(line.say, ' '), [cmd])
-    reactFace([cmd], fx)
+    reactFace(fx)
     const emo = outcomeFace(topic, fx.askOutcome?.agreed ?? false)
     if (emo) markOutcomeEmotion(other.id, emo, world.time)
     bump()
@@ -250,7 +250,7 @@ export function Dialogue({
     const fx = dialogueEffects(world, other, reply.commands, reply.text)
     push({ who: 'them', text: utteranceText(fx.them) })
     for (const line of fx.system) push({ who: 'system', text: phraseText(line) })
-    reactFace(reply.commands, fx)
+    reactFace(fx)
     // Собеседник сам ВЫЗВАЛ выражение лица (поле emotion): у бога — восемь ликов (divineFace),
     // у смертного — шесть (faceEmo). Строка уже провалидирована парсером по роли (`coerceEmotion`).
     //
@@ -272,7 +272,8 @@ export function Dialogue({
     }
     // Сказанное богу — в общую память: другие смертные услышат от него, что ты был.
     if (other.divine) publishGodMemory(world)
-    if (reply.hangup) {
+    // Обрыв — по слову модели или по воле домена: собеседник ушёл от угроз или стал врагом.
+    if (reply.hangup || fx.ends) {
       digestMemory.current = createDigestMemory()
       setEnded(reply.source === 'overload' ? t('dialogue.overload') : t('dialogue.hangup'))
     }

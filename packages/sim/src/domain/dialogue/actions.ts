@@ -1,5 +1,6 @@
 import type { Command } from './commandBus'
 import type { Topic } from './dialogue'
+import { coerceSpeechAct } from './temper'
 import {
   coerceLearn,
   coerceOrder,
@@ -70,14 +71,17 @@ const askAction: DialogueAction = {
   },
 }
 
-/** Тон реплики игрока: нахамил/польстил. Следствие для обиды считает домен. */
-const socialAction: DialogueAction = {
-  id: 'social',
+/**
+ * Речевой акт игрока: угроза, хамство, лесть, извинение (`act`). Модель только распознаёт —
+ * реакцию по нраву считает домен (`temper.ts`). Старое поле `social` (insult|flatter)
+ * понимаем тоже: модель по привычке может прислать его.
+ */
+const actAction: DialogueAction = {
+  id: 'act',
   roles: ['bot', 'god'],
   build(o) {
-    return o.social === 'insult' || o.social === 'flatter'
-      ? [{ action: 'social', payload: { tone: o.social } }]
-      : []
+    const act = coerceSpeechAct(o.act) ?? coerceSpeechAct(o.social)
+    return act ? [{ action: 'act', payload: { act } }] : []
   },
 }
 
@@ -87,6 +91,16 @@ const socialAction: DialogueAction = {
  */
 function strikesDeal(o: Record<string, unknown>): boolean {
   return o.job === 'offer' || o.job === 'accept' || o.meet === true || o.transfer != null
+}
+
+/**
+ * На угрозу или хамство отвечает НРАВ (`act` → `temper.react`): трус уходит, храбрец дерётся.
+ * Модель по привычке ставит рядом `stance: hostile` — и трус, которому игра велела бежать,
+ * становился врагом. В такой реплике вражду решает реакция, а не поле модели.
+ */
+function answersHostility(o: Record<string, unknown>): boolean {
+  const act = coerceSpeechAct(o.act) ?? coerceSpeechAct(o.social)
+  return act === 'threat' || act === 'insult'
 }
 
 /**
@@ -101,7 +115,7 @@ const stanceAction: DialogueAction = {
   roles: ['bot', 'god'],
   build(o) {
     const stance = coerceStance(o.stance)
-    if (!stance || (stance === 'hostile' && strikesDeal(o))) return []
+    if (!stance || (stance === 'hostile' && (strikesDeal(o) || answersHostility(o)))) return []
     return [{ action: 'stance', payload: { stance } }]
   },
 }
@@ -286,7 +300,7 @@ const giftAction: DialogueAction = {
  */
 export const ACTIONS: readonly DialogueAction[] = [
   askAction,
-  socialAction,
+  actAction,
   stanceAction,
   mapEditAction,
   orderAction,

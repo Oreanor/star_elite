@@ -1,4 +1,4 @@
-import type { Command, DialogueEffects, ShipEntity, World } from '@elite/sim'
+import type { DialogueEffects, Reaction, ShipEntity, World } from '@elite/sim'
 import { moodTo } from '@elite/sim'
 import type { Emotion } from '../portrait'
 
@@ -25,19 +25,17 @@ export function dialogueBaseline(world: World, other: ShipEntity): Emotion {
   }
 }
 
-function socialTone(cmd: Command): 'insult' | 'flatter' | null {
-  if (cmd.action !== 'social') return null
-  const tone = (cmd.payload as { tone?: string } | null)?.tone
-  return tone === 'insult' || tone === 'flatter' ? tone : null
+/** Лицо на реакцию нрава (`temper.ts`): что собеседник РЕШИЛ, а не каким тоном с ним говорили. */
+const REACTION_FACE: Record<Reaction, Emotion> = {
+  bristle: 'anger',
+  fight: 'anger',
+  flee: 'fear',
+  soften: 'joy',
 }
 
-/** Мгновенная реакция на ход: оскорбление, лесть, отказ, согласие. */
-export function dialogueReaction(commands: Command[], fx: Pick<DialogueEffects, 'askOutcome'>): Emotion | null {
-  for (const cmd of commands) {
-    const tone = socialTone(cmd)
-    if (tone === 'insult') return 'anger'
-    if (tone === 'flatter') return 'joy'
-  }
+/** Мгновенная реакция на ход: угроза, хамство, лесть, отказ, согласие. */
+export function dialogueReaction(fx: Pick<DialogueEffects, 'askOutcome' | 'reaction'>): Emotion | null {
+  if (fx.reaction) return REACTION_FACE[fx.reaction]
   if (fx.askOutcome) {
     if (!fx.askOutcome.agreed) return 'anger'
     if (fx.askOutcome.topic === 'surrender' || fx.askOutcome.topic === 'plunder') return 'sadness'

@@ -14,8 +14,8 @@ import type { RawPlanStep } from '../world/contactPlan'
 import { acquaintanceOf, applyContactPlan } from '../world/plan'
 import type { ShipEntity, World } from '../world/entities'
 import { beginWarpDeparture } from '../world/warp'
-import { WARP } from '../../config/ai'
-import { applyOutcome, applySocial, linesFor, say, type Social } from './dialogue'
+import { applyOutcome, linesFor, say } from './dialogue'
+import { coerceSpeechAct, react, startFleeing, type Reaction } from './temper'
 import { coerceOrder, coerceStance, coerceTopic, coerceTransfer } from './payload'
 import { applyTransfer, type TransferResult } from './transfer'
 import { localFine, payLocalFine } from '../station/legal'
@@ -47,6 +47,10 @@ export interface CommandOutcome {
   agreed?: boolean
   /** Что звучит голосом собеседника от домена (отказ, подтверждение). */
   spoken?: Phrase
+  /** Разговор окончен по воле домена: собеседник ушёл или стал врагом. */
+  ends?: boolean
+  /** Как собеседник отреагировал на речевой акт — по ней UI ставит лицо. */
+  reaction?: Reaction
 }
 
 export type CommandHandler = (world: World, ship: ShipEntity, payload: unknown) => CommandOutcome | null
@@ -227,14 +231,26 @@ function mapEditCommand(world: World, ship: ShipEntity, payload: unknown): Comma
   return { line: phrase('mapEdited') }
 }
 
-/** Соц-тон реплики игрока: нахамил/польстил. Следствие для отношений считает домен. */
-function socialCommand(world: World, ship: ShipEntity, payload: unknown): CommandOutcome | null {
-  const o = asObject(payload)
-  const tone: Social | null = o && (o.tone === 'insult' || o.tone === 'flatter') ? o.tone : null
-  if (!tone) return null
-  applySocial(world, ship, tone)
-  recordEvent(world, ship, { kind: 'social', tone })
-  return { line: null }
+/**
+ * Речевой акт игрока (угроза, хамство, лесть, извинение). Модель лишь распознала его;
+ * реакцию считает и исполняет нрав (`temper.react`). Разрыв — бегство или бой — кончает
+ * разговор: дальше говорит оружие или пустота за кормой.
+ */
+function actCommand(world: World, ship: ShipEntity, payload: unknown): CommandOutcome | null {
+  const act = coerceSpeechAct(asObject(payload)?.act)
+  if (!act) return null
+  const reaction = react(world, ship, act)
+  // Журнал знакомого помнит тон: «нахамил» и «польстил» — прежние записи, угроза — как хамство.
+  if (act !== 'apology') recordEvent(world, ship, { kind: 'social', tone: act === 'flatter' ? 'flatter' : 'insult' })
+  if (reaction === 'flee') {
+    recordEvent(world, ship, { kind: 'note', text: 'ушёл от угроз' })
+    return { line: phrase('foeFled'), ends: true, reaction }
+  }
+  if (reaction === 'fight') {
+    recordEvent(world, ship, { kind: 'note', text: 'принял вызов — враг' })
+    return { line: phrase('foeTurned'), ends: true, reaction }
+  }
+  return { line: null, reaction }
 }
 
 /** Передача добра. Журналим и показываем ТОЛЬКО реально перешедшее (домен урезал сам). */
@@ -374,14 +390,8 @@ function surrenderCommand(world: World, ship: ShipEntity, _payload: unknown): Co
 
 /** Бот удирает: уходит в отрыв, гасит огонь и, при наличии привода, заряжает прыжок-побег. */
 function fleeCommand(world: World, ship: ShipEntity, _payload: unknown): CommandOutcome | null {
-  const ai = ship.ai
-  if (!ai) return null
-  ai.mode = 'evade'
-  ai.targetId = null
-  ai.wantsFire = false
-  ai.wantsMissile = false
-  // Заряд прыжка ставим лишь если он ещё не идёт и есть чем прыгать (иначе просто отрыв).
-  if (ship.spec.jumpRange > 0 && ai.warpTimer < 0) ai.warpTimer = WARP.CHARGE
+  if (!ship.ai) return null
+  startFleeing(ship)
   recordEvent(world, ship, { kind: 'note', text: 'бежал из боя' })
   return { line: null }
 }
@@ -468,7 +478,7 @@ const HANDLERS: Record<string, CommandHandler> = {
   ask: askCommand,
   order: orderCommand,
   task: taskCommand,
-  social: socialCommand,
+  act: actCommand,
   stance: stanceCommand,
   mapEdit: mapEditCommand,
   transfer: transferCommand,
@@ -495,7 +505,7 @@ const HANDLERS: Record<string, CommandHandler> = {
  * Что можно с зеркалом (бортом, которым правит хозяин системы): только слова и память.
  * Деньги, груз, приказы и дела ушли бы в копию, которой этот клиент не управляет.
  */
-const MIRROR_SAFE = new Set(['social', 'note', 'meet', 'tip', 'mark', 'stance', 'learn', 'job'])
+const MIRROR_SAFE = new Set(['note', 'meet', 'tip', 'mark', 'stance', 'learn', 'job'])
 
 /** С копией бога можно и божье: правка карты и мимика — это про мир и игрока, не про борт. */
 const DIVINE_MIRROR_SAFE = new Set(['mapEdit', 'emote', 'gift'])

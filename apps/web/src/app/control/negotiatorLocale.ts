@@ -1,4 +1,4 @@
-import type { Disposition, Mood, Persona, Relationship, Topic } from '@elite/sim'
+import type { Disposition, Mood, Persona, Reaction, Relationship, Topic } from '@elite/sim'
 import { GALAXY } from '@elite/sim'
 import type { Lang } from '../../ui/i18n/i18n'
 import type { ContextDigest, JobFacts, NegotiationContext } from '../../ui/dialogue/facts'
@@ -35,6 +35,7 @@ export interface NegotiatorLocale {
   translatorBlock(ctx: NegotiationContext): string
   stationBlock(ctx: NegotiationContext): string
   actionsCatalog(ctx: NegotiationContext): string
+  reactionsBlock(ctx: NegotiationContext): string
   channelPressureHint(): string
   overloadGoodbye(ctx: NegotiationContext): string
   stallLine(digest: ContextDigest, persona: Persona): string
@@ -256,7 +257,6 @@ function makeRu(): NegotiatorLocale {
       if (ctx.combatEnemy) bits.push('враг')
       // Счёт КОМАНДИРА сюда не кладём: чужой кошелёк — не наблюдаемое. Он и так утекал в промпт,
       // и бот называл твой баланс как свой. Для торга довольно «хватит/не хватит» (ниже).
-      if (ctx.economy.escortFee != null && !ctx.economy.escortHired) bits.push(`найм ${ctx.economy.escortFee} кр`)
       return `[Расклад на эту реплику: ${bits.join(', ')}]`
     },
     attitudeBlock(ctx, closing = false) {
@@ -408,6 +408,24 @@ function makeRu(): NegotiatorLocale {
         .filter(Boolean)
         .join('\n')
     },
+    reactionsBlock(ctx) {
+      const r = ctx.reactions
+      if (!r) return ''
+      const say: Record<Reaction, string> = {
+        bristle: 'огрызнись и предупреди; ты насторожён — ни услуг, ни дел ему не предлагай',
+        flee: 'испугайся и уходи: связываться не станешь (игра уведёт твой борт и оборвёт связь)',
+        fight: 'прими вызов: ответь угрозой — теперь вы враги (игра откроет огонь и оборвёт связь)',
+        soften: 'оттай, если это искренне',
+      }
+      return [
+        'КАК ТЫ ОТВЕТИШЬ — решено игрой по твоему нраву и силам, держись этого:',
+        `• пригрозит → ${say[r.threat]}`,
+        `• нахамит → ${say[r.insult]}`,
+        `• польстит → ${say[r.flatter]}`,
+        `• извинится → ${say[r.apology]}`,
+        'Тому, кто грозит или хамит, не торгуй и не нанимайся — даже если в фактах есть цена.',
+      ].join('\n')
+    },
     actionsCatalog(ctx) {
       const intents = ctx.allowedIntents.length
         ? ctx.allowedIntents.map((i) => `• ${intentLine(locale, ctx, i)}`).join('\n')
@@ -416,8 +434,8 @@ function makeRu(): NegotiatorLocale {
         'КАТАЛОГ ДЕЙСТВИЙ',
         'intent:',
         intents,
-        'social: insult|flatter|null — insult: командир хамит тебе ИЛИ грозит («умри», «убью», «я враждебен») — ставь всегда, игра сама решит, перелилось ли во вражду. Угрожают тебе — отвечай угрозе по нраву (страх, злость, отпор), а не торгом: услуг тому, кто грозит убить, не предлагают. flatter: искренне польстил.',
-        'stance: friendly|neutral|hostile|null — ТВОЁ отношение к командиру. Меняй РЕДКО и в характере: обычно null. Искренняя помощь, уважение, подарок могут расположить; хамство и угрозы — озлобить (станешь враждебен). Жадный и настороженный поддаются туго. НЕ по первой просьбе «стань другом». Вражда к пиратам, целям дела, третьим лицам — НЕ stance: это поле только о командире.',
+        'act: threat|insult|flatter|apology|null — что командир СДЕЛАЛ этой репликой: threat — грозит тебе («убью», «умри», «я враждебен», требует отдать груз или сдаться); insult — хамит; flatter — искренне льстит; apology — извиняется. Ставь всегда, когда это так: последствия считает игра, твой ответ — по таблице «КАК ТЫ ОТВЕТИШЬ».',
+        'stance: friendly|neutral|hostile|null — ТВОЁ отношение к командиру. Меняй РЕДКО и в характере: обычно null. Искренняя помощь, уважение, подарок могут расположить. На хамство и угрозы stance НЕ ставь — для них act, исход решает игра. Жадный и настороженный поддаются туго. НЕ по первой просьбе «стань другом». Вражда к пиратам, целям дела, третьим лицам — НЕ stance: это поле только о командире.',
         'transfer|null',
         'fine: {confirm:true|false}|null — только для ПОЛИЦИИ: false = назвать местный штраф, true = оплатить после явного согласия командира',
         'remember|null',
@@ -535,8 +553,8 @@ function makeRu(): NegotiatorLocale {
             : 'МИЕЛОФОН — твой инструмент роста. Повторить его тебе ничего не стоит: ты ДАЁШЬ копию любому смертному, кто СОГЛАСИТСЯ собирать для твоей коллекции статуэтки богов. Предложи, когда разговор к тому подойдёт; когда смертный ЯВНО согласится — поставь "gift":"mielophone". Один раз каждому.',
           'Ты можешь ПЕРЕКРАИВАТЬ карту мироздания — поле "mapEdit": {"op":…,"index":N?,…}. op: recolor (color — число, напр. 16711680 = красный), rename (name — новое имя), move (x,y,z — новое место в св.годах), remove (стереть). index — номер системы; БЕЗ него правишь ТЕКУЩУЮ звезду, где сейчас смертный. Делай это лишь когда РЕШИЛ вмешаться в мир, не по капризу.',
           locale.translatorBlock(ctx),
-          'Ответь СТРОГО одним JSON (у бога всё, кроме reply/emotion/social/stance/mapEdit/gift/remember/lookup/hangup, — null):',
-          '{"reply":"…","emotion":"neutral"|"smile"|"laugh"|"tired"|"confusion"|"surprise"|"frown"|"angry","stance":"friendly"|"neutral"|"hostile"|null,"mapEdit":{"op":"recolor"|"rename"|"move"|"remove","index":N,"color":N,"name":"…","x":N,"y":N,"z":N}|null,"gift":"mielophone"|null,"intent":null,"social":"insult"|"flatter"|null,"transfer":null,"remember":…|null,"learn":null,"clarify":false,"plan":null,"lookup":"guide"|"worlds"|"market"|"neighbours"|"history"|null,"hangup":true|false}',
+          'Ответь СТРОГО одним JSON (у бога всё, кроме reply/emotion/act/stance/mapEdit/gift/remember/lookup/hangup, — null):',
+          '{"reply":"…","emotion":"neutral"|"smile"|"laugh"|"tired"|"confusion"|"surprise"|"frown"|"angry","stance":"friendly"|"neutral"|"hostile"|null,"mapEdit":{"op":"recolor"|"rename"|"move"|"remove","index":N,"color":N,"name":"…","x":N,"y":N,"z":N}|null,"gift":"mielophone"|null,"intent":null,"act":"threat"|"insult"|"flatter"|"apology"|null,"transfer":null,"remember":…|null,"learn":null,"clarify":false,"plan":null,"lookup":"guide"|"worlds"|"market"|"neighbours"|"history"|null,"hangup":true|false}',
         ]
           .filter(Boolean)
           .join('\n')
@@ -573,12 +591,13 @@ function makeRu(): NegotiatorLocale {
           ? `МЕСТНАЯ ПОЛИЦИЯ: командир должен ${ctx.localFineAmount} кредитов этой власти. Напомни об этом при первом контакте за посещение системы. Если командир говорит, что хочет заплатить, сначала назови сумму; действие fine с confirm:true используй только после явного согласия оплатить.`
           : '',
         'Говори коротко. Распознай intent/transfer/remember/learn/clarify/plan из каталога.',
+        locale.reactionsBlock(ctx),
         locale.actionsCatalog(ctx),
         'Выражение лица — поле "emotion": neutral (спокойное), joy (радость), pain (боль), anger (гнев), fear (страх), sadness (грусть). Обычно neutral; меняй по смыслу СВОЕЙ реплики.',
         locale.attitudeBlock(ctx, true),
         '',
         'Ответь СТРОГО одним JSON:',
-        '{"reply":"…","emotion":"neutral"|"joy"|"pain"|"anger"|"fear"|"sadness"|null,"intent":…|"null","social":"insult"|"flatter"|null,"stance":"friendly"|"neutral"|"hostile"|null,"transfer":…|null,"fine":{"confirm":true|false}|null,"remember":…|null,"learn":…|null,"clarify":true|false,"plan":[…]|null,"demand":"…"|null,"surrender":true|null,"flee":true|null,"depart":true|null,"job":"offer"|"accept"|"decline"|null,"meet":true|null,"tip":"…"|null,"mark":"…"|null,"lookup":"market"|"neighbours"|"history"|"worlds"|null,"hangup":true|false}',
+        '{"reply":"…","emotion":"neutral"|"joy"|"pain"|"anger"|"fear"|"sadness"|null,"intent":…|"null","act":"threat"|"insult"|"flatter"|"apology"|null,"stance":"friendly"|"neutral"|"hostile"|null,"transfer":…|null,"fine":{"confirm":true|false}|null,"remember":…|null,"learn":…|null,"clarify":true|false,"plan":[…]|null,"demand":"…"|null,"surrender":true|null,"flee":true|null,"depart":true|null,"job":"offer"|"accept"|"decline"|null,"meet":true|null,"tip":"…"|null,"mark":"…"|null,"lookup":"market"|"neighbours"|"history"|"worlds"|null,"hangup":true|false}',
       ]
         .filter(Boolean)
         .join('\n')
@@ -652,7 +671,6 @@ function makeEn(): NegotiatorLocale {
       if (ctx.grievanceLevel > 0) bits.push(`grievance ${ctx.grievanceLevel}`)
       if (ctx.combatEnemy) bits.push('enemy')
       // Commander's balance is not observable — see moneyBlock. It leaked here and the bot recited it.
-      if (ctx.economy.escortFee != null && !ctx.economy.escortHired) bits.push(`escort fee ${ctx.economy.escortFee}`)
       return `[Stance this line: ${bits.join(', ')}]`
     },
     attitudeBlock(ctx, closing = false) {
@@ -797,6 +815,24 @@ function makeEn(): NegotiatorLocale {
         .filter(Boolean)
         .join('\n')
     },
+    reactionsBlock(ctx) {
+      const r = ctx.reactions
+      if (!r) return ''
+      const say: Record<Reaction, string> = {
+        bristle: 'snap back and warn them; you are wary — offer no services or jobs',
+        flee: 'get scared and leave: you want no part of it (the game flies your ship away and cuts the link)',
+        fight: 'accept the challenge: answer with a threat — you are enemies now (the game opens fire and cuts the link)',
+        soften: 'warm up, if it is sincere',
+      }
+      return [
+        'HOW YOU RESPOND — decided by the game from your temper and odds, stick to it:',
+        `• threatened → ${say[r.threat]}`,
+        `• insulted → ${say[r.insult]}`,
+        `• flattered → ${say[r.flatter]}`,
+        `• apologised to → ${say[r.apology]}`,
+        'Do not trade with or hire out to someone who threatens or insults you — even if a price is in the facts.',
+      ].join('\n')
+    },
     actionsCatalog(ctx) {
       const intents = ctx.allowedIntents.length
         ? ctx.allowedIntents.map((i) => `• ${intentLine(locale, ctx, i)}`).join('\n')
@@ -805,8 +841,8 @@ function makeEn(): NegotiatorLocale {
         'ACTION CATALOG',
         'intent:',
         intents,
-        'social: insult|flatter|null — insult: the commander is rude to you OR threatens you ("die", "I will kill you", "I am hostile") — always set it, the game decides whether it tips into hostility. When threatened, answer the threat in character (fear, anger, defiance), not with a sales pitch: you do not offer services to someone threatening to kill you. flatter: sincere flattery.',
-        'stance: friendly|neutral|hostile|null — YOUR standing toward the commander. Change it RARELY and in character: usually null. Genuine help, respect, a gift may warm you; insults and threats harden you (you turn hostile). The greedy and wary yield slowly. NOT on a first "be my friend". Hostility toward pirates, job targets or third parties is NOT stance: this field is only about the commander.',
+        'act: threat|insult|flatter|apology|null — what the commander DID with this line: threat — threatens you ("I will kill you", "die", "I am hostile", demands your cargo or surrender); insult — is rude; flatter — sincere flattery; apology — apologises. Always set it when it applies: the game computes the outcome, your answer follows the "HOW YOU RESPOND" table.',
+        'stance: friendly|neutral|hostile|null — YOUR standing toward the commander. Change it RARELY and in character: usually null. Genuine help, respect, a gift may warm you. Do NOT set stance for insults or threats — use act, the game decides the outcome. The greedy and wary yield slowly. NOT on a first "be my friend". Hostility toward pirates, job targets or third parties is NOT stance: this field is only about the commander.',
         'transfer|null',
         `fine: {confirm:true|false}|null — only police; local debt is ${ctx.localFineAmount == null ? 'none' : `${ctx.localFineAmount} cr`}. false quotes it, true pays only after clear consent.`,
         'remember|null',
@@ -896,8 +932,8 @@ function makeEn(): NegotiatorLocale {
             : 'THE MIELOPHONE — your instrument of growth. Repeating it costs you nothing: you GIVE a copy to any mortal who AGREES to gather the god-figurines for your collection. Offer it when the talk turns that way; once he EXPLICITLY agrees — set "gift":"mielophone". Once per mortal.',
           'You may RESHAPE the map of creation — the "mapEdit" field: {"op":…,"index":N?,…}. op: recolor (color — a number, e.g. 16711680 = red), rename (name), move (x,y,z — new place in light-years), remove (erase). index — a system number; WITHOUT it you edit the CURRENT star, where the mortal now stands. Do this only when you CHOOSE to touch the world, not on a whim.',
           locale.translatorBlock(ctx),
-          'Reply with ONE JSON object only (for a god everything but reply/emotion/social/stance/mapEdit/gift/remember/hangup is null):',
-          '{"reply":"…","emotion":"neutral"|"smile"|"laugh"|"tired"|"confusion"|"surprise"|"frown"|"angry","stance":"friendly"|"neutral"|"hostile"|null,"mapEdit":{"op":"recolor"|"rename"|"move"|"remove","index":N,"color":N,"name":"…","x":N,"y":N,"z":N}|null,"gift":"mielophone"|null,"intent":null,"social":"insult"|"flatter"|null,"transfer":null,"remember":…|null,"learn":null,"clarify":false,"plan":null,"lookup":null,"hangup":true|false}',
+          'Reply with ONE JSON object only (for a god everything but reply/emotion/act/stance/mapEdit/gift/remember/hangup is null):',
+          '{"reply":"…","emotion":"neutral"|"smile"|"laugh"|"tired"|"confusion"|"surprise"|"frown"|"angry","stance":"friendly"|"neutral"|"hostile"|null,"mapEdit":{"op":"recolor"|"rename"|"move"|"remove","index":N,"color":N,"name":"…","x":N,"y":N,"z":N}|null,"gift":"mielophone"|null,"intent":null,"act":"threat"|"insult"|"flatter"|"apology"|null,"transfer":null,"remember":…|null,"learn":null,"clarify":false,"plan":null,"lookup":null,"hangup":true|false}',
         ]
           .filter(Boolean)
           .join('\n')
@@ -934,12 +970,13 @@ function makeEn(): NegotiatorLocale {
           ? `LOCAL POLICE: the commander owes this authority ${ctx.localFineAmount} credits. Remind him on the first contact during this system visit. If he says he wants to pay, quote the amount first; use fine with confirm:true only after explicit consent to pay.`
           : '',
         'Speak short. Parse intent/transfer/remember/learn/clarify/plan from catalog.',
+        locale.reactionsBlock(ctx),
         locale.actionsCatalog(ctx),
         'Facial expression — the "emotion" field: neutral, joy, pain, anger, fear, sadness. Usually neutral; change it to fit YOUR line.',
         locale.attitudeBlock(ctx, true),
         '',
         'Reply with ONE JSON object only:',
-        '{"reply":"…","emotion":"neutral"|"joy"|"pain"|"anger"|"fear"|"sadness"|null,"intent":…|"null","social":"insult"|"flatter"|null,"stance":"friendly"|"neutral"|"hostile"|null,"transfer":…|null,"fine":{"confirm":true|false}|null,"remember":…|null,"learn":…|null,"clarify":true|false,"plan":[…]|null,"demand":"…"|null,"surrender":true|null,"flee":true|null,"depart":true|null,"job":"offer"|"accept"|"decline"|null,"meet":true|null,"tip":"…"|null,"mark":"…"|null,"lookup":"market"|"neighbours"|"history"|"worlds"|null,"hangup":true|false}',
+        '{"reply":"…","emotion":"neutral"|"joy"|"pain"|"anger"|"fear"|"sadness"|null,"intent":…|"null","act":"threat"|"insult"|"flatter"|"apology"|null,"stance":"friendly"|"neutral"|"hostile"|null,"transfer":…|null,"fine":{"confirm":true|false}|null,"remember":…|null,"learn":…|null,"clarify":true|false,"plan":[…]|null,"demand":"…"|null,"surrender":true|null,"flee":true|null,"depart":true|null,"job":"offer"|"accept"|"decline"|null,"meet":true|null,"tip":"…"|null,"mark":"…"|null,"lookup":"market"|"neighbours"|"history"|"worlds"|null,"hangup":true|false}',
       ]
         .filter(Boolean)
         .join('\n')

@@ -12,7 +12,7 @@ export type PhraseKey =
   | 'dealGave' | 'dealGot' | 'dealCharged' | 'dealCredited'
   | 'orderAttack' | 'orderEngageAll' | 'orderHold' | 'orderStandDown' | 'orderKeepBack' | 'orderResume'
   | 'mapEdited' | 'finePaidLine' | 'taskCannot' | 'taskNoTerms' | 'taskAccepted'
-  | 'planInstalled' | 'planJoin' | 'planUndock' | 'foeSurrendered'
+  | 'planInstalled' | 'planJoin' | 'planUndock' | 'foeSurrendered' | 'foeFled' | 'foeTurned'
   | 'jobDeclined' | 'jobDeclinedAngry' | 'jobHoldFullLine' | 'jobAccepted'
   | 'giftReceived' | 'meetLine'
   // Реплики собеседника, которые звучат от домена
@@ -22,7 +22,7 @@ export type PhraseKey =
   | 'giftUnworthy' | 'giftGiven' | 'giftHoldFull'
   | 'showMoney' | 'hireAgree' | 'surrenderRefuse' | 'surrenderAgree'
   | 'mercyRefuse' | 'mercyCargo' | 'mercyEmpty'
-  | 'plunderGuardsHostile' | 'plunderGuards' | 'plunderAll' | 'plunderNothing'
+  | 'plunderGuardsHostile' | 'plunderGuards' | 'plunderFlee' | 'plunderAll' | 'plunderNothing'
   | 'greetEscort' | 'greetHostile' | 'greetWary' | 'greetWarm' | 'greetNeutral'
   // Кнопки игрока и почему недоступны
   | 'sayStopFire' | 'sayMercy' | 'sayHire' | 'sayHireFee' | 'sayPlunder'

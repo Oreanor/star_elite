@@ -1,6 +1,5 @@
 export {
   applyOutcome,
-  applySocial,
   escortFee,
   interlocutor,
   linesFor,
@@ -10,9 +9,16 @@ export {
   type Line,
   type Mood,
   type Reply,
-  type Social,
   type Topic,
 } from './dialogue'
+export {
+  SPEECH_ACTS,
+  coerceSpeechAct,
+  reactionCard,
+  reactionTo,
+  type Reaction,
+  type SpeechAct,
+} from './temper'
 export { giveMielophone, type GiftRefusal } from './divineGift'
 export { applyTransfer, type Transfer, type TransferDirection, type TransferResult } from './transfer'
 export {

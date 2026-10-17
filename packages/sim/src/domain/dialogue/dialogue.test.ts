@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import { DIALOGUE } from '../../config/dialogue'
-import { GRIEVANCE } from '../../config/ai'
 import { COMMODITIES } from '../cargo'
 import { addCommodity } from '../cargo/hold'
 import { createAIState } from '../ai/types'
@@ -8,7 +7,7 @@ import { rememberPilot } from '../world/acquaintance'
 import { DEFAULT_PERSONA } from '../world/persona'
 import { createWorld, STARTER_SYSTEM, type World } from '../world'
 import type { ShipEntity } from '../world/entities'
-import { applyOutcome, applySocial, escortFee, interlocutor, linesFor, moodTo, say } from './dialogue'
+import { applyOutcome, escortFee, interlocutor, linesFor, moodTo, say } from './dialogue'
 import { lockContact } from '../world/queries'
 
 /**
@@ -285,22 +284,17 @@ describe('разговор', () => {
     })
 
     /**
-     * Требование груза к целому торговцу — угроза: он копит претензию тем же счётчиком,
-     * что и попадания, и на пороге встаёт на бой честно. Слова провоцируют так же, как выстрел.
+     * Требование груза к целому торговцу — УГРОЗА. Раньше он копил «попадания» и сначала
+     * лишь ворчал; теперь реагирует тем же нравом, что и на угрозу словами (`temper.ts`):
+     * не сдаётся, а уходит или встаёт на бой — и это видно по миру, а не только по реплике.
      */
-    it('повторная угроза грабежом переводит нейтрала во враги', () => {
+    it('требование груза к целому — угроза: торговец не терпит, а уходит или дерётся', () => {
       const { world, other } = withShip('neutral')
-      other.ai = createAIState(other.state.pos, world.rng) // обижаться может лишь борт с ИИ
-
-      // THREAT_WEIGHT=2, HOSTILE_HITS=4 → две наглые попытки, и он враг.
-      const need = Math.ceil(GRIEVANCE.HOSTILE_HITS / DIALOGUE.THREAT_WEIGHT)
-      for (let i = 0; i < need - 1; i++) {
-        expect(say(world, other, 'plunder').agreed).toBe(false)
-        expect(other.faction).toBe('neutral') // ещё терпит, но уже насторожён
-        expect(moodTo(world, other)).toBe('wary')
-      }
-      say(world, other, 'plunder')
-      expect(other.faction).toBe('hostile')
+      other.ai = createAIState(other.state.pos, world.rng)
+      expect(say(world, other, 'plunder').agreed).toBe(false)
+      const fought = other.faction === 'hostile'
+      const fled = other.ai.mode === 'evade'
+      expect(fought || fled).toBe(true)
     })
 
     /**
@@ -321,33 +315,6 @@ describe('разговор', () => {
       rig(coward.world, 0.5)
       expect(say(brave.world, brave.other, 'surrender').agreed).toBe(false)
       expect(say(coward.world, coward.other, 'surrender').agreed).toBe(true)
-    })
-
-    /**
-     * Соц-тон распознаёт модель, а следствие считает движок: оскорбление копит обиду
-     * тем же счётчиком (повторишь — враг и эскорт врозь), лесть её гасит. Дружбы лесть
-     * не даёт — расположить можно делом, не словом.
-     */
-    it('оскорбление копит обиду и рвёт эскорт, лесть её гасит', () => {
-      const { world, other } = withShip('neutral')
-      other.ai = createAIState(other.state.pos, world.rng)
-      other.ai.escortOf = world.player.id // как будто нанят
-
-      // INSULT_WEIGHT=2, HOSTILE_HITS=4 → два оскорбления, и он враг, эскорт отменён.
-      applySocial(world, other, 'insult')
-      expect(other.faction).toBe('neutral')
-      expect(moodTo(world, other)).toBe('wary')
-      applySocial(world, other, 'insult')
-      expect(other.faction).toBe('hostile')
-      expect(other.ai.escortOf).toBeNull() // договорённость отменилась сама
-
-      // Лесть гасит открытую претензию (успокаивает насторожённого), но не роднит.
-      const t = withShip('neutral')
-      t.other.ai = createAIState(t.other.state.pos, t.world.rng)
-      t.other.ai.grievance = 1
-      applySocial(t.world, t.other, 'flatter')
-      expect(t.other.ai.grievance).toBe(0)
-      expect(moodTo(t.world, t.other)).toBe('neutral') // не подружились, просто отпустило
     })
 
     /**

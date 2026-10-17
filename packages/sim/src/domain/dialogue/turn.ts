@@ -2,6 +2,7 @@ import type { ShipEntity, World } from '../world/entities'
 import { applyCommand, type Command } from './commandBus'
 import type { Topic } from './dialogue'
 import { joinPhrases, phrase, type Phrase } from './phrase'
+import type { Reaction } from './temper'
 
 /** Что показать в ленте после исполнения команд (кнопка или LLM — один контур). */
 export interface DialogueEffects {
@@ -14,6 +15,10 @@ export interface DialogueEffects {
   system: Phrase[]
   /** Исход просьбы-действия — для эмоции на портрете. */
   askOutcome: { topic: Topic; agreed: boolean } | null
+  /** Реакция на речевой акт игрока, если он был (`temper.ts`). */
+  reaction: Reaction | null
+  /** Домен оборвал разговор: собеседник ушёл или стал врагом (`CommandOutcome.ends`). */
+  ends: boolean
 }
 
 /**
@@ -44,5 +49,7 @@ export function dialogueEffects(
     askOutcome = { topic, agreed: askEntry.out.agreed ?? false }
   }
 
-  return { them, system, askOutcome }
+  const ends = outcomes.some((o) => o.out?.ends === true)
+  const reaction = outcomes.find((o) => o.out?.reaction)?.out?.reaction ?? null
+  return { them, system, askOutcome, ends, reaction }
 }
