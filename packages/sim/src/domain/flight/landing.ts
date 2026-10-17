@@ -481,8 +481,13 @@ export function stepLanding(ship: ShipEntity, world: World, dt: number): boolean
   binding.normal.copy(_normal)
   const er = effectiveRadius(ship)
   let altitude = ship.state.pos.distanceTo(surface.pos) - surface.radius - er
-  const climbed = Math.abs(ship.controls.strafeUp) < 1e-3 ? 0 : ship.controls.strafeUp * LANDING.ALT_RATE * dt
-  altitude += climbed
+  const requested = Math.abs(ship.controls.strafeUp) < 1e-3 ? 0 : ship.controls.strafeUp * LANDING.ALT_RATE * dt
+  // Shift+W/S — лишь до пола и потолка: у края подъём или спуск кончаются, и камере (ниже)
+  // идёт ровно то, что борт РЕАЛЬНО прошёл. Прежде у пола она получала «спуск» и дальше и
+  // уезжала от стоящего корабля.
+  const railFrom = altitude
+  altitude = requested === 0 ? altitude : Math.min(LANDING.ALT_MAX, Math.max(LANDING.ALT_MIN, altitude + requested))
+  const climbed = altitude - railFrom
 
   /**
    * НАБОР ВЫСОТЫ — плавный: носом вверх поднимаешься не быстрее CLIMB_RATE, с форсажем (ПКМ)
@@ -510,7 +515,7 @@ export function stepLanding(ship: ShipEntity, world: World, dt: number): boolean
    * отстала бы, будто уезжаешь ты, а грунт стоит. Смещение идёт тем же каналом, что
    * перецентровка начала координат, — и след позы едет с ним, без отставания.
    */
-  if (climbed !== 0 && ship === world.player) {
+  if (requested !== 0 && climbed !== 0 && ship === world.player) {
     world.originShift.addScaledVector(_normal, climbed)
     shiftTrail(ship.state, _climb.copy(_normal).multiplyScalar(climbed))
   }

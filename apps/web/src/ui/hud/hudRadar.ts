@@ -13,7 +13,9 @@ import {
   lockedPodId,
   lockedAsteroidId,
   lockedFixtureId,
+  renderTime,
 } from '@elite/sim'
+import { t as tr } from '../i18n'
 import { galaxyRadar } from '../../render/scene/galaxyRadar'
 import { HUD_COLORS, circle, corners, dot, ellipse, line, text } from './draw'
 import { figurineTitleLocal, properName } from '../i18n/dataNames'
@@ -376,5 +378,32 @@ export function drawAltimeter(frame: HudFrame, cx: number, top: number, bottom: 
   const baseFont = ctx.font
   ctx.font = hudFont(6 * S)
   text(ctx, formatDistance(altitude), cx, bottom + 9 * S, color, 'center')
+  // ВЕРТИКАЛЬНАЯ СКОРОСТЬ: задрал нос — видно, что набираешь; опустил — что снижаешься. По
+  // одной ленте это читалось плохо: на сотнях метров метка ползёт еле заметно.
+  const rate = verticalRate(near.id, altitude, renderTime(world))
+  if (Math.abs(rate) >= 0.5) {
+    const mark = rate > 0 ? '▲' : '▼'
+    text(ctx, `${mark} ${Math.round(Math.abs(rate))} ${tr('unit.mps')}`, cx, top - 4 * S, color, 'center')
+  }
   ctx.font = baseFont
+}
+
+/**
+ * Вертикальная скорость по смене высоты между кадрами, м/с, сглаженная (иначе цифра прыгает
+ * от неровного кадра). Считается здесь, а не в домене: это показание прибора, а не физика.
+ * Сменилась поверхность или время пошло назад (новый мир) — начинаем заново.
+ */
+const vrate = { id: -1, alt: 0, at: 0, value: 0 }
+function verticalRate(id: number, altitude: number, now: number): number {
+  const dt = now - vrate.at
+  if (id !== vrate.id || dt <= 0 || dt > 1) {
+    vrate.id = id
+    vrate.value = 0
+  } else {
+    const raw = (altitude - vrate.alt) / dt
+    vrate.value += (raw - vrate.value) * Math.min(1, dt * 6)
+  }
+  vrate.alt = altitude
+  vrate.at = now
+  return vrate.value
 }

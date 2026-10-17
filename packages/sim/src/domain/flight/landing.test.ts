@@ -543,3 +543,23 @@ describe('ховер над вращающейся планетой', () => {
   })
 })
 
+describe('спуск до пола', () => {
+  it('у пола Shift+S больше не двигает камеру: она не уезжает от стоящего корабля', () => {
+    // Пойманное: у ALT_MIN борт вставал, а камера получала «спуск» дальше и уходила от него.
+    const world = quietWorld()
+    const planet = world.bodies.find((b) => b.kind === 'planet')!
+    const p = world.player
+    p.state.pos.copy(planet.pos).add(new Vector3(planet.radius + effectiveRadius(p) + ARM_ALT, 0, 0))
+    p.state.vel.set(0, 0, 0)
+    p.controls.throttle = 0
+    expect(armAutoland(world)).toBe(true)
+    p.controls.strafeUp = -1
+    for (let i = 0; i < 1200; i++) {
+      const before = p.state.pos.clone()
+      stepWorld(world, PHYSICS.FIXED_DT, NO_CONTROLLERS)
+      expect(p.state.pos.clone().sub(before).sub(world.originShift).length()).toBeLessThan(0.05)
+    }
+    expect(p.landedOn!.altitude).toBe(LANDING.ALT_MIN)
+  })
+})
+
