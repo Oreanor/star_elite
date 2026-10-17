@@ -85,6 +85,7 @@ import { stepTitans } from '../world/titans'
 import { stepPlatforms } from '../world/platforms'
 import { stepGrievances } from '../combat/grievance'
 import { stepRockCollisions } from '../combat/rockCollisions'
+import { stepBelts } from '../world/belts'
 import { stepTension } from '../dialogue/temper'
 import { stepContracts } from '../contracts/contracts'
 import { NULL_CONTROLLER, type Controller, type ControllerMap } from './controller'
@@ -263,6 +264,7 @@ function stepTick(world: World, helm: Helm, dt: number): void {
 
   cleanup(world)
   stepTraffic(world, dt)
+  stepBelts(world, dt)
   // Бог, идущий к причалу, ужимается до обычного борта: масштаб — свойство облика.
   stepDivineScale(world, dt)
   stepTitans(world, dt)

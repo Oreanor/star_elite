@@ -2,6 +2,7 @@ import { useFrame } from '@react-three/fiber'
 import { useRef } from 'react'
 import { Group } from 'three'
 import { AsteroidField } from './Asteroids'
+import { AsteroidBelts } from './AsteroidBelts'
 import { Comets } from './Comets'
 import { Bodies } from './Bodies'
 import { GalaxyLayer } from './GalaxyLayer'
@@ -84,6 +85,7 @@ export function WorldVisuals() {
         <StarBeams />
         <Dyson />
         <AsteroidField />
+        <AsteroidBelts />
         <Comets />
         <Titans />
         <Platforms />

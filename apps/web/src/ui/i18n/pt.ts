@@ -340,6 +340,8 @@ export const PT: Record<keyof typeof RU, string> = {
   'locator.kind.pod': 'contêiner',
   'locator.kind.asteroid': 'asteroide',
   'locator.kind.comet': 'cometa',
+  'locator.kind.belt': 'cinturão de asteroides',
+  'locator.belt.inside': 'dentro',
   'locator.kind.fixture': 'emplacamento',
   'locator.kind.warbase': 'base militar',
   'locator.kind.ship': 'nave',

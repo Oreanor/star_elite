@@ -142,6 +142,11 @@ export interface SystemDef {
    */
   extraStations?: readonly StationDef[]
   belt: { center: readonly [number, number, number]; radius: number; count: number } | null
+  /**
+   * Пояса астероидов вокруг светила: орбита (м), ширина и толщина (м). Плоские, в плоскости
+   * XZ системы. Нет поля — поясов нет.
+   */
+  asteroidBelts?: readonly { radius: number; width: number; thickness: number }[]
   patrols: readonly PatrolDef[]
   /**
    * Пустынная система: НИКАКОГО трафика — ни встреч, ни завсегдатаев у причала, ни китов и

@@ -310,6 +310,19 @@ export interface ShipEntity {
   kinematic?: boolean
 }
 
+/**
+ * Пояс астероидов — кольцо вокруг светила `centerId` (центр берём у тела: при сдвиге начала
+ * координат он едет вместе с ним). Плоский, в плоскости XZ.
+ */
+export interface AsteroidBeltEntity {
+  centerId: number
+  /** Радиус средней линии, м. */
+  radius: number
+  /** Ширина кольца (по радиусу) и толщина (по высоте), м. */
+  width: number
+  thickness: number
+}
+
 export interface AsteroidEntity {
   id: number
   kind: 'asteroid'
@@ -1028,6 +1041,10 @@ export interface World {
   /** Лазерные болты в полёте. Снаряды: летят, заметают отрезок, наносят урон при попадании. */
   bolts: BoltEntity[]
   bodies: BodyEntity[]
+  /** Пояса астероидов системы (`AsteroidBeltEntity`): область, где вокруг корабля родятся камни. */
+  asteroidBelts: AsteroidBeltEntity[]
+  /** Таймер подрождения камней в поясе, с (тактовый). */
+  beltSpawnTimer: number
   /** Корабли поколений — киты-города. Декорация: мимо боя и столкновений. */
   titans: TitanEntity[]
   /** Статуи-исполины у причала. Самая инертная декорация: висят и медленно кувыркаются. */

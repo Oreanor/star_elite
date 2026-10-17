@@ -14,6 +14,7 @@ import { createCruiseState } from '../cruise/drive'
 import { createControls, createShipState } from '../flight/types'
 import { deriveShipSpec, isDrone, isMissile, NO_HULL_UPGRADES, type Loadout, type WeaponModule } from '../loadout'
 import type {
+  AsteroidBeltEntity,
   AsteroidEntity,
   BodyEntity,
   Faction,
@@ -381,6 +382,13 @@ function companionMass(comp: StarCompanionDef | BlackHoleCompanionDef): number {
   return starMassSolar(comp.massSolar)
 }
 
+/** Пояса из описания — вокруг главного светила (первое тело: звезда или дыра ядра). */
+function beltsOf(def: SystemDef, bodies: BodyEntity[]): AsteroidBeltEntity[] {
+  const center = bodies[0]
+  if (!center || !def.asteroidBelts) return []
+  return def.asteroidBelts.map((b) => ({ centerId: center.id, radius: b.radius, width: b.width, thickness: b.thickness }))
+}
+
 function makeBodies(ids: IdSource, def: SystemDef): BodyEntity[] {
   const comp = def.companion
   const m1 = starMassSolar(def.star.massSolar)
@@ -669,6 +677,7 @@ export function enterVoid(world: World): void {
   world.missiles = []
   world.bolts = []
   world.bodies = []
+  world.asteroidBelts = []
   world.titans = []
   world.monoliths = []
   world.figurines = []
@@ -719,6 +728,8 @@ export function enterSystem(
 
   world.ships = makePatrols(rng, world.ids, def)
   world.bodies = makeBodies(world.ids, def)
+  world.asteroidBelts = beltsOf(def, world.bodies)
+  world.beltSpawnTimer = 0
   // Бой старой системы гасим ДО орбит: stepOrbits двигает ракеты/трассы вместе со
   // станцией — чужой мусор (и тесты с заглушками) не должен переживать вход.
   world.pods = []
@@ -854,6 +865,8 @@ export function createWorld(
     warBases: [],
     platforms: [],
     bodies,
+    asteroidBelts: beltsOf(def, bodies),
+    beltSpawnTimer: 0,
     tracers: [],
     remoteHits: [],
     incomingHits: [],
