@@ -5,8 +5,9 @@ import { TITAN } from '../../config/titans'
 import { PLATFORM } from '../../config/platform'
 import { ARRIVAL } from '../../config/galaxy'
 import { CONTACTS } from '../../config/contacts'
-import { ASTEROID, TRAFFIC } from '../../config/world'
+import { ASTEROID, COMET, TRAFFIC } from '../../config/world'
 import { despawnDistantAsteroids, liveAsteroidCount, spawnAsteroidEncounter } from './asteroidEncounter'
+import { liveCometCount, spawnComet } from './comets'
 import { randomUnit, signed, weightedPick, type Rng } from '../../core/math'
 import { countWhere, retain } from '../../core/list'
 import type { Loadout } from '../loadout'
@@ -760,6 +761,12 @@ export function stepTraffic(world: World, dt: number): ShipEntity[] {
   // Гнездо — событие, а не рядовая встреча: спавним его помимо потолка трафика.
   if (world.rng() < PLATFORM.ENCOUNTER_SHARE && world.platforms.length < PLATFORM.MAX) {
     return born.concat(spawnPlatform(world))
+  }
+
+  // Комета — как встреча, только реже камней: пролетает сквозь пузырь трафика мимо игрока.
+  if (world.rng() < COMET.ENCOUNTER_SHARE && liveCometCount(world) < COMET.MAX_LIVE) {
+    spawnComet(world)
+    return born
   }
 
   // Камни: одиночка (крупный) или стая (мельче, общая масса ≈ одному крупному).

@@ -1,18 +1,15 @@
 import { useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef } from 'react'
 import {
-  AdditiveBlending,
   ConeGeometry,
-  DataTexture,
-  DoubleSide,
+  Group,
   Mesh,
-  MeshBasicMaterial,
   Quaternion,
-  RGBAFormat,
   Vector3,
 } from 'three'
 import { beamDirection, renderPos, renderTime, type BodyEntity } from '@elite/sim'
 import { useSession } from '../../session/GameContext'
+import { createStarBeamMaterial } from '../materials/starBeam'
 import { worldShrink } from '../worldShrink'
 
 /**
@@ -34,24 +31,6 @@ export const beamCone = (() => {
   return g
 })()
 
-/**
- * Прозрачность вдоль длины: ярко у тела, тает к концу. У конуса `v = 1` у вершины (после
- * переворота вершина осталась с v = 1), поэтому строка текстуры v — это доля «от конца».
- */
-export const beamFade = (() => {
-  const n = 64
-  // RGBA, а не один канал: `alphaMap` в three читает ЗЕЛЁНЫЙ — одноканальная красная
-  // текстура дала бы ноль, и луч был бы невидим.
-  const data = new Uint8Array(n * 4)
-  for (let i = 0; i < n; i++) {
-    const v = Math.round(255 * Math.pow(i / (n - 1), 1.6))
-    data.set([v, v, v, 255], i * 4)
-  }
-  const tex = new DataTexture(data, 1, n, RGBAFormat)
-  tex.needsUpdate = true
-  return tex
-})()
-
 /** Цвет луча: джет квазара голубовато-белый, маяк пульсара — холодно-белый. */
 const JET_COLOR = 0x9fd0ff
 const PULSAR_COLOR = 0xe2f4ff
@@ -65,27 +44,27 @@ const _shown = new Vector3()
 const _up = new Vector3(0, 1, 0)
 const _q = new Quaternion()
 
+/**
+ * Слои луча: узкое плотное ЯДРО и широкий тусклый ОРЕОЛ — вместе дают размытый столб света,
+ * а не твёрдый конус. Ширина — в долях опасной ширины луча (`beams.halfAngle`): ядро внутри
+ * неё, ореол шире — свет рассеивается дальше, чем жжёт.
+ */
+const LAYERS = [
+  { width: 0.45, strength: 0.55 },
+  { width: 1.6, strength: 0.13 },
+] as const
+
 function BeamPair({ body }: { body: BodyEntity }) {
   const session = useSession()
   const camera = useThree((s) => s.camera)
-  const a = useRef<Mesh>(null)
-  const b = useRef<Mesh>(null)
+  const group = useRef<Group>(null)
   const pulsar = body.kind === 'star'
+  // Четыре меша: два луча (вдоль оси и против) × два слоя. Материал на каждый — у каждого
+  // своя яркость (встречный луч тусклее).
   const materials = useMemo(
     () =>
-      [0, 1].map(
-        () =>
-          new MeshBasicMaterial({
-            color: pulsar ? PULSAR_COLOR : JET_COLOR,
-            alphaMap: beamFade,
-            transparent: true,
-            opacity: 0.6,
-            blending: AdditiveBlending,
-            depthWrite: false,
-            side: DoubleSide,
-            toneMapped: false,
-            fog: false,
-          }),
+      [1, -1].flatMap(() =>
+        LAYERS.map((layer) => createStarBeamMaterial(pulsar ? PULSAR_COLOR : JET_COLOR, layer.strength, pulsar ? 0.25 : 0.6)),
       ),
     [pulsar],
   )
@@ -93,38 +72,41 @@ function BeamPair({ body }: { body: BodyEntity }) {
 
   useFrame(() => {
     const beams = body.beams
-    const ma = a.current
-    const mb = b.current
-    if (!beams || !ma || !mb) return
+    const g = group.current
+    if (!beams || !g) return
     const shrink = worldShrink(session.world.player.state.scale)
-    ma.visible = mb.visible = shrink > 0
+    g.visible = shrink > 0
     if (shrink <= 0) return
 
+    const time = renderTime(session.world)
     renderPos(session.world, body, _shown)
-    beamDirection(body, renderTime(session.world), _dir)
+    beamDirection(body, time, _dir)
     _toCam.copy(camera.position).sub(_shown).normalize()
     const length = beams.length * shrink
     const width = (body.radius + beams.length * Math.tan(beams.halfAngle)) * shrink
 
-    for (const [mesh, sign, mat] of [
-      [ma, 1, materials[0]!],
-      [mb, -1, materials[1]!],
-    ] as const) {
+    for (let k = 0; k < g.children.length; k++) {
+      const mesh = g.children[k] as Mesh
+      const sign = k < LAYERS.length ? 1 : -1
+      const layer = LAYERS[k % LAYERS.length]!
+      const mat = materials[k]!
       mesh.position.copy(_shown)
       _q.setFromUnitVectors(_up, _signed.copy(_dir).multiplyScalar(sign))
       mesh.quaternion.copy(_q)
-      mesh.scale.set(width, length, width)
+      mesh.scale.set(width * layer.width, length, width * layer.width)
       // Глядящий на камеру луч ярче: 1 — прямо на нас, AWAY_DIM — прямо от нас.
       const facing = (_toCam.dot(_dir) * sign + 1) / 2
-      mat.opacity = 0.6 * (AWAY_DIM + (1 - AWAY_DIM) * facing)
+      mat.uniforms.uStrength!.value = layer.strength * (AWAY_DIM + (1 - AWAY_DIM) * facing)
+      mat.uniforms.uTime!.value = time
     }
   })
 
   return (
-    <>
-      <mesh ref={a} geometry={beamCone} material={materials[0]} frustumCulled={false} renderOrder={3} />
-      <mesh ref={b} geometry={beamCone} material={materials[1]} frustumCulled={false} renderOrder={3} />
-    </>
+    <group ref={group}>
+      {materials.map((m, k) => (
+        <mesh key={k} geometry={beamCone} material={m} frustumCulled={false} renderOrder={3} />
+      ))}
+    </group>
   )
 }
 

@@ -51,7 +51,7 @@ import { COMMODITIES } from '../cargo/items'
 import { oreUnits } from '../combat/mining'
 import { MIELOPHONE } from '../../config/mielophone'
 import { effectiveRadius, stepScale } from '../scale/scale'
-import { stepGravity } from '../flight/gravity'
+import { gravityAt, stepGravity } from '../flight/gravity'
 import { stepJumpGateCollision } from '../flight/jumpGate'
 import {
   isLandableAsteroid,
@@ -84,6 +84,7 @@ import { stepDivineScale, stepDockTraffic, stepTraffic } from '../world/traffic'
 import { stepTitans } from '../world/titans'
 import { stepPlatforms } from '../world/platforms'
 import { stepGrievances } from '../combat/grievance'
+import { stepRockCollisions } from '../combat/rockCollisions'
 import { stepTension } from '../dialogue/temper'
 import { stepContracts } from '../contracts/contracts'
 import { NULL_CONTROLLER, type Controller, type ControllerMap } from './controller'
@@ -249,6 +250,7 @@ function stepTick(world: World, helm: Helm, dt: number): void {
   stepPhysics(world, dt)
   stepWeapons(world, helm, dt)
   stepAsteroids(world, dt)
+  stepRockCollisions(world)
   stepMissiles(world, dt)
   // Болты летят и заметают отрезок ПОСЛЕ движения кораблей и ракет этого шага:
   // попадание считается по свежим позициям целей, а не по вчерашним.
@@ -381,9 +383,19 @@ function stepWeapons(world: World, helm: Helm, dt: number): void {
   }
 }
 
+const _cometPull = new Vector3()
+
 function stepAsteroids(world: World, dt: number): void {
   for (const a of world.asteroids) {
     if (!a.alive) continue
+    // Комету ведёт тяготение светил — тот же закон, что у кораблей: вдали путь прямой,
+    // у звезды загибается. Дрейфующие камни встреч — вне поля (иначе пояс у станции
+    // сыпался бы на планету за минуты).
+    if (a.comet) {
+      for (const body of world.bodies) {
+        a.vel.addScaledVector(gravityAt(a.pos, a.radius, body, _cometPull), dt)
+      }
+    }
     a.pos.addScaledVector(a.vel, dt)
 
     const angle = a.spin.length() * dt

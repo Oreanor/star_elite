@@ -1,5 +1,5 @@
 import { Quaternion, Vector3 } from 'three'
-import { ASTEROID } from '../../config/world'
+import { ASTEROID, COMET } from '../../config/world'
 import { signed } from '../../core/math'
 import { addCommodity, freeCapacity } from '../cargo/hold'
 import { COMMODITIES, itemMass } from '../cargo/items'
@@ -41,6 +41,16 @@ const radiusForShare = (radius: number, share: number) => radius * Math.cbrt(sha
 export const splittable = (a: AsteroidEntity) =>
   a.radius > ASTEROID.MIN_SPLIT_RADIUS && (a.gen ?? 0) < ASTEROID.SPLIT_MAX_GEN
 
+/**
+ * Скорость, которую уносят обломки: у камня — вся его, у кометы — малая доля
+ * (`COMET.FRAGMENT_KEEP`): рыхлое ядро взрывается, и пыль гасит импульс о собственный газ.
+ * Пишет в `out`; общая для раскола, бомбы и рассыпания в руду.
+ */
+function fragmentVelocity(a: AsteroidEntity, out: Vector3): Vector3 {
+  return out.copy(a.vel).multiplyScalar(a.comet ? COMET.FRAGMENT_KEEP : 1)
+}
+const _fragVel = new Vector3()
+
 /** Скорость разлёта осколков камня этого радиуса, м/с. */
 const splitSpeed = (radius: number) => ASTEROID.SPLIT_SPEED + radius * ASTEROID.SPLIT_SPEED_PER_RADIUS
 
@@ -50,7 +60,7 @@ const splitSpeed = (radius: number) => ASTEROID.SPLIT_SPEED + radius * ASTEROID.
  */
 function crumble(world: World, a: AsteroidEntity, oreYield = 1): void {
   const units = Math.max(1, Math.round(Math.min(oreUnits(a.radius), ASTEROID.ORE_POD_MAX) * oreYield))
-  spawnOrePod(world, a.pos, a.vel, units)
+  spawnOrePod(world, a.pos, fragmentVelocity(a, _fragVel), units)
 }
 
 /**
@@ -83,14 +93,14 @@ export function blastAsteroid(world: World, a: AsteroidEntity, oreYield: number 
   if (!a.alive) return
   if (forwardRock(world, a, a.hull + 1, 'blast', oreYield)) return
   a.alive = false
-  spawnExplosion(world, a.pos, a.vel, a.radius * 0.12)
+  spawnExplosion(world, a.pos, fragmentVelocity(a, _fragVel), a.radius * 0.12)
   crumble(world, a, oreYield)
 }
 
 export function shatter(world: World, a: AsteroidEntity, oreYield = 1): void {
   if (forwardRock(world, a, a.hull + 1, 'laser', oreYield)) return
   a.alive = false
-  spawnExplosion(world, a.pos, a.vel, a.radius * 0.12)
+  spawnExplosion(world, a.pos, fragmentVelocity(a, _fragVel), a.radius * 0.12)
 
   if (!splittable(a)) {
     crumble(world, a, oreYield)
@@ -120,7 +130,7 @@ export function shatter(world: World, a: AsteroidEntity, oreYield = 1): void {
       id: world.ids.next(),
       kind: 'asteroid',
       pos: a.pos.clone().addScaledVector(dir, a.radius - radius),
-      vel: a.vel.clone().addScaledVector(dir, speed),
+      vel: fragmentVelocity(a, new Vector3()).addScaledVector(dir, speed),
       quat: a.quat.clone(),
       spin: new Vector3(signed(rng), signed(rng), signed(rng)).multiplyScalar(0.35),
       radius,
@@ -149,7 +159,7 @@ export function bombShatterAsteroid(world: World, a: AsteroidEntity): void {
   if (!a.alive) return
   if (forwardRock(world, a, a.hull + 1, 'bomb')) return
   a.alive = false
-  spawnExplosion(world, a.pos, a.vel, a.radius * 0.12)
+  spawnExplosion(world, a.pos, fragmentVelocity(a, _fragVel), a.radius * 0.12)
 
   const half = Math.floor(a.radius / 2)
   const gen = (a.gen ?? 0) + 1
@@ -169,7 +179,7 @@ export function bombShatterAsteroid(world: World, a: AsteroidEntity): void {
       id: world.ids.next(),
       kind: 'asteroid',
       pos: a.pos.clone().addScaledVector(dir, a.radius - half),
-      vel: a.vel.clone().addScaledVector(dir, splitSpeed(a.radius)),
+      vel: fragmentVelocity(a, new Vector3()).addScaledVector(dir, splitSpeed(a.radius)),
       quat: a.quat.clone(),
       spin: new Vector3(signed(rng), signed(rng), signed(rng)).multiplyScalar(0.35),
       radius: half,

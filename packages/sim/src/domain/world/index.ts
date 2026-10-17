@@ -176,3 +176,4 @@ export { findWarBaseFixture, livingFixtures, warBaseFixtureWorldPos, warBaseInte
 export { renderPos, renderQuat, renderTime, shownPosition, type Posed } from './poseTrail'
 export { SLOVO_KIND, SLOVO_NAME } from './slovo'
 export { beamDirection, beamExposure } from './beams'
+export { liveCometCount, spawnComet } from './comets'

@@ -54,17 +54,25 @@ export function bodyMass(body: BodyEntity): number {
 
 /** Ускорение притяжения к телу, м/с². У причала (station) — ноль. */
 export function gravityAccel(ship: ShipEntity, body: BodyEntity, out: Vector3): Vector3 {
+  return gravityAt(ship.state.pos, effectiveRadius(ship), body, out)
+}
+
+/**
+ * Притяжение тела к точке с собственным радиусом `selfR`, м/с². Тот же закон и та же зона,
+ * что у кораблей: кометы и камни падают по тем же правилам, другой физики для них нет.
+ */
+export function gravityAt(pos: Vector3, selfR: number, body: BodyEntity, out: Vector3): Vector3 {
   out.set(0, 0, 0)
   if (body.kind === 'station') return out
 
   // `out` в основном цикле — это `_pull`, поэтому расстояние обязано жить
   // в ДРУГОМ векторе. Иначе ранний выход вне зоны возвращает само расстояние
   // как ускорение и швыряет корабль на миллиарды м/с.
-  _delta.copy(body.pos).sub(ship.state.pos)
+  _delta.copy(body.pos).sub(pos)
   const dist = _delta.length()
   if (dist < 1e-3) return out
 
-  const shipR = effectiveRadius(ship)
+  const shipR = selfR
   const horizon = gravityHorizon(body)
   const altitude = dist - gravityMassRadius(body) - shipR
   if (altitude > gravityReach(body)) return out

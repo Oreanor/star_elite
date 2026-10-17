@@ -1,11 +1,9 @@
 import { useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef } from 'react'
 import {
-  AdditiveBlending,
   BufferAttribute,
   BufferGeometry,
   Color,
-  DoubleSide,
   Group,
   LineBasicMaterial,
   LineDashedMaterial,
@@ -24,7 +22,8 @@ import {
   type StarSystem,
 } from '@elite/sim'
 import { UI } from '../theme'
-import { beamCone, beamFade } from '../../render/scene/StarBeams'
+import { beamCone } from '../../render/scene/StarBeams'
+import { createStarBeamMaterial } from '../../render/materials/starBeam'
 import { t } from '../i18n'
 
 /**
@@ -320,21 +319,12 @@ export function YouAreHere({ at }: { at: Vector3 }) {
  * у дыры в самом Ядре (`quasarOf`): на карте и в полёте джеты смотрят в одну сторону.
  */
 export function GalaxyJets({ axis }: { axis: readonly [number, number, number] }) {
-  const material = useMemo(
-    () =>
-      new MeshBasicMaterial({
-        color: 0x9fd0ff,
-        alphaMap: beamFade,
-        transparent: true,
-        opacity: 0.55,
-        blending: AdditiveBlending,
-        depthWrite: false,
-        side: DoubleSide,
-        toneMapped: false,
-      }),
-    [],
-  )
-  useEffect(() => () => material.dispose(), [material])
+  // Тот же мягкий луч, что в полёте: ядро и ореол, края тают, по струе бегут сгустки.
+  const materials = useMemo(() => [createStarBeamMaterial(0x9fd0ff, 0.6, 0.5), createStarBeamMaterial(0x9fd0ff, 0.15, 0.5)], [])
+  useEffect(() => () => materials.forEach((m) => m.dispose()), [materials])
+  useFrame(({ clock }) => {
+    for (const m of materials) m.uniforms.uTime!.value = clock.elapsedTime
+  })
   const quats = useMemo(() => {
     const dir = new Vector3(axis[0], axis[1], axis[2]).normalize()
     const up = new Vector3(0, 1, 0)
@@ -344,9 +334,12 @@ export function GalaxyJets({ axis }: { axis: readonly [number, number, number] }
   const width = GALAXY.RADIUS_LY * GALAXY_JET_WIDTH
   return (
     <>
-      {quats.map((q, i) => (
-        <mesh key={i} geometry={beamCone} material={material} quaternion={q} scale={[width, length, width]} raycast={() => null} renderOrder={1} />
-      ))}
+      {quats.flatMap((q, i) =>
+        materials.map((m, k) => {
+          const w = width * (k === 0 ? 0.5 : 1.6)
+          return <mesh key={`${i}-${k}`} geometry={beamCone} material={m} quaternion={q} scale={[w, length, w]} raycast={() => null} renderOrder={1} />
+        }),
+      )}
     </>
   )
 }
