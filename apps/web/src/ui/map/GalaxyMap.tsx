@@ -432,9 +432,9 @@ function GalaxyMapImpl({ onClose, embedded = false }: { onClose: () => void; emb
           <YouAreHere at={here} />
           {/* Обводки: где ты сам (фосфор, как «ВЫ») и куда прыгаешь (цвет навигации, как метка
               цели прыжка на HUD). Кольцо постоянного экранного размера — видно при любом зуме. */}
-          <StarRing at={here} color={UI.PRIMARY} radiusPx={11} />
+          <StarRing at={here} color={UI.PRIMARY} radiusPx={8} />
           {selected != null && systems[selected] && selected !== world.systemIndex && (
-            <StarRing at={positionOf(systems[selected]!)} color={UI.NAV} radiusPx={14} />
+            <StarRing at={positionOf(systems[selected]!)} color={UI.NAV} radiusPx={10} />
           )}
           <YouLabel at={here} box={you} />
           {showContacts && (
