@@ -81,13 +81,28 @@ const socialAction: DialogueAction = {
   },
 }
 
-/** Бот сам переменил отношение к командиру: оттаял или озлобился. Богу тоже — дарует милость. */
+/**
+ * Сделку не заключают со злобой: реплика, где бот берёт или даёт работу, назначает встречу
+ * или передаёт добро, — это согласие, а не разрыв.
+ */
+function strikesDeal(o: Record<string, unknown>): boolean {
+  return o.job === 'offer' || o.job === 'accept' || o.meet === true || o.transfer != null
+}
+
+/**
+ * Бот сам переменил отношение к командиру: оттаял или озлобился. Богу тоже — дарует милость.
+ *
+ * Пойманное: патрульный дал дело «перебей пиратов», игрок согласился — и борт стал враждебным.
+ * Модель ставила `stance: hostile`, имея в виду ПИРАТОВ, а домен применял это к командиру.
+ * Вражда в той же реплике, что и сделка, — противоречие; верим сделке.
+ */
 const stanceAction: DialogueAction = {
   id: 'stance',
   roles: ['bot', 'god'],
   build(o) {
     const stance = coerceStance(o.stance)
-    return stance ? [{ action: 'stance', payload: { stance } }] : []
+    if (!stance || (stance === 'hostile' && strikesDeal(o))) return []
+    return [{ action: 'stance', payload: { stance } }]
   },
 }
 

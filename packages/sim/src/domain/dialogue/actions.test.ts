@@ -25,6 +25,16 @@ describe('пул экшнов и наборы ролей', () => {
     }
   })
 
+  it('взял дело на пиратов — не враг: вражда в реплике со сделкой не принимается', () => {
+    // Пойманное: «hostile» модель писала про пиратов, а домен обращал патрульного против игрока.
+    const deal = parseModelReply({ reply: 'Договорились, бей их.', job: 'accept', stance: 'hostile' }, [], 'bot')!
+    expect(deal.commands.some((c) => c.action === 'stance')).toBe(false)
+    expect(deal.commands.some((c) => c.action === 'job')).toBe(true)
+    // Без сделки озлобиться по-прежнему можно.
+    const insult = parseModelReply({ reply: 'Ну всё.', stance: 'hostile' }, [], 'bot')!
+    expect(insult.commands).toContainEqual({ action: 'stance', payload: { stance: 'hostile' } })
+  })
+
   it('богу недоступен plan: пришлёт — команда не соберётся, боту соберётся', () => {
     const json = { reply: '…', plan: [{ step: 'collect' }] }
     expect(parseModelReply(json, [], 'bot')!.commands.some((c) => c.action === 'plan')).toBe(true)
