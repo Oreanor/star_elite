@@ -314,26 +314,22 @@ export function stepAutoland(ship: ShipEntity, world: World, dt: number): boolea
   if (_normal.lengthSq() < 1e-9) _normal.set(0, 1, 0)
   _normal.normalize()
 
-  const altitude = surfaceAltitude(ship, surface)
-  const err = altitude - LANDING.HOVER_ALT
+  /**
+   * Заход — НА МЕСТЕ: борт остаётся на той высоте, где нажали L, и лишь плавно ложится брюхом к
+   * грунту. Прежде он опускался к HOVER_ALT — «проваливался» в коридор после нажатия, некрасиво.
+   * Пол — ALT_MIN: ниже него и так коснулся бы.
+   */
+  const altitude = Math.max(LANDING.ALT_MIN, surfaceAltitude(ship, surface))
   // Поза «брюхом к грунту» — к ней ведём весь заход (см. доворот ниже).
   levelTarget(ship, _normal, _targetQuat)
-  /**
-   * Переход в ховер — лишь когда корабль УЖЕ выровнен. Прежде он случался по одной высоте:
-   * короткий спуск кончался раньше доворота, и остаток поворота `enterSurfaceFlight` делал
-   * одним кадром — корабль и камера за кормой рывком «выныривали» сверху-снизу. Теперь у
-   * высоты ховера висим и плавно доворачиваемся, а финал — уже без скачка.
-   */
-  const leveled = ship.state.quat.angleTo(_targetQuat) <= LANDING.LEVEL_SNAP
-  if (Math.abs(err) <= LANDING.HOVER_SNAP && leveled) {
-    enterSurfaceFlight(ship, surface)
+  // Переход в ховер — лишь когда УЖЕ выровнен: иначе остаток доворота `enterSurfaceFlight`
+  // сделал бы одним кадром, и корабль с камерой рывком «выныривали».
+  if (ship.state.quat.angleTo(_targetQuat) <= LANDING.LEVEL_SNAP) {
+    enterSurfaceFlight(ship, surface, altitude)
     ship.autoland = null
     return true
   }
 
-  // К цели по нормали: слишком высоко — вниз (−normal), слишком низко — вверх.
-  const step = Math.min(LANDING.DESCENT_SPEED * dt, Math.abs(err))
-  ship.state.pos.addScaledVector(_normal, err > 0 ? -step : step)
   ship.state.vel.set(0, 0, 0)
   ship.state.angVel.set(0, 0, 0)
   ship.controls.throttle = 0
@@ -348,7 +344,7 @@ export function stepAutoland(ship: ShipEntity, world: World, dt: number): boolea
  * Включить ховер: высота HOVER_ALT, дальше полёт по сфере своей физикой.
  * Отрыв — крейсер ≥ ESCAPE_CRUISE или L; скорость сохраняется.
  */
-export function enterSurfaceFlight(ship: ShipEntity, surface: LandableSurface): boolean {
+export function enterSurfaceFlight(ship: ShipEntity, surface: LandableSurface, altitude: number = LANDING.HOVER_ALT): boolean {
   if (!ship.alive) return false
 
   _normal.copy(ship.state.pos).sub(surface.pos)
@@ -357,10 +353,10 @@ export function enterSurfaceFlight(ship: ShipEntity, surface: LandableSurface): 
 
   levelBelly(ship, _normal)
 
-  ship.landedOn = { bodyId: surface.id, normal: _normal.clone(), altitude: LANDING.HOVER_ALT }
+  ship.landedOn = { bodyId: surface.id, normal: _normal.clone(), altitude }
   ship.state.pos
     .copy(surface.pos)
-    .addScaledVector(_normal, surface.radius + effectiveRadius(ship) + LANDING.HOVER_ALT)
+    .addScaledVector(_normal, surface.radius + effectiveRadius(ship) + altitude)
   ship.state.vel.set(0, 0, 0)
   ship.state.angVel.set(0, 0, 0)
   ship.controls.throttle = 0

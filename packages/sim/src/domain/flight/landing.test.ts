@@ -54,8 +54,8 @@ function moonOf(world: World): BodyEntity {
 
 /** Заводит корабль в окно автопосадки над телом и крутит шаги, пока он не сядет. */
 /**
- * Откуда жать L — середина окна посадки. Ховер садит НИЖЕ (HOVER_ALT), поэтому стартовать с
- * самой высоты ховера нельзя: она вне окна, и L там не берётся.
+ * Откуда жать L — середина окна посадки. Заход идёт НА МЕСТЕ: борт выравнивается на этой же
+ * высоте, она и есть высота ховера.
  */
 const ARM_ALT = (LANDING.PROMPT_LO + LANDING.PROMPT_HI) / 2
 
@@ -98,7 +98,7 @@ describe('посадка на поверхность', () => {
     expect(world.player.landedOn?.bodyId).toBe(moon.id)
   })
 
-  it('на ховере высота держится у HOVER_ALT, пока луна уходит по орбите', () => {
+  it('на ховере высота держится той, на которой нажали L, пока луна уходит по орбите', () => {
     const world = quietWorld()
     const moon = moonOf(world)
     landOn(world, moon)
@@ -112,7 +112,7 @@ describe('посадка на поверхность', () => {
     expect(world.player.landedOn?.bodyId).toBe(moon.id)
     const altitude =
       world.player.state.pos.distanceTo(moon.pos) - moon.radius - effectiveRadius(world.player)
-    expect(altitude).toBeCloseTo(LANDING.HOVER_ALT, 0)
+    expect(altitude).toBeCloseTo(ARM_ALT, 0)
   })
 
   it('после отрыва L ближайшее тело не уносит орбитальной скоростью', () => {
@@ -159,7 +159,7 @@ describe('посадка на поверхность', () => {
     expect(player.alive).toBe(true)
     expect(player.landedOn?.bodyId).toBe(rock.id)
     expect(player.state.pos.distanceTo(rock.pos)).toBeCloseTo(
-      solid + effectiveRadius(player) + LANDING.HOVER_ALT,
+      solid + effectiveRadius(player) + ARM_ALT,
       3,
     )
   })
@@ -321,7 +321,7 @@ describe('посадка на поверхность', () => {
     expect(canAutoland(world)).toBe(true)
   })
 
-  it('на ховере высота легко покачивается вокруг HOVER_ALT', () => {
+  it('на ховере высота легко покачивается вокруг высоты захода', () => {
     const world = quietWorld()
     const rock = landableRock(world)
     const player = world.player
@@ -347,7 +347,7 @@ describe('посадка на поверхность', () => {
     }
     // Высота ДЕРЖИТСЯ ровно: качка убрана — корабль над поверхностью не должно болтать.
     expect(maxAlt - minAlt).toBeLessThan(1)
-    expect(minAlt).toBeCloseTo(LANDING.HOVER_ALT, 0)
+    expect(minAlt).toBeCloseTo(ARM_ALT, 0)
   })
 
   it('на ховере тяга ведёт вдоль сферы и не отрывает без ×ESCAPE', () => {
@@ -375,8 +375,8 @@ describe('посадка на поверхность', () => {
     expect(player.landedOn).not.toBeNull()
     expect(player.state.pos.distanceTo(before)).toBeGreaterThan(5)
     const alt = player.state.pos.distanceTo(rock.pos) - solid - er
-    expect(alt).toBeGreaterThan(LANDING.HOVER_ALT)
-    expect(alt).toBeLessThanOrEqual(LANDING.HOVER_ALT + LANDING.CLIMB_RATE * seconds + 1)
+    expect(alt).toBeGreaterThan(ARM_ALT)
+    expect(alt).toBeLessThanOrEqual(ARM_ALT + LANDING.CLIMB_RATE * seconds + 1)
 
     // updateCruise без удержания клавиши успел бы сбросить factor ниже порога —
     // проверяем отрыв напрямую в шаге ховера.
