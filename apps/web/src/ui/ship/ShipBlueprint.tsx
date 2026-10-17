@@ -57,7 +57,7 @@ const ZOOM_MIN = 0.45
 
 const ZOOM_MAX = 2.6
 
-export function Blueprint({ chassisId, clickable = false }: { chassisId: string; /** Клик открывает мастерскую: курсор — «палец», а не «схватить». */ clickable?: boolean }) {
+export function Blueprint({ chassisId }: { chassisId: string }) {
   const geometry = useMemo(() => chassisGeometry(chassisId), [chassisId])
   const drag = useRef<DragState>({ dragging: false, lastX: 0, lastY: 0, yaw: 0, pitch: 0, base: 0, zoom: 1 })
 
@@ -111,7 +111,8 @@ export function Blueprint({ chassisId, clickable = false }: { chassisId: string;
       ref={box}
       // Во ВСЮ площадь контейнера, абсолютно: высота превью задана пропорцией (aspect-ratio),
       // и «h-full» от неё не считалась — холст выходил короче места, снизу зиял зазор.
-      className={`absolute inset-0 touch-none ${clickable ? 'cursor-pointer' : 'cursor-grab active:cursor-grabbing'}`}
+      // Холст наследует курсор: глобальный прицел `canvas` из styles.css иначе перебивал «руку».
+      className="absolute inset-0 touch-none cursor-grab active:cursor-grabbing [&_canvas]:cursor-[inherit]"
       onPointerDown={onDown}
       onPointerMove={onMove}
       onPointerUp={onUp}

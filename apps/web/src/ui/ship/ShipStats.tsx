@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import {
   type ShipSpec,
 } from '@elite/sim'
@@ -73,12 +74,15 @@ export function Stats({
   name,
   baseline,
   cargoUsed,
+  corner,
 }: {
   spec: ShipSpec
   name: string
   baseline?: ShipSpec | null
   /** Занято в трюме, т — для «СВОБОДНО x/y». */
   cargoUsed: number
+  /** Справа в шапке, напротив имени: переключатель сборки у чужого корпуса. */
+  corner?: ReactNode
 }) {
   const rows = statRows(spec, cargoUsed)
   const base = baseline ? statRows(baseline, cargoUsed) : null
@@ -103,7 +107,10 @@ export function Stats({
 
   return (
     <section className="border px-4 py-3" style={{ borderColor: DIM }}>
-      <h2 className="mb-1.5 text-sm tracking-[0.3em]">{name}</h2>
+      <div className="mb-1.5 flex items-center justify-between gap-3">
+        <h2 className="text-sm tracking-[0.3em]">{name}</h2>
+        {corner}
+      </div>
       {/* Две колонки по порядку чтения: своё корпуса, затем от оборудования. Половина
           ширины экрана — это слишком длинная строка для пары «имя … число». */}
       <div className="grid grid-cols-2 items-start gap-x-8">

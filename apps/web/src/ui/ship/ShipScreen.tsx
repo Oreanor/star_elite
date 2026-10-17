@@ -74,15 +74,21 @@ export function ShipScreen({
   const shownId = docked ? offer.chassis.id : currentId
   const owned = shownId === currentId
 
-  // Примерка обвеса на выбранный корпус: спека и осадок «в трюм». По ней и статы со
-  // стрелками, и проверка грузоподъёмности для кнопки покупки.
-  const fit = useMemo(() => fitOntoChassis(player.loadout, offer.chassis), [player.loadout, offer])
-  const previewSpec = useMemo(() => deriveShipSpec(fit.loadout), [fit])
+  // Чужой корпус показываем в одной из двух сборок. По умолчанию ЗАВОДСКАЯ — так верфь его
+  // и продаёт. Галочка «примерить обвес» ставит на него СВОЁ железо (как разложит его
+  // `swapHull` при покупке), и стрелки отвечают на вопрос «станет ли МОЙ корабль сильнее».
+  // Выбор переживает листание: сравниваешь корпуса одной меркой.
+  const [tryFit, setTryFit] = useState(false)
+  const previewLoadout = useMemo(
+    () => (tryFit ? fitOntoChassis(player.loadout, offer.chassis).loadout : offer.loadout()),
+    [tryFit, player.loadout, offer],
+  )
+  const previewSpec = useMemo(() => deriveShipSpec(previewLoadout), [previewLoadout])
 
   // Сетка слотов — по ПОКАЗЫВАЕМОМУ корпусу: свой борт интерактивен (клик открывает
   // мастерскую), а листая ЧУЖОЙ корпус на верфи, видим ЕГО раскладку слотов (сколько чего
-  // и что пусто) по примерке — но только на просмотр, оснащать чужой корабль нельзя.
-  const shownLoadout = docked && !owned ? fit.loadout : player.loadout
+  // и что пусто) в выбранной сборке — но только на просмотр, оснащать чужой корабль нельзя.
+  const shownLoadout = docked && !owned ? previewLoadout : player.loadout
   const slots = buildSlots(shownLoadout)
   // Свой борт интерактивен всегда: в полёте — переставить своё железо из трюма, у причала — верфь.
   const slotsInteractive = owned
@@ -96,7 +102,7 @@ export function ShipScreen({
     setOpenKey(null) // открытый слот своего борта не должен «переехать» на чужой корпус
   }
 
-  // МАСТЕРСКАЯ КОРПУСА — ремонт и усиление осей — открывается кликом по самому кораблю.
+  // МАСТЕРСКАЯ КОРПУСА — ремонт и усиление осей — открывается кнопкой «просмотреть» под чертежом.
   // Только у своего борта на верфи: чужой корпус не чинят, а в полёте мастерской нет.
   const hullWorkshop = docked && owned
   const [hullOpen, setHullOpen] = useState(false)
@@ -140,17 +146,13 @@ export function ShipScreen({
           характеристики прижаты к низу левой, модули растянуты до низа правой. */}
       <div className="mt-1 grid gap-5 lg:grid-cols-2">
         <div className="flex flex-col gap-3">
-          {/* Клик по вращающемуся кораблю открывает МАСТЕРСКУЮ КОРПУСА: ремонт и усиление
-              осей. Раньше это был ряд кнопок под характеристиками — он занимал полколонки
-              и висел там даже тогда, когда чинить и качать нечего. Корабль сам себе кнопка. */}
           <div
             // 16:9 и без подложки: корабль висит прямо на стекле панели, а под ним целиком
             // влезают характеристики и кнопка покупки. На низком окне потолок по высоте
             // экрана сжимает превью первым — характеристики важнее простора вокруг модели.
-            className={`relative aspect-[16/9] max-h-[39vh] w-full ${hullWorkshop ? 'cursor-pointer' : ''}`}
-            onClick={hullWorkshop ? () => setHullOpen(true) : undefined}
+            className="relative aspect-[16/9] max-h-[39vh] w-full"
           >
-            <Blueprint chassisId={shownId} clickable={hullWorkshop} />
+            <Blueprint chassisId={shownId} />
 
             {/* Стрелки каталога — на самом контейнере, по бокам и по центру высоты: они
                 листают то, что в нём показано, и отдельной строки под ним не заслуживают.
@@ -159,31 +161,27 @@ export function ShipScreen({
             {docked && (
               <>
                 <div className="absolute left-1.5 top-1/2 -translate-y-1/2">
-                  {/* Клик по стрелке не должен открывать мастерскую корпуса под ней. */}
-                  <ArrowButton dir="left" onClick={(e) => { e.stopPropagation(); cycle(-1) }} />
+                  <ArrowButton dir="left" onClick={() => cycle(-1)} />
                 </div>
                 <div className="absolute right-1.5 top-1/2 -translate-y-1/2">
-                  <ArrowButton dir="right" onClick={(e) => { e.stopPropagation(); cycle(1) }} />
+                  <ArrowButton dir="right" onClick={() => cycle(1)} />
                 </div>
               </>
             )}
             {/* Покупка с ценой — на самом чертеже, внизу по центру, над характеристиками: сперва
-                смотришь, что за корпус, решаешь — и кнопка прямо под ним. Свой корпус обозначен
-                неактивной кнопкой. Клик открывает модалку сделки: зачёт старого, груз-осадок, доплата. */}
+                смотришь, что за корпус, решаешь — и кнопка прямо под ним. На своём корпусе
+                та же кнопка открывает МАСТЕРСКУЮ КОРПУСА (ремонт, усиление осей): покупать
+                своё нечего, а место под чертежом — самое заметное на экране.
+                Чужой корпус — модалка сделки: зачёт старого, груз-осадок, доплата. */}
             {docked && (
               <div className="absolute inset-x-0 bottom-1.5 flex justify-center">
                 <button
                   type="button"
-                  disabled={owned}
-                  onClick={(e) => {
-                    // Клик по кнопке не должен открывать мастерскую корпуса под ней.
-                    e.stopPropagation()
-                    setBuyingHull(true)
-                  }}
-                  className="cursor-pointer border bg-black/40 px-5 py-2 text-sm tracking-[0.2em] whitespace-nowrap backdrop-blur-sm transition-colors ui-btn disabled:cursor-default disabled:opacity-50"
+                  onClick={() => (hullWorkshop ? setHullOpen(true) : setBuyingHull(true))}
+                  className="cursor-pointer border bg-black/40 px-5 py-2 text-sm tracking-[0.2em] whitespace-nowrap backdrop-blur-sm transition-colors ui-btn"
                   style={{ borderColor: ACCENT, color: ACCENT }}
                 >
-                  {owned ? t('ship.alreadyOwned') : tm('ship.buyHull', { price: <Money amount={offer.cost} /> })}
+                  {owned ? t('ship.inspect') : tm('ship.buyHull', { price: <Money amount={offer.cost} /> })}
                 </button>
               </div>
             )}
@@ -197,6 +195,14 @@ export function ShipScreen({
             name={chassisName((owned ? player.loadout.chassis : offer.chassis).name)}
             baseline={docked && !owned ? player.spec : null}
             cargoUsed={usedCapacityOf(player.hold)}
+            corner={
+              docked && !owned ? (
+                <label className="flex cursor-pointer items-center gap-2 text-xs tracking-[0.15em]" style={{ color: ACCENT }}>
+                  <input type="checkbox" checked={tryFit} onChange={(e) => setTryFit(e.target.checked)} />
+                  {t('ship.tryFit')}
+                </label>
+              ) : null
+            }
           />
           </div>
 
@@ -224,7 +230,7 @@ export function ShipScreen({
         <SlotModal world={world} docked={docked} slot={openSlot} onChange={refresh} onClose={() => setOpenKey(null)} />
       )}
 
-      {/* Мастерская корпуса по клику на корабль: починить раму, усилить оси. */}
+      {/* Мастерская корпуса по кнопке «просмотреть»: починить раму, усилить оси. */}
       {hullWorkshop && hullOpen && (
         <HullModal world={world} onChange={refresh} onClose={() => setHullOpen(false)} />
       )}
