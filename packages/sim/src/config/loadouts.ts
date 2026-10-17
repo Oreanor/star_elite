@@ -117,8 +117,9 @@ export function pirateLeaderLoadout(): Loadout {
   return createLoadout(
     ORION,
     [ENGINE_CIVILIAN, RCS_STANDARD, SHIELD_LIGHT, HYPERDRIVE_COMPACT, ECM_UNIT],
-    // «Орион» — [пушка, пилон, пилон]: ствол + две ракеты. Компактный привод для ПОБЕГА.
-    [PULSE_LASER, MISSILE_PYLON, MISSILE_PYLON],
+    // «Орион» — три орудийные точки и два пилона: ствол + две ракеты на ПИЛОНАХ (оружие — по
+    // номерам точек). Компактный привод для ПОБЕГА.
+    [PULSE_LASER, null, null, MISSILE_PYLON, MISSILE_PYLON],
   )
 }
 
@@ -161,7 +162,9 @@ function fighterLoadout(chassis: Chassis): Loadout {
   return createLoadout(
     chassis,
     [ENGINE_STANDARD, RCS_STANDARD, SHIELD_LIGHT, ARMOUR_PLATE, CARGO_SMALL, HYPERDRIVE_COMPACT],
-    [PULSE_LASER, MISSILE_PYLON, MISSILE_PYLON],
+    // Оружие — ПО НОМЕРАМ точек: у истребителей три орудийные, затем два пилона. Прежде
+    // [лазер, ракета, ракета] сажало ракеты на орудийные точки, а пилоны пустели.
+    [PULSE_LASER, null, null, MISSILE_PYLON, MISSILE_PYLON],
   )
 }
 /** «Гермес» — лёгкий скороход. */
