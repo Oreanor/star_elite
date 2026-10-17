@@ -4,6 +4,9 @@ import type { BodyEntity, World } from '../world/entities'
 import { makePersona, type Persona } from '../world/persona'
 import { makePilotName } from '../world/names'
 import { findShip } from '../world/queries'
+import { stanceTo } from '../dialogue/dialogue'
+import { shipWhereabouts } from '../galaxy/contacts'
+import type { Relationship } from '../world/acquaintance'
 import { localSettlement } from './trade'
 import { lockedStationId } from '../world/queries'
 
@@ -89,4 +92,47 @@ export function dispatcherBriefing(world: World): DispatcherBriefing {
     nearestPopulated: bodies.find((b) => b.populated) ?? null,
     dockOccupant: occupant?.pilotName ?? null,
   }
+}
+
+/** Один борт в сводке трафика. Имена и роли — сырые: локализует UI. */
+export interface TrafficShip {
+  pilot: string
+  chassis: string
+  /** Род занятий из трафика (`originKind`) и фракция — UI сложит из них «торговец», «пират». */
+  originKind: string | null
+  faction: string
+  /** Кто он КОМАНДИРУ: враг, друг, нейтрал. */
+  stance: Relationship
+  /** Где: стоит у причала, заходит на причал или летит (у ближайшего тела). */
+  status: 'berthed' | 'inbound' | 'flying'
+  /** Ближайшее тело — «у планеты X». */
+  near: string | null
+  /** До командира, км. */
+  distanceKm: number
+}
+
+/**
+ * Трафик системы — кто где летает. Диспетчер ведёт всю систему, а не только причал: раньше в
+ * его сводке был лишь занявший причал, и на «кто тут летает?» он отвечал «никого».
+ *
+ * Не держится в промпте, а запрашивается свежим на каждый вопрос (`lookup: traffic`): борта
+ * улетают и прилетают, и срез на момент начала разговора врал бы уже через минуту.
+ * Замаскированных не видит и диспетчер — маскировка честная.
+ */
+export function dispatcherTraffic(world: World, limit = 20): TrafficShip[] {
+  const player = world.player
+  return world.ships
+    .filter((s) => s.alive && !s.cloaked)
+    .map((s) => ({
+      pilot: s.pilotName,
+      chassis: s.loadout.chassis.name,
+      originKind: s.originKind,
+      faction: s.faction,
+      stance: stanceTo(world, s),
+      status: s.ai?.dock === 'berthed' ? ('berthed' as const) : s.ai?.dock === 'inbound' ? ('inbound' as const) : ('flying' as const),
+      near: shipWhereabouts(world, s).place,
+      distanceKm: Math.round(s.state.pos.distanceTo(player.state.pos) / 1000),
+    }))
+    .sort((a, b) => a.distanceKm - b.distanceKm)
+    .slice(0, limit)
 }

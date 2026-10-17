@@ -43,6 +43,7 @@ import {
   reactionCard,
   type Reaction,
   type SpeechAct,
+  type LookupDigest,
 } from '@elite/sim'
 import { chassisName, economyName, governmentName, moduleName, professionName, properName, speciesName } from '../i18n/dataNames'
 import { godHearsOf, godVisitors } from '../../session/net/godMemory'
@@ -314,7 +315,8 @@ function contractProgress(world: World, c: Contract): { done: number; of: number
 }
 
 /** Справочники, которые не тащим в каждый запрос — пилот «листает» их по просьбе. */
-export type ContextDigest = 'market' | 'neighbours' | 'history' | 'worlds' | 'guide'
+/** Справочники пилота — все запросы домена, кроме `traffic` (он только у диспетчера). */
+export type ContextDigest = Exclude<LookupDigest, 'traffic'>
 
 /** Сколько справочников держим в «памяти» одного разговора — старейший выпадает. */
 export const MAX_ACTIVE_DIGESTS = 3
@@ -410,7 +412,7 @@ export interface NegotiatorReply {
   /** Откуда реплика: живая модель, локальный запас или обрыв от перегрузки канала. */
   source: 'model' | 'fallback' | 'overload'
   /** Модель просит подгрузить справочник — клиент догрузит и переспросит. */
-  lookup?: ContextDigest | null
+  lookup?: LookupDigest | null
   /**
    * Переводчик/чужие понятия: бот не уверен в поручении и просит расклад по шагам.
    * Команды при этом пустые — домен ничего не исполняет.

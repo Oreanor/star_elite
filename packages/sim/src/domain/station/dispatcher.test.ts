@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { createWorld, STARTER_SYSTEM } from '../world'
 import { cycleCelestial, targetableStationsOf } from '../world/queries'
-import { dispatcherBriefing, dispatcherPersona, stationInterlocutor } from './dispatcher'
+import { dispatcherBriefing, dispatcherPersona, dispatcherTraffic, stationInterlocutor } from './dispatcher'
 import { localSettlement } from './trade'
 import { lockContact, lockedShipId, lockedStationId } from '../world/queries'
 
@@ -52,5 +52,26 @@ describe('диспетчер станции', () => {
     expect(lockedShipId(w)).toBeNull() // старый контакт сброшен
     expect(w.targetFocus).toBe('nav')
     expect(stationInterlocutor(w)?.id).toBe(station.id)
+  })
+})
+
+describe('трафик диспетчера', () => {
+  /** Пойманное: диспетчер видел лишь занявшего причал, а на «кто тут летает?» отвечал «никого». */
+  it('видит все живые незамаскированные борта системы, ближние первыми', () => {
+    const w = world()
+    const traffic = dispatcherTraffic(w, 1000)
+    const expected = w.ships.filter((s) => s.alive && !s.cloaked).length
+    expect(traffic.length).toBe(expected)
+    for (let i = 1; i < traffic.length; i++) {
+      expect(traffic[i]!.distanceKm).toBeGreaterThanOrEqual(traffic[i - 1]!.distanceKm)
+    }
+  })
+
+  it('замаскированного не видит и диспетчер', () => {
+    const w = world()
+    const ship = w.ships[0]
+    if (!ship) return
+    ship.cloaked = true
+    expect(dispatcherTraffic(w, 1000).some((t) => t.pilot === ship.pilotName && t.distanceKm === Math.round(ship.state.pos.distanceTo(w.player.state.pos) / 1000))).toBe(false)
   })
 })

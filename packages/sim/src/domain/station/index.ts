@@ -17,8 +17,10 @@ export {
   dispatcherName,
   dispatcherPersona,
   dispatcherBriefing,
+  dispatcherTraffic,
   type BriefingBody,
   type DispatcherBriefing,
+  type TrafficShip,
 } from './dispatcher'
 export {
   armMissiles,

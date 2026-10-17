@@ -16,7 +16,8 @@ export const AI_ORDERS: readonly AIOrder[] = ['attack', 'engageAll', 'hold', 'st
  * `guide` — устройство игры целиком (`docs/GUIDE.md`): что вообще есть, что можно, чего нельзя.
  * Нужен тем, кто говорит о мире по существу (бог-архитектор), чтобы не выдумывать числа.
  */
-export const LOOKUP_DIGESTS = ['market', 'neighbours', 'history', 'worlds', 'guide'] as const
+/** `traffic` — только диспетчеру: борта в системе, свежим срезом на каждый вопрос. */
+export const LOOKUP_DIGESTS = ['market', 'neighbours', 'history', 'worlds', 'guide', 'traffic'] as const
 export type LookupDigest = (typeof LOOKUP_DIGESTS)[number]
 
 function asObject(p: unknown): Record<string, unknown> | null {
