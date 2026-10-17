@@ -11,6 +11,7 @@ import {
   shipAxes,
   stanceTo,
   lockContact,
+  lockedAsteroidId,
   lockedShipId,
   type BodyEntity,
   type ShipEntity,
@@ -78,7 +79,7 @@ function bodyColor(body: BodyEntity): string {
 
 type Shape = 'square' | 'round' | 'diamond'
 
-type SelectKind = 'body' | 'monolith' | 'figurine' | 'asteroid' | 'ship'
+type SelectKind = 'body' | 'monolith' | 'figurine' | 'asteroid' | 'ship' | 'comet'
 
 interface Blip {
   key: string
@@ -227,6 +228,27 @@ function blips(world: World): Blip[] {
     })
   }
 
+  // Кометы — всегда на локаторе: событие, а не пейзаж, и пролетают быстро.
+  for (const rock of world.asteroids) {
+    if (!rock.alive || !rock.comet) continue
+    const d = toDisc(world, rock.pos)
+    if (!d) continue
+    out.push({
+      key: `comet-${rock.id}`,
+      ...d,
+      color: UI.COMET,
+      shape: 'round',
+      size: 8,
+      ring: rock.id === lockedAsteroidId(world) && world.targetFocus === 'contact',
+      kind: t('locator.kind.comet'),
+      rank: 'comet',
+      title: t('locator.kind.comet'),
+      lines: [`${Math.round(rock.vel.length())} ${t('unit.mps')}`],
+      selectId: rock.id,
+      selectKind: 'comet',
+    })
+  }
+
   for (const ship of world.ships) {
     if (!isVisible(ship) || ship.divine) continue
     const d = toDisc(world, ship.state.pos)
@@ -263,6 +285,18 @@ function blips(world: World): Blip[] {
 
 /** Клик по отметке — тот же захват, что Tab / Shift+Tab / карта системы. */
 function applySelect(world: World, kind: SelectKind, id: number): void {
+  // Комета — цель захвата, как борт по Tab: нав-целью бывают лишь глыбы-ориентиры.
+  if (kind === 'comet') {
+    if (lockedAsteroidId(world) === id && world.targetFocus === 'contact') {
+      clearContactLock(world)
+      return
+    }
+    clearNavLock(world)
+    clearContactLock(world)
+    lockContact(world, 'asteroid', id)
+    world.targetFocus = 'contact'
+    return
+  }
   if (kind === 'ship') {
     if (lockedShipId(world) === id && world.targetFocus === 'contact') {
       clearContactLock(world)

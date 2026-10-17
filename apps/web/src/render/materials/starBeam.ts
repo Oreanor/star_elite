@@ -43,6 +43,7 @@ const FRAG = /* glsl */ `
   uniform float uStrength;
   uniform float uTime;
   uniform float uKnots;
+  uniform float uAlongFade;
   varying vec3 vNormalV;
   varying vec3 vViewV;
   varying float vAlong;
@@ -54,7 +55,8 @@ const FRAG = /* glsl */ `
     float facing = abs(dot(normalize(vNormalV), normalize(vViewV)));
     float soft = pow(facing, 2.2);
     /* Вдоль: плавный вход у светила и растворение к концу. */
-    float fade = smoothstep(0.0, 0.04, vAlong) * pow(1.0 - vAlong, 1.8);
+    /* uAlongFade = 0 — без затухания по длине: так тот же свет годится и для шара-комы. */
+    float fade = mix(1.0, smoothstep(0.0, 0.04, vAlong) * pow(max(0.0, 1.0 - vAlong), 1.8), uAlongFade);
     /* Сгустки бегут прочь от светила; поперечная рябь ломает правильность. */
     float knots = 1.0 - uKnots + uKnots * (0.55 + 0.45 * sin(vAlong * 46.0 - uTime * 2.6 + sin(vAngle * 3.0) * 1.3));
     float a = uStrength * soft * fade * knots;
@@ -65,8 +67,9 @@ const FRAG = /* glsl */ `
 /**
  * @param strength Яркость слоя: ядро ~0.5, ореол ~0.12.
  * @param knots Насколько видны сгустки, 0..1: у джетов заметны, у маяка слабее.
+ * @param alongFade 1 — гаснет вдоль длины (лучи, хвосты); 0 — нет (кома кометы, шар).
  */
-export function createStarBeamMaterial(color: number, strength: number, knots: number): ShaderMaterial {
+export function createStarBeamMaterial(color: number, strength: number, knots: number, alongFade = 1): ShaderMaterial {
   return new ShaderMaterial({
     vertexShader: VERT,
     fragmentShader: FRAG,
@@ -75,6 +78,7 @@ export function createStarBeamMaterial(color: number, strength: number, knots: n
       uStrength: { value: strength },
       uTime: { value: 0 },
       uKnots: { value: knots },
+      uAlongFade: { value: alongFade },
     },
     transparent: true,
     blending: AdditiveBlending,

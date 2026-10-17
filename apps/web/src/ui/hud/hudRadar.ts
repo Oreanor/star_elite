@@ -306,6 +306,11 @@ export function drawRadar(frame: HudFrame): void {
 
   for (const rock of world.asteroids) {
     if (!rock.alive) continue
+    // Комета — на радаре всегда (событие, а не пейзаж) и своим цветом, крупнее камня.
+    if (rock.comet) {
+      plot(rock.pos, HUD_COLORS.COMET, Math.round(2.5 * S), rock.id === lockedAsteroidId(world), 'round')
+      continue
+    }
     const nav = rock.id === world.navTargetId
     // Нав-глыбу держим на радаре всегда; мелочь — только рядом.
     if (!nav && rock.pos.distanceToSquared(player.state.pos) > ROCK_RANGE * ROCK_RANGE) continue

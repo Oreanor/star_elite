@@ -339,9 +339,9 @@ export function drawTargetPanels(frame: HudFrame): void {
       : null
     if (rock) {
       cell(
-        HUD_COLORS.ROCK,
+        rock.comet ? HUD_COLORS.COMET : HUD_COLORS.ROCK,
         [
-          t('locator.kind.asteroid'),
+          t(rock.comet ? 'locator.kind.comet' : 'locator.kind.asteroid'),
           formatStat('mass', asteroidMass(rock.radius)),
           formatDistance(Math.max(0, shipDistance(world, rock.pos) - rock.radius)),
         ],

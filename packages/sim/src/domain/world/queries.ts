@@ -157,7 +157,8 @@ function contactCandidates(world: World): ContactCandidate[] {
     ...targetablesOf(world).map((s) => ({ id: s.id, kind: 'ship' as const, ...facingScore(from, s.state.pos) })),
     ...world.pods.filter((p) => p.alive).map((p) => ({ id: p.id, kind: 'pod' as const, ...facingScore(from, p.pos) })),
     ...world.asteroids
-      .filter((a) => a.alive && a.pos.distanceToSquared(from) <= ASTEROID_LOCK_RANGE_SQ)
+      // Комета ловится Tab'ом на любой дальности пузыря: событие, а не мелочь у борта.
+      .filter((a) => a.alive && (a.comet || a.pos.distanceToSquared(from) <= ASTEROID_LOCK_RANGE_SQ))
       .map((a) => ({ id: a.id, kind: 'asteroid' as const, ...facingScore(from, a.pos) })),
     // Детали базы — такие же цели, как борта: пушка и глаз бьются отдельно от корпуса,
     // значит и наводиться на них надо отдельно. Место детали считаем на лету: база
