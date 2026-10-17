@@ -111,18 +111,21 @@ export function SystemPopup({
       action={{ ...action, disabled: unreachable }}
       extra={
         <div style={{ color: UI.PRIMARY }}>
-          <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
+          {/* Две колонки по смыслу: слева звезда и путь к ней (длинные значения), справа счёт
+              миров (короткие). Сетка заполняется по строкам, поэтому пары идут вперемешку.
+              Правая колонка — по содержимому, левой достаётся остаток: строки не переносятся. */}
+          <dl className="mt-3 grid grid-cols-[minmax(0,1fr)_auto] gap-x-5 gap-y-1 text-sm">
             <Row
               label={t('map.class')}
               value={`${system.star.class} · ${starClassName(system.star)}${
                 system.companion ? ` · ${t('map.binary')}` : ''
               }`}
             />
-            <Row label={t('map.size')} value={formatStarSize(system.star.radius)} />
             <Row label={t('map.planets')} value={String(system.planets.length)} />
-            <Row label={t('map.stations')} value={String(stations.length)} />
-            <Row label={t('map.life')} value={lifeName(systemLife(system))} />
             <Row label={t('map.distance')} value={formatRange(distance)} />
+            <Row label={t('map.life')} value={lifeName(systemLife(system))} />
+            <Row label={t('map.size')} value={formatStarSize(system.star.radius)} />
+            <Row label={t('map.stations')} value={String(stations.length)} />
           </dl>
 
           {core && <p className="mt-3 text-[11px] leading-relaxed" style={{ color: UI.WARN }}>{t('map.core')}</p>}
@@ -211,11 +214,11 @@ function StationPicker({
 
 function Row({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex min-w-0 items-baseline justify-between gap-2">
-      <dt className="min-w-0 text-xs" style={{ color: UI.DIM }}>
+    <div className="flex min-w-0 items-baseline justify-between gap-3">
+      <dt className="shrink-0 whitespace-nowrap text-xs" style={{ color: UI.DIM }}>
         {label}
       </dt>
-      <dd className="min-w-0 text-right leading-tight">{value}</dd>
+      <dd className="min-w-0 truncate whitespace-nowrap text-right leading-tight">{value}</dd>
     </div>
   )
 }

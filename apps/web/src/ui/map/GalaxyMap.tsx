@@ -520,7 +520,7 @@ function GalaxyMapImpl({ onClose, embedded = false }: { onClose: () => void; emb
             <div
               data-map-card
               ref={cardBox}
-              className="absolute left-0 top-0 z-30 flex max-h-full w-96 max-w-[80%] cursor-grab flex-col overflow-y-auto overscroll-contain opacity-0 active:cursor-grabbing"
+              className="absolute left-0 top-0 z-30 flex max-h-full w-[28rem] max-w-[80%] cursor-grab flex-col overflow-y-auto overscroll-contain opacity-0 active:cursor-grabbing"
               style={{ willChange: 'transform' }}
               onPointerDown={(e) => beginCardDrag(e, cardBox.current, cardDrag.current)}
             >

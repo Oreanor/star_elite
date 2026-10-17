@@ -114,6 +114,8 @@ const _white = /* @__PURE__ */ new Color(0xffffff)
  */
 /** Видимый радиус диска в долях `gl_PointSize`: край круга гаснет на 0.34..0.5 (см. фрагмент). */
 const DISC_FRACTION = 0.42
+/** Во сколько раз крупнее рисуется звезда под курсором. */
+const HOVER_GROW = 1.8
 /** Мельче этого, пикс., в звезду мышью не попасть — даём запас под палец. */
 const PICK_MIN_PX = 7
 /** Сдвиг между нажатием и отпусканием, пикс., до которого это клик, а не вращение. */
@@ -198,14 +200,20 @@ export function Stars({
    */
   useEffect(() => {
     const colors = geometry.getAttribute('color') as BufferAttribute
+    const sizes = geometry.getAttribute('size') as BufferAttribute
     systems.forEach((s, i) => {
       _colour.setHex(s.star.color)
-      if (i === hovered || i === selected || i === highlight) _colour.lerp(_white, 0.6)
+      // Под курсором — чисто белая и крупнее: видно, ЧТО именно сейчас выберется кликом.
+      // Выбранная и найденная — мягче (белым наполовину): их держат кольцо и подпись.
+      sizes.setX(i, starScale(s.star.radius) * (i === hovered ? HOVER_GROW : 1))
+      if (i === hovered) _colour.copy(_white)
+      else if (i === selected || i === highlight) _colour.lerp(_white, 0.6)
       // Отсеянные фильтром гаснут до тлеющей искры: они на месте, но не мешают.
       else if (!visible[i]) _colour.multiplyScalar(0.14)
       colors.setXYZ(i, _colour.r, _colour.g, _colour.b)
     })
     colors.needsUpdate = true
+    sizes.needsUpdate = true
   }, [geometry, systems, hovered, selected, highlight, visible])
 
   /**
