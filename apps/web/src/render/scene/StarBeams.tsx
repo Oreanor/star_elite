@@ -45,26 +45,34 @@ const _up = new Vector3(0, 1, 0)
 const _q = new Quaternion()
 
 /**
- * Слои луча: узкое плотное ЯДРО и широкий тусклый ОРЕОЛ — вместе дают размытый столб света,
- * а не твёрдый конус. Ширина — в долях опасной ширины луча (`beams.halfAngle`): ядро внутри
- * неё, ореол шире — свет рассеивается дальше, чем жжёт.
+ * Слои луча: плотное ЯДРО и широкий тусклый ОРЕОЛ — вместе дают размытый столб света, а не
+ * твёрдый конус. Ширина — в долях опасной ширины луча (`beams.halfAngle`): ядро около неё,
+ * ореол шире — свет рассеивается дальше, чем жжёт. У пульсара луч заметнее и ярче джета:
+ * маяк — главное, что в нём есть, и тонкий луч терялся на фоне неба.
  */
-const LAYERS = [
-  { width: 0.45, strength: 0.55 },
-  { width: 1.6, strength: 0.13 },
-] as const
+export const BEAM_LAYERS = {
+  pulsar: [
+    { width: 0.85, strength: 1.0 },
+    { width: 2.6, strength: 0.32 },
+  ],
+  jet: [
+    { width: 0.6, strength: 0.7 },
+    { width: 2.0, strength: 0.2 },
+  ],
+} as const
 
 function BeamPair({ body }: { body: BodyEntity }) {
   const session = useSession()
   const camera = useThree((s) => s.camera)
   const group = useRef<Group>(null)
   const pulsar = body.kind === 'star'
+  const layers = pulsar ? BEAM_LAYERS.pulsar : BEAM_LAYERS.jet
   // Четыре меша: два луча (вдоль оси и против) × два слоя. Материал на каждый — у каждого
   // своя яркость (встречный луч тусклее).
   const materials = useMemo(
     () =>
       [1, -1].flatMap(() =>
-        LAYERS.map((layer) => createStarBeamMaterial(pulsar ? PULSAR_COLOR : JET_COLOR, layer.strength, pulsar ? 0.25 : 0.6)),
+        layers.map((layer) => createStarBeamMaterial(pulsar ? PULSAR_COLOR : JET_COLOR, layer.strength, pulsar ? 0.25 : 0.6)),
       ),
     [pulsar],
   )
@@ -87,8 +95,8 @@ function BeamPair({ body }: { body: BodyEntity }) {
 
     for (let k = 0; k < g.children.length; k++) {
       const mesh = g.children[k] as Mesh
-      const sign = k < LAYERS.length ? 1 : -1
-      const layer = LAYERS[k % LAYERS.length]!
+      const sign = k < layers.length ? 1 : -1
+      const layer = layers[k % layers.length]!
       const mat = materials[k]!
       mesh.position.copy(_shown)
       _q.setFromUnitVectors(_up, _signed.copy(_dir).multiplyScalar(sign))

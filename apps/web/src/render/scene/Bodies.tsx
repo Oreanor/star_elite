@@ -233,7 +233,9 @@ function Star({ body }: { body: BodyEntity }) {
     [body.color],
   )
   useEffect(() => () => material.dispose(), [material])
-  const glowSize = body.radius * CORONA.SCALE
+  // Пульсар (звезда с лучами) — корона меньше: главное в нём лучи (`CORONA.PULSAR_SCALE`).
+  const coronaScale = body.beams ? CORONA.PULSAR_SCALE : CORONA.SCALE
+  const glowSize = body.radius * coronaScale
 
   // Карта поверхности класса. Грузится лениво по цвету звезды; пока её нет (или у
   // класса карты не бывает — T/N/чёрная дыра) — диск остаётся на плоском цвете.
@@ -281,7 +283,7 @@ function Star({ body }: { body: BodyEntity }) {
       // раздвигается ровно вслед за шаром. Зажата, чтобы у самой поверхности не схлопнуться.
       const camDist = state.camera.position.distanceTo(at)
       const rOverD = Math.min(0.985, (body.radius * shrink) / Math.max(camDist, 1e-3))
-      const edge = (2 * 0.975) / (CORONA.SCALE * Math.sqrt(1 - rOverD * rOverD))
+      const edge = (2 * 0.975) / (coronaScale * Math.sqrt(1 - rOverD * rOverD))
       material.uniforms.uDiskFrac!.value = Math.min(edge, 0.96)
     }
     // Фаза абсолютна для мира, а не является возрастом экземпляра материала. WorldVisuals

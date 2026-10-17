@@ -1,6 +1,7 @@
 import { Vector3 } from 'three'
 import { beamDirection, renderTime } from '@elite/sim'
 import type { HudFrame } from './hudShared'
+import { BEAM_LAYERS } from '../../render/scene/StarBeams'
 
 /**
  * ВСПЫШКА ЛУЧА — главный признак пульсара: когда луч маяка проходит через наблюдателя,
@@ -13,8 +14,6 @@ import type { HudFrame } from './hudShared'
  * объектив, а не корпус. Конус берём по видимому ореолу, он шире опасной зоны.
  */
 
-/** Во сколько раз видимый ореол луча шире опасной зоны (как внешний слой `StarBeams`). */
-const HALO_WIDEN = 1.6
 /** Наибольшая непрозрачность засветки — экран не выбеливается целиком, HUD читается. */
 const FLASH_MAX = 0.75
 const FLASH_RGB = '226, 244, 255'
@@ -34,7 +33,9 @@ export function drawBeamFlash({ ctx, camera, world, width, height }: HudFrame): 
     const s = Math.abs(along)
     if (s < body.radius || s > beams.length) continue
     const perp = Math.sqrt(Math.max(0, _r.lengthSq() - along * along))
-    const halo = (body.radius + s * Math.tan(beams.halfAngle)) * HALO_WIDEN
+    // Ширина видимого ореола — та же, что у внешнего слоя отрисовки (`BEAM_LAYERS`).
+    const widen = (body.kind === 'star' ? BEAM_LAYERS.pulsar : BEAM_LAYERS.jet)[1].width
+    const halo = (body.radius + s * Math.tan(beams.halfAngle)) * widen
     // Квадрат — резкий пик у оси: вспышка, а не ровная подсветка всего конуса.
     const e = Math.max(0, 1 - perp / halo) ** 2 * (1 - s / beams.length)
     if (e > strongest) strongest = e
