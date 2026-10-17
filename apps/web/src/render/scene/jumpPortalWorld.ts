@@ -1,6 +1,5 @@
 import { PerspectiveCamera, Quaternion, Scene, Vector3, type Camera } from 'three'
 import {
-  CORE_INDEX,
   aiController,
   applyPlayerSave,
   arrivalPointAt,
@@ -8,7 +7,6 @@ import {
   carryFollowersOnJump,
   driftContacts,
   enterSystem,
-  isCore,
   serializePlayer,
   spawnResidentContacts,
   stepWorld,
@@ -79,7 +77,7 @@ export function prepareJumpPortalWorld(source: Session): PreparedJumpWorld {
   }
 
   const sourceWorld = source.world
-  const destIndex = isCore(p.index) ? CORE_INDEX : p.index
+  const destIndex = p.index
   const seat = p.arrival?.kind === 'body' ? p.arrival.planet : undefined
   const def = systemDefFor(destIndex, sourceWorld.galaxySeed, seat)
   const start = arrivalPointAt(def, p.arrival, sourceWorld.calendarTime)

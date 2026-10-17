@@ -385,9 +385,11 @@ function makeBodies(ids: IdSource, def: SystemDef): BodyEntity[] {
   const m1 = starMassSolar(def.star.massSolar)
   const m2 = comp ? companionMass(comp) : 0
 
+  const hole = def.star.blackHole
   const primary: BodyEntity = {
     id: ids.next(),
-    kind: 'star',
+    // Ядро галактики — чёрная дыра, а не звезда (см. `SystemDef.star.blackHole`).
+    kind: hole ? 'blackhole' : 'star',
     name: def.name,
     pos: new Vector3(...def.star.pos),
     radius: def.star.radius,
@@ -396,7 +398,8 @@ function makeBodies(ids: IdSource, def: SystemDef): BodyEntity[] {
     population: 0,
     settlement: null,
     spin: 0,
-    spinAxis: new Vector3(0, 1, 0),
+    // У дыры ось — это ось аккреционного диска; у звезды ось не видна, пусть будет вверх.
+    spinAxis: hole ? new Vector3(...hole.diskAxis).normalize() : new Vector3(0, 1, 0),
     // Одиночная стоит в центре; главная звезда двойной обращается вокруг барицентра.
     orbit: comp ? binaryOrbit(m1, m2, comp.separation, 0) : null,
   }

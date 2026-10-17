@@ -8,7 +8,6 @@ export {
 } from './arrival'
 export { systemDefOf } from './bridge'
 export {
-  isCore,
   commitPreparedJump,
   jump,
   jumpBlock,

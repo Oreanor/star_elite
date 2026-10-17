@@ -201,6 +201,9 @@ export function systemDefOf(system: StarSystem, galaxySeed: number, seatOverride
       radius: starRadius,
       color: system.star.color,
       massSolar: system.star.massSolar,
+      // Класс H — чёрная дыра ядра. Ось диска чуть наклонена к плоскости галактики: ребром
+      // диск не виден вовсе, плашмя — плоская шайба; под углом читается и диск, и тень.
+      ...(system.star.class === 'H' ? { blackHole: { diskAxis: [0.25, 1, 0.15] as const } } : {}),
     },
     companion,
     dyson: system.dyson,

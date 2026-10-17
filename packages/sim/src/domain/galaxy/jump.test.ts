@@ -295,36 +295,31 @@ describe('прыжок', () => {
   })
 
   /**
-   * Ядро — не система, а ворота. Прыжок в него меняет ЗЕРНО галактики (а с ним и
-   * все 2500 систем разом), и корабль выходит у чёрной дыры уже НОВОЙ галактики.
-   * Проверяем переход, а не топливо, поэтому доливаем бак и ставим дальний привод.
+   * Ядро — цель, как любая звезда: прыжок выводит в окрестности его чёрной дыры в ЭТОЙ же
+   * галактике. Пойманное: прыжок менял зерно на «следующее» по формуле — галактику, которой
+   * нет среди узлов клубка. Наружу ведёт только сама дыра (вход в клубок, см. `Simulation`).
    */
-  it('прыжок в ядро уводит в другую галактику через чёрную дыру', () => {
+  it('прыжок в ядро — к чёрной дыре своей галактики, зерно не меняется', () => {
     const world = createWorld()
     world.player.spec.jumpRange = 1e6
     world.player.jumpCharge = 1e6
     const seedBefore = world.galaxySeed
 
     expect(jump(world, CORE_INDEX)).toBe(true)
-    expect(world.galaxySeed).not.toBe(seedBefore) // галактика сменилась целиком
-    expect(world.systemIndex).toBe(CORE_INDEX) // вышли у чёрной дыры новой галактики
-    // В чужой галактике индекс 1 — обычная звезда, не наш Люрилар.
-    expect(systemDefFor(WORLD.HOME_INDEX, world.galaxySeed).name).not.toBe('Люрилар')
+    expect(world.galaxySeed).toBe(seedBefore)
+    expect(world.systemIndex).toBe(CORE_INDEX)
   })
 
-  /** Цепочка галактик детерминирована: тот же старт — то же следующее зерно. */
-  it('следующая галактика за дырой одна и та же при том же старте', () => {
-    const mk = () => {
-      const w = createWorld()
-      w.player.spec.jumpRange = 1e6
-      w.player.jumpCharge = 1e6
-      return w
-    }
-    const a = mk()
-    const b = mk()
-    jump(a, CORE_INDEX)
-    jump(b, CORE_INDEX)
-    expect(a.galaxySeed).toBe(b.galaxySeed)
+  /** Ядро — чёрная дыра с диском, а не звезда; выходим снаружи горизонта. */
+  it('в ядре светило — чёрная дыра, и корабль вне её горизонта', () => {
+    const world = createWorld()
+    world.player.spec.jumpRange = 1e6
+    world.player.jumpCharge = 1e6
+    jump(world, CORE_INDEX)
+    const hole = world.bodies.find((b) => b.kind === 'blackhole')
+    expect(hole).toBeDefined()
+    expect(world.bodies.some((b) => b.kind === 'star')).toBe(false)
+    expect(world.player.state.pos.distanceTo(hole!.pos)).toBeGreaterThan(hole!.radius * 10)
   })
 
   it('расстояние симметрично и считается по трём осям', () => {

@@ -116,11 +116,9 @@ function setPilot(session: Session, mode: Session['mode']): void {
  */
 function touchedDoor(world: World): boolean {
   for (const body of world.bodies) {
-    // Дверь — всякая чёрная дыра, а В ЯДРЕ ею работает само светило: система `CORE_INDEX`
-    // строится из класса «H», но `SystemDef` класса не носит, и в мире дыра ядра приезжает
-    // обычной звездой. Без этой оговорки выход в новую галактику был бы билетом в один конец.
-    const isDoor = body.kind === 'blackhole' || (body.kind === 'star' && world.systemIndex === CORE_INDEX)
-    if (!isDoor) continue
+    // Дверь — всякая чёрная дыра, и дыра ядра тоже: она приезжает телом `blackhole`
+    // (`SystemDef.star.blackHole`), особого случая для ядра больше нет.
+    if (body.kind !== 'blackhole') continue
     if (world.player.state.pos.distanceTo(body.pos) <= body.radius) return true
   }
   return false
@@ -243,9 +241,9 @@ function exitBushInto(session: Session, vertex: number): boolean {
   /**
    * ОКРЕСТНОСТИ ДЫРЫ, а не стандартная точка выхода в двух астроединицах: вылетел — она
    * перед носом. Ближе нельзя честно: дыра ядра — 12 солнечных масс при радиусе 152 000 км,
-   * и её тяга падает как 1/d². На сотне радиусов это ~7 м/с² — заметный тянущий фон, из
-   * которого корабль (шестнадцать g) выгребает. На десятке было бы 690 м/с² — падение без
-   * шансов, каким бы ни был двигатель.
+   * и её тяга падает как 1/d². Дыра вдвое плотнее звезды того же радиуса (`bodyMass`): на
+   * сотне радиусов это ~14 м/с² — заметный тянущий фон, из которого корабль (шестнадцать g)
+   * выгребает. На десятке было бы ~1400 м/с² — падение без шансов, каким бы ни был двигатель.
    */
   const holeR = def.star.radius
   enterSystem(world, def, CORE_INDEX, [0, 0, -holeR * BUSH_EXIT_RADII])

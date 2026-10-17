@@ -83,6 +83,12 @@ export interface SystemDef {
     color: number
     /** Масса в M☉. Период двойной и гравитация — отсюда, не из ∝ R³. */
     massSolar: number
+    /**
+     * Светило — ЧЁРНАЯ ДЫРА (ядро галактики). Тело в мире тогда `blackhole`, а не `star`:
+     * отрисовка с аккреционным диском, «чёрная дыра» на HUD, вход в клубок галактик.
+     * `radius` — горизонт; `diskAxis` — ось диска.
+     */
+    blackHole?: { diskAxis: readonly [number, number, number] }
   }
   /**
    * Спутник двойной: вторая звезда или чёрная дыра (барицентр, `separation`, орбита).
