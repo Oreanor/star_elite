@@ -29,6 +29,7 @@ import { t } from '../i18n'
 import { figurineTitleLocal, occupationName, properName } from '../i18n/dataNames'
 import { formatStat } from '../station/format'
 import { drawFlare } from './drawFlare'
+import { drawBeamFlash } from './hudBeamFlash'
 import { angularSize, formatDistance, projectPoint } from './project'
 import { apertureEllipse, insideAperture } from './aperture'
 import { HudFrame, S, bodyColor, fitHudScale, formatLy, hudGalaxyFor, isOnScreen, navMarkerColor, navReticle, offscreenArrow, radarColor, shipDistance } from './hudShared'
@@ -77,6 +78,9 @@ export function drawHud(frame: HudFrame): void {
   if (flareHole && flareWorld && flareCamera) {
     drawFlare(ctx, flareCamera, flareWorld, width, height, { ellipse: flareHole, inside: true })
   }
+
+  // Засветка лучом пульсара/джета — на кадре, под приборами: свет бьёт в объектив.
+  drawBeamFlash(frame)
 
   // Счётчик кадров рисуется ДО проверки на гибель: узнать, во что превратилась
   // частота, важнее всего именно тогда, когда на экране взрыв.
