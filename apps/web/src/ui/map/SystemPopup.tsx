@@ -81,7 +81,18 @@ export function SystemPopup({
   // заслонял её менее полезным сообщением «сначала отчальте».
   const beyondDriveRange =
     index !== world.systemIndex && world.player.spec.jumpRange > 0 && distance > world.player.spec.jumpRange
-  const blocked = beyondDriveRange ? 'out-of-range' : docked ? null : jumpBlock(world, index)
+  // Неустранимое (вне дальности, без привода, своя же система) пишем всегда — и у причала:
+  // по нему гаснет «ВЫБРАТЬ», и серая кнопка без причины читалась бы как поломка.
+  // Временное (в доке, мало заряда, крейсер) — только в полёте и цель не запрещает.
+  const permanent = beyondDriveRange
+    ? 'out-of-range'
+    : index === world.systemIndex
+      ? 'same-system'
+      : world.player.spec.jumpRange <= 0
+        ? 'no-drive'
+        : null
+  const blocked = permanent ?? (docked ? null : jumpBlock(world, index))
+  const unreachable = permanent !== null
 
   // Все причалы системы — индексы их планет. Порядок планет в карте и в мире совпадает
   // (мост строит SystemDef.planets один-к-одному), поэтому индекс годится и для выхода.
@@ -97,7 +108,7 @@ export function SystemPopup({
       name={properName(system.name).toUpperCase()}
       color={UI.PRIMARY}
       lines={[]}
-      action={action}
+      action={{ ...action, disabled: unreachable }}
       extra={
         <div style={{ color: UI.PRIMARY }}>
           <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1 text-sm">

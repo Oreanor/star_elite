@@ -92,7 +92,12 @@ export function MapCard({
    * Кнопка внизу: «ВЫБРАТЬ» ставит цель (как Tab в космосе, цель прыжка, цель перехода),
    * у уже выбранного — «СНЯТЬ ВЫБОР». Рассматривать и выбирать — разные действия.
    */
-  action?: { selected: boolean; onClick: () => void }
+  action?: {
+    selected: boolean
+    onClick: () => void
+    /** Выбрать нельзя (звезда вне досягаемости привода). Снять выбор можно всегда. */
+    disabled?: boolean
+  }
   /**
    * Своё содержимое вместо «род: имя» и строк — у бортов паспорт пилота (`PilotIdentity`),
    * тот же, что во вкладке «Люди» и в шапке разговора. Рамка и фон карточки остаются.
@@ -137,8 +142,9 @@ export function MapCard({
         <div className="mt-3 flex justify-center">
           <button
             type="button"
+            disabled={action.disabled && !action.selected}
             onClick={action.onClick}
-            className="cursor-pointer border px-4 py-1.5 text-xs tracking-[0.25em] transition-colors ui-btn"
+            className="cursor-pointer border px-4 py-1.5 text-xs tracking-[0.25em] transition-colors ui-btn disabled:cursor-not-allowed disabled:opacity-40"
             style={{ borderColor: UI.PRIMARY, color: UI.PRIMARY }}
           >
             {action.selected ? t('map.unselect') : t('map.select')}
