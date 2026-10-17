@@ -28,7 +28,6 @@ const _shown = { pos: new Vector3(), quat: new Quaternion() }
 const _offset = new Vector3()
 /** Скорость для упреждения, обрезанная базовым MAX_SPEED: см. врезку у addScaledVector. */
 const _lead = new Vector3()
-const _rel = new Vector3()
 const _twist = new Quaternion()
 const _desiredQuat = new Quaternion()
 const _shake = new Vector3()
@@ -83,13 +82,6 @@ export function FlightCamera() {
   const camSwing = useRef(new Quaternion()).current
   const camTwist = useRef(new Quaternion()).current
 
-  /**
-   * Поза камеры, застывшая на входе в бочку: смещение от корабля и ориентация.
-   * Пока фигура идёт, камеру не трогаем вовсе — только возим за кораблём от этой
-   * замороженной точки. `null` — бочки нет.
-   */
-  const frozen = useRef<{ offset: Vector3; quat: Quaternion } | null>(null)
-
   useFrame((_, dt) => {
     /**
      * Мир стоит — камера не ДОГОНЯЕТ, но встать на место обязана.
@@ -114,10 +106,6 @@ export function FlightCamera() {
     // иначе следующий кадр пружины пересчитывает старый курс и создаёт видимый рывок.
     if (consumeCameraFrameRotation(_deltaRot)) {
       camSwing.premultiply(_deltaRot).normalize()
-      if (frozen.current) {
-        frozen.current.offset.applyQuaternion(_deltaRot)
-        frozen.current.quat.premultiply(_deltaRot).normalize()
-      }
     }
 
     /**
@@ -197,32 +185,15 @@ export function FlightCamera() {
     const barrel = session.intent.manoeuvre.kind === 'barrel'
 
     /**
-     * БОЧКА: камеру не трогаем СОВСЕМ. Раньше она разбирала кватернион корабля на
-     * крен и курс — но у полного оборота разложение вырождается (у 180° крен
-     * меняет знак), и камера ныряла за носом на пол-оборота, а потом на пол-оборота
-     * обратно. Никакой пружиной это не лечится: вырождается сам источник.
-     *
-     * Поэтому в бочке разложения нет вовсе. На первом кадре фигуры запоминаем позу
-     * камеры относительно корабля и дальше лишь возим её за кораблём: ориентация
-     * стоит намертво, корабль крутится в центре кадра. Кончилась бочка — обычное
-     * слежение подхватывает с той же позы (курс не менялся), без рывка.
+     * БОЧКА — тем же «замороженным видом», что петля и разворот (`frozenView`): ориентация и
+     * база смещения стоят, корабль крутится в центре кадра, а ПОЛОЖЕНИЕ камеры ведёт обычная
+     * пружина с упреждением. Раньше бочка жила своей веткой с жёсткой привязкой камеры к борту
+     * по смещению, снятому в первый кадр, — и смещение ловило кадр пути: борт рывком уходил
+     * вперёд и вверх, а после бочки плавно возвращался. С пружиной положение непрерывно на
+     * входе и на выходе — рваться нечему. Разложения кватерниона борта (от него у полного
+     * оборота знак крена прыгал) здесь нет: курс и крен камеры просто не обновляются.
      */
-    if (barrel) {
-      const f =
-        frozen.current ??
-        (frozen.current = {
-          offset: _rel.copy(camera.position).sub(state.pos).clone(),
-          quat: camera.quaternion.clone(),
-        })
-      camera.position.copy(state.pos).add(f.offset)
-      camera.quaternion.copy(f.quat)
-      camera.updateMatrixWorld(true)
-      // Множитель крейсера в бочке не читаем — чтобы на выходе тряска не дёрнулась
-      // от накопившейся «скорости роста», которой на деле не было.
-      previousFactor.current = player.cruise.factor
-      return
-    }
-    frozen.current = null
+    const frozenView = held || barrel
 
     /**
      * Пользовательский облёт активен (стрелки ←/→ увели азимут от нуля)? Тогда камера НЕ
@@ -236,7 +207,7 @@ export function FlightCamera() {
 
     const offset = CAMERA.CHASE_OFFSET
     _offset.set(offset[0], offset[1], offset[2]).multiplyScalar(sizeFactor)
-    if (held) {
+    if (frozenView) {
       /**
        * И отодвигается — ровно на петлю. Радиус петли есть v/ω, и с обычных
        * двадцати четырёх метров камера оказывается ВНУТРИ круга: корабль
@@ -254,7 +225,8 @@ export function FlightCamera() {
         1,
         CAMERA.LOOP_PULLBACK_MAX,
       )
-      _offset.multiplyScalar(pullback)
+      // Бочке отъезд не нужен: она крутится вокруг носа, круга, сквозь который летит борт, нет.
+      if (held) _offset.multiplyScalar(pullback)
 
       _camRot.copy(camSwing).multiply(camTwist)
       _offset.applyQuaternion(_camRot)
@@ -341,7 +313,7 @@ export function FlightCamera() {
       camSwing.setFromUnitVectors(_refFwd, _noseFwd)
       residualTwist(state.quat, camSwing, _twist)
       camTwist.copy(_twist)
-    } else if (held) {
+    } else if (frozenView) {
       // В фигуре ориентацию не трогаем — камера смотрит замороженным курсом, корабль
       // крутится в центре кадра.
     } else if (running) {
