@@ -33,7 +33,15 @@ export const hasCloak = (e: ShipEntity): boolean => e.spec.cloakDrain > 0
  * Отходя (`dock: 'done'`), он появляется снова — это и есть вылет из шлюза.
  */
 export const isVisible = (e: ShipEntity): boolean =>
-  e.alive && !e.cloaked && e.ai?.dock !== 'berthed'
+  e.alive && !e.cloaked && !isBerthed(e)
+
+/**
+ * Стоит у причала — ВНУТРИ станции. Только `berthed`: заходящий (`inbound`) ещё летит в
+ * космосе, виден на локаторе за километры и в доке не числится. Одно правило на всех —
+ * видимость, «где он», список «у причала»: раньше связь у причала звала и подлетающих,
+ * и они числились пристыкованными в восьми километрах от станции.
+ */
+export const isBerthed = (e: ShipEntity): boolean => e.ai?.dock === 'berthed'
 
 /**
  * Хватит ли заряда, чтобы поле продержалось хоть сколько-то осмысленно.

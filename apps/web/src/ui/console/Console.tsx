@@ -4,6 +4,7 @@ import {
   contactTravelEta,
   contactWhereabouts,
   findStation,
+  isBerthed,
   capitalBody,
   stationHost,
   dispatcherName,
@@ -601,11 +602,11 @@ function capitalWorld(world: World): BodyEntity | null {
 
 /**
  * Кто сейчас пристыкован. Игрок — всегда первым (он же и стоит у причала), следом
- * НАСТОЯЩИЕ борта из мира, что заняли причал или заходят на него (`dock` берётся из
- * их ИИ). Это не выдуманный список: пока игрок в доке, мир заморожен, и роль-плашки
- * показывают ровно тех, кто был у причала в этот миг. Улетит пилот — исчезнет и плашка.
+ * НАСТОЯЩИЕ борта из мира, что стоят у причала (`isBerthed`). Подлетающих сюда не берём:
+ * они ещё в космосе, видны на локаторе за километры, а мир в доке заморожен — «зайти»
+ * они так и не успеют. Это не выдуманный список: улетит пилот — исчезнет и плашка.
  */
 function dockedPilots(world: World): ShipEntity[] {
-  const here = world.ships.filter((s) => s.alive && (s.ai?.dock === 'berthed' || s.ai?.dock === 'inbound'))
+  const here = world.ships.filter((s) => s.alive && isBerthed(s))
   return [world.player, ...here]
 }

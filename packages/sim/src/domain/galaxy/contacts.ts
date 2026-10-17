@@ -1,3 +1,4 @@
+import { isBerthed } from '../combat/cloak'
 import { CONTACTS } from '../../config/contacts'
 import { CORE_INDEX, GALAXY } from '../../config/galaxy'
 import type { BodyEntity, ShipEntity, World } from '../world/entities'
@@ -133,7 +134,7 @@ export interface Whereabouts {
  * «в доке такой-то станции». Не про знакомство — про любой борт, что сейчас в мире.
  */
 export function shipWhereabouts(world: World, ship: ShipEntity): Whereabouts {
-  const berthed = ship.ai?.dock === 'berthed' || ship.ai?.dock === 'inbound'
+  const berthed = isBerthed(ship)
   let near: BodyEntity | null = null
   let best = Infinity
   for (const b of world.bodies) {
