@@ -438,7 +438,6 @@ export const IT: Record<keyof typeof RU, string> = {
   'ship.cancel': 'ANNULLA',
   'ship.ok': 'OK',
 
-  'unit.pc': 'pc',
 
   'map.close': 'M — CHIUDI',
 

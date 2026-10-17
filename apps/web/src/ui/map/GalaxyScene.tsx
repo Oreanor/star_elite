@@ -38,8 +38,6 @@ export function formatStarSize(catalogRadius: number): string {
   return t('map.starSize', { n })
 }
 
-/** Световых лет в парсеке. Астрономы меряют парсеками, пилоты — годами. */
-export const LY_PER_PARSEC = 3.26156
 
 /**
  * Радиус звезды на карте, св.г. Класс задаёт размер: гигант виден гигантом.

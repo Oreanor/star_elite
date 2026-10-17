@@ -461,7 +461,6 @@ export const RU = {
   'ship.cancel': 'ОТМЕНА',
   'ship.ok': 'ОК',
 
-  'unit.pc': 'пк',
 
   'map.close': 'M — ЗАКРЫТЬ',
 

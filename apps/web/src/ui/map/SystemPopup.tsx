@@ -14,7 +14,7 @@ import {
 import { UI } from '../theme'
 import { t } from '../i18n'
 import { lifeName, properName, starClassName } from '../i18n/dataNames'
-import { LY_PER_PARSEC, formatStarSize } from './GalaxyScene'
+import { formatStarSize } from './GalaxyScene'
 import { MapCard } from './MapFrame'
 
 /**
@@ -22,8 +22,9 @@ import { MapCard } from './MapFrame'
  * Своя причина меняться — что мы рассказываем о системе.
  */
 
+/** Дальность — только в световых годах: в них же дальность привода и список систем. */
 export function formatRange(ly: number): string {
-  return `${ly.toFixed(1)} ${t('unit.ly')} · ${(ly / LY_PER_PARSEC).toFixed(2)} ${t('unit.pc')}`
+  return `${ly.toFixed(1)} ${t('unit.ly')}`
 }
 
 /** Почему прыжок запрещён — код домена в строку интерфейса. */
@@ -101,6 +102,12 @@ export function SystemPopup({
     () => new Set(stations.map((s) => system.planets.indexOf(s.planet))),
     [system, stations],
   )
+  // Имя причала по индексу планеты — подпись на схеме: без неё кликабельные точки не
+  // отличались от прочих ничем, кроме цвета, и было неясно, что их вообще можно выбрать.
+  const stationNames = useMemo(
+    () => new Map(stations.map((s) => [system.planets.indexOf(s.planet), properName(s.station.name)])),
+    [system, stations],
+  )
 
   return (
     <MapCard
@@ -143,6 +150,7 @@ export function SystemPopup({
                 <StationPicker
                   def={def}
                   stationPlanets={stationPlanets}
+                  stationNames={stationNames}
                   selected={onArrival ? world.jumpArrivalPlanet : null}
                   onPick={onArrival}
                 />
@@ -168,12 +176,15 @@ export function SystemPopup({
 function StationPicker({
   def,
   stationPlanets,
+  stationNames,
   selected,
   onPick,
 }: {
   def: SystemDef
   /** Индексы планет со станциями — все они кликаются как точки выхода. */
   stationPlanets: Set<number>
+  /** Имя причала по индексу планеты — мелкая подпись у точки. */
+  stationNames: Map<number, string>
   /** Индекс планеты-со-станцией, у которой назначен выход, или null — у звезды. */
   selected: number | null
   /** null — схема для справки: система не цель прыжка, выход назначать некуда. */
@@ -185,7 +196,7 @@ function StationPicker({
 
   return (
     <div>
-      <svg viewBox={`0 0 ${ORRERY_VIEW} ${ORRERY_VIEW}`} className="w-full" role="img" aria-label={`Схема ${def.name}`}>
+      <svg viewBox={`0 0 ${ORRERY_VIEW} ${ORRERY_VIEW}`} className="w-full overflow-visible" role="img" aria-label={`Схема ${def.name}`}>
         {/* Звезда — и точка выхода у светила: клик по ней снимает причал. */}
         <circle
           cx={ORRERY_CENTRE}
@@ -201,6 +212,21 @@ function StationPicker({
             {/* Планета со станцией светит фосфором и кликается; прочие — тусклые, мимо них. */}
             <circle cx={p.x} cy={p.y} r={p.giant ? 3.4 : 2} fill={p.station ? UI.PRIMARY : UI.DIM} opacity={p.station ? 1 : 0.4} />
             {/* Зона под палец: в точку в 2 единицы мышью не попасть. Только у станций. */}
+            {/* Подпись причала — мелко, сбоку от точки, к центру не лезет: справа от звезды
+                пишем вправо, слева — влево. Кликается вместе с точкой. */}
+            {p.station && stationNames.has(i) && (
+              <text
+                x={p.x + (p.x >= ORRERY_CENTRE ? 5 : -5)}
+                y={p.y + 2}
+                fontSize="6"
+                textAnchor={p.x >= ORRERY_CENTRE ? 'start' : 'end'}
+                fill={selected === i ? UI.PRIMARY : UI.DIM}
+                className={onPick ? 'cursor-pointer select-none' : 'select-none'}
+                onClick={onPick ? () => onPick(i) : undefined}
+              >
+                {stationNames.get(i)}
+              </text>
+            )}
             {p.station && onPick && (
               <circle cx={p.x} cy={p.y} r="7" fill="transparent" className="cursor-pointer" onClick={() => onPick(i)} />
             )}
