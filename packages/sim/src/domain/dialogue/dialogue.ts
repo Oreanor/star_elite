@@ -127,12 +127,27 @@ export function applySocial(world: World, other: ShipEntity, social: Social): vo
 }
 
 /**
+ * Сам ищет охраны: предлагает дело «проводи меня» / «отбей пиратов» или уже нанял на него
+ * командира. Такой в эскорт не нанимается — иначе в одном разговоре он платил 5500 за то,
+ * чтобы его проводили, и тут же продавал командиру своё сопровождение за 800.
+ */
+function wantsProtection(world: World, other: ShipEntity): boolean {
+  const guarded = (kind: string) => kind === 'escort' || kind === 'rescue'
+  if (other.offer && guarded(other.offer.kind)) return true
+  return (
+    other.acquaintanceId != null &&
+    world.contracts.some((c) => c.status === 'active' && c.giverId === other.acquaintanceId && guarded(c.terms.kind))
+  )
+}
+
+/**
  * Плата за сопровождение — это ТОРГ, а не прайс: базу двигают нрав и отношение.
  * Жадный дерёт больше, расположенный уступает. Насторожённый или враждебный не
  * наймётся НИ ЗА ЧТО (`null`) — сперва помирись. Так наём зависит от цены И согласия,
  * а порча отношения (нахамил, пригрозил) честно срывает возможность договориться.
  */
 export function escortFee(world: World, other: ShipEntity): number | null {
+  if (wantsProtection(world, other)) return null
   const m = moodTo(world, other)
   if (m === 'hostile' || m === 'wary') return null
   let factor = 1
@@ -177,8 +192,8 @@ export function linesFor(world: World, other: ShipEntity): Line[] {
 
     const fee = escortFee(world, other)
     const lines: Line[] = []
-    // Уже в эскорте — кнопку найма не показываем и не предлагаем модели.
-    if (other.ai?.escortOf !== player.id) {
+    // Уже в эскорте или сам ищет охраны — кнопку найма не показываем и не предлагаем модели.
+    if (other.ai?.escortOf !== player.id && !wantsProtection(world, other)) {
       lines.push({
         topic: 'escort',
         say: fee != null ? phrase('sayHireFee', { fee }) : phrase('sayHire'),
