@@ -69,7 +69,13 @@ export function HullModal({
 
   return (
     <Modal onClose={onClose}>
-      <h3 className="mb-3 text-base tracking-[0.2em]">{chassisName(player.loadout.chassis.name)}</h3>
+      {/* Шапка как у модалки слота: имя корпуса и кнопка закрытия. */}
+      <div className="mb-3 flex items-start justify-between gap-4">
+        <h3 className="text-base tracking-[0.2em]">{chassisName(player.loadout.chassis.name)}</h3>
+        <Button small variant="secondary" onClick={onClose}>
+          {t('ship.close')}
+        </Button>
+      </div>
 
       <p className="text-sm" style={{ color: DIM }}>
         {dmg <= 0

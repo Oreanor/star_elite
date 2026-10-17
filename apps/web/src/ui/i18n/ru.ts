@@ -430,7 +430,7 @@ export const RU = {
   'ship.repair.tooComplex': 'Тут за такой корпус не берутся — слишком сложно для местной мастерской.',
   'ship.buyHull': 'КУПИТЬ · {price}',
   'ship.inspect': 'ПРОСМОТРЕТЬ',
-  'ship.tryFit': 'ПРИМЕРИТЬ ОБВЕС',
+  'ship.tryFit': 'ПРИМЕРИТЬ СВОЙ ОБВЕС',
   'ship.hullBuy.title': 'ПОКУПКА КОРПУСА',
   'ship.hullBuy.tradeIn': 'примут автоматически, состояние {pct}%',
   'ship.hullBuy.overflowList': 'не встанет в слоты:',
