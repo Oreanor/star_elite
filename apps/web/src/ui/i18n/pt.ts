@@ -487,6 +487,8 @@ export const PT: Record<keyof typeof RU, string> = {
   'map.block.cruising': 'SAIA DO CRUZEIRO PRIMEIRO',
   'map.block.scaled': 'O HIPERSALTO EXIGE ESCALA 1×',
   'map.pickStation': '{n} cais — escolha onde chegar',
+  'map.select': 'ESCOLHER',
+  'map.unselect': 'REMOVER',
   'planet.surface.rocky': 'rochosa',
   'planet.surface.ice': 'gelada',
   'planet.surface.gas': 'gigante gasoso',

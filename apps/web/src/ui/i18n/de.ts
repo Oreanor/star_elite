@@ -464,6 +464,8 @@ export const DE: Record<keyof typeof RU, string> = {
   'map.block.cruising': 'ZUERST REISESCHUB BEENDEN',
   'map.block.scaled': 'HYPERSPRUNG ERFORDERT MASSSTAB 1×',
   'map.pickStation': '{n} Docks — wähl, wo du ankommst',
+  'map.select': 'WÄHLEN',
+  'map.unselect': 'ABWÄHLEN',
   'planet.surface.rocky': 'Gestein',
   'planet.surface.ice': 'Eis',
   'planet.surface.gas': 'Gasriese',

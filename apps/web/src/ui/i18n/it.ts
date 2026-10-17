@@ -464,6 +464,8 @@ export const IT: Record<keyof typeof RU, string> = {
   'map.block.cruising': 'ESCI PRIMA DALLA CROCIERA',
   'map.block.scaled': 'L’IPERSALTO RICHIEDE LA SCALA 1×',
   'map.pickStation': '{n} moli — scegli dove arrivare',
+  'map.select': 'SCEGLI',
+  'map.unselect': 'DESELEZIONA',
   'planet.surface.rocky': 'rocciosa',
   'planet.surface.ice': 'ghiacciata',
   'planet.surface.gas': 'gigante gassoso',

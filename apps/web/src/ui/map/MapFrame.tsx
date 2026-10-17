@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { UI } from '../theme'
 import { t } from '../i18n'
 
@@ -83,7 +83,16 @@ export function MapCard({
   color,
   lines,
   body,
+  extra,
+  action,
 }: {
+  /** Сведения под строками: у системы — характеристики и схема выхода. */
+  extra?: React.ReactNode
+  /**
+   * Кнопка внизу: «ВЫБРАТЬ» ставит цель (как Tab в космосе, цель прыжка, цель перехода),
+   * у уже выбранного — «СНЯТЬ ВЫБОР». Рассматривать и выбирать — разные действия.
+   */
+  action?: { selected: boolean; onClick: () => void }
   /**
    * Своё содержимое вместо «род: имя» и строк — у бортов паспорт пилота (`PilotIdentity`),
    * тот же, что во вкладке «Люди» и в шапке разговора. Рамка и фон карточки остаются.
@@ -123,6 +132,19 @@ export function MapCard({
             ))}
         </>
       )}
+      {extra}
+      {action && (
+        <div className="mt-3 flex justify-center">
+          <button
+            type="button"
+            onClick={action.onClick}
+            className="cursor-pointer border px-4 py-1.5 text-xs tracking-[0.25em] transition-colors ui-btn"
+            style={{ borderColor: UI.PRIMARY, color: UI.PRIMARY }}
+          >
+            {action.selected ? t('map.unselect') : t('map.select')}
+          </button>
+        </div>
+      )}
     </div>
   )
 }
@@ -149,7 +171,7 @@ export function MapPin({ x, y, wide, children }: { x: number; y: number; wide?: 
       }}
     >
       {/* Сама карточка кликабельна (в ней бывают кнопки), а поле под булавкой — нет. */}
-      <div className="pointer-events-auto">{children}</div>
+      <div className="pointer-events-auto" data-map-card>{children}</div>
     </div>
   )
 }
@@ -261,4 +283,49 @@ export function SortToggle({ value, onChange }: { value: ListSort; onChange: (v:
       })}
     </div>
   )
+}
+
+/** Сдвиг указателя, пикс., до которого нажатие ещё клик, а не вращение поля. */
+const TAP_SLOP = 4
+
+/**
+ * ЧТО РАССМАТРИВАЕМ на карте — одно правило на все четыре вида (локатор, система,
+ * галактика, мир). Клик по объекту (на поле или в списке) только ОТКРЫВАЕТ его плашку:
+ * посмотреть — ещё не выбрать. Цель ставит кнопка «ВЫБРАТЬ» в самой плашке. Клик мимо —
+ * по пустому полю — плашку закрывает; крестика нет.
+ *
+ * «Мимо» — клик без вращения, не попавший ни в объект, ни в саму плашку (`data-map-card`).
+ */
+export function useInspect<K extends string | number>() {
+  const [inspected, setInspected] = useState<K | null>(null)
+  const picked = useRef(false)
+  // Слушаем ОКНО, а не поле: «мимо» — это любое место вне плашки (пустая панель, строка
+  // без объекта), а не только диск. Обработчики объектов (React и r3f) срабатывают раньше,
+  // чем клик всплывёт до окна, и успевают сказать «это был выбор» через `inspect`.
+  useEffect(() => {
+    let down: { x: number; y: number } | null = null
+    const onDown = (e: PointerEvent) => {
+      down = { x: e.clientX, y: e.clientY }
+    }
+    const onClick = (e: MouseEvent) => {
+      const moved = down ? Math.hypot(e.clientX - down.x, e.clientY - down.y) : 0
+      const onCard = e.target instanceof Element && e.target.closest('[data-map-card]') != null
+      if (!picked.current && !onCard && moved <= TAP_SLOP) setInspected(null)
+      picked.current = false
+    }
+    window.addEventListener('pointerdown', onDown, true)
+    window.addEventListener('click', onClick)
+    return () => {
+      window.removeEventListener('pointerdown', onDown, true)
+      window.removeEventListener('click', onClick)
+    }
+  }, [])
+  return {
+    inspected,
+    inspect: (key: K) => {
+      picked.current = true
+      setInspected(key)
+    },
+    close: () => setInspected(null),
+  }
 }

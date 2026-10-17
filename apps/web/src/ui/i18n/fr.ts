@@ -463,6 +463,8 @@ export const FR: Record<keyof typeof RU, string> = {
   'map.block.cruising': 'QUITTEZ LA CROISIÈRE D\'ABORD',
   'map.block.scaled': 'L’HYPERSAUT EXIGE L’ÉCHELLE 1×',
   'map.pickStation': '{n} quais — choisissez où arriver',
+  'map.select': 'CHOISIR',
+  'map.unselect': 'RETIRER',
   'planet.surface.rocky': 'rocheuse',
   'planet.surface.ice': 'glacée',
   'planet.surface.gas': 'géante gazeuse',

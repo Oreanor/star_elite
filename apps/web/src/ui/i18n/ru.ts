@@ -487,6 +487,8 @@ export const RU = {
   'map.block.cruising': 'СБРОСЬТЕ КРЕЙСЕРСКИЙ ХОД',
   'map.block.scaled': 'ГИПЕРПРЫЖОК ТОЛЬКО В МАСШТАБЕ 1×',
   'map.pickStation': 'причалов: {n} — выбери, к какому выйти',
+  'map.select': 'ВЫБРАТЬ',
+  'map.unselect': 'СНЯТЬ ВЫБОР',
   'planet.surface.rocky': 'скалистая',
   'planet.surface.ice': 'ледяная',
   'planet.surface.gas': 'газовый гигант',

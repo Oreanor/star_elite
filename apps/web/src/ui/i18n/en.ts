@@ -464,6 +464,8 @@ export const EN: Record<keyof typeof RU, string> = {
   'map.block.cruising': 'DROP OUT OF CRUISE FIRST',
   'map.block.scaled': 'HYPERJUMP REQUIRES 1× SCALE',
   'map.pickStation': '{n} docks — pick where to arrive',
+  'map.select': 'SELECT',
+  'map.unselect': 'DESELECT',
   'planet.surface.rocky': 'rocky',
   'planet.surface.ice': 'ice',
   'planet.surface.gas': 'gas giant',

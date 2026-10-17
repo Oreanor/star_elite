@@ -24,7 +24,7 @@ import { nameOfVertex, vertexOfNode } from '../../render/scene/torusNodes'
 import { UI } from '../theme'
 import { properName } from '../i18n/dataNames'
 import { t } from '../i18n'
-import { MapCard, MapFrame, MapRow } from './MapFrame'
+import { MapCard, MapFrame, MapRow, useInspect } from './MapFrame'
 
 /**
  * КАРТА МИРА — вселенная как ОБЫЧНЫЙ ШАР вокруг корабля, который вертят мышью.
@@ -103,6 +103,7 @@ const _v = new Vector3()
 function Field({
   items,
   selected,
+  inspected,
   homeVertex,
   nose,
   onPick,
@@ -110,6 +111,8 @@ function Field({
 }: {
   items: Item[]
   selected: number | null
+  /** Рассматриваемая галактика — у неё булавкой висит плашка. */
+  inspected: number | null
   homeVertex: number
   nose: Vector3
   onPick: (vertex: number) => void
@@ -312,7 +315,7 @@ function Field({
     // группы (`updateMatrixWorld`), иначе плашка отставала бы от точки на кадр.
     const el = pin.current
     if (!el) return
-    const item = selected != null ? items.find((it) => it.vertex === selected) : undefined
+    const item = inspected != null ? items.find((it) => it.vertex === inspected) : undefined
     if (!item) {
       el.style.opacity = '0'
       return
@@ -382,7 +385,10 @@ export function UniverseMap({ onClose }: { onClose: () => void }) {
    * она уже помечена, когда откроешь карту. Двух списков «что выбрано» быть не должно.
    */
   const [selected, setSelected] = useState<number | null>(torusTargetVertex())
-  const pick = (vertex: number) => {
+  // Клик по точке или строке только ОТКРЫВАЕТ плашку галактики; цель перехода ставит кнопка
+  // «ВЫБРАТЬ» в плашке, клик мимо плашку закрывает (`useInspect`).
+  const card = useInspect<number>()
+  const choose = (vertex: number | null) => {
     selectTorusTarget(vertex)
     setSelected(vertex)
   }
@@ -395,6 +401,7 @@ export function UniverseMap({ onClose }: { onClose: () => void }) {
   }, [items, query])
 
   const target = items.find((it) => it.vertex === selected) ?? null
+  const inspectedItem = items.find((it) => it.vertex === card.inspected) ?? null
   /** Плашка цели поверх поля: позицию ей пишет кадр внутри `Field`, а не React. */
   const pin = useRef<HTMLDivElement>(null)
 
@@ -424,13 +431,12 @@ export function UniverseMap({ onClose }: { onClose: () => void }) {
                 meta={`${Math.round((it.gamma * 180) / Math.PI)}°`}
                 color={UI.PRIMARY}
                 active={it.vertex === selected}
-                onClick={() => pick(it.vertex)}
+                onClick={() => card.inspect(it.vertex)}
               />
             ))}
           </div>
 
-          {/* Отдельной кнопки «ЦЕЛЬ» нет: выбор применяется сразу по клику — и на карте, и в
-              комнате. Здесь остаётся только тронуться, а закрыть карту — общий выход панели. */}
+          {/* Цель ставит «ВЫБРАТЬ» в плашке; здесь — тронуться к ней. Закрыть карту — общий выход панели. */}
           <button
             type="button"
             disabled={target === null}
@@ -474,28 +480,33 @@ export function UniverseMap({ onClose }: { onClose: () => void }) {
           <Field
             items={items}
             selected={selected}
+            inspected={card.inspected}
             homeVertex={homeVertex}
             nose={nose}
-            onPick={pick}
+            onPick={card.inspect}
             pin={pin}
           />
         </Canvas>
 
         {/* Карточка цели — поверх поля, у самой точки. Не часть вёрстки: её появление
             ничего не двигает, а место ей каждый кадр считает `Field`. */}
-        {target && (
-          <div ref={pin} className="pointer-events-none absolute left-0 top-0 z-30 w-64 max-w-[80%] opacity-0" style={{ willChange: 'transform' }}>
+        {inspectedItem && (
+          <div ref={pin} data-map-card className="absolute left-0 top-0 z-30 w-64 max-w-[80%] opacity-0" style={{ willChange: 'transform' }}>
             <MapCard
               kind={t('map.view.galaxy')}
-              name={properName(target.name).toUpperCase()}
+              name={properName(inspectedItem.name).toUpperCase()}
               color={UI.PRIMARY}
               lines={[
                 // Дальность — в градусах дуги: 0° под ногами, 180° край мира. Единственная
                 // честная мера в замкнутой вселенной, где «километров до» не существует.
-                `${t('map.distance')}: ${Math.round((target.gamma * 180) / Math.PI)}°`,
-                target.vertex === homeVertex ? 'ДОМ' : null,
-                target.vertex === TORUS.MONUMENT_NODE ? 'КРЕСТЫ' : null,
+                `${t('map.distance')}: ${Math.round((inspectedItem.gamma * 180) / Math.PI)}°`,
+                inspectedItem.vertex === homeVertex ? 'ДОМ' : null,
+                inspectedItem.vertex === TORUS.MONUMENT_NODE ? 'КРЕСТЫ' : null,
               ]}
+              action={{
+                selected: inspectedItem.vertex === selected,
+                onClick: () => choose(inspectedItem.vertex === selected ? null : inspectedItem.vertex),
+              }}
             />
           </div>
         )}

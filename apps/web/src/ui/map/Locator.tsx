@@ -21,7 +21,7 @@ import { t, useLang } from '../i18n'
 import { figurineTitleLocal, chassisName, occupationName, properName } from '../i18n/dataNames'
 import { formatDistance } from '../hud/project'
 import { useWheelZoom } from './useWheelZoom'
-import { bySort, discProject, MapCard, MapFrame, MapPin, MapRow, SortToggle, type ListSort } from './MapFrame'
+import { bySort, discProject, MapCard, MapFrame, MapPin, MapRow, SortToggle, useInspect, type ListSort } from './MapFrame'
 import { PilotPortrait } from '../station/chrome'
 import { PilotIdentity } from '../station/PilotIdentity'
 
@@ -319,7 +319,11 @@ export function Locator({ world }: { world: World }) {
     .sort((a, b) => b.base.depth - a.base.depth)
   // Карточка: выбранная цель важнее наведения — пилот видит, что захватил. Держим и место
   // отметки на экране: карточка висит булавкой У НЕЁ, а не в колонке.
-  const active = marks.find((m) => m.b.ring) ?? marks.find((m) => m.b.key === hover) ?? null
+  // Плашка — у РАССМАТРИВАЕМОЙ отметки (клик), а нет её — у наведённой. Цель ставит кнопка
+  // в плашке (`useInspect`), тем же захватом, что Tab в космосе.
+  const card = useInspect<string>()
+  const active = marks.find((m) => m.b.key === card.inspected) ?? marks.find((m) => m.b.key === hover) ?? null
+  const pickActive = active?.b.key === card.inspected ? active : null
 
   // Обод, сетка и конус — через ту же проекцию. Кольца сетки: эллипсы rx=r·zoom, ry=r·cos·zoom.
   const gridRings = [0.25, 0.5, 0.75, 1]
@@ -354,10 +358,7 @@ export function Locator({ world }: { world: World }) {
                 active={b.ring}
                 hover={b.key === hover}
                 onHover={(on) => setHover((h) => (on ? b.key : h === b.key ? null : h))}
-                onClick={() => {
-                  applySelect(world, b.selectKind, b.selectId)
-                  bump()
-                }}
+                onClick={() => card.inspect(b.key)}
               />
             </li>
           ))}
@@ -437,8 +438,7 @@ export function Locator({ world }: { world: World }) {
                 onMouseLeave={() => setHover((h) => (h === b.key ? null : h))}
                 onClick={() => {
                   if (dragged.current) return
-                  applySelect(world, b.selectKind, b.selectId)
-                  bump()
+                  card.inspect(b.key)
                 }}
                 style={{ cursor: 'pointer' }}
               >
@@ -470,6 +470,17 @@ export function Locator({ world }: { world: World }) {
               name={active.b.title}
               color={active.b.color}
               lines={[...active.b.lines, `${t('map.distance')}: ${formatDistance(active.b.dist)}`]}
+              action={
+                pickActive
+                  ? {
+                      selected: pickActive.b.ring,
+                      onClick: () => {
+                        applySelect(world, pickActive.b.selectKind, pickActive.b.selectId)
+                        bump()
+                      },
+                    }
+                  : undefined
+              }
               body={
                 active.b.ship ? (
                   // Борт — тем же паспортом пилота, что во вкладке «Люди» и в разговоре;

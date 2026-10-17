@@ -15,6 +15,7 @@ import { UI } from '../theme'
 import { t } from '../i18n'
 import { lifeName, properName, starClassName } from '../i18n/dataNames'
 import { LY_PER_PARSEC, formatStarSize } from './GalaxyScene'
+import { MapCard } from './MapFrame'
 
 /**
  * Карточка системы на карте галактики: сведения, выбор станции прибытия и схема-оррерий.
@@ -52,30 +53,26 @@ export interface Ring {
 }
 
 /**
- * Плашка выбранной системы — та же, что у причала: имя, миры, жизнь и схемка выхода
- * у станции. Кнопки прыжка нет нигде: метка пишется в мир и переживает отчаливание;
- * гипер — только клавишей H в космосе, когда привод и заряд позволяют.
+ * Плашка системы на карте галактики — та же карточка `MapCard`, что на локаторе, в системе и
+ * в мире: «СИСТЕМА: имя», сведения, кнопка «ВЫБРАТЬ». Рассматривать систему и целиться в неё —
+ * разные действия: кнопка ставит цель прыжка, и только у цели схема выхода кликается
+ * (`onArrival`). Кнопки прыжка нет: гипер — клавишей H в космосе.
  */
 export function SystemPopup({
   system,
   world,
   index,
   docked,
-  at,
-  inline = false,
   onArrival,
-  onClose,
+  action,
 }: {
   system: StarSystem
   world: World
   index: number
   docked: boolean
-  /** Позиция плашки у курсора — только для всплывающего режима. В `inline` не нужна. */
-  at?: { x: number; y: number; w: number; h: number }
-  /** Встроена в колонку инфо (статичная карточка), а не всплывает у курсора. */
-  inline?: boolean
-  onArrival: (planet: number | null) => void
-  onClose: () => void
+  /** Назначить точку выхода. null — система лишь рассматривается, схема только для справки. */
+  onArrival: ((planet: number | null) => void) | null
+  action: { selected: boolean; onClick: () => void }
 }) {
   const def = useMemo(() => systemDefFor(index, world.galaxySeed), [index, world.galaxySeed])
   const core = index === CORE_INDEX
@@ -94,36 +91,15 @@ export function SystemPopup({
     [system, stations],
   )
 
-  // Всплывающий режим — прижимаем плашку к полю карты у курсора. Встроенная (`inline`)
-  // карточка просто течёт в колонке инфо: ни абсолюта, ни фиксированной ширины.
-  const PW = 384
-  const PH = 220
-  const pos = at && !inline
-    ? { left: Math.max(8, Math.min(at.x + 12, at.w - PW - 8)), top: Math.max(8, Math.min(at.y, at.h - PH - 8)) }
-    : null
-
   return (
-    <div
-      className={inline ? 'rounded-lg border p-3' : 'absolute z-30 w-96 rounded-lg border p-4 backdrop-blur-md'}
-      style={{
-        ...(pos ?? {}),
-        borderColor: 'rgba(124,196,255,0.4)',
-        background: 'rgba(8,22,42,0.88)',
-        boxShadow: '0 0 30px rgba(60,150,255,0.2)',
-        color: UI.PRIMARY,
-      }}
-      onPointerDown={(e) => e.stopPropagation()}
-      onClick={(e) => e.stopPropagation()}
-    >
-      <div className="flex flex-col">
-        <div className="flex min-w-0 flex-1 flex-col">
-          <div className="flex items-start justify-between gap-3">
-            <h3 className="text-base leading-tight tracking-[0.2em]">{properName(system.name).toUpperCase()}</h3>
-            <button type="button" onClick={onClose} className="cursor-pointer text-lg leading-none" style={{ color: UI.DIM }}>
-              ×
-            </button>
-          </div>
-
+    <MapCard
+      kind={t('map.view.system')}
+      name={properName(system.name).toUpperCase()}
+      color={UI.PRIMARY}
+      lines={[]}
+      action={action}
+      extra={
+        <div style={{ color: UI.PRIMARY }}>
           <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
             <Row
               label={t('map.class')}
@@ -141,30 +117,32 @@ export function SystemPopup({
           {core && <p className="mt-3 text-[11px] leading-relaxed" style={{ color: UI.WARN }}>{t('map.core')}</p>}
 
           {blocked && (
-            <p
-              className="mt-auto pt-3 text-[11px] tracking-widest"
-              style={{ color: UI.WARN }}
-            >
+            <p className="pt-3 text-[11px] tracking-widest" style={{ color: UI.WARN }}>
               {blockLabel(blocked)}
             </p>
           )}
-        </div>
 
-        {/* Схема идёт отдельной строкой: длинные значения характеристик больше не заходят под неё. */}
-        {def.planets.length > 0 && (
-          <div className="mt-4 border-t pt-4" style={{ borderColor: 'rgba(124,196,255,0.18)' }}>
-            <div className="mx-auto w-full max-w-52">
-              <StationPicker def={def} stationPlanets={stationPlanets} selected={world.jumpArrivalPlanet} onPick={onArrival} />
-              {stations.length > 1 && (
-                <p className="mt-2 text-[10px] leading-tight" style={{ color: UI.DIM }}>
-                  {t('map.pickStation', { n: stations.length })}
-                </p>
-              )}
+          {/* Схема отдельной строкой: длинные значения характеристик не заходят под неё. */}
+          {def.planets.length > 0 && (
+            <div className="mt-4 border-t pt-4" style={{ borderColor: 'rgba(124,196,255,0.18)' }}>
+              <div className="mx-auto w-full max-w-52">
+                <StationPicker
+                  def={def}
+                  stationPlanets={stationPlanets}
+                  selected={onArrival ? world.jumpArrivalPlanet : null}
+                  onPick={onArrival}
+                />
+                {onArrival && stations.length > 1 && (
+                  <p className="mt-2 text-[10px] leading-tight" style={{ color: UI.DIM }}>
+                    {t('map.pickStation', { n: stations.length })}
+                  </p>
+                )}
+              </div>
             </div>
-          </div>
-        )}
-      </div>
-    </div>
+          )}
+        </div>
+      }
+    />
   )
 }
 
@@ -184,7 +162,8 @@ function StationPicker({
   stationPlanets: Set<number>
   /** Индекс планеты-со-станцией, у которой назначен выход, или null — у звезды. */
   selected: number | null
-  onPick: (planet: number | null) => void
+  /** null — схема для справки: система не цель прыжка, выход назначать некуда. */
+  onPick: ((planet: number | null) => void) | null
 }) {
   const plotted = rings(def, stationPlanets)
   if (plotted.length === 0) return null
@@ -199,8 +178,8 @@ function StationPicker({
           cy={ORRERY_CENTRE}
           r="6"
           fill={`#${def.star.color.toString(16).padStart(6, '0')}`}
-          className="cursor-pointer"
-          onClick={() => onPick(null)}
+          className={onPick ? 'cursor-pointer' : undefined}
+          onClick={onPick ? () => onPick(null) : undefined}
         />
         {plotted.map((p, i) => (
           <g key={p.name}>
@@ -208,7 +187,7 @@ function StationPicker({
             {/* Планета со станцией светит фосфором и кликается; прочие — тусклые, мимо них. */}
             <circle cx={p.x} cy={p.y} r={p.giant ? 3.4 : 2} fill={p.station ? UI.PRIMARY : UI.DIM} opacity={p.station ? 1 : 0.4} />
             {/* Зона под палец: в точку в 2 единицы мышью не попасть. Только у станций. */}
-            {p.station && (
+            {p.station && onPick && (
               <circle cx={p.x} cy={p.y} r="7" fill="transparent" className="cursor-pointer" onClick={() => onPick(i)} />
             )}
           </g>

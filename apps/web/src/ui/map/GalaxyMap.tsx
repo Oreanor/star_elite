@@ -1,7 +1,7 @@
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import { useWheelZoom } from './useWheelZoom'
-import { MapFrame, MapRow } from './MapFrame'
+import { MapFrame, MapRow, useInspect } from './MapFrame'
 import {
   Vector3,
 } from 'three'
@@ -195,6 +195,9 @@ function GalaxyMapImpl({ onClose, embedded = false }: { onClose: () => void; emb
   // Выбор берётся из МИРА и туда же пишется: намеченная у причала цель обязана
   // пережить закрытие карты и отчаливание — прыгать-то можно только отчалив.
   const [selected, setSelected] = useState<number | null>(world.jumpTargetIndex)
+  // Клик по звезде только ОТКРЫВАЕТ плашку системы — посмотреть. Цель прыжка ставит кнопка
+  // «ВЫБРАТЬ» в плашке; клик мимо плашку закрывает (`useInspect`).
+  const card = useInspect<number>()
 
   // Фильтр по характеру системы: всё / со станциями (разумная раса колонизовала) /
   // с примитивной жизнью (фауна, без причала) / пустые (нет обитаемых миров). Отсеянные
@@ -267,14 +270,14 @@ function GalaxyMapImpl({ onClose, embedded = false }: { onClose: () => void; emb
   const control = useRef({ yaw: 0.6, pitch: 0.5, distance: GALAXY.RADIUS_LY * 2.6, target: new Vector3() })
   const dragging = useRef(false)
   const label = useRef<HTMLDivElement>(null)
-  const card = useRef<HTMLDivElement>(null)
+  const cardBox = useRef<HTMLDivElement>(null)
   /** Куда оттащили карточку. Пишет драг, читает кадр — React в этом не участвует. */
   const cardDrag = useRef<CardDrag>({ pinned: null })
   // Выбрал другую звезду — плашка возвращается к ней. Оттащенное место принадлежало
   // прежней системе, и держать новую карточку там значило бы отвязать её от карты вовсе.
   useEffect(() => {
     cardDrag.current.pinned = null
-  }, [selected])
+  }, [card.inspected])
   const you = useRef<HTMLDivElement>(null)
   const viewport = useRef<HTMLDivElement>(null)
   // Метки знакомых: где живые контакты по системам. Div'ы подписей собираем в карту по
@@ -385,7 +388,7 @@ function GalaxyMapImpl({ onClose, embedded = false }: { onClose: () => void; emb
                   active={s.index === selected}
                   hover={s.index === hovered}
                   onHover={(on) => setHovered((h) => (on ? s.index : h === s.index ? null : h))}
-                  onClick={() => chooseSystem(s.index)}
+                  onClick={() => card.inspect(s.index)}
                 />
               </li>
             ))}
@@ -423,7 +426,7 @@ function GalaxyMapImpl({ onClose, embedded = false }: { onClose: () => void; emb
             visible={visible}
             current={world.systemIndex}
             onHover={setHovered}
-            onSelect={chooseSystem}
+            onSelect={card.inspect}
           />
           <JumpSphere at={here} charge={world.player.jumpCharge} max={world.player.spec.jumpRange} />
           <YouAreHere at={here} />
@@ -439,7 +442,7 @@ function GalaxyMapImpl({ onClose, embedded = false }: { onClose: () => void; emb
           <Route from={here} to={picked ? positionOf(picked.system) : null} />
           <StarLabel at={picked ? positionOf(picked.system) : null} box={label} />
           {/* Плашка выбранной системы едет за своей звездой — её место считает кадр. */}
-          <CardPin at={selected != null && systems[selected] ? positionOf(systems[selected]!) : null} box={card} drag={cardDrag} />
+          <CardPin at={card.inspected != null && systems[card.inspected] ? positionOf(systems[card.inspected]!) : null} box={cardBox} drag={cardDrag} />
         </Canvas>
 
         {/* Подпись «ВЫ» и имя под курсором живут всегда: их двигает кадр, а не React. */}
@@ -504,33 +507,48 @@ function GalaxyMapImpl({ onClose, embedded = false }: { onClose: () => void; emb
         {/* Высота ограничена полем карты, а лишнее прокручивается внутри: карточка с полной
             схемой выхода выше поля, и без этого её низ уходил под обрез рамки (та с
             `overflow-hidden`) — читать было нечего. */}
-        {selected != null && systems[selected] && (
-          <div
-            ref={card}
-            className="absolute left-0 top-0 z-30 flex max-h-full w-96 max-w-[80%] cursor-grab flex-col overflow-y-auto overscroll-contain opacity-0 active:cursor-grabbing"
-            style={{ willChange: 'transform' }}
-            onPointerDown={(e) => beginCardDrag(e, card.current, cardDrag.current)}
-          >
-            <SystemPopup
-              key={selected}
-              inline
-              system={systems[selected]!}
-              world={world}
-              index={selected}
-              docked={world.docked}
-              onArrival={(planet) => {
-                world.jumpArrivalPlanet = planet
-                bump()
-              }}
-              onClose={() => {
-                setSelected(null)
-                world.jumpTargetIndex = null
-                world.jumpArrivalPlanet = null
-                bump()
-              }}
-            />
-          </div>
-        )}
+        {card.inspected != null && systems[card.inspected] && (() => {
+          const index = card.inspected
+          const target = index === selected
+          return (
+            <div
+              data-map-card
+              ref={cardBox}
+              className="absolute left-0 top-0 z-30 flex max-h-full w-96 max-w-[80%] cursor-grab flex-col overflow-y-auto overscroll-contain opacity-0 active:cursor-grabbing"
+              style={{ willChange: 'transform' }}
+              onPointerDown={(e) => beginCardDrag(e, cardBox.current, cardDrag.current)}
+            >
+              <SystemPopup
+                key={index}
+                system={systems[index]!}
+                world={world}
+                index={index}
+                docked={world.docked}
+                // Точку выхода назначают только у ЦЕЛИ прыжка: у просто рассматриваемой
+                // системы схема — справка, а не выбор.
+                onArrival={
+                  target
+                    ? (planet) => {
+                        world.jumpArrivalPlanet = planet
+                        bump()
+                      }
+                    : null
+                }
+                action={{
+                  selected: target,
+                  onClick: () => {
+                    if (target) {
+                      setSelected(null)
+                      world.jumpTargetIndex = null
+                      world.jumpArrivalPlanet = null
+                      bump()
+                    } else chooseSystem(index)
+                  },
+                }}
+              />
+            </div>
+          )
+        })()}
       </div>
     </MapFrame>
   )

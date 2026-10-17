@@ -14,7 +14,7 @@ import { t, useLang } from '../i18n'
 import { figurineTitleLocal, properName } from '../i18n/dataNames'
 import { formatDistance } from '../hud/project'
 import { useWheelZoom } from './useWheelZoom'
-import { bySort, discProject, MapCard, MapFrame, MapPin, MapRow, SortToggle, type ListSort } from './MapFrame'
+import { bySort, discProject, MapCard, MapFrame, MapPin, MapRow, SortToggle, useInspect, type ListSort } from './MapFrame'
 
 /**
  * Карта системы — голограмма над консолью.
@@ -292,6 +292,7 @@ export function SystemMap({
   const points = markers(world)
   // Выбор цели: и клик по метке на диске, и строка списка ведут сюда — одно состояние
   // `navTargetId`, одна подсветка. Тот же клик по выбранному снимает выбор.
+  const card = useInspect<number>()
   const applySelect = (id: number) => {
     // Карта пишет в тот же нав-захват, что Shift+Tab; контакт гасим — один фокус.
     if (world.navTargetId === id && world.targetFocus === 'nav') {
@@ -307,7 +308,7 @@ export function SystemMap({
   // следующем pointerdown). Список к драгу отношения не имеет и зовёт applySelect напрямую.
   const selectFromMap = (id: number) => {
     if (dragged.current) return
-    applySelect(id)
+    card.inspect(id)
   }
 
   // Выбранную строку подтягиваем в видимую часть списка: клик по дальней планете на диске
@@ -318,7 +319,9 @@ export function SystemMap({
 
   // Карточка показывает захваченное, а нет захвата — то, на что смотрит курсор: тот же
   // порядок, что на локаторе (выбор важнее наведения).
-  const shown = points.find((m) => m.id === world.navTargetId) ?? points.find((m) => m.id === hover) ?? null
+  // Плашка — у рассматриваемого (клик), иначе у наведённого. Цель — кнопкой в плашке.
+  const shown = points.find((m) => m.id === card.inspected) ?? points.find((m) => m.id === hover) ?? null
+  const inspecting = shown != null && shown.id === card.inspected
 
   const content = (
     <MapFrame
@@ -342,7 +345,7 @@ export function SystemMap({
                   active={m.id === world.navTargetId}
                   hover={m.id === hover}
                   onHover={(on) => setHover((h) => (on ? m.id : h === m.id ? null : h))}
-                  onClick={() => applySelect(m.id)}
+                  onClick={() => card.inspect(m.id)}
                 />
               </li>
             ))}
@@ -392,6 +395,11 @@ export function SystemMap({
                 name={properName(shown.name)}
                 color={shown.tint ?? colourOf(shown.kind)}
                 lines={[`${t('map.distance')}: ${formatDistance(shown.range)}`]}
+                action={
+                  inspecting
+                    ? { selected: world.navTargetId === shown.id && world.targetFocus === 'nav', onClick: () => applySelect(shown.id) }
+                    : undefined
+                }
               />
             </MapPin>
           )
