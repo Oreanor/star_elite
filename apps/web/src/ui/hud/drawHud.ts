@@ -21,7 +21,6 @@ import {
   type World,
 } from '@elite/sim'
 import { bombFlash, bombRing } from '../../render/bombFeel'
-import { currentGameDate } from '../clock'
 import { undocking } from '../../session/undockFx'
 import { drawUndockTunnel } from './drawUndock'
 import { galaxyRadar, galaxyRadarUsable } from '../../render/scene/galaxyRadar'
@@ -36,6 +35,7 @@ import { HudFrame, S, bodyColor, fitHudScale, formatLy, hudGalaxyFor, isOnScreen
 import { drawBushLocator, drawTorusLabels, drawTorusMarkers } from './hudBush'
 import { drawRadar } from './hudRadar'
 import { drawReadouts } from './hudReadouts'
+import { drawWallet } from './hudWallet'
 import { drawTargetPanels } from './hudTargetPanels'
 import { gatherWarnings, paintWarningPlate } from './hudWarnings'
 
@@ -81,7 +81,7 @@ export function drawHud(frame: HudFrame): void {
   // Счётчик кадров рисуется ДО проверки на гибель: узнать, во что превратилась
   // частота, важнее всего именно тогда, когда на экране взрыв.
   drawFps(frame)
-  drawDate(frame)
+  drawWallet(frame)
 
   // Экран смерти — React-оверлей: там нужны кнопки и курсор.
   if (!world.player.alive) return
@@ -222,14 +222,6 @@ function drawFps({ ctx, width, fps }: HudFrame): void {
 }
 
 /**
- * Игровая дата в левом верхнем углу — симметрично счётчику кадров справа. Тускло:
- * HUD, станция и журналы — общий календарь (`app/net/worldClock`), не `world.time`.
- */
-function drawDate({ ctx }: HudFrame): void {
-  text(ctx, currentGameDate(), 6 * S, 5 * S, HUD_COLORS.DIM, 'left')
-}
-
-/**
  * Прицел — там, где СХОДЯТСЯ СТВОЛЫ, а не там, где мышь.
  * Мышь у нас виртуальная ручка: она задаёт угловую скорость, а не точку.
  *
@@ -343,7 +335,7 @@ function drawOffscreenArrows(frame: HudFrame): void {
   }
 
   const nav = navTarget(world)
-  if (nav) offscreenArrow(frame, nav.pos, navMarkerColor(nav), true)
+  if (nav) offscreenArrow(frame, nav.pos, navMarkerColor(nav), true, formatDistance(Math.max(0, shipDistance(world, nav.pos) - nav.radius)))
 }
 
 /**
@@ -365,7 +357,7 @@ function drawTargetLock(frame: HudFrame): void {
       text(ctx, formatDistance(Math.max(0, shipDistance(world, pos) - surfaceR)), p.x, p.y + 16 * S, color, 'center')
       if (label) text(ctx, label, p.x, p.y - 20 * S, color, 'center')
     } else {
-      offscreenArrow(frame, pos, color, true)
+      offscreenArrow(frame, pos, color, true, formatDistance(Math.max(0, shipDistance(world, pos) - surfaceR)))
     }
   }
 
@@ -382,16 +374,8 @@ function drawTargetLock(frame: HudFrame): void {
     const nav = navTarget(world)
     if (!nav) return
     if (stellarOnly && nav.kind !== 'star' && nav.kind !== 'blackhole') return
-    const surfaceR =
-      nav.kind === 'planet' ||
-      nav.kind === 'moon' ||
-      nav.kind === 'star' ||
-      nav.kind === 'monolith' ||
-      nav.kind === 'figurine' ||
-      nav.kind === 'asteroid'
-        ? nav.radius
-        : 0
-    mark(nav.pos, navMarkerColor(nav), properName(nav.name), surfaceR)
+    // До поверхности любой нав-цели — как панель цели и подсказка причала (`stationRange`).
+    mark(nav.pos, navMarkerColor(nav), properName(nav.name), nav.radius)
   }
 }
 
@@ -491,10 +475,10 @@ function collectMarkers(world: World, ships = false): Marker[] {
       // Станция и спутник вторичны — их подпись уступает планете, к которой они
       // липнут. Звезда и планета — ориентиры, подписаны всегда.
       primary: body.kind === 'star' || body.kind === 'planet' || body.kind === 'blackhole',
-      // До поверхности садишься, а не в центр: у крупных тел (планета/луна/звезда) дистанцию
-      // меряем от поверхности. Станция/чёрная дыра — точечные ориентиры, у них центр.
-      surfaceR:
-        body.kind === 'planet' || body.kind === 'moon' || body.kind === 'star' ? body.radius : 0,
+      // До поверхности, а не до центра — у ВСЕХ тел, и у станции тоже: у Кориолиса радиус
+      // около километра, и метка «3 км» при подсказке «ПРИЧАЛ 2 км» (та меряет до корпуса,
+      // `stationRange`) — два ответа на один вопрос. Врезаешься и стыкуешься у корпуса.
+      surfaceR: body.radius,
     })
   }
   // Киты — тоже ориентиры: их МАРКУ пилот должен прочесть, это событие в системе.
