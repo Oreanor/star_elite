@@ -85,7 +85,7 @@ export interface CardDrag {
  */
 function beginCardDrag(e: React.PointerEvent, el: HTMLDivElement | null, drag: CardDrag): void {
   if (!el || e.button !== 0) return
-  if ((e.target as HTMLElement).closest('button, a, input, select, textarea')) return
+  if ((e.target as Element).closest('button, a, input, select, textarea, [data-no-drag]')) return
 
   const field = el.offsetParent as HTMLElement | null
   if (!field) return
@@ -530,16 +530,13 @@ function GalaxyMapImpl({ onClose, embedded = false }: { onClose: () => void; emb
                 world={world}
                 index={index}
                 docked={world.docked}
-                // Точку выхода назначают только у ЦЕЛИ прыжка: у просто рассматриваемой
-                // системы схема — справка, а не выбор.
-                onArrival={
-                  target
-                    ? (planet) => {
-                        world.jumpArrivalPlanet = planet
-                        bump()
-                      }
-                    : null
-                }
+                // Ткнул в причал на схеме — это и выбор цели, и точка выхода разом: выбирать
+                // систему отдельной кнопкой, чтобы потом ткнуть в её станцию, — лишний шаг.
+                onArrival={(planet) => {
+                  if (!target) chooseSystem(index)
+                  world.jumpArrivalPlanet = planet
+                  bump()
+                }}
                 action={{
                   selected: target,
                   onClick: () => {

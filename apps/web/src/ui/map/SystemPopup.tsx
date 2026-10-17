@@ -71,8 +71,8 @@ export function SystemPopup({
   world: World
   index: number
   docked: boolean
-  /** Назначить точку выхода. null — система лишь рассматривается, схема только для справки. */
-  onArrival: ((planet: number | null) => void) | null
+  /** Назначить точку выхода (у не-цели — заодно выбрать систему целью). */
+  onArrival: (planet: number | null) => void
   action: { selected: boolean; onClick: () => void }
 }) {
   const def = useMemo(() => systemDefFor(index, world.galaxySeed), [index, world.galaxySeed])
@@ -151,10 +151,11 @@ export function SystemPopup({
                   def={def}
                   stationPlanets={stationPlanets}
                   stationNames={stationNames}
-                  selected={onArrival ? world.jumpArrivalPlanet : null}
-                  onPick={onArrival}
+                  selected={action.selected ? world.jumpArrivalPlanet : null}
+                  // К недостижимой звезде выхода не назначишь: туда не прыгнуть вовсе.
+                  onPick={unreachable && !action.selected ? null : onArrival}
                 />
-                {onArrival && stations.length > 1 && (
+                {!unreachable && stations.length > 1 && (
                   <p className="mt-2 text-[10px] leading-tight" style={{ color: UI.DIM }}>
                     {t('map.pickStation', { n: stations.length })}
                   </p>
@@ -204,6 +205,7 @@ function StationPicker({
           r="6"
           fill={`#${def.star.color.toString(16).padStart(6, '0')}`}
           className={onPick ? 'cursor-pointer' : undefined}
+          data-no-drag={onPick ? true : undefined}
           onClick={onPick ? () => onPick(null) : undefined}
         />
         {plotted.map((p, i) => (
@@ -222,13 +224,14 @@ function StationPicker({
                 textAnchor={p.x >= ORRERY_CENTRE ? 'start' : 'end'}
                 fill={selected === i ? UI.PRIMARY : UI.DIM}
                 className={onPick ? 'cursor-pointer select-none' : 'select-none'}
+                data-no-drag={onPick ? true : undefined}
                 onClick={onPick ? () => onPick(i) : undefined}
               >
                 {stationNames.get(i)}
               </text>
             )}
             {p.station && onPick && (
-              <circle cx={p.x} cy={p.y} r="7" fill="transparent" className="cursor-pointer" onClick={() => onPick(i)} />
+              <circle cx={p.x} cy={p.y} r="7" fill="transparent" className="cursor-pointer" data-no-drag onClick={() => onPick(i)} />
             )}
           </g>
         ))}
