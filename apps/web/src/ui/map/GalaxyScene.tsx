@@ -114,6 +114,7 @@ export function Stars({
   selected,
   highlight,
   visible,
+  current,
   onHover,
   onSelect,
 }: {
@@ -124,6 +125,8 @@ export function Stars({
   highlight: number | null
   /** Прошла ли звезда фильтр обитаемости. Отсеянная гаснет и не ловит курсор. */
   visible: boolean[]
+  /** Своя система — выбирается всегда, даже отсеянная фильтром. */
+  current: number
   onHover: (index: number | null) => void
   onSelect: (index: number) => void
 }) {
@@ -196,6 +199,14 @@ export function Stars({
     colors.needsUpdate = true
   }, [geometry, systems, hovered, selected, highlight, visible])
 
+  // Своя система выбирается всегда — даже если сама отсеяна фильтром.
+  const pickVisible = (hits: readonly { index?: number | null }[]): number | null => {
+    for (const h of hits) {
+      if (h.index != null && (visible[h.index] || h.index === current)) return h.index
+    }
+    return null
+  }
+
   return (
     <points
       geometry={geometry}
@@ -203,15 +214,17 @@ export function Stars({
       frustumCulled={false}
       onPointerMove={(e) => {
         e.stopPropagation()
-        // ВЫБИРАЕМЫ ВСЕ звёзды, даже вне зоны прыжка и отсеянные фильтром: фильтр лишь
-        // притеняет (эмфаза), а не запрещает выбор. Зона прыжка решает только, активна ли
-        // кнопка прыжка в панельке (`jumpBlock`), — но затаргетить и разглядеть можно любую.
-        onHover(e.index != null ? e.index : null)
+        // Выбираемы звёзды вне зоны прыжка (кнопка прыжка решит сама, `jumpBlock`), но НЕ
+        // отсеянные фильтром: прежде гасли лишь цветом, а ловили курсор как прежде — и пилот
+        // прыгал в потемневшую систему, думая, что она «со станцией». Под курсором несколько
+        // точек — берём ближайшую из прошедших фильтр.
+        onHover(pickVisible(e.intersections))
       }}
       onPointerOut={() => onHover(null)}
       onClick={(e) => {
         e.stopPropagation()
-        if (e.index != null) onSelect(e.index)
+        const index = pickVisible(e.intersections)
+        if (index != null) onSelect(index)
       }}
     />
   )

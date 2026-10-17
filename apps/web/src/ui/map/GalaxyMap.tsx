@@ -421,6 +421,7 @@ function GalaxyMapImpl({ onClose, embedded = false }: { onClose: () => void; emb
             selected={selected}
             highlight={searchIndex}
             visible={visible}
+            current={world.systemIndex}
             onHover={setHovered}
             onSelect={chooseSystem}
           />
