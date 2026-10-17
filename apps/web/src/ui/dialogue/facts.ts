@@ -412,10 +412,6 @@ export interface NegotiatorReply {
   emotion?: string | null
 }
 
-export function digestActive(mem: Pick<DigestMemory, 'active'>, digest: ContextDigest): boolean {
-  return mem.active.includes(digest)
-}
-
 export function digestLoaded(ctx: NegotiationContext, digest: ContextDigest): boolean {
   return ctx.activeDigests.includes(digest)
 }
@@ -495,17 +491,7 @@ export function digestSummary(
   return digests.map((d) => labels[d]).join(', ')
 }
 
-/** @deprecated — то же, что digestSummary */
-export function loadedDigestSummary(loaded: readonly ContextDigest[]): string {
-  return digestSummary(loaded)
-}
-
 export { DIGEST_LABEL }
-
-/** @deprecated имя сохранено — то же, что sufflerDigestsFor */
-export function detectDigests(text: string): ContextDigest[] {
-  return sufflerDigestsFor(text)
-}
 
 const pct = (num: number, den: number): number => (den > 0 ? Math.round((num / den) * 100) : 0)
 

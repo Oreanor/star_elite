@@ -10,7 +10,7 @@ import { forget, knowsOf, memoryFresh } from './perception'
 import { choosePrey } from './robbery'
 import { holdStill } from './steer'
 import { isFoe, isHostileTo, selectTarget } from './targeting'
-import { clearOwnTasks, enqueueTask } from './tasks'
+import { enqueueTask } from './tasks'
 import { pilotTraits } from './traits'
 import type { AIState } from './types'
 
@@ -241,14 +241,5 @@ function resolveTarget(e: ShipEntity, world: World): ShipEntity | null {
   // Приказанную цель знает по приказу (наводка нанимателя), а не своими глазами.
   if (e.ai!.orderedTargetId === id) return target
   return knowsOf(e, target, world) ? target : null
-}
-
-/** Нанятого или получившего приказ — освободить от своего промысла (рейс подождёт). */
-export function yieldOwnErrands(e: ShipEntity): void {
-  clearOwnTasks(e)
-  if (e.ai) {
-    e.ai.preyId = null
-    e.ai.demandAt = -1
-  }
 }
 

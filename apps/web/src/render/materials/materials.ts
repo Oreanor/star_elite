@@ -582,20 +582,6 @@ export function dustNeonMaterial(): ShaderMaterial {
   return dustNeon
 }
 
-let crossRays: MeshBasicMaterial | null = null
-
-/** Лучи из концов креста: аддитивные, глубину не пишут — свет складывается с фоном. */
-export function crossRayMaterial(): MeshBasicMaterial {
-  crossRays ??= new MeshBasicMaterial({
-    vertexColors: true,
-    transparent: true,
-    blending: AdditiveBlending,
-    depthWrite: false,
-    fog: false,
-  })
-  return crossRays
-}
-
 let stars: PointsMaterial | null = null
 
 export function starfieldMaterial(size: number): PointsMaterial {

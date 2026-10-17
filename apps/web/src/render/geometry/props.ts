@@ -36,9 +36,6 @@ const TUBE_RADIUS = 0.17 // полутолщина трубы обода
 const HUB_RADIUS = 0.2
 const HUB_HALF = 0.34 // полудлина ступицы по Z
 
-/** Радиус внешнего экватора обода — по нему рендер расставляет мигающие маяки. */
-export const STATION_RIM_RADIUS = RING_RADIUS + TUBE_RADIUS
-
 function torus(major: number, minor: number, majorSegments: number, minorSegments: number): Triangle[] {
   const out: Triangle[] = []
 

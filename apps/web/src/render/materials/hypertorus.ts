@@ -134,5 +134,3 @@ export function torusDotMaterial(): ShaderMaterial {
     toneMapped: false,
   })
 }
-
-export const TORUS_PUFF_RGB = new Color(TORUS.PUFF_COLOR)

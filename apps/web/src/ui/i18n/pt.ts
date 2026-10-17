@@ -261,7 +261,6 @@ export const PT: Record<keyof typeof RU, string> = {
   'station.col.unit': 'UNIDADE',
   'station.col.stock': 'ESTOQUE',
   'station.col.market': 'MERCADO',
-  'station.col.value': 'RECEITA',
   'station.col.profit': 'LUCRO',
 
   // ─── Mercado ─────────────────────────────────────────────────────────────────
@@ -269,7 +268,6 @@ export const PT: Record<keyof typeof RU, string> = {
   'station.outfit.title': 'EQUIPAMENTO',
   'station.outfit.empty': 'Nenhum equipamento à venda',
   'station.buyFit': 'COMPRAR E INSTALAR',
-  'ship.confirm.buyPlain': 'Comprar «{name}» por {price}?',
   'station.buy': 'COMPRAR',
   'station.noFunds': 'SEM FUNDOS',
   'station.cheap': 'barato',
@@ -295,7 +293,6 @@ export const PT: Record<keyof typeof RU, string> = {
   // Erros de instalação (FitError / PurchaseError) — no botão, no lugar da ação.
   'station.wontFit': 'NÃO CABE',
   'station.fitted': 'JÁ INSTALADO',
-  'station.noRoom': 'SEM ESPAÇO',
   'station.noHardpoint': 'SEM SUPORTE',
   'station.wrongSlot': 'SLOT ERRADO',
 
@@ -306,10 +303,7 @@ export const PT: Record<keyof typeof RU, string> = {
   'station.service.hullWhole': 'CASCO INTACTO',
 
   // ─── Melhoria de módulo ──────────────────────────────────────────────────────
-  'station.upgradeCopy': 'MELHORAR (CÓPIA) +50%',
-  'station.upgradeCash': 'MELHORAR +25%',
   'station.byCopy': 'com uma cópia',
-  'station.maxed': 'NO MÁXIMO',
 
   // ─── Tela do local (onde você atracou) ───────────────────────────────────────
   'station.economy': 'ECONOMIA',
@@ -323,7 +317,6 @@ export const PT: Record<keyof typeof RU, string> = {
   'station.nav.shop': 'MERCADO',
   'station.nav.comms': 'CONTATOS',
   'station.nav.map': 'MAPA',
-  'station.nav.ref': 'GUIA',
   'station.atPlanet': '{station} (planeta {planet})',
   'station.atSystem': '{station} (sistema {system})',
   'station.saveFailed': 'NÃO SALVO',
@@ -336,9 +329,7 @@ export const PT: Record<keyof typeof RU, string> = {
   'map.view.universe': 'MUNDO',
 
   // ─── Localizador: grande radar redondo do console ────────────────────────────
-  'locator.title': 'LOCALIZADOR',
   'locator.nose': 'NARIZ',
-  'locator.count': 'no localizador: {n}',
   'locator.kind.star': 'estrela',
   'locator.kind.planet': 'planeta',
   'locator.kind.moon': 'lua',
@@ -394,23 +385,6 @@ export const PT: Record<keyof typeof RU, string> = {
   'dialogue.stance.hostile': 'HOSTIL',
 
   'dispatcher.off': 'CÂMBIO E DESLIGO',
-  'dispatcher.lost': 'Enlace perdido.',
-  'dispatcher.section.locale': 'LOCAL',
-  'dispatcher.section.system': 'SISTEMA',
-  'dispatcher.gov': 'Regime',
-  'dispatcher.economy': 'Economia',
-  'dispatcher.tech': 'Nível técnico',
-  'dispatcher.population': 'População',
-  'dispatcher.dock': 'No cais',
-  'dispatcher.dockFree': 'livre',
-  'dispatcher.nearest': 'Mundo habitado mais próximo — {name}, {distance} km. Siga para lá.',
-  'dispatcher.inhabited': ' · habitado',
-  'dispatcher.greet.brave': 'Controle na escuta. Fale direto, piloto — sem enrolação.',
-  'dispatcher.greet.cowardly': 'Éh… controle escutando. Nada de bobagem, tá bom?',
-  'dispatcher.greet.greedy': 'Controle. O que você quer? Tempo é dinheiro, então rápido.',
-  'dispatcher.greet.honorable': 'Controle, boa nave. Em que posso ajudar?',
-  'dispatcher.greet.hotheaded': 'Até que enfim! Controle na linha. Desembucha — o que travou?',
-  'dispatcher.greet.calculating': 'Controle. Ouço com atenção — direto ao ponto, por favor.',
   'chat.incoming': 'CHAMADA RECEBIDA',
   'chat.incoming.hint': 'encerre a chamada atual para atender',
   // Aviso no HUD quando um conhecido some (morto fora de vista ou diante de você).
@@ -491,12 +465,6 @@ export const PT: Record<keyof typeof RU, string> = {
   'map.close': 'M — FECHAR',
 
   'map.you': 'VOCÊ',
-  'map.count.stars': 'estrelas',
-  'map.count.planets': 'planetas',
-  'map.count.moons': 'luas',
-  'map.count.stations': 'estações',
-  'map.galaxy': 'GALÁXIA',
-  'map.starsCount': '{n} ESTRELAS',
   'map.class': 'CLASSE',
   'map.size': 'TAMANHO',
   'map.starSize': '{n} R☉',

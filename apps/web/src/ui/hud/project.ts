@@ -75,16 +75,9 @@ export function formatDistance(metres: number): string {
   return `${metres.toFixed(0)} ${t('unit.m')}`
 }
 
-/** Крейсер идёт быстрее света, и мерить его в км/с — писать девять знаков. */
-export function formatSpeed(metresPerSecond: number): string {
-  if (metresPerSecond >= 0.01 * C) return `${(metresPerSecond / C).toFixed(2)}c`
-  if (metresPerSecond >= 1000) return `${(metresPerSecond / 1000).toFixed(1)} ${t('unit.kmps')}`
-  return `${metresPerSecond.toFixed(0)} ${t('unit.mps')}`
-}
-
 /**
- * Скорость РАЗДЕЛЬНО: число и единица. Нужно HUD, где цифра рисуется крупно, а единица
- * вдвое мельче рядом, — цельная строка `formatSpeed` для этого не годится.
+ * Скорость РАЗДЕЛЬНО: число и единица — HUD рисует цифру крупно, а единицу вдвое мельче.
+ * Крейсер идёт быстрее света, и мерить его в км/с — писать девять знаков: там доля `c`.
  */
 export function speedParts(metresPerSecond: number): { value: string; unit: string } {
   if (metresPerSecond >= 0.01 * C) return { value: (metresPerSecond / C).toFixed(2), unit: 'c' }

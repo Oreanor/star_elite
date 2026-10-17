@@ -259,7 +259,6 @@ export const RU = {
   'station.col.unit': 'ЕДИНИЦА',
   'station.col.stock': 'СКЛАД',
   'station.col.market': 'РЫНОК',
-  'station.col.value': 'ВЫРУЧКА',
   'station.col.profit': 'ВЫГОДА',
 
   // ─── Рынок ──────────────────────────────────────────────────────────────────
@@ -267,7 +266,6 @@ export const RU = {
   'station.outfit.title': 'ОБОРУДОВАНИЕ',
   'station.outfit.empty': 'Оборудования в продаже нет',
   'station.buyFit': 'КУПИТЬ И УСТАНОВИТЬ',
-  'ship.confirm.buyPlain': 'Купить «{name}» за {price}?',
   'station.buy': 'КУПИТЬ',
   'station.noFunds': 'НЕТ ДЕНЕГ',
   'station.cheap': 'дёшево',
@@ -293,7 +291,6 @@ export const RU = {
   // Ошибки установки (FitError / PurchaseError) — на кнопке вместо действия.
   'station.wontFit': 'НЕ ВЛЕЗЕТ',
   'station.fitted': 'УЖЕ СТОИТ',
-  'station.noRoom': 'НЕТ МЕСТА',
   'station.noHardpoint': 'НЕТ ПОДВЕСКИ',
   'station.wrongSlot': 'НЕ ТОТ СЛОТ',
 
@@ -304,10 +301,7 @@ export const RU = {
   'station.service.hullWhole': 'КОРПУС ЦЕЛ',
 
   // ─── Улучшение модуля ───────────────────────────────────────────────────────
-  'station.upgradeCopy': 'УЛУЧШИТЬ КОПИЕЙ +50%',
-  'station.upgradeCash': 'УЛУЧШИТЬ +25%',
   'station.byCopy': 'копией',
-  'station.maxed': 'МАКСИМУМ',
 
   // ─── Экран расположения (куда причалил) ─────────────────────────────────────
   'station.economy': 'ЭКОНОМИКА',
@@ -321,7 +315,6 @@ export const RU = {
   'station.nav.shop': 'ТОРГОВЛЯ',
   'station.nav.comms': 'СВЯЗЬ',
   'station.nav.map': 'КАРТА',
-  'station.nav.ref': 'СПРАВОЧНИК',
   'station.atPlanet': '{station} (планета {planet})',
   'station.atSystem': '{station} (система {system})',
   'station.saveFailed': 'СЕЙВ НЕ ЗАПИСАН',
@@ -334,9 +327,7 @@ export const RU = {
   'map.view.universe': 'МИР',
 
   // ─── Локатор: большой круглый радар консоли ──────────────────────────────────
-  'locator.title': 'ЛОКАТОР',
   'locator.nose': 'НОС',
-  'locator.count': 'на локаторе: {n}',
   'locator.kind.star': 'звезда',
   'locator.kind.planet': 'планета',
   'locator.kind.moon': 'луна',
@@ -394,23 +385,6 @@ export const RU = {
   'dialogue.stance.hostile': 'ВРАЖДЕБНЫЙ',
 
   'dispatcher.off': 'ОТБОЙ',
-  'dispatcher.lost': 'Связь прервана.',
-  'dispatcher.section.locale': 'ОКРУГА',
-  'dispatcher.section.system': 'СИСТЕМА',
-  'dispatcher.gov': 'Строй',
-  'dispatcher.economy': 'Экономика',
-  'dispatcher.tech': 'Тех-уровень',
-  'dispatcher.population': 'Население',
-  'dispatcher.dock': 'У причала',
-  'dispatcher.dockFree': 'свободно',
-  'dispatcher.nearest': 'Ближайший обитаемый мир — {name}, {distance} км. Туда и держи.',
-  'dispatcher.inhabited': ' · обитаема',
-  'dispatcher.greet.brave': 'Диспетчер на связи. Говори прямо, пилот — не тяни.',
-  'dispatcher.greet.cowardly': 'Э-э… диспетчер слушает. Только без глупостей, ладно?',
-  'dispatcher.greet.greedy': 'Диспетчер. Чего надо? Время — деньги, так что живее.',
-  'dispatcher.greet.honorable': 'Диспетчерская, добрый борт. Чем могу помочь?',
-  'dispatcher.greet.hotheaded': 'Ну наконец-то! Диспетчер на связи. Выкладывай, чего застрял.',
-  'dispatcher.greet.calculating': 'Диспетчер. Слушаю внимательно — по делу, будь добр.',
   'chat.incoming': 'ВХОДЯЩИЙ ВЫЗОВ',
   'chat.incoming.hint': 'заверши текущий разговор, чтобы ответить',
   // Весть на HUD, когда знакомый пропал (погиб вне поля зрения или на глазах).
@@ -491,12 +465,6 @@ export const RU = {
   'map.close': 'M — ЗАКРЫТЬ',
 
   'map.you': 'ВЫ',
-  'map.count.stars': 'звёзд',
-  'map.count.planets': 'планет',
-  'map.count.moons': 'лун',
-  'map.count.stations': 'станций',
-  'map.galaxy': 'ГАЛАКТИКА',
-  'map.starsCount': '{n} ЗВЁЗД',
   'map.class': 'КЛАСС',
   'map.size': 'РАЗМЕР',
   'map.starSize': '{n} R☉',

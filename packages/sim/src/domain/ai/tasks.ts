@@ -296,11 +296,6 @@ export function assignVoyage(e: ShipEntity, exit: Vector3, arriveRadius = 400): 
   return true
 }
 
-/** Голова очереди — свой промысел (а не поручение)? Пустая очередь — нет. */
-export function onOwnErrand(e: ShipEntity): boolean {
-  return e.ai?.tasks[0]?.own === true
-}
-
 /** Есть ли у бота активное поручение. */
 export function hasTask(e: ShipEntity): boolean {
   return (e.ai?.tasks.length ?? 0) > 0

@@ -113,10 +113,6 @@ export function starClassName(star: { class: string; className: string }): strin
   return pick('starClass', star.class, star.className)
 }
 
-export function galaxyShapeName(shape: { id: string; name: string }): string {
-  return pick('galaxyShape', shape.id, shape.name)
-}
-
 /**
  * Род занятий по ТИПУ ВСТРЕЧИ (`originKind`), а не по имени борта: имя после знакомства
  * становится личным, а занятие остаётся. Внешне читаемое — показываем в диалоге сразу,

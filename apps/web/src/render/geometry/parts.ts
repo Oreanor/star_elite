@@ -78,13 +78,3 @@ export function bell(
   }
   return out
 }
-
-/**
- * Тонкая пластина-антенна в плоскости, параллельной борту (x = const).
- * Один треугольник: материал двусторонний, и лишняя грань тут ничего не добавит.
- */
-export function antenna(x: number, base: readonly [number, number], tip: readonly [number, number], color: number): Triangle[] {
-  const [z0, y0] = base
-  const [z1, y1] = tip
-  return [tri([x, y0, z0], [x, y0, z0 + 0.9], [x, y1, z1], color)]
-}

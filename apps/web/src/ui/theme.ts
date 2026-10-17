@@ -91,8 +91,3 @@ export function threatColor(level: 'low' | 'moderate' | 'high' | 'extreme'): str
 export function trend(better: boolean): { color: string; mark: '▲' | '▼' } {
   return better ? { color: UI.ALLY, mark: '▲' } : { color: UI.DANGER, mark: '▼' }
 }
-
-/** Тот же фосфор для three.js, где цвет — число, а не строка. */
-export const UI_HEX = {
-  PRIMARY: 0x7fd6ff,
-} as const
