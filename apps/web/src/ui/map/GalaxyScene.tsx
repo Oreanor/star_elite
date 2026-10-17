@@ -11,6 +11,7 @@ import {
   Mesh,
   MeshBasicMaterial,
   PerspectiveCamera,
+  RingGeometry,
   ShaderMaterial,
   Vector3,
 } from 'three'
@@ -103,10 +104,24 @@ const _colour = new Color()
 const _white = /* @__PURE__ */ new Color(0xffffff)
 
 /**
- * Порог наведения на точку, св. годы. По самой звезде курсором не попасть:
- * она в четверть светового года, а на экране это два пикселя.
+ * Наведение — в ЭКРАННЫХ пикселях, а не лучом в световых годах. Луч с порогом 0.9 св.г.
+ * врал двояко: из нескольких звёзд под курсором брал ближнюю к КАМЕРЕ, а не к курсору
+ * (навёл на одну — подсветилась соседняя), а порог не знал зума — вблизи большой диск
+ * ловился лишь у центра, издали в порог попадала пачка звёзд.
+ *
+ * Теперь каждая звезда проверяется там, где нарисована, и того размера, каким нарисована
+ * (та же формула, что в `starVertex`); выигрывает ближайший к курсору центр.
  */
-const HOVER_LY = 0.9
+/** Видимый радиус диска в долях `gl_PointSize`: край круга гаснет на 0.34..0.5 (см. фрагмент). */
+const DISC_FRACTION = 0.42
+/** Мельче этого, пикс., в звезду мышью не попасть — даём запас под палец. */
+const PICK_MIN_PX = 7
+/** Сдвиг между нажатием и отпусканием, пикс., до которого это клик, а не вращение. */
+const CLICK_SLOP = 4
+
+const _pick = new Vector3()
+/** Наименьший размер точки, пикс. буфера — тот же, что `uMinPixels` шейдера. */
+const MIN_POINT_PX = 1.6
 
 export function Stars({
   systems,
@@ -130,13 +145,7 @@ export function Stars({
   onHover: (index: number | null) => void
   onSelect: (index: number) => void
 }) {
-  const { size, raycaster } = useThree()
-
-  // Порог живёт на самом луче: три пары скобок в пропсе Canvas требовали бы
-  // задать заодно и Mesh, и Line, и Sprite — то есть переписать то, что и так верно.
-  useEffect(() => {
-    if (raycaster.params.Points) raycaster.params.Points.threshold = HOVER_LY
-  }, [raycaster])
+  const { size, camera, gl } = useThree()
 
   const geometry = useMemo(() => {
     const g = new BufferGeometry()
@@ -162,7 +171,7 @@ export function Stars({
       new ShaderMaterial({
         vertexShader: starVertex,
         fragmentShader: starFragment,
-        uniforms: { uHalfHeight: { value: 1 }, uMinPixels: { value: 1.6 } },
+        uniforms: { uHalfHeight: { value: 1 }, uMinPixels: { value: MIN_POINT_PX } },
         transparent: true,
         depthWrite: false,
         vertexColors: true,
@@ -199,34 +208,70 @@ export function Stars({
     colors.needsUpdate = true
   }, [geometry, systems, hovered, selected, highlight, visible])
 
-  // Своя система выбирается всегда — даже если сама отсеяна фильтром.
-  const pickVisible = (hits: readonly { index?: number | null }[]): number | null => {
-    for (const h of hits) {
-      if (h.index != null && (visible[h.index] || h.index === current)) return h.index
+  /**
+   * Звезда под курсором — по экрану. Своя система выбирается всегда, даже отсеянная фильтром;
+   * прочие отсеянные курсор не ловят (прежде ловили — и пилот прыгал в потемневшую систему).
+   */
+  const pickAt = (clientX: number, clientY: number): number | null => {
+    const rect = gl.domElement.getBoundingClientRect()
+    const mx = clientX - rect.left
+    const my = clientY - rect.top
+    const halfH = rect.height / 2
+    const p11 = camera.projectionMatrix.elements[5]!
+    // gl_PointSize — в пикселях буфера, а мерим в CSS-пикселях: делим на плотность экрана.
+    const dpr = gl.getPixelRatio()
+    const positions = geometry.getAttribute('position') as BufferAttribute
+    const sizes = geometry.getAttribute('size') as BufferAttribute
+    let best: number | null = null
+    let bestD = Infinity
+    for (let i = 0; i < systems.length; i++) {
+      if (!visible[i] && i !== current) continue
+      _pick.fromBufferAttribute(positions, i).applyMatrix4(camera.matrixWorldInverse)
+      const depth = -_pick.z
+      if (depth <= 0) continue
+      _pick.applyMatrix4(camera.projectionMatrix)
+      const sx = (_pick.x * 0.5 + 0.5) * rect.width
+      const sy = (-_pick.y * 0.5 + 0.5) * rect.height
+      const pointPx = Math.max(((sizes.getX(i) * p11 * halfH) / depth) * 2, MIN_POINT_PX) / dpr
+      const radius = Math.max(pointPx * DISC_FRACTION, PICK_MIN_PX)
+      const d = Math.hypot(sx - mx, sy - my)
+      if (d <= radius && d < bestD) {
+        best = i
+        bestD = d
+      }
     }
-    return null
+    return best
   }
 
+  // Слушаем сам холст: звезда под курсором больше не обязана попасть под луч r3f.
+  useEffect(() => {
+    const el = gl.domElement
+    let down: { x: number; y: number } | null = null
+    const move = (e: PointerEvent) => onHover(pickAt(e.clientX, e.clientY))
+    const leave = () => onHover(null)
+    const press = (e: PointerEvent) => {
+      down = { x: e.clientX, y: e.clientY }
+    }
+    const click = (e: MouseEvent) => {
+      // Тянул мышью — это было вращение карты, а не выбор.
+      if (down && Math.hypot(e.clientX - down.x, e.clientY - down.y) > CLICK_SLOP) return
+      const index = pickAt(e.clientX, e.clientY)
+      if (index != null) onSelect(index)
+    }
+    el.addEventListener('pointermove', move)
+    el.addEventListener('pointerleave', leave)
+    el.addEventListener('pointerdown', press)
+    el.addEventListener('click', click)
+    return () => {
+      el.removeEventListener('pointermove', move)
+      el.removeEventListener('pointerleave', leave)
+      el.removeEventListener('pointerdown', press)
+      el.removeEventListener('click', click)
+    }
+  })
+
   return (
-    <points
-      geometry={geometry}
-      material={material}
-      frustumCulled={false}
-      onPointerMove={(e) => {
-        e.stopPropagation()
-        // Выбираемы звёзды вне зоны прыжка (кнопка прыжка решит сама, `jumpBlock`), но НЕ
-        // отсеянные фильтром: прежде гасли лишь цветом, а ловили курсор как прежде — и пилот
-        // прыгал в потемневшую систему, думая, что она «со станцией». Под курсором несколько
-        // точек — берём ближайшую из прошедших фильтр.
-        onHover(pickVisible(e.intersections))
-      }}
-      onPointerOut={() => onHover(null)}
-      onClick={(e) => {
-        e.stopPropagation()
-        const index = pickVisible(e.intersections)
-        if (index != null) onSelect(index)
-      }}
-    />
+    <points geometry={geometry} material={material} frustumCulled={false} raycast={() => null} />
   )
 }
 
@@ -256,6 +301,42 @@ export function YouAreHere({ at }: { at: Vector3 }) {
     if (ref.current) ref.current.quaternion.copy(state.camera.quaternion)
   })
   return <mesh ref={ref} geometry={youMarkerGeometry} material={material} position={[at.x, at.y, at.z]} raycast={() => null} />
+}
+
+/** Кольцо единичного радиуса; размер на экране задаёт кадр (`StarRing`). Одно на модуль. */
+const ringGeometry = new RingGeometry(0.82, 1, 48)
+
+/**
+ * Кольцо вокруг звезды ПОСТОЯННОГО экранного размера: вблизи и с края галактики одинаково
+ * заметно. Звезда сама по себе — точка в пару пикселей среди тысяч таких же, и без обводки
+ * не найти ни свою систему, ни выбранную цель прыжка. Билборд: смотрит в камеру всегда.
+ */
+export function StarRing({ at, color, radiusPx }: { at: Vector3; color: string; radiusPx: number }) {
+  const ref = useRef<Mesh>(null)
+  const material = useMemo(
+    () => new MeshBasicMaterial({ color, toneMapped: false, transparent: true, opacity: 0.9, depthTest: false }),
+    [color],
+  )
+  useEffect(() => () => material.dispose(), [material])
+  useFrame(({ camera, size }) => {
+    const mesh = ref.current
+    if (!mesh) return
+    mesh.quaternion.copy(camera.quaternion)
+    // Пиксели → световые годы на дальности звезды: та же проекция, что у точек звёзд.
+    const depth = camera.position.distanceTo(at)
+    const p11 = camera.projectionMatrix.elements[5]!
+    mesh.scale.setScalar((radiusPx * depth) / (p11 * (size.height / 2)))
+  })
+  return (
+    <mesh
+      ref={ref}
+      geometry={ringGeometry}
+      material={material}
+      position={[at.x, at.y, at.z]}
+      renderOrder={2}
+      raycast={() => null}
+    />
+  )
 }
 
 /** Подпись «ВЫ» у своей звезды. DOM поверх канваса: её двигает кадр, а не React. */

@@ -25,7 +25,7 @@ import { UI } from '../theme'
 import { t, useLang } from '../i18n'
 import { properName } from '../i18n/dataNames'
 import { CONTACT_MAP, ContactLabels, ContactStars, PLAYER_MAP, PlayerLabels, PlayerStars, contactSystemsOf, playerSystemsOf } from './GalaxyPeople'
-import { JumpSphere, OrbitCamera, Route, StarLabel, Stars, YouAreHere, YouLabel, formatStarSize, positionOf } from './GalaxyScene'
+import { JumpSphere, OrbitCamera, Route, StarLabel, StarRing, Stars, YouAreHere, YouLabel, formatStarSize, positionOf } from './GalaxyScene'
 import { SystemPopup, formatRange } from './SystemPopup'
 
 const _origin = /* @__PURE__ */ new Vector3()
@@ -430,6 +430,12 @@ function GalaxyMapImpl({ onClose, embedded = false }: { onClose: () => void; emb
           />
           <JumpSphere at={here} charge={world.player.jumpCharge} max={world.player.spec.jumpRange} />
           <YouAreHere at={here} />
+          {/* Обводки: где ты сам (фосфор, как «ВЫ») и куда прыгаешь (цвет навигации, как метка
+              цели прыжка на HUD). Кольцо постоянного экранного размера — видно при любом зуме. */}
+          <StarRing at={here} color={UI.PRIMARY} radiusPx={11} />
+          {selected != null && systems[selected] && selected !== world.systemIndex && (
+            <StarRing at={positionOf(systems[selected]!)} color={UI.NAV} radiusPx={14} />
+          )}
           <YouLabel at={here} box={you} />
           {showContacts && (
             <>
