@@ -54,13 +54,10 @@ import { effectiveRadius, stepScale } from '../scale/scale'
 import { stepGravity } from '../flight/gravity'
 import { stepJumpGateCollision } from '../flight/jumpGate'
 import {
-  findLandable,
   isLandableAsteroid,
-  landOnSurface,
   landShip,
   meshSolidRadius,
   warBaseSolidRadius,
-  stepAutoland,
   stepLanding,
 } from '../flight/landing'
 import { stepShip } from '../flight/model'
@@ -296,9 +293,7 @@ function stepPhysics(world: World, dt: number): void {
     // Кинематический борт не интегрируем: его позу ставит внешний источник.
     if (ship.kinematic) continue
     if (ship.warpEmerging || ship.warpDeparting) continue
-    if (stepAutoland(ship, world, dt)) {
-      // Непрерываемая автопосадка ведёт корабль вниз сама: ни гравитации, ни интегратора.
-    } else if (!stepLanding(ship, world, dt)) {
+    if (!stepLanding(ship, world, dt)) {
       stepGravity(ship, world, dt)
       stepShip(ship.state, ship.controls, ship.spec.tuning, dt)
       // Миелофон: рост/усадка масштаба от сигнала. До столкновений — они считаются по
@@ -451,13 +446,6 @@ function stepCollisions(world: World, dt: number): void {
 
       // Уже на ховере над этим камнем — сфера сама держит высоту.
       if (ship.landedOn?.bodyId === a.id) continue
-      // Автозаход дошёл до тверди раньше HOVER — включаем стоянку.
-      if (ship.autoland === a.id) {
-        const surface = findLandable(world, a.id, ship)
-        if (surface) landOnSurface(ship, surface)
-        ship.autoland = null
-        continue
-      }
 
       // Посадочная глыба — отскок без урона (как статуя), не таран с расколом.
       if (landable) {
@@ -634,7 +622,7 @@ function stepBodyCollisions(world: World, dt: number): void {
         if (!hitsBodySphere(ship, body.pos, body.radius, dt)) continue
 
         // УПРАВЛЯЕМО — мягкая посадка. НЕУПРАВЛЯЕМО — отскок без урона («КРУШЕНИЕ»).
-        if (ship.autoland === body.id || ship.landedOn?.bodyId === body.id) {
+        if (ship.landedOn?.bodyId === body.id) {
           landShip(ship, body)
         } else {
           crashBounce(world, ship, body.pos, body.radius, dt, {
@@ -675,13 +663,7 @@ function stepBodyCollisions(world: World, dt: number): void {
       const hitR = warBaseSolidRadius(rock.radius)
       if (!hitsBodySphere(ship, rock.pos, hitR, dt)) continue
       if (ship.landedOn?.bodyId === rock.id) continue
-      if (ship.autoland === rock.id) {
-        const surface = findLandable(world, rock.id, ship)
-        if (surface) landOnSurface(ship, surface)
-        ship.autoland = null
-      } else {
-        crashBounce(world, ship, rock.pos, hitR, dt, { kind: 'warbase', name: '' })
-      }
+      crashBounce(world, ship, rock.pos, hitR, dt, { kind: 'warbase', name: '' })
       break
     }
   }

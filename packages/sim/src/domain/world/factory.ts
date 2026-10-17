@@ -128,7 +128,6 @@ export function makeShip(
     guns,
     cruise: createCruiseState(),
     landedOn: null,
-    autoland: null,
     alive: true,
     wreckAt: null,
     ai: null,
@@ -677,7 +676,6 @@ export function enterVoid(world: World): void {
   const player = world.player
   player.ai = null
   player.landedOn = null
-  player.autoland = null
   player.state.pos.set(0, 0, 0)
   player.state.vel.set(0, 0, 0)
   player.state.angVel.set(0, 0, 0)
@@ -754,7 +752,6 @@ export function enterSystem(
   const player = world.player
   player.ai = null
   player.landedOn = null
-  player.autoland = null
   player.state.pos.set(...start)
   player.state.vel.set(0, 0, 0)
   player.state.angVel.set(0, 0, 0)

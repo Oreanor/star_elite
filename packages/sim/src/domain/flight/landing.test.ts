@@ -253,7 +253,7 @@ describe('посадка на поверхность', () => {
     const target = landingPromptTarget(world)
     expect(target?.id).toBe(inWindow.id)
     expect(armAutoland(world)).toBe(true)
-    expect(player.autoland).toBe(inWindow.id)
+    expect(player.landedOn?.bodyId).toBe(inWindow.id)
   })
 
   /**

@@ -218,7 +218,7 @@ export function landingCue(
   world: World,
 ): { id: number; altitude: number; phase: 'approach' | 'prompt' } | null {
   const p = world.player
-  if (!p.alive || p.landedOn || p.autoland !== null) return null
+  if (!p.alive || p.landedOn) return null
   if (!landingScaleOk(p)) return null
 
   // Сперва — окно посадки (PROMPT_LO…PROMPT_HI): соседняя глыба внизу не перебивает камень в
@@ -247,12 +247,17 @@ export function canAutoland(world: World): boolean {
   return landingPromptTarget(world) !== null
 }
 
-/** Включить непрерываемую автопосадку игрока на поверхность в окне высот. */
+/**
+ * L: сразу в полёт над поверхностью — на той же высоте, с тем же ходом и управлением. Прежде L
+ * включал заход: секунду борт выравнивался, стоя на месте, — скорость терялась, руль не слушался.
+ * Теперь выравнивание брюхом к грунту — мягкая помощь в первые секунды (`levelFor`).
+ */
 export function armAutoland(world: World): boolean {
   const target = landingPromptTarget(world)
   if (!target) return false
-  world.player.autoland = target.id
-  return true
+  const surface = findLandable(world, target.id, world.player)
+  if (!surface) return false
+  return enterSurfaceFlight(world.player, surface, Math.max(LANDING.ALT_MIN, target.altitude), true)
 }
 
 /**
@@ -295,71 +300,33 @@ function levelTarget(ship: ShipEntity, normal: Vector3, out: Quaternion): Quater
 }
 
 /**
- * Шаг автозахода на ховер. Ведём к HOVER_ALT вдоль нормали; у цели — полёт по сфере.
- * true — этот шаг ведём мы (без гравитации/интегратора).
- */
-export function stepAutoland(ship: ShipEntity, world: World, dt: number): boolean {
-  if (ship.autoland === null) return false
-  if (!landingScaleOk(ship)) {
-    ship.autoland = null
-    return false
-  }
-  const surface = findLandable(world, ship.autoland, ship)
-  if (!surface) {
-    ship.autoland = null
-    return false
-  }
-
-  _normal.copy(ship.state.pos).sub(surface.pos)
-  if (_normal.lengthSq() < 1e-9) _normal.set(0, 1, 0)
-  _normal.normalize()
-
-  /**
-   * Заход — НА МЕСТЕ: борт остаётся на той высоте, где нажали L, и лишь плавно ложится брюхом к
-   * грунту. Прежде он опускался к HOVER_ALT — «проваливался» в коридор после нажатия, некрасиво.
-   * Пол — ALT_MIN: ниже него и так коснулся бы.
-   */
-  const altitude = Math.max(LANDING.ALT_MIN, surfaceAltitude(ship, surface))
-  // Поза «брюхом к грунту» — к ней ведём весь заход (см. доворот ниже).
-  levelTarget(ship, _normal, _targetQuat)
-  // Переход в ховер — лишь когда УЖЕ выровнен: иначе остаток доворота `enterSurfaceFlight`
-  // сделал бы одним кадром, и корабль с камерой рывком «выныривали».
-  if (ship.state.quat.angleTo(_targetQuat) <= LANDING.LEVEL_SNAP) {
-    enterSurfaceFlight(ship, surface, altitude)
-    ship.autoland = null
-    return true
-  }
-
-  ship.state.vel.set(0, 0, 0)
-  ship.state.angVel.set(0, 0, 0)
-  ship.controls.throttle = 0
-
-  // Плавный доворот брюхом к нормали на заходе — дальше пилот крутит сам.
-  ship.state.quat.slerp(_targetQuat, Math.min(1, LANDING.LEVEL_RATE * dt))
-
-  return true
-}
-
-/**
  * Включить ховер: высота HOVER_ALT, дальше полёт по сфере своей физикой.
  * Отрыв — крейсер ≥ ESCAPE_CRUISE или L; скорость сохраняется.
  */
-export function enterSurfaceFlight(ship: ShipEntity, surface: LandableSurface, altitude: number = LANDING.HOVER_ALT): boolean {
+export function enterSurfaceFlight(
+  ship: ShipEntity,
+  surface: LandableSurface,
+  altitude: number = LANDING.HOVER_ALT,
+  /** Мягкий вход по L: ход, поза и газ — как были, выравнивание — помощью (`levelFor`). */
+  soft = false,
+): boolean {
   if (!ship.alive) return false
 
   _normal.copy(ship.state.pos).sub(surface.pos)
   if (_normal.lengthSq() < 1e-9) _normal.set(0, 1, 0)
   _normal.normalize()
 
-  levelBelly(ship, _normal)
+  if (!soft) levelBelly(ship, _normal)
 
-  ship.landedOn = { bodyId: surface.id, normal: _normal.clone(), altitude }
+  ship.landedOn = { bodyId: surface.id, normal: _normal.clone(), altitude, levelFor: soft ? LANDING.LEVEL_TIME : 0 }
   ship.state.pos
     .copy(surface.pos)
     .addScaledVector(_normal, surface.radius + effectiveRadius(ship) + altitude)
-  ship.state.vel.set(0, 0, 0)
-  ship.state.angVel.set(0, 0, 0)
-  ship.controls.throttle = 0
+  if (!soft) {
+    ship.state.vel.set(0, 0, 0)
+    ship.state.angVel.set(0, 0, 0)
+    ship.controls.throttle = 0
+  }
   ship.controls.retro = 0
   ship.cruise.factor = 1
   ship.cruise.block = null
@@ -382,7 +349,6 @@ export function landShip(ship: ShipEntity, body: BodyEntity): boolean {
 /** Снять ховер. Позу/скорость не трогаем — летишь куда летел; L / ×ESCAPE отпускают. */
 export function releaseLanding(ship: ShipEntity, _world: World): boolean {
   if (!ship.landedOn) return false
-  ship.autoland = null
   ship.landedOn = null
   return true
 }
@@ -482,7 +448,22 @@ export function stepLanding(ship: ShipEntity, world: World, dt: number): boolean
   ship.controls.strafeUp = 0
   stepShip(ship.state, ship.controls, ship.spec.tuning, dt)
   ship.controls.strafeUp = strafeUp
-  alignToNose(ship, dt)
+  /**
+   * ВХОД БЕЗ ШВА. Первые секунды после L (`levelFor`) все помощи режима НАРАСТАЮТ от нуля:
+   * укладка хода вдоль носа, предел подъёма — иначе на входе скорость разом разворачивалась
+   * бы вбок или срезалась. Брюхом к грунту кладём мягко и лишь пока пилот не тянет тангаж/крен.
+   */
+  const entering = binding.levelFor && binding.levelFor > 0 ? binding.levelFor / LANDING.LEVEL_TIME : 0
+  const ease = 1 - entering
+  alignToNose(ship, dt * ease)
+  if (entering > 0) {
+    binding.levelFor = Math.max(0, (binding.levelFor ?? 0) - dt)
+    const c = ship.controls
+    if (Math.abs(c.pitch) < 0.05 && Math.abs(c.roll) < 0.05) {
+      levelTarget(ship, binding.normal, _targetQuat)
+      ship.state.quat.slerp(_targetQuat, Math.min(1, LANDING.LEVEL_RATE * dt))
+    }
+  }
 
   // Высота — из настоящего места после шага; Shift+W/S по-прежнему поднимает/опускает борт.
   _normal.copy(ship.state.pos).sub(surface.pos)
@@ -510,7 +491,9 @@ export function stepLanding(ship: ShipEntity, world: World, dt: number): boolean
    */
   const climbCap = ship.controls.boost > 1 ? LANDING.CLIMB_RATE_BOOST : LANDING.CLIMB_RATE
   const vn = ship.state.vel.dot(_normal)
-  if (vn > climbCap) redirectRadial(ship.state.vel, _normal, vn - climbCap)
+  // Излишек подъёма уходит в ход вдоль поверхности ПЛАВНО (≈0.25 с), а не одним тактом: влетел
+  // в ховер на крутом наборе — нос не дёргает, траектория загибается.
+  if (vn > climbCap) redirectRadial(ship.state.vel, _normal, (vn - climbCap) * (1 - Math.exp(-LANDING.ALIGN_RATE * dt)))
   // Потолок и пол: выше ALT_MAX и ниже ALT_MIN не пустим — ход за край гасим, вдоль оставляем.
   if (altitude > LANDING.ALT_MAX || altitude < LANDING.ALT_MIN) {
     altitude = Math.min(LANDING.ALT_MAX, Math.max(LANDING.ALT_MIN, altitude))

@@ -32,7 +32,6 @@ export {
   landShip,
   nearestLandable,
   releaseLanding,
-  stepAutoland,
   stepLanding,
   surfaceAltitude,
   type LandableSurface,

@@ -185,20 +185,28 @@ describe('удар о крупное тело', () => {
     )
   })
 
-  it('автопосаженный корпус лежит в плоскости, перпендикулярной радиусу', () => {
+  it('L — вход без шва: место и ход прежние, брюхом к грунту ложится мягко', () => {
+    // Пойманное: заход секунду держал борт на месте — скорость терялась, руль не слушался.
     const world = quietWorld()
     const player = world.player
     const planet = bodyOf(world, 'planet')
+    hover(world, planet, (LANDING.PROMPT_LO + LANDING.PROMPT_HI) / 2)
+    player.state.vel.set(0, 0, -50)
+    const pos = player.state.pos.clone()
+    const vel = player.state.vel.clone()
+    expect(armAutoland(world)).toBe(true)
+    expect(player.landedOn).not.toBeNull()
+    // В момент нажатия ни места, ни хода не трогаем.
+    expect(player.state.pos.distanceTo(pos)).toBeLessThan(1e-6)
+    expect(player.state.vel.distanceTo(vel)).toBeLessThan(1e-6)
 
-    landViaAutoland(world, planet)
-
+    for (let t = 0; t < LANDING.LEVEL_TIME; t += PHYSICS.FIXED_DT) oneStep(world)
     const normal = player.state.pos.clone().sub(planet.pos).normalize()
     const forward = new Vector3()
     const right = new Vector3()
     const up = new Vector3()
     shipAxes(player.state.quat, forward, right, up)
-    expect(up.dot(normal)).toBeCloseTo(1, 6)
-    expect(Math.abs(forward.dot(normal))).toBeLessThan(1e-6)
+    expect(up.dot(normal)).toBeGreaterThan(0.95)
   })
 
   it('L отпускает стоянку без телепорта', () => {
