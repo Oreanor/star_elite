@@ -16,7 +16,7 @@ import {
 } from '@elite/sim'
 import { t, useLang, type Key } from '../i18n'
 import { UI } from '../theme'
-import { ACCENT, Button, DIM, Modal } from '../station/chrome'
+import { ACCENT, Button, DIM, Modal, ModalActions, ModalKicker, ModalTitle } from '../station/chrome'
 import { formatStat, statLabel, statNumber } from '../station/format'
 import { chassisName } from '../i18n/dataNames'
 import { Money } from '../station/Money'
@@ -69,13 +69,7 @@ export function HullModal({
 
   return (
     <Modal onClose={onClose}>
-      {/* Шапка как у модалки слота: имя корпуса и кнопка закрытия. */}
-      <div className="mb-3 flex items-start justify-between gap-4">
-        <h3 className="text-base tracking-[0.2em]">{chassisName(player.loadout.chassis.name)}</h3>
-        <Button small variant="secondary" onClick={onClose}>
-          {t('ship.close')}
-        </Button>
-      </div>
+      <ModalTitle>{chassisName(player.loadout.chassis.name)}</ModalTitle>
 
       <p className="text-sm" style={{ color: DIM }}>
         {dmg <= 0
@@ -119,6 +113,12 @@ export function HullModal({
           {note}
         </p>
       )}
+
+      <ModalActions>
+        <Button small variant="secondary" onClick={onClose}>
+          {t('ship.close')}
+        </Button>
+      </ModalActions>
     </Modal>
   )
 }
@@ -150,9 +150,7 @@ export function HullBuyModal({
 
   return (
     <Modal onClose={onClose}>
-      <h3 className="mb-4 text-sm tracking-[0.25em]" style={{ color: DIM }}>
-        {t('ship.hullBuy.title')}
-      </h3>
+      <ModalKicker>{t('ship.hullBuy.title')}</ModalKicker>
 
       {/* Зачёт старого корпуса — автоматически, по состоянию и классу мастеров. */}
       <div className="text-sm">
@@ -219,14 +217,14 @@ export function HullBuyModal({
         </p>
       )}
 
-      <div className="mt-5 flex justify-center gap-2">
+      <ModalActions>
         <Button small variant="primary" disabled={!canBuy} onClick={() => onConfirm(q.net, sell)}>
           {t('ship.ok')}
         </Button>
         <Button small variant="secondary" onClick={onClose}>
           {t('ship.cancel')}
         </Button>
-      </div>
+      </ModalActions>
     </Modal>
   )
 }

@@ -17,7 +17,7 @@ import {
 import { trend, UI } from '../theme'
 import { t, useLang } from '../i18n'
 import { pushWarning } from '../../session/warnings'
-import { Button, Column, DIM, Modal, Panel, Table } from './chrome'
+import { Button, Column, DIM, Modal, ModalActions, Panel, Table } from './chrome'
 import { formatStat, statLabel } from './format'
 import { displayName } from './Equipment'
 import { itemDisplayName } from '../i18n/dataNames'
@@ -213,7 +213,7 @@ function ItemModal({
         {fault > 0 && <p style={{ color: UI.DANGER }}>{t('ship.broken', { pct: Math.round(fault * 100) })}</p>}
       </ItemSheet>
 
-      <div className="mt-6 flex justify-center gap-2">
+      <ModalActions>
         {atStation ? (
           <Button
             small
@@ -251,7 +251,7 @@ function ItemModal({
         <Button small variant="secondary" onClick={onClose}>
           {t('ship.close')}
         </Button>
-      </div>
+      </ModalActions>
     </Modal>
   )
 }

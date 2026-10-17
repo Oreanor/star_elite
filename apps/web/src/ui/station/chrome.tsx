@@ -318,6 +318,29 @@ export function Modal({
   )
 }
 
+/** Заголовок модалки: имя того, о чём окно (модуль, товар, корпус). Один кегль на все окна. */
+export function ModalTitle({ children }: { children: React.ReactNode }) {
+  return <h3 className="mb-4 text-base tracking-[0.2em]">{children}</h3>
+}
+
+/** Надзаголовок модалки: вид окна словом («ЛАЗЕР», «ПОКУПКА КОРПУСА»), тусклый, над именем. */
+export function ModalKicker({ children }: { children: React.ReactNode }) {
+  return (
+    <h3 className="mb-4 text-sm tracking-[0.25em]" style={{ color: DIM }}>
+      {children}
+    </h3>
+  )
+}
+
+/**
+ * Нижний ряд кнопок модалки — у ВСЕХ окон одинаковый: по центру, действия слева,
+ * «закрыть/отмена» последней. Раньше закрытие жило где придётся (в углу шапки, внизу,
+ * нигде), и отступы гуляли от окна к окну.
+ */
+export function ModalActions({ children }: { children: React.ReactNode }) {
+  return <div className="mt-6 flex flex-wrap justify-center gap-2">{children}</div>
+}
+
 /**
  * Колонка таблицы: заголовок, выравнивание, ширина и как из строки достать ячейку.
  * `header: ''` — колонка без подписи (действие); если пусты ВСЕ, шапка не рисуется.

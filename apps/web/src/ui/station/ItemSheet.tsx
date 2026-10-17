@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { DIM } from './chrome'
+import { DIM, ModalTitle } from './chrome'
 
 /**
  * Карточка предмета в модалке — ОДНА форма на продажу из отсека и на покупку оборудования:
@@ -9,7 +9,7 @@ import { DIM } from './chrome'
 export function ItemSheet({ title, children }: { title: ReactNode; children: ReactNode }) {
   return (
     <>
-      <h3 className="mb-4 text-base tracking-[0.2em]">{title}</h3>
+      <ModalTitle>{title}</ModalTitle>
       {/* Отступ от заголовка: строки — сведения О нём, а не вровень с ним. */}
       <div className="space-y-1 pl-4 text-sm">{children}</div>
     </>

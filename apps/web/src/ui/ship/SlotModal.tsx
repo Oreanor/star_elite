@@ -34,7 +34,7 @@ import {
 } from '@elite/sim'
 import { t, type Key } from '../i18n'
 import { UI } from '../theme'
-import { ACCENT, Button, DIM, Modal, Table, type Column } from '../station/chrome'
+import { ACCENT, Button, DIM, Modal, ModalActions, ModalKicker, Table, type Column } from '../station/chrome'
 import { moduleColumns } from '../station/moduleColumns'
 import { formatStat, statLabel, statNumber } from '../station/format'
 import { Money, tm } from '../station/Money'
@@ -258,21 +258,13 @@ export function SlotModal({
 
   return (
     <Modal onClose={onClose} fit>
-        {/* Шапка: вид слота словом и кнопка закрытия. */}
-        <div className="flex items-start justify-between gap-4">
-          <h3 className="text-sm tracking-[0.25em]" style={{ color: DIM }}>
-            {t(('kind.' + labelKind) as Key).toUpperCase()}
-          </h3>
-          <Button small variant="secondary" onClick={onClose}>
-            {t('ship.close')}
-          </Button>
-        </div>
+        <ModalKicker>{t(('kind.' + labelKind) as Key).toUpperCase()}</ModalKicker>
 
         {/* Что стоит сейчас — крупно, без рамки. */}
-        <div className="mt-4">
+        <div>
           {module ? (
             <>
-              <p className="text-lg">{displayName(module)}</p>
+              <p className="text-base tracking-[0.2em]">{displayName(module)}</p>
               <p className="text-sm" style={{ color: DIM }}>
                 {statLabel(moduleStat(module).key)} {formatStat(moduleStat(module).key, moduleStat(module).value)}
               </p>
@@ -284,7 +276,7 @@ export function SlotModal({
               )}
             </>
           ) : (
-            <p className="text-lg" style={{ color: DIM }}>
+            <p className="text-base tracking-[0.2em]" style={{ color: DIM }}>
               {t('ship.slotEmpty')}
             </p>
           )}
@@ -354,6 +346,12 @@ export function SlotModal({
             />
           </>
         )}
+
+        <ModalActions>
+          <Button small variant="secondary" onClick={onClose}>
+            {t('ship.close')}
+          </Button>
+        </ModalActions>
 
         {confirm && (
           <ConfirmBox
@@ -513,7 +511,7 @@ export function ConfirmBox({
           </div>
         )
       )}
-      <div className="mt-6 flex flex-wrap justify-center gap-2">
+      <ModalActions>
         {confirm.actions.map((a, i) => (
           <Button key={i} small variant="primary" onClick={() => onRun(a)}>
             {a.label}
@@ -522,7 +520,7 @@ export function ConfirmBox({
         <Button small variant={confirm.actions.length > 0 ? 'secondary' : 'primary'} onClick={onCancel}>
           {confirm.actions.length > 0 ? t('ship.cancel') : t('ship.ok')}
         </Button>
-      </div>
+      </ModalActions>
     </Modal>
   )
 }

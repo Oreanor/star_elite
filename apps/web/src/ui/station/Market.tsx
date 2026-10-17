@@ -13,7 +13,7 @@ import {
 } from '@elite/sim'
 import { trend } from '../theme'
 import { t, useLang } from '../i18n'
-import { ACCENT, Button, Column, DIM, Modal, Table } from './chrome'
+import { ACCENT, Button, Column, DIM, Modal, ModalActions, ModalTitle, Table } from './chrome'
 import { Hold } from './Hold'
 import { Outfitter } from './Outfitter'
 import { formatStat } from './format'
@@ -236,14 +236,10 @@ function TradeModal({
 
   return (
     <Modal onClose={onClose}>
-      <div className="mb-3 flex items-baseline justify-between gap-3">
-        <h3 className="text-lg tracking-[0.2em]">
-          {commodity.contraband ? `${commodityName(commodity)} ⚠` : commodityName(commodity)}
-        </h3>
-      </div>
+      <ModalTitle>{commodity.contraband ? `${commodityName(commodity)} ⚠` : commodityName(commodity)}</ModalTitle>
 
       {/* Товар — в тоннах: «3 т × цена тонны». Единица любого товара — тонна, дробных тонн нет. */}
-      <div className="mt-7 flex flex-col gap-2 text-center tabular-nums" style={{ color: ACCENT }}>
+      <div className="mt-6 flex flex-col gap-2 text-center tabular-nums" style={{ color: ACCENT }}>
         <div className="text-base font-normal leading-7">
             {tm('station.trade.line', {
               mass: commodity.unitMass === 1 ? formatStat('mass', totalMass) : `${units} × ${commodityMass(commodity)}`,
@@ -271,14 +267,14 @@ function TradeModal({
         <span className="w-10 text-base" style={{ color: DIM }}>{max}</span>
       </div>
 
-      <div className="mt-5 flex justify-center gap-2">
+      <ModalActions>
         <Button small variant="primary" disabled={disabled} onClick={act}>
           {t(selling ? 'station.trade.sell' : 'station.trade.buy')}
         </Button>
         <Button small variant="secondary" onClick={onClose}>
           {t('ship.cancel')}
         </Button>
-      </div>
+      </ModalActions>
     </Modal>
   )
 }
