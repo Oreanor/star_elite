@@ -5,6 +5,7 @@ import {
   clearContactLock,
   clearNavLock,
   MONOLITH_NAMES,
+  distanceToBody,
   shipAxes,
   stanceTo,
   type BodyEntity,
@@ -153,7 +154,7 @@ function markers(world: World): { points: Marker[]; belts: BeltBand[] } {
     .map((s) => ({ id: -2000 - s.id, name: s.name, kind: 'player' as MarkerKind, pos: s.state.pos }))
 
   const raw = [
-    ...world.bodies.map((b) => ({ id: b.id, name: b.name, kind: b.kind as MarkerKind, pos: b.pos })),
+    ...world.bodies.map((b) => ({ id: b.id, name: b.name, kind: b.kind as MarkerKind, pos: b.pos, range: distanceToBody(world, b) })),
     ...world.monoliths.map((m) => ({
       id: m.id,
       name: MONOLITH_NAMES[m.variant] ?? 'Монолит',
@@ -180,7 +181,8 @@ function markers(world: World): { points: Marker[]; belts: BeltBand[] } {
       orbit: Math.hypot(dx, dz),
       az: Math.atan2(dz, dx),
       dy,
-      range: m.pos.distanceTo(player),
+      // Тела — до поверхности, своя станция у причала — ноль (`distanceToBody`), прочее — до точки.
+      range: 'range' in m && typeof m.range === 'number' ? m.range : m.pos.distanceTo(player),
       isStar: star != null && m.id === star.id,
     }
   })

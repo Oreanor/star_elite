@@ -4,6 +4,7 @@ import {
   clearContactLock,
   assessThreat,
   beltNearest,
+  distanceToBody,
   clearNavLock,
   isVisible,
   MIELOPHONE,
@@ -157,6 +158,8 @@ function blips(world: World): Blip[] {
     out.push({
       key: `body-${body.id}`,
       ...d,
+      // До поверхности, у своей станции у причала — ноль (`distanceToBody`): как на HUD.
+      dist: distanceToBody(world, body),
       color: bodyColor(body),
       shape: body.kind === 'station' ? 'diamond' : 'round',
       size: body.kind === 'star' || body.kind === 'blackhole' ? 11 : 7,
