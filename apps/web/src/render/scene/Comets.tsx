@@ -1,11 +1,10 @@
-import { useFrame } from '@react-three/fiber'
+import { useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef } from 'react'
-import { Group, IcosahedronGeometry, Mesh, Quaternion, Vector3 } from 'three'
+import { CylinderGeometry, Group, Mesh, PlaneGeometry, Quaternion, Vector3 } from 'three'
 import { COMET, renderPos, renderTime, type AsteroidEntity, type World } from '@elite/sim'
 import { useSession } from '../../session/GameContext'
-import { createStarBeamMaterial } from '../materials/starBeam'
+import { createGlowMaterial, createStarBeamMaterial } from '../materials/starBeam'
 import { worldShrink } from '../worldShrink'
-import { beamCone } from './StarBeams'
 
 /**
  * КОМЕТЫ — свечение и хвосты. Само ядро рисует `AsteroidField` (комета — тот же камень);
@@ -21,16 +20,33 @@ import { beamCone } from './StarBeams'
  * позы и видимость. Свет — тот же мягкий материал, что у лучей светил.
  */
 
-/** Размеры — в радиусах ядра. */
-const COMA_RADII = 14
-const ION_LENGTH_RADII = 320
-const ION_WIDTH_RADII = 10
-const DUST_LENGTH_RADII = 170
-const DUST_WIDTH_RADII = 34
+/**
+ * Размеры — в радиусах ядра. Хвост начинается шириной с кому и расширяется медленно: от
+ * точки-вершины он выходил раструбом-прожектором, а настоящий хвост — длинная тающая лента.
+ */
+const COMA_RADII = 16
+const ION_LENGTH_RADII = 420
+const ION_START_RADII = 2.5
+const ION_END_RADII = 7
+const DUST_LENGTH_RADII = 240
+const DUST_START_RADII = 4
+const DUST_END_RADII = 14
 /** Насколько пылевой хвост тянется против движения (остальное — от звезды). */
 const DUST_DRAG = 0.65
 
-const comaGeometry = new IcosahedronGeometry(1, 3)
+const comaGeometry = new PlaneGeometry(2, 2)
+
+/**
+ * Хвост — усечённый конус: начало (y = 0, у ядра) уже конца (y = 1). Радиусы — в радиусах
+ * ядра; меш масштабируется радиусом кометы. У каждого хвоста свой профиль, поэтому меша два.
+ */
+function tailGeometry(start: number, end: number) {
+  const g = new CylinderGeometry(end, start, 1, 20, 1, true)
+  g.translate(0, 0.5, 0) // начало хвоста у ядра (y = 0), конец на +1
+  return g
+}
+const ionGeometry = tailGeometry(ION_START_RADII, ION_END_RADII)
+const dustGeometry = tailGeometry(DUST_START_RADII, DUST_END_RADII)
 
 const _pos = new Vector3()
 const _anti = new Vector3()
@@ -58,15 +74,16 @@ function antiStar(world: World, comet: AsteroidEntity, out: Vector3): Vector3 {
 
 function CometSlot({ index }: { index: number }) {
   const session = useSession()
+  const camera = useThree((s) => s.camera)
   const group = useRef<Group>(null)
   const coma = useRef<Mesh>(null)
   const ion = useRef<Mesh>(null)
   const dust = useRef<Mesh>(null)
   const mats = useMemo(
     () => ({
-      coma: createStarBeamMaterial(0xdff4ff, 0.35, 0, 0),
-      ion: createStarBeamMaterial(0x8fc8ff, 0.5, 0.35),
-      dust: createStarBeamMaterial(0xfff0cf, 0.32, 0.15),
+      coma: createGlowMaterial(0xdff4ff, 0.55),
+      ion: createStarBeamMaterial(0x8fc8ff, 0.32, 0.45),
+      dust: createStarBeamMaterial(0xfff0cf, 0.18, 0.2),
     }),
     [],
   )
@@ -99,15 +116,16 @@ function CometSlot({ index }: { index: number }) {
     const time = renderTime(world)
 
     coma.current.position.copy(_pos)
+    coma.current.quaternion.copy(camera.quaternion) // облако всегда лицом к камере
     coma.current.scale.setScalar(r * COMA_RADII)
 
     ion.current.position.copy(_pos)
     ion.current.quaternion.copy(_q.setFromUnitVectors(_up, _anti))
-    ion.current.scale.set(r * ION_WIDTH_RADII, r * ION_LENGTH_RADII, r * ION_WIDTH_RADII)
+    ion.current.scale.set(r, r * ION_LENGTH_RADII, r)
 
     dust.current.position.copy(_pos)
     dust.current.quaternion.copy(_q.setFromUnitVectors(_up, _dust))
-    dust.current.scale.set(r * DUST_WIDTH_RADII, r * DUST_LENGTH_RADII, r * DUST_WIDTH_RADII)
+    dust.current.scale.set(r, r * DUST_LENGTH_RADII, r)
 
     mats.ion.uniforms.uTime!.value = time
     mats.dust.uniforms.uTime!.value = time
@@ -116,8 +134,8 @@ function CometSlot({ index }: { index: number }) {
   return (
     <group ref={group} visible={false}>
       <mesh ref={coma} geometry={comaGeometry} material={mats.coma} frustumCulled={false} renderOrder={3} />
-      <mesh ref={ion} geometry={beamCone} material={mats.ion} frustumCulled={false} renderOrder={3} />
-      <mesh ref={dust} geometry={beamCone} material={mats.dust} frustumCulled={false} renderOrder={3} />
+      <mesh ref={ion} geometry={ionGeometry} material={mats.ion} frustumCulled={false} renderOrder={3} />
+      <mesh ref={dust} geometry={dustGeometry} material={mats.dust} frustumCulled={false} renderOrder={3} />
     </group>
   )
 }

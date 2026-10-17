@@ -87,3 +87,46 @@ export function createStarBeamMaterial(color: number, strength: number, knots: n
     toneMapped: false,
   })
 }
+
+const GLOW_VERT = /* glsl */ `
+  #include <common>
+  #include <logdepthbuf_pars_vertex>
+  varying vec2 vUv;
+  void main() {
+    vUv = uv * 2.0 - 1.0;
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    #include <logdepthbuf_vertex>
+  }
+`
+
+const GLOW_FRAG = /* glsl */ `
+  #include <common>
+  #include <logdepthbuf_pars_fragment>
+  uniform vec3 uColor;
+  uniform float uStrength;
+  varying vec2 vUv;
+  void main() {
+    #include <logdepthbuf_fragment>
+    /* Гауссово облако: края нет вовсе — свет тает в ноль задолго до кромки квадрата. */
+    float r2 = dot(vUv, vUv);
+    float a = uStrength * exp(-r2 * 5.0) * (1.0 - smoothstep(0.8, 1.0, r2));
+    gl_FragColor = vec4(uColor, a);
+  }
+`
+
+/**
+ * Мягкое СВЕЧЕНИЕ-облако на плоскости лицом к камере — кома кометы. Гауссов спад без края:
+ * шар с френелем давал жёсткий диск с кромкой.
+ */
+export function createGlowMaterial(color: number, strength: number): ShaderMaterial {
+  return new ShaderMaterial({
+    vertexShader: GLOW_VERT,
+    fragmentShader: GLOW_FRAG,
+    uniforms: { uColor: { value: new Color(color) }, uStrength: { value: strength } },
+    transparent: true,
+    blending: AdditiveBlending,
+    depthWrite: false,
+    side: DoubleSide,
+    toneMapped: false,
+  })
+}
