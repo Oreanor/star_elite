@@ -14,6 +14,7 @@ import { stepShip } from './model'
 
 const _climb = new Vector3()
 const _normalBefore = new Vector3()
+const _spinFrom = new Vector3()
 const _noseDir = new Vector3()
 const _side = new Vector3()
 const _transport = new Quaternion()
@@ -452,9 +453,23 @@ export function stepLanding(ship: ShipEntity, world: World, dt: number): boolean
   // Тело крутится — корабль едет с поверхностью, иначе астероид ускользает из-под ног.
   if (Math.abs(surface.spinRate) > 1e-9) {
     _spinQ.setFromAxisAngle(surface.spinAxis, surface.spinRate * dt)
+    _spinFrom.copy(ship.state.pos)
     ship.state.pos.sub(surface.pos).applyQuaternion(_spinQ).add(surface.pos)
     ship.state.quat.premultiply(_spinQ).normalize()
     ship.state.vel.applyQuaternion(_spinQ)
+    // Вертикаль под бортом повернулась вместе с телом — иначе шаг ниже довернул бы позу второй раз.
+    binding.normal.applyQuaternion(_spinQ)
+    /**
+     * Езда с поверхностью — СМЕНА СИСТЕМЫ ОТСЧЁТА, а не ход корабля. У планеты экватор идёт
+     * сотнями м/с (3.5 м за такт), и камера, не зная об этом, отставала: после L корабль
+     * «убегал назад» и почти пропадал, пока разгон не стягивал пружину камеры. Сдвиг идёт
+     * камере тем же каналом, что орбитальный перенос, и след позы едет с ним.
+     */
+    if (ship === world.player) {
+      _spinFrom.subVectors(ship.state.pos, _spinFrom)
+      world.originShift.add(_spinFrom)
+      shiftTrail(ship.state, _spinFrom)
+    }
   }
 
   /*

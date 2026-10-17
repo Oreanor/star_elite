@@ -519,3 +519,27 @@ describe('над поверхностью без заноса', () => {
   })
 })
 
+describe('ховер над вращающейся планетой', () => {
+  it('езда с поверхностью доходит до камеры: сдвиг борта — весь в originShift', () => {
+    // Пойманное: экватор идёт ~460 м/с, а камера об этом не знала — после L корабль «убегал»
+    // от неё назад и почти пропадал из кадра.
+    const world = quietWorld()
+    const planet = world.bodies.find((b) => b.kind === 'planet')!
+    expect(Math.abs(planet.spin)).toBeGreaterThan(0)
+    const p = world.player
+    p.state.pos.copy(planet.pos).add(new Vector3(planet.radius + effectiveRadius(p) + ARM_ALT, 0, 0))
+    p.state.vel.set(0, 0, 0)
+    p.controls.throttle = 0
+    expect(armAutoland(world)).toBe(true)
+    for (let i = 0; i < 3000 && !p.landedOn; i++) stepWorld(world, PHYSICS.FIXED_DT, NO_CONTROLLERS)
+    expect(p.landedOn).not.toBeNull()
+    for (let i = 0; i < 60; i++) {
+      const before = p.state.pos.clone()
+      stepWorld(world, PHYSICS.FIXED_DT, NO_CONTROLLERS)
+      const moved = p.state.pos.clone().sub(before)
+      // Без хода самого корабля всё смещение — это смена системы отсчёта, и камера его знает.
+      expect(moved.sub(world.originShift).length()).toBeLessThan(0.05)
+    }
+  })
+})
+
