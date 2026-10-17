@@ -45,6 +45,7 @@ import { resetTorusFlight, stepTorusFlight } from '../../session/torusFlight'
 import {
   consumeTorusArrival,
   cycleTorusTarget,
+  disengageTorusAutopilot,
   resetTorusAutopilot,
   toggleTorusAutopilot,
 } from '../../session/torusAutopilot'
@@ -144,7 +145,8 @@ function stepBush(session: Session): void {
     enterBush(bush, homeNode >= 0 ? homeNode : GALAXY.HOME_NODE)
     session.monumentCross = null
     placeTorusAtVertex(vertexOfNode(bush.node))
-    resetTorusAutopilot()
+    // Цель, намеченную на карте «Мир» ещё снаружи, не стираем — сбрасываем лишь ведение.
+    disengageTorusAutopilot()
     // Влетели снова, не досмотрев прошлый выход (успел долететь до дыры за полторы секунды) —
     // старый переход не должен доигрывать поверх новой комнаты.
     resetBushExit()

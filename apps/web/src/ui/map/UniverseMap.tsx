@@ -11,6 +11,7 @@ import {
   SphereGeometry,
   Vector3,
 } from 'three'
+import { GALAXY } from '@elite/sim'
 import { useSession } from '../../session/GameContext'
 import {
   selectTorusTarget,
@@ -21,6 +22,7 @@ import { torusView } from '../../session/torusFlight'
 import { TORUS } from '../../render/config'
 import { GRID } from '../../render/scene/HypertorusLayer'
 import { nameOfVertex, vertexOfNode } from '../../render/scene/torusNodes'
+import { placeTorusAtVertex } from '../../render/scene/HypertorusLayer'
 import { UI } from '../theme'
 import { properName } from '../i18n/dataNames'
 import { t } from '../i18n'
@@ -368,11 +370,24 @@ function Field({
 export function UniverseMap({ onClose }: { onClose: () => void }) {
   const session = useSession()
   const universe = session.universe
-  const homeVertex = vertexOfNode(session.bush.node)
+  const inRoom = session.bush.active
+  /**
+   * Где ты в клубке. В комнате — узел, где стоишь; снаружи — узел ТВОЕЙ галактики (по зерну
+   * мира, как и вход в дыру). Не нашли (чужое зерно, дев-старт) — дом из конфига.
+   */
+  const hereNode = inRoom ? session.bush.node : universe.nodes.findIndex((n) => n.seed === session.world.galaxySeed)
+  const homeVertex = vertexOfNode(hereNode >= 0 ? hereNode : GALAXY.HOME_NODE)
 
   // Снимок на открытие: пока карта на экране, мир стоит, а пересчитывать 720 дуг каждый
   // кадр ради неподвижной картинки незачем.
-  const items = useMemo(() => snapshot((i) => nameOfVertex(universe, i)), [universe])
+  //
+  // Снаружи клубка поза полёта по S³ ничего не значит (её сбрасывает выход из комнаты), и
+  // дуги считались бы от случайной точки. Ставим позу в узел своей галактики — то же самое
+  // сделает вход в дыру, так что карта показывает ровно то, что увидишь, влетев.
+  const items = useMemo(() => {
+    if (!inRoom) placeTorusAtVertex(homeVertex)
+    return snapshot((i) => nameOfVertex(universe, i))
+  }, [universe, inRoom, homeVertex])
   const nose = useMemo(() => {
     _q.copy(session.world.player.state.quat)
     return new Vector3(0, 0, -1).applyQuaternion(_q)
@@ -437,9 +452,11 @@ export function UniverseMap({ onClose }: { onClose: () => void }) {
           </div>
 
           {/* Цель ставит «ВЫБРАТЬ» в плашке; здесь — тронуться к ней. Закрыть карту — общий выход панели. */}
+          {/* Вести — только из комнаты: автопилот летит по S³. Снаружи цель лишь намечается,
+              а тронуться к ней можно, влетев в дыру ядра. */}
           <button
             type="button"
-            disabled={target === null}
+            disabled={target === null || !inRoom}
             onClick={() => {
               if (!target) return
               toggleTorusAutopilot()

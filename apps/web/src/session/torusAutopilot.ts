@@ -93,6 +93,18 @@ export function consumeTorusArrival(): number | null {
   return v
 }
 
+/**
+ * Сбросить ВЕДЕНИЕ, оставив цель. На входе в клубок: цель могли наметить заранее на карте
+ * «Мир», снаружи, — и влетев в дыру, игрок ждёт её помеченной, а не стёртой.
+ */
+export function disengageTorusAutopilot(): void {
+  engaged = false
+  rank = -1
+  arrivedAt = null
+  nav.valid = false
+  nav.arrived = false
+}
+
 export function resetTorusAutopilot(): void {
   target = null
   engaged = false
