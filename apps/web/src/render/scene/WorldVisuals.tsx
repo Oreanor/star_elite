@@ -15,6 +15,7 @@ import { Dyson } from './Dyson'
 import { BlackHole } from './BlackHole'
 import { StarBeams } from './StarBeams'
 import { MassStreams } from './MassStreams'
+import { QuasarDisks } from './QuasarDisks'
 import {
   CargoPods,
   Explosions,
@@ -85,6 +86,7 @@ export function WorldVisuals() {
         <BlackHole />
         <StarBeams />
         <MassStreams />
+        <QuasarDisks />
         <Dyson />
         <AsteroidField />
         <AsteroidBelts />

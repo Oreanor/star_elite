@@ -56,8 +56,8 @@ export const BEAM_LAYERS = {
     { width: 2.6, strength: 0.32 },
   ],
   jet: [
-    { width: 0.6, strength: 0.7 },
-    { width: 2.0, strength: 0.2 },
+    { width: 0.3, strength: 1.1 },
+    { width: 1.1, strength: 0.25 },
   ],
 } as const
 
@@ -72,7 +72,7 @@ function BeamPair({ body }: { body: BodyEntity }) {
   const materials = useMemo(
     () =>
       [1, -1].flatMap(() =>
-        layers.map((layer) => createStarBeamMaterial(pulsar ? PULSAR_COLOR : JET_COLOR, layer.strength, pulsar ? 0.25 : 0.6)),
+        layers.map((layer) => createStarBeamMaterial(pulsar ? PULSAR_COLOR : JET_COLOR, layer.strength, pulsar ? 0.25 : 0.9)),
       ),
     [pulsar],
   )
