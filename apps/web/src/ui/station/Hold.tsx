@@ -77,10 +77,13 @@ export function Hold({
   onChange,
   atStation,
   onTrade,
+  flush,
 }: {
   world: World
   onChange: () => void
   atStation: boolean
+  /** Без верхнего отступа панели — на экране корабля под переключателем «модули / отсек». */
+  flush?: boolean
   /**
    * Товар из отсека продают ТЕМ ЖЕ окном сделки, что и со списка товаров (его держит
    * магазин). Есть — клик по товару зовёт его; модули и вне станции — своя карточка.
@@ -123,7 +126,7 @@ export function Hold({
   ]
 
   return (
-    <Panel title={t('station.hold.title')}>
+    <Panel title={t('station.hold.title')} flush={flush}>
       <p className="mb-3 text-xs tracking-widest" style={{ color: DIM }}>
         {t('ship.cargo.used', { used: Math.round(cargoMass(hold)), cap: hold.capacity })}
       </p>

@@ -105,6 +105,8 @@ export function ShipScreen({
   // МАСТЕРСКАЯ КОРПУСА — ремонт и усиление осей — открывается кнопкой «просмотреть» под чертежом.
   // Только у своего борта на верфи: чужой корпус не чинят, а в полёте мастерской нет.
   const hullWorkshop = docked && owned
+  // Правая колонка: модули или грузовой отсек — по очереди, переключателем над ней.
+  const [rightTab, setRightTab] = useState<RightTab>('modules')
   const [hullOpen, setHullOpen] = useState(false)
 
   // Escape закрывает экран — как на карте галактики. Клавишу I гасит App.
@@ -209,18 +211,26 @@ export function ShipScreen({
 
         </div>
 
-        <div className="flex flex-col gap-5">
-          <SlotGrid
-            slots={slots}
-            onOpen={setOpenKey}
-            interactive={slotsInteractive}
-            // У причала модули — нижняя панель колонки: тянем её до линии характеристик.
-            grow={docked}
-          />
-          {/* ГРУЗ у причала уехал в МАГАЗИН, под товары: там торгуют, и трюм нужен рядом с
-              прилавком. В полёте магазина нет, а трюм есть — и он остаётся здесь, под
-              модулями, в режиме «выбросить за борт». Компонент один и тот же. */}
-          {!docked && <Hold world={world} onChange={refresh} atStation={false} />}
+        <div className="flex flex-col gap-3">
+          {/* Правая колонка — по очереди: модули или грузовой отсек. Вместе они не влезали:
+              отсек под модулями растягивал экран, и приходилось листать. Отсек здесь всегда —
+              и в полёте (выбросить за борт), и у причала (продать), компонент один и тот же. */}
+          <RightTabs value={rightTab} onChange={setRightTab} />
+          {rightTab === 'modules' ? (
+            <SlotGrid
+              slots={slots}
+              onOpen={setOpenKey}
+              interactive={slotsInteractive}
+              // У причала модули — нижняя панель колонки: тянем её до линии характеристик.
+              grow={docked}
+            />
+          ) : (
+            // Высота — не больше колонки модулей: длинный трюм прокручивается внутри, а не
+            // растягивает экран (иначе характеристики слева уезжали вниз за край).
+            <div className="max-h-[62vh] min-h-0 overflow-y-auto overscroll-contain pr-1">
+              <Hold world={world} onChange={refresh} atStation={docked} flush />
+            </div>
+          )}
         </div>
       </div>
 
@@ -263,3 +273,28 @@ export function ShipScreen({
 }
 
 // ─── Чертёж ────────────────────────────────────────────────────────────────
+
+type RightTab = 'modules' | 'hold'
+
+/** Переключатель правой колонки — того же вида, что «по удалённости / по типу» на картах. */
+function RightTabs({ value, onChange }: { value: RightTab; onChange: (v: RightTab) => void }) {
+  return (
+    <div className="flex gap-2">
+      {(['modules', 'hold'] as const).map((k) => {
+        const on = k === value
+        return (
+          <button
+            key={k}
+            type="button"
+            onClick={() => onChange(k)}
+            aria-current={on ? 'true' : undefined}
+            className="cursor-pointer border px-3 py-1 text-xs tracking-[0.2em] transition-colors ui-btn"
+            style={{ borderColor: on ? ACCENT : DIM, backgroundColor: on ? ACCENT : 'transparent', color: on ? '#000' : DIM }}
+          >
+            {t(k === 'modules' ? 'ship.tab.modules' : 'station.hold.title')}
+          </button>
+        )
+      })}
+    </div>
+  )
+}

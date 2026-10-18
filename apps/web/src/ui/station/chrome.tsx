@@ -266,9 +266,10 @@ export function PilotPortrait({
   )
 }
 
-export function Panel({ title, children }: { title: string; children: React.ReactNode }) {
+/** @param flush Без верхнего отступа — когда панель встаёт под переключатель, а не под соседку. */
+export function Panel({ title, children, flush }: { title: string; children: React.ReactNode; flush?: boolean }) {
   return (
-    <section className="mt-6 border p-5" style={{ borderColor: DIM }}>
+    <section className={`${flush ? '' : 'mt-6 '}border p-5`} style={{ borderColor: DIM }}>
       <h2 className="mb-3 text-sm tracking-[0.3em]">{title}</h2>
       {children}
     </section>
