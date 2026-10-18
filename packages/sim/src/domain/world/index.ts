@@ -178,4 +178,4 @@ export { renderPos, renderQuat, renderTime, shownPosition, type Posed } from './
 export { SLOVO_KIND, SLOVO_NAME } from './slovo'
 export { beamDirection, beamExposure } from './beams'
 export { liveCometCount, spawnComet } from './comets'
-export { beltAt, beltNearest, insideBelt } from './belts'
+export { beltAt, beltNearest, beltRockKey, beltRocks, insideBelt, type BeltRock } from './belts'

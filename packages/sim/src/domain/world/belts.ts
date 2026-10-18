@@ -1,12 +1,13 @@
 import { Vector3 } from 'three'
-import { ASTEROID_BELT } from '../../config/world'
-import { liveAsteroidCount, spawnAsteroidEncounter } from './asteroidEncounter'
+import { ASTEROID, ASTEROID_BELT } from '../../config/world'
+import { makeRng } from '../../core/math'
+import { pushRock } from './asteroidEncounter'
 import type { AsteroidBeltEntity, World } from './entities'
 
 /**
- * Пояса астероидов. Пояс — ОБЛАСТЬ вокруг светила, а не тысячи тел на всю систему: пока
- * корабль в ней, вокруг подрождаются камни (те же, что у встреч), и пояс ощущается полным;
- * вылетел — камни уйдут за кромку и уберутся обычной уборкой.
+ * Пояса астероидов. Камни пояса — НАСТОЯЩИЕ и неподвижные в поясе: у каждого своё место из
+ * зерна (`beltRocks`). Издали рендер рисует их точками; ближе `MATERIALIZE_RANGE` камень
+ * становится телом мира на том же месте — его можно сбить, и тогда его нет и точкой.
  *
  * Плоскость пояса — XZ системы, центр — светило (`centerId`), поэтому при сдвиге начала
  * координат пояс едет вместе со звездой сам.
@@ -51,19 +52,95 @@ export function beltAt(world: World, pos: Vector3): AsteroidBeltEntity | null {
   return null
 }
 
+/** Один камень пояса: место в системе координат пояса (центр — светило) и размер. */
+export interface BeltRock {
+  /** Смещение от светила, м (плоскость пояса — XZ). */
+  x: number
+  y: number
+  z: number
+  radius: number
+}
+
+/** Нормальное распределение (Бокс — Мюллер): камни гуще к средней линии пояса. */
+function gauss(rng: () => number): number {
+  const u = Math.max(rng(), 1e-9)
+  return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * rng())
+}
+
+const ROCKS_CACHE = new WeakMap<AsteroidBeltEntity, BeltRock[]>()
+
 /**
- * Шаг пояса: пока игрок в поясе, раз в `SPAWN_INTERVAL` секунд подрождается встреча камней,
- * пока вокруг их меньше `TARGET_LIVE`. Таймер в секундах такта — от частоты кадров не зависит.
+ * Камни пояса — детерминированно из его размеров (у всех игроков одни и те же). Список
+ * чистый и неизменный: держим его на пояс, а не собираем каждый такт.
+ */
+export function beltRocks(belt: AsteroidBeltEntity): readonly BeltRock[] {
+  const cached = ROCKS_CACHE.get(belt)
+  if (cached) return cached
+  const rng = makeRng(Math.floor(belt.radius) >>> 0)
+  const rocks: BeltRock[] = []
+  for (let i = 0; i < ASTEROID_BELT.ROCKS; i++) {
+    const a = rng() * Math.PI * 2
+    const r = belt.radius + Math.max(-0.5, Math.min(0.5, gauss(rng) * 0.22)) * belt.width
+    const y = Math.max(-0.5, Math.min(0.5, gauss(rng) * 0.25)) * belt.thickness
+    const size = Math.pow(rng(), ASTEROID_BELT.ROCK_RADIUS_POWER)
+    rocks.push({
+      x: Math.cos(a) * r,
+      y,
+      z: Math.sin(a) * r,
+      radius: ASTEROID_BELT.ROCK_RADIUS_MIN + (ASTEROID.RADIUS_MAX - ASTEROID_BELT.ROCK_RADIUS_MIN) * size,
+    })
+  }
+  ROCKS_CACHE.set(belt, rocks)
+  return rocks
+}
+
+/** Ключ камня: номер пояса в системе и номер камня. */
+export function beltRockKey(beltIndex: number, rockIndex: number): string {
+  return `${beltIndex}:${rockIndex}`
+}
+
+const _rock = new Vector3()
+
+/**
+ * Шаг пояса: камни, до которых ближе `MATERIALIZE_RANGE`, становятся телами мира на СВОИХ
+ * местах; улетел — тело уберёт обычная уборка (за горизонтом), а камень останется точкой.
+ * Сбитый (тело погибло) уходит совсем: ни телом, ни точкой — до следующего входа в систему.
  * Камни ведёт хозяин системы: у зеркала свои не рождаются (как у трафика).
  */
 export function stepBelts(world: World, dt: number): void {
-  if (world.desolate || world.trafficRole === 'mirror') return
-  if (!beltAt(world, world.player.state.pos)) {
-    world.beltSpawnTimer = 0
-    return
+  // Судьба уже рождённых: погиб — сбит; пропал из мира живым — улетели, вернётся точкой.
+  for (const [key, rock] of world.beltLive) {
+    if (!rock.alive) {
+      world.beltGone.add(key)
+      world.beltLive.delete(key)
+    } else if (!world.asteroids.includes(rock)) {
+      world.beltLive.delete(key)
+    }
   }
+  if (world.desolate || world.trafficRole === 'mirror' || world.asteroidBelts.length === 0) return
   world.beltSpawnTimer -= dt
   if (world.beltSpawnTimer > 0) return
-  world.beltSpawnTimer = ASTEROID_BELT.SPAWN_INTERVAL
-  if (liveAsteroidCount(world) < ASTEROID_BELT.TARGET_LIVE) spawnAsteroidEncounter(world)
+  world.beltSpawnTimer = ASTEROID_BELT.SCAN_INTERVAL
+
+  const player = world.player.state.pos
+  const range2 = ASTEROID_BELT.MATERIALIZE_RANGE ** 2
+  world.asteroidBelts.forEach((belt, b) => {
+    const c = centerOf(world, belt)
+    if (!c) return
+    // Далеко от кольца — камни не перебираем вовсе.
+    if (beltNearest(world, belt, player, _rock) > ASTEROID_BELT.MATERIALIZE_RANGE) return
+    const rocks = beltRocks(belt)
+    for (let i = 0; i < rocks.length; i++) {
+      const r = rocks[i]!
+      _rock.set(c.x + r.x, c.y + r.y, c.z + r.z)
+      if (_rock.distanceToSquared(player) > range2) continue
+      const key = beltRockKey(b, i)
+      if (world.beltLive.has(key) || world.beltGone.has(key)) continue
+      const body = pushRock(world, _rock, r.radius)
+      // Камень пояса стоит на своём месте, а не плывёт, как встречный.
+      body.vel.set(0, 0, 0)
+      body.beltKey = key
+      world.beltLive.set(key, body)
+    }
+  })
 }

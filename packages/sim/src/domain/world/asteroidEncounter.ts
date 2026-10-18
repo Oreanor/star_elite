@@ -30,7 +30,7 @@ function aloneRadius(world: World): number {
   return lo + world.rng() * (ASTEROID.RADIUS_MAX - lo)
 }
 
-function pushRock(world: World, pos: Vector3, radius: number): AsteroidEntity {
+export function pushRock(world: World, pos: Vector3, radius: number): AsteroidEntity {
   const r = Math.min(ASTEROID.RADIUS_MAX, Math.max(ASTEROID.RADIUS_MIN, radius))
   const spinScale = r >= ASTEROID.NAV_RADIUS ? 0.04 : 0.12
   const rock: AsteroidEntity = {

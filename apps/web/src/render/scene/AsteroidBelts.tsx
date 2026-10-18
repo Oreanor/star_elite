@@ -1,54 +1,104 @@
 import { useFrame } from '@react-three/fiber'
 import { useEffect, useMemo, useRef } from 'react'
-import { BufferAttribute, BufferGeometry, Group, PointsMaterial } from 'three'
-import { makeRng, renderPos, type AsteroidBeltEntity } from '@elite/sim'
+import { BufferAttribute, BufferGeometry, Color, Group, ShaderMaterial } from 'three'
+import { ASTEROID, beltRockKey, beltRocks, renderPos, type AsteroidBeltEntity } from '@elite/sim'
 import { useSession } from '../../session/GameContext'
 import { worldShrink } from '../worldShrink'
 
 /**
- * ПОЯСА АСТЕРОИДОВ издали — пылевое кольцо точек вокруг светила. Вблизи пояс — настоящие
- * камни (`stepBelts` рождает их вокруг корабля), а это лишь его силуэт на всю систему.
+ * ПОЯСА АСТЕРОИДОВ издали — КАМНИ точками. Каждая точка — настоящий камень пояса
+ * (`beltRocks`): то же место, где вблизи стоит его тело. Подлетая, точка гаснет ровно там,
+ * где камень уже виден телом (`MATERIALIZE_RANGE` в домене), — не тает в пустоту, а
+ * сменяется самим камнем. Сбитый камень гаснет и точкой (`world.beltGone`).
  *
- * Точки разложены один раз на пояс (детерминированно от его радиуса — у всех одинаково):
- * плотнее к средней линии, тоньше к кромкам — гауссов профиль, а не резкая шайба. За кадр
- * двигается только группа — вслед за светилом.
+ * Буфер выделен один раз на пояс; за кадр двигается только группа (за светилом), а признак
+ * «жив» переписывается лишь когда кого-то сбили.
  */
 
-/** Точек на пояс. Кольцо — силуэт, не тела: этого хватает, чтобы читалось сплошным. */
-const DUST_COUNT = 9000
-const DUST_COLOR = 0x9a8f80
+const DOT_COLOR = 0x9a8f80
+/** Точка гаснет ближе этого, м: дальше видно тело камня (оно рождается на 15 км). */
+const HIDE_NEAR = 9_000
+const HIDE_FAR = 13_000
 
-/** Нормальное распределение (Бокс — Мюллер): плотнее к середине пояса. */
-function gauss(rng: () => number): number {
-  const u = Math.max(rng(), 1e-9)
-  return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * rng())
-}
+const VERT = /* glsl */ `
+  #include <common>
+  #include <logdepthbuf_pars_vertex>
+  attribute float aSize;
+  attribute float aAlive;
+  uniform float uHideNear;
+  uniform float uHideFar;
+  varying float vAlpha;
+  void main() {
+    vec4 mv = modelViewMatrix * vec4(position, 1.0);
+    float d = -mv.z;
+    vAlpha = aAlive * smoothstep(uHideNear, uHideFar, d);
+    gl_PointSize = aSize;
+    gl_Position = projectionMatrix * mv;
+    #include <logdepthbuf_vertex>
+  }
+`
 
-function BeltDust({ belt }: { belt: AsteroidBeltEntity }) {
+const FRAG = /* glsl */ `
+  #include <common>
+  #include <logdepthbuf_pars_fragment>
+  uniform vec3 uColor;
+  uniform float uOpacity;
+  varying float vAlpha;
+  void main() {
+    #include <logdepthbuf_fragment>
+    if (vAlpha <= 0.001) discard;
+    vec2 c = gl_PointCoord * 2.0 - 1.0;
+    if (dot(c, c) > 1.0) discard;
+    gl_FragColor = vec4(uColor, uOpacity * vAlpha);
+  }
+`
+
+function BeltDots({ belt, index }: { belt: AsteroidBeltEntity; index: number }) {
   const session = useSession()
   const group = useRef<Group>(null)
-  const geometry = useMemo(() => {
-    const rng = makeRng(Math.floor(belt.radius) >>> 0)
-    const pos = new Float32Array(DUST_COUNT * 3)
-    for (let i = 0; i < DUST_COUNT; i++) {
-      const a = rng() * Math.PI * 2
-      const r = belt.radius + Math.max(-0.5, Math.min(0.5, gauss(rng) * 0.22)) * belt.width
-      pos[i * 3] = Math.cos(a) * r
-      pos[i * 3 + 1] = Math.max(-0.5, Math.min(0.5, gauss(rng) * 0.25)) * belt.thickness
-      pos[i * 3 + 2] = Math.sin(a) * r
-    }
+  const goneSeen = useRef(-1)
+  const { geometry, alive } = useMemo(() => {
+    const rocks = beltRocks(belt)
+    const pos = new Float32Array(rocks.length * 3)
+    const size = new Float32Array(rocks.length)
+    const live = new Float32Array(rocks.length).fill(1)
+    rocks.forEach((r, i) => {
+      pos[i * 3] = r.x
+      pos[i * 3 + 1] = r.y
+      pos[i * 3 + 2] = r.z
+      // Крупный камень — точка чуть больше: глыба читается издали заметнее мелочи.
+      size[i] = 1.4 + 1.6 * (r.radius / ASTEROID.RADIUS_MAX)
+    })
     const g = new BufferGeometry()
     g.setAttribute('position', new BufferAttribute(pos, 3))
-    return g
+    g.setAttribute('aSize', new BufferAttribute(size, 1))
+    const aliveAttr = new BufferAttribute(live, 1)
+    g.setAttribute('aAlive', aliveAttr)
+    return { geometry: g, alive: aliveAttr }
   }, [belt])
   const material = useMemo(
-    () => new PointsMaterial({ color: DUST_COLOR, size: 1.6, sizeAttenuation: false, transparent: true, opacity: 0.55, depthWrite: false }),
+    () =>
+      new ShaderMaterial({
+        vertexShader: VERT,
+        fragmentShader: FRAG,
+        uniforms: {
+          uColor: { value: new Color(DOT_COLOR) },
+          uOpacity: { value: 0.75 },
+          uHideNear: { value: HIDE_NEAR },
+          uHideFar: { value: HIDE_FAR },
+        },
+        transparent: true,
+        depthWrite: false,
+      }),
     [],
   )
-  useEffect(() => () => {
-    geometry.dispose()
-    material.dispose()
-  }, [geometry, material])
+  useEffect(
+    () => () => {
+      geometry.dispose()
+      material.dispose()
+    },
+    [geometry, material],
+  )
 
   useFrame(() => {
     const g = group.current
@@ -60,6 +110,15 @@ function BeltDust({ belt }: { belt: AsteroidBeltEntity }) {
     if (!center || shrink <= 0) return
     renderPos(world, center, g.position)
     g.scale.setScalar(shrink)
+    material.uniforms.uHideNear!.value = HIDE_NEAR * shrink
+    material.uniforms.uHideFar!.value = HIDE_FAR * shrink
+    // Сбили камень — гасим его точку. Пересобираем признак только при перемене.
+    if (world.beltGone.size !== goneSeen.current) {
+      goneSeen.current = world.beltGone.size
+      const arr = alive.array as Float32Array
+      for (let i = 0; i < arr.length; i++) arr[i] = world.beltGone.has(beltRockKey(index, i)) ? 0 : 1
+      alive.needsUpdate = true
+    }
   })
 
   return (
@@ -77,7 +136,7 @@ export function AsteroidBelts() {
   return (
     <>
       {belts.map((belt, i) => (
-        <BeltDust key={`${belt.centerId}-${i}`} belt={belt} />
+        <BeltDots key={`${belt.centerId}-${i}`} belt={belt} index={i} />
       ))}
     </>
   )

@@ -4,7 +4,7 @@ import { ASTEROID_BELT } from '../../config/world'
 import { GALAXY } from '../../config/galaxy'
 import { systemDefFor } from '../galaxy/jump'
 import { createWorld } from './factory'
-import { beltNearest, insideBelt, stepBelts } from './belts'
+import { beltNearest, beltRockKey, beltRocks, insideBelt, stepBelts } from './belts'
 import type { World } from './entities'
 
 /**
@@ -68,16 +68,60 @@ describe('пояса астероидов', () => {
     expect(beltNearest(world, belt, outside, new Vector3())).toBeCloseTo(belt.width / 2, 0)
   })
 
-  it('в поясе вокруг корабля родятся камни, вне — нет', () => {
-    const world = worldWithBelt()
+  /** Подлететь вплотную к камню пояса номер `i` и дать поясу пару проверок. */
+  function nearRock(world: World, i: number): Vector3 {
     const belt = world.asteroidBelts[0]!
     const star = world.bodies.find((b) => b.id === belt.centerId)!
-    world.player.state.pos.copy(star.pos).add(new Vector3(0, 0, belt.radius))
-    for (let t = 0; t < ASTEROID_BELT.SPAWN_INTERVAL * 3; t += 1 / 60) stepBelts(world, 1 / 60)
-    expect(world.asteroids.filter((a) => a.alive).length).toBeGreaterThan(0)
+    const r = beltRocks(belt)[i]!
+    const at = star.pos.clone().add(new Vector3(r.x, r.y, r.z))
+    world.player.state.pos.copy(at).add(new Vector3(0, 0, 2_000))
+    for (let t = 0; t < ASTEROID_BELT.SCAN_INTERVAL * 3; t += 1 / 60) stepBelts(world, 1 / 60)
+    return at
+  }
 
-    const empty = worldWithBelt()
-    for (let t = 0; t < ASTEROID_BELT.SPAWN_INTERVAL * 3; t += 1 / 60) stepBelts(empty, 1 / 60)
-    expect(empty.asteroids.length).toBe(0)
+  it('одно зерно — те же камни пояса, на своих местах', () => {
+    const a = worldWithBelt().asteroidBelts[0]!
+    const b = worldWithBelt().asteroidBelts[0]!
+    expect(beltRocks(a)).toEqual(beltRocks(b))
+    expect(beltRocks(a).length).toBe(ASTEROID_BELT.ROCKS)
+  })
+
+  // Пойманное: пояс был облаком точек-картинки, а камни рождались случайно вокруг корабля —
+  // подлетал к точке, она таяла, а камня там не было. Теперь точка и тело — одно место.
+  it('подлетел к точке пояса — там этот самый камень, телом мира', () => {
+    const world = worldWithBelt()
+    const at = nearRock(world, 7)
+    const key = beltRockKey(0, 7)
+    const body = world.asteroids.find((a) => a.beltKey === key)
+    expect(body).toBeDefined()
+    expect(body!.pos.distanceTo(at)).toBeLessThan(1)
+    expect(body!.radius).toBeCloseTo(beltRocks(world.asteroidBelts[0]!)[7]!.radius, 3)
+  })
+
+  it('вдали от кольца камни телами не рождаются', () => {
+    const world = worldWithBelt()
+    for (let t = 0; t < ASTEROID_BELT.SCAN_INTERVAL * 3; t += 1 / 60) stepBelts(world, 1 / 60)
+    expect(world.asteroids.length).toBe(0)
+  })
+
+  it('сбитый камень пояса не возвращается; улетевший — возвращается тем же', () => {
+    const world = worldWithBelt()
+    nearRock(world, 3)
+    const key = beltRockKey(0, 3)
+    const rock = world.asteroids.find((a) => a.beltKey === key)!
+    // Улетели: уборка унесла живое тело — камень остаётся в поясе.
+    world.asteroids.length = 0
+    stepBelts(world, 1 / 60)
+    expect(world.beltGone.has(key)).toBe(false)
+    nearRock(world, 3)
+    expect(world.asteroids.some((a) => a.beltKey === key)).toBe(true)
+    // Сбили — больше не рождается.
+    world.asteroids.find((a) => a.beltKey === key)!.alive = false
+    void rock
+    stepBelts(world, 1 / 60)
+    world.asteroids.length = 0
+    nearRock(world, 3)
+    expect(world.beltGone.has(key)).toBe(true)
+    expect(world.asteroids.some((a) => a.beltKey === key)).toBe(false)
   })
 })

@@ -778,6 +778,8 @@ export function enterSystem(
   world.bodies = makeBodies(world.ids, def)
   world.asteroidBelts = beltsOf(def, world.bodies)
   world.beltSpawnTimer = 0
+  world.beltLive = new Map()
+  world.beltGone = new Set()
   // Бой старой системы гасим ДО орбит: stepOrbits двигает ракеты/трассы вместе со
   // станцией — чужой мусор (и тесты с заглушками) не должен переживать вход.
   world.pods = []
@@ -915,6 +917,8 @@ export function createWorld(
     bodies,
     asteroidBelts: beltsOf(def, bodies),
     beltSpawnTimer: 0,
+    beltLive: new Map(),
+    beltGone: new Set(),
     tracers: [],
     remoteHits: [],
     incomingHits: [],
