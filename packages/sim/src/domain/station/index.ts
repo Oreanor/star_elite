@@ -2,6 +2,7 @@ export { autodockController, canEngageAutodock } from './autopilot'
 export {
   swapHull,
   fitOntoChassis,
+  stackWithFactory,
   shipyardOffers,
   hullCondition,
   hullPurchase,

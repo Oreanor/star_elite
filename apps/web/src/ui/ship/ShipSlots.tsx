@@ -143,8 +143,7 @@ export function SlotGrid({
   const cards = groupCards(slots)
   return (
     <section className="flex h-full min-h-0 flex-1 flex-col border px-4 py-3" style={{ borderColor: DIM }}>
-      <h2 className="mb-2 shrink-0 text-sm tracking-[0.3em]">{t('ship.tab.modules')}</h2>
-      {/* pr-3: правый столбец не вплотную к полосе прокрутки. */}
+      {/* «Модули» уже написано на вкладке. pr-3 — последний столбец не вплотную к полосе. */}
       <div className="grid min-h-0 flex-1 grid-cols-2 gap-2 overflow-y-auto overscroll-contain pr-3">
         {cards.map(({ cat, subs }) => {
           const filled = subs.filter((s) => s.module)

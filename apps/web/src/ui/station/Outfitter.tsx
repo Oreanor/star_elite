@@ -13,13 +13,12 @@ import {
   type ShipModule,
   type World,
 } from '@elite/sim'
-import { t, useLang, type Key } from '../i18n'
+import { t, useLang } from '../i18n'
 import { ConfirmBox, type Confirm } from '../ship/SlotModal'
-import { DIM, SideTabs, Table } from './chrome'
+import { DIM, Table } from './chrome'
 import { moduleColumns } from './moduleColumns'
 import { buyLabel, displayName, headlineCompare, weaponSlot } from './Equipment'
 import { trend } from '../theme'
-import { CATEGORY_ORDER, cardOf, type SlotCard } from '../ship/ShipSlots'
 import { formatStat, statLabel, statNumber } from './format'
 import { Money } from './Money'
 import { StatLine } from './ItemSheet'
@@ -28,9 +27,10 @@ import { StatLine } from './ItemSheet'
  * ОБОРУДОВАНИЕ: всё железо, что лежит на прилавке ЭТОЙ станции, одним списком.
  *
  * Тот же ассортимент, что предлагает окно слота (`stationStock`), только не по одному
- * слоту, а целиком — чтобы увидеть, за чем сюда стоило лететь. Сделка та же: клик по
- * строке спрашивает «купить и установить?», вытесненное железо станция забирает по
- * остаточной цене (так решает домен в `buy`).
+ * слоту, а целиком — чтобы увидеть, за чем сюда стоило лететь. Без категорий: столбик
+ * слотов прятал ассортимент за лишним кликом. Сделка та же: клик по строке спрашивает
+ * «купить и установить?», вытесненное железо станция забирает по остаточной цене
+ * (так решает домен в `buy`).
  */
 
 type Kind = ShipModule['kind']
@@ -82,14 +82,10 @@ export function Outfitter({ world, onChange }: { world: World; onChange: () => v
   useLang()
   const [confirm, setConfirm] = useState<Confirm | null>(null)
 
-  // Список разбит по СЛОТАМ корабля — тем же карточкам, что на экране корабля (`cardOf`):
-  // всё доп-оборудование одним «доп. отсеком», дрон-ракеты при ракетах. Столбик слева,
-  // справа — только выбранный слот. Слот, которого здесь не продают, виден, но гаснет.
+  // Весь прилавок сразу, кучками по виду (двигатель, щит, лазер…), внутри — по классу.
   const stock = stationStock(world).filter((m) => !HIDDEN.has(m.kind))
-  const has = (c: SlotCard) => stock.some((m) => cardOf(m.kind) === c)
-  const [card, setCard] = useState<SlotCard>(() => CATEGORY_ORDER.find(has) ?? CATEGORY_ORDER[0])
   const rows = stock
-    .filter((m) => cardOf(m.kind) === card)
+    .slice()
     .sort((a, b) => KIND_ORDER.indexOf(a.kind) - KIND_ORDER.indexOf(b.kind) || a.class - b.class || a.cost - b.cost)
 
   // Две дороги: купить и сразу поставить — или купить В ТРЮМ (запас, на другой корабль,
@@ -148,22 +144,16 @@ export function Outfitter({ world, onChange }: { world: World; onChange: () => v
   }
 
   return (
-    <div className="flex gap-6">
-      <SideTabs
-        items={CATEGORY_ORDER.map((c) => ({ id: c, label: t(('kind.' + c) as Key).toUpperCase(), disabled: !has(c) }))}
-        active={card}
-        onSelect={setCard}
+    <div className="flex min-h-0 flex-1 flex-col">
+      <Table
+        scrollable
+        columns={columns}
+        rows={rows}
+        rowKey={(m) => m.id}
+        onRowClick={ask}
+        // Ни поставить, ни положить в трюм — строка гаснет, но сравнение видно.
+        rowDisabled={(m) => canPurchase(world, m) !== null && !canStow(world, m)}
       />
-      <div className="min-w-0 flex-1">
-        <Table
-          columns={columns}
-          rows={rows}
-          rowKey={(m) => m.id}
-          onRowClick={ask}
-          // Ни поставить, ни положить в трюм — строка гаснет, но сравнение видно.
-          rowDisabled={(m) => canPurchase(world, m) !== null && !canStow(world, m)}
-        />
-      </div>
       {confirm && (
         <ConfirmBox
           confirm={confirm}

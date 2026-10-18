@@ -69,6 +69,41 @@ export function fitOntoChassis(current: Loadout, chassis: Chassis): HullFit {
   return { loadout: createLoadout(chassis, fitted, weapons), overflow: [...pool, ...guns] }
 }
 
+/**
+ * Примерка своего обвеса НА заводскую сборку, а не вместо неё.
+ *
+ * `fitOntoChassis` переносит только своё железо: штатные стволы, щит и контейнер
+ * витрины пропадают, и корпус на глаз слабее того, что только что показывали.
+ * Здесь заводское остаётся в своих слотах, своё встаёт в свободные. Чему места
+ * нет — в примерку не входит (покупка по-прежнему перевозит только свой обвес).
+ */
+export function stackWithFactory(player: Loadout, factory: Loadout): Loadout {
+  const chassis = factory.chassis
+  const pool = [...player.internals].sort((a, b) => rackCapacity(b) - rackCapacity(a))
+  const stock = [...factory.internals]
+  const fitted: ShipModule[] = []
+  for (const slot of chassis.slots) {
+    const fromStock = stock.findIndex((m) => slotCategoryOf(m.kind) === slot.kind && m.class <= chassis.class)
+    if (fromStock >= 0) {
+      fitted.push(stock.splice(fromStock, 1)[0]!)
+      continue
+    }
+    const fromPlayer = pool.findIndex((m) => slotCategoryOf(m.kind) === slot.kind && m.class <= chassis.class)
+    if (fromPlayer >= 0) fitted.push(pool.splice(fromPlayer, 1)[0]!)
+  }
+
+  const guns = player.weapons.filter((w): w is WeaponModule => w != null)
+  const weapons: (WeaponModule | null)[] = chassis.hardpoints.map((_, i) => factory.weapons[i] ?? null)
+  chassis.hardpoints.forEach((hp, i) => {
+    if (weapons[i]) return
+    const accepts = (k: WeaponModule['kind']) => (hp.kind === 'pylon' ? k === 'missile' || k === 'drone' : k === 'laser')
+    const idx = guns.findIndex((w) => accepts(w.kind) && w.class <= chassis.class)
+    if (idx >= 0) weapons[i] = guns.splice(idx, 1)[0]!
+  })
+
+  return createLoadout(chassis, fitted, weapons)
+}
+
 function rackCapacity(m: ShipModule): number {
   return m.kind === 'cargo' ? m.capacity : 0
 }

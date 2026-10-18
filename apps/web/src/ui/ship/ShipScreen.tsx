@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useReducer, useState } from 'react'
 import {
   deriveShipSpec,
-  fitOntoChassis,
+  stackWithFactory,
   shipyardOffers,
   swapHull,
   usedCapacityOf,
@@ -75,12 +75,12 @@ export function ShipScreen({
   const owned = shownId === currentId
 
   // Чужой корпус показываем в одной из двух сборок. По умолчанию ЗАВОДСКАЯ — так верфь его
-  // и продаёт. Галочка «примерить обвес» ставит на него СВОЁ железо (как разложит его
-  // `swapHull` при покупке), и стрелки отвечают на вопрос «станет ли МОЙ корабль сильнее».
+  // и продаёт. Галочка «примерить обвес» ДОБАВЛЯЕТ своё железо в свободные слоты, не
+  // выкидывая штатное: иначе щит и стволы витрины пропадали, и корпус становился слабее.
   // Выбор переживает листание: сравниваешь корпуса одной меркой.
   const [tryFit, setTryFit] = useState(false)
   const previewLoadout = useMemo(
-    () => (tryFit ? fitOntoChassis(player.loadout, offer.chassis).loadout : offer.loadout()),
+    () => (tryFit ? stackWithFactory(player.loadout, offer.loadout()) : offer.loadout()),
     [tryFit, player.loadout, offer],
   )
   const previewSpec = useMemo(() => deriveShipSpec(previewLoadout), [previewLoadout])
@@ -150,10 +150,11 @@ export function ShipScreen({
       <div className="mt-1 grid min-h-0 flex-1 grid-rows-[auto_minmax(0,1fr)] gap-5 lg:grid-cols-2 lg:grid-rows-1">
         <div className="flex min-h-0 flex-col gap-3 overflow-y-auto">
           <div
-            // 16:9 и без подложки: корабль висит прямо на стекле панели, а под ним целиком
-            // влезают характеристики и кнопка покупки. На низком окне потолок по высоте
-            // экрана сжимает превью первым — характеристики важнее простора вокруг модели.
-            className="relative aspect-[16/9] max-h-[39vh] w-full"
+            // Высота — всё, что осталось над кнопкой и характеристиками, а не фиксированные
+            // 16:9 и 39vh. Те потолки оставляли пустую полосу: заголовки вкладок убраны,
+            // и этот остаток должен достаться кораблю. На низком окне превью сжимается
+            // первым (min-h-0) — цифры важнее простора вокруг модели.
+            className="relative min-h-0 w-full flex-1"
           >
             <Blueprint chassisId={shownId} />
 
@@ -171,42 +172,38 @@ export function ShipScreen({
                 </div>
               </>
             )}
-            {/* Покупка с ценой — на самом чертеже, внизу по центру, над характеристиками: сперва
-                смотришь, что за корпус, решаешь — и кнопка прямо под ним. На своём корпусе
-                та же кнопка открывает МАСТЕРСКУЮ КОРПУСА (ремонт, усиление осей): покупать
-                своё нечего, а место под чертежом — самое заметное на экране.
-                Чужой корпус — модалка сделки: зачёт старого, груз-осадок, доплата. */}
-            {docked && (
-              <div className="absolute inset-x-0 bottom-1.5 flex justify-center">
-                <button
-                  type="button"
-                  onClick={() => (hullWorkshop ? setHullOpen(true) : setBuyingHull(true))}
-                  className="cursor-pointer border bg-black/40 px-5 py-2 text-sm tracking-[0.2em] whitespace-nowrap backdrop-blur-sm transition-colors ui-btn"
-                  style={{ borderColor: ACCENT, color: ACCENT }}
-                >
-                  {owned ? t('ship.inspect') : tm('ship.buyHull', { price: <Money amount={offer.cost} /> })}
-                </button>
-              </div>
-            )}
           </div>
 
-          {/* Характеристики. У чужого корпуса — со стрелками сравнения с текущим: белая
-              вверх — параметр лучше, синяя вниз — хуже. */}
-          <div className="mt-auto">
-          <Stats
-            spec={owned ? player.spec : previewSpec}
-            name={chassisName((owned ? player.loadout.chassis : offer.chassis).name)}
-            baseline={docked && !owned ? player.spec : null}
-            cargoUsed={usedCapacityOf(player.hold)}
-            corner={
-              docked && !owned ? (
-                <label className="flex cursor-pointer items-center gap-2 text-xs tracking-[0.15em]" style={{ color: ACCENT }}>
-                  <input type="checkbox" checked={tryFit} onChange={(e) => setTryFit(e.target.checked)} />
-                  {t('ship.tryFit')}
-                </label>
-              ) : null
-            }
-          />
+          {/* Характеристики прижаты к низу колонки, чертёж — к верху, между ними пусто.
+              Кнопку покупки/просмотра держим у панели, а не у нижнего края чертежа:
+              иначе на высоком окне она висит в пустоте, далеко от цифр, которые решает. */}
+          <div className="mt-auto flex w-full flex-col items-center gap-3">
+            {docked && (
+              <button
+                type="button"
+                onClick={() => (hullWorkshop ? setHullOpen(true) : setBuyingHull(true))}
+                className="cursor-pointer border bg-black/40 px-5 py-2 text-sm tracking-[0.2em] whitespace-nowrap backdrop-blur-sm transition-colors ui-btn"
+                style={{ borderColor: ACCENT, color: ACCENT }}
+              >
+                {owned ? t('ship.inspect') : tm('ship.buyHull', { price: <Money amount={offer.cost} /> })}
+              </button>
+            )}
+            <div className="w-full">
+              <Stats
+                spec={owned ? player.spec : previewSpec}
+                name={chassisName((owned ? player.loadout.chassis : offer.chassis).name)}
+                baseline={docked && !owned ? player.spec : null}
+                cargoUsed={usedCapacityOf(player.hold)}
+                corner={
+                  docked && !owned ? (
+                    <label className="flex cursor-pointer items-center gap-2 text-xs tracking-[0.15em]" style={{ color: ACCENT }}>
+                      <input type="checkbox" checked={tryFit} onChange={(e) => setTryFit(e.target.checked)} />
+                      {t('ship.tryFit')}
+                    </label>
+                  ) : null
+                }
+              />
+            </div>
           </div>
 
 

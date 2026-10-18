@@ -7,6 +7,7 @@ import {
   CARGO_LARGE,
   CLOAK_FIELD,
   ECM_UNIT,
+  MODULE_CATALOGUE,
   SHIELD_HEAVY,
   SHIELD_STANDARD,
   SHRINK_RAY,
@@ -46,6 +47,15 @@ describe('перестановка железа из трюма', () => {
     expect(shield).toBeDefined()
     expect(shield!.to).toBeGreaterThan(shield!.from)
     expect(shield!.higherBetter).toBe(true)
+  })
+
+  it('сравнение всего каталога не падает, если слота под модуль нет', () => {
+    // Витрина спрашивает «было → станет» у каждой строки сразу. Пустой слот
+    // (класс не пускает, категории нет) не должен ронять reduce по пустому списку.
+    const world = veteranWorld()
+    for (const module of MODULE_CATALOGUE) {
+      expect(() => fitDeltas(world.player, module)).not.toThrow()
+    }
   })
 
   it('тот же модуль, что уже стоит, ставить незачем — отказ', () => {

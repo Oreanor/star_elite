@@ -110,8 +110,8 @@ export function Blueprint({ chassisId }: { chassisId: string }) {
   return (
     <div
       ref={box}
-      // Во ВСЮ площадь контейнера, абсолютно: высота превью задана пропорцией (aspect-ratio),
-      // и «h-full» от неё не считалась — холст выходил короче места, снизу зиял зазор.
+      // Во ВСЮ площадь контейнера, абсолютно. Высоту задаёт родитель (остаток колонки),
+      // и «h-full» от неё не считался — холст выходил короче места, снизу зиял зазор.
       // Холст наследует курсор: глобальный прицел `canvas` из styles.css иначе перебивал «руку».
       className="absolute inset-0 touch-none cursor-grab active:cursor-grabbing [&_canvas]:cursor-[inherit]"
       onPointerDown={onDown}

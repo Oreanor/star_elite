@@ -107,26 +107,29 @@ export function Market({ world, onChange }: { world: World; onChange: () => void
     </div>
   )
 
-  // Список (товары или оборудование) — левые две трети, ГРУЗОВОЙ ОТСЕК — правая треть на
-  // всю высоту, и на ОБЕИХ вкладках: торговля это разговор двух списков, «что продают» и
-  // «что у меня», а купленное в трюм железо должно тут же появиться рядом. Отступ панелей
-  // гасим, чтобы обе колонки начинались вровень.
+  // Список слева уже отсека: имена в трюме обрезались, а прайс читается и в узкой колонке.
+  // Обе колонки — на всю высоту вкладки, и на ОБЕИХ переключателях: купленное железо
+  // должно тут же появиться рядом. Отступ панели отсека гасим, чтобы колонки начались вровень.
   return (
-    // Растягиваемся на всю высоту вкладки — чтобы отсек справа доходил до низа панели.
-    <div className="flex flex-1 flex-col">
-      {/* Отсек справа — от 1280 px; уже — он уходит под список: пять колонок оборудования
-          без переносов в 60% узкого окна не влезают и наезжали на отсек. Пропорция 60 / 40. */}
-      <div className="grid min-h-0 flex-1 grid-cols-1 gap-5 xl:grid-cols-[3fr_2fr]">
-        <div className="min-w-0">
-          {switcher}
+    // Высота — остаток консоли, не длина списка. Иначе отсек растёт вместе с грузом,
+    // и внутренняя прокрутка (та же, что на вкладке корабля) не включается.
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+      {/* Отсек справа — от 1280 px; уже — он под списком, каждая половина со своей прокруткой.
+          Было 3/2 в пользу прайса, имена в отсеке обрезались. Теперь 2/3: левый список уже,
+          отсек шире. Длинная строка оборудования уходит во внутреннюю прокрутку, не в рост колонки. */}
+      <div className="grid min-h-0 flex-1 grid-cols-1 grid-rows-[minmax(0,1fr)_minmax(0,1fr)] gap-5 xl:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] xl:grid-rows-1">
+        <div className="flex min-h-0 min-w-0 flex-col">
+          <div className="shrink-0">{switcher}</div>
           {section === 'gear' ? (
             <Outfitter world={world} onChange={onChange} />
           ) : (
             // Без своей рамки и заголовка: вкладка ТОВАРЫ сверху уже сказала, что это за список.
-            <div>
+            // Прокручивается список, шапка липнет — как строки отсека справа.
+            <div className="flex min-h-0 flex-1 flex-col">
               {/* Список — ВСЕ товары, чтобы видеть цену даже на то, чего ни у кого нет. Но строка,
                   в которой сейчас ни купить, ни продать, — неактивна: делать в ней нечего. */}
               <Table
+                scrollable
                 columns={columns}
                 rows={commodityStock()}
                 rowKey={(c) => c.id}
@@ -139,8 +142,8 @@ export function Market({ world, onChange }: { world: World; onChange: () => void
             </div>
           )}
         </div>
-        <div className="flex min-h-0 min-w-0 flex-col [&>section]:mt-0 [&>section]:flex-1">
-          <Hold world={world} onChange={onChange} atStation onTrade={(c) => setTrading({ commodity: c, sell: true })} />
+        <div className="flex min-h-0 min-w-0 flex-col [&>section]:mt-0 [&>section]:min-h-0 [&>section]:flex-1">
+          <Hold world={world} onChange={onChange} atStation scrollable onTrade={(c) => setTrading({ commodity: c, sell: true })} />
         </div>
       </div>
       {trading && (

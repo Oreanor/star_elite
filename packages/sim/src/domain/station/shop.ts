@@ -328,9 +328,13 @@ const SPEC_FIELDS: readonly { key: StatKey; get: (s: ShipSpec) => number }[] = [
 
 /** Тот же loadout, но с установленным модулем: гипотетический, для сравнения spec. */
 function withFitted(loadout: Loadout, module: ShipModule): Loadout {
+  const slots = slotsForChassis(loadout, module)
+  // Слота этой категории нет (или класс корпуса не пускает). Пустой reduce падал,
+  // когда витрина спрашивала «было → станет» у всего прилавка сразу.
+  if (slots === 0) return loadout
   const internals = [...loadout.internals]
   const installed = internals.filter((m) => m.kind === module.kind)
-  if (installed.length >= slotsForChassis(loadout, module)) {
+  if (installed.length >= slots) {
     const worst = installed.reduce((a, b) => (a.cost <= b.cost ? a : b))
     internals.splice(internals.indexOf(worst), 1)
   }

@@ -142,37 +142,42 @@ export function Hold({
   ]
 
   return (
-    <Panel title={t('station.hold.title')} flush={flush} className={scrollable ? 'flex h-full min-h-0 flex-1 flex-col' : undefined}>
-      <p className="mb-3 shrink-0 text-xs tracking-widest" style={{ color: DIM }}>
-        {t('ship.cargo.used', { used: Math.round(cargoMass(hold)), cap: hold.capacity })}
-      </p>
-
-      {/* Пустой отсек — просто пусто: «занято 0 из N» выше уже всё сказало. */}
+    <Panel
+      // Под вкладкой корабля имя уже на кнопке. На торговле вкладки нет — заголовок нужен.
+      title={flush ? '' : t('station.hold.title')}
+      flush={flush}
+      className={scrollable ? 'flex h-full min-h-0 flex-1 flex-col' : undefined}
+    >
+      {/* Пустой отсек — просто список пуст. «Занято» внизу, сразу перед выбросом:
+          сверху его читали как заголовок таблицы, а решение выбросить смотрят внизу. */}
       {hold.items.length === 0 ? null : (
-        <>
-          <Table
-            fixedLayout
-            scrollable={scrollable}
-            columns={columns}
-            rows={hold.items}
-            // Ключ обязан пережить продажу соседа: одинаковые товары уже в одной стопке,
-            // разные модули различаются именем, а хвост индекса разводит совпадения.
-            rowKey={(item, i) => `${itemName(item)}-${i}`}
-            onRowClick={(item) => (item.kind === 'commodity' && onTrade ? onTrade(item.commodity) : setDetail(item))}
-          />
-
-          {/* Выброс доступен и у причала; действие остаётся вне прокрутки. */}
-            <div className={scrollable ? 'mt-auto shrink-0' : undefined}>
-            <Button
-              onClick={() => {
-                if (dumpAllInFlight(world)) onChange()
-              }}
-            >
-              {t('ship.jettisonAll')}
-            </Button>
-            </div>
-        </>
+        <Table
+          fixedLayout
+          scrollable={scrollable}
+          columns={columns}
+          rows={hold.items}
+          // Ключ обязан пережить продажу соседа: одинаковые товары уже в одной стопке,
+          // разные модули различаются именем, а хвост индекса разводит совпадения.
+          rowKey={(item, i) => `${itemName(item)}-${i}`}
+          onRowClick={(item) => (item.kind === 'commodity' && onTrade ? onTrade(item.commodity) : setDetail(item))}
+        />
       )}
+
+      {/* Вне прокрутки: строка занятого и выброс остаются на месте, когда список длинный. */}
+      <div className={scrollable ? 'mt-auto shrink-0' : undefined}>
+        <p className="text-xs tracking-widest" style={{ color: DIM }}>
+          {t('ship.cargo.used', { used: Math.round(cargoMass(hold)), cap: hold.capacity })}
+        </p>
+        {hold.items.length > 0 && (
+          <Button
+            onClick={() => {
+              if (dumpAllInFlight(world)) onChange()
+            }}
+          >
+            {t('ship.jettisonAll')}
+          </Button>
+        )}
+      </div>
 
       {detail && (
         <ItemModal

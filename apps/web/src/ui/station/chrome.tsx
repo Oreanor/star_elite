@@ -121,8 +121,8 @@ export function Tabs<T extends string>({
 }
 
 /**
- * Вкладки СТОЛБИКОМ слева от списка — слоты корабля в справочнике и в магазине.
- * Одна на оба экрана: два столбика однажды разошлись бы шириной и порядком.
+ * Вкладки СТОЛБИКОМ слева от списка — слоты корабля в справочнике.
+ * Магазин категории не режет: там весь прилавок одним списком.
  * Неактивный пункт виден, но гаснет — так видно, что вообще бывает.
  */
 export function SideTabs<T extends string>({
@@ -270,7 +270,8 @@ export function PilotPortrait({
 export function Panel({ title, children, flush, className = '' }: { title: string; children: React.ReactNode; flush?: boolean; className?: string }) {
   return (
     <section className={`${flush ? '' : 'mt-6 '}border p-5 ${className}`} style={{ borderColor: DIM }}>
-      <h2 className="mb-3 shrink-0 text-sm tracking-[0.3em]">{title}</h2>
+      {/* Пустой заголовок не рисуем: под вкладкой «модули / отсек» повтор того же слова шумит. */}
+      {title ? <h2 className="mb-3 shrink-0 text-sm tracking-[0.3em]">{title}</h2> : null}
       {children}
     </section>
   )

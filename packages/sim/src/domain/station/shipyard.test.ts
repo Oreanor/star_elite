@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { veteranWorld } from '../../testkit'
-import { SHIPYARD } from '../../config/loadouts'
+import { playerStartLoadout, SHIPYARD } from '../../config/loadouts'
 import { deriveShipSpec } from '../loadout'
 import { addCommodity } from '../cargo/hold'
 import { COMMODITIES } from '../cargo/items'
-import { fitOntoChassis, hullPurchase, swapHull } from './shipyard'
+import { fitOntoChassis, hullPurchase, stackWithFactory, swapHull } from './shipyard'
 import { CARGO_LARGE, CARGO_SMALL } from '../../config/modules'
 
 /**
@@ -95,6 +95,27 @@ describe('верфь корпусов', () => {
       // Всё вместилось — тогда хотя бы обвес не потерялся (переехал в слоты/трюм).
       expect(result).toBeNull()
     }
+  })
+
+  it('примерка своего обвеса не снимает заводское, а докладывает в свободные слоты', () => {
+    // Галочка на верфи подменяла витрину только своим железом: штатный щит и ствол
+    // пропадали, и корпус читался слабее того, что показывали без галочки.
+    const factory = SHIPYARD.find((o) => o.chassis.id === 'perseus')!.loadout()
+    const stacked = stackWithFactory(playerStartLoadout(), factory)
+    for (const module of factory.internals) {
+      const before = factory.internals.filter((m) => m.id === module.id).length
+      const after = stacked.internals.filter((m) => m.id === module.id).length
+      expect(after, module.id).toBeGreaterThanOrEqual(before)
+    }
+    expect(stacked.weapons[0]?.id).toBe(factory.weapons[0]?.id)
+    // У «Персея» из трёх орудийных занята одна — своё встаёт в пустую, не вместо штатной.
+    expect(stacked.weapons.filter((w) => w != null).length).toBeGreaterThan(
+      factory.weapons.filter((w) => w != null).length,
+    )
+    // Заводской контейнер остаётся, свой — во второй грузовой слот.
+    expect(stacked.internals.filter((m) => m.kind === 'cargo').length).toBeGreaterThan(
+      factory.internals.filter((m) => m.kind === 'cargo').length,
+    )
   })
 
   it('у каждого корпуса три грузовых слота — контейнеры при пересадке переезжают все', () => {
