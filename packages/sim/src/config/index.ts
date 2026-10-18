@@ -23,7 +23,7 @@ export {
   type GalaxyShapeId,
   type PlanetType,
 } from './galaxy'
-export { BEAM_HEAT, PULSAR, QUASAR } from './beams'
+export { BEAM_HEAT, MASS_STREAM, PULSAR, QUASAR } from './beams'
 export { CHARACTER } from './character'
 export { LANDING } from './landing'
 export { AI, GRIEVANCE, MORALE, WARP } from './ai'

@@ -47,7 +47,19 @@ export function applySharedStartWorld(def: SystemDef, index: number, galaxySeed:
   return {
     ...def,
     name: SYSTEM_NAME,
-    blackHoles: [{ name: DOOR_NAME, radius: 300, stationOffset: [0, 0, 60_000] }],
+    // ВРЕМЕННО для теста: Дверь — квазар (джеты вертикально, мимо станции). Снять `jets`.
+    blackHoles: [{ name: DOOR_NAME, radius: 300, stationOffset: [0, 0, 60_000], jets: true }],
+    // ВРЕМЕННО для теста: тесная пара с перетеканием вещества в ~260 км от причала, в стороне
+    // от Двери и баз. Голубой гигант-донор и белый компаньон с диском. Убрать после проверки.
+    streamPairs: [
+      {
+        name: 'Близнецы',
+        stationOffset: [-220_000, 30_000, -130_000],
+        donor: { radius: 26_000, color: 0x9fd4ff },
+        accretor: { radius: 7_000, color: 0xeaf6ff },
+        separation: 95_000,
+      },
+    ],
     // Четыре военные базы на снос у причала, каждая со своей техно-картой (model → текстура).
     // Разнесены в стороны от станции и от «Двери» (та в +Z на 60 км), чтобы не толпиться.
     warBases: [

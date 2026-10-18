@@ -466,6 +466,12 @@ function makeBodies(ids: IdSource, def: SystemDef): BodyEntity[] {
         // Спутник на противоположной стороне барицентра: фаза π.
         orbit: binaryOrbit(m2, m1, comp.separation, Math.PI),
       })
+      // Поток — с бОльшей звезды (она переполнила полость Роша) на меньшую.
+      if (comp.stream) {
+        const b = bodies[bodies.length - 1]!
+        if (primary.radius >= b.radius) primary.streamTo = b.id
+        else b.streamTo = primary.id
+      }
     }
   }
 
@@ -537,6 +543,41 @@ function makeBodies(ids: IdSource, def: SystemDef): BodyEntity[] {
   for (const extra of def.extraStations ?? []) bodies.push(makeStation(extra, planetAt(extra.planet)))
 
   // (военные базы — не тела, см. `placeWarBases`: у них ни гравитации, ни орбиты.)
+  for (const pair of def.streamPairs ?? []) {
+    const offset = new Vector3(...pair.stationOffset)
+    const at = station ? station.pos.clone().add(offset) : new Vector3(...def.star.pos).add(offset)
+    const star = (name: string, radius: number, color: number): BodyEntity => ({
+      id: ids.next(),
+      kind: 'star',
+      name,
+      pos: at.clone(),
+      radius,
+      color,
+      surface: null,
+      population: 0,
+      settlement: null,
+      spin: 0,
+      spinAxis: new Vector3(0, 1, 0),
+      orbit: null,
+    })
+    const donor = star(pair.name, pair.donor.radius, pair.donor.color)
+    // Донор стоит на смещении от станции (едет с ней), компаньон обращается вокруг донора:
+    // скорость — из масс звёзд, как у любой пары, а не назначенная.
+    donor.orbit = station ? orbitFromOffset(station.id, station.pos, at, 0) : null
+    const accretor = star(`${pair.name} B`, pair.accretor.radius, pair.accretor.color)
+    const mass = (r: number) => GRAVITY.STAR_DENSITY * (4 / 3) * Math.PI * r ** 3
+    accretor.orbit = {
+      parentId: donor.id,
+      radius: pair.separation,
+      phase: 0,
+      rate: Math.sqrt((GRAVITY.G * (mass(pair.donor.radius) + mass(pair.accretor.radius))) / pair.separation ** 3),
+      tilt: 0,
+    }
+    accretor.pos.add(new Vector3(pair.separation, 0, 0))
+    donor.streamTo = accretor.id
+    bodies.push(donor, accretor)
+  }
+
   for (const hole of def.blackHoles ?? []) {
     const offset = new Vector3(...hole.stationOffset)
     const pos = station

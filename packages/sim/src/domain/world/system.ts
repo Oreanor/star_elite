@@ -34,6 +34,8 @@ export interface MoonDef {
 /** Вторая звезда двойной системы (из генератора). */
 export interface StarCompanionDef {
   kind?: 'star'
+  /** Видно перетекание вещества: струя с бОльшей звезды на меньшую (`MASS_STREAM`). */
+  stream?: boolean
   radius: number
   color: number
   /** Масса в M☉ — как у главной, не из радиуса. */
@@ -51,6 +53,18 @@ export interface BlackHoleCompanionDef {
   visualRadius: number
   separation: number
   diskAxis?: readonly [number, number, number]
+}
+
+/**
+ * Тесная пара звёзд с перетеканием — отдельно от светила системы, у станции (как «Дверь»).
+ * Донор стоит на смещении, компаньон обращается вокруг него на `separation`.
+ */
+export interface StreamPairDef {
+  name: string
+  stationOffset: readonly [number, number, number]
+  donor: { radius: number; color: number }
+  accretor: { radius: number; color: number }
+  separation: number
 }
 
 /** Отдельная тестовая чёрная дыра, привязанная смещением к станции. */
@@ -112,6 +126,8 @@ export interface SystemDef {
   companion: StarCompanionDef | BlackHoleCompanionDef | null
   /** Отдельные чёрные дыры; не заменяют звёзды и не участвуют в барицентре пары. */
   blackHoles?: readonly BlackHoleDef[]
+  /** Отдельные тесные пары с перетеканием вещества — привязаны смещением к станции. */
+  streamPairs?: readonly StreamPairDef[]
   /** Военные базы на снос — сферы у станции. Данные, а не спавн-хардкод. */
   warBases?: readonly WarBaseDef[]
   /** Сфера Дайсона вокруг светила, или `null`. Только декорация: облик и цела ли. */
@@ -291,9 +307,7 @@ export const STARTER_SYSTEM: SystemDef = {
    * точку у станции, но ни в стыковку, ни в бой она не вмешивается.
    */
   blackHoles: [
-    // ВРЕМЕННО для теста: Дверь — квазар (джеты вдоль вертикали, мимо станции в плоскости).
-    // Снять `jets` после проверки.
-    { name: 'Дверь', radius: 300, stationOffset: [0, 0, 60_000], jets: true },
+    { name: 'Дверь', radius: 300, stationOffset: [0, 0, 60_000] },
   ],
   // Пояса нет: камни приходят встречами трафика (см. asteroidEncounter).
   belt: null,

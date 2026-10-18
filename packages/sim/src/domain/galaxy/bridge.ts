@@ -3,7 +3,7 @@ import { PLANET_COLORS, SCALE } from '../../config/galaxy'
 import { makeRng } from '../../core/math'
 import { STATION_RADIUS } from '../world/system'
 import type { PatrolDef, SystemDef } from '../world/system'
-import { PULSAR } from '../../config/beams'
+import { PULSAR, MASS_STREAM } from '../../config/beams'
 import { ASTEROID_BELT } from '../../config/world'
 import { quasarOf } from './quasar'
 import { capitalOf, type Planet, type StarSystem } from './types'
@@ -208,6 +208,8 @@ export function systemDefOf(system: StarSystem, galaxySeed: number, seatOverride
         color: system.companion.color,
         massSolar: system.companion.massSolar,
         separation: (starRadius + system.companion.radius * SCALE.STAR_RADIUS) * (3 + rng() * 4),
+        // Своё подзерно: бросок не сдвигает остальную случайность системы.
+        stream: makeRng((galaxySeed ^ Math.imul(system.index + 1, 0x5713a3)) >>> 0)() < MASS_STREAM.SHARE,
       }
     : null
 
