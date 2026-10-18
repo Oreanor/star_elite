@@ -78,12 +78,15 @@ export function Hold({
   atStation,
   onTrade,
   flush,
+  scrollable,
 }: {
   world: World
   onChange: () => void
   atStation: boolean
   /** Без верхнего отступа панели — на экране корабля под переключателем «модули / отсек». */
   flush?: boolean
+  /** Экран корабля ограничивает высоту отсека; прокручиваются только строки таблицы. */
+  scrollable?: boolean
   /**
    * Товар из отсека продают ТЕМ ЖЕ окном сделки, что и со списка товаров (его держит
    * магазин). Есть — клик по товару зовёт его; модули и вне станции — своя карточка.
@@ -113,6 +116,13 @@ export function Hold({
       cell: (item) => <span style={{ color: DIM }}>{formatStat('mass', itemMass(item))}</span>,
     },
     {
+      key: 'price',
+      header: t('station.col.price'),
+      align: 'right',
+      sortValue: (item) => itemSellValue(world, item),
+      cell: (item) => <Money amount={itemSellValue(world, item)} />,
+    },
+    {
       key: 'profit',
       header: t('station.col.profit'),
       align: 'right',
@@ -126,8 +136,8 @@ export function Hold({
   ]
 
   return (
-    <Panel title={t('station.hold.title')} flush={flush}>
-      <p className="mb-3 text-xs tracking-widest" style={{ color: DIM }}>
+    <Panel title={t('station.hold.title')} flush={flush} className={scrollable ? 'flex h-[62vh] min-h-0 flex-col' : undefined}>
+      <p className="mb-3 shrink-0 text-xs tracking-widest" style={{ color: DIM }}>
         {t('ship.cargo.used', { used: Math.round(cargoMass(hold)), cap: hold.capacity })}
       </p>
 
@@ -135,6 +145,7 @@ export function Hold({
       {hold.items.length === 0 ? null : (
         <>
           <Table
+            scrollable={scrollable}
             columns={columns}
             rows={hold.items}
             // Ключ обязан пережить продажу соседа: одинаковые товары уже в одной стопке,
@@ -146,6 +157,7 @@ export function Hold({
           {/* У причала «продать всё» нет: товар продают по одному через окно сделки, видя
               цену и выгоду. В полёте остаётся «выбросить всё» — там торговаться не с кем. */}
           {!atStation && (
+            <div className={scrollable ? 'mt-auto shrink-0' : undefined}>
             <Button
               onClick={() => {
                 if (dumpAllInFlight(world)) onChange()
@@ -153,6 +165,7 @@ export function Hold({
             >
               {t('ship.jettisonAll')}
             </Button>
+            </div>
           )}
         </>
       )}

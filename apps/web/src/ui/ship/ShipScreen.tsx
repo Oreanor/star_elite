@@ -227,9 +227,7 @@ export function ShipScreen({
           ) : (
             // Высота — не больше колонки модулей: длинный трюм прокручивается внутри, а не
             // растягивает экран (иначе характеристики слева уезжали вниз за край).
-            <div className="max-h-[62vh] min-h-0 overflow-y-auto overscroll-contain pr-1">
-              <Hold world={world} onChange={refresh} atStation={docked} flush />
-            </div>
+            <Hold world={world} onChange={refresh} atStation={docked} flush scrollable />
           )}
         </div>
       </div>

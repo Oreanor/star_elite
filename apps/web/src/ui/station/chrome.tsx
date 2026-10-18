@@ -267,10 +267,10 @@ export function PilotPortrait({
 }
 
 /** @param flush Без верхнего отступа — когда панель встаёт под переключатель, а не под соседку. */
-export function Panel({ title, children, flush }: { title: string; children: React.ReactNode; flush?: boolean }) {
+export function Panel({ title, children, flush, className = '' }: { title: string; children: React.ReactNode; flush?: boolean; className?: string }) {
   return (
-    <section className={`${flush ? '' : 'mt-6 '}border p-5`} style={{ borderColor: DIM }}>
-      <h2 className="mb-3 text-sm tracking-[0.3em]">{title}</h2>
+    <section className={`${flush ? '' : 'mt-6 '}border p-5 ${className}`} style={{ borderColor: DIM }}>
+      <h2 className="mb-3 shrink-0 text-sm tracking-[0.3em]">{title}</h2>
       {children}
     </section>
   )
@@ -385,6 +385,7 @@ export function Table<Row>({
   onRowClick,
   selectedKey,
   rowDisabled,
+  scrollable,
 }: {
   columns: readonly Column<Row>[]
   rows: readonly Row[]
@@ -397,6 +398,8 @@ export function Table<Row>({
   /** Строка НЕАКТИВНА: не кликается и приглушена. Данные видны (цена в столбце), а
    *  делать нечего — например товар, который ни купить, ни продать сейчас. */
   rowDisabled?: (row: Row) => boolean
+  /** Прокрутка внутри ограниченной по высоте панели с неподвижной шапкой. */
+  scrollable?: boolean
 }) {
   const [open, setOpen] = useState<ReadonlySet<string>>(new Set())
   // Сортировка по клику на заголовок: колонка и направление; null — исходный порядок данных.
@@ -429,7 +432,7 @@ export function Table<Row>({
   return (
     // Без переносов: строка таблицы — одна строка экрана (имя «Лучевой лазер 3 «Клинок»» в две
     // строки ломало ритм списка). Не влезло — таблица прокручивается вбок, а не ломает строки.
-    <div className="overflow-x-auto">
+    <div className={scrollable ? 'min-h-0 overflow-auto overscroll-contain' : 'overflow-x-auto'}>
     <table className="w-full border-collapse whitespace-nowrap text-sm">
       {/* Ширины — колонкам, а не заголовкам: заголовок может накрывать несколько колонок. */}
       <colgroup>
@@ -438,7 +441,7 @@ export function Table<Row>({
         ))}
       </colgroup>
       {showHead && (
-        <thead>
+        <thead className={scrollable ? 'sticky top-0 z-10' : undefined} style={scrollable ? { backgroundColor: UI.TABLE_HEADER } : undefined}>
           <tr className="border-b" style={{ borderColor: DIM }}>
             {columns.map((c, i) => {
               // Колонку накрыл заголовок одной из предыдущих — своего не рисуем.
