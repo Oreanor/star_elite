@@ -52,8 +52,9 @@ const STREAM_FRAG = /* glsl */ `
     /* Поперёк: свет спадает к краю мягко и ДО края ленты, а сам край рвёт шум вдоль течения —
        без этого сложение света выжигало середину в белое, и струя читалась ровной трубой. */
     float wisp = noise(vec2(s * 14.0 - uTime * 0.9, side * 3.0 + 11.0));
-    float edge = exp(-side * side * (4.0 + 5.0 * wisp)) * (1.0 - side * side);
-    float body = 0.45 + 0.4 * flow + 0.25 * fibres;
+    float edge = exp(-side * side * (3.0 + 3.5 * wisp)) * (1.0 - side * side);
+    /* Плотный поток: шум лишь оттеняет, а не выедает просветы. */
+    float body = 0.75 + 0.3 * flow + 0.2 * fibres;
     /* Вход — из тела донора (плавно), к концу спирали растворяется в диске. */
     float fade = smoothstep(0.0, 0.05, s) * mix(1.0, 1.0 - smoothstep(0.86, 1.0, s), uEndFade);
     vec3 col = mix(uFrom, uHot, smoothstep(0.25, 0.85, s));
@@ -106,7 +107,7 @@ export function createStreamMaterial(fromColor: number): ShaderMaterial {
       uFrom: { value: new Color(fromColor) },
       uHot: { value: new Color(0xf2fbff) },
       uTime: { value: 0 },
-      uStrength: { value: 1.0 },
+      uStrength: { value: 1.5 },
       uEndFade: { value: 1 },
     },
     transparent: true,
