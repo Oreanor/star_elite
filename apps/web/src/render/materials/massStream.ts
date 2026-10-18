@@ -46,11 +46,13 @@ const STREAM_FRAG = /* glsl */ `
     #include <logdepthbuf_fragment>
     float s = vUv.x;
     float side = vUv.y;
-    /* Поперёк: мягкий край, середина плотнее. */
-    float edge = exp(-side * side * 3.2);
     /* Сгустки бегут ВНИЗ по течению; волокна вдоль струи. */
     float flow = noise(vec2(s * 38.0 - uTime * 1.6, side * 2.5));
     float fibres = noise(vec2(s * 9.0 - uTime * 0.7, side * 7.0 + 3.0));
+    /* Поперёк: свет спадает к краю мягко и ДО края ленты, а сам край рвёт шум вдоль течения —
+       без этого сложение света выжигало середину в белое, и струя читалась ровной трубой. */
+    float wisp = noise(vec2(s * 14.0 - uTime * 0.9, side * 3.0 + 11.0));
+    float edge = exp(-side * side * (4.0 + 5.0 * wisp)) * (1.0 - side * side);
     float body = 0.45 + 0.4 * flow + 0.25 * fibres;
     /* Вход — из тела донора (плавно), к концу спирали растворяется в диске. */
     float fade = smoothstep(0.0, 0.05, s) * mix(1.0, 1.0 - smoothstep(0.86, 1.0, s), uEndFade);
@@ -104,7 +106,7 @@ export function createStreamMaterial(fromColor: number): ShaderMaterial {
       uFrom: { value: new Color(fromColor) },
       uHot: { value: new Color(0xf2fbff) },
       uTime: { value: 0 },
-      uStrength: { value: 1.25 },
+      uStrength: { value: 1.0 },
       uEndFade: { value: 1 },
     },
     transparent: true,

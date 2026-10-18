@@ -22,6 +22,8 @@ const N = 128
 const ARC_SHARE = 0.62
 /** Витков спирали внутри диска. */
 const SPIRAL_TURNS = 1.15
+/** Во сколько раз лента шире видимой струи — запас под мягкий спад света к краю. */
+const SOFT_WIDTH = 1.7
 /** Кольцо диска в радиусах компаньона. */
 const DISK_INNER = 1.25
 const DISK_OUTER = 2.2
@@ -171,10 +173,12 @@ function Stream({ donor, accretor }: { donor: BodyEntity; accretor: BodyEntity }
       const neck = (1 - smooth(0, 0.1, s)) ** 2
       // Гантелька — воронки у ОБЕИХ звёзд и тонкая перемычка посередине.
       // Гантелька — КОНУС: узко у меньшей звезды, плавно шире к большей (донору).
-      const w = straight
+      let w = straight
         ? ra * 0.12 + (rd * 0.42 - ra * 0.12) * (1 - s) ** 1.6
         : (ra * 0.16 + (rd * 0.3 - ra * 0.16) * neck) * (1 - 0.4 * smooth(0.6, 1, s))
       const o = i * 6
+      // Лента шире видимой струи: свет гаснет к её краю в шейдере, а не обрывается на нём.
+      w *= SOFT_WIDTH
       arr[o] = p.x - _side.x * w
       arr[o + 1] = p.y - _side.y * w
       arr[o + 2] = p.z - _side.z * w
