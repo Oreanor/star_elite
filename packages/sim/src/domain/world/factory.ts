@@ -555,6 +555,7 @@ function makeBodies(ids: IdSource, def: SystemDef): BodyEntity[] {
       settlement: null,
       spin: 0,
       spinAxis: ax,
+      ...(hole.jets ? { beams: { axis: ax.clone(), length: QUASAR.JET_LENGTH, halfAngle: QUASAR.JET_HALF_ANGLE } } : {}),
       // Нулевая скорость означает постоянное смещение от движущейся станции.
       orbit: station ? orbitFromOffset(station.id, station.pos, pos, 0) : null,
     })

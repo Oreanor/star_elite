@@ -59,6 +59,8 @@ export interface BlackHoleDef {
   radius: number
   stationOffset: readonly [number, number, number]
   diskAxis?: readonly [number, number, number]
+  /** Квазар: два джета вдоль оси диска — та же механика лучей, что у ядра (`QUASAR`). */
+  jets?: boolean
 }
 
 /** Военная база — сферический объект на снос, привязана смещением к станции. */
@@ -289,7 +291,9 @@ export const STARTER_SYSTEM: SystemDef = {
    * точку у станции, но ни в стыковку, ни в бой она не вмешивается.
    */
   blackHoles: [
-    { name: 'Дверь', radius: 300, stationOffset: [0, 0, 60_000] },
+    // ВРЕМЕННО для теста: Дверь — квазар (джеты вдоль вертикали, мимо станции в плоскости).
+    // Снять `jets` после проверки.
+    { name: 'Дверь', radius: 300, stationOffset: [0, 0, 60_000], jets: true },
   ],
   // Пояса нет: камни приходят встречами трафика (см. asteroidEncounter).
   belt: null,
