@@ -120,7 +120,10 @@ function BlackHoleInstance({ body }: { body: BodyEntity }) {
     // и на экране оставалось одно чёрное ядро.
     const fullInfluence = rs * BLACK_HOLE_DEFAULTS.influenceMultiplier
     const influence = Math.max(rs * 6, Math.min(fullInfluence, dist * 0.88))
-    const lensOn = dist > rs * 6.2
+    // У квазара линзы нет: его газовый диск (`QuasarDisks`) — сплошное вещество до горизонта,
+    // а линза искажала уже нарисованный кадр, рвала диск чёрными дырами и рисовала поверх
+    // свой маленький диск с обводом. Остаётся чёрный горизонт в сплошном свете.
+    const lensOn = dist > rs * 6.2 && !body.beams
 
     if (coreRef.current) {
       coreRef.current.visible = true
