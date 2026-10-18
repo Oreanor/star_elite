@@ -78,17 +78,31 @@ export function beltRocks(belt: AsteroidBeltEntity): readonly BeltRock[] {
   if (cached) return cached
   const rng = makeRng(Math.floor(belt.radius) >>> 0)
   const rocks: BeltRock[] = []
-  for (let i = 0; i < ASTEROID_BELT.ROCKS; i++) {
+  // Скопления: центр — по поясу (гуще к средней линии), камни — вокруг него в `CLUSTER_SPREAD`.
+  // Камней на скопление поровну в среднем, но с разбросом: где поле погуще, где пожиже.
+  const perCluster = ASTEROID_BELT.ROCKS / ASTEROID_BELT.CLUSTERS
+  for (let c = 0; c < ASTEROID_BELT.CLUSTERS && rocks.length < ASTEROID_BELT.ROCKS; c++) {
     const a = rng() * Math.PI * 2
     const r = belt.radius + Math.max(-0.5, Math.min(0.5, gauss(rng) * 0.22)) * belt.width
-    const y = Math.max(-0.5, Math.min(0.5, gauss(rng) * 0.25)) * belt.thickness
-    const size = Math.pow(rng(), ASTEROID_BELT.ROCK_RADIUS_POWER)
-    rocks.push({
-      x: Math.cos(a) * r,
-      y,
-      z: Math.sin(a) * r,
-      radius: ASTEROID_BELT.ROCK_RADIUS_MIN + (ASTEROID.RADIUS_MAX - ASTEROID_BELT.ROCK_RADIUS_MIN) * size,
-    })
+    const cy = Math.max(-0.5, Math.min(0.5, gauss(rng) * 0.25)) * belt.thickness
+    const cx = Math.cos(a) * r
+    const cz = Math.sin(a) * r
+    const count = Math.max(3, Math.round(perCluster * (0.5 + rng())))
+    for (let k = 0; k < count && rocks.length < ASTEROID_BELT.ROCKS; k++) {
+      // Плотнее к центру скопления: радиус — квадрат равномерного.
+      const u = rng() * 2 - 1
+      const phi = rng() * Math.PI * 2
+      const ring = Math.sqrt(1 - u * u)
+      const d = ASTEROID_BELT.CLUSTER_SPREAD * rng() * rng()
+      const size = Math.pow(rng(), ASTEROID_BELT.ROCK_RADIUS_POWER)
+      rocks.push({
+        x: cx + ring * Math.cos(phi) * d,
+        // Поле приплюснуто, как сам пояс.
+        y: cy + u * d * 0.4,
+        z: cz + ring * Math.sin(phi) * d,
+        radius: ASTEROID_BELT.ROCK_RADIUS_MIN + (ASTEROID.RADIUS_MAX - ASTEROID_BELT.ROCK_RADIUS_MIN) * size,
+      })
+    }
   }
   ROCKS_CACHE.set(belt, rocks)
   return rocks

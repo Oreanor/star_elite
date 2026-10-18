@@ -98,6 +98,19 @@ describe('пояса астероидов', () => {
     expect(body!.radius).toBeCloseTo(beltRocks(world.asteroidBelts[0]!)[7]!.radius, 3)
   })
 
+  // Пойманное: 2400 одиночек по кольцу в сотни миллионов км стояли в среднем в 300 тысячах км
+  // друг от друга — влетел в полосу, а она рассыпалась в пустоту. Камни лежат полями.
+  it('камни пояса лежат скоплениями: у каждого есть сосед в пределах поля', () => {
+    const rocks = beltRocks(worldWithBelt().asteroidBelts[0]!)
+    let lonely = 0
+    for (let i = 0; i < rocks.length; i += 37) {
+      const a = rocks[i]!
+      const near = rocks.some((b, j) => j !== i && Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z) < ASTEROID_BELT.CLUSTER_SPREAD * 2)
+      if (!near) lonely++
+    }
+    expect(lonely).toBe(0)
+  })
+
   it('вдали от кольца камни телами не рождаются', () => {
     const world = worldWithBelt()
     for (let t = 0; t < ASTEROID_BELT.SCAN_INTERVAL * 3; t += 1 / 60) stepBelts(world, 1 / 60)
