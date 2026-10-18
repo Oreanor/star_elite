@@ -1,7 +1,7 @@
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
-import { useEffect, useMemo, useRef } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useSyncExternalStore } from 'react'
 import { Group, PerspectiveCamera, Vector3, type BufferGeometry } from 'three'
-import { chassisGeometry } from '../../render/geometry/ships'
+import { chassisGeometry, preloadHull, subscribeHulls } from '../../render/geometry/ships'
 import { useWheelZoom } from '../map/useWheelZoom'
 import { hullMaterialFor } from '../../render/materials/materials'
 import { ACCENT, DIM } from '../station/chrome'
@@ -58,7 +58,8 @@ const ZOOM_MIN = 0.45
 const ZOOM_MAX = 2.6
 
 export function Blueprint({ chassisId }: { chassisId: string }) {
-  const geometry = useMemo(() => chassisGeometry(chassisId), [chassisId])
+  const geometry = useSyncExternalStore(subscribeHulls, useCallback(() => chassisGeometry(chassisId), [chassisId]))
+  useEffect(() => { preloadHull(chassisId) }, [chassisId])
   const drag = useRef<DragState>({ dragging: false, lastX: 0, lastY: 0, yaw: 0, pitch: 0, base: 0, zoom: 1 })
 
   // Кадрируем по сфере столкновений геометрии: корабль любого размера влезает

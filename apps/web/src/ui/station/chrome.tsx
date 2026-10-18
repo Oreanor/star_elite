@@ -434,7 +434,8 @@ export function Table<Row>({
   return (
     // Без переносов: строка таблицы — одна строка экрана (имя «Лучевой лазер 3 «Клинок»» в две
     // строки ломало ритм списка). Не влезло — таблица прокручивается вбок, а не ломает строки.
-    <div className={scrollable ? 'min-h-0 overflow-auto overscroll-contain' : 'overflow-x-auto'}>
+    // pr-3 у прокрутки: последний столбец не прилипает к полосе.
+    <div className={scrollable ? 'min-h-0 flex-1 overflow-auto overscroll-contain pr-3' : 'overflow-x-auto'}>
     <table className={`w-full border-collapse whitespace-nowrap text-sm ${fixedLayout ? 'table-fixed' : ''}`}>
       {/* Ширины — колонкам, а не заголовкам: заголовок может накрывать несколько колонок. */}
       <colgroup>

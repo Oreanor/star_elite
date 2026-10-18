@@ -142,7 +142,7 @@ export function Hold({
   ]
 
   return (
-    <Panel title={t('station.hold.title')} flush={flush} className={scrollable ? 'flex h-[62vh] min-h-0 flex-col' : undefined}>
+    <Panel title={t('station.hold.title')} flush={flush} className={scrollable ? 'flex h-full min-h-0 flex-1 flex-col' : undefined}>
       <p className="mb-3 shrink-0 text-xs tracking-widest" style={{ color: DIM }}>
         {t('ship.cargo.used', { used: Math.round(cargoMass(hold)), cap: hold.capacity })}
       </p>

@@ -134,21 +134,18 @@ export function SlotGrid({
   slots,
   onOpen,
   interactive,
-  grow,
 }: {
   slots: readonly SlotView[]
   onOpen: (key: string) => void
   /** Клик открывает мастерскую только у СВОЕГО борта на верфи. Чужой корпус — на просмотр. */
   interactive: boolean
-  /** Растянуть панель на всю высоту колонки — нижняя кромка вровень с соседней. */
-  grow?: boolean
 }) {
   const cards = groupCards(slots)
   return (
-    // Плотно: вся оснастка обязана влезть рядом с кораблём без прокрутки.
-    <section className={`border px-4 py-3 ${grow ? 'flex-1' : ''}`} style={{ borderColor: DIM }}>
-      <h2 className="mb-2 text-sm tracking-[0.3em]">{t('ship.tab.modules')}</h2>
-      <div className="grid grid-cols-2 gap-2">
+    <section className="flex h-full min-h-0 flex-1 flex-col border px-4 py-3" style={{ borderColor: DIM }}>
+      <h2 className="mb-2 shrink-0 text-sm tracking-[0.3em]">{t('ship.tab.modules')}</h2>
+      {/* pr-3: правый столбец не вплотную к полосе прокрутки. */}
+      <div className="grid min-h-0 flex-1 grid-cols-2 gap-2 overflow-y-auto overscroll-contain pr-3">
         {cards.map(({ cat, subs }) => {
           const filled = subs.filter((s) => s.module)
           return (

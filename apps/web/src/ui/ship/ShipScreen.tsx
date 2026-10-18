@@ -144,10 +144,11 @@ export function ShipScreen({
       {/* Пополам: слева паспорт (корабль крупно, под ним характеристики в две колонки),
           справа — оснастка плиткой. Корабль — главное на экране, ему половина ширины,
           а не узкая полоска над столбцом цифр. */}
-      {/* Колонки — одной высоты (grid тянет обе), а нижние кромки панелей — на одной линии:
-          характеристики прижаты к низу левой, модули растянуты до низа правой. */}
-      <div className="mt-1 grid gap-5 lg:grid-cols-2">
-        <div className="flex flex-col gap-3">
+      {/* Строка грида — оставшаяся высота консоли, не содержимое вкладки. Иначе модули
+          и отсек разной длины, и переключение двигает нижнюю кромку. Характеристики
+          прижаты к низу левой колонки, правая панель доходит до той же линии. */}
+      <div className="mt-1 grid min-h-0 flex-1 grid-rows-[auto_minmax(0,1fr)] gap-5 lg:grid-cols-2 lg:grid-rows-1">
+        <div className="flex min-h-0 flex-col gap-3 overflow-y-auto">
           <div
             // 16:9 и без подложки: корабль висит прямо на стекле панели, а под ним целиком
             // влезают характеристики и кнопка покупки. На низком окне потолок по высоте
@@ -211,24 +212,24 @@ export function ShipScreen({
 
         </div>
 
-        <div className="flex flex-col gap-3">
+        <div className="flex h-full min-h-0 flex-col gap-3">
           {/* Правая колонка — по очереди: модули или грузовой отсек. Вместе они не влезали:
               отсек под модулями растягивал экран, и приходилось листать. Отсек здесь всегда —
               и в полёте (выбросить за борт), и у причала (продать), компонент один и тот же. */}
           <RightTabs value={rightTab} onChange={setRightTab} />
+          {/* Остаток колонки под переключателем — одна высота на обе вкладки.
+              h-full здесь нельзя: он взял бы всю колонку ещё раз, поверх кнопок. */}
+          <div className="flex min-h-0 flex-1 flex-col">
           {rightTab === 'modules' ? (
             <SlotGrid
               slots={slots}
               onOpen={setOpenKey}
               interactive={slotsInteractive}
-              // У причала модули — нижняя панель колонки: тянем её до линии характеристик.
-              grow={docked}
             />
           ) : (
-            // Высота — не больше колонки модулей: длинный трюм прокручивается внутри, а не
-            // растягивает экран (иначе характеристики слева уезжали вниз за край).
             <Hold world={world} onChange={refresh} atStation={docked} flush scrollable />
           )}
+          </div>
         </div>
       </div>
 
@@ -260,12 +261,12 @@ export function ShipScreen({
     </>
   )
 
-  // Встроенный — просто тело: рамку, фон и скролл даёт стеклянная панель станции.
-  if (embedded) return <div className="font-mono">{body}</div>
+  // Встроенный — тело на всю оставшуюся высоту консоли: вкладки делят её, а не растут от списка.
+  if (embedded) return <div className="flex min-h-0 flex-1 flex-col overflow-hidden font-mono">{body}</div>
 
   return (
-    <div className="absolute inset-0 overflow-auto bg-black/90 font-mono" style={{ color: ACCENT }}>
-      <div className="mx-auto max-w-5xl px-8 py-10">{body}</div>
+    <div className="absolute inset-0 overflow-hidden bg-black/90 font-mono" style={{ color: ACCENT }}>
+      <div className="mx-auto flex h-full min-h-0 max-w-5xl flex-col px-8 py-10">{body}</div>
     </div>
   )
 }
@@ -277,7 +278,7 @@ type RightTab = 'modules' | 'hold'
 /** Переключатель правой колонки — того же вида, что «по удалённости / по типу» на картах. */
 function RightTabs({ value, onChange }: { value: RightTab; onChange: (v: RightTab) => void }) {
   return (
-    <div className="flex gap-2">
+    <div className="flex shrink-0 gap-2">
       {(['modules', 'hold'] as const).map((k) => {
         const on = k === value
         return (

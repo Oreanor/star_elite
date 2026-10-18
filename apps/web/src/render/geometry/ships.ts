@@ -350,6 +350,14 @@ function prepareGlbHull(scene: import('three').Object3D, def: GlbHullDef): Loade
 }
 
 const glbCache = new Map<string, LoadedHull>()
+const hullListeners = new Set<() => void>()
+
+/** Превью обновляется по завершении загрузки, даже когда игровая сцена на паузе. */
+export function subscribeHulls(listener: () => void): () => void {
+  hullListeners.add(listener)
+  return () => { hullListeners.delete(listener) }
+}
+
 let hullsRequested = false
 
 /**
@@ -377,7 +385,10 @@ function loadHull(def: GlbHullDef): void {
   hullOrdered.add(def.id)
   new GLTFLoader().load(def.url, (gltf) => {
     const hull = prepareGlbHull(gltf.scene, def)
-    if (hull) glbCache.set(def.id, hull)
+    if (hull) {
+      glbCache.set(def.id, hull)
+      for (const listener of hullListeners) listener()
+    }
   })
 }
 
