@@ -49,6 +49,7 @@ const _tan = new Vector3()
 const _toCam = new Vector3()
 const _side = new Vector3()
 const _camLocal = new Vector3()
+const _radial = new Vector3()
 const _up = new Vector3(0, 1, 0)
 const _q = new Quaternion()
 
@@ -169,13 +170,22 @@ function Stream({ donor, accretor }: { donor: BodyEntity; accretor: BodyEntity }
       _side.crossVectors(_tan, _toCam)
       const len = _side.length()
       if (len > 0) _side.divideScalar(len)
-      // Шея у донора — широкая (звезда вытянута каплей), дальше тонкая струя, к диску тоньше.
+      // На витке вокруг компаньона газ расплющивает вращение: лента ложится в плоскость диска
+      // (поперечник — радиус от компаньона, а не «к камере») и расползается вширь. Иначе виток
+      // читался колбасой, обёрнутой вокруг звезды.
+      const flat = straight ? 0 : smooth(ARC_SHARE, ARC_SHARE + 0.18, s)
+      if (flat > 0) {
+        _radial.copy(p).sub(_a)
+        _radial.addScaledVector(_n, -_radial.dot(_n))
+        const rl = _radial.length()
+        if (rl > 0) _side.lerp(_radial.divideScalar(rl), flat).normalize()
+      }
+      // Шея у донора — широкая (звезда вытянута каплей), дальше тонкая струя.
       const neck = (1 - smooth(0, 0.1, s)) ** 2
-      // Гантелька — воронки у ОБЕИХ звёзд и тонкая перемычка посередине.
       // Гантелька — КОНУС: узко у меньшей звезды, плавно шире к большей (донору).
       let w = straight
         ? ra * 0.12 + (rd * 0.42 - ra * 0.12) * (1 - s) ** 1.6
-        : (ra * 0.16 + (rd * 0.3 - ra * 0.16) * neck) * (1 - 0.4 * smooth(0.6, 1, s))
+        : ra * 0.16 + (rd * 0.3 - ra * 0.16) * neck + rim * 0.38 * flat
       const o = i * 6
       // Лента шире видимой струи: свет гаснет к её краю в шейдере, а не обрывается на нём.
       w *= SOFT_WIDTH
@@ -192,6 +202,8 @@ function Stream({ donor, accretor }: { donor: BodyEntity; accretor: BodyEntity }
     const time = renderTime(world)
     streamMat.uniforms.uTime!.value = time
     streamMat.uniforms.uEndFade!.value = straight ? 0.35 : 1
+    // Расплющенный виток — рассеянный: та же масса на большей площади светит тусклее.
+    streamMat.uniforms.uSpread!.value = straight ? 2 : ARC_SHARE
     if (disk.current && ownDisk) {
       disk.current.position.copy(_acc)
       disk.current.scale.setScalar(ra)

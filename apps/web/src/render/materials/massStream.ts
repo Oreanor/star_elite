@@ -40,6 +40,7 @@ const STREAM_FRAG = /* glsl */ `
   uniform float uTime;
   uniform float uStrength;
   uniform float uEndFade;
+  uniform float uSpread;
   varying vec2 vUv;
   ${NOISE}
   void main() {
@@ -58,7 +59,10 @@ const STREAM_FRAG = /* glsl */ `
     /* Вход — из тела донора (плавно), к концу спирали растворяется в диске. */
     float fade = smoothstep(0.0, 0.05, s) * mix(1.0, 1.0 - smoothstep(0.86, 1.0, s), uEndFade);
     vec3 col = mix(uFrom, uHot, smoothstep(0.25, 0.85, s));
-    gl_FragColor = vec4(col, uStrength * edge * body * fade);
+    /* На витке газ рассеян: тусклее и рыхлее (s от uSpread к концу). */
+    float spread = smoothstep(uSpread, min(1.0, uSpread + 0.3), s);
+    float scatter = mix(1.0, 0.35 + 0.5 * fibres, spread);
+    gl_FragColor = vec4(col, uStrength * edge * body * fade * scatter);
   }
 `
 
@@ -109,6 +113,7 @@ export function createStreamMaterial(fromColor: number): ShaderMaterial {
       uTime: { value: 0 },
       uStrength: { value: 1.5 },
       uEndFade: { value: 1 },
+      uSpread: { value: 2 },
     },
     transparent: true,
     blending: AdditiveBlending,
