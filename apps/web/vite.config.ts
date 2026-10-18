@@ -11,28 +11,75 @@ const pkg = JSON.parse(readFileSync(fileURLToPath(new URL('./package.json', impo
 }
 
 /**
- * Версия для титула. ПАТЧ-разряд — это номер сборки, что растёт САМ: число коммитов
- * сверх якоря (`versionAnchor`). Пуш всегда несёт новые коммиты, значит и версия
- * поднимается на каждый пуш — ровно на столько, сколько коммитов в нём приехало.
+ * Версия для титула. ПАТЧ-разряд — номер сборки, что растёт САМ: число коммитов сверх якоря
+ * (`versionAnchor`). Пуш несёт новые коммиты — версия поднимается на каждый пуш.
  * `major.minor` живут в package.json и бампятся руками на заметную фичу/веху.
  *
- * Якорь выставлен так, чтобы «сейчас» патч равнялся тому, что записан в version.
- * Нет git (архивная сборка, shallow-клон в CI) — молча отдаём статику из package.json,
- * зажав патч снизу базовым: версия никогда не «уедет назад».
+ * Пойманное: на проде стояло вечное 0.0.1. Vercel клонирует репозиторий МЕЛКО (последние
+ * коммиты), `rev-list --count` давал единицы, и патч зажимался в базовый. Поэтому число
+ * коммитов добываем по очереди: полная история → догрузить её (`fetch --unshallow`) →
+ * спросить GitHub (у Vercel есть владелец и имя репо в окружении). Не вышло ничем — базовая
+ * версия с коротким хешем коммита: хотя бы видно, какая сборка на проде.
  */
-function appVersion(): string {
+const run = (cmd: string): string =>
+  execSync(cmd, { stdio: ['ignore', 'pipe', 'ignore'], timeout: 30_000 }).toString().trim()
+
+function localCommitCount(): number | null {
+  try {
+    if (run('git rev-parse --is-shallow-repository') === 'true') {
+      try {
+        run('git fetch --unshallow --quiet')
+      } catch {
+        return null
+      }
+    }
+    const n = Number(run('git rev-list --count HEAD'))
+    return Number.isFinite(n) ? n : null
+  } catch {
+    return null
+  }
+}
+
+/** Число коммитов до `sha` по GitHub API: страница по одному коммиту, номер последней — счёт. */
+async function githubCommitCount(): Promise<number | null> {
+  const owner = process.env.VERCEL_GIT_REPO_OWNER
+  const repo = process.env.VERCEL_GIT_REPO_SLUG
+  const sha = process.env.VERCEL_GIT_COMMIT_SHA
+  if (!owner || !repo || !sha) return null
+  try {
+    const res = await fetch(`https://api.github.com/repos/${owner}/${repo}/commits?sha=${sha}&per_page=1`, {
+      headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'elite-build' },
+      signal: AbortSignal.timeout(10_000),
+    })
+    if (!res.ok) return null
+    const last = /[?&]page=(\d+)>; rel="last"/.exec(res.headers.get('link') ?? '')
+    return last ? Number(last[1]) : 1
+  } catch {
+    return null
+  }
+}
+
+function shortSha(): string {
+  const env = process.env.VERCEL_GIT_COMMIT_SHA
+  if (env) return env.slice(0, 7)
+  try {
+    return run('git rev-parse --short HEAD')
+  } catch {
+    return ''
+  }
+}
+
+async function appVersion(): Promise<string> {
   const [major = '0', minor = '0', basePatch = '0'] = pkg.version.split('.')
   if (pkg.versionAnchor == null) return pkg.version
-  try {
-    const commits = Number(
-      execSync('git rev-list --count HEAD', { stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim(),
-    )
-    if (!Number.isFinite(commits)) return pkg.version
-    const patch = Math.max(Number(basePatch), Number(basePatch) + commits - pkg.versionAnchor)
-    return `${major}.${minor}.${patch}`
-  } catch {
-    return pkg.version
+  const commits = localCommitCount() ?? (await githubCommitCount())
+  if (commits == null) {
+    const sha = shortSha()
+    return sha ? `${pkg.version}+${sha}` : pkg.version
   }
+  // Зажим снизу базовым: версия никогда не «уедет назад».
+  const patch = Math.max(Number(basePatch), Number(basePatch) + commits - pkg.versionAnchor)
+  return `${major}.${minor}.${patch}`
 }
 
 /**
@@ -83,13 +130,13 @@ function rigSave(): Plugin {
   }
 }
 
-export default defineConfig({
+export default defineConfig(async () => ({
   plugins: [react(), tailwindcss(), rigSave()],
   server: { port: 5173 },
   // Env читаем из КОРНЯ монорепо, а не из папки пакета: ключ модели один на весь
   // проект (его же подхватит будущий apps/server), и хранится в одном `.env.local`.
   envDir: '../../',
   define: {
-    __APP_VERSION__: JSON.stringify(appVersion()),
+    __APP_VERSION__: JSON.stringify(await appVersion()),
   },
-})
+}))
