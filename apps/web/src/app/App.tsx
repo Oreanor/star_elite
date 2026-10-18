@@ -5,7 +5,7 @@ import { closePortal, freshPortalKeyDown, jumpPortal, openPortal, portalActive, 
 import { disposeJumpPortalWorld, resetJumpPortalWorlds } from '../render/scene/jumpPortalWorld'
 import { hlog, hreset } from '../session/hyperLog'
 import { startUndock } from '../session/undockFx'
-import { negotiate, negotiateDispatcher, negotiatorAvailable } from './control/negotiator'
+import { negotiate, negotiateCopilot, negotiateDispatcher, negotiatorAvailable } from './control/negotiator'
 import { Game } from './Game'
 import { readResume, writeResume } from './resume'
 import { KeyHelp } from './KeyHelp'
@@ -22,6 +22,7 @@ import { Console, type ConsoleTab } from '../ui/console/Console'
 import { CharacterCreation } from '../ui/create/CharacterCreation'
 import { Dialogue } from '../ui/dialogue/Dialogue'
 import { Dispatcher } from '../ui/dialogue/Dispatcher'
+import { CopilotChat } from '../ui/dialogue/CopilotChat'
 import { PlayerChat, IncomingCall } from '../ui/chat/PlayerChat'
 import { subscribeInbox } from '../session/net/chat'
 import type { OnlinePlayer } from '../session/net/presence'
@@ -207,6 +208,8 @@ function Shell({ onRestart }: { onRestart: () => void }) {
   const [peopleRefresh, setPeopleRefresh] = useState(0)
   /** Открыта ли связь с ДИСПЕТЧЕРОМ станции. Свой оверлей, как разговор с бортом. */
   const [dispatching, setDispatching] = useState(false)
+  /** Открыт ли разговор со ВТОРЫМ ПИЛОТОМ (P в полёте, карточка в «Связи»). */
+  const [copiloting, setCopiloting] = useState(false)
   /** Живой игрок, с кем СЕЙЧАС открыт чат. Ровно один за раз — как разговор по T. */
   const [chatWith, setChatWith] = useState<OnlinePlayer | null>(null)
   /** Второй вызов, пришедший пока ты занят: висит баннером, пока не освободишься. */
@@ -221,10 +224,10 @@ function Shell({ onRestart }: { onRestart: () => void }) {
   useEffect(() => (online ? subscribeOnline((players) => (onlineRef.current = players)) : undefined), [])
   const waitingRef = useRef<OnlinePlayer | null>(null)
   useEffect(() => {
-    busyRef.current = talking || chatWith !== null || dispatching
+    busyRef.current = talking || chatWith !== null || dispatching || copiloting
     chatUidRef.current = chatWith?.uid ?? null
     waitingRef.current = waiting
-  }, [talking, chatWith, waiting, dispatching])
+  }, [talking, chatWith, waiting, dispatching, copiloting])
 
   /**
    * Сцена строится по нажатию СТАРТ, а не при загрузке страницы.
@@ -417,7 +420,7 @@ function Shell({ onRestart }: { onRestart: () => void }) {
    * (жест клика сгорел). Без флага мир стоял бы мёртвым, пока не кликнешь по канвасу.
    */
   useEffect(() => {
-    const menuOpen = tab !== null || talking || dispatching || chatWith !== null
+    const menuOpen = tab !== null || talking || dispatching || copiloting || chatWith !== null
     const apply = () => {
       const focused = document.visibilityState === 'visible' && document.hasFocus()
       session.menuFlying =
@@ -433,7 +436,7 @@ function Shell({ onRestart }: { onRestart: () => void }) {
       document.removeEventListener('visibilitychange', apply)
       session.menuFlying = false
     }
-  }, [session, tab, talking, dispatching, chatWith, started, over, docked, enterPlay])
+  }, [session, tab, talking, dispatching, copiloting, chatWith, started, over, docked, enterPlay])
 
   // Симуляция сообщает о событиях один раз, из кадра. React узнаёт о них отсюда.
   useEffect(() => {
@@ -484,6 +487,14 @@ function Shell({ onRestart }: { onRestart: () => void }) {
   const closeDispatch = useCallback(() => {
     setDispatching(false)
     if (!session.world.docked) void requestLock()
+  }, [session])
+  const closeCopilot = useCallback(() => {
+    setCopiloting(false)
+    if (!session.world.docked) void requestLock()
+  }, [session])
+  const openCopilot = useCallback(() => {
+    setCopiloting(true)
+    if (!session.world.docked) releaseLock()
   }, [session])
   const openDispatch = useCallback(() => {
     if (session.world.docked) {
@@ -549,7 +560,7 @@ function Shell({ onRestart }: { onRestart: () => void }) {
   // World и привязан к epoch: после прыжка напоминание снова разрешено, но в одной
   // системе повторного автоматического вызова не будет.
   useEffect(() => {
-    if (docked || talking || dispatching || chatWith !== null) return
+    if (docked || talking || dispatching || copiloting || chatWith !== null) return
     const check = () => {
       const w = session.world
       const police = pendingPoliceFineHail(w)
@@ -562,7 +573,7 @@ function Shell({ onRestart }: { onRestart: () => void }) {
     check()
     const id = window.setInterval(check, 250)
     return () => window.clearInterval(id)
-  }, [session, docked, talking, dispatching, chatWith])
+  }, [session, docked, talking, dispatching, copiloting, chatWith])
   // «Навести» из вкладки «Люди»: захватываем борт знакомого — стрелка HUD поведёт к
   // нему. В полёте закрываем консоль, чтобы мир ожил и можно было лететь; у причала
   // лететь некуда, метку просто держим.
@@ -637,6 +648,7 @@ function Shell({ onRestart }: { onRestart: () => void }) {
         }
         if (chatWith) closeChat()
         else if (dispatching) closeDispatch()
+        else if (copiloting) closeCopilot()
         else if (talking) closeTalk()
         else if (menu) setMenu(false)
         // У ПРИЧАЛА консоль закрывать некуда (она и есть станция), поэтому Escape там
@@ -649,8 +661,19 @@ function Shell({ onRestart }: { onRestart: () => void }) {
       // менять её из-под заставки. Escape выше — единственный выход, он уже обработан.
       if (menu) return
 
+      // P — связь со ВТОРЫМ ПИЛОТОМ, как T с бортом: приказы ему словами. Нет пилота — плашка.
+      if (e.code === 'KeyP') {
+        if (docked || tab !== null || talking || chatWith || dispatching || copiloting) return
+        if (!session.world.copilot) {
+          pushWarning('noTarget', session.world.time, { label: t('copilot.none') })
+          return
+        }
+        openCopilot()
+        return
+      }
+
       if (e.code === 'KeyT') {
-        if (docked || tab !== null || talking || chatWith || dispatching) return
+        if (docked || tab !== null || talking || chatWith || dispatching || copiloting) return
         // Входящий вызов — первым. HUD пишет «◄ … ВЫЗЫВАЕТ · T — ОТВЕТИТЬ» по тому же
         // `pendingHail ?? offerHail`, и T обязана исполнять обещанное на плашке: прежде
         // захваченная цель (станция, пират) перехватывала T, и ответить каравану было нельзя.
@@ -713,7 +736,7 @@ function Shell({ onRestart }: { onRestart: () => void }) {
           hlog('ВЫХОД: автоповтор клавиши')
           return
         }
-        if (docked || talking || dispatching) {
+        if (docked || talking || dispatching || copiloting) {
           hlog('ВЫХОД: занят', { docked, talking, dispatching })
           return
         }
@@ -788,7 +811,7 @@ function Shell({ onRestart }: { onRestart: () => void }) {
       // открыть вкладку; повтор своей — назад (в доке на «станцию», в полёте — закрыть).
       const wanted: ConsoleTab | null =
         e.code === 'KeyM' ? 'system' : e.code === 'KeyG' ? 'galaxy' : e.code === 'KeyI' ? 'ship' : null
-      if (!wanted || talking || dispatching || chatWith) return
+      if (!wanted || talking || dispatching || copiloting || chatWith) return
 
       if (docked) {
         // Консоль уже на экране: только вкладка. `tab` после флориша может быть null, хотя
@@ -805,7 +828,7 @@ function Shell({ onRestart }: { onRestart: () => void }) {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [session, over, docked, menu, tab, talking, dispatching, chatWith, openConsole, closeConsole, closeTalk, closeChat, closeDispatch])
+  }, [session, over, docked, menu, tab, talking, dispatching, copiloting, chatWith, openConsole, closeConsole, closeTalk, closeChat, closeDispatch, closeCopilot, openCopilot])
 
   /**
    * Меню паузы — ОДНА панель на три случая: титул, пауза в полёте (курсор отпущен) и
@@ -871,6 +894,8 @@ function Shell({ onRestart }: { onRestart: () => void }) {
         <Dialogue onClose={closeTalk} negotiate={negotiate} chatAvailable={negotiatorAvailable()} />
       ) : dispatching ? (
         <Dispatcher world={session.world} onClose={closeDispatch} negotiate={(history, text) => negotiateDispatcher(session.world, history, text)} />
+      ) : copiloting ? (
+        <CopilotChat world={session.world} onClose={closeCopilot} negotiate={(history, text) => negotiateCopilot(session.world, history, text, session.mode === 'flyto')} />
       ) : docked || tab !== null ? (
         // Одна консоль и в полёте, и у причала: планета, корабль, груз, карты (плюс
         // верфь и магазин у причала). «Открыть карту» — раскрыть эту панель на нужной
@@ -883,6 +908,7 @@ function Shell({ onRestart }: { onRestart: () => void }) {
           onClose={docked ? undockAndResume : closeConsole}
           onTalk={talkTo}
           onDispatch={openDispatch}
+          onCopilot={openCopilot}
           onLocate={locateShip}
           onRoute={routeTo}
           onChat={hail}

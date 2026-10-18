@@ -1,4 +1,4 @@
-export { autofightActive, autofightSpent, disengageAutofight, engageAutofight, retargetAutofight } from './autofight'
+export { autofightActive, autofightSpent, continueAutofight, disengageAutofight, engageAutofight, retargetAutofight } from './autofight'
 export {
   orderAttack,
   orderEngageAll,

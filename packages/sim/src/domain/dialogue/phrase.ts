@@ -27,6 +27,12 @@ export type PhraseKey =
   // Кнопки игрока и почему недоступны
   | 'sayStopFire' | 'sayMercy' | 'sayHire' | 'sayHireFee' | 'sayPlunder'
   | 'blockedUnharmed' | 'blockedMakePeace' | 'blockedNoCredits'
+  // Второй пилот: найм (строка ленты и отказы голосом) и исход приказов
+  | 'copilotHired' | 'copilotDismissed'
+  | 'hireTaken' | 'hireWary' | 'hireRank' | 'hireMoney'
+  | 'copilotGoto' | 'copilotAttack' | 'copilotAttackAll' | 'copilotCollect' | 'copilotFlee' | 'copilotStop'
+  | 'copilotRepaired' | 'copilotRepairShort' | 'copilotNothingToRepair' | 'copilotNoMoney'
+  | 'copilotNoFoes' | 'copilotNoPods' | 'copilotHoldFull' | 'copilotDocked' | 'copilotNoTarget'
 
 export type PhraseParams = Readonly<Record<string, string | number>>
 

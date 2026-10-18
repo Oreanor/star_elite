@@ -1,7 +1,7 @@
-import { commodityBuyPrice, commoditySellPrice, commodityStock, dispatcherBriefing, dispatcherTraffic, extractModelJson, localFine, localSettlement, parseModelReply, stationInterlocutor, type DialogueRole, type Persona, type TrafficShip, type Topic, type World } from '@elite/sim'
-import type { ChatTurn, ContextDigest, NegotiationContext, NegotiatorReply } from '../../ui/dialogue/facts'
+import { copilotBriefing, findModule, commodityBuyPrice, commoditySellPrice, commodityStock, dispatcherBriefing, dispatcherTraffic, extractModelJson, localFine, localSettlement, parseModelReply, stationInterlocutor, type DialogueRole, type Persona, type TrafficShip, type Topic, type World } from '@elite/sim'
+import type { ChatTurn, ContextDigest, CopilotReply, NegotiationContext, NegotiatorReply } from '../../ui/dialogue/facts'
 import { currentLang } from '../../ui/i18n/i18n'
-import { chassisName, occupationName, properName } from '../../ui/i18n/dataNames'
+import { chassisName, moduleName, occupationName, properName } from '../../ui/i18n/dataNames'
 import { negotiatorLocale } from './negotiatorLocale'
 import { chatMessages } from './chatMessages'
 
@@ -342,4 +342,113 @@ function dispatcherLookup(world: World, kind: NonNullable<NegotiatorReply['looku
   return english
     ? 'Station operations: trade and fitting are available while docked; navigation and system information are available by radio.'
     : 'Правила станции: торговля и оснащение доступны в доке; навигационные сведения и данные системы можно запросить по связи.'
+}
+
+
+/** Сводка второго пилота словами для промпта: id у каждой цели — по ним он и выбирает. */
+function copilotSituation(world: World, english: boolean, helmFlyTo: boolean): string {
+  const b = copilotBriefing(world)
+  if (!b) return ''
+  const km = (m: number) => (m < 1000 ? `${m} m` : `${(m / 1000).toFixed(m < 10_000 ? 1 : 0)} km`)
+  const bodies = b.bodies
+    .map((x) => `#${x.id} ${properName(x.name)} (${x.kind}${x.populated ? (english ? ', inhabited' : ', обитаема') : ''}, ${km(x.distanceM)})`)
+    .join('; ')
+  const contacts = b.contacts
+    .map((c) => `#${c.id} ${properName(c.name)} «${chassisName(c.chassis)}» (${c.foe ? (english ? 'HOSTILE' : 'ВРАГ') : c.faction}, ${english ? 'rank' : 'ранг'} ${c.rank}, ${km(c.distanceM)})`)
+    .join('; ')
+  const broken = b.broken
+    .map((m) => {
+      const mod = findModule(m.moduleId)
+      return `${m.n}) ${mod ? moduleName(mod) : m.moduleId} — ${english ? 'broken' : 'сломано'} ${m.faultPct}%, ${m.price} cr`
+    })
+    .join('; ')
+  const helm = helmFlyTo ? 'cruise' : b.helm
+  const none = english ? 'none' : 'нет'
+  return english
+    ? [
+        `YOU: ${properName(b.name)}, rank ${b.rank} (1 ace … 10 rookie), pay ${b.salary} cr/month. Commander rank ${b.playerRank}.`,
+        `HELM NOW: ${helm}${b.docked ? ' (docked at station)' : ''}.`,
+        `BODIES (nearest first): ${bodies || none}.`,
+        `SCANNER CONTACTS: ${contacts || none}. Canisters on scanner: ${b.pods}.`,
+        `SHIP: hull ${Math.round(b.hull.share * 100)}%${b.hull.repairPrice ? `, your hull repair ${b.hull.repairPrice} cr` : ''}. Broken parts: ${broken || none}.`,
+      ].join('\n')
+    : [
+        `ТЫ: ${properName(b.name)}, ранг ${b.rank} (1 — ас … 10 — новичок), жалованье ${b.salary} кр/мес. Ранг командира ${b.playerRank}.`,
+        `ШТУРВАЛ СЕЙЧАС: ${helm}${b.docked ? ' (стоим у причала)' : ''}.`,
+        `ТЕЛА (ближние первыми): ${bodies || none}.`,
+        `ЛОКАТОР: ${contacts || none}. Контейнеров на локаторе: ${b.pods}.`,
+        `КОРАБЛЬ: корпус ${Math.round(b.hull.share * 100)}%${b.hull.repairPrice ? `, твой ремонт корпуса ${b.hull.repairPrice} кр` : ''}. Сломано: ${broken || none}.`,
+      ].join('\n')
+}
+
+const COPILOT_SCHEMA =
+  '{"reply":"…","emotion":"neutral"|"joy"|"pain"|"anger"|"fear"|"sadness"|null,"goto":<body id>|null,"attack":"nearest"|"all"|<ship id>|null,"flee":true|null,"collect":true|null,"stop":true|null,"repair":"hull"|"all"|<part number>|null,"dismiss":true|null,"lookup":"market"|"traffic"|"worlds"|null,"clarify":true|false}'
+
+/**
+ * Свободный чат со ВТОРЫМ ПИЛОТОМ. Это роль `copilot`: приказы из речи игрока модель кладёт
+ * в поля JSON, команды собирает тот же пул экшнов, исполняет домен (`crew/copilot.ts`).
+ * Цены и трафик он «узнаёт у диспетчера» — тем же справочником, что диспетчер, второй репликой.
+ */
+export async function negotiateCopilot(world: World, history: ChatTurn[], userText: string, helmFlyTo: boolean): Promise<CopilotReply> {
+  const copilot = world.copilot
+  const noise = (): CopilotReply => ({ replies: [staticNoise(history).text], commands: [], emotion: null, source: 'fallback' })
+  if (!copilot || !negotiatorAvailable()) return noise()
+  const english = currentLang() === 'en'
+  const persona = copilot.persona
+  const situation = copilotSituation(world, english, helmFlyTo)
+  const system = english
+    ? `You are ${properName(copilot.name)}, the commander's CO-PILOT, sitting in his cockpit. Temper: ${persona.disposition}. Talk like a crewmate on intercom: short, alive, in character. Answer in English.
+${situation}
+You fly, fight, repair and know what a dispatcher knows. Turn the commander's words into orders in the JSON fields:
+- "fly to the nearest station / planet X / the star" → goto: id from BODIES (nearest = smallest distance of that kind).
+- "attack X" → attack: ship id from SCANNER; "attack the nearest pirate" → "nearest"; "attack all pirates / everyone in turn" → "all".
+- "get us out of here, it is dangerous" → flee:true. "collect the canisters" → collect:true. "stop / I will take it / hands off" → stop:true.
+- Repair: you charge only for parts (prices above). If asked how much — name the price, no order. If he clearly asks to fix — repair: "hull", "all" or a broken part number.
+- Prices, market, who is flying around: you do not know offhand — set lookup ("market", "traffic" or "worlds") and SAY you are calling the dispatcher (e.g. "Hold on, I will raise the dispatcher").
+- dismiss:true ONLY if the commander explicitly fires you.
+If you do not understand WHAT to do or WHOM he means — do not nod along: ask back, set clarify:true and no orders. Never invent ids, prices or ships absent above. Several orders at once are fine (stop + goto).
+Reply with one JSON object: ${COPILOT_SCHEMA}.`
+    : `Ты ${properName(copilot.name)}, ВТОРОЙ ПИЛОТ командира, сидишь у него в кабине. Нрав: ${persona.disposition}. Говори как напарник по внутренней связи: коротко, живо, в своём характере. Отвечай по-русски.
+${situation}
+Ты летаешь, дерёшься, чинишь и знаешь то, что знает диспетчер. Слова командира превращай в приказы в полях JSON:
+- «лети к ближайшей станции / к планете X / к звезде» → goto: id из ТЕЛ (ближайшая — наименьшее расстояние нужного вида).
+- «атакуй такого-то» → attack: id борта с ЛОКАТОРА; «атакуй ближайшего пирата» → "nearest"; «бей всех пиратов / всех по очереди» → "all".
+- «лети отсюда подальше, тут опасно» → flee:true. «собери контейнеры» → collect:true. «стоп / отставить / сам поведу» → stop:true.
+- Ремонт: берёшь только за детали (цены выше). Спросил «сколько» — назови цену, без приказа. Ясно попросил починить — repair: "hull", "all" или номер сломанной детали.
+- Цены, рынок, кто летает в системе: на память не знаешь — ставь lookup ("market", "traffic" или "worlds") и СКАЖИ, что связываешься с диспетчером (например: «Ща свяжусь с диспетчером, узнаю»).
+- dismiss:true — ТОЛЬКО если командир прямо тебя увольняет.
+Не понял, ЧТО делать или КОГО он имеет в виду, — не поддакивай: переспроси, поставь clarify:true и никаких приказов. Не выдумывай id, цены и борта, которых нет выше. Несколько приказов сразу можно (stop + goto).
+Ответь одним JSON: ${COPILOT_SCHEMA}.`
+  const messages: OutboundMessages = [{ role: 'system', content: system }]
+  for (const turn of history.slice(-CHAT_RECENT)) {
+    if (turn.who === 'you') messages.push({ role: 'user', content: turn.text })
+    else if (turn.who === 'them') messages.push({ role: 'assistant', content: turn.text })
+  }
+  messages.push({ role: 'user', content: userText })
+  const request = async (input: OutboundMessages): Promise<NegotiatorReply | null> => {
+    for (const tier of TIERS) {
+      const reply = await raceAll(liveModels(tier, Date.now()), input, [], 'copilot', null, null)
+      if (reply) return reply
+    }
+    return null
+  }
+  const first = await request(messages)
+  if (!first) return noise()
+  const out: CopilotReply = { replies: [first.text], commands: [...first.commands], emotion: first.emotion ?? null, source: 'model' }
+  if (!first.lookup || first.clarify) return out
+
+  // Справочник диспетчера — со станции системы. Нет станции — связаться не с кем.
+  const hasStation = world.bodies.some((b) => b.kind === 'station')
+  const data = hasStation
+    ? dispatcherLookup(world, first.lookup, english)
+    : english ? 'No station in this system — no dispatcher to raise.' : 'В системе нет станции — диспетчера не достать.'
+  const followUp: OutboundMessages = [...messages, { role: 'assistant', content: first.text }, {
+    role: 'user',
+    content: english
+      ? `DISPATCHER ANSWERED (${first.lookup}):\n${data}\nNow tell the commander what you learned, briefly. No orders, lookup:null.`
+      : `ДИСПЕТЧЕР ОТВЕТИЛ (${first.lookup}):\n${data}\nТеперь коротко перескажи командиру, что узнал. Без приказов, lookup:null.`,
+  }]
+  const second = await request(followUp)
+  if (second) out.replies.push(second.text)
+  return out
 }

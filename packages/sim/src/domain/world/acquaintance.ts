@@ -340,6 +340,8 @@ export function residentAcquaintances(world: World): Acquaintance[] {
     (a) =>
       a.alive &&
       a.systemIndex === world.systemIndex &&
+      // Второй пилот сидит у тебя в кабине — бортом в трафике он не появляется.
+      a.id !== world.copilot?.acquaintanceId &&
       !world.ships.some((s) => s.alive && s.acquaintanceId === a.id),
   )
 }

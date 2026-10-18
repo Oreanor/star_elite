@@ -10,6 +10,9 @@ import {
   isEssential,
   minTechForClass,
   moduleFault,
+  copilotRepair,
+  copilotRepairQuote,
+  type RepairTarget,
   moduleResaleValue,
   moduleStat,
   priceOf,
@@ -141,6 +144,19 @@ export function SlotModal({
     const outcome = runRepair(world, module)
     onChange()
     setConfirm({ message: t(('ship.repair.' + outcome) as Key), actions: [] })
+  }
+
+  // В полёте чинит ВТОРОЙ ПИЛОТ — только за детали, без броска (`copilotRepair`).
+  const doCopilotRepair = () => {
+    const target = module ? copilotTargetOf(module) : null
+    if (!target) return
+    const price = copilotRepairQuote(world, target)?.price ?? 0
+    const out = copilotRepair(world, target)
+    onChange()
+    setConfirm({
+      message: out === 'repaired' ? t('phrase.copilotRepaired', { credits: price }) : t('phrase.copilotNoMoney', { credits: price }),
+      actions: [],
+    })
   }
 
   // Клик по МОЕМУ варианту из трюма — спросить и поставить взамен (даром, железо своё).
@@ -334,6 +350,7 @@ export function SlotModal({
                 module && commit(() => (isMissileSlot ? stripMissiles(player) : unfitModule(player, module)))
               }
               onRepair={doRepair}
+              onCopilotRepair={doCopilotRepair}
               onUpgrade={askUpgrade}
               onSell={() => {}}
             />
@@ -380,15 +397,17 @@ function ActionBar({
   module,
   onStrip,
   onRepair,
+  onCopilotRepair,
   onUpgrade,
   onSell,
 }: {
   world: World
-  /** Не у причала — только «снять в трюм»: прочее (деньги и мастерская) живёт на верфи. */
+  /** Не у причала — «снять в трюм» и ремонт вторым пилотом; прочее (деньги, мастерская) — на верфи. */
   docked: boolean
   module: ShipModule | null
   onStrip: () => void
   onRepair: () => void
+  onCopilotRepair?: () => void
   onUpgrade: () => void
   onSell: () => void
 }) {
@@ -397,6 +416,9 @@ function ActionBar({
   const noRoom = module ? freeCapacity(player.hold) < module.mass : true
   const repair = docked && module ? repairInfoFor(world, module) : { price: 0, can: false, refused: false }
   const maxed = module ? canUpgrade(world, player, module, true) === 'maxed' : true
+  // В полёте с вторым пилотом — его ремонт за детали (корпус у брони, поломка у прочего).
+  const copilotTarget = !docked && world.copilot && module ? copilotTargetOf(module) : null
+  const copilotQuote = copilotTarget ? copilotRepairQuote(world, copilotTarget) : null
   // «Ремонт» значит РАЗНОЕ по виду: у бронеплиты латает КОРПУС корабля (общий), у
   // пусковой — ДОЗАРЯДКА ракет, у прочего железа — чинит ПОЛОМКУ самой детали.
   const repairLabel =
@@ -412,6 +434,11 @@ function ActionBar({
         <Button small variant="primary" disabled={!module || essential || noRoom} onClick={onStrip}>
           {t('station.strip')}
         </Button>
+        {copilotQuote && onCopilotRepair && (
+          <Button small variant="primary" disabled={world.credits < copilotQuote.price} onClick={onCopilotRepair}>
+            {repairLabel} · <Money amount={copilotQuote.price} />
+          </Button>
+        )}
         {docked && (
         <>
         <Button small variant="primary" disabled={!repair.can} onClick={onRepair}>
@@ -546,6 +573,12 @@ function repairInfoFor(world: World, module: ShipModule): RepairInfo {
     return { price: q.price, can: world.credits >= q.price, refused: false }
   }
   return { price: 0, can: false, refused: false } // исправна — чинить нечего
+}
+
+/** Что чинит второй пилот у этого слота: у брони — корпус, у сломанной детали — её саму. */
+function copilotTargetOf(module: ShipModule): RepairTarget | null {
+  if (module.kind === 'armour') return { kind: 'hull' }
+  return moduleFault(module) > 0 ? { kind: 'module', module } : null
 }
 
 /** Собственно ремонт. Возвращает КЛЮЧ исхода для сообщения игроку (ремонт — бросок). */

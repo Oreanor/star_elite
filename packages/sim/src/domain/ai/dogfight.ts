@@ -11,6 +11,7 @@ import { wantsToFlee } from './morale'
 import { remember } from './perception'
 import { drive, driveOpts } from './steer'
 import { pilotTraits } from './traits'
+import { pilotSkill } from '../crew/rank'
 import type { AIMode, AIState } from './types'
 
 /**
@@ -207,7 +208,7 @@ function updateAimJitter(e: ShipEntity, ai: AIState, world: World, distance: num
 
   ai.aimJitterTimer = AI.AIM_JITTER_INTERVAL
   // Шире промахивается от слабой выучки и от неточной руки. Ни одно — не от урона.
-  const spread = (AI.FIRE_SPREAD * distance * pilotTraits(e).spread) / ai.skill
+  const spread = (AI.FIRE_SPREAD * distance * pilotTraits(e).spread) / pilotSkill(e)
   const rng = world.rng
   ai.aimJitter.set(signed(rng), signed(rng), signed(rng)).multiplyScalar(spread * 0.5)
 }

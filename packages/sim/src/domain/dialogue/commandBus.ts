@@ -21,6 +21,7 @@ import { applyTransfer, type TransferResult } from './transfer'
 import { localFine, payLocalFine } from '../station/legal'
 import { acceptBlock, acceptOffer, declineOffer, revealOffer } from '../contracts/contracts'
 import { giveMielophone } from './divineGift'
+import { copilotCommand, crewCommand } from '../crew/copilotCommands'
 
 /**
  * КОМАНДА боту — единица «что игрок велел / о чём договорились» в диалоге: {действие, груз}.
@@ -495,6 +496,8 @@ const HANDLERS: Record<string, CommandHandler> = {
   mark: markCommand,
   job: jobCommand,
   gift: giftCommand,
+  crew: crewCommand,
+  copilot: copilotCommand,
 }
 
 /**

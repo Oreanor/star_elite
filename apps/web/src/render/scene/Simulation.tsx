@@ -450,16 +450,18 @@ export function Simulation() {
       else if (canEngageAutodock(world)) setPilot(session, 'autodock')
     }
 
-    // J — автопилот НА ЦЕЛЬ: контакт / нав / звезда галактики (jumpTarget). Нет цели — плашка.
-    // В комнате тора та же клавиша ведёт к выбранной галактике: Tab и карта только ВЫБИРАЮТ,
-    // ход даёт J. Иначе выбор цели means немедленный старт, а дорога сквозь S³ идёт по чужим
-    // узлам — выбрасывало бы у первой встречной галактики вместо конца пути.
-    if (consumePress('KeyJ')) {
-      if (session.bush.active) {
-        if (!toggleTorusAutopilot()) pushWarning('noTarget', world.time)
-      } else if (session.mode === 'flyto') setPilot(session, 'manual')
-      else if (canEngageFlyTo(world)) setPilot(session, 'flyto')
-      else pushWarning('noTarget', world.time)
+    // J — только в комнате тора: ведёт к выбранной галактике (Tab и карта лишь ВЫБИРАЮТ, ход
+    // даёт J — иначе дорога сквозь S³ выбрасывала бы у первой встречной галактики). В системе
+    // автопилот — дело ВТОРОГО ПИЛОТА: его просят словами, клавиши у этого больше нет.
+    if (consumePress('KeyJ') && session.bush.active) {
+      if (!toggleTorusAutopilot()) pushWarning('noTarget', world.time)
+    }
+    // Просьба второго пилота к штурвалу: «веду к цели» или «отдаю управление». Домен режимов
+    // сессии не знает — оставляет просьбу, сессия исполняет и гасит.
+    if (world.helmRequest) {
+      if (world.helmRequest === 'flyto' && canEngageFlyTo(world)) setPilot(session, 'flyto')
+      else if (session.mode === 'flyto' || session.mode === 'autodock') setPilot(session, 'manual')
+      world.helmRequest = null
     }
     // Долетели (или цель пропала) — возвращаем штурвал: автопилот-к-цели не залипает.
     if (session.mode === 'flyto' && flyToArrived(world)) setPilot(session, 'manual')

@@ -73,8 +73,12 @@ function hashString(s: string): number {
 export function portraitIndex(ship: ShipEntity): number {
   // Игрок ВЫБРАЛ лицо в создании персонажа — оно и есть, без хеша имени.
   if (ship.persona.portrait !== undefined) return ship.persona.portrait
-  const h = hashString(ship.pilotName || String(ship.id))
-  return h % (PORTRAIT_GRID * PORTRAIT_GRID)
+  return faceOfName(ship.pilotName || String(ship.id))
+}
+
+/** Лицо пилота по имени — то же, что у его борта: второй пилот в кабине не меняет лица. */
+export function faceOfName(name: string): number {
+  return hashString(name) % (PORTRAIT_GRID * PORTRAIT_GRID)
 }
 
 /** Клетка лица в сетке: столбец/строка из индекса. */

@@ -162,7 +162,11 @@ const plan: Behavior = {
  */
 const tasks: Behavior = {
   id: 'tasks',
-  score: ({ ai }) => (ai.tasks.length === 0 ? 0 : ai.tasks[0]!.own ? UTILITY.ROUTINE : UTILITY.TASK),
+  score: ({ ai }) => {
+    const head = ai.tasks[0]
+    if (!head) return 0
+    return head.urgent ? UTILITY.ORDER : head.own ? UTILITY.ROUTINE : UTILITY.TASK
+  },
   run({ e, ai, world }) {
     const intent = stepTasks(e, world)
     if (!intent) return false

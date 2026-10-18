@@ -1,3 +1,5 @@
+import { awardKillXp } from '../crew/rank'
+import { stepCrew } from '../crew/copilot'
 import { Quaternion, Vector3 } from 'three'
 import { WARP } from '../../config/ai'
 import { WARBASE } from '../../config/warbase'
@@ -160,6 +162,7 @@ export function stepWorld(world: World, frameDt: number, controllers: Controller
     for (let i = 0; i < ticks; i++) {
       advanceCalendar(world, PHYSICS.FIXED_DT)
       stepDockTraffic(world, PHYSICS.FIXED_DT)
+      stepCrew(world)
     }
     return
   }
@@ -274,6 +277,8 @@ function stepTick(world: World, helm: Helm, dt: number): void {
   stepTension(world, dt)
   // Дела — после всего, что могло решить их исход в этом такте: гибели, стыковки, ухода.
   stepContracts(world, dt)
+  // Жалованье второму пилоту — по календарю мира, тем же тактом.
+  stepCrew(world)
   maybeShiftOrigin(world)
 }
 
@@ -699,7 +704,8 @@ function stepScooping(world: World, helm: Helm, dt: number): void {
   clearTractorMarks(world)
 
   if (world.pods.length > 0) {
-    if (wantTractor) tractorPods(world, player, dt)
+    // Второй пилот на поручении «собери» тянет контейнеры лучом, как бот-компаньон.
+    if (wantTractor || player.ai?.tasks[0]?.kind === 'collect-cargo') tractorPods(world, player, dt)
     if (player.alive) scoopNearby(world, player)
 
     // Компаньон на поручении СБОРА черпает тем же правилом, что игрок.
@@ -763,6 +769,8 @@ function cleanup(world: World): void {
     spawnExplosion(world, ship.state.pos, ship.state.vel, DEBRIS.SHIP_EXPLOSION_SCALE)
     // Зеркало бота хозяина: трофеи сыплет хозяин (они общие), здесь — только взрыв. Награда —
     // тому, чей выстрел был последним: у каждого игрока своя касса.
+    // Опыт — тому, чей выстрел был последним: игроку (и второму пилоту, бой общий).
+    if (ship.lastAttackerId === world.player.id) awardKillXp(world, ship)
     if (ship.kinematic) {
       if (ship.faction === 'hostile' && ship.lastAttackerId === world.player.id) {
         world.score += SCORE.HOSTILE_KILL

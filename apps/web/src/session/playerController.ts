@@ -3,7 +3,7 @@ import {
   aiController,
   approach,
   autofightActive,
-  autofightSpent,
+  continueAutofight,
   beginManoeuvre,
   canAerobatics,
   boostMult,
@@ -12,9 +12,6 @@ import {
   createManoeuvre,
   cycleLaserGroup,
   deadzoneScale,
-  disengageAutofight,
-  engageAutofight,
-  retargetAutofight,
   manoeuvreHoldsCamera as holdsCamera,
   manoeuvring as busy,
   stepManoeuvre,
@@ -237,31 +234,16 @@ function pollTap(intent: PlayerIntent, dt: number): TapKey | null {
 }
 
 /**
- * Автобой по клавише P. Тумблер живёт здесь, потому что это РЕШЕНИЕ игрока,
- * а не правило мира: правила (кого бить, когда отпустить штурвал) домен знает сам.
+ * Штурвал у ВТОРОГО ПИЛОТА: автобой или его поручение («собери», «уходим»). Включает их не
+ * клавиша, а слово в чате с пилотом (`crew/copilot.ts`); здесь — только «идёт ли дальше».
  *
- * Пока автобой ведёт корабль, ввод не читается вовсе — иначе мышь дралась бы
- * с пилотом за одну и ту же ручку. Фигуру сбрасываем: докручивать чужой оборот
- * автопилоту незачем.
+ * Пока пилот ведёт корабль, ввод не читается вовсе — иначе мышь дралась бы с ним за одну
+ * и ту же ручку. Фигуру сбрасываем: докручивать чужой оборот незачем.
  */
 function pollAutofight(world: World, intent: PlayerIntent): boolean {
-  if (consumePress('KeyP')) {
-    if (autofightActive(world)) {
-      disengageAutofight(world)
-    } else if (engageAutofight(world)) {
-      intent.manoeuvre.kind = null
-      intent.surge = 0
-    }
-  }
-
-  if (!autofightActive(world)) return false
-
-  // Цель погибла, ушла за горизонт или мы сами мертвы: рядом есть ещё враг — бьём следующего
-  // (`retargetAutofight`), нет — штурвал возвращается.
-  if (autofightSpent(world) && !retargetAutofight(world)) {
-    disengageAutofight(world)
-    return false
-  }
+  if (!continueAutofight(world)) return false
+  intent.manoeuvre.kind = null
+  intent.surge = 0
   return true
 }
 
@@ -583,8 +565,9 @@ export function createPlayerController(intent: PlayerIntent): Controller {
       return true
     },
 
-    wantsCruise(_ship: ShipEntity, world: World): boolean | number {
-      if (autofightActive(world)) return false
+    wantsCruise(ship: ShipEntity, world: World): boolean | number {
+      // Штурвал у второго пилота — крейсер решает он, как любой бот (уйти подальше без него долго).
+      if (autofightActive(world)) return aiController.wantsCruise?.(ship, world) ?? false
       // Защёлка важнее пробела: иначе Space снова потащит к MAX.
       if (intent.cruiseLatch && intent.cruiseLatchFactor > 1) return intent.cruiseLatchFactor
       return intent.cruise

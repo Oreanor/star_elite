@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import {
   canUpgradeHullStat,
+  copilotRepair,
+  copilotRepairQuote,
   hullPurchase,
   hullStatUpgradeCost,
   hullStatPreview,
@@ -60,6 +62,12 @@ export function HullModal({
     setNote(t(('ship.repair.' + out) as Key))
     onChange()
   }
+  const copilotQuote = world.copilot ? copilotRepairQuote(world, { kind: 'hull' }) : null
+  const doCopilotRepair = () => {
+    const price = copilotQuote?.price ?? 0
+    if (copilotRepair(world, { kind: 'hull' }) === 'repaired') setNote(t('phrase.copilotRepaired', { credits: price }))
+    onChange()
+  }
   const doUpgrade = (stat: HullStat) => {
     if (upgradeHullStat(world, player, stat) === null) {
       setNote(null)
@@ -77,9 +85,16 @@ export function HullModal({
           : t('station.service.hullDmg', { cur: hullCur, max: hullMax, cost: quote.price })}
       </p>
       <div className="mt-3">
-        <Button small variant="primary" disabled={dmg <= 0 || quote.chance <= 0 || world.credits < quote.price} onClick={doRepair}>
-          {dmg <= 0 ? t('station.service.hullWhole') : t('station.service.repair')}
-        </Button>
+        {world.docked ? (
+          <Button small variant="primary" disabled={dmg <= 0 || quote.chance <= 0 || world.credits < quote.price} onClick={doRepair}>
+            {dmg <= 0 ? t('station.service.hullWhole') : t('station.service.repair')}
+          </Button>
+        ) : copilotQuote ? (
+          // В полёте корпус латает ВТОРОЙ ПИЛОТ — за детали, без броска мастера.
+          <Button small variant="primary" disabled={world.credits < copilotQuote.price} onClick={doCopilotRepair}>
+            {t('station.service.repair')} · <Money amount={copilotQuote.price} />
+          </Button>
+        ) : null}
       </div>
 
       <div className="mt-5 space-y-1">

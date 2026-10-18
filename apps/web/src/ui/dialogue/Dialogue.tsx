@@ -349,7 +349,7 @@ export function Dialogue({
               <PilotPortrait ship={other} world={world} emotion={faceEmo} divineEmotion={other.divine ? divineFace ?? undefined : undefined} size={108} />
             }
             name={other.pilotName}
-            role={occupationName(other.originKind, other.faction)}
+            role={other.divine ? occupationName(other.originKind, other.faction) : `${occupationName(other.originKind, other.faction)} · ${t('copilot.rank', { rank: other.rank })}`}
             craft={chassisName(other.loadout.chassis.name)}
             stance={stance}
           />

@@ -132,6 +132,16 @@ export interface AIState {
    * а не заниженным оружием. Ровно этим правилом живут и пираты.
    */
   skill: number
+  /**
+   * Кто ведёт борт, если не его хозяин: в автобое игрока штурвал у ВТОРОГО ПИЛОТА, и выучку
+   * задаёт его ранг, а не ранг игрока. `null` — ведёт сам (`ship.rank`).
+   */
+  pilotRank: number | null
+  /**
+   * Бой по очереди: цель пала — брать следующего врага на локаторе (`retargetAutofight`).
+   * Нет — после цели штурвал возвращается.
+   */
+  chainFoes: boolean
 
   /** Стыкуется ли к причалу и на какой стадии. null — обычный трафик. */
   dock: DockPhase
@@ -231,6 +241,8 @@ export function createAIState(home: Vector3, rng: Rng): AIState {
     demandAt: -1,
     escortOf: null,
     skill: 1,
+    pilotRank: null,
+    chainFoes: false,
     dock: null,
     dockTimer: 0,
     dormant: false,

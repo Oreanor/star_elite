@@ -87,6 +87,8 @@ export function driftContacts(world: World): void {
 
   for (const c of world.acquaintances) {
     if (!c.alive) continue
+    // Второй пилот летит с тобой: за кулисами не бродит и не гибнет.
+    if (c.id === world.copilot?.acquaintanceId) continue
     // Присутствует живым бортом здесь и сейчас — он рядом с тобой, не за кулисами.
     if (world.ships.some((s) => s.alive && s.acquaintanceId === c.id)) continue
     // Уже в системе, куда ты входишь: это ЖИТЕЛЬ, его сейчас выставят на радар

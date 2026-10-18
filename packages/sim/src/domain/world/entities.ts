@@ -13,6 +13,7 @@ import type { AIState } from '../ai/types'
 import type { CruiseState } from '../cruise/drive'
 import type { IdSource } from './ids'
 import type { Persona } from './persona'
+import type { Copilot } from '../crew/copilot'
 import type { Acquaintance } from './acquaintance'
 import type { Settlement } from '../galaxy/types'
 import type { GalaxyDelta, GalaxyEdit } from '../galaxy/delta'
@@ -113,6 +114,11 @@ export interface ShipEntity {
    * знакомстве; на станции же, где читаешь манифест причала, имена видны сразу.
    */
   pilotName: string
+  /**
+   * Ранг пилота, 10 (новичок) … 1 (ас). Задаёт выучку в бою (`pilotSkill`). У бота — от
+   * рождения (`botRank`), у игрока — из опыта (`world.pilotXp`).
+   */
+  rank: number
 
   /** Что установлено. Меняется на станции и при подборе трофеев. */
   loadout: Loadout
@@ -886,8 +892,9 @@ export interface Notice {
    * уступил / отказал пирату `other`. Чужой разбой слышен — это повод вмешаться.
    * `contract-done` / `contract-failed` — дело `other` от `name` закрыто или провалено.
    * `lead-jump` — клиент `name` прыгает к звезде `other` и зовёт за собой.
+   * `copilot-quit` — второй пилот `name` ушёл: жалованье платить нечем.
    */
-  kind: 'contact-lost' | 'player-left' | 'demand' | 'yielded' | 'refused' | 'contract-done' | 'contract-failed' | 'lead-jump'
+  kind: 'contact-lost' | 'player-left' | 'demand' | 'yielded' | 'refused' | 'contract-done' | 'contract-failed' | 'lead-jump' | 'copilot-quit'
   /** Имя, которое игрок знал. Данные, не перевод: подставляется в шаблон HUD. */
   name: string
   /** Второе имя или подпись для вестей о двоих (эфир) и о делах. */
@@ -1205,6 +1212,15 @@ export interface World {
   policeFineHailEpoch: number
   credits: number
   score: number
+  /** Боевой опыт игрока — за сбитых (`awardKillXp`). Из него ранг (`rankOfXp`). */
+  pilotXp: number
+  /** Второй пилот на борту или `null` (`crew/copilot.ts`). */
+  copilot: Copilot | null
+  /**
+   * Просьба к штурвалу от второго пилота: «веду к цели» / «отдаю управление». Домен не знает
+   * режимов сессии — их включает слой приложения, прочитав и сбросив эту просьбу.
+   */
+  helmRequest: 'flyto' | 'manual' | null
 
   /**
    * Реестр знакомых пилотов: с кем игрок говорил. Переживает и гибель бортов

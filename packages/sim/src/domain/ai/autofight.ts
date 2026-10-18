@@ -1,5 +1,6 @@
 import { Vector3 } from 'three'
 import { AI } from '../../config/ai'
+import { COPILOT } from '../../config/crew'
 import { isEngageable } from '../combat/engage'
 import { findShip } from '../world/queries'
 import { findWarBaseFixture, warBaseFixtureWorldPos } from '../world/warBase'
@@ -94,12 +95,12 @@ export function engageAutofight(world: World): boolean {
  * заново, ловил очередь от соседей. Новая цель встаёт и в захват — HUD показывает, кого бьём.
  * Возвращает false — врагов рядом нет, бой окончен.
  */
-export function retargetAutofight(world: World): boolean {
+export function retargetAutofight(world: World, range: number = AI.AWARENESS): boolean {
   const player = world.player
   const ai = player.ai
   if (!ai || ai.orderedSoft || !player.alive) return false
   let best: ShipEntity | null = null
-  let bestD = AI.AWARENESS * AI.AWARENESS
+  let bestD = range * range
   for (const s of world.ships) {
     if (!s.alive || !isEngageable(s) || !isFoe(player, s)) continue
     const d = s.state.pos.distanceToSquared(player.state.pos)
@@ -113,6 +114,25 @@ export function retargetAutofight(world: World): boolean {
   ai.targetId = best.id
   lockContact(world, 'ship', best.id)
   return true
+}
+
+/**
+ * Такт автобоя (зовёт слой ввода): идёт ли он дальше. Поручение второго пилота («собери»,
+ * «уходим») держит штурвал, пока не исполнено; бой — пока цель жива и рядом, а «бей всех»
+ * (`chainFoes`) берёт следующего врага на локаторе. Иначе штурвал возвращается.
+ */
+export function continueAutofight(world: World): boolean {
+  const ai = world.player.ai
+  if (!ai) return false
+  if (!world.player.alive) {
+    disengageAutofight(world)
+    return false
+  }
+  if (ai.tasks.length > 0) return true
+  if (!autofightSpent(world)) return true
+  if (ai.chainFoes && retargetAutofight(world, COPILOT.SCAN_RANGE)) return true
+  disengageAutofight(world)
+  return false
 }
 
 /** Вернуть штурвал. Идемпотентно: снять несуществующий автобой не ошибка. */

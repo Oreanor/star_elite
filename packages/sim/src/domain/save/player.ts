@@ -1,3 +1,5 @@
+import type { Copilot } from '../crew/copilot'
+import { rankOfXp } from '../crew/rank'
 import { isPortable } from '../contracts/contracts'
 import type { Contract } from '../contracts/types'
 import { findChassis } from '../../config/chassis'
@@ -97,6 +99,10 @@ export interface PlayerSave {
   auxEnergy?: number
   /** Боезапас по индексам подвесок (`spec.mounts`): у ствола 0, у ракеты/БПЛА — остаток. */
   guns: number[]
+  /** Боевой опыт. Необязателен: старые сейвы — новичок, ранг 10. */
+  pilotXp?: number
+  /** Второй пилот на борту. Необязателен: старые сейвы — без него. Чистые данные. */
+  copilot?: Copilot | null
 }
 
 /** Товар по id: номенклатура мала и фиксирована, разово строим индекс. */
@@ -241,6 +247,8 @@ export function serializePlayer(world: World): PlayerSave {
     jumpCharge: p.jumpCharge,
     auxEnergy: p.auxEnergy,
     guns: p.guns.map((g) => g.ammo),
+    pilotXp: world.pilotXp,
+    copilot: world.copilot ? { ...world.copilot, persona: { ...world.copilot.persona } } : null,
   }
 }
 
@@ -271,12 +279,15 @@ export function applyPlayerSave(world: World, save: PlayerSave): void {
   }))
   world.fines = save.fines ? save.fines.map((fine) => ({ ...fine })) : []
   world.contracts = save.contracts ? save.contracts.map(cloneContract) : []
+  world.pilotXp = save.pilotXp ?? 0
+  world.copilot = save.copilot ? { ...save.copilot, persona: { ...save.copilot.persona } } : null
 
   const p = world.player
   // Имя игрока открыто — это он сам. Ставим и отображаемое, и истинное.
   p.name = save.name
   p.pilotName = save.name
   p.persona = { ...save.persona }
+  p.rank = rankOfXp(world.pilotXp)
   p.loadout = rehydrateLoadout(save.loadout)
   // Прокачки рамы — ДО refreshSpec: от них зависят HP/трюм/аукс сборки.
   p.hullUp = { ...NO_HULL_UPGRADES, ...save.hullUp }

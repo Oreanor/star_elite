@@ -32,6 +32,8 @@ import {
 } from './persona'
 import { SLOVO_KIND, SLOVO_NAME, SLOVO_PERSONA } from './slovo'
 import { makePilotName } from './names'
+import { RANK } from '../../config/crew'
+import { botRank } from '../crew/rank'
 import { placeFigurines, rollFigurineSpecimen, stockSlovoCollection } from './figurines'
 import { placeMonoliths, placeWarBases } from './monoliths'
 import { maybeShiftOrigin } from './origin'
@@ -99,6 +101,9 @@ export function makeShip(
     faction,
     name,
     pilotName,
+    // Игрок начинает новичком; бот — рангом от имени (без лишнего броска `rng`: зерно мира
+    // не сдвигается); без личности (тест, дрон) — прежняя ровная выучка.
+    rank: faction === 'player' ? RANK.WORST : rng ? botRank(pilotName, faction) : RANK.DEFAULT,
     loadout,
     spec,
     hullUp: { ...NO_HULL_UPGRADES },
@@ -912,6 +917,9 @@ export function createWorld(
     fines: [],
     notices: [],
     credits: WORLD.START_CREDITS,
+    pilotXp: 0,
+    copilot: null,
+    helmRequest: null,
     score: 0,
   }
 

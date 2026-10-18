@@ -12,6 +12,7 @@ import { holdStill } from './steer'
 import { isFoe, isHostileTo, selectTarget } from './targeting'
 import { enqueueTask } from './tasks'
 import { pilotTraits } from './traits'
+import { pilotSkill } from '../crew/rank'
 import type { AIState } from './types'
 
 /**
@@ -64,7 +65,7 @@ export const aiController: Controller = {
     ai.thinkTimer -= dt
     const rethink = ai.thinkTimer <= 0
     if (rethink) {
-      ai.thinkSpan = (AI.THINK_INTERVAL * pilotTraits(e).reaction) / ai.skill
+      ai.thinkSpan = (AI.THINK_INTERVAL * pilotTraits(e).reaction) / pilotSkill(e)
       ai.thinkTimer = ai.thinkSpan
     }
 

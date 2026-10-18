@@ -26,7 +26,7 @@ import {
  */
 
 /** Роль собеседника. Открытый союз: новая роль = новый член + строки в наборах пула. */
-export type DialogueRole = 'bot' | 'god'
+export type DialogueRole = 'bot' | 'god' | 'copilot'
 
 /** Что парсеру известно помимо самого JSON — чтобы проверить поле, не веря модели. */
 export interface ActionContext {
@@ -292,6 +292,41 @@ const giftAction: DialogueAction = {
   },
 }
 
+/**
+ * Бот соглашается пойти ВТОРЫМ ПИЛОТОМ (`crew: "join"`) — игрок позвал его словами. Пойдёт
+ * ли (ранг, деньги на первый месяц, отношение) — решает домен, не модель.
+ */
+const crewAction: DialogueAction = {
+  id: 'crew',
+  roles: ['bot'],
+  build(o) {
+    return o.crew === 'join' ? [{ action: 'crew', payload: { join: true } }] : []
+  },
+}
+
+/**
+ * ПРИКАЗЫ ВТОРОМУ ПИЛОТУ — из речи игрока, как у любого бота. Поля плоского JSON:
+ * `goto` (id тела из сводки), `attack` (nearest | all | id борта), `flee`, `collect`, `stop`
+ * (true), `repair` (hull | all | номер сломанной детали), `dismiss` (true — расчёт).
+ * Каждое поле — своя команда шины `copilot`; исполнит и проверит домен (`crew/copilot.ts`).
+ */
+const copilotOrderAction: DialogueAction = {
+  id: 'copilot',
+  roles: ['copilot'],
+  build(o) {
+    const out: Command[] = []
+    const order = (payload: Record<string, unknown>) => out.push({ action: 'copilot', payload })
+    if (o.stop === true) order({ order: 'stop' })
+    if (typeof o.goto === 'number') order({ order: 'goto', id: o.goto })
+    if (o.attack === 'nearest' || o.attack === 'all' || typeof o.attack === 'number') order({ order: 'attack', target: o.attack })
+    if (o.collect === true) order({ order: 'collect' })
+    if (o.flee === true) order({ order: 'flee' })
+    if (o.repair === 'hull' || o.repair === 'all' || typeof o.repair === 'number') order({ order: 'repair', target: o.repair })
+    if (o.dismiss === true) order({ order: 'dismiss' })
+    return out
+  },
+}
+
 // ─── Пул и наборы ───────────────────────────────────────────────────────────────
 
 /**
@@ -316,6 +351,8 @@ export const ACTIONS: readonly DialogueAction[] = [
   noteAction,
   learnAction,
   planAction,
+  crewAction,
+  copilotOrderAction,
   // Уход — В КОНЦЕ: любые прочие команды реплики исполнятся ДО того, как бот покинет сцену.
   fleeAction,
   departAction,

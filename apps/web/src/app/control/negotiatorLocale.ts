@@ -293,6 +293,7 @@ function makeRu(): NegotiatorLocale {
         'Счёт КОМАНДИРА ты НЕ ЗНАЕШЬ: не называй и не угадывай цифру. Скажет сам — поверь на слово.',
         'Свои деньги — твоё дело, точной суммы ты не назовёшь. Ни в коем случае не выдавай счёт командира за свой.',
         escort,
+        crewLineRu(e.crew),
         'transfer.direction — куда идёт ГРУЗ: toYou = тебе от него, toThem = ты ему. Одни кредиты — в ту же сторону.',
         'Покупка/продажа: в ОДНОМ transfer и commodityId+units, и credits — деньги идут НАВСТРЕЧУ грузу (купил статуэтку: toYou + figurine + credits=цена).',
         'После сделки смотри свой трюм в фактах следующего хода — не продавай то, чего уже нет, и не обещай то, что уже отдал.',
@@ -457,6 +458,7 @@ function makeRu(): NegotiatorLocale {
         'flee: true|null — удираешь из боя (прыжком, если есть привод)',
         'depart: true|null — уходишь из системы совсем, конец встречи',
         'job: "offer"|"accept"|"decline"|null — ДЕЛО (только если в СИТУАЦИИ есть строка ДЕЛО): озвучил / командир взялся / отказался',
+        'crew: "join"|null — командир зовёт тебя ВТОРЫМ ПИЛОТОМ (к себе в кабину) и ты согласен. Пойдёшь ли — решит игра (ранг, деньги, доверие); не ставь, если он лишь спросил о цене',
         'meet: true|null — знакомишься: назовись, станешь контактом в журнале',
         'tip: «слух/наводка»|null — делишься полезным (в журнал)',
         'mark: «место словом»|null — отмечаешь точку командиру (в журнал)',
@@ -597,7 +599,7 @@ function makeRu(): NegotiatorLocale {
         locale.attitudeBlock(ctx, true),
         '',
         'Ответь СТРОГО одним JSON:',
-        '{"reply":"…","emotion":"neutral"|"joy"|"pain"|"anger"|"fear"|"sadness"|null,"intent":…|"null","act":"threat"|"insult"|"flatter"|"apology"|null,"stance":"friendly"|"neutral"|"hostile"|null,"transfer":…|null,"fine":{"confirm":true|false}|null,"remember":…|null,"learn":…|null,"clarify":true|false,"plan":[…]|null,"demand":"…"|null,"surrender":true|null,"flee":true|null,"depart":true|null,"job":"offer"|"accept"|"decline"|null,"meet":true|null,"tip":"…"|null,"mark":"…"|null,"lookup":"market"|"neighbours"|"history"|"worlds"|null,"hangup":true|false}',
+        '{"reply":"…","emotion":"neutral"|"joy"|"pain"|"anger"|"fear"|"sadness"|null,"intent":…|"null","act":"threat"|"insult"|"flatter"|"apology"|null,"stance":"friendly"|"neutral"|"hostile"|null,"transfer":…|null,"fine":{"confirm":true|false}|null,"remember":…|null,"learn":…|null,"clarify":true|false,"plan":[…]|null,"demand":"…"|null,"surrender":true|null,"flee":true|null,"depart":true|null,"job":"offer"|"accept"|"decline"|null,"crew":"join"|null,"meet":true|null,"tip":"…"|null,"mark":"…"|null,"lookup":"market"|"neighbours"|"history"|"worlds"|null,"hangup":true|false}',
       ]
         .filter(Boolean)
         .join('\n')
@@ -704,6 +706,7 @@ function makeEn(): NegotiatorLocale {
         'You do NOT know the commander balance: never state or guess a figure. If he tells you, take his word.',
         'Your own money is your business and you cannot name an exact sum. Never pass his balance off as yours.',
         escort,
+        crewLineEn(e.crew),
         'transfer.direction — where CARGO goes: toYou = them→you, toThem = you→them. Credits alone follow the same direction.',
         'They hand over money or cargo — SET transfer: without it nothing moves, however much you say "received". What REALLY moved is only the [COMMS FACT] lines; no fact — nothing arrived, say so.',
         'Buy/sell: one transfer with BOTH commodityId+units AND credits — money flows OPPOSITE the cargo (buy a figurine: toYou + figurine + credits=price).',
@@ -864,6 +867,7 @@ function makeEn(): NegotiatorLocale {
         'flee: true|null — you bolt from the fight (by jump if you have a drive)',
         'depart: true|null — you leave the system entirely, end of the encounter',
         'job: "offer"|"accept"|"decline"|null — a JOB (only if SITUATION has a JOB line): pitched / commander took it / refused',
+        'crew: "join"|null — the commander asks you to be his CO-PILOT (aboard his ship) and you agree. The game decides if it works (rank, money, trust); do not set it if he only asked the price',
         'meet: true|null — you introduce yourself, becoming a contact in the log',
         'tip: "rumour/lead"|null — you share something useful (into the log)',
         'mark: "a place in words"|null — you flag a spot for the commander (into the log)',
@@ -976,7 +980,7 @@ function makeEn(): NegotiatorLocale {
         locale.attitudeBlock(ctx, true),
         '',
         'Reply with ONE JSON object only:',
-        '{"reply":"…","emotion":"neutral"|"joy"|"pain"|"anger"|"fear"|"sadness"|null,"intent":…|"null","act":"threat"|"insult"|"flatter"|"apology"|null,"stance":"friendly"|"neutral"|"hostile"|null,"transfer":…|null,"fine":{"confirm":true|false}|null,"remember":…|null,"learn":…|null,"clarify":true|false,"plan":[…]|null,"demand":"…"|null,"surrender":true|null,"flee":true|null,"depart":true|null,"job":"offer"|"accept"|"decline"|null,"meet":true|null,"tip":"…"|null,"mark":"…"|null,"lookup":"market"|"neighbours"|"history"|"worlds"|null,"hangup":true|false}',
+        '{"reply":"…","emotion":"neutral"|"joy"|"pain"|"anger"|"fear"|"sadness"|null,"intent":…|"null","act":"threat"|"insult"|"flatter"|"apology"|null,"stance":"friendly"|"neutral"|"hostile"|null,"transfer":…|null,"fine":{"confirm":true|false}|null,"remember":…|null,"learn":…|null,"clarify":true|false,"plan":[…]|null,"demand":"…"|null,"surrender":true|null,"flee":true|null,"depart":true|null,"job":"offer"|"accept"|"decline"|null,"crew":"join"|null,"meet":true|null,"tip":"…"|null,"mark":"…"|null,"lookup":"market"|"neighbours"|"history"|"worlds"|null,"hangup":true|false}',
       ]
         .filter(Boolean)
         .join('\n')
@@ -992,4 +996,31 @@ const LOCALES: Partial<Record<Lang, NegotiatorLocale>> = { ru: makeRu(), en: mak
 
 export function negotiatorLocale(lang: Lang): NegotiatorLocale {
   return LOCALES[lang] ?? LOCALES.en!
+}
+
+type CrewFacts = { rank: number; salary: number; block: string | null } | null
+
+/** Строка «пойдёшь ли вторым пилотом» — ранг, ставка и что мешает: модель не сочиняет цену. */
+function crewLineRu(c: CrewFacts): string {
+  if (!c) return ''
+  const why: Record<string, string> = {
+    taken: 'У командира уже есть второй пилот.',
+    wary: 'Ты ему сейчас не доверяешь — вторым пилотом не пойдёшь.',
+    hostile: 'Вы враги — вторым пилотом не пойдёшь.',
+    rank: 'Командир для тебя слишком зелёный по рангу — не пойдёшь, пока не налетает боёв.',
+    money: 'Похоже, у командира не хватит на первый месяц.',
+  }
+  return `ВТОРЫМ ПИЛОТОМ: твой ранг ${c.rank} (1 — ас, 10 — новичок), ставка ${c.salary} кр в месяц вперёд. ${c.block ? why[c.block] ?? '' : 'Позовёт — можешь согласиться.'}`
+}
+
+function crewLineEn(c: CrewFacts): string {
+  if (!c) return ''
+  const why: Record<string, string> = {
+    taken: 'The commander already has a co-pilot.',
+    wary: 'You do not trust him now — you will not crew for him.',
+    hostile: 'You are enemies — you will not crew for him.',
+    rank: 'He is too green for your rank — not until he has more combat behind him.',
+    money: 'Looks like he cannot pay the first month.',
+  }
+  return `AS CO-PILOT: your rank ${c.rank} (1 ace, 10 rookie), rate ${c.salary} cr a month up front. ${c.block ? why[c.block] ?? '' : 'If he asks, you may agree.'}`
 }

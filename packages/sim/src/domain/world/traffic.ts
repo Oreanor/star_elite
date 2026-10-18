@@ -1,3 +1,4 @@
+import { botRank } from '../crew/rank'
 import { Quaternion, Vector3 } from 'three'
 import { freighterLoadout, godLoadout, pirateLeaderLoadout, pirateLoadout, traderLoadout } from '../../config/loadouts'
 import { NPC_DOCK } from '../../config/station'
@@ -427,6 +428,8 @@ export function spawnResidentContacts(world: World): ShipEntity[] {
     ship.pilotName = rec.name
     ship.persona = rec.persona
     ship.faction = rec.faction
+    // Ранг — от имени: тот же пилот, тот же ранг, где бы его ни встретили.
+    ship.rank = botRank(rec.name, rec.faction)
     ship.acquaintanceId = rec.id
     if (station && rec.faction === 'neutral' && canDockAtStation(kind) && ship.ai) {
       ship.ai.dock = 'inbound'

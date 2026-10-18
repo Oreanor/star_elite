@@ -6,6 +6,7 @@ import {
   findStation,
   isBerthed,
   capitalBody,
+  copilotRank,
   stationHost,
   dispatcherName,
   dispatcherPersona,
@@ -18,6 +19,7 @@ import {
   type ShipEntity,
   type World,
 } from '@elite/sim'
+import { faceOfName } from '../portrait'
 import { useOnlinePlayers, type OnlinePlayer } from '../../session/net/presence'
 import { t, useLang } from '../i18n'
 import { currentGameDate } from '../clock'
@@ -107,6 +109,7 @@ export function Console({
   onClose,
   onTalk,
   onDispatch,
+  onCopilot,
   onLocate: _onLocate,
   onRoute: _onRoute,
   onChat,
@@ -119,6 +122,8 @@ export function Console({
   onClose: () => void
   onTalk: (shipId: number) => void
   onDispatch: () => void
+  /** Разговор со вторым пилотом — тот же, что по P в полёте. */
+  onCopilot: () => void
   onLocate?: (shipId: number) => void
   onRoute?: (systemIndex: number) => void
   onChat: (player: OnlinePlayer) => void
@@ -259,7 +264,7 @@ export function Console({
           {tab === 'reference' && <Reference />}
           {tab === 'jobs' && <JobsTab world={world} />}
           {tab === 'people' && (
-            <PeopleTab key={peopleRefresh} world={world} docked={docked} onTalk={onTalk} onDispatch={onDispatch} onChat={onChat} />
+            <PeopleTab key={peopleRefresh} world={world} docked={docked} onTalk={onTalk} onDispatch={onDispatch} onCopilot={onCopilot} onChat={onChat} />
           )}
           {isMapView(tab) && (() => {
             // Выбранный вид мог погаснуть от обстановки (влетел в комнату, вырос миелофоном) —
@@ -387,12 +392,14 @@ function PeopleTab({
   docked,
   onTalk,
   onDispatch,
+  onCopilot,
   onChat,
 }: {
   world: World
   docked: boolean
   onTalk: (shipId: number) => void
   onDispatch: () => void
+  onCopilot: () => void
   onChat: (player: OnlinePlayer) => void
 }) {
   const dockedHere = docked ? dockedPilots(world).slice(1).filter((s) => s.alive) : []
@@ -401,10 +408,28 @@ function PeopleTab({
   const slovo = docked ? world.ships.find((s) => s.alive && s.divine) : undefined
   const station = docked ? findStation(world) : null
   const dispatcher = station ? dispatcherPersona(world, station) : null
-  const contacts = contactsExceptDocked(livingContacts(world), dockedHere).filter((c) => !c.ship?.divine)
+  const copilot = world.copilot
+  // Второй пилот — у тебя в кабине: своей карточкой сверху, не среди знакомых «где-то там».
+  const contacts = contactsExceptDocked(livingContacts(world), dockedHere).filter(
+    (c) => !c.ship?.divine && c.record.id !== copilot?.acquaintanceId,
+  )
 
   return (
     <div>
+      {copilot && (
+        <div className="mb-6">
+          <h2 className="text-base">{t('copilot.title')}</h2>
+          <div className={CARD_GRID}>
+            <PersonPlaque
+              name={properName(copilot.name)}
+              role={t('copilot.title')}
+              craft={t('copilot.rank', { rank: copilotRank(copilot) })}
+              portrait={<PilotPortrait species={copilot.persona.species} face={faceOfName(copilot.name)} size={108} />}
+              onTalk={onCopilot}
+            />
+          </div>
+        </div>
+      )}
       {/* У причала — кто СЕЙЧАС здесь, одной строкой без категорий: Слово (бог на Кресте) и
           пристыкованные борта. Себя не показываем. Пусто — так и говорим: борта заходят со
           временем, а пока стоишь в доке, мир на паузе. */}
@@ -571,7 +596,7 @@ function DockPlaque({ ship, you, world, onTalk }: { ship: ShipEntity; you: boole
   return (
     <PersonPlaque
       name={ship.pilotName}
-      role={you ? professionName(ship.persona.profession) : occupationName(ship.originKind, ship.faction)}
+      role={`${you ? professionName(ship.persona.profession) : occupationName(ship.originKind, ship.faction)} · ${t('copilot.rank', { rank: ship.rank })}`}
       // У СЕБЯ отношения нет — не показываем: «ты нейтрален к себе» это шум, а не сведения.
       stance={you ? undefined : stanceTo(world, ship)}
       // У бога тоже корабль — его ладья; в шапке разговора она указана, и здесь так же.

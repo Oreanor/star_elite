@@ -18,6 +18,8 @@ import {
   localSettlement,
   localFine,
   escortFee,
+  copilotHireBlock,
+  copilotSalary,
   masterClass,
   moodTo,
   shipWhereabouts,
@@ -351,6 +353,11 @@ export interface EconomySnapshot {
   escortFee: number | null
   escortHired: boolean
   canAffordEscort: boolean
+  /**
+   * Пойдёт ли ВТОРЫМ ПИЛОТОМ: свой ранг, ставка в месяц и что мешает (`copilotHireBlock`).
+   * null — не бот (бог, игрок) или уже второй пилот.
+   */
+  crew: { rank: number; salary: number; block: string | null } | null
 }
 
 /** Что есть на станции и кто у причала — чтобы бот не обещал установку модулей в полёте. */
@@ -398,6 +405,14 @@ export interface ChatTurn {
  * домен (`say` по триггеру): согласие и смену отношения модель не диктует — иначе
  * выходит «послал → чистого неба». Пустой триггер — просто болтовня (погода, цены).
  */
+/** Ответ второго пилота: одна или две реплики (вторая — после «свяжусь с диспетчером»). */
+export interface CopilotReply {
+  replies: string[]
+  commands: Command[]
+  emotion: string | null
+  source: 'model' | 'fallback' | 'overload'
+}
+
 export interface NegotiatorReply {
   text: string
   /**
@@ -994,6 +1009,7 @@ export function buildContext(
       escortFee: fee,
       escortHired,
       canAffordEscort: fee != null && world.credits >= fee,
+      crew: other.divine ? null : { rank: other.rank, salary: copilotSalary(other.rank), block: copilotHireBlock(world, other) },
     },
     localFineAmount: fine,
     reactions: other.divine ? null : reactionCard(world, other),
