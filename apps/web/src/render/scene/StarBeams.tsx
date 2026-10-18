@@ -7,9 +7,10 @@ import {
   Quaternion,
   Vector3,
 } from 'three'
-import { beamDirection, renderPos, renderTime, type BodyEntity } from '@elite/sim'
+import { beamDirection, quasarLook, renderPos, renderTime, type BodyEntity } from '@elite/sim'
 import { useSession } from '../../session/GameContext'
 import { createStarBeamMaterial } from '../materials/starBeam'
+import { quasarPalette } from '../materials/quasarDisk'
 import { worldShrink } from '../worldShrink'
 
 /**
@@ -31,8 +32,7 @@ export const beamCone = (() => {
   return g
 })()
 
-/** Цвет луча: джет квазара голубовато-белый, маяк пульсара — холодно-белый. */
-const JET_COLOR = 0x9fd0ff
+/** Цвет луча: маяк пульсара — холодно-белый; джет квазара — по его палитре (`quasarPalette`). */
 const PULSAR_COLOR = 0xe2f4ff
 /** Насколько тускнеет луч, глядящий от камеры, относительно глядящего на неё. */
 const AWAY_DIM = 0.35
@@ -72,7 +72,7 @@ function BeamPair({ body }: { body: BodyEntity }) {
   const materials = useMemo(
     () =>
       [1, -1].flatMap(() =>
-        layers.map((layer) => createStarBeamMaterial(pulsar ? PULSAR_COLOR : JET_COLOR, layer.strength, pulsar ? 0.25 : 0.9)),
+        layers.map((layer) => createStarBeamMaterial(pulsar ? PULSAR_COLOR : quasarPalette(quasarLook(body.name).palette).jet, layer.strength, pulsar ? 0.25 : 0.9)),
       ),
     [pulsar],
   )

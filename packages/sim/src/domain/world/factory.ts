@@ -1,3 +1,4 @@
+import { quasarLook } from '../galaxy/quasar'
 import { CONTRACTS } from '../../config/contracts'
 import { Euler, Quaternion, Vector3 } from 'three'
 import { GRAVITY, MOON } from '../../config/bodies'
@@ -422,7 +423,7 @@ function makeBodies(ids: IdSource, def: SystemDef): BodyEntity[] {
         : new Vector3(0, 1, 0),
     // Лучи: джеты квазара вдоль оси диска или маяк пульсара вдоль магнитной оси.
     ...(hole?.jets
-      ? { beams: { axis: new Vector3(...hole.diskAxis).normalize(), length: QUASAR.JET_LENGTH, halfAngle: QUASAR.JET_HALF_ANGLE } }
+      ? { beams: { axis: new Vector3(...hole.diskAxis).normalize(), length: QUASAR.JET_LENGTH * quasarLook(def.name).jetLength, halfAngle: QUASAR.JET_HALF_ANGLE * quasarLook(def.name).jetAngle } }
       : pulsar
         ? { beams: { axis: new Vector3(...pulsar.beamAxis).normalize(), length: PULSAR.BEAM_LENGTH, halfAngle: PULSAR.BEAM_HALF_ANGLE } }
         : {}),
@@ -601,7 +602,9 @@ function makeBodies(ids: IdSource, def: SystemDef): BodyEntity[] {
       spinAxis: ax,
       // Джеты соразмерны дыре: у шарика в 300 м столб на 6 а.е., как у ядра галактики, —
       // нить в пустоте, которой вблизи не видно вовсе.
-      ...(hole.jets ? { beams: { axis: ax.clone(), length: hole.radius * QUASAR.SMALL_JET_RADII, halfAngle: QUASAR.JET_HALF_ANGLE * 2 } } : {}),
+      ...(hole.jets
+        ? { beams: { axis: ax.clone(), length: hole.radius * QUASAR.SMALL_JET_RADII * quasarLook(hole.name).jetLength, halfAngle: QUASAR.JET_HALF_ANGLE * 2 * quasarLook(hole.name).jetAngle } }
+        : {}),
       // Нулевая скорость означает постоянное смещение от движущейся станции.
       orbit: station ? orbitFromOffset(station.id, station.pos, pos, 0) : null,
     })

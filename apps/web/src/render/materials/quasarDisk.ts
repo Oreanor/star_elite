@@ -1,4 +1,4 @@
-import { AdditiveBlending, DoubleSide, NormalBlending, ShaderMaterial } from 'three'
+import { AdditiveBlending, Color, DoubleSide, NormalBlending, ShaderMaterial } from 'three'
 
 /**
  * КВАЗАР — жрущая чёрная дыра: огромный закрученный газовый диск (жёлто-белое ядро, оранжевые
@@ -45,6 +45,10 @@ const DISK_FRAG = /* glsl */ `
   uniform float uTime;
   uniform float uStrength;
   uniform float uInner;
+  uniform vec3 uCore;
+  uniform vec3 uMid;
+  uniform vec3 uOuter;
+  uniform vec3 uRim;
   varying vec2 vPos;
   ${NOISE}
   void main() {
@@ -58,13 +62,9 @@ const DISK_FRAG = /* glsl */ `
     float streaks = fbm(vec2(swirl * 4.0 + r * 3.0, r * 11.0));
     float gas = 0.35 + 0.9 * arms * (0.6 + 0.6 * streaks);
     /* Ядро — белое и яркое, к краю жёлтый → оранжевый → тёмно-красный и растворение. */
-    vec3 core = vec3(1.0, 0.97, 0.85);
-    vec3 yellow = vec3(1.0, 0.66, 0.24);
-    vec3 orange = vec3(0.95, 0.42, 0.08);
-    vec3 red = vec3(0.45, 0.08, 0.03);
-    vec3 col = mix(core, yellow, smoothstep(0.0, 0.12, r));
-    col = mix(col, orange, smoothstep(0.12, 0.45, r));
-    col = mix(col, red, smoothstep(0.45, 0.85, r));
+    vec3 col = mix(uCore, uMid, smoothstep(0.0, 0.12, r));
+    col = mix(col, uOuter, smoothstep(0.12, 0.45, r));
+    col = mix(col, uRim, smoothstep(0.45, 0.85, r));
     float glow = 1.0 + 2.2 * exp(-r * 22.0);
     float edge = smoothstep(uInner, uInner * 2.5, r) * (1.0 - smoothstep(0.7, 1.0, r));
     gl_FragColor = vec4(col * glow, uStrength * gas * edge);
@@ -92,12 +92,35 @@ const DUST_FRAG = /* glsl */ `
   }
 `
 
+/**
+ * ПАЛИТРЫ квазаров: ядро → середина → наружная часть → край, и цвет джетов. Квазар берёт
+ * свою по доле `palette` (`quasarLook`): тёплый оранжевый, горячий бело-голубой, пурпурный.
+ */
+export const QUASAR_PALETTES = [
+  { core: 0xfff7d9, mid: 0xffa83d, outer: 0xf26b14, rim: 0x731408, jet: 0x9fd0ff },
+  { core: 0xf4fbff, mid: 0x9fd8ff, outer: 0x3f7fe0, rim: 0x14205e, jet: 0xd8f0ff },
+  { core: 0xfff0f6, mid: 0xff8fb8, outer: 0xc0306e, rim: 0x3c0a2c, jet: 0xc7a8ff },
+  { core: 0xfffbe8, mid: 0xffe08a, outer: 0xd99a2b, rim: 0x5a3008, jet: 0xa6ffe9 },
+] as const
+
+export function quasarPalette(share: number): (typeof QUASAR_PALETTES)[number] {
+  return QUASAR_PALETTES[Math.min(QUASAR_PALETTES.length - 1, Math.floor(share * QUASAR_PALETTES.length))]!
+}
+
 /** Газовый диск квазара. `inner` — доля внешнего радиуса, где диск начинается (у горизонта). */
-export function createQuasarDiskMaterial(inner: number): ShaderMaterial {
+export function createQuasarDiskMaterial(inner: number, palette: (typeof QUASAR_PALETTES)[number] = QUASAR_PALETTES[0]): ShaderMaterial {
   return new ShaderMaterial({
     vertexShader: VERT,
     fragmentShader: DISK_FRAG,
-    uniforms: { uTime: { value: 0 }, uStrength: { value: 1.0 }, uInner: { value: inner } },
+    uniforms: {
+      uTime: { value: 0 },
+      uStrength: { value: 1.0 },
+      uInner: { value: inner },
+      uCore: { value: new Color(palette.core) },
+      uMid: { value: new Color(palette.mid) },
+      uOuter: { value: new Color(palette.outer) },
+      uRim: { value: new Color(palette.rim) },
+    },
     transparent: true,
     blending: AdditiveBlending,
     depthWrite: false,

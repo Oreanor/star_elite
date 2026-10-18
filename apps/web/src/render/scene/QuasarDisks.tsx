@@ -1,10 +1,10 @@
 import { useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef } from 'react'
 import { Mesh, PlaneGeometry, Quaternion, RingGeometry, Vector3 } from 'three'
-import { renderPos, renderTime, type BodyEntity } from '@elite/sim'
+import { quasarLook, renderPos, renderTime, type BodyEntity } from '@elite/sim'
 import { useSession } from '../../session/GameContext'
 import { createGlowMaterial } from '../materials/starBeam'
-import { createQuasarDiskMaterial, createQuasarDustMaterial } from '../materials/quasarDisk'
+import { createQuasarDiskMaterial, createQuasarDustMaterial, quasarPalette } from '../materials/quasarDisk'
 import { worldShrink } from '../worldShrink'
 
 /**
@@ -16,8 +16,9 @@ import { worldShrink } from '../worldShrink'
  * горизонтах: у шарика-«Двери» и у ядра галактики пропорции одни.
  */
 
-/** Внешний радиус газового диска, в горизонтах. */
-const DISK_RADII = 70
+/** Внешний радиус газового диска, в горизонтах: от квазара к квазару в этой вилке. */
+const DISK_RADII_MIN = 45
+const DISK_RADII_MAX = 110
 /** Дымка — до 1.6 диска (её кольцо в шейдере). */
 const DUST_SCALE = 1.6
 /** Яркое ядро — гауссово облако такого поперечника, в горизонтах. */
@@ -48,15 +49,18 @@ function Quasar({ body }: { body: BodyEntity }) {
   const disk = useRef<Mesh>(null)
   const dust = useRef<Mesh>(null)
   const core = useRef<Mesh>(null)
-  const materials = useMemo(
-    () => ({
+  // Свой характер у каждого квазара: размер диска и палитра — по имени (`quasarLook`).
+  const look = useMemo(() => quasarLook(body.name), [body.name])
+  const diskRadii = DISK_RADII_MIN + (DISK_RADII_MAX - DISK_RADII_MIN) * look.disk
+  const materials = useMemo(() => {
+    const palette = quasarPalette(look.palette)
+    return {
       // Диск начинается у горизонта: доля внешнего радиуса ≈ 1.5 горизонта.
-      disk: createQuasarDiskMaterial(1.5 / DISK_RADII),
+      disk: createQuasarDiskMaterial(1.5 / diskRadii, palette),
       dust: createQuasarDustMaterial(),
-      core: createGlowMaterial(0xfff1c8, 1.4),
-    }),
-    [],
-  )
+      core: createGlowMaterial(palette.core, 1.4),
+    }
+  }, [look, diskRadii])
   useEffect(() => () => Object.values(materials).forEach((m) => m.dispose()), [materials])
 
   useFrame(() => {
@@ -73,10 +77,10 @@ function Quasar({ body }: { body: BodyEntity }) {
 
     disk.current.position.copy(_shown)
     disk.current.quaternion.copy(_q)
-    disk.current.scale.setScalar(horizon * DISK_RADII)
+    disk.current.scale.setScalar(horizon * diskRadii)
     dust.current.position.copy(_shown)
     dust.current.quaternion.copy(_q)
-    dust.current.scale.setScalar(horizon * DISK_RADII)
+    dust.current.scale.setScalar(horizon * diskRadii)
     // Ядро — облако лицом к камере, вынесенное к ней за горизонт: в центре чёрный шар
     // горизонта (`BlackHole`) закрыл бы половину свечения, и ядро читалось бы чёрным.
     _toCam.copy(camera.position).sub(_shown)
