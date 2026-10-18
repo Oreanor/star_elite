@@ -44,6 +44,7 @@ const FRAG = /* glsl */ `
   uniform float uTime;
   uniform float uKnots;
   uniform float uAlongFade;
+  uniform float uStart;
   varying vec3 vNormalV;
   varying vec3 vViewV;
   varying float vAlong;
@@ -56,7 +57,9 @@ const FRAG = /* glsl */ `
     float soft = pow(facing, 2.2);
     /* Вдоль: плавный вход у светила и растворение к концу. */
     /* uAlongFade = 0 — без затухания по длине: так тот же свет годится и для шара-комы. */
-    float fade = mix(1.0, smoothstep(0.0, 0.04, vAlong) * pow(max(0.0, 1.0 - vAlong), 1.8), uAlongFade);
+    /* Вход у основания — в долях длины до кромки тела (uStart), а не фиксированные 4%: у
+       маленькой дыры с длинным джетом 4% длины — десятки миллионов км пустоты у самой дыры. */
+    float fade = mix(1.0, smoothstep(0.0, uStart, vAlong) * pow(max(0.0, 1.0 - vAlong), 1.8), uAlongFade);
     /* Сгустки бегут прочь от светила; поперечная рябь ломает правильность. */
     float knots = 1.0 - uKnots + uKnots * (0.55 + 0.45 * sin(vAlong * 46.0 - uTime * 2.6 + sin(vAngle * 3.0) * 1.3));
     float a = uStrength * soft * fade * knots;
@@ -79,6 +82,7 @@ export function createStarBeamMaterial(color: number, strength: number, knots: n
       uTime: { value: 0 },
       uKnots: { value: knots },
       uAlongFade: { value: alongFade },
+      uStart: { value: 0.04 },
     },
     transparent: true,
     blending: AdditiveBlending,

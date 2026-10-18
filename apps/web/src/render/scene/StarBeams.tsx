@@ -106,6 +106,8 @@ function BeamPair({ body }: { body: BodyEntity }) {
       const facing = (_toCam.dot(_dir) * sign + 1) / 2
       mat.uniforms.uStrength!.value = layer.strength * (AWAY_DIM + (1 - AWAY_DIM) * facing)
       mat.uniforms.uTime!.value = time
+      // Вход луча — от кромки тела: свет рождается у поверхности, а не в пустоте вдали.
+      mat.uniforms.uStart!.value = Math.min(0.04, Math.max(0.002, ((body.visualRadius ?? body.radius) * 1.5) / beams.length))
     }
   })
 

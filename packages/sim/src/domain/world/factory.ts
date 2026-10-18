@@ -597,7 +597,9 @@ function makeBodies(ids: IdSource, def: SystemDef): BodyEntity[] {
       settlement: null,
       spin: 0,
       spinAxis: ax,
-      ...(hole.jets ? { beams: { axis: ax.clone(), length: QUASAR.JET_LENGTH, halfAngle: QUASAR.JET_HALF_ANGLE } } : {}),
+      // Джеты соразмерны дыре: у шарика в 300 м столб на 6 а.е., как у ядра галактики, —
+      // нить в пустоте, которой вблизи не видно вовсе.
+      ...(hole.jets ? { beams: { axis: ax.clone(), length: hole.radius * QUASAR.SMALL_JET_RADII, halfAngle: QUASAR.JET_HALF_ANGLE * 2 } } : {}),
       // Нулевая скорость означает постоянное смещение от движущейся станции.
       orbit: station ? orbitFromOffset(station.id, station.pos, pos, 0) : null,
     })
