@@ -55,6 +55,8 @@ describe('передача борта', () => {
     const host = world()
     const trader = host.ships[0]!
     trader.offer = { kind: 'escort', toSystem: 9, toSystemName: 'Z', reward: 2000, days: 5, revealed: true }
+    // Трюм задаём сами: тест про то, что груз ЕДЕТ с бортом, а не про вместимость корпуса.
+    trader.hold.capacity = 20
     addCommodity(trader.hold, COMMODITIES.METALS, 3)
 
     const guest = world()

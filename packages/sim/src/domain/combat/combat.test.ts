@@ -75,6 +75,11 @@ function withOneEnemy(pylons = false): { world: World; enemy: ShipEntity } {
   if (pylons) {
     world.player.loadout = auroraOneLoadout()
     refreshSpec(world.player)
+    // Пересадка на другую сборку клампит корпус и щит к потолку, но не доливает до него:
+    // у новой рамы потолок выше, и борт стартовал бы недолитым. Тесты урона сравнивают с
+    // потолком спеки — начинаем с полного, как свежий корабль.
+    world.player.hull = world.player.spec.hull.hull
+    world.player.shield = world.player.spec.hull.shield
   }
   return { world, enemy: world.ships[0]! }
 }

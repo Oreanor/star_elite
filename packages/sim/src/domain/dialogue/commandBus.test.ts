@@ -295,7 +295,9 @@ describe('доверенный груз', () => {
     const { world, ship } = withAcquaintance()
     addCommodity(world.player.hold, COMMODITIES.MINERALS, 10)
     const record = world.acquaintances[0]!
-    // Партия меньше трюма лёгкого борта (5 т): тест про учёт, а не про нехватку места.
+    // Тест про учёт, а не про нехватку места: трюм бота задаём сами, а не берём у корпуса —
+    // после перебалансировки верфи у лёгкого борта влезало лишь 2 т, и партия урезалась.
+    ship.hold.capacity = 20
 
     applyCommand(world, ship, {
       action: 'transfer',
