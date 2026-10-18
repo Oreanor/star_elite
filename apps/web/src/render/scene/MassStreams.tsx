@@ -24,7 +24,7 @@ const ARC_SHARE = 0.62
 const SPIRAL_TURNS = 1.15
 /** Кольцо диска в радиусах компаньона. */
 const DISK_INNER = 1.25
-const DISK_OUTER = 3.2
+const DISK_OUTER = 2.2
 
 /** Диск — кольцо в плоскости XZ (нормаль +Y), радиусы в единицах компаньона. Один на модуль. */
 const diskGeometry = (() => {
@@ -131,10 +131,14 @@ function Stream({ donor, accretor }: { donor: BodyEntity; accretor: BodyEntity }
     const d = dist * shrink
     // Всё в координатах донора. Дуга уходит с ближнего бока, загибается и входит в край диска.
     _a.copy(_u).multiplyScalar(d)
-    _p0.copy(_u).multiplyScalar(rd * 0.88)
-    _p1.copy(_u).multiplyScalar(rd * 1.45)
-    _p2.copy(_a).addScaledVector(_u, -rim * 0.5).addScaledVector(_v, rim * 2.6)
+    // Почти прямо от точки донора, обращённой к компаньону, и плавный сдвиг вбок ровно на
+    // радиус диска: в край диска струя входит ПО КАСАТЕЛЬНОЙ (касательная спирали там — +u).
+    // Прежде контрольная точка уводила дугу на 2.6 радиуса вбок — выходил «мост».
+    const gap = Math.max(rim, d - rd - rim)
+    _p0.copy(_u).multiplyScalar(rd * 0.92)
+    _p1.copy(_p0).addScaledVector(_u, gap * 0.45)
     _p3.copy(_a).addScaledVector(_v, rim)
+    _p2.copy(_p3).addScaledVector(_u, -gap * 0.35)
     for (let i = 0; i < N; i++) {
       const s = i / (N - 1)
       if (s <= ARC_SHARE) {
@@ -160,8 +164,8 @@ function Stream({ donor, accretor }: { donor: BodyEntity; accretor: BodyEntity }
       const len = _side.length()
       if (len > 0) _side.divideScalar(len)
       // Шея у донора — широкая (звезда вытянута каплей), дальше тонкая струя, к диску тоньше.
-      const neck = (1 - smooth(0, 0.14, s)) ** 2
-      const w = (ra * 0.22 + (rd * 0.75 - ra * 0.22) * neck) * (1 - 0.4 * smooth(0.6, 1, s))
+      const neck = (1 - smooth(0, 0.1, s)) ** 2
+      const w = (ra * 0.16 + (rd * 0.3 - ra * 0.16) * neck) * (1 - 0.4 * smooth(0.6, 1, s))
       const o = i * 6
       arr[o] = p.x - _side.x * w
       arr[o + 1] = p.y - _side.y * w

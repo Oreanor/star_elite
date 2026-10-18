@@ -122,7 +122,7 @@ export function createAccretionDiskMaterial(fromColor: number, inner: number, ou
       uFrom: { value: new Color(fromColor) },
       uHot: { value: new Color(0xf2fbff) },
       uTime: { value: 0 },
-      uStrength: { value: 1.1 },
+      uStrength: { value: 0.65 },
       uInner: { value: inner },
       uOuter: { value: outer },
     },
