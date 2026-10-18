@@ -2,6 +2,7 @@ import { phrase, type Phrase } from '../dialogue/phrase'
 import type { ShipEntity, World } from '../world/entities'
 import {
   brokenModules,
+  copilotApproach,
   copilotAttack,
   copilotCollect,
   copilotFlee,
@@ -11,7 +12,7 @@ import {
   copilotRepairQuote,
   copilotSalary,
   copilotStop,
-  dismissCopilot,
+  requestDismiss,
   hireCopilot,
   type HireBlock,
   type OrderResult,
@@ -84,14 +85,21 @@ function repairOutcome(world: World, raw: unknown): Outcome | null {
   if (!target) return { line: null, spoken: phrase('copilotNothingToRepair') }
   if (target === 'all') {
     const r = copilotRepairAll(world)
-    if (r.fixed === 0) return { line: null, spoken: r.short ? phrase('copilotRepairShort') : phrase('copilotNothingToRepair') }
-    return { line: phrase('copilotRepaired', { credits: r.spent }), spoken: r.short ? phrase('copilotRepairShort') : undefined }
+    const why = r.short ? phrase('copilotRepairShort') : r.partial ? phrase('copilotRepairAgain') : undefined
+    if (r.fixed === 0) return { line: null, spoken: why ?? phrase('copilotNothingToRepair') }
+    return { line: phrase('copilotRepaired', { credits: r.spent }), spoken: why }
   }
   const price = copilotRepairQuote(world, target)?.price ?? 0
   const r = copilotRepair(world, target)
-  if (r === 'repaired') return { line: phrase('copilotRepaired', { credits: price }) }
-  if (r === 'no-money') return { line: null, spoken: phrase('copilotNoMoney', { credits: price }) }
-  if (r === 'nothing') return { line: null, spoken: phrase('copilotNothingToRepair') }
+  if (r.result === 'repaired') return { line: phrase('copilotRepaired', { credits: r.spent }) }
+  if (r.result === 'partial') {
+    return {
+      line: phrase('copilotRepairedPartial', { credits: r.spent, pct: Math.max(1, Math.round(r.left * 100)) }),
+      spoken: phrase('copilotRepairAgain'),
+    }
+  }
+  if (r.result === 'no-money') return { line: null, spoken: phrase('copilotNoMoney', { credits: price }) }
+  if (r.result === 'nothing') return { line: null, spoken: phrase('copilotNothingToRepair') }
   return null
 }
 
@@ -102,9 +110,13 @@ function repairOutcome(world: World, raw: unknown): Outcome | null {
 export function copilotCommand(world: World, _ship: ShipEntity, payload: unknown): Outcome | null {
   const o = asObject(payload)
   if (!o || !world.copilot) return null
+  // Отдал другой приказ — значит, не увольняет: вопрос «точно?» снят.
+  if (o.order !== 'dismiss') world.copilot.dismissAskedAt = undefined
   switch (o.order) {
     case 'goto':
       return typeof o.id === 'number' ? orderOutcome(copilotGoto(world, o.id), phrase('copilotGoto')) : null
+    case 'approach':
+      return typeof o.id === 'number' ? orderOutcome(copilotApproach(world, o.id), phrase('copilotApproach')) : null
     case 'attack': {
       const target = o.target === 'nearest' || o.target === 'all' || typeof o.target === 'number' ? o.target : null
       if (target === null) return null
@@ -120,7 +132,7 @@ export function copilotCommand(world: World, _ship: ShipEntity, payload: unknown
       return repairOutcome(world, o.target)
     case 'dismiss': {
       const name = world.copilot.name
-      dismissCopilot(world)
+      if (requestDismiss(world) === 'ask') return { line: null, spoken: phrase('copilotDismissConfirm') }
       return { line: phrase('copilotDismissed', { name }), ends: true }
     }
   }

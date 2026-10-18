@@ -354,7 +354,11 @@ function copilotSituation(world: World, english: boolean, helmFlyTo: boolean): s
     .map((x) => `#${x.id} ${properName(x.name)} (${x.kind}${x.populated ? (english ? ', inhabited' : ', обитаема') : ''}, ${km(x.distanceM)})`)
     .join('; ')
   const contacts = b.contacts
-    .map((c) => `#${c.id} ${properName(c.name)} «${chassisName(c.chassis)}» (${c.foe ? (english ? 'HOSTILE' : 'ВРАГ') : c.faction}, ${english ? 'rank' : 'ранг'} ${c.rank}, ${km(c.distanceM)})`)
+    .map((c) => {
+      const who = c.foe ? (english ? 'HOSTILE' : 'ВРАГ') : occupationName(c.occupation, c.faction)
+      const scan = c.scanner ? (english ? ', on scanner' : ', на локаторе') : ''
+      return `#${c.id} ${properName(c.name)} «${chassisName(c.chassis)}» (${who}, ${english ? 'rank' : 'ранг'} ${c.rank}, ${km(c.distanceM)}${scan})`
+    })
     .join('; ')
   const broken = b.broken
     .map((m) => {
@@ -369,20 +373,20 @@ function copilotSituation(world: World, english: boolean, helmFlyTo: boolean): s
         `YOU: ${properName(b.name)}, rank ${b.rank} (1 ace … 10 rookie), pay ${b.salary} cr/month. Commander rank ${b.playerRank}.`,
         `HELM NOW: ${helm}${b.docked ? ' (docked at station)' : ''}.`,
         `BODIES (nearest first): ${bodies || none}.`,
-        `SCANNER CONTACTS: ${contacts || none}. Canisters on scanner: ${b.pods}.`,
+        `SHIPS IN THE SYSTEM (nearest first; "on scanner" = within 20 km): ${contacts || 'no ships in the system'}. Canisters on scanner: ${b.pods}. The scanner WORKS — an empty list only means nobody is around.`,
         `SHIP: hull ${Math.round(b.hull.share * 100)}%${b.hull.repairPrice ? `, your hull repair ${b.hull.repairPrice} cr` : ''}. Broken parts: ${broken || none}.`,
       ].join('\n')
     : [
         `ТЫ: ${properName(b.name)}, ранг ${b.rank} (1 — ас … 10 — новичок), жалованье ${b.salary} кр/мес. Ранг командира ${b.playerRank}.`,
         `ШТУРВАЛ СЕЙЧАС: ${helm}${b.docked ? ' (стоим у причала)' : ''}.`,
         `ТЕЛА (ближние первыми): ${bodies || none}.`,
-        `ЛОКАТОР: ${contacts || none}. Контейнеров на локаторе: ${b.pods}.`,
+        `БОРТА В СИСТЕМЕ (ближние первыми; «на локаторе» — ближе 20 км): ${contacts || 'в системе ни одного борта'}. Контейнеров на локаторе: ${b.pods}. Локатор ИСПРАВЕН — пустой список значит лишь, что рядом никого.`,
         `КОРАБЛЬ: корпус ${Math.round(b.hull.share * 100)}%${b.hull.repairPrice ? `, твой ремонт корпуса ${b.hull.repairPrice} кр` : ''}. Сломано: ${broken || none}.`,
       ].join('\n')
 }
 
 const COPILOT_SCHEMA =
-  '{"reply":"…","emotion":"neutral"|"joy"|"pain"|"anger"|"fear"|"sadness"|null,"goto":<body id>|null,"attack":"nearest"|"all"|<ship id>|null,"flee":true|null,"collect":true|null,"stop":true|null,"repair":"hull"|"all"|<part number>|null,"dismiss":true|null,"lookup":"market"|"traffic"|"worlds"|null,"clarify":true|false}'
+  '{"reply":"…","emotion":"neutral"|"joy"|"pain"|"anger"|"fear"|"sadness"|null,"goto":<body id>|null,"approach":<ship id>|null,"attack":"nearest"|"all"|<ship id>|null,"flee":true|null,"collect":true|null,"stop":true|null,"repair":"hull"|"all"|<part number>|null,"dismiss":true|null,"lookup":"market"|"traffic"|"worlds"|null,"clarify":true|false}'
 
 /**
  * Свободный чат со ВТОРЫМ ПИЛОТОМ. Это роль `copilot`: приказы из речи игрока модель кладёт
@@ -401,22 +405,26 @@ export async function negotiateCopilot(world: World, history: ChatTurn[], userTe
 ${situation}
 You fly, fight, repair and know what a dispatcher knows. Turn the commander's words into orders in the JSON fields:
 - "fly to the nearest station / planet X / the star" → goto: id from BODIES (nearest = smallest distance of that kind).
-- "attack X" → attack: ship id from SCANNER; "attack the nearest pirate" → "nearest"; "attack all pirates / everyone in turn" → "all".
+- "fly to that trader / find a trader and go to him" → approach: ship id from SHIPS (pick by occupation; nearest if several). The whole system is visible to you, not only the scanner.
+- "attack X" → attack: ship id from SHIPS; "attack the nearest pirate" → "nearest"; "attack all pirates / everyone in turn" → "all" (these two only on scanner).
 - "get us out of here, it is dangerous" → flee:true. "collect the canisters" → collect:true. "stop / I will take it / hands off" → stop:true.
 - Repair: you charge only for parts (prices above). If asked how much — name the price, no order. If he clearly asks to fix — repair: "hull", "all" or a broken part number.
 - Prices, market, who is flying around: you do not know offhand — set lookup ("market", "traffic" or "worlds") and SAY you are calling the dispatcher (e.g. "Hold on, I will raise the dispatcher").
-- dismiss:true ONLY if the commander explicitly fires you.
+- "stand down / cancel / belay that / never mind / stop" = stop:true (drop the current order). It is NOT firing you.
+- dismiss:true ONLY if the commander explicitly fires you ("you're fired", "get off my ship"). The game will make you ask "are you sure?" first; set dismiss:true again only if he confirms.
 If you do not understand WHAT to do or WHOM he means — do not nod along: ask back, set clarify:true and no orders. Never invent ids, prices or ships absent above. Several orders at once are fine (stop + goto).
 Reply with one JSON object: ${COPILOT_SCHEMA}.`
     : `Ты ${properName(copilot.name)}, ВТОРОЙ ПИЛОТ командира, сидишь у него в кабине. Нрав: ${persona.disposition}. Говори как напарник по внутренней связи: коротко, живо, в своём характере. Отвечай по-русски.
 ${situation}
 Ты летаешь, дерёшься, чинишь и знаешь то, что знает диспетчер. Слова командира превращай в приказы в полях JSON:
 - «лети к ближайшей станции / к планете X / к звезде» → goto: id из ТЕЛ (ближайшая — наименьшее расстояние нужного вида).
-- «атакуй такого-то» → attack: id борта с ЛОКАТОРА; «атакуй ближайшего пирата» → "nearest"; «бей всех пиратов / всех по очереди» → "all".
+- «найди торговца и лети к нему / подлети к тому борту» → approach: id из БОРТОВ (выбирай по роду занятий; несколько — ближайший). Тебе видна вся система, не только локатор.
+- «атакуй такого-то» → attack: id из БОРТОВ; «атакуй ближайшего пирата» → "nearest"; «бей всех пиратов / всех по очереди» → "all" (эти два — только на локаторе).
 - «лети отсюда подальше, тут опасно» → flee:true. «собери контейнеры» → collect:true. «стоп / отставить / сам поведу» → stop:true.
 - Ремонт: берёшь только за детали (цены выше). Спросил «сколько» — назови цену, без приказа. Ясно попросил починить — repair: "hull", "all" или номер сломанной детали.
 - Цены, рынок, кто летает в системе: на память не знаешь — ставь lookup ("market", "traffic" или "worlds") и СКАЖИ, что связываешься с диспетчером (например: «Ща свяжусь с диспетчером, узнаю»).
-- dismiss:true — ТОЛЬКО если командир прямо тебя увольняет.
+- «отбой», «отставить», «отмена», «стоп», «ладно, не надо» = stop:true (снять текущий приказ). Это НЕ увольнение.
+- dismiss:true — ТОЛЬКО если командир прямо тебя увольняет («ты уволен», «вали с моего корабля»). Игра сперва заставит тебя переспросить «точно?»; ставь dismiss:true снова, только если он подтвердил.
 Не понял, ЧТО делать или КОГО он имеет в виду, — не поддакивай: переспроси, поставь clarify:true и никаких приказов. Не выдумывай id, цены и борта, которых нет выше. Несколько приказов сразу можно (stop + goto).
 Ответь одним JSON: ${COPILOT_SCHEMA}.`
   const messages: OutboundMessages = [{ role: 'system', content: system }]

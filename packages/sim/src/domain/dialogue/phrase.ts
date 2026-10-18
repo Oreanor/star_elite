@@ -28,10 +28,10 @@ export type PhraseKey =
   | 'sayStopFire' | 'sayMercy' | 'sayHire' | 'sayHireFee' | 'sayPlunder'
   | 'blockedUnharmed' | 'blockedMakePeace' | 'blockedNoCredits'
   // Второй пилот: найм (строка ленты и отказы голосом) и исход приказов
-  | 'copilotHired' | 'copilotDismissed'
+  | 'copilotHired' | 'copilotDismissed' | 'copilotDismissConfirm'
   | 'hireTaken' | 'hireWary' | 'hireRank' | 'hireMoney'
-  | 'copilotGoto' | 'copilotAttack' | 'copilotAttackAll' | 'copilotCollect' | 'copilotFlee' | 'copilotStop'
-  | 'copilotRepaired' | 'copilotRepairShort' | 'copilotNothingToRepair' | 'copilotNoMoney'
+  | 'copilotGoto' | 'copilotApproach' | 'copilotAttack' | 'copilotAttackAll' | 'copilotCollect' | 'copilotFlee' | 'copilotStop'
+  | 'copilotRepaired' | 'copilotRepairedPartial' | 'copilotRepairAgain' | 'copilotRepairShort' | 'copilotNothingToRepair' | 'copilotNoMoney'
   | 'copilotNoFoes' | 'copilotNoPods' | 'copilotHoldFull' | 'copilotDocked' | 'copilotNoTarget'
 
 export type PhraseParams = Readonly<Record<string, string | number>>

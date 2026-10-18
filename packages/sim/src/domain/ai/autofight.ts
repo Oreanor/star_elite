@@ -28,7 +28,9 @@ import { lockedShipId, lockedPodId, lockedAsteroidId, lockedFixtureId } from '..
  */
 
 /** Дальше этого автобой считает цель ушедшей и возвращает управление. Метры. */
-const ABORT_RANGE = AI.AWARENESS * 1.6
+// Автобой ведёт второй пилот, и цель ему дают с локатора (`COPILOT.SCAN_RANGE`): прежние
+// AWARENESS × 1.6 (5.6 км) сбрасывали бой с бортом в десяти километрах в первый же такт.
+const ABORT_RANGE = COPILOT.SCAN_RANGE * 1.5
 
 export function autofightActive(world: World): boolean {
   return world.player.ai !== null

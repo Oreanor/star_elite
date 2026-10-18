@@ -650,4 +650,8 @@ export const EN: Record<keyof typeof RU, string> = {
   'copilot.repair': "FIX · {price}",
   'copilot.hull': "HULL {pct}%",
   'hud.copilotQuit': "{name} QUIT — NO PAY",
+  'phrase.copilotApproach': "CLOSING ON TARGET",
+  'phrase.copilotRepairedPartial': "PATCHED · {pct}% LEFT · {credits} CR CHARGED",
+  'phrase.copilotRepairAgain': "Not quite — one more go and it's good as new.",
+  'phrase.copilotDismissConfirm': "Putting me ashore? Say it again and I'm gone.",
 }

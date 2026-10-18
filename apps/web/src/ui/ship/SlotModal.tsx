@@ -13,6 +13,7 @@ import {
   copilotRepair,
   copilotRepairQuote,
   type RepairTarget,
+  type CopilotRepairOutcome,
   moduleResaleValue,
   moduleStat,
   priceOf,
@@ -153,10 +154,7 @@ export function SlotModal({
     const price = copilotRepairQuote(world, target)?.price ?? 0
     const out = copilotRepair(world, target)
     onChange()
-    setConfirm({
-      message: out === 'repaired' ? t('phrase.copilotRepaired', { credits: price }) : t('phrase.copilotNoMoney', { credits: price }),
-      actions: [],
-    })
+    setConfirm({ message: copilotRepairNote(out, price), actions: [] })
   }
 
   // Клик по МОЕМУ варианту из трюма — спросить и поставить взамен (даром, железо своё).
@@ -573,6 +571,15 @@ function repairInfoFor(world: World, module: ShipModule): RepairInfo {
     return { price: q.price, can: world.credits >= q.price, refused: false }
   }
   return { price: 0, can: false, refused: false } // исправна — чинить нечего
+}
+
+/** Исход подхода второго пилота словами: починил, подлатал (ещё заход добьёт), нет денег. */
+export function copilotRepairNote(out: CopilotRepairOutcome, price: number): string {
+  if (out.result === 'repaired') return t('phrase.copilotRepaired', { credits: out.spent })
+  if (out.result === 'partial') {
+    return `${t('phrase.copilotRepairedPartial', { credits: out.spent, pct: Math.max(1, Math.round(out.left * 100)) })} · ${t('phrase.copilotRepairAgain')}`
+  }
+  return t('phrase.copilotNoMoney', { credits: price })
 }
 
 /** Что чинит второй пилот у этого слота: у брони — корпус, у сломанной детали — её саму. */

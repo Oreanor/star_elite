@@ -24,6 +24,7 @@ import { chassisName } from '../i18n/dataNames'
 import { Money } from '../station/Money'
 import { cargoBudgetText } from './ShipSlots'
 import { displayName } from '../station/Equipment'
+import { copilotRepairNote } from './SlotModal'
 
 /**
  * Окна корпуса: смена рамы на верфи и покупка нового корпуса.
@@ -65,7 +66,7 @@ export function HullModal({
   const copilotQuote = world.copilot ? copilotRepairQuote(world, { kind: 'hull' }) : null
   const doCopilotRepair = () => {
     const price = copilotQuote?.price ?? 0
-    if (copilotRepair(world, { kind: 'hull' }) === 'repaired') setNote(t('phrase.copilotRepaired', { credits: price }))
+    setNote(copilotRepairNote(copilotRepair(world, { kind: 'hull' }), price))
     onChange()
   }
   const doUpgrade = (stat: HullStat) => {

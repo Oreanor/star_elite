@@ -306,7 +306,7 @@ const crewAction: DialogueAction = {
 
 /**
  * ПРИКАЗЫ ВТОРОМУ ПИЛОТУ — из речи игрока, как у любого бота. Поля плоского JSON:
- * `goto` (id тела из сводки), `attack` (nearest | all | id борта), `flee`, `collect`, `stop`
+ * `goto` (id тела из сводки), `approach` (id борта — подлететь), `attack` (nearest | all | id борта), `flee`, `collect`, `stop`
  * (true), `repair` (hull | all | номер сломанной детали), `dismiss` (true — расчёт).
  * Каждое поле — своя команда шины `copilot`; исполнит и проверит домен (`crew/copilot.ts`).
  */
@@ -318,6 +318,7 @@ const copilotOrderAction: DialogueAction = {
     const order = (payload: Record<string, unknown>) => out.push({ action: 'copilot', payload })
     if (o.stop === true) order({ order: 'stop' })
     if (typeof o.goto === 'number') order({ order: 'goto', id: o.goto })
+    if (typeof o.approach === 'number') order({ order: 'approach', id: o.approach })
     if (o.attack === 'nearest' || o.attack === 'all' || typeof o.attack === 'number') order({ order: 'attack', target: o.attack })
     if (o.collect === true) order({ order: 'collect' })
     if (o.flee === true) order({ order: 'flee' })

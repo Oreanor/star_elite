@@ -2,7 +2,7 @@ import { Vector3 } from 'three'
 import { CALENDAR_DAY } from '../../config/contracts'
 import { COPILOT, RANK } from '../../config/crew'
 import { SHOP } from '../../config/station'
-import { clamp } from '../../core/math'
+import { clamp, makeRng } from '../../core/math'
 import { autofightActive, disengageAutofight, engageAutofight } from '../ai/autofight'
 import { enqueueTask } from '../ai/tasks'
 import { isFoe } from '../ai/targeting'
@@ -12,13 +12,14 @@ import { isEngageable } from '../combat/engage'
 import { moodTo } from '../dialogue/dialogue'
 import { allModules, type ShipModule } from '../loadout'
 import { hullDamage } from '../station/repair'
-import { moduleFault, replaceInstalled, withFault } from '../station/moduleState'
+import { hashModuleId, moduleFault, replaceInstalled, withFault } from '../station/moduleState'
 import { rememberPilot } from '../world/acquaintance'
 import type { ShipEntity, World } from '../world/entities'
 import { refreshSpec } from '../world/factory'
 import type { Persona } from '../world/persona'
 import { lockContact } from '../world/queries'
 import { beginWarpDeparture } from '../world/warp'
+import { spawnResidentContacts } from '../world/traffic'
 import { rankIndex, rankOfXp, xpForRank } from './rank'
 
 /**
@@ -38,7 +39,15 @@ export interface Copilot {
   xp: number
   /** До какого момента календаря (`world.calendarTime`) жалованье уплачено. */
   paidUntil: number
+  /**
+   * Когда (`world.time`) он переспросил «точно списываешь?». Расчёт — только вторым словом:
+   * модель путала «отбой» (снять приказ) с увольнением, и пилот молча сходил с борта.
+   */
+  dismissAskedAt?: number
 }
+
+/** Сколько секунд мира живёт вопрос «точно списываешь?» — дальше снова переспросит. */
+const DISMISS_CONFIRM_WINDOW = 120
 
 const MONTH = COPILOT.MONTH_DAYS * CALENDAR_DAY
 
@@ -94,12 +103,32 @@ export function hireCopilot(world: World, ship: ShipEntity): HireBlock | null {
   return null
 }
 
-/** Расчёт: пилот сходит с борта, штурвал — снова твой. */
+/**
+ * Просьба о расчёте. Первая — только вопрос (`'ask'`): «точно?». Повтор в окне
+ * `DISMISS_CONFIRM_WINDOW` — расчёт (`'done'`).
+ */
+export function requestDismiss(world: World): 'ask' | 'done' | null {
+  const copilot = world.copilot
+  if (!copilot) return null
+  const asked = copilot.dismissAskedAt
+  if (asked === undefined || world.time - asked > DISMISS_CONFIRM_WINDOW || world.time < asked) {
+    copilot.dismissAskedAt = world.time
+    return 'ask'
+  }
+  dismissCopilot(world)
+  return 'done'
+}
+
+/**
+ * Расчёт: пилот сходит с борта, штурвал — снова твой. Он не растворяется: вызывает свой
+ * корабль и остаётся в системе знакомым — передумал, позови снова.
+ */
 export function dismissCopilot(world: World): void {
   if (!world.copilot) return
   world.copilot = null
   if (autofightActive(world)) disengageAutofight(world)
   world.helmRequest = 'manual'
+  spawnResidentContacts(world)
 }
 
 /**
@@ -154,6 +183,25 @@ export function copilotGoto(world: World, bodyId: number): OrderResult {
   world.contactLock = null
   world.navTargetId = bodyId
   world.targetFocus = 'nav'
+  // Звезда галактики, выбранная на карте, перебивает цель в системе (`flyto.destination`).
+  world.jumpTargetIndex = null
+  world.helmRequest = 'flyto'
+  return 'ok'
+}
+
+/**
+ * Подлететь к БОРТУ в системе — любому видимому, не только на локаторе: «найди торговца и
+ * лети к нему». Тот же полёт-к-цели, цель — захваченный корабль (едет — догоняем).
+ */
+export function copilotApproach(world: World, shipId: number): OrderResult {
+  const block = ready(world)
+  if (block) return block
+  const ship = world.ships.find((s) => s.id === shipId)
+  if (!ship || !ship.alive || ship.cloaked) return 'no-target'
+  if (autofightActive(world)) disengageAutofight(world)
+  lockContact(world, 'ship', ship.id)
+  world.targetFocus = 'contact'
+  world.jumpTargetIndex = null
   world.helmRequest = 'flyto'
   return 'ok'
 }
@@ -185,8 +233,9 @@ export function copilotAttack(world: World, target: 'nearest' | 'all' | number):
   const block = ready(world)
   if (block) return block
   const copilot = world.copilot!
+  // Названный борт — где угодно в системе (пилот догонит); «ближайший» и «все» — с локатора.
   const ship = typeof target === 'number' ? world.ships.find((s) => s.id === target) : nearestFoe(world)
-  if (!ship || !scanned(world, ship)) return typeof target === 'number' ? 'no-target' : 'no-foes'
+  if (!ship || !ship.alive || !isEngageable(ship)) return typeof target === 'number' ? 'no-target' : 'no-foes'
   lockContact(world, 'ship', ship.id)
   world.targetFocus = 'contact'
   if (!engageAutofight(world)) return 'no-target'
@@ -250,57 +299,91 @@ export function copilotRepairDiscount(rank: number): number {
   return COPILOT.REPAIR_DISCOUNT_WORST + (COPILOT.REPAIR_DISCOUNT_BEST - COPILOT.REPAIR_DISCOUNT_WORST) * t
 }
 
-/** Какую долю поломки закрывает за раз: с `REPAIR_FULL_RANK` — всю. */
-export function copilotRepairShare(rank: number): number {
+/** Шанс починить начисто за подход: новичок `REPAIR_LUCK_WORST`, с `REPAIR_FULL_RANK` — всегда. */
+export function copilotRepairLuck(rank: number): number {
   if (rank <= COPILOT.REPAIR_FULL_RANK) return 1
   const t = clamp((RANK.WORST - rank) / (RANK.WORST - COPILOT.REPAIR_FULL_RANK), 0, 1)
-  return COPILOT.REPAIR_QUALITY_WORST + (1 - COPILOT.REPAIR_QUALITY_WORST) * t
+  return COPILOT.REPAIR_LUCK_WORST + (1 - COPILOT.REPAIR_LUCK_WORST) * t
 }
 
 /** Что чинить: корпус или деталь (модуль на борту игрока). */
 export type RepairTarget = { kind: 'hull' } | { kind: 'module'; module: ShipModule }
 
 export interface CopilotRepairQuote {
-  /** Цена — только детали: цена мастерской × починенная доля × (1 − скидка). */
+  /** Цена ПОЛНОЙ починки — только детали: цена мастерской × (1 − скидка). Не дочинил — дешевле. */
   price: number
-  /** Доля поломки, что будет закрыта, 0..1. */
-  share: number
+  /** Поломка сейчас, доля 0..1. */
+  before: number
+  /** Шанс, что этот подход доведёт до нуля. */
+  luck: number
 }
 
-/**
- * Расклад ремонта в полёте. Броска нет: пилот знает свой корабль и не «доламывает», как
- * чужой мастер, — слабый просто не дотягивает до конца. `null` — чинить нечего.
- */
+/** Поломка цели долей: у корпуса — недостающая доля прочности, у детали — её `fault`. */
+function faultOf(world: World, target: RepairTarget): number {
+  if (target.kind === 'module') return moduleFault(target.module)
+  const max = world.player.spec.hull.hull
+  return max > 0 ? hullDamage(world.player) / max : 0
+}
+
+/** Цена починки доли `amount` поломки цели, со скидкой второго пилота. */
+function partsPrice(world: World, target: RepairTarget, amount: number, rank: number): number {
+  const full =
+    target.kind === 'hull'
+      ? world.player.spec.hull.hull * SHOP.HULL_REPAIR_COST
+      : target.module.cost * SHOP.MODULE_REPAIR_FRACTION
+  return Math.ceil(full * amount * (1 - copilotRepairDiscount(rank)))
+}
+
+/** Расклад ремонта в полёте. `null` — чинить нечего. */
 export function copilotRepairQuote(world: World, target: RepairTarget): CopilotRepairQuote | null {
   const copilot = world.copilot
   if (!copilot) return null
+  const before = faultOf(world, target)
+  if (before <= 1e-6) return null
   const rank = copilotRank(copilot)
-  const share = copilotRepairShare(rank)
-  const base =
-    target.kind === 'hull'
-      ? hullDamage(world.player) * SHOP.HULL_REPAIR_COST
-      : target.module.cost * moduleFault(target.module) * SHOP.MODULE_REPAIR_FRACTION
-  if (base <= 0) return null
-  return { price: Math.ceil(base * share * (1 - copilotRepairDiscount(rank))), share }
+  const luck = before <= COPILOT.REPAIR_SURE_BELOW ? 1 : copilotRepairLuck(rank)
+  return { price: partsPrice(world, target, before, rank), before, luck }
 }
 
-export type RepairResult = 'repaired' | 'no-copilot' | 'nothing' | 'no-money'
+export type RepairResult = 'repaired' | 'partial' | 'no-copilot' | 'nothing' | 'no-money'
 
-export function copilotRepair(world: World, target: RepairTarget): RepairResult {
-  if (!world.copilot) return 'no-copilot'
+export interface CopilotRepairOutcome {
+  result: RepairResult
+  /** Списано, кр. */
+  spent: number
+  /** Поломка после подхода, доля 0..1. */
+  left: number
+}
+
+/**
+ * Подход к ремонту. Бросок детерминирован (зерно галактики, система, цель, текущая поломка —
+ * `Math.random` под запретом ради сети) и меняется от подхода к подходу: поломка другая.
+ * Денег должно хватать на полную починку — сколько выйдет, заранее не знает и пилот.
+ */
+export function copilotRepair(world: World, target: RepairTarget): CopilotRepairOutcome {
+  if (!world.copilot) return { result: 'no-copilot', spent: 0, left: 0 }
   const quote = copilotRepairQuote(world, target)
-  if (!quote) return 'nothing'
-  if (world.credits < quote.price) return 'no-money'
-  world.credits -= quote.price
+  if (!quote) return { result: 'nothing', spent: 0, left: 0 }
+  if (world.credits < quote.price) return { result: 'no-money', spent: 0, left: quote.before }
+  const rng = makeRng(
+    world.galaxySeed ^
+      Math.imul(world.systemIndex + 1, 0x9e3779b1) ^
+      Math.imul(Math.round(quote.before * 10_000), 0x85ebca6b) ^
+      Math.imul(target.kind === 'hull' ? 1 : hashModuleId(target.module.id), 0x27d4eb2f),
+  )
+  const clean = rng() < quote.luck
+  const [lo, hi] = COPILOT.REPAIR_LEFT
+  const left = clean ? 0 : quote.before * (lo + (hi - lo) * rng())
+  const spent = partsPrice(world, target, quote.before - left, copilotRank(world.copilot))
+  world.credits -= spent
   const player = world.player
   if (target.kind === 'hull') {
-    player.hull = Math.min(player.spec.hull.hull, player.hull + hullDamage(player) * quote.share)
-    return 'repaired'
+    player.hull = player.spec.hull.hull * (1 - left)
+  } else {
+    replaceInstalled(player, target.module, withFault(target.module, left - quote.before))
+    refreshSpec(player)
   }
-  const fault = moduleFault(target.module)
-  replaceInstalled(player, target.module, withFault(target.module, -fault * quote.share))
-  refreshSpec(player)
-  return 'repaired'
+  return { result: clean ? 'repaired' : 'partial', spent, left }
 }
 
 /** Сломанные детали на борту игрока — в порядке `allModules`. Индекс — ссылка для чата. */
@@ -312,15 +395,17 @@ export function brokenModules(world: World): ShipModule[] {
  * Починить всё, на что хватит денег: корпус, затем детали по порядку. Сколько вещей
  * починено и сколько потрачено — для ленты.
  */
-export function copilotRepairAll(world: World): { fixed: number; spent: number; short: boolean } {
+export function copilotRepairAll(world: World): { fixed: number; spent: number; short: boolean; partial: boolean } {
   const before = world.credits
   let fixed = 0
   let short = false
+  let partial = false
   const targets: RepairTarget[] = [{ kind: 'hull' }, ...brokenModules(world).map((module) => ({ kind: 'module' as const, module }))]
   for (const target of targets) {
-    const r = copilotRepair(world, target)
-    if (r === 'repaired') fixed++
+    const r = copilotRepair(world, target).result
+    if (r === 'repaired' || r === 'partial') fixed++
+    if (r === 'partial') partial = true
     else if (r === 'no-money') short = true
   }
-  return { fixed, spent: before - world.credits, short }
+  return { fixed, spent: before - world.credits, short, partial }
 }

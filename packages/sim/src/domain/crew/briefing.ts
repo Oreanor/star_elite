@@ -1,6 +1,5 @@
 import { COPILOT } from '../../config/crew'
 import { isFoe } from '../ai/targeting'
-import { isEngageable } from '../combat/engage'
 import { moduleFault } from '../station/moduleState'
 import { distanceToBody } from '../station/docking'
 import type { World } from '../world/entities'
@@ -24,8 +23,19 @@ export interface CopilotBriefing {
   helm: 'idle' | 'fight' | 'fightAll' | 'collect' | 'flee' | 'cruise'
   credits: number
   bodies: { id: number; name: string; kind: string; distanceM: number; populated: boolean }[]
-  /** Борта на локаторе, ближние первыми. */
-  contacts: { id: number; name: string; chassis: string; foe: boolean; faction: string; rank: number; distanceM: number }[]
+  /** Борта в системе (видимые), ближние первыми; `scanner` — в радиусе локатора. */
+  contacts: {
+    id: number
+    name: string
+    chassis: string
+    /** Род занятий из трафика: trader, pirate, police… (`originKind`). */
+    occupation: string | null
+    foe: boolean
+    faction: string
+    rank: number
+    distanceM: number
+    scanner: boolean
+  }[]
   /** Контейнеров на локаторе. */
   pods: number
   /** Корпус, доля целого, и цена его ремонта вторым пилотом (0 — цел). */
@@ -34,7 +44,7 @@ export interface CopilotBriefing {
   broken: { n: number; moduleId: string; faultPct: number; price: number }[]
 }
 
-const CONTACTS_LIMIT = 12
+const CONTACTS_LIMIT = 16
 
 export function copilotBriefing(world: World): CopilotBriefing | null {
   const copilot = world.copilot
@@ -64,15 +74,17 @@ export function copilotBriefing(world: World): CopilotBriefing | null {
       .map((b) => ({ id: b.id, name: b.name, kind: b.kind, distanceM: Math.round(distanceToBody(world, b)), populated: b.population > 0 }))
       .sort((a, b) => a.distanceM - b.distanceM),
     contacts: world.ships
-      .filter((s) => s.alive && isEngageable(s) && s.state.pos.distanceToSquared(pos) <= range2)
+      .filter((s) => s.alive && !s.cloaked)
       .map((s) => ({
         id: s.id,
         name: s.name,
         chassis: s.loadout.chassis.name,
+        occupation: s.originKind,
         foe: isFoe(player, s),
         faction: s.faction,
         rank: s.rank,
         distanceM: Math.round(s.state.pos.distanceTo(pos)),
+        scanner: s.state.pos.distanceToSquared(pos) <= range2,
       }))
       .sort((a, b) => a.distanceM - b.distanceM)
       .slice(0, CONTACTS_LIMIT),

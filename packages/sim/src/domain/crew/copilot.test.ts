@@ -17,7 +17,7 @@ import {
   copilotRepair,
   copilotRepairDiscount,
   copilotRepairQuote,
-  copilotRepairShare,
+  copilotRepairLuck,
   copilotSalary,
   hireCopilot,
   stepCrew,
@@ -155,12 +155,12 @@ describe('жалованье', () => {
 })
 
 describe('ремонт в полёте', () => {
-  it('за детали дешевле мастерской, и чем выше ранг — тем дешевле и полнее', () => {
+  it('за детали дешевле мастерской, и чем выше ранг — тем дешевле и надёжнее', () => {
     for (let r = RANK.WORST; r >= RANK.BEST; r--) {
       expect(copilotRepairDiscount(r)).toBeGreaterThan(0)
       if (r < RANK.WORST) {
         expect(copilotRepairDiscount(r)).toBeGreaterThan(copilotRepairDiscount(r + 1))
-        expect(copilotRepairShare(r)).toBeGreaterThanOrEqual(copilotRepairShare(r + 1))
+        expect(copilotRepairLuck(r)).toBeGreaterThanOrEqual(copilotRepairLuck(r + 1))
       }
     }
     // Средняя скидка по шкале — около сорока процентов, как задумано.
@@ -169,30 +169,69 @@ describe('ремонт в полёте', () => {
     expect(sum / 10).toBeCloseTo(0.4, 1)
   })
 
-  it('корпус: цена за починенную долю ниже полной цены мастерской', () => {
+  it('корпус: полная починка дешевле мастерской, опытный чинит начисто', () => {
     const world = hired(5)
     world.player.hull = world.player.spec.hull.hull * 0.5
     const station = repairCost(world.player)
-    const quote = copilotRepairQuote(world, { kind: 'hull' })!
-    expect(quote.price / quote.share).toBeLessThan(station)
-    expect(copilotRepair(world, { kind: 'hull' })).toBe('repaired')
+    expect(copilotRepairQuote(world, { kind: 'hull' })!.price).toBeLessThan(station)
+    expect(copilotRepair(world, { kind: 'hull' }).result).toBe('repaired')
     expect(world.player.hull).toBe(world.player.spec.hull.hull)
   })
 
-  it('новичок чинит деталь не до конца — остаток доделает станция', () => {
-    const world = hired(10)
-    const module = world.player.loadout.internals[0]!
-    const broken = withFault(module, 0.6)
-    replaceInstalled(world.player, module, broken)
-    refreshSpec(world.player)
-    expect(copilotRepair(world, { kind: 'module', module: broken })).toBe('repaired')
-    const after = world.player.loadout.internals[0]!
-    expect(moduleFault(after)).toBeGreaterThan(0)
-    expect(moduleFault(after)).toBeLessThan(0.6)
+  // Пойманное: «доля за раз» чинила 100 → 40 → 16 → 6… без конца. Бросок может не довести
+  // до нуля, но второй подход добивает наверняка — до нуля за один-два подхода, при любом броске.
+  it('новичок доводит до нуля за один-два подхода, при любой поломке', () => {
+    for (let k = 0; k < 40; k++) {
+      const world = hired(10)
+      world.galaxySeed = 1000 + k
+      const module = world.player.loadout.internals[0]!
+      replaceInstalled(world.player, module, withFault(module, 0.3 + (k % 7) * 0.1))
+      refreshSpec(world.player)
+      for (let pass = 0; pass < 2; pass++) {
+        const broken = world.player.loadout.internals[0]!
+        if (moduleFault(broken) <= 0) break
+        copilotRepair(world, { kind: 'module', module: broken })
+      }
+      expect(moduleFault(world.player.loadout.internals[0]!)).toBe(0)
+    }
+  })
+
+  it('недочинил — взял меньше, чем за полную починку', () => {
+    let seen = false
+    for (let k = 0; k < 40 && !seen; k++) {
+      const world = hired(10)
+      world.galaxySeed = 2000 + k
+      world.player.hull = world.player.spec.hull.hull * 0.2
+      const full = copilotRepairQuote(world, { kind: 'hull' })!.price
+      const r = copilotRepair(world, { kind: 'hull' })
+      if (r.result !== 'partial') continue
+      seen = true
+      expect(r.spent).toBeLessThan(full)
+      expect(r.left).toBeGreaterThan(0)
+    }
+    expect(seen).toBe(true)
   })
 })
 
 describe('приказы словами', () => {
+  // Пойманное: игрок сказал «отбой», модель поставила dismiss — и пилот молча сошёл с борта.
+  // Расчёт теперь только вторым словом, а сошедший остаётся в системе знакомым.
+  it('расчёт — только после переспроса; уволенный остаётся в системе бортом', () => {
+    const world = hired()
+    const id = world.copilot!.acquaintanceId
+    const first = applyCommand(world, world.player, { action: 'copilot', payload: { order: 'dismiss' } })
+    expect(first?.spoken?.key).toBe('copilotDismissConfirm')
+    expect(world.copilot).not.toBeNull()
+    // Другой приказ между ними — значит, не увольнял: вопрос снят.
+    applyCommand(world, world.player, { action: 'copilot', payload: { order: 'stop' } })
+    applyCommand(world, world.player, { action: 'copilot', payload: { order: 'dismiss' } })
+    expect(world.copilot).not.toBeNull()
+    const second = applyCommand(world, world.player, { action: 'copilot', payload: { order: 'dismiss' } })
+    expect(second?.line?.key).toBe('copilotDismissed')
+    expect(world.copilot).toBeNull()
+    expect(world.ships.some((s) => s.alive && s.acquaintanceId === id)).toBe(true)
+  })
+
   it('модель вытащила «бей всех» — у второго пилота это команда, у обычного бота — нет', () => {
     const copilot = parseModelReply({ reply: 'Есть!', attack: 'all', collect: true }, [], 'copilot')!
     expect(copilot.commands.map((c) => c.action)).toEqual(['copilot', 'copilot'])

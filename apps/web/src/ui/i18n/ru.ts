@@ -673,4 +673,8 @@ export const RU = {
   'copilot.repair': "ПОЧИНИТЬ · {price}",
   'copilot.hull': "КОРПУС {pct}%",
   'hud.copilotQuit': "{name} УШЁЛ — НЕЧЕМ ПЛАТИТЬ",
+  'phrase.copilotApproach': "КУРС НА БОРТ",
+  'phrase.copilotRepairedPartial': "ПОДЛАТАНО · ОСТАЛОСЬ {pct}% · СПИСАНО {credits} КР",
+  'phrase.copilotRepairAgain': "Не до конца — ещё заход, и будет как новое.",
+  'phrase.copilotDismissConfirm': "Списываешь меня на берег? Скажи ещё раз — и я ухожу.",
 }
