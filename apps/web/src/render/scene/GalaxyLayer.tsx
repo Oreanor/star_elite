@@ -205,7 +205,7 @@ function binaryDir(index: number, out: Vector3): Vector3 {
 }
 
 function homePair(bodies: BodyEntity[]): BodyEntity[] {
-  const stars = bodies.filter((b) => b.kind === 'star')
+  const stars = bodies.filter((b) => b.kind === 'star' && !b.faint)
   if (stars.length >= 2) return stars.slice(0, 2)
   if (stars.length === 1) {
     const hole = bodies.find((b) => b.kind === 'blackhole')

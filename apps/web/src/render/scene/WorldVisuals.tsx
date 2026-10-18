@@ -14,6 +14,7 @@ import { DockingCorridor } from './DockingCorridor'
 import { Dyson } from './Dyson'
 import { BlackHole } from './BlackHole'
 import { StarBeams } from './StarBeams'
+import { MassStreams } from './MassStreams'
 import {
   CargoPods,
   Explosions,
@@ -83,6 +84,7 @@ export function WorldVisuals() {
         <Bodies />
         <BlackHole />
         <StarBeams />
+        <MassStreams />
         <Dyson />
         <AsteroidField />
         <AsteroidBelts />

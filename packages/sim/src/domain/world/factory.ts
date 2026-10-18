@@ -559,6 +559,7 @@ function makeBodies(ids: IdSource, def: SystemDef): BodyEntity[] {
       spin: 0,
       spinAxis: new Vector3(0, 1, 0),
       orbit: null,
+      faint: true,
     })
     const donor = star(pair.name, pair.donor.radius, pair.donor.color)
     // Донор стоит на смещении от станции (едет с ней), компаньон обращается вокруг донора:

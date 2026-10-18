@@ -18,7 +18,7 @@ export function nearestStar(world: World, from: Vector3): BodyEntity | null {
   let best: BodyEntity | null = null
   let nearest = Infinity
   for (const body of world.bodies) {
-    if (body.kind !== 'star') continue
+    if (body.kind !== 'star' || body.faint) continue
     const d = body.pos.distanceToSquared(from)
     if (d < nearest) {
       nearest = d
