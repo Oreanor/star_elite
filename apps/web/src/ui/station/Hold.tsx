@@ -106,10 +106,14 @@ export function Hold({
       key: 'name',
       header: t('station.col.name'),
       sortValue: (item) => (item.kind === 'module' ? displayName(item.module) : itemDisplayName(item)),
-      cell: (item) => (item.kind === 'module' ? displayName(item.module) : itemDisplayName(item)),
+      cell: (item) => {
+        const name = item.kind === 'module' ? displayName(item.module) : itemDisplayName(item)
+        return <span className="block truncate" title={name}>{name}</span>
+      },
     },
     {
       key: 'mass',
+      width: '4rem',
       header: t('station.col.mass'),
       align: 'right',
       sortValue: (item) => itemMass(item),
@@ -117,6 +121,7 @@ export function Hold({
     },
     {
       key: 'price',
+      width: '7rem',
       header: t('station.col.price'),
       align: 'right',
       sortValue: (item) => itemSellValue(world, item),
@@ -124,6 +129,7 @@ export function Hold({
     },
     {
       key: 'profit',
+      width: '8rem',
       header: t('station.col.profit'),
       align: 'right',
       // Находка (цены входа нет) — в самом низу по возрастанию: сравнивать её не с чем.
@@ -145,6 +151,7 @@ export function Hold({
       {hold.items.length === 0 ? null : (
         <>
           <Table
+            fixedLayout
             scrollable={scrollable}
             columns={columns}
             rows={hold.items}
@@ -154,9 +161,7 @@ export function Hold({
             onRowClick={(item) => (item.kind === 'commodity' && onTrade ? onTrade(item.commodity) : setDetail(item))}
           />
 
-          {/* У причала «продать всё» нет: товар продают по одному через окно сделки, видя
-              цену и выгоду. В полёте остаётся «выбросить всё» — там торговаться не с кем. */}
-          {!atStation && (
+          {/* Выброс доступен и у причала; действие остаётся вне прокрутки. */}
             <div className={scrollable ? 'mt-auto shrink-0' : undefined}>
             <Button
               onClick={() => {
@@ -166,7 +171,6 @@ export function Hold({
               {t('ship.jettisonAll')}
             </Button>
             </div>
-          )}
         </>
       )}
 

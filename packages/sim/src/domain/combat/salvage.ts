@@ -315,7 +315,6 @@ function spitPodAhead(world: World, ship: ShipEntity, item: CargoItem): void {
  * Выбросить один предмет трюма в космос контейнером по носу.
  */
 export function jettisonItem(world: World, ship: ShipEntity, index: number): boolean {
-  if (world.docked) return false
   const item = ship.hold.items[index]
   if (!item) return false
   spitPodAhead(world, ship, item)

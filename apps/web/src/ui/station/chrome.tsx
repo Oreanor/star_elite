@@ -386,6 +386,7 @@ export function Table<Row>({
   selectedKey,
   rowDisabled,
   scrollable,
+  fixedLayout,
 }: {
   columns: readonly Column<Row>[]
   rows: readonly Row[]
@@ -400,6 +401,7 @@ export function Table<Row>({
   rowDisabled?: (row: Row) => boolean
   /** Прокрутка внутри ограниченной по высоте панели с неподвижной шапкой. */
   scrollable?: boolean
+  fixedLayout?: boolean
 }) {
   const [open, setOpen] = useState<ReadonlySet<string>>(new Set())
   // Сортировка по клику на заголовок: колонка и направление; null — исходный порядок данных.
@@ -433,7 +435,7 @@ export function Table<Row>({
     // Без переносов: строка таблицы — одна строка экрана (имя «Лучевой лазер 3 «Клинок»» в две
     // строки ломало ритм списка). Не влезло — таблица прокручивается вбок, а не ломает строки.
     <div className={scrollable ? 'min-h-0 overflow-auto overscroll-contain' : 'overflow-x-auto'}>
-    <table className="w-full border-collapse whitespace-nowrap text-sm">
+    <table className={`w-full border-collapse whitespace-nowrap text-sm ${fixedLayout ? 'table-fixed' : ''}`}>
       {/* Ширины — колонкам, а не заголовкам: заголовок может накрывать несколько колонок. */}
       <colgroup>
         {columns.map((c) => (

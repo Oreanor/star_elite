@@ -278,7 +278,7 @@ export function placeFigurineFromHold(
   ship: ShipEntity,
   index: number,
 ): PlaceFigurineAheadResult | null {
-  if (world.docked || !ship.alive) return null
+  if (!ship.alive) return null
   const item = ship.hold.items[index]
   if (!item || item.kind !== 'commodity' || item.commodity.id !== COMMODITIES.FIGURINE.id) {
     return null

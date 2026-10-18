@@ -104,8 +104,10 @@ describe('коллекционные статуэтки', () => {
     for (const t of FIGURINE_TITLES) expect(titles.has(t.id)).toBe(true)
   })
 
-  it('выкладка ставит статуэтку в 3–5 км по носу', () => {
+  it.each([false, true])('выкладка ставит статуэтку в 3–5 км по носу (docked=%s)', (docked) => {
     const world = createWorld({ ...STARTER_SYSTEM, patrols: [], belt: null })
+    // Выброс всего трюма должен работать и со статуэтками у причала.
+    world.docked = docked
     // Убрать системные статуэтки — иначе зазор/пересечение с ними режет попытку.
     world.figurines = []
     const ship = world.player

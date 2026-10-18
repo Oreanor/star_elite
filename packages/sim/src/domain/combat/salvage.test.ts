@@ -372,6 +372,22 @@ describe('дрейф контейнера', () => {
 })
 
 describe('выброс из трюма', () => {
+  it('у причала груз покидает трюм и появляется контейнером', () => {
+    // Кнопка доступна в доке: домен должен выполнить выброс, а не молча отказать.
+    const world = quiet()
+    world.docked = true
+    const ship = world.player
+    const item = { kind: 'commodity' as const, commodity: COMMODITIES.FOOD, units: 1 }
+    expect(addItem(ship.hold, item)).toBe(true)
+    const index = ship.hold.items.findIndex((entry) => entry.kind === 'commodity' && entry.commodity.id === COMMODITIES.FOOD.id)
+    const cargo = ship.hold.items[index]!
+    const count = world.pods.length
+    expect(jettisonItem(world, ship, index)).toBe(true)
+    expect(ship.hold.items).not.toContain(cargo)
+    expect(world.pods).toHaveLength(count + 1)
+    expect(world.docked).toBe(true)
+  })
+
   it('ящик появляется в нескольких метрах по носу и летит как трофей', () => {
     const world = quiet()
     const ship = world.player
