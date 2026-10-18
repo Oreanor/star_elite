@@ -59,6 +59,15 @@ export function applySharedStartWorld(def: SystemDef, index: number, galaxySeed:
         accretor: { radius: 7_000, color: 0xeaf6ff },
         separation: 95_000,
       },
+      // Вторая — «гантелька»: газ по прямой, воронками у обеих звёзд.
+      {
+        name: 'Гантели',
+        style: 'straight',
+        stationOffset: [-160_000, -40_000, 260_000],
+        donor: { radius: 22_000, color: 0xffc89a },
+        accretor: { radius: 14_000, color: 0xfff0d8 },
+        separation: 85_000,
+      },
     ],
     // Четыре военные базы на снос у причала, каждая со своей техно-картой (model → текстура).
     // Разнесены в стороны от станции и от «Двери» (та в +Z на 60 км), чтобы не толпиться.

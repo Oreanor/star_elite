@@ -39,6 +39,7 @@ const STREAM_FRAG = /* glsl */ `
   uniform vec3 uHot;
   uniform float uTime;
   uniform float uStrength;
+  uniform float uEndFade;
   varying vec2 vUv;
   ${NOISE}
   void main() {
@@ -52,7 +53,7 @@ const STREAM_FRAG = /* glsl */ `
     float fibres = noise(vec2(s * 9.0 - uTime * 0.7, side * 7.0 + 3.0));
     float body = 0.45 + 0.4 * flow + 0.25 * fibres;
     /* Вход — из тела донора (плавно), к концу спирали растворяется в диске. */
-    float fade = smoothstep(0.0, 0.05, s) * (1.0 - smoothstep(0.86, 1.0, s));
+    float fade = smoothstep(0.0, 0.05, s) * mix(1.0, 1.0 - smoothstep(0.86, 1.0, s), uEndFade);
     vec3 col = mix(uFrom, uHot, smoothstep(0.25, 0.85, s));
     gl_FragColor = vec4(col, uStrength * edge * body * fade);
   }
@@ -104,6 +105,7 @@ export function createStreamMaterial(fromColor: number): ShaderMaterial {
       uHot: { value: new Color(0xf2fbff) },
       uTime: { value: 0 },
       uStrength: { value: 1.25 },
+      uEndFade: { value: 1 },
     },
     transparent: true,
     blending: AdditiveBlending,

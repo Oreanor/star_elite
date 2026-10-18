@@ -469,8 +469,9 @@ function makeBodies(ids: IdSource, def: SystemDef): BodyEntity[] {
       // Поток — с бОльшей звезды (она переполнила полость Роша) на меньшую.
       if (comp.stream) {
         const b = bodies[bodies.length - 1]!
-        if (primary.radius >= b.radius) primary.streamTo = b.id
-        else b.streamTo = primary.id
+        const donor = primary.radius >= b.radius ? primary : b
+        donor.streamTo = donor === primary ? b.id : primary.id
+        donor.streamStyle = comp.streamStyle ?? 'spiral'
       }
     }
   }
@@ -576,6 +577,7 @@ function makeBodies(ids: IdSource, def: SystemDef): BodyEntity[] {
     }
     accretor.pos.add(new Vector3(pair.separation, 0, 0))
     donor.streamTo = accretor.id
+    donor.streamStyle = pair.style ?? 'spiral'
     bodies.push(donor, accretor)
   }
 

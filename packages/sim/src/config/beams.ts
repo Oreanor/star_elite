@@ -44,6 +44,8 @@ export const QUASAR = {
 export const MASS_STREAM = {
   /** Доля двойных звёзд, у которых виден поток. */
   SHARE: 0.35,
+  /** Из них — доля прямых «гантелек» (остальные — спираль в диск). */
+  STRAIGHT_SHARE: 0.5,
 } as const
 
 export const PULSAR = {

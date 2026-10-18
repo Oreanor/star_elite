@@ -93,8 +93,9 @@ function Stream({ donor, accretor }: { donor: BodyEntity; accretor: BodyEntity }
   }, [])
   const streamMat = useMemo(() => createStreamMaterial(donor.color), [donor.color])
   const diskMat = useMemo(() => createAccretionDiskMaterial(donor.color, DISK_INNER, DISK_OUTER), [donor.color])
-  // У чёрной дыры свой диск (`BlackHole`) — второй не рисуем.
-  const ownDisk = accretor.kind !== 'blackhole'
+  // Прямая «гантелька» диска не имеет; у чёрной дыры свой диск (`BlackHole`).
+  const straight = donor.streamStyle === 'straight'
+  const ownDisk = !straight && accretor.kind !== 'blackhole'
   useEffect(
     () => () => {
       geometry.dispose()
@@ -141,7 +142,10 @@ function Stream({ donor, accretor }: { donor: BodyEntity; accretor: BodyEntity }
     _p2.copy(_p3).addScaledVector(_u, -gap * 0.35)
     for (let i = 0; i < N; i++) {
       const s = i / (N - 1)
-      if (s <= ARC_SHARE) {
+      if (straight) {
+        // Гантелька: от поверхности донора до поверхности компаньона по прямой.
+        points[i]!.copy(_u).multiplyScalar(rd * 0.92 + (d - ra * 0.92 - rd * 0.92) * s)
+      } else if (s <= ARC_SHARE) {
         bezier(s / ARC_SHARE, points[i]!)
       } else {
         // Спираль внутрь: от края диска к внутреннему ободу, касательная — продолжение дуги.
@@ -165,7 +169,10 @@ function Stream({ donor, accretor }: { donor: BodyEntity; accretor: BodyEntity }
       if (len > 0) _side.divideScalar(len)
       // Шея у донора — широкая (звезда вытянута каплей), дальше тонкая струя, к диску тоньше.
       const neck = (1 - smooth(0, 0.1, s)) ** 2
-      const w = (ra * 0.16 + (rd * 0.3 - ra * 0.16) * neck) * (1 - 0.4 * smooth(0.6, 1, s))
+      // Гантелька — воронки у ОБЕИХ звёзд и тонкая перемычка посередине.
+      const w = straight
+        ? ra * 0.14 + (rd * 0.3 - ra * 0.14) * neck + ra * 0.3 * smooth(0.82, 1, s) ** 2
+        : (ra * 0.16 + (rd * 0.3 - ra * 0.16) * neck) * (1 - 0.4 * smooth(0.6, 1, s))
       const o = i * 6
       arr[o] = p.x - _side.x * w
       arr[o + 1] = p.y - _side.y * w
@@ -179,6 +186,7 @@ function Stream({ donor, accretor }: { donor: BodyEntity; accretor: BodyEntity }
 
     const time = renderTime(world)
     streamMat.uniforms.uTime!.value = time
+    streamMat.uniforms.uEndFade!.value = straight ? 0.35 : 1
     if (disk.current && ownDisk) {
       disk.current.position.copy(_acc)
       disk.current.scale.setScalar(ra)

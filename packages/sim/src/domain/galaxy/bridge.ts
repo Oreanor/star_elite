@@ -127,6 +127,13 @@ function beltsOf(system: StarSystem, galaxySeed: number, planets: SystemDef['pla
   return belts
 }
 
+/** Поток в паре: виден ли и какого вида — своё подзерно, бросок не сдвигает остальное. */
+function streamOf(index: number, galaxySeed: number): { stream: boolean; streamStyle: 'spiral' | 'straight' } {
+  const rng = makeRng((galaxySeed ^ Math.imul(index + 1, 0x5713a3)) >>> 0)
+  const stream = rng() < MASS_STREAM.SHARE
+  return { stream, streamStyle: rng() < MASS_STREAM.STRAIGHT_SHARE ? 'straight' : 'spiral' }
+}
+
 /**
  * Особое светило: чёрная дыра ядра (класс H) или пульсар (класс N). Обычным звёздам — ничего.
  *
@@ -209,7 +216,7 @@ export function systemDefOf(system: StarSystem, galaxySeed: number, seatOverride
         massSolar: system.companion.massSolar,
         separation: (starRadius + system.companion.radius * SCALE.STAR_RADIUS) * (3 + rng() * 4),
         // Своё подзерно: бросок не сдвигает остальную случайность системы.
-        stream: makeRng((galaxySeed ^ Math.imul(system.index + 1, 0x5713a3)) >>> 0)() < MASS_STREAM.SHARE,
+        ...streamOf(system.index, galaxySeed),
       }
     : null
 

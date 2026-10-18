@@ -36,6 +36,8 @@ export interface StarCompanionDef {
   kind?: 'star'
   /** Видно перетекание вещества: струя с бОльшей звезды на меньшую (`MASS_STREAM`). */
   stream?: boolean
+  /** Вид потока: спираль в диск у компаньона или прямая «гантелька». */
+  streamStyle?: StreamStyle
   radius: number
   color: number
   /** Масса в M☉ — как у главной, не из радиуса. */
@@ -56,11 +58,19 @@ export interface BlackHoleCompanionDef {
 }
 
 /**
+ * Вид перетекания: `spiral` — струя по касательной наматывается на диск компаньона;
+ * `straight` — газ тянется по прямой между звёздами, воронками у обеих («гантелька»).
+ */
+export type StreamStyle = 'spiral' | 'straight'
+
+/**
  * Тесная пара звёзд с перетеканием — отдельно от светила системы, у станции (как «Дверь»).
  * Донор стоит на смещении, компаньон обращается вокруг него на `separation`.
  */
 export interface StreamPairDef {
   name: string
+  /** Спираль в диск (по умолчанию) или прямая «гантелька». */
+  style?: StreamStyle
   stationOffset: readonly [number, number, number]
   donor: { radius: number; color: number }
   accretor: { radius: number; color: number }
