@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { MODULE_CATALOGUE } from '../../config/modules'
+import { listPrice } from '../../config/pricing'
 import * as L from '../../config/loadouts'
 import { SHIPYARD } from '../../config/loadouts'
 import { slotCategoryOf, type Loadout } from '.'
@@ -54,6 +55,36 @@ describe('каталог', () => {
       if (m.id === 'drone_gun') continue
       expect(Number.isInteger(m.mass) && m.mass >= 1, `${m.id}: ${m.mass} т`).toBe(true)
     }
+  })
+
+  it('в одном классе масса расходится: иначе две линейки — одно и то же железо', () => {
+    const kinds = ['engine', 'thrusters', 'shield', 'armour', 'hyperdrive'] as const
+    for (const kind of kinds) {
+      for (const cls of [1, 2, 3]) {
+        const group = MODULE_CATALOGUE.filter((m) => m.kind === kind && m.class === cls)
+        if (group.length < 2) continue
+        const masses = group.map((m) => m.mass)
+        expect(Math.max(...masses) - Math.min(...masses), `${kind} класс ${cls}`).toBeGreaterThanOrEqual(1)
+      }
+    }
+  })
+
+  it('цена каталога — формула характеристики на тонну, не цифра в карточке', () => {
+    for (const m of MODULE_CATALOGUE) {
+      if (m.kind === 'mielophone') continue
+      expect(m.cost, m.id).toBe(listPrice(m))
+    }
+  })
+
+  it('та же характеристика на меньшей массе стоит дороже', () => {
+    // Формула, а не подбор: две тяги равны — легче та, что дороже.
+    const base = MODULE_CATALOGUE.find((m) => m.kind === 'engine')!
+    const heavy = listPrice({ ...base, mass: 4 })
+    const light = listPrice({ ...base, mass: 1 })
+    expect(light).toBeGreaterThan(heavy)
+    const weak = listPrice({ ...base, thrust: base.thrust })
+    const strong = listPrice({ ...base, thrust: base.thrust * 2 })
+    expect(strong).toBeGreaterThan(weak)
   })
 
   it('id модулей уникальны: сейв и сеть узнают деталь по id', () => {

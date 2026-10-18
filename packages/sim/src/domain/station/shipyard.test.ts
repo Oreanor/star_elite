@@ -1,11 +1,21 @@
 import { describe, expect, it } from 'vitest'
 import { veteranWorld } from '../../testkit'
-import { playerStartLoadout, SHIPYARD } from '../../config/loadouts'
+import { playerStartLoadout, SHIPYARD, type HullOffer } from '../../config/loadouts'
 import { deriveShipSpec } from '../loadout'
 import { addCommodity } from '../cargo/hold'
 import { COMMODITIES } from '../cargo/items'
 import { fitOntoChassis, hullPurchase, stackWithFactory, swapHull } from './shipyard'
-import { CARGO_LARGE, CARGO_SMALL } from '../../config/modules'
+import { CARGO_LARGE, CARGO_SMALL, MODULE_CATALOGUE } from '../../config/modules'
+
+/** Модули заводской сборки: внутренности и стволы. Пустая точка не считается. */
+function fittedGear(offer: HullOffer) {
+  const fit = offer.loadout()
+  return [...fit.internals, ...fit.weapons.filter((m) => m !== null)]
+}
+
+function gearClasses(offer: HullOffer): number[] {
+  return fittedGear(offer).map((m) => m.class)
+}
 
 /**
  * Верфь — правило, а не кнопка. Проверяем без рендера.
@@ -108,7 +118,7 @@ describe('верфь корпусов', () => {
       expect(after, module.id).toBeGreaterThanOrEqual(before)
     }
     expect(stacked.weapons[0]?.id).toBe(factory.weapons[0]?.id)
-    // У «Персея» из трёх орудийных занята одна — своё встаёт в пустую, не вместо штатной.
+    // У «Персея» одна орудийная пустая — своё встаёт в неё, не вместо штатной.
     expect(stacked.weapons.filter((w) => w != null).length).toBeGreaterThan(
       factory.weapons.filter((w) => w != null).length,
     )
@@ -155,5 +165,44 @@ describe('верфь корпусов', () => {
     }
     expect(SHIPYARD[SHIPYARD.length - 1]!.chassis.id).toBe('hermes')
     expect(SHIPYARD.find((o) => o.chassis.id === 'hermes')!.soldBy).toEqual(['Диктатура'])
+  })
+
+  it('ступень лестницы заметно дороже, крепче и принимает железо не хуже предыдущей', () => {
+    // Плюс десять процентов не отличает корпуса: следующая ступень должна стоить в разы,
+    // шкура расти, а потолок класса не падать. Заводская сборка обязана в этот потолок
+    // влезать и быть не беднее железом, чем у более дешёвого соседа.
+    for (let i = 1; i < SHIPYARD.length; i++) {
+      const prev = SHIPYARD[i - 1]!
+      const next = SHIPYARD[i]!
+      expect(next.cost, next.chassis.name).toBeGreaterThanOrEqual(prev.cost * 1.6)
+      expect(next.chassis.baseHull, next.chassis.name).toBeGreaterThan(prev.chassis.baseHull)
+      expect(next.chassis.class, next.chassis.name).toBeGreaterThanOrEqual(prev.chassis.class)
+      const prevGear = Math.max(...gearClasses(prev))
+      const nextGear = Math.max(...gearClasses(next))
+      expect(nextGear, next.chassis.name).toBeGreaterThanOrEqual(prevGear)
+      for (const cls of gearClasses(next)) {
+        expect(cls, next.chassis.name).toBeLessThanOrEqual(next.chassis.class)
+      }
+    }
+    const first = SHIPYARD[0]!
+    const last = SHIPYARD[SHIPYARD.length - 1]!
+    expect(Math.max(...gearClasses(last))).toBeGreaterThan(Math.max(...gearClasses(first)))
+    expect(last.chassis.class).toBeGreaterThan(first.chassis.class)
+  })
+
+  it('с завода стоит начальный или средний грейд своего класса, не вершина', () => {
+    // Буква A в каталоге — самая дорогая в своём классе. Её с верфи не отдают:
+    // иначе следующий грейд покупать незачем. Трюм бесклассовый и в эту мерку не входит.
+    const core = new Set(['engine', 'thrusters', 'shield', 'armour', 'hyperdrive'])
+    for (const offer of SHIPYARD) {
+      for (const module of fittedGear(offer)) {
+        if (module.kind === 'cargo') continue
+        const dearer = MODULE_CATALOGUE.some(
+          (other) => other.kind === module.kind && other.class === module.class && other.cost > module.cost,
+        )
+        expect(dearer, `${offer.chassis.name}: ${module.name}`).toBe(true)
+        if (core.has(module.kind)) expect(module.class, module.name).toBe(offer.chassis.class)
+      }
+    }
   })
 })

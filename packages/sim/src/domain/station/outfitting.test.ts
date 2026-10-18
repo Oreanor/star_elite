@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { refreshSpec } from '../world/factory'
 import { veteranWorld } from '../../testkit'
-import { AURORA_ONE, HERMES, PERSEUS } from '../../config/chassis'
+import { AURORA_ONE, HERMES } from '../../config/chassis'
 import {
   BOMB_UNIT,
   CARGO_LARGE,
@@ -73,15 +73,15 @@ describe('перестановка железа из трюма', () => {
 
 /**
  * Класс гейтит КОРПУС, а не отдельный слот: железо выше класса рамы не встаёт,
- * какой бы слот под него ни был. Груз — бесклассовый и лезет всегда. «Арес»
- * (HERMES) класса 2 — на нём это и проверяем.
+ * какой бы слот под него ни был. Груз — бесклассовый и лезет всегда. «Ника»
+ * класса 2 — на ней это и проверяем: дорогие рамы класс 3 уже принимают.
  */
 describe('класс корпуса ограничивает железо', () => {
   it('модуль класса выше корпуса — отказ, свой класс и ниже — встаёт', () => {
-    const bare = createLoadout(PERSEUS, [], []) // класс корпуса 2
+    const bare = createLoadout(AURORA_ONE, [], [])
     // SHIELD_STANDARD класса 2 — ровно по корпусу, слот щита есть.
     expect(canInstallInternal(bare, SHIELD_STANDARD)).toBeNull()
-    // SHIELD_HEAVY класса 3 — выше класса «Ареса», не по корпусу.
+    // SHIELD_HEAVY класса 3 — выше «Ники», не по корпусу.
     expect(canInstallInternal(bare, SHIELD_HEAVY)).toBe('class-too-large')
   })
 

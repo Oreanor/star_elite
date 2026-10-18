@@ -1,3 +1,4 @@
+import { listPrice } from './pricing'
 import { RAYS } from './weapons'
 import { GALAXY } from './galaxy'
 import type {
@@ -24,6 +25,10 @@ import type {
  * Числа подобраны так, чтобы апгрейд был выбором, а не улучшением по всем осям:
  * мощный щит тяжёл и режет манёвренность, военные маневровые дороги и прожорливы
  * по массе, большой трюм превращает боевой корабль в мишень.
+ *
+ * Градация одна на весь каталог. Линейка — характер обмена (дёшево и тяжело, середина,
+ * легко и дорого, максимум стата). Буква внутри класса — шаг по линейке: старше значит
+ * мощнее, тяжелее и дороже. Класс рамы решает, какой потолок вообще встанет.
  */
 
 // ─── Двигатели ───────────────────────────────────────────────────────────────
@@ -66,7 +71,7 @@ export const ENGINE_MILITARY: EngineModule = {
   name: 'Двигатель 3A «Военный»',
   kind: 'engine',
   class: 3,
-  mass: 3, // тяжёлый: часть выигрыша съедает собственная масса
+  mass: 5, // тяжелее входного 3C: часть выигрыша съедает собственная масса
   cost: 76000,
   salvageChance: 0.15,
   thrust: 551,
@@ -103,7 +108,7 @@ const ENGINE_STANDARD_B: EngineModule = {
   name: 'Двигатель 2B «Стандарт»',
   kind: 'engine',
   class: 2,
-  mass: 2,
+  mass: 3,
   cost: 34000,
   salvageChance: 0.3,
   thrust: 360,
@@ -122,7 +127,7 @@ const ENGINE_SWIFT: EngineModule = {
   name: 'Двигатель 2A «Стриж»',
   kind: 'engine',
   class: 2,
-  mass: 2, // легче даже стокового 2C — в этом весь смысл линии
+  mass: 1, // легче стокового 2C — в этом весь смысл линии
   cost: 52000,
   salvageChance: 0.25,
   thrust: 348,
@@ -138,9 +143,9 @@ const ENGINE_SWIFT_B: EngineModule = {
   name: 'Двигатель 3B «Стриж»',
   kind: 'engine',
   class: 3,
-  // Легче военного 3A (3.4), но не легче собственного младшего 2A: старший класс —
-  // более крупное железо. Премиальность линии оплачивается ценой, а не нарушением массы.
-  mass: 3,
+  // Легче военного 3A, но тяжелее собственного младшего 2A: старший класс — более
+  // крупное железо. Премиальность линии оплачивается ценой, а не нарушением массы.
+  mass: 2,
   cost: 124000,
   salvageChance: 0.1,
   thrust: 522,
@@ -154,7 +159,7 @@ const ENGINE_SWIFT_B: EngineModule = {
 // «Военный» — предельная тяга, тяжёлая и дорогая. 3C — входной военный: сырой тяги
 // в нём меньше, чем в топовом 3A, зато и цена, и масса ниже. Внутри линии старший
 // грейд и тяжелее, и мощнее, и дороже — тяга не бывает бесплатной.
-const ENGINE_MILITARY_C: EngineModule = {
+export const ENGINE_MILITARY_C: EngineModule = {
   id: 'engine_3c',
   name: 'Двигатель 3C «Военный»',
   kind: 'engine',
@@ -212,7 +217,7 @@ export const RCS_MILITARY: ThrusterModule = {
   name: 'Маневровые 3A «Военные»',
   kind: 'thrusters',
   class: 3,
-  mass: 2,
+  mass: 3, // старше 3C и тяжелее: потолок момента не бесплатен
   cost: 62000,
   salvageChance: 0.15,
   lateralThrust: 340,
@@ -243,7 +248,7 @@ const RCS_STANDARD_B: ThrusterModule = {
   name: 'Маневровые 2B «Стандарт»',
   kind: 'thrusters',
   class: 2,
-  mass: 1,
+  mass: 2,
   cost: 30000,
   salvageChance: 0.3,
   lateralThrust: 275,
@@ -287,7 +292,7 @@ const RCS_VORTEX_B: ThrusterModule = {
 
 // «Военные» — предельный момент, тяжёлые и дорогие. 3C — входной: слабее топового
 // 3A и по моменту, и по лимитам, зато легче и вдвое дешевле. Старший грейд тяжелее.
-const RCS_MILITARY_C: ThrusterModule = {
+export const RCS_MILITARY_C: ThrusterModule = {
   id: 'rcs_3c',
   name: 'Маневровые 3C «Военные»',
   kind: 'thrusters',
@@ -359,7 +364,7 @@ const SHIELD_LIGHT_D: ShieldModule = {
 }
 
 // «Стандарт» — рабочая лошадка. 2B поверх 2C: больше ёмкости, но и массы, и цены.
-const SHIELD_STANDARD_B: ShieldModule = {
+export const SHIELD_STANDARD_B: ShieldModule = {
   id: 'shield_2b',
   name: 'Щит 2B',
   kind: 'shield',
@@ -403,7 +408,7 @@ const SHIELD_MIRAGE_B: ShieldModule = {
 
 // «Бастион» — тяжёлая ёмкая стена. 3C — входной: ёмкости меньше топового 3A, зато
 // легче и дешевле. Старший грейд и тяжелее, и ёмче, и дороже — защита не даром.
-const SHIELD_HEAVY_C: ShieldModule = {
+export const SHIELD_HEAVY_C: ShieldModule = {
   id: 'shield_3c',
   name: 'Щит 3C «Бастион»',
   kind: 'shield',
@@ -443,7 +448,7 @@ export const ARMOUR_COMPOSITE: ArmourModule = {
 // «Сталь» — дешёвый мясистый прокат: прочности за кредит много, но масса зверская.
 // «Бронеплиты» выше — её младший грейд. 2D и 3C дают корпуса больше композита за
 // меньшие деньги, и вся разница уходит в тонны — а тонны это потерянный манёвр.
-const ARMOUR_STEEL_2: ArmourModule = {
+export const ARMOUR_STEEL_2: ArmourModule = {
   id: 'armour_2d',
   name: 'Броня 2D «Сталь»',
   kind: 'armour',
@@ -892,7 +897,7 @@ const MISSILE_HOMING: MissileModule = {
   lifetime: 12,
 }
 
-const MISSILE_HEAVY: MissileModule = {
+export const MISSILE_HEAVY: MissileModule = {
   id: 'missile_2',
   name: 'Ракета «Молот»',
   kind: 'missile',
@@ -1021,10 +1026,9 @@ const MISSILE_SLEDGE: MissileModule = {
 
 // ─── Трюм ────────────────────────────────────────────────────────────────────
 //
-// Контейнеры БЕСКЛАССОВЫ: любой грузовой слот принимает любой. Линейка ОДНА и простая —
-// 10 / 20 / 30 / 50 / 100 т: в магазине прежде было три линии с буквами (стандарт, «Композит»,
-// «Балкер»), и выбрать трюм было нельзя без таблицы. Теперь разница только в размере, а
-// крупный выгоднее: тонна вместимости дешевеет с ростом контейнера. Сам контейнер весит
+// Контейнеры БЕСКЛАССОВЫ: любой грузовой слот принимает любой. Линейка ОДНА —
+// 10 / 20 / 30 / 50 / 100 т. Цена не скидка за опт, а та же формула, что у остального
+// железа: сколько тонн груза приходится на тонну самого контейнера. Сам контейнер весит
 // (целыми тоннами, как всё оборудование) и ест бюджет корпуса.
 // (Поле `class` держим на 1, чтобы контейнер влезал в слот любого класса.)
 
@@ -1104,7 +1108,7 @@ export const HYPERDRIVE_BASIC: HyperdriveModule = {
   jumpRange: GALAXY.BASE_JUMP_RANGE,
 }
 
-const HYPERDRIVE_LONG: HyperdriveModule = {
+export const HYPERDRIVE_LONG: HyperdriveModule = {
   id: 'hyper_2',
   name: 'Гиперпривод 2C «Меридиан»',
   kind: 'hyperdrive',
@@ -1155,7 +1159,7 @@ const HYPERDRIVE_COMPACT_B: HyperdriveModule = {
 // «Тягач» — дешёвый тяжёлый привод. Дальность почти как у дорогих собратьев за
 // малые деньги, но масса огромна. Для баржи это идеал: разворот ей и так не нужен,
 // а на боевом корпусе такой привод — гиря, съедающая манёвр целиком.
-const HYPERDRIVE_HAULER: HyperdriveModule = {
+export const HYPERDRIVE_HAULER: HyperdriveModule = {
   id: 'hyper_2h',
   name: 'Гиперпривод 2E «Тягач»',
   kind: 'hyperdrive',
@@ -1166,7 +1170,7 @@ const HYPERDRIVE_HAULER: HyperdriveModule = {
   jumpRange: 45,
 }
 
-const HYPERDRIVE_HAULER_B: HyperdriveModule = {
+export const HYPERDRIVE_HAULER_B: HyperdriveModule = {
   id: 'hyper_3h',
   name: 'Гиперпривод 3E «Тягач»',
   kind: 'hyperdrive',
@@ -1361,39 +1365,597 @@ const SCOOP_UNIT: ScoopModule = {
   salvageChance: 0.5,
 }
 
+// Недостающие клетки той же сетки: у линейки есть класс, которого не было, и внутри
+// класса масса с ценой расходятся хотя бы на тонну и в полтора раза по кредитам.
+// Буква A по-прежнему вершина — её сюда не добавляем туда, где она уже стоит.
+
+const ENGINE_STANDARD_1: EngineModule = {
+  id: 'engine_1c',
+  name: 'Двигатель 1C «Стандарт»',
+  kind: 'engine',
+  class: 1,
+  mass: 2,
+  cost: 14000,
+  salvageChance: 0.45,
+  thrust: 260,
+  maxSpeed: 205,
+  optimalMass: 12,
+  boostMult: 2.2,
+  energy: 100,
+  energyRegen: 6,
+}
+
+const ENGINE_SWIFT_1: EngineModule = {
+  id: 'engine_1a',
+  name: 'Двигатель 1A «Стриж»',
+  kind: 'engine',
+  class: 1,
+  mass: 1, // тяги меньше, чем у 1C, зато тонна вместо двух
+  cost: 36000,
+  salvageChance: 0.3,
+  thrust: 240,
+  maxSpeed: 215,
+  optimalMass: 12,
+  boostMult: 2.3,
+  energy: 100,
+  energyRegen: 7,
+}
+
+const ENGINE_CIVILIAN_2: EngineModule = {
+  id: 'engine_2e',
+  name: 'Двигатель 2E «Гражданский»',
+  kind: 'engine',
+  class: 2,
+  mass: 4, // вдвое тяжелее «Стандарта» 2C
+  cost: 11000, // и заметно дешевле его
+  salvageChance: 0.45,
+  thrust: 290, // тяга ниже 312 у 2C: дёшево не бывает быстро
+  maxSpeed: 200,
+  optimalMass: 14,
+  boostMult: 2.1,
+  energy: 100,
+  energyRegen: 6,
+}
+
+const ENGINE_MILITARY_2: EngineModule = {
+  id: 'engine_2d',
+  name: 'Двигатель 2D «Военный»',
+  kind: 'engine',
+  class: 2,
+  mass: 3,
+  cost: 42000, // дешевле лёгкого «Стрижа», тяжелее «Стандарта»
+  salvageChance: 0.25,
+  thrust: 410,
+  maxSpeed: 235,
+  optimalMass: 15,
+  boostMult: 2.5,
+  energy: 140,
+  energyRegen: 8,
+}
+
+const ENGINE_CIVILIAN_3: EngineModule = {
+  id: 'engine_3e',
+  name: 'Двигатель 3E «Гражданский»',
+  kind: 'engine',
+  class: 3,
+  mass: 6, // самый тяжёлый двигатель каталога
+  cost: 28000, // вход в класс 3 за треть цены вершины
+  salvageChance: 0.3,
+  thrust: 450,
+  maxSpeed: 230,
+  optimalMass: 16,
+  boostMult: 2.3,
+  energy: 130,
+  energyRegen: 8,
+}
+
+const ENGINE_STANDARD_3: EngineModule = {
+  id: 'engine_3d',
+  name: 'Двигатель 3D «Стандарт»',
+  kind: 'engine',
+  class: 3,
+  mass: 4,
+  cost: 68000,
+  salvageChance: 0.2,
+  thrust: 510,
+  maxSpeed: 255,
+  optimalMass: 16,
+  boostMult: 2.6,
+  energy: 150,
+  energyRegen: 9,
+}
+
+const RCS_STANDARD_1: ThrusterModule = {
+  id: 'rcs_1c',
+  name: 'Маневровые 1C «Стандарт»',
+  kind: 'thrusters',
+  class: 1,
+  mass: 2,
+  cost: 12000,
+  salvageChance: 0.45,
+  lateralThrust: 220,
+  torque: [46, 29, 122],
+  maxRate: [1.78, 1.04, 2.95],
+  angDamp: 1.9,
+}
+
+const RCS_VORTEX_1: ThrusterModule = {
+  id: 'rcs_1a',
+  name: 'Маневровые 1A «Вихрь»',
+  kind: 'thrusters',
+  class: 1,
+  mass: 1,
+  cost: 24000, // момент ниже 1C, платят за тонну
+  salvageChance: 0.3,
+  lateralThrust: 205,
+  torque: [44, 28, 118],
+  maxRate: [1.9, 1.1, 3.1],
+  angDamp: 2.0,
+}
+
+const RCS_CIVILIAN_2: ThrusterModule = {
+  id: 'rcs_2e',
+  name: 'Маневровые 2E «Гражданский»',
+  kind: 'thrusters',
+  class: 2,
+  mass: 3,
+  cost: 8000,
+  salvageChance: 0.45,
+  lateralThrust: 210,
+  torque: [44, 28, 116],
+  maxRate: [1.72, 1.0, 2.9],
+  angDamp: 1.9,
+}
+
+const RCS_MILITARY_2: ThrusterModule = {
+  id: 'rcs_2d',
+  name: 'Маневровые 2D «Военные»',
+  kind: 'thrusters',
+  class: 2,
+  mass: 2,
+  cost: 36000,
+  salvageChance: 0.25,
+  lateralThrust: 300,
+  torque: [62, 39, 160],
+  maxRate: [2.15, 1.24, 3.4], // ниже потолка 3A: перекрутить игрока нельзя
+  angDamp: 2.1,
+}
+
+const RCS_CIVILIAN_3: ThrusterModule = {
+  id: 'rcs_3e',
+  name: 'Маневровые 3E «Гражданский»',
+  kind: 'thrusters',
+  class: 3,
+  mass: 4,
+  cost: 22000,
+  salvageChance: 0.3,
+  lateralThrust: 280,
+  torque: [58, 36, 150],
+  maxRate: [2.0, 1.15, 3.2],
+  angDamp: 2.0,
+}
+
+const RCS_STANDARD_3: ThrusterModule = {
+  id: 'rcs_3d',
+  name: 'Маневровые 3D «Стандарт»',
+  kind: 'thrusters',
+  class: 3,
+  mass: 2,
+  cost: 70000,
+  salvageChance: 0.2,
+  lateralThrust: 300,
+  torque: [66, 41, 168],
+  maxRate: [2.25, 1.28, 3.55],
+  angDamp: 2.2,
+}
+
+const SHIELD_STANDARD_1: ShieldModule = {
+  id: 'shield_1c',
+  name: 'Щит 1C',
+  kind: 'shield',
+  class: 1,
+  mass: 2,
+  cost: 16000,
+  salvageChance: 0.45,
+  capacity: 240,
+  regen: 3.2,
+  regenDelay: 4.6,
+}
+
+const SHIELD_MIRAGE_1: ShieldModule = {
+  id: 'shield_1a',
+  name: 'Щит 1A «Мираж»',
+  kind: 'shield',
+  class: 1,
+  mass: 1, // ёмкости меньше, чем у 1C, регенерация выше
+  cost: 28000,
+  salvageChance: 0.3,
+  capacity: 175,
+  regen: 4.8,
+  regenDelay: 3.2,
+}
+
+export const SHIELD_CIVILIAN_2: ShieldModule = {
+  id: 'shield_2e',
+  name: 'Щит 2E',
+  kind: 'shield',
+  class: 2,
+  mass: 3,
+  cost: 9000,
+  salvageChance: 0.45,
+  capacity: 280, // меньше стокового 2C (325)
+  regen: 3.5,
+  regenDelay: 5.2,
+}
+
+const SHIELD_CIVILIAN_3: ShieldModule = {
+  id: 'shield_3e',
+  name: 'Щит 3E',
+  kind: 'shield',
+  class: 3,
+  mass: 5,
+  cost: 24000,
+  salvageChance: 0.3,
+  capacity: 480, // меньше входного «Бастиона» 3C
+  regen: 6,
+  regenDelay: 5.5,
+}
+
+const SHIELD_STANDARD_3: ShieldModule = {
+  id: 'shield_3d',
+  name: 'Щит 3D',
+  kind: 'shield',
+  class: 3,
+  mass: 3,
+  cost: 72000,
+  salvageChance: 0.2,
+  capacity: 640,
+  regen: 7.5, // ёмкости больше 3C, регенерация меньше: не замена, а другой размен
+  regenDelay: 4.4,
+}
+
+const ARMOUR_STEEL_1: ArmourModule = {
+  id: 'armour_1d',
+  name: 'Броня 1D «Сталь»',
+  kind: 'armour',
+  class: 1,
+  mass: 3,
+  cost: 6000,
+  salvageChance: 0.5,
+  hull: 160, // больше плит и «Керамета» 1C, и тяжелее обоих
+}
+
+const ARMOUR_COMPOSITE_1: ArmourModule = {
+  id: 'armour_1b',
+  name: 'Броня 1B «Композит»',
+  kind: 'armour',
+  class: 1,
+  mass: 2,
+  cost: 14000,
+  salvageChance: 0.45,
+  hull: 120,
+}
+
+const ARMOUR_STEEL_2E: ArmourModule = {
+  id: 'armour_2e',
+  name: 'Броня 2E «Сталь»',
+  kind: 'armour',
+  class: 2,
+  mass: 5,
+  cost: 14000,
+  salvageChance: 0.45,
+  hull: 300, // меньше 2D, ещё тяжелее и дешевле
+}
+
+const ARMOUR_STEEL_3D: ArmourModule = {
+  id: 'armour_3d',
+  name: 'Броня 3D «Сталь»',
+  kind: 'armour',
+  class: 3,
+  mass: 6,
+  cost: 40000,
+  salvageChance: 0.25,
+  hull: 640,
+}
+
+const ARMOUR_COMPOSITE_3: ArmourModule = {
+  id: 'armour_3b',
+  name: 'Броня 3B «Композит»',
+  kind: 'armour',
+  class: 3,
+  mass: 4, // легче стали 3C, тяжелее «Керамета» 3A
+  cost: 90000,
+  salvageChance: 0.2,
+  hull: 640,
+}
+
+const ARMOUR_CERAMET_3B: ArmourModule = {
+  id: 'armour_3k',
+  name: 'Броня 3B «Керамет»',
+  kind: 'armour',
+  class: 3,
+  mass: 2,
+  cost: 110000, // меньше корпуса, чем у 3A, и легче — платят ценой
+  salvageChance: 0.15,
+  hull: 540,
+}
+
+const PULSE_LASER_2B: LaserModule = {
+  id: 'pulse_2b',
+  name: 'Импульсный лазер 2B',
+  kind: 'laser',
+  class: 2,
+  mass: 1,
+  cost: 28000,
+  salvageChance: 0.3,
+  damage: 15,
+  range: 4000,
+  cooldown: 0.2, // ~75/с — всё ещё слабее любого луча того же класса
+  heatPerShot: 0.11,
+  heatCool: 0.28,
+}
+
+const PULSE_LASER_3C: LaserModule = {
+  id: 'pulse_3c',
+  name: 'Импульсный лазер 3C',
+  kind: 'laser',
+  class: 3,
+  mass: 2,
+  cost: 48000,
+  salvageChance: 0.25,
+  damage: 20,
+  range: 4000,
+  cooldown: 0.22,
+  heatPerShot: 0.12,
+  heatCool: 0.26,
+}
+
+const PULSE_LASER_3: LaserModule = {
+  id: 'pulse_3',
+  name: 'Импульсный лазер 3B',
+  kind: 'laser',
+  class: 3,
+  mass: 1,
+  cost: 90000,
+  salvageChance: 0.18,
+  damage: 22,
+  range: 4000,
+  cooldown: 0.18, // ~122/с, ниже входного луча 3C
+  heatPerShot: 0.12,
+  heatCool: 0.28,
+}
+
+const BEAM_LASER_2C: LaserModule = {
+  id: 'beam_2c',
+  name: 'Лучевой лазер 2C',
+  kind: 'laser',
+  class: 2,
+  mass: 2,
+  cost: 28000, // дешевле «Лучевого 2», горячее и слабее
+  salvageChance: 0.3,
+  beam: true,
+  damage: 110,
+  range: 4000,
+  cooldown: 0,
+  heatPerShot: 0.26,
+  heatCool: 0.2,
+}
+
+const BEAM_LASER_3C: LaserModule = {
+  id: 'beam_3c',
+  name: 'Лучевой лазер 3C',
+  kind: 'laser',
+  class: 3,
+  mass: 2,
+  cost: 80000,
+  salvageChance: 0.18,
+  beam: true,
+  damage: 170, // выше любого импульсного 3-го класса, ниже «Клинка»
+  range: 4000,
+  cooldown: 0,
+  heatPerShot: 0.28,
+  heatCool: 0.2,
+}
+
+const ROTARY_LASER_3: LaserModule = {
+  id: 'rotary_3',
+  name: 'Роторный лазер 3 «Шквал»',
+  kind: 'laser',
+  class: 3,
+  mass: 2,
+  cost: 70000,
+  salvageChance: 0.2,
+  damage: 7, // мелко: плазма того же каталога бьёт больше чем впятеро за выстрел
+  range: 4000,
+  cooldown: 0.05,
+  heatPerShot: 0.13,
+  heatCool: 0.34,
+}
+
+const PLASMA_GUN_1: LaserModule = {
+  id: 'plasma_1',
+  name: 'Плазменное орудие 1 «Игла»',
+  kind: 'laser',
+  class: 1,
+  mass: 2,
+  cost: 18000,
+  salvageChance: 0.35,
+  damage: 40,
+  range: 4000,
+  cooldown: 1.1,
+  heatPerShot: 0.28,
+  heatCool: 0.18,
+}
+
+const MISSILE_HAMMER_E: MissileModule = {
+  id: 'missile_2e',
+  name: 'Ракета 2E «Молот»',
+  kind: 'missile',
+  class: 2,
+  mass: 3,
+  cost: 22000,
+  salvageChance: 0.25,
+  ammo: 3,
+  damage: 300,
+  speed: 400,
+  armTime: 0.26,
+  boostTime: 0.72,
+  turnRate: 0.8,
+  seekerRate: 1.35,
+  lifetime: 13,
+}
+
+const MISSILE_HORNET_3: MissileModule = {
+  id: 'missile_3p',
+  name: 'Ракета 3C «Оса»',
+  kind: 'missile',
+  class: 3,
+  mass: 3,
+  cost: 48000,
+  salvageChance: 0.2,
+  ammo: 2,
+  damage: 640,
+  speed: 540,
+  armTime: 0.2,
+  boostTime: 0.6,
+  turnRate: 1.15,
+  seekerRate: 2.2,
+  lifetime: 12,
+}
+
+const MISSILE_SEEKER_3: MissileModule = {
+  id: 'missile_3b',
+  name: 'Ракета 3B «Гончая»',
+  kind: 'missile',
+  class: 3,
+  mass: 2,
+  cost: 90000,
+  salvageChance: 0.16,
+  ammo: 5,
+  damage: 280,
+  speed: 520,
+  armTime: 0.16,
+  boostTime: 0.55,
+  turnRate: 1.2,
+  seekerRate: 3.4,
+  lifetime: 13,
+}
+
+const MISSILE_HAMMER_3: MissileModule = {
+  id: 'missile_3e',
+  name: 'Ракета 3E «Кувалда»',
+  kind: 'missile',
+  class: 3,
+  mass: 4,
+  cost: 70000,
+  salvageChance: 0.14,
+  ammo: 2,
+  damage: 700,
+  speed: 380,
+  armTime: 0.32,
+  boostTime: 0.85,
+  turnRate: 0.7,
+  seekerRate: 1.2,
+  lifetime: 16,
+}
+
+const HYPERDRIVE_HAULER_1: HyperdriveModule = {
+  id: 'hyper_1h',
+  name: 'Гиперпривод 1E «Тягач»',
+  kind: 'hyperdrive',
+  class: 1,
+  mass: 4,
+  cost: 6000,
+  salvageChance: 0.3,
+  jumpRange: 22, // короче соседского шага: дёшево, но не из каждой системы
+}
+
+const HYPERDRIVE_BASIC_C: HyperdriveModule = {
+  id: 'hyper_1c',
+  name: 'Гиперпривод 1C «Аркан»',
+  kind: 'hyperdrive',
+  class: 1,
+  mass: 2,
+  cost: 60000,
+  salvageChance: 0.18,
+  jumpRange: 32,
+}
+
+const HYPERDRIVE_LONG_E: HyperdriveModule = {
+  id: 'hyper_2e',
+  name: 'Гиперпривод 2E «Меридиан»',
+  kind: 'hyperdrive',
+  class: 2,
+  mass: 5,
+  cost: 48000,
+  salvageChance: 0.16,
+  jumpRange: 36, // между соседским 1E и рабочим 2C, зато очень тяжёлый
+}
+
+const HYPERDRIVE_LONG_C: HyperdriveModule = {
+  id: 'hyper_3c',
+  name: 'Гиперпривод 3C «Меридиан»',
+  kind: 'hyperdrive',
+  class: 3,
+  mass: 4,
+  cost: 180000,
+  salvageChance: 0.1,
+  jumpRange: 70,
+}
+
+const HYPERDRIVE_SWIFT_3: HyperdriveModule = {
+  id: 'hyper_3b',
+  name: 'Гиперпривод 3B «Стриж»',
+  kind: 'hyperdrive',
+  class: 3,
+  mass: 2, // легче «Дальнего», дальность заметно меньше — платят за тонны
+  cost: 680000,
+  salvageChance: 0.06,
+  jumpRange: 62,
+}
+
 export const MODULE_CATALOGUE: readonly ShipModule[] = [
-  ENGINE_CIVILIAN, ENGINE_CIVILIAN_D,
-  ENGINE_STANDARD, ENGINE_STANDARD_B,
+  ENGINE_CIVILIAN, ENGINE_CIVILIAN_D, ENGINE_STANDARD_1, ENGINE_SWIFT_1,
+  ENGINE_CIVILIAN_2, ENGINE_STANDARD, ENGINE_STANDARD_B, ENGINE_MILITARY_2,
   ENGINE_SWIFT, ENGINE_SWIFT_B,
-  ENGINE_MILITARY_C, ENGINE_MILITARY,
-  RCS_CIVILIAN, RCS_CIVILIAN_D,
-  RCS_STANDARD, RCS_STANDARD_B,
+  ENGINE_CIVILIAN_3, ENGINE_MILITARY_C, ENGINE_STANDARD_3, ENGINE_MILITARY,
+  RCS_CIVILIAN, RCS_CIVILIAN_D, RCS_STANDARD_1, RCS_VORTEX_1,
+  RCS_CIVILIAN_2, RCS_STANDARD, RCS_STANDARD_B, RCS_MILITARY_2,
   RCS_VORTEX, RCS_VORTEX_B,
-  RCS_MILITARY_C, RCS_MILITARY,
-  SHIELD_LIGHT, SHIELD_LIGHT_D,
-  SHIELD_STANDARD, SHIELD_STANDARD_B,
+  RCS_CIVILIAN_3, RCS_MILITARY_C, RCS_STANDARD_3, RCS_MILITARY,
+  SHIELD_LIGHT, SHIELD_LIGHT_D, SHIELD_STANDARD_1, SHIELD_MIRAGE_1,
+  SHIELD_CIVILIAN_2, SHIELD_STANDARD, SHIELD_STANDARD_B,
   SHIELD_MIRAGE, SHIELD_MIRAGE_B,
-  SHIELD_HEAVY_C, SHIELD_HEAVY,
-  ARMOUR_PLATE, ARMOUR_STEEL_2, ARMOUR_STEEL_3,
-  ARMOUR_COMPOSITE, ARMOUR_COMPOSITE_B,
-  ARMOUR_CERAMET_1, ARMOUR_CERAMET_2, ARMOUR_CERAMET_3,
-  PULSE_LASER_WORN, PULSE_LASER, PULSE_LASER_FINE, PULSE_LASER_CENTRAL, BURST_LASER,
-  BEAM_LASER_LIGHT, BEAM_LASER, BEAM_LASER_HEAVY,
-  ROTARY_LASER, ROTARY_LASER_B,
-  PLASMA_GUN, PLASMA_GUN_HEAVY,
+  SHIELD_CIVILIAN_3, SHIELD_HEAVY_C, SHIELD_STANDARD_3, SHIELD_HEAVY,
+  ARMOUR_PLATE, ARMOUR_STEEL_1, ARMOUR_COMPOSITE_1, ARMOUR_CERAMET_1,
+  ARMOUR_STEEL_2E, ARMOUR_STEEL_2, ARMOUR_COMPOSITE, ARMOUR_COMPOSITE_B, ARMOUR_CERAMET_2,
+  ARMOUR_STEEL_3D, ARMOUR_STEEL_3, ARMOUR_COMPOSITE_3, ARMOUR_CERAMET_3B, ARMOUR_CERAMET_3,
+  PULSE_LASER_WORN, PULSE_LASER, PULSE_LASER_FINE, PULSE_LASER_CENTRAL, BURST_LASER, PULSE_LASER_2B,
+  PULSE_LASER_3C, PULSE_LASER_3,
+  BEAM_LASER_LIGHT, BEAM_LASER_2C, BEAM_LASER, BEAM_LASER_3C, BEAM_LASER_HEAVY,
+  ROTARY_LASER, ROTARY_LASER_B, ROTARY_LASER_3,
+  PLASMA_GUN_1, PLASMA_GUN, PLASMA_GUN_HEAVY,
   MINING_LASER, SHRINK_RAY, GROW_RAY, HOLD_RAY,
   MISSILE_STING, MISSILE_PYLON, MISSILE_WASP,
   MISSILE_SWARM, MISSILE_HOMING, MISSILE_HOUND,
-  MISSILE_HEAVY, MISSILE_SLEDGE,
+  MISSILE_HAMMER_E, MISSILE_HEAVY, MISSILE_SLEDGE,
+  MISSILE_HORNET_3, MISSILE_SEEKER_3, MISSILE_HAMMER_3,
   CARGO_SMALL, CARGO_MEDIUM, CARGO_LARGE, CARGO_HUGE, CARGO_GIANT,
-  HYPERDRIVE_BASIC, HYPERDRIVE_LONG, HYPERDRIVE_DEEP,
-  HYPERDRIVE_COMPACT, HYPERDRIVE_COMPACT_B,
+  HYPERDRIVE_HAULER_1, HYPERDRIVE_BASIC, HYPERDRIVE_BASIC_C,
+  HYPERDRIVE_LONG_E, HYPERDRIVE_LONG, HYPERDRIVE_LONG_C, HYPERDRIVE_DEEP,
+  HYPERDRIVE_COMPACT, HYPERDRIVE_COMPACT_B, HYPERDRIVE_SWIFT_3,
   HYPERDRIVE_HAULER, HYPERDRIVE_HAULER_B,
   CLOAK_FIELD, CLOAK_HAZE, CLOAK_SPECTRE,
   DRONE_BAY, DRONE_BAY_LIGHT, DRONE_BAY_HEAVY,
   MIELOPHONE_DEVICE,
   ECM_UNIT, BOMB_UNIT, SCOOP_UNIT,
 ]
+
+// Цена в литералах выше не действует: её считает формула характеристики на тонну.
+for (const module of MODULE_CATALOGUE) {
+  if (module.kind === 'mielophone') continue
+  module.cost = listPrice(module)
+}
 
 /**
  * Снятые из каталога модули → их замена. Сейв хранит id: без этой карты старый «Композит»

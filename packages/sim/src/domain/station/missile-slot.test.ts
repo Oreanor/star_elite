@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { veteranWorld } from '../../testkit'
 import { auroraOneLoadout } from '../../config/loadouts'
-import { DRONE_BAY, MISSILE_PYLON } from '../../config/modules'
+import { DRONE_BAY } from '../../config/modules'
 import { isDrone, isMissile } from '../loadout'
 import { createWorld } from '../world'
 import { refreshSpec } from '../world/factory'
@@ -62,7 +62,9 @@ describe('ракетный (мунишн) слот', () => {
   it('тот же тип на всех пилонах повторно не ставится', () => {
     const world = missileWorld()
     world.credits = 10_000_000
-    expect(armMissiles(world, world.player, MISSILE_PYLON)).toBe('already-installed')
+    const fitted = installedMissile(world.player)
+    expect(fitted).not.toBeNull()
+    expect(armMissiles(world, world.player, fitted!)).toBe('already-installed')
   })
 
   it('дрон-ракеты встают ВЗАМЕН обычных: слот держит один тип', () => {

@@ -2,7 +2,10 @@ import { createLoadout, type Chassis, type Loadout } from './schema'
 import type { Government } from './galaxy'
 import { ATHENA, ATLAS, AURORA_ONE, HERMES, ICARUS, ORION, PEGASUS, PERSEUS, SPIRITUS_SANCTUS, THESEUS } from './chassis'
 import {
+  ARMOUR_COMPOSITE,
   ARMOUR_PLATE,
+  ARMOUR_STEEL_2,
+  ARMOUR_STEEL_3,
   BEAM_LASER,
   BEAM_LASER_HEAVY,
   BURST_LASER,
@@ -12,17 +15,26 @@ import {
   CARGO_LARGE,
   CARGO_SMALL,
   ENGINE_CIVILIAN,
+  ENGINE_MILITARY_C,
   ENGINE_STANDARD,
   HYPERDRIVE_BASIC,
   HYPERDRIVE_COMPACT,
+  HYPERDRIVE_HAULER,
+  HYPERDRIVE_HAULER_B,
+  HYPERDRIVE_LONG,
+  MISSILE_HEAVY,
   MISSILE_PYLON,
   PULSE_LASER,
   PULSE_LASER_CENTRAL,
   PULSE_LASER_WORN,
   RCS_CIVILIAN,
+  RCS_MILITARY_C,
   RCS_STANDARD,
+  SHIELD_CIVILIAN_2,
+  SHIELD_HEAVY_C,
   SHIELD_LIGHT,
   SHIELD_STANDARD,
+  SHIELD_STANDARD_B,
 } from './modules'
 
 /**
@@ -144,56 +156,76 @@ export function freighterLoadout(): Loadout {
  * купив, тут же летит — а не собирает корабль из пустых слотов.
  */
 
-/** «Ника» — серийный корпус на верфи. */
+/** «Ника» — серийный корпус на верфи. Середина класса 2, не «Стриж» и не «Керамет». */
 export function auroraOneLoadout(): Loadout {
   return createLoadout(
     AURORA_ONE,
-    [ENGINE_STANDARD, RCS_STANDARD, SHIELD_STANDARD, ARMOUR_PLATE, CARGO_SMALL, HYPERDRIVE_BASIC],
-    // Пара пилонов снаряжена, как и у стартовой сборки.
-    [PULSE_LASER, PULSE_LASER, null, MISSILE_PYLON, MISSILE_PYLON],
+    [ENGINE_STANDARD, RCS_STANDARD, SHIELD_STANDARD_B, ARMOUR_COMPOSITE, CARGO_SMALL, HYPERDRIVE_LONG],
+    [BURST_LASER, BURST_LASER, null, MISSILE_HEAVY, MISSILE_HEAVY],
   )
 }
 
 /**
- * Стоковые сборки истребителей-GLB (Гермес/Персей/Пегас/Орион). Раскладка одна: спаренный
- * лазер + два пилона; корпус и привод — по классу. Отличаются шасси (масса, живучесть, вёрткость).
+ * Заводская сборка — начальный или средний грейд СВОЕГО класса рамы, никогда буква A.
+ * Вершины («Военный» 3A, «Бастион», «Клинок», «Дальний») остаются покупкой. Стволы
+ * класса 3 в каталоге и есть эти вершины, поэтому с завода стоит импульсный 2.
+ * Оружие — по номерам точек: три орудия, затем два пилона.
  */
-function fighterLoadout(chassis: Chassis): Loadout {
+/** «Икар» — низ класса 2: сталь 2D и тяжёлый «Тягач», не середина. */
+export function icarusLoadout(): Loadout {
   return createLoadout(
-    chassis,
-    [ENGINE_STANDARD, RCS_STANDARD, SHIELD_LIGHT, ARMOUR_PLATE, CARGO_SMALL, HYPERDRIVE_COMPACT],
-    // Оружие — ПО НОМЕРАМ точек: у истребителей три орудийные, затем два пилона. Прежде
-    // [лазер, ракета, ракета] сажало ракеты на орудийные точки, а пилоны пустели.
-    [PULSE_LASER, null, null, MISSILE_PYLON, MISSILE_PYLON],
+    ICARUS,
+    [ENGINE_STANDARD, RCS_STANDARD, SHIELD_CIVILIAN_2, ARMOUR_STEEL_2, CARGO_SMALL, HYPERDRIVE_HAULER],
+    [BURST_LASER, null, null, MISSILE_HEAVY, null],
   )
 }
-/** «Гермес» — лёгкий скороход. */
-export function hermesLoadout(): Loadout {
-  return fighterLoadout(HERMES)
-}
-/** «Персей» — сбалансированный перехватчик. */
-export function perseusLoadout(): Loadout {
-  return fighterLoadout(PERSEUS)
-}
-/** «Пегас» — вёрткий, с трюмом. */
-export function pegasusLoadout(): Loadout {
-  return fighterLoadout(PEGASUS)
-}
-/** «Орион» — тяжёлый истребитель. */
-export function orionLoadout(): Loadout {
-  return fighterLoadout(ORION)
-}
-/** «Афина» — свежий серийный истребитель на общей раскладке. */
-export function athenaLoadout(): Loadout {
-  return fighterLoadout(ATHENA)
-}
-/** «Икар» — самый лёгкий из серийных: скорость вместо брони. */
-export function icarusLoadout(): Loadout {
-  return fighterLoadout(ICARUS)
-}
-/** «Тесей» — ещё один лёгкий истребитель на общей раскладке. */
+/** «Тесей» — та же середина класса 2, что у «Ники»: стандарт, композит, «Меридиан». */
 export function theseusLoadout(): Loadout {
-  return fighterLoadout(THESEUS)
+  return createLoadout(
+    THESEUS,
+    [ENGINE_STANDARD, RCS_STANDARD, SHIELD_STANDARD_B, ARMOUR_COMPOSITE, CARGO_SMALL, HYPERDRIVE_LONG],
+    [BURST_LASER, BURST_LASER, null, MISSILE_HEAVY, MISSILE_HEAVY],
+  )
+}
+/** «Пегас» — вход класса 3: грейд C и «Тягач» 3E, не 3A. */
+export function pegasusLoadout(): Loadout {
+  return createLoadout(
+    PEGASUS,
+    [ENGINE_MILITARY_C, RCS_MILITARY_C, SHIELD_HEAVY_C, ARMOUR_STEEL_3, CARGO_LARGE, HYPERDRIVE_HAULER_B],
+    [BURST_LASER, BURST_LASER, null, MISSILE_HEAVY, MISSILE_HEAVY],
+  )
+}
+/** «Персей» — тот же грейд C. Средняя точка пустая: своё встаёт рядом, не вместо штатного. */
+export function perseusLoadout(): Loadout {
+  return createLoadout(
+    PERSEUS,
+    [ENGINE_MILITARY_C, RCS_MILITARY_C, SHIELD_HEAVY_C, ARMOUR_STEEL_3, CARGO_SMALL, HYPERDRIVE_HAULER_B],
+    [BURST_LASER, null, BURST_LASER, MISSILE_HEAVY, MISSILE_HEAVY],
+  )
+}
+/** «Афина» — грейд C, три ствола. */
+export function athenaLoadout(): Loadout {
+  return createLoadout(
+    ATHENA,
+    [ENGINE_MILITARY_C, RCS_MILITARY_C, SHIELD_HEAVY_C, ARMOUR_STEEL_3, CARGO_SMALL, HYPERDRIVE_HAULER_B],
+    [BURST_LASER, BURST_LASER, BURST_LASER, MISSILE_HEAVY, MISSILE_HEAVY],
+  )
+}
+/** «Орион» — тот же грейд C, трюм крупнее. */
+export function orionLoadout(): Loadout {
+  return createLoadout(
+    ORION,
+    [ENGINE_MILITARY_C, RCS_MILITARY_C, SHIELD_HEAVY_C, ARMOUR_STEEL_3, CARGO_LARGE, HYPERDRIVE_HAULER_B],
+    [BURST_LASER, BURST_LASER, BURST_LASER, MISSILE_HEAVY, MISSILE_HEAVY],
+  )
+}
+/** «Гермес» — грейд C в оба слота брони. «Дальний» и «Керамет» 3A на верфи не отдают. */
+export function hermesLoadout(): Loadout {
+  return createLoadout(
+    HERMES,
+    [ENGINE_MILITARY_C, RCS_MILITARY_C, SHIELD_HEAVY_C, ARMOUR_STEEL_3, ARMOUR_STEEL_3, CARGO_LARGE, HYPERDRIVE_HAULER_B],
+    [BURST_LASER, BURST_LASER, BURST_LASER, MISSILE_HEAVY, MISSILE_HEAVY],
+  )
 }
 
 /**
