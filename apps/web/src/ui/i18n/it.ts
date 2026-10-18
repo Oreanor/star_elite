@@ -467,6 +467,7 @@ export const IT: Record<keyof typeof RU, string> = {
   'map.block.scaled': 'L’IPERSALTO RICHIEDE LA SCALA 1×',
   'map.pickStation': '{n} moli — scegli dove arrivare',
   'map.select': 'SCEGLI',
+  'loading.scene': 'CARICAMENTO SCENA',
   'map.quasar': 'QUASAR',
   'map.unselect': 'DESELEZIONA',
   'planet.surface.rocky': 'rocciosa',

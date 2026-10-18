@@ -490,6 +490,7 @@ export const PT: Record<keyof typeof RU, string> = {
   'map.block.scaled': 'O HIPERSALTO EXIGE ESCALA 1×',
   'map.pickStation': '{n} cais — escolha onde chegar',
   'map.select': 'ESCOLHER',
+  'loading.scene': 'CARREGANDO CENA',
   'map.quasar': 'QUASAR',
   'map.unselect': 'REMOVER',
   'planet.surface.rocky': 'rochosa',

@@ -366,12 +366,29 @@ let hullsRequested = false
 export function preloadHulls(): void {
   if (hullsRequested) return
   hullsRequested = true
-  for (const def of GLB_HULLS) {
-    new GLTFLoader().load(def.url, (gltf) => {
-      const hull = prepareGlbHull(gltf.scene, def)
-      if (hull) glbCache.set(def.id, hull)
-    })
-  }
+  for (const def of GLB_HULLS) loadHull(def)
+}
+
+/** Уже заказанные корпуса — чтобы свой, заказанный первым, не грузился второй раз. */
+const hullOrdered = new Set<string>()
+
+function loadHull(def: GlbHullDef): void {
+  if (hullOrdered.has(def.id)) return
+  hullOrdered.add(def.id)
+  new GLTFLoader().load(def.url, (gltf) => {
+    const hull = prepareGlbHull(gltf.scene, def)
+    if (hull) glbCache.set(def.id, hull)
+  })
+}
+
+/**
+ * Заказать ОДИН корпус — свой, первым. На старте нужен лишь он: прочие восемь (около
+ * десяти мегабайт) шли той же очередью и отбирали канал у станции и планеты, а сцену до них
+ * всё равно не показать. Остальные — `preloadHulls` после готовности сцены.
+ */
+export function preloadHull(id: string): void {
+  const def = GLB_HULLS.find((d) => d.id === id)
+  if (def) loadHull(def)
 }
 
 /** Геометрия GLB-корпуса, если загрузился; иначе null — вызывающий падает на заглушку. */

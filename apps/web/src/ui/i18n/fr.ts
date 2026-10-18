@@ -466,6 +466,7 @@ export const FR: Record<keyof typeof RU, string> = {
   'map.block.scaled': 'L’HYPERSAUT EXIGE L’ÉCHELLE 1×',
   'map.pickStation': '{n} quais — choisissez où arriver',
   'map.select': 'CHOISIR',
+  'loading.scene': 'CHARGEMENT DE LA SCÈNE',
   'map.quasar': 'QUASAR',
   'map.unselect': 'RETIRER',
   'planet.surface.rocky': 'rocheuse',

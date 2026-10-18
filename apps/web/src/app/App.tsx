@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { applyPilotProfile, offerHail, hailPoliceForFine, interlocutor, jumpBlock, lockShipContact, markPoliceFineHail, pendingHail, pendingPoliceFineHail, serializePlayer, stationInterlocutor, undock, type JumpBlock, type PilotProfile, type PlayerSave, type World } from '@elite/sim'
 import { GameProvider, useSession } from '../session/GameContext'
 import { closePortal, freshPortalKeyDown, jumpPortal, openPortal, portalActive, portalOpen } from '../session/jumpPortal'
@@ -27,6 +27,10 @@ import { subscribeInbox } from '../session/net/chat'
 import type { OnlinePlayer } from '../session/net/presence'
 import { t, useLang } from '../ui/i18n'
 import { pushWarning } from '../session/warnings'
+import { UI } from '../ui/theme'
+import { markFirstFrame, sceneProgress, sceneReady as sceneReadyNow, subscribeSceneReady } from '../session/sceneReady'
+import { preloadHull, preloadHulls } from '../render/geometry/ships'
+import { preloadPortraits } from '../ui/portrait'
 
 const JUMP_BLOCK_LABEL: Record<JumpBlock, Parameters<typeof t>[0]> = {
   'no-drive': 'map.block.noDrive',
@@ -245,7 +249,12 @@ function Shell({ onRestart }: { onRestart: () => void }) {
   useEffect(() => {
     if (!booted) return
     let raf = requestAnimationFrame(() => {
-      raf = requestAnimationFrame(() => setSceneReady(true))
+      raf = requestAnimationFrame(() => {
+        setSceneReady(true)
+        // Экрану загрузки — тот же сигнал «сцена собрана»: кадровый цикл канвы до захвата
+        // курсора может не тикать, и зонд в сцене (`SceneReadyProbe`) тогда молчал бы.
+        markFirstFrame()
+      })
     })
     // Подстраховка: если rAF почему-то не отработал (был заморожен сборкой и т.п.), всё равно
     // объявляем готовность — иначе «вжуха» и перехода не будет вовсе («не улетает»).
@@ -255,6 +264,20 @@ function Shell({ onRestart }: { onRestart: () => void }) {
       window.clearTimeout(fallback)
     }
   }, [booted])
+
+  // ЭКРАН ЗАГРУЗКИ и очередь загрузок. Свой корпус — первым, сразу: без него сцену не
+  // показать. Прочие корпуса и портреты — когда сцена готова: раньше они шли той же очередью
+  // (около десяти мегабайт) и отбирали канал у станции и планеты.
+  const loadingDone = useSyncExternalStore(subscribeSceneReady, sceneReadyNow)
+  const loadingProgress = useSyncExternalStore(subscribeSceneReady, sceneProgress)
+  useEffect(() => {
+    preloadHull(session.world.player.loadout.chassis.id)
+  }, [session])
+  useEffect(() => {
+    if (!loadingDone) return
+    preloadHulls()
+    preloadPortraits()
+  }, [loadingDone])
 
   /**
    * Новичок только что слепил пилота и запускается: Paused проигрывает флориш взлёта
@@ -833,6 +856,9 @@ function Shell({ onRestart }: { onRestart: () => void }) {
       {/* Канвас — всегда: захвату курсора нужен готовый канвас уже на первом жесте.
           Тяжёлую сцену он строит только по `booted` (после нажатия СТАРТ). */}
       <Game ready={booted} />
+      {/* Обновил вкладку у причала: станция уже на экране, но сцена ещё грузится — кликать
+          бесполезно. Закрываем интерфейс, пока она не готова (`session/sceneReady`). */}
+      {booted && docked && !loadingDone && <LoadingVeil progress={loadingProgress} />}
       {/* Онлайн: раз в пару секунд шлём своё присутствие. Ничего не рисует. */}
       {online && <PresencePublisher />}
       {over ? (
@@ -889,6 +915,26 @@ function Shell({ onRestart }: { onRestart: () => void }) {
         className="pointer-events-none absolute inset-0 z-[60] bg-black"
         style={{ opacity: veil ? 1 : 0, transition: `opacity ${VEIL_FADE_MS}ms ease-in-out` }}
       />
+    </div>
+  )
+}
+
+/**
+ * Экран загрузки поверх интерфейса: перехватывает клики, пока сцена не готова. Тот же язык,
+ * что у заставки: тёмный фон, полоса прогресса фосфором.
+ */
+function LoadingVeil({ progress }: { progress: number }) {
+  return (
+    <div
+      className="absolute inset-0 z-[100] flex flex-col items-center justify-center gap-4 bg-black/85 font-mono"
+      style={{ color: UI.PRIMARY }}
+      onPointerDown={(e) => e.stopPropagation()}
+      onClick={(e) => e.stopPropagation()}
+    >
+      <div className="text-sm tracking-[0.4em]">{t('loading.scene')}</div>
+      <div className="h-1 w-64 border" style={{ borderColor: UI.DIM }}>
+        <div className="h-full" style={{ width: `${Math.round(progress * 100)}%`, background: UI.PRIMARY }} />
+      </div>
     </div>
   )
 }

@@ -490,6 +490,7 @@ export const RU = {
   'map.block.scaled': 'ГИПЕРПРЫЖОК ТОЛЬКО В МАСШТАБЕ 1×',
   'map.pickStation': 'причалов: {n} — выбери, к какому выйти',
   'map.select': 'ВЫБРАТЬ',
+  'loading.scene': 'ЗАГРУЗКА СЦЕНЫ',
   'map.quasar': 'КВАЗАР',
   'map.unselect': 'СНЯТЬ ВЫБОР',
   'planet.surface.rocky': 'скалистая',

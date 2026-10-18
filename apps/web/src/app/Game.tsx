@@ -1,6 +1,7 @@
-import { Canvas } from '@react-three/fiber'
+import { Canvas, useFrame } from '@react-three/fiber'
 import { useEffect, useRef, useState } from 'react'
 import { useSession } from '../session/GameContext'
+import { markFirstFrame } from '../session/sceneReady'
 import { FlightCamera } from '../render/camera/FlightCamera'
 import { Post } from '../render/post/Post'
 import { Probe } from '../render/post/Probe'
@@ -41,8 +42,27 @@ function Scene({ epoch }: { epoch: number }) {
       <Post />
       {/* После композера: счётчики рендерера читаются, когда кадр уже нарисован. F3. */}
       <Probe />
+      <SceneReadyProbe />
     </>
   )
+}
+
+/** Сколько кадров отсчитать до «первого кадра»: загрузчики к этому времени уже заказаны. */
+const READY_AFTER_FRAMES = 20
+
+/**
+ * Сообщает «сцена показалась» (`markFirstFrame`) — для экрана загрузки. Не на самом первом
+ * кадре: модели и текстуры заказываются при монтировании объектов, и в первый кадр очередь
+ * загрузок ещё может быть пуста — экран снялся бы раньше, чем сцена что-то покажет.
+ */
+function SceneReadyProbe() {
+  const frames = useRef(0)
+  useFrame(() => {
+    if (frames.current > READY_AFTER_FRAMES) return
+    frames.current++
+    if (frames.current === READY_AFTER_FRAMES) markFirstFrame()
+  })
+  return null
 }
 
 /**

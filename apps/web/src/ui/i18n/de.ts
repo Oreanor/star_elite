@@ -467,6 +467,7 @@ export const DE: Record<keyof typeof RU, string> = {
   'map.block.scaled': 'HYPERSPRUNG ERFORDERT MASSSTAB 1×',
   'map.pickStation': '{n} Docks — wähl, wo du ankommst',
   'map.select': 'WÄHLEN',
+  'loading.scene': 'SZENE WIRD GELADEN',
   'map.quasar': 'QUASAR',
   'map.unselect': 'ABWÄHLEN',
   'planet.surface.rocky': 'Gestein',

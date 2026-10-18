@@ -1,8 +1,6 @@
 import { createRoot } from 'react-dom/client'
 import { App } from './app/App'
 import { initWorldClock } from './session/net/worldClock'
-import { preloadHulls } from './render/geometry/ships'
-import { preloadPortraits } from './ui/portrait'
 import { preloadTitleAssets } from './ui/preload'
 import { currentLang, loadLang } from './ui/i18n'
 import './styles.css'
@@ -20,10 +18,10 @@ initWorldClock()
 //
 // Сначала титульные PNG (со снятой растеризацией), и только потом всё остальное:
 // корпуса нужны к первому вылету, портреты — к первому разговору, а это ещё позже.
-void preloadTitleAssets().then(() => {
-  preloadHulls()
-  preloadPortraits()
-})
+// Корпуса и портреты — ПОСЛЕ готовности сцены (`deferredPreloads` в App): свой корпус
+// App заказывает первым, а прочие восемь моделей и портреты шли той же очередью и отбирали
+// канал у станции и планеты, без которых сцену не показать.
+void preloadTitleAssets()
 
 // Язык игрока — до первого кадра: прочие языки грузятся по требованию, и без этого
 // заставка мигнула бы русским, пока доезжает свой словарь.

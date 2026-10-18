@@ -153,13 +153,16 @@ function blips(world: World): Blip[] {
 
   for (const body of world.bodies) {
     if (stellarOnly && body.kind !== 'star' && body.kind !== 'blackhole') continue
-    const d = toDisc(world, body.pos)
+    // У причала своя станция — там же, где ты: в центре диска, а не в километре впереди
+    // по её центру (как и расстояние — ноль, `distanceToBody`).
+    const range = distanceToBody(world, body)
+    const d = range === 0 ? { rt: 0, fwd: 0, h: 0, dist: 0 } : toDisc(world, body.pos)
     if (!d) continue
     out.push({
       key: `body-${body.id}`,
       ...d,
       // До поверхности, у своей станции у причала — ноль (`distanceToBody`): как на HUD.
-      dist: distanceToBody(world, body),
+      dist: range,
       color: bodyColor(body),
       shape: body.kind === 'station' ? 'diamond' : 'round',
       size: body.kind === 'star' || body.kind === 'blackhole' ? 11 : 7,
