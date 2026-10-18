@@ -573,7 +573,7 @@ function repairInfoFor(world: World, module: ShipModule): RepairInfo {
   return { price: 0, can: false, refused: false } // исправна — чинить нечего
 }
 
-/** Исход подхода второго пилота словами: починил, подлатал (ещё заход добьёт), нет денег. */
+/** Исход подхода второго пилота словами: починил, починил частично (ещё заход добьёт), нет денег. */
 export function copilotRepairNote(out: CopilotRepairOutcome, price: number): string {
   if (out.result === 'repaired') return t('phrase.copilotRepaired', { credits: out.spent })
   if (out.result === 'partial') {

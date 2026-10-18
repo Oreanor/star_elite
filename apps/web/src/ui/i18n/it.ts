@@ -651,7 +651,7 @@ export const IT: Record<keyof typeof RU, string> = {
   'copilot.hull': "SCAFO {pct}%",
   'hud.copilotQuit': "{name} SE NE VA — NIENTE PAGA",
   'phrase.copilotApproach': "ROTTA SULLA NAVE",
-  'phrase.copilotRepairedPartial': "RATTOPPATO · RESTA {pct}% · {credits} CR ADDEBITATI",
+  'phrase.copilotRepairedPartial': "RIPARATO IN PARTE · RESTA {pct}% · {credits} CR ADDEBITATI",
   'phrase.copilotRepairAgain': "Non del tutto — ancora un tentativo ed è come nuovo.",
   'phrase.copilotDismissConfirm': "Mi sbarchi? Ripetilo e me ne vado.",
 }
