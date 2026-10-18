@@ -167,7 +167,7 @@ function blips(world: World): Blip[] {
       shape: body.kind === 'station' ? 'diamond' : 'round',
       size: body.kind === 'star' || body.kind === 'blackhole' ? 11 : 7,
       ring: body.id === world.navTargetId && world.targetFocus === 'nav',
-      kind: t(`locator.kind.${body.kind}` as 'locator.kind.planet'),
+      kind: t(body.kind === 'blackhole' && body.beams ? 'locator.kind.quasar' : (`locator.kind.${body.kind}` as 'locator.kind.planet')),
       rank: body.kind,
       title: properName(body.name),
       lines: [],

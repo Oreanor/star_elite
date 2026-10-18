@@ -677,4 +677,5 @@ export const RU = {
   'phrase.copilotRepairedPartial': "ЧАСТИЧНО ПОЧИНЕНО · ОСТАЛОСЬ {pct}% · СПИСАНО {credits} КР",
   'phrase.copilotRepairAgain': "Не до конца — ещё заход, и будет как новое.",
   'phrase.copilotDismissConfirm': "Списываешь меня на берег? Скажи ещё раз — и я ухожу.",
+  'locator.kind.quasar': "квазар",
 }

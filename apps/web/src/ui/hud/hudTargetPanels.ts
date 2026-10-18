@@ -355,7 +355,8 @@ export function drawTargetPanels(frame: HudFrame): void {
 
   const nav = navTarget(world)
   if (!nav) return
-  const kindKey = `locator.kind.${nav.kind}` as Key
+  // Дыра с джетами — квазар (тот же признак `beams`, по которому рисуются лучи).
+  const kindKey = (nav.kind === 'blackhole' && 'beams' in nav && nav.beams ? 'locator.kind.quasar' : `locator.kind.${nav.kind}`) as Key
   const color = navMarkerColor(nav)
   const navMass =
     nav.kind === 'asteroid' ? formatStat('mass', asteroidMass(nav.radius)) : undefined

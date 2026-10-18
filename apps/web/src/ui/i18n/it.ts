@@ -654,4 +654,5 @@ export const IT: Record<keyof typeof RU, string> = {
   'phrase.copilotRepairedPartial': "RIPARATO IN PARTE · RESTA {pct}% · {credits} CR ADDEBITATI",
   'phrase.copilotRepairAgain': "Non del tutto — ancora un tentativo ed è come nuovo.",
   'phrase.copilotDismissConfirm': "Mi sbarchi? Ripetilo e me ne vado.",
+  'locator.kind.quasar': "quasar",
 }
