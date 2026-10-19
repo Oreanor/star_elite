@@ -3,7 +3,6 @@ import { Vector3 } from 'three'
 import {
   clearContactLock,
   assessThreat,
-  beltNearest,
   distanceToBody,
   clearNavLock,
   isVisible,
@@ -113,14 +112,10 @@ interface Blip {
   /** Клик пишет захват в мир — тот же id, что у тела/борта/статуи. */
   selectId: number
   selectKind: SelectKind
-  /** Целью не берётся (пояс — область, а не тело): в карточке нет кнопки «ВЫБРАТЬ». */
-  unselectable?: boolean
 }
 
 
 /** Проекция мировой точки на плоскость диска (right/forward/height), null — в самом центре. */
-const _beltAt = new Vector3()
-
 function toDisc(world: World, pos: Vector3): { rt: number; fwd: number; h: number; dist: number } | null {
   _rel.copy(pos).sub(world.player.state.pos)
   const dist = _rel.length()
@@ -238,28 +233,6 @@ function blips(world: World): Blip[] {
       selectKind: 'asteroid',
     })
   }
-
-  // Пояса — упрощённо: отметка в ближайшей точке кольца и расстояние до него («внутри» — ноль).
-  world.asteroidBelts.forEach((belt, i) => {
-    const dist = beltNearest(world, belt, world.player.state.pos, _beltAt)
-    const d = dist < 1 ? { rt: 0, fwd: 0, h: 0, dist: 0 } : toDisc(world, _beltAt)
-    if (!d) return
-    out.push({
-      key: `belt-${i}`,
-      ...d,
-      color: UI.BELT,
-      shape: 'round',
-      size: 7,
-      ring: false,
-      kind: t('locator.kind.belt'),
-      rank: 'belt',
-      title: t('locator.kind.belt'),
-      lines: dist < 1 ? [t('locator.belt.inside')] : [],
-      selectId: -1,
-      selectKind: 'body',
-      unselectable: true,
-    })
-  })
 
   // Кометы — всегда на локаторе: событие, а не пейзаж, и пролетают быстро.
   for (const rock of world.asteroids) {
@@ -538,7 +511,7 @@ export function Locator({ world }: { world: World }) {
               color={active.b.color}
               lines={[...active.b.lines, `${t('map.distance')}: ${formatDistance(active.b.dist)}`]}
               action={
-                pickActive && !pickActive.b.unselectable
+                pickActive
                   ? {
                       selected: pickActive.b.ring,
                       onClick: () => {

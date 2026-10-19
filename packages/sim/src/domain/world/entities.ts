@@ -330,19 +330,6 @@ export interface ShipEntity {
   kinematic?: boolean
 }
 
-/**
- * Пояс астероидов — кольцо вокруг светила `centerId` (центр берём у тела: при сдвиге начала
- * координат он едет вместе с ним). Плоский, в плоскости XZ.
- */
-export interface AsteroidBeltEntity {
-  centerId: number
-  /** Радиус средней линии, м. */
-  radius: number
-  /** Ширина кольца (по радиусу) и толщина (по высоте), м. */
-  width: number
-  thickness: number
-}
-
 export interface AsteroidEntity {
   rayHold?: RayHold
   id: number
@@ -357,8 +344,6 @@ export interface AsteroidEntity {
   shape: number
   /** Поколение раскола: 0 (или нет поля) — целый камень пояса, 1 — его осколок и т. д. */
   gen?: number
-  /** Камень ПОЯСА: ключ его места (`beltRockKey`). Осколки ключа не несут. */
-  beltKey?: string
   /**
    * Радиус до первого луча-переделки (`shrink`/`grow`), м: от него меряются пределы — нельзя
    * раздуть больше ×1000 исходного. Нет поля — лучом камень ещё не трогали.
@@ -1079,14 +1064,6 @@ export interface World {
   /** Лазерные болты в полёте. Снаряды: летят, заметают отрезок, наносят урон при попадании. */
   bolts: BoltEntity[]
   bodies: BodyEntity[]
-  /** Пояса астероидов системы (`AsteroidBeltEntity`): область, где вокруг корабля родятся камни. */
-  asteroidBelts: AsteroidBeltEntity[]
-  /** Таймер проверки камней пояса рядом с кораблём, с (тактовый). */
-  beltSpawnTimer: number
-  /** Камни пояса, ставшие телами мира, по ключу (`beltRockKey`). */
-  beltLive: Map<string, AsteroidEntity>
-  /** Сбитые камни пояса: в этой системе их больше нет — ни телом, ни точкой. */
-  beltGone: Set<string>
   /** Корабли поколений — киты-города. Декорация: мимо боя и столкновений. */
   titans: TitanEntity[]
   /** Статуи-исполины у причала. Самая инертная декорация: висят и медленно кувыркаются. */

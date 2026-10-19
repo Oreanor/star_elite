@@ -4,7 +4,6 @@ import { makeRng } from '../../core/math'
 import { STATION_RADIUS } from '../world/system'
 import type { PatrolDef, SystemDef } from '../world/system'
 import { PULSAR, MASS_STREAM } from '../../config/beams'
-import { ASTEROID_BELT } from '../../config/world'
 import { quasarOf } from './quasar'
 import { capitalOf, type Planet, type StarSystem } from './types'
 
@@ -98,33 +97,6 @@ function moonsOf(planet: Planet, radius: number): SystemDef['planets'][number]['
     phase: i * GOLDEN_ANGLE,
     tilt: MOON.MAX_TILT * ((i + 1) / (planet.moons.length + 1)),
   }))
-}
-
-/**
- * Пояса астероидов системы — из своего подзерна, чтобы бросок не сдвигал остальную случайность.
- * Пояс ложится в ПРОСВЕТ между соседними орбитами (кольцо не должно задевать планету) или за
- * последней. Ядро галактики без поясов: у дыры нет системы, чтобы им было где лежать.
- */
-function beltsOf(system: StarSystem, galaxySeed: number, planets: SystemDef['planets']): SystemDef['asteroidBelts'] {
-  if (system.star.class === 'H' || planets.length === 0) return []
-  const rng = makeRng((galaxySeed ^ Math.imul(system.index + 1, 0x42454c54)) >>> 0)
-  if (rng() >= ASTEROID_BELT.CHANCE) return []
-  const orbits = planets.map((p) => Math.hypot(p.pos[0], p.pos[2])).sort((a, b) => a - b)
-  // Места: просветы, где кольцо целиком помещается, плюс «за последней планетой».
-  const slots: number[] = []
-  for (let k = 0; k + 1 < orbits.length; k++) {
-    const inner = orbits[k]!
-    const outer = orbits[k + 1]!
-    if (outer - inner > inner * ASTEROID_BELT.MIN_GAP) slots.push(Math.sqrt(inner * outer))
-  }
-  slots.push(orbits[orbits.length - 1]! * 1.6)
-  const count = rng() < ASTEROID_BELT.SECOND_CHANCE && slots.length > 1 ? 2 : 1
-  const belts: { radius: number; width: number; thickness: number }[] = []
-  for (let n = 0; n < count && slots.length > 0; n++) {
-    const radius = slots.splice(Math.floor(rng() * slots.length), 1)[0]!
-    belts.push({ radius, width: radius * ASTEROID_BELT.WIDTH_FRAC, thickness: radius * ASTEROID_BELT.THICKNESS_FRAC })
-  }
-  return belts
 }
 
 /** Поток в паре: виден ли и какого вида — своё подзерно, бросок не сдвигает остальное. */
@@ -289,7 +261,6 @@ export function systemDefOf(system: StarSystem, galaxySeed: number, seatOverride
     extraStations,
     // Камни — встречи трафика, не хардкод-пояс у старта.
     belt: null,
-    asteroidBelts: beltsOf(system, galaxySeed, planets),
     patrols: patrolsFor(system, start),
   }
 }

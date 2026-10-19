@@ -348,8 +348,6 @@ export const RU = {
   'locator.kind.pod': 'контейнер',
   'locator.kind.asteroid': 'астероид',
   'locator.kind.comet': 'комета',
-  'locator.kind.belt': 'пояс астероидов',
-  'locator.belt.inside': 'внутри',
   'locator.kind.fixture': 'орудие',
   'locator.kind.warbase': 'база',
   'locator.kind.ship': 'корабль',

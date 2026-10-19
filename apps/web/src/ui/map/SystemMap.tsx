@@ -69,7 +69,6 @@ const CONTACT = '#b98bff'
 /** Живой игрок: розовый — та же семантика, что на локаторе и карте галактики. */
 const PLAYER = UI.PLAYER
 const MONOLITH = UI.MONOLITH
-
 type MarkerKind = BodyEntity['kind'] | 'monolith' | 'figurine' | 'ship' | 'contact' | 'player'
 
 /** Цвет отметки по роду. Таблица, а не лестница тернарников: новый род — строка, не ветка. */
@@ -116,7 +115,6 @@ function radiusOf(orbit: number, min: number, span: number): number {
 const _fwd = new Vector3()
 const _right = new Vector3()
 const _up = new Vector3()
-
 /** Куда смотрит нос, в осях карты. Единичный вектор; нулевой, если нос строго вверх. */
 function headingOf(world: World): { x: number; y: number } {
   shipAxes(world.player.state.quat, _fwd, _right, _up)
@@ -128,7 +126,7 @@ function headingOf(world: World): { x: number; y: number } {
  * Раскладка всей системы вокруг звезды. Игрок добавлен отдельным маркером — не
  * тело, но его место в системе показать надо: об этом и просили.
  */
-function markers(world: World): { points: Marker[]; belts: BeltBand[] } {
+function markers(world: World): Marker[] {
   const star = world.bodies.find((b) => b.kind === 'star') ?? null
   // Нет звезды (не должно случаться в обитаемой системе) — мерим от игрока.
   const origin = star ? star.pos : world.player.state.pos
@@ -193,13 +191,7 @@ function markers(world: World): { points: Marker[]; belts: BeltBand[] } {
   const max = orbits.length ? Math.max(...orbits) : min * 10
   const span = Math.log(max / min)
 
-  // Пояса — той же шкалой, что орбиты: полоса между внутренней и внешней кромкой кольца.
-  const belts = world.asteroidBelts.map((b) => ({
-    inner: radiusOf(Math.max(1.0001, b.radius - b.width / 2), min, span),
-    outer: radiusOf(b.radius + b.width / 2, min, span),
-  }))
-
-  const points = raw.map((m) => {
+  return raw.map((m) => {
     const r = m.isStar ? 0 : radiusOf(m.orbit, min, span)
     return {
       id: m.id,
@@ -216,13 +208,6 @@ function markers(world: World): { points: Marker[]; belts: BeltBand[] } {
       tint: 'tint' in m && typeof m.tint === 'string' ? m.tint : undefined,
     }
   })
-  return { points, belts }
-}
-
-/** Пояс астероидов на диске карты: радиусы внутренней и внешней кромки в единицах диска. */
-interface BeltBand {
-  inner: number
-  outer: number
 }
 
 // Дистанции меряет общая лестница из `hud/project`: карта и окно обязаны называть
@@ -233,8 +218,7 @@ interface BeltBand {
  * Выбирается всё, что стоит на месте: звезда, планета, луна, причал. Корабль —
  * нет: он летит, и «цель навигации» на нём означала бы преследование, а не курс.
  */
-const selectable = (m: Marker) =>
-  m.kind !== 'ship' && m.kind !== 'contact' && m.kind !== 'player'
+const selectable = (m: Marker) => m.kind !== 'ship' && m.kind !== 'contact' && m.kind !== 'player'
 
 /**
  * Род объекта словом — он пишется перед именем и в списке, и в карточке. Имя без рода
@@ -304,7 +288,7 @@ export function SystemMap({
     drag.current = null
   }
 
-  const { points, belts } = markers(world)
+  const points = markers(world)
   // Выбор цели: и клик по метке на диске, и строка списка ведут сюда — одно состояние
   // `navTargetId`, одна подсветка. Тот же клик по выбранному снимает выбор.
   const card = useInspect<number>()
@@ -389,7 +373,6 @@ export function SystemMap({
       >
         <Hologram
           points={points}
-          belts={belts}
           heading={headingOf(world)}
           navTargetId={world.navTargetId}
           hoverId={hover}
@@ -445,12 +428,8 @@ export function SystemMap({
   )
 }
 
-/** Пояс астероидов на карте — цветом пыли, тусклой зернистой полосой. */
-const BELT_COLOUR = '#9a8f80'
-
 function Hologram({
   points,
-  belts,
   heading,
   navTargetId,
   hoverId,
@@ -461,8 +440,6 @@ function Hologram({
   onHover,
 }: {
   points: Marker[]
-  /** Пояса астероидов — полосами между орбитами. */
-  belts: BeltBand[]
   heading: { x: number; y: number }
   navTargetId: number | null
   /** Что подсвечено курсором — здесь или в списке слева. */
@@ -497,25 +474,6 @@ function Hologram({
 
       {/* Диск и орбиты кладутся в наклон эллипсами: ry = rx·cos(tilt), центр — звезда. */}
       <ellipse rx={DISC * zoom} ry={DISC * cos * zoom} fill="url(#map-disc)" />
-
-      {/* Пояса — упрощённо: полоса-эллипс по средней линии толщиной в ширину кольца. */}
-      {belts.map((b, i) => {
-        const mid = ((b.inner + b.outer) / 2) * zoom
-        const width = Math.max(2, (b.outer - b.inner) * zoom)
-        return (
-          <ellipse
-            key={`belt-${i}`}
-            rx={mid}
-            ry={mid * cos}
-            fill="none"
-            stroke={BELT_COLOUR}
-            strokeOpacity={0.22}
-            strokeWidth={width}
-            strokeDasharray="1 3"
-            style={{ pointerEvents: 'none' }}
-          />
-        )
-      })}
 
       {points
         .filter((m) => !m.isStar && m.kind !== 'ship' && m.ring > 0)
