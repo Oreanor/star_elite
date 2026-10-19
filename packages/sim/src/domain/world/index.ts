@@ -173,7 +173,7 @@ export {
 } from './figurines'
 export { spawnPlatform, stepPlatforms } from './platforms'
 export { STARTER_SYSTEM, type PatrolDef, type SystemDef } from './system'
-export { findWarBaseFixture, livingFixtures, warBaseFixtureWorldPos, warBaseIntegrity } from './warBase'
+export { findWarBaseFixture, livingFixtures, warBaseFixtureWorldPos, warBaseGrid, warBaseIntegrity } from './warBase'
 export { renderPos, renderQuat, renderTime, shownPosition, type Posed } from './poseTrail'
 export { SLOVO_KIND, SLOVO_NAME } from './slovo'
 export { beamDirection, beamExposure } from './beams'

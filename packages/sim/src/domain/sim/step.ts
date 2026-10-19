@@ -516,7 +516,7 @@ const _fixtureAt = /* @__PURE__ */ new Vector3()
 /**
  * Навесные детали базы — ТВЕРДЬ, как и её шар.
  *
- * Башня трёхкилометровой базы — шестьсот метров, пушки — по полторы-три сотни, и все они
+ * Башня — двести метров на любой базе, пушки — десятки метров, и все они
  * торчат над обшивкой. Твёрдым был только шар, и корабль влетал в деталь насквозь: камера
  * внутри башни, а до «поверхности» и до посадки ещё полкилометра. Деталь — неровный меш,
  * нормированный в единичную сферу, поэтому твердь берётся тем же правилом, что у глыб
@@ -525,8 +525,8 @@ const _fixtureAt = /* @__PURE__ */ new Vector3()
  * Проверяется и над поверхностью (в ховере): эшелон в двадцать метров ниже любой башни.
  */
 function bounceOffFixtures(world: World, ship: ShipEntity, base: WarBaseEntity, dt: number): boolean {
-  // Дешёвая отбраковка: самая высокая деталь (башня) не выходит за полтора радиуса базы.
-  const reach = base.radius * (1 + 2 * WARBASE.TOWER_SIZE) + effectiveRadius(ship)
+  // Дешёвая отбраковка: башня одного калибра на любой базе, торчит на свои метры над шаром.
+  const reach = base.radius + WARBASE.TOWER_SIZE * 2 + effectiveRadius(ship)
   if (base.pos.distanceToSquared(ship.state.pos) > reach * reach) return false
   for (const fix of base.fixtures) {
     if (!fix.alive) continue

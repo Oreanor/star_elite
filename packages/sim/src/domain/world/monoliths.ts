@@ -4,6 +4,7 @@ import { WARBASE } from '../../config/warbase'
 import { makeRng, type Rng } from '../../core/math'
 import type { BodyEntity, WarBaseFixture, World } from './entities'
 import type { SystemDef } from './system'
+import { warBaseGrid } from './warBase'
 
 /**
  * Статуи-исполины у причала.
@@ -27,21 +28,24 @@ function anchorStation(world: World): BodyEntity | null {
 }
 
 /**
- * Навесные детали базы: башня на «северном» полюсе + вразброс по сфере (спираль Фибоначчи —
- * равномерно, без комков). Тип и калибр из `rng`, поэтому расстановка у всех игроков одна.
- * Детали — в ДОМЕНЕ (а не в рендере), потому что они отстреливаются: у каждой своя прочность.
+ * Навесные детали базы: башня на «северном» полюсе и кварталы по сетке. Калибр в метрах
+ * один на все базы; число и густота сетки растут с площадью шара. Тип и места — из `rng`,
+ * поэтому расстановка у всех игроков одна. Детали в ДОМЕНЕ, потому что они отстреливаются.
  */
 function layoutFixtures(ids: World['ids'], radius: number, rng: Rng): WarBaseFixture[] {
   const out: WarBaseFixture[] = []
-  const n = WARBASE.FIXTURES_MIN + Math.floor(rng() * (WARBASE.FIXTURES_MAX - WARBASE.FIXTURES_MIN + 1))
+  // Число — от площади шара. На опорном радиусе множитель 1, и база выходит как раньше.
+  const span = WARBASE.FIXTURES_MIN + Math.floor(rng() * (WARBASE.FIXTURES_MAX - WARBASE.FIXTURES_MIN + 1))
+  const area = (radius / WARBASE.FIXTURE_REF_RADIUS) ** 2
+  const n = Math.max(2, Math.round(span * area))
   const push = (model: number, dir: Vector3, size: number): void => {
     out.push({ id: ids.next(), model, dir, size, roll: rng() * Math.PI * 2, cooldown: rng() * WARBASE.TURRET_COOLDOWN, burstLeft: 0, shotIn: 0, hitsLeft: WARBASE.FIXTURE_HITS, lastHitAt: -Infinity, alive: true })
   }
   // ОБА полюса всегда прикрыты деталью. На полюсе equirect-карта стягивается в точку
   // («закрутка звёздочкой»), и башня/пушка маскируют этот артефакт — иначе на «макушке»
-  // базы виден шов. Север — башня, юг — пушка.
-  push(0, new Vector3(0, 1, 0), radius * WARBASE.TOWER_SIZE)
-  push(1, new Vector3(0, -1, 0), radius * WARBASE.TOWER_SIZE * 0.8)
+  // базы виден шов. Север — башня, юг — пушка. Калибр в метрах, не в долях радиуса.
+  push(0, new Vector3(0, 1, 0), WARBASE.TOWER_SIZE)
+  push(1, new Vector3(0, -1, 0), WARBASE.TOWER_SIZE * 0.8)
   /**
    * Прочие — ПО СЕТКЕ параллелей и меридианов, а не спиралью.
    *
@@ -53,21 +57,8 @@ function layoutFixtures(ids: World['ids'], radius: number, rng: Rng): WarBaseFix
    * Число колонн на параллели считается от её длины (`cos φ`): у экватора клеток больше,
    * к полюсам меньше — иначе у макушки квартал сжимался бы в точку.
    */
-  const rows = WARBASE.GRID_ROWS
   const wanted = n - 2
-  const cells: { dir: Vector3 }[] = []
-  for (let r = 0; r < rows; r++) {
-    // Широты идут внутри пояса ±SPIRAL_LAT: полюса уже заняты башнями.
-    const lat = WARBASE.SPIRAL_LAT * (1 - 2 * ((r + 0.5) / rows))
-    const ring = Math.sqrt(Math.max(0, 1 - lat * lat))
-    const cols = Math.max(2, Math.round(WARBASE.GRID_COLS * ring))
-    // Каждый ряд сдвинут на свою долю шага: колонны не выстраиваются в один шов.
-    const shift = (r % 2) * 0.5
-    for (let c = 0; c < cols; c++) {
-      const phi = ((c + shift) / cols) * Math.PI * 2
-      cells.push({ dir: new Vector3(Math.cos(phi) * ring, lat, Math.sin(phi) * ring).normalize() })
-    }
-  }
+  const { cells } = warBaseGrid(radius)
 
   // Занятость клетки — бросок, но с поправкой: сколько деталей заказано, столько и ставим.
   // Идём по всем клеткам, беря каждую с шансом «осталось поставить / осталось клеток», —
@@ -78,8 +69,8 @@ function layoutFixtures(ids: World['ids'], radius: number, rng: Rng): WarBaseFix
     if (rng() >= left / remaining) continue
     left--
     const model = 1 + Math.floor(rng() * WARBASE.FIXTURE_MODELS)
-    const size = radius * (WARBASE.FIXTURE_SIZE_MIN + rng() * (WARBASE.FIXTURE_SIZE_MAX - WARBASE.FIXTURE_SIZE_MIN))
-    push(model, cells[i]!.dir, size)
+    const size = WARBASE.FIXTURE_SIZE_MIN + rng() * (WARBASE.FIXTURE_SIZE_MAX - WARBASE.FIXTURE_SIZE_MIN)
+    push(model, cells[i]!, size)
   }
   return out
 }
@@ -87,7 +78,8 @@ function layoutFixtures(ids: World['ids'], radius: number, rng: Rng): WarBaseFix
 /**
  * Военные базы на снос — из ДАННЫХ системы (`def.warBases`), а не спавн-хардкодом.
  * Смещение отсчитывается от станции (как у «Двери»): базы стоят у причала, но телами не
- * являются — своего списка, без гравитации и орбиты. Прочность корки растёт с радиусом.
+ * являются — своего списка, без гравитации и орбиты. Крупный шар несёт больше деталей,
+ * и снести его дольше: живучесть — это они, а не толщина корки.
  * Навесные детали отстреливаются поштучно, расставлены детерминированно по сиду базы.
  */
 export function placeWarBases(world: World, def: SystemDef): void {

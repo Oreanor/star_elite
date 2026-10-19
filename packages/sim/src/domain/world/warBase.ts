@@ -14,6 +14,29 @@ import type { WarBaseEntity, WarBaseFixture } from './entities'
 const _spin = /* @__PURE__ */ new Quaternion()
 
 /**
+ * Сетка мест под детали. Шаг клетки в метрах один и тот же на любой базе: у шара большего
+ * радиуса больше рядов и колонн, поэтому пушки не редеют и не растут. На опорном радиусе
+ * (`FIXTURE_REF_RADIUS`) это ровно `GRID_ROWS` × `GRID_COLS`.
+ */
+export function warBaseGrid(radius: number): { cells: Vector3[]; cols: number } {
+  const k = radius / WARBASE.FIXTURE_REF_RADIUS
+  const rows = Math.max(2, Math.round(WARBASE.GRID_ROWS * k))
+  const cols = Math.max(3, Math.round(WARBASE.GRID_COLS * k))
+  const cells: Vector3[] = []
+  for (let r = 0; r < rows; r++) {
+    const lat = WARBASE.SPIRAL_LAT * (1 - 2 * ((r + 0.5) / rows))
+    const ring = Math.sqrt(Math.max(0, 1 - lat * lat))
+    const n = Math.max(2, Math.round(cols * ring))
+    const shift = (r % 2) * 0.5
+    for (let c = 0; c < n; c++) {
+      const phi = ((c + shift) / n) * Math.PI * 2
+      cells.push(new Vector3(Math.cos(phi) * ring, lat, Math.sin(phi) * ring).normalize())
+    }
+  }
+  return { cells, cols }
+}
+
+/**
  * Мировая точка навесной детали в момент `time`: локальная радиаль, повёрнутая спином базы,
  * отложенная на поверхность + выступ. ОДИН источник для луча, рендера и захвата — куда
  * нарисовано, туда и попадает. Пишет в `out`, наружу scratch не отдаёт.

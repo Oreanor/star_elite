@@ -51,7 +51,11 @@ function warBaseHullFallback(): MeshStandardMaterial {
  * Корпусов единицы — обычные меши; детали одного облика — один InstancedMesh на все базы.
  */
 
-const MAX_DETAILS = 256
+/**
+ * Потолок одного облика на все базы кадра. Крупная база вешает сотни пушек одного вида,
+ * и урезанный пакет просто не нарисовал бы то, что домен уже поставил и во что бьёт луч.
+ */
+const MAX_DETAILS = 1024
 const _dummy = new Object3D()
 const _pos = new Vector3()
 const _dir = new Vector3()

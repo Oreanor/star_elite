@@ -141,6 +141,23 @@ describe('отстрел деталей базы', () => {
     expect(towers[0]!.dir.y).toBeCloseTo(1, 5)
   })
 
+  it('крупная база шире числом деталей, а пушки того же калибра', () => {
+    const world = withBases()
+    const small = world.warBases[0]!
+    const large = world.warBases[1]!
+    expect(large.radius).toBeGreaterThan(small.radius)
+    // Площадь, не диаметр: тройной радиус — заметно больше, чем втрое деталей.
+    expect(large.fixtures.length / small.fixtures.length).toBeGreaterThan(large.radius / small.radius)
+    const tower = (b: typeof small) => b.fixtures.find((f) => f.model === 0)!
+    expect(tower(small).size).toBe(WARBASE.TOWER_SIZE)
+    expect(tower(large).size).toBe(tower(small).size)
+    for (const f of [...small.fixtures, ...large.fixtures]) {
+      if (f.model === 0) continue
+      expect(f.size).toBeGreaterThanOrEqual(WARBASE.FIXTURE_SIZE_MIN)
+      expect(f.size).toBeLessThanOrEqual(WARBASE.TOWER_SIZE)
+    }
+  })
+
   it('луч бьёт по ДЕТАЛИ, а не по корпусу, целясь в неё', () => {
     const world = withBases()
     const base = world.warBases[0]!
@@ -244,8 +261,8 @@ describe('отстрел деталей базы', () => {
 
   /**
    * Регрессия: твёрдым был только шар базы, и корабль влетал в навесную деталь насквозь —
-   * башня трёхкилометровой базы в шестьсот метров, внутри неё камера, а до обшивки и до
-   * посадки ещё сотни метров. Деталь — твердь: корабль встаёт на ней, а не под ней.
+   * башня торчит над обшивкой, внутри неё оказывалась камера, а до посадки ещё сотни метров.
+   * Деталь — твердь: корабль встаёт на ней, а не под ней.
    */
   it('в башню базы не влететь: деталь твёрдая, как и шар', () => {
     const world = withBases()

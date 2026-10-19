@@ -1,4 +1,5 @@
-import { WARBASE, warBaseIntegrity, type WarBaseEntity, type World } from '@elite/sim'
+import { Vector3 } from 'three'
+import { WARBASE, warBaseGrid, warBaseIntegrity, type WarBaseEntity, type World } from '@elite/sim'
 import { consumePress } from '../../platform/input/input'
 
 /**
@@ -30,46 +31,24 @@ function targetBase(world: World): WarBaseEntity | null {
   return world.warBases.find((b) => b.id === world.navTargetId && b.alive) ?? null
 }
 
-/**
- * Клетки сетки — те же, что кладёт `layoutFixtures`: ряды по широте, колонны по длине
- * параллели, чётные ряды сдвинуты на полшага. Здесь считается только НАПРАВЛЕНИЕ клетки,
- * занятость решает вызывающий.
- */
-function gridCells(): { x: number; y: number; z: number }[] {
-  const cells: { x: number; y: number; z: number }[] = []
-  for (let r = 0; r < WARBASE.GRID_ROWS; r++) {
-    const lat = WARBASE.SPIRAL_LAT * (1 - 2 * ((r + 0.5) / WARBASE.GRID_ROWS))
-    const ring = Math.sqrt(Math.max(0, 1 - lat * lat))
-    const cols = Math.max(2, Math.round(WARBASE.GRID_COLS * ring))
-    const shift = (r % 2) * 0.5
-    for (let c = 0; c < cols; c++) {
-      const phi = ((c + shift) / cols) * Math.PI * 2
-      cells.push({ x: Math.cos(phi) * ring, y: lat, z: Math.sin(phi) * ring })
-    }
-  }
-  return cells
+/** Занята ли клетка. Порог — середина шага до соседа на экваторе, иначе на крупной сетке сосед считается той же клеткой. */
+function occupied(base: WarBaseEntity, cell: Vector3, cols: number): boolean {
+  const limit = Math.cos(Math.PI / cols)
+  return base.fixtures.some((f) => f.alive && f.dir.dot(cell) > limit)
 }
 
-/** Занята ли клетка: деталь стоит достаточно близко к её направлению. */
-function occupied(base: WarBaseEntity, cell: { x: number; y: number; z: number }): boolean {
-  return base.fixtures.some((f) => f.alive && f.dir.x * cell.x + f.dir.y * cell.y + f.dir.z * cell.z > 0.985)
-}
-
-/** Изменить диаметр. Детали растут вместе с базой: их калибр — доля радиуса. */
+/** Изменить диаметр шара. Пушки остаются своего калибра: большая база — это больше шар, не крупнее детали. */
 function resize(base: WarBaseEntity, factor: number): void {
-  const next = Math.min(RADIUS_MAX, Math.max(RADIUS_MIN, base.radius * factor))
-  const k = next / base.radius
-  base.radius = next
-  for (const f of base.fixtures) f.size *= k
+  base.radius = Math.min(RADIUS_MAX, Math.max(RADIUS_MIN, base.radius * factor))
 }
 
 /** Поставить деталь в случайную СВОБОДНУЮ клетку сетки. Нет свободных — молчим. */
 function addFixture(world: World, base: WarBaseEntity): boolean {
-  const free = gridCells().filter((c) => !occupied(base, c))
+  const { cells, cols } = warBaseGrid(base.radius)
+  const free = cells.filter((c) => !occupied(base, c, cols))
   if (free.length === 0) return false
   const cell = free[Math.floor(world.rng() * free.length)]!
-  const size =
-    base.radius * (WARBASE.FIXTURE_SIZE_MIN + world.rng() * (WARBASE.FIXTURE_SIZE_MAX - WARBASE.FIXTURE_SIZE_MIN))
+  const size = WARBASE.FIXTURE_SIZE_MIN + world.rng() * (WARBASE.FIXTURE_SIZE_MAX - WARBASE.FIXTURE_SIZE_MIN)
   const dir = base.fixtures[0]!.dir.clone().set(cell.x, cell.y, cell.z).normalize()
   base.fixtures.push({
     id: world.ids.next(),
@@ -102,15 +81,16 @@ function removeFixture(base: WarBaseEntity): boolean {
 /** Готовый конфиг в консоль: и числа каталога, и запись базы для системы. */
 function dump(base: WarBaseEntity): void {
   const alive = base.fixtures.filter((f) => f.alive)
-  const sizes = alive.map((f) => f.size / base.radius)
+  const sizes = alive.map((f) => f.size)
   const min = sizes.length ? Math.min(...sizes) : 0
   const max = sizes.length ? Math.max(...sizes) : 0
+  const { cells } = warBaseGrid(base.radius)
   console.log(
     [
       `// база «${base.name}»: деталей ${alive.length}, живучесть ${(warBaseIntegrity(base) * 100).toFixed(0)}%`,
       `{ name: '${base.name}', radius: ${Math.round(base.radius)}, stationOffset: [?, ?, ?], model: ${base.shape} },`,
-      `// config/warbase: FIXTURES ≈ ${alive.length}, FIXTURE_SIZE ${min.toFixed(3)}…${max.toFixed(3)}`,
-      `// сетка: GRID_ROWS ${WARBASE.GRID_ROWS}, GRID_COLS ${WARBASE.GRID_COLS} → клеток ${gridCells().length}`,
+      `// калибр деталей ${min.toFixed(0)}…${max.toFixed(0)} м`,
+      `// сетка на этом радиусе: ${cells.length} клеток`,
     ].join('\n'),
   )
 }
