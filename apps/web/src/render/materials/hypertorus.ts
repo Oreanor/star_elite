@@ -105,6 +105,9 @@ uniform mat4 uPose;
 uniform float uScale;
 uniform float uThickness;
 uniform float uAngular;
+uniform float uSpread;
+uniform float uPuffAngular;
+uniform float uPuffMax;
 uniform float uFogNear;
 uniform float uFogFar;
 uniform float uCut;
@@ -135,8 +138,14 @@ void main() {
   // Середина — узкая струя, к галактике лента раздаётся. Квадрат тянет ширину вдоль последней трети.
   float along = abs(aFlow.x * 2.0 - 1.0);
   float neck = 0.5 + 2.4 * along * along;
-  float halfWidth = uAngular * neck * uScale / max(1e-4, 1.0 - p4.w);
-  mv.xyz += across * halfWidth * aSide * uThickness;
+  float denom = max(1e-4, 1.0 - p4.w);
+  float halfWidth = uAngular * neck * uScale / denom * uThickness;
+  // Пуф считается без раздвижки: лента живёт в масштабе проекции, галактика — нет.
+  float puffR = min(uPuffMax, uPuffAngular * uScale / max(uSpread, 0.001) / denom);
+  // Узел: торец не шире галактики. Сегмент там короткий, а устье широкое — торец
+  // рисуется чёрточкой поперёк потока и при толщине > 1 торчит из узла иголкой.
+  halfWidth = mix(halfWidth, min(halfWidth, puffR), along * along);
+  mv.xyz += across * halfWidth * aSide;
   gl_Position = projectionMatrix * mv;
   vBright = 1.0 - smoothstep(uFogNear, uFogFar, length(pos));
   #include <logdepthbuf_vertex>
@@ -168,14 +177,14 @@ void main() {
   // не зависят: иначе жёлтое ядро рвалось на пятна и выглядело крученой нитью.
   float flow = noise(vec2(s * 6.0 - clock * 0.5, vFlow.y));
   float density = 0.9 + 0.1 * flow;
-  float core = exp(-side * side * 7.0);
-  float halo = exp(-side * side * 2.5);
-  float edge = (0.6 * core + 0.4 * halo) * (1.0 - smoothstep(0.7, 1.0, abs(side)));
-  // Короткий спад только на самом срезе: устье уже широкое, длинное гашение съедало его.
-  float fade = smoothstep(0.0, 0.015, s) * (1.0 - smoothstep(0.985, 1.0, s));
+  float core = exp(-side * side * 8.0);
+  float halo = exp(-side * side * 2.8);
+  // Без жёсткой кромки: обрез на 0.7 ширины рисовал торец ленты прямой иголкой.
+  float edge = (0.7 * core + 0.3 * halo) * (1.0 - smoothstep(0.92, 1.0, abs(side)));
+  float fade = smoothstep(0.0, 0.05, s) * (1.0 - smoothstep(0.95, 1.0, s));
   // Цветовой профиль совпадает с галактикой: узкая светлая сердцевина, широкое фиолетовое гало.
   float colorCore = exp(-side * side * 16.0);
-  float colorHalo = exp(-side * side * 3.0) * 0.35 * (1.0 - smoothstep(0.7, 1.0, abs(side)));
+  float colorHalo = exp(-side * side * 3.0) * 0.35 * (1.0 - smoothstep(0.92, 1.0, abs(side)));
   vec3 col = glowColor(uCore, uFar, colorCore, colorHalo);
   col = mix(uFar, col, smoothstep(0.15, 0.95, vBright));
   float alpha = edge * density * fade * vBright * vBright * uGain;
@@ -266,6 +275,9 @@ export function torusEdgeMaterial(): ShaderMaterial {
       uGain: { value: TORUS.EDGE_INTENSITY },
       uTime: { value: 0 },
       uThickness: { value: TORUS.EDGE_THICKNESS },
+      uSpread: { value: TORUS.NODE_SPREAD },
+      uPuffAngular: { value: TORUS.PUFF_ANGULAR_R },
+      uPuffMax: { value: TORUS.PUFF_MAX_R_M },
       uPose: { value: new Matrix4() },
       uScale: { value: TORUS.SCALE },
       uAngular: { value: TORUS.EDGE_ANGULAR_WIDTH },

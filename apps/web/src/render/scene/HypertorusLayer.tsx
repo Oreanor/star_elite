@@ -388,6 +388,7 @@ export function HypertorusLayer() {
       TORUS.FOG_NEAR_M * spread,
       TORUS.FOG_FAR_M * spread,
       torusTuning.curvature,
+      spread,
     )
 
     // ДОМ — узел, ИЗ КОТОРОГО влетел (его записал `enterBush`), а не постоянный номер:

@@ -82,11 +82,13 @@ export function updateTorusEdges(
   fogNear: number,
   fogFar: number,
   curvature: number,
+  spread: number,
 ): void {
   if (g.userData.curve !== curvature) bakeRest(g, grid, curvature)
   const uniforms = material.uniforms
   if (uniforms.uPose!.value !== _poseMat) uniforms.uPose!.value = _poseMat
   uniforms.uScale!.value = scale
+  uniforms.uSpread!.value = spread
   uniforms.uFogNear!.value = fogNear
   uniforms.uFogFar!.value = fogFar
   const wLimit = Math.min(TORUS.POLE_CULL, wAtFog(scale, fogFar))
