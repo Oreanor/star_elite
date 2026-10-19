@@ -241,6 +241,12 @@ export interface ShipEntity {
 
   hold: CargoHold
   guns: GunState[]
+  /**
+   * Ракеты в направляющих, 0..стойка. Остальные лежат в трюме (тонна штука) и подаются
+   * по одной: `missileReload` — секунды до следующей. Пуск заводит таймер, такт его тикает.
+   */
+  missileReady: number
+  missileReload: number
   /** Общий нагрев лазеров (см. `LaserHeat`). */
   laserHeat: LaserHeat
   /**

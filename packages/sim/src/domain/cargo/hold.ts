@@ -55,6 +55,32 @@ export function addItem(hold: CargoHold, item: CargoItem): boolean {
   return true
 }
 
+/** Сколько единиц этого товара уже лежит. Нет стопки — ноль. */
+export function commodityUnits(hold: CargoHold, commodityId: string): number {
+  for (const item of hold.items) {
+    if (item.kind === 'commodity' && item.commodity.id === commodityId) return item.units
+  }
+  return 0
+}
+
+/**
+ * Забрать единицы из стопки. Возвращает, сколько реально ушло.
+ * Цена входа режется пропорционально остатку — иначе продажа остатка врала бы выгоду.
+ */
+export function takeCommodity(hold: CargoHold, commodityId: string, units: number): number {
+  const idx = hold.items.findIndex((i) => i.kind === 'commodity' && i.commodity.id === commodityId)
+  const stack = hold.items[idx]
+  if (!stack || stack.kind !== 'commodity' || units <= 0) return 0
+  const taken = Math.min(units, stack.units)
+  const left = stack.units - taken
+  if (stack.costBasis !== undefined) {
+    stack.costBasis = left > 0 ? stack.costBasis * (left / stack.units) : undefined
+  }
+  if (left <= 0) hold.items.splice(idx, 1)
+  else stack.units = left
+  return taken
+}
+
 /** Кладёт столько единиц товара, сколько влезет. Возвращает принятое количество. */
 export function addCommodity(hold: CargoHold, commodity: Commodity, units: number): number {
   // Масса 0 (статуэтки): место не занимает — влезает всё запрошенное.

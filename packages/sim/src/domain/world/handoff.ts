@@ -2,6 +2,7 @@ import { Vector3 } from 'three'
 import { GRIEVANCE } from '../../config/ai'
 import { createAIState, type AICommand, type DockPhase } from '../ai/types'
 import { refreshSpec } from './factory'
+import { chamberMissiles } from '../combat/ordnance'
 import { rehydrateCargoItem, serializeCargoItem, type SavedCargoItem } from '../save/player'
 import type { ContractOffer } from '../contracts/types'
 import type { ShipEntity, World } from './entities'
@@ -136,6 +137,9 @@ export function adoptShip(
   s.auxEnergy = h.aux
   s.hold.items = h.hold.map(rehydrateCargoItem).filter((it): it is NonNullable<typeof it> => it != null)
   refreshSpec(s)
+  // Трюм приехал чужой, стойка была местная. На станции передачи направляющие полные:
+  // секунда подачи — про бой, а не про смену хозяина.
+  chamberMissiles(s)
   // Слышал ли оферту — дело этого игрока, а не прежнего владельца.
   const heard = s.offer != null && h.offer != null && s.offer.kind === h.offer.kind && s.offer.revealed
   s.offer = h.offer ? { ...h.offer, revealed: heard } : null

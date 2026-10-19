@@ -7,6 +7,7 @@ import type { ShipEntity, World } from '../world/entities'
 import { refreshSpec } from '../world/factory'
 import { stockLevel, unitBuyPrice, unitSellPrice } from './market'
 import { issueFine, localFine } from './legal'
+import { isMissileRoundId } from '../combat/ordnance'
 
 /**
  * Торговля грузом на станции: цены от рынка поселения, покупка и продажа товара, стоимость трюма.
@@ -48,6 +49,9 @@ export function commodityBuyPrice(world: World, commodity: Commodity): number {
 
 /** Цена, по которой станция ПРИНИМАЕТ единицу. Ниже покупки — отсюда и убыток на месте. */
 export function commoditySellPrice(world: World, commodity: Commodity): number {
+  // Ракеты покупаются по твёрдой цене у пусковой, не на рынке. Иначе прилавок
+  // платил бы за них по формуле товара — и покупка пачки печатала бы кредиты.
+  if (isMissileRoundId(commodity.id)) return commodity.basePrice
   return unitSellPrice(commodity, localSettlement(world), world.systemIndex, world.galaxySeed)
 }
 

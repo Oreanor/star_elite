@@ -31,6 +31,8 @@ export type WarnCode =
   | 'dockHint'
   | 'playerLeft'
   | 'noRockets'
+  | 'magEmpty'
+  | 'reloading'
   | 'noLaser'
   | 'noJump'
   | 'portalClosed'
@@ -73,6 +75,8 @@ const RANK: Record<WarnCode, number> = {
   // Ответ на нажатие X — видно сразу, но любая тревога важнее.
   laserGroup: 45,
   noRockets: 84,
+  magEmpty: 84,
+  reloading: 84,
   noLaser: 84,
   noJump: 84,
   portalClosed: 43,

@@ -30,6 +30,8 @@ const STYLE: Record<WarnCode, Style> = {
   laserHot: { color: UI.WARN, hz: 3, key: 'hud.laserHot' },
   laserGroup: { color: UI.PRIMARY, hz: 0, key: 'hud.lasersAll' },
   noRockets: { color: UI.WARN, hz: 0, key: 'hud.noRockets' },
+  magEmpty: { color: UI.WARN, hz: 0, key: 'hud.magEmpty' },
+  reloading: { color: UI.WARN, hz: 0, key: 'hud.reloading' },
   noLaser: { color: UI.WARN, hz: 0, key: 'hud.noLaser' },
   noJump: { color: UI.WARN, hz: 0, key: 'hud.noJump' },
   portalClosed: { color: UI.PRIMARY, hz: 0, key: 'hud.portalClosed' },

@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest'
 import { MISSILE_PYLON, MODULE_CATALOGUE } from '../../config/modules'
 import { ASTEROID } from '../../config/world'
 import { PHYSICS } from '../../config/physics'
+import { ATHENA, ATLAS, AURORA_ONE, HERMES, ICARUS, missileRackOf, ORION, PEGASUS, PERSEUS, SPIRITUS_SANCTUS, THESEUS } from '../../config/chassis'
 import { ECM, GUNNERY } from '../../config/weapons'
 import { raySphere } from '../../core/math'
 import { auroraOneLoadout } from '../../config/loadouts'
@@ -16,6 +17,8 @@ import { applyDamage, regenShield } from './damage'
 import { fireEcm, regenEnergy } from './ecm'
 import { stepMissiles } from './missiles'
 import { coolGuns, cycleLaserGroup, fireLasers, fireMissile, missileAmmo } from './weapons'
+import { addCommodity } from '../cargo/hold'
+import { issueFactoryMissiles, missileCommodity, missileStock } from './ordnance'
 import { quietWorld } from '../../testkit'
 
 /**
@@ -73,8 +76,14 @@ function withOneEnemy(pylons = false): { world: World; enemy: ShipEntity } {
     patrols: [{ count: 1, at: [0, 0, -500], spread: 0, faction: 'hostile', name: 'Пират' }],
   })
   if (pylons) {
+    // В трюме «Гермеса» уже лежат его ракеты. Другой тип, но те же тонны: на тесном
+    // трюме «Авроры» заводская выдача новой пусковой в них не влезает, и тест меряет
+    // чужой груз. Боевой фикстуре нужен пустой отсек.
+    world.player.hold.items.length = 0
     world.player.loadout = auroraOneLoadout()
     refreshSpec(world.player)
+    // Пересадка не выдаёт ракеты сама: заводской боезапас кладётся при сборке борта.
+    issueFactoryMissiles(world.player)
     // Пересадка на другую сборку клампит корпус и щит к потолку, но не доливает до него:
     // у новой рамы потолок выше, и борт стартовал бы недолитым. Тесты урона сравнивают с
     // потолком спеки — начинаем с полного, как свежий корабль.
@@ -315,7 +324,35 @@ function launcherIndices(ship: ShipEntity): number[] {
   return out
 }
 
+/** Паспорт `ammo` стоящей пусковой: сколько штук на неё кладут с завода. */
+function fittedMissileAmmo(ship: ShipEntity): number {
+  const mount = ship.spec.mounts.find((m) => isMissile(m.weapon))
+  return mount && isMissile(mount.weapon) ? mount.weapon.ammo : 0
+}
+
 describe('ракеты на пилонах', () => {
+  /**
+   * В редакторе зеркальная пара — один подвес. Восемь ракет — у сильных, и не по гладкой
+   * лестнице цены: «Атлас» дешевле «Афины», но толще. Вторая пара подвесов — только
+   * у «Гермеса» и «Ориона», остальным с восьмёркой хватает одной.
+   */
+  it('залп восемь у сильных, второй подвес не у всех', () => {
+    const pylons = (hardpoints: readonly { kind: string }[]) => hardpoints.filter((h) => h.kind === 'pylon').length
+    expect(missileRackOf(HERMES)).toBe(8)
+    expect(pylons(HERMES.hardpoints)).toBe(4)
+    expect(missileRackOf(ORION)).toBe(8)
+    expect(pylons(ORION.hardpoints)).toBe(4)
+    expect(missileRackOf(ATHENA)).toBe(8)
+    expect(pylons(ATHENA.hardpoints)).toBe(2)
+    expect(missileRackOf(ATLAS)).toBe(8)
+    expect(pylons(ATLAS.hardpoints)).toBe(2)
+    for (const chassis of [PERSEUS, PEGASUS, THESEUS, AURORA_ONE, ICARUS]) {
+      expect(missileRackOf(chassis)).toBe(4)
+      expect(pylons(chassis.hardpoints)).toBe(2)
+    }
+    expect(pylons(SPIRITUS_SANCTUS.hardpoints)).toBe(0)
+  })
+
   /**
    * Боезапас считается из данных, а не из числа пилонов: ракета сама объявляет
    * `ammo`. Раньше он был равен единице, и тест сравнивал запас с числом пилонов —
@@ -330,7 +367,9 @@ describe('ракеты на пилонах', () => {
 
     const launchers = launcherIndices(world.player)
     expect(launchers.length).toBeGreaterThan(0)
-    expect(missileAmmo(world.player)).toBe(launchers.length * MISSILE_PYLON.ammo)
+    const ammo = fittedMissileAmmo(world.player)
+    // Паспорт модуля, но не больше отсека: тонна за штуку, и лишнее с завода не кладут.
+    expect(missileAmmo(world.player)).toBe(Math.min(launchers.length * ammo, world.player.hold.capacity))
 
     // Один вызов — одна ракета, независимо от того, сколько их на пилоне.
     const before = missileAmmo(world.player)
@@ -348,6 +387,7 @@ describe('ракеты на пилонах', () => {
   it('залп идёт с разных пусковых, пока они свободны', () => {
     const { world, enemy } = withOneEnemy(true)
     const launchers = launcherIndices(world.player)
+    const before = missileAmmo(world.player)
 
     // Ни одного шага мира: перезарядка не тикает, значит каждый пуск — новая пусковая.
     for (let i = 0; i < launchers.length; i++) {
@@ -359,8 +399,51 @@ describe('ракеты на пилонах', () => {
     expect(fireMissile(world, world.player, enemy.id)).toBe(false)
     expect(world.missiles.length).toBe(launchers.length)
 
-    // Запас при этом остался: по второй ракете на каждой пусковой.
-    expect(missileAmmo(world.player)).toBe(launchers.length * (MISSILE_PYLON.ammo - 1))
+    // Запас при этом остался: отстрелили по одной с пусковой, остальное лежит в трюме.
+    expect(missileAmmo(world.player)).toBe(before - launchers.length)
+    expect(missileAmmo(world.player)).toBeGreaterThan(0)
+  })
+
+  /**
+   * Отстрелял четыре — четыре секунды перезарядки. За это время ракеты садятся
+   * на пилоны по одной в секунду, но пуск молчит, пока не сели все четыре.
+   */
+  it('после четырёх пусков четыре секунды, и ракеты садятся на пилоны', () => {
+    const { world, enemy } = withOneEnemy(true)
+    const player = world.player
+    const fitted = player.spec.mounts.find((m) => isMissile(m.weapon))
+    if (!fitted || !isMissile(fitted.weapon)) throw new Error('нет пусковой')
+    const rack = missileRackOf(player.loadout.chassis)
+    const span = rack * GUNNERY.MISSILE_SEAT
+    // Отсек стартовой рамы может быть меньше двух стоек. Поднимаем потолок только
+    // чтобы доложить ещё одну стойку; refreshSpec тут же вернёт настоящую вместимость,
+    // а уже лежащие ракеты из трюма не выкидывает.
+    player.hold.capacity = Math.max(player.hold.capacity, missileStock(player) + rack)
+    addCommodity(player.hold, missileCommodity(fitted.weapon), rack)
+    refreshSpec(player)
+    const before = missileStock(player)
+    expect(before).toBeGreaterThan(rack)
+    expect(player.missileReady).toBe(rack)
+
+    for (let n = 0; n < rack; n++) {
+      for (const g of player.guns) g.cooldown = 0
+      expect(fireMissile(world, player, enemy.id)).toBe(true)
+    }
+    expect(player.missileReady).toBe(0)
+    expect(player.missileReload).toBe(span)
+    expect(missileStock(player)).toBe(before - rack)
+
+    const step = GUNNERY.MISSILE_SEAT
+    coolGuns(player, 0, step)
+    expect(player.missileReady).toBe(1) // первая уже на пилоне
+    for (const g of player.guns) g.cooldown = 0
+    expect(fireMissile(world, player, enemy.id)).toBe(false) // перезарядка ещё идёт
+
+    coolGuns(player, 0, span - step)
+    expect(player.missileReady).toBe(rack)
+    expect(player.missileReload).toBe(0)
+    for (const g of player.guns) g.cooldown = 0
+    expect(fireMissile(world, player, enemy.id)).toBe(true)
   })
 
   it('подвесная ракета сносит около половины «Сайдвиндера», но не добивает с одного', () => {

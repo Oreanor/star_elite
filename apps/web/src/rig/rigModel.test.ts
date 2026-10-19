@@ -13,6 +13,20 @@ describe('редактор оснастки', () => {
     { offset: [1.5, -0.7, 7.5] as const, radius: 1 },
   ]
 
+  it('вторая пара подвесов в редакторе — второй пункт, а не продолжение первой', () => {
+    const pylonsOf = (id: string) => {
+      const chassis = CHASSIS_CATALOGUE.find((c) => c.id === id)!
+      return fromChassis(chassis, [], 1).items.filter((i) => i.kind === 'pylon')
+    }
+    // Зеркало ±x редактор считает одним подвесом. Две пары — два пункта.
+    expect(pylonsOf('hermes')).toHaveLength(2)
+    expect(pylonsOf('orion')).toHaveLength(2)
+    expect(pylonsOf('hermes').every((p) => p.pair)).toBe(true)
+    expect(pylonsOf('athena')).toHaveLength(1)
+    expect(pylonsOf('atlas')).toHaveLength(1)
+    expect(pylonsOf('aurora_one')).toHaveLength(1)
+  })
+
   it('зеркальные точки сводятся в пары: дула, подвесы, сопла', () => {
     const s = fromChassis(aurora, nozzles, 1)
     const lasers = s.items.filter((i) => i.kind === 'laser')
@@ -45,9 +59,9 @@ describe('редактор оснастки', () => {
 
   it('печать: исходная оснастка воспроизводится строками конфига', () => {
     const text = printout(fromChassis(aurora, nozzles, 1))
-    expect(text).toContain("{ offset: [0, -0.86, 0.53], kind: 'gun', maxClass: 2, nozzles: [[-3.82, -0.86, 0.53], [3.82, -0.86, 0.53]] },")
+    expect(text).toContain("{ offset: [0, -0.86, 0.53], kind: 'gun', maxClass: 2, nozzles: [[-4.34, -0.86, 0.53], [4.34, -0.86, 0.53]] },")
     expect(text).toContain("{ offset: [0, -0.87, -8.52], kind: 'gun', maxClass: 2, bore: 2, nozzles: [[0, -0.87, -8.52]] },")
-    expect(text).toContain("{ offset: [-5, -0.8, 3], kind: 'pylon', maxClass: 1 },")
+    expect(text).toContain("{ offset: [-3.34, -0.8, 3], kind: 'pylon', maxClass: 1 },")
     expect(text).toContain('nozzles: [{ offset: [-1.5, -0.7, 7.5], radius: 1 }, { offset: [1.5, -0.7, 7.5], radius: 1 }],')
     expect(text).toContain('missileScale: 1,')
   })
@@ -58,8 +72,8 @@ describe('редактор оснастки', () => {
     moveItem(pylon, 1, 0, 0)
     const entry = toEntry(aurora, s)
     expect(entry.hardpoints!.map((h) => h.kind)).toEqual(aurora.hardpoints.map((h) => h.kind))
-    expect(entry.hardpoints![3]!.offset).toEqual([-6, -0.8, 3]) // −x пары — на своём месте
-    expect(entry.hardpoints![4]!.offset).toEqual([6, -0.8, 3])
+    expect(entry.hardpoints![3]!.offset).toEqual([-4.34, -0.8, 3]) // −x пары — на своём месте
+    expect(entry.hardpoints![4]!.offset).toEqual([4.34, -0.8, 3])
     expect(entry.hardpoints![0]!.offset).toEqual(aurora.hardpoints[0]!.offset) // соседняя точка не тронута
     expect(entry.missileScale).toBe(1)
   })

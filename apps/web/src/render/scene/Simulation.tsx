@@ -21,8 +21,10 @@ import {
   hasBomb,
   hasEcm,
   droneAmmo,
+  isDrone,
   isLaser,
-  missileAmmo,
+  isMissile,
+  missileStock,
   serializePlayer,
   stepWorld,
   aiController,
@@ -387,8 +389,15 @@ export function Simulation() {
     // почему клавиша молчит. Иначе «нажал — ничего» читается как баг, а не как «не куплено».
     // R — пилон. Тип один за раз: обычная ракета или дрон-ракета (что экипировано).
     if (consumePress('KeyR')) {
-      if (missileAmmo(world.player) > 0 || droneAmmo(world.player) > 0) intent.missile = true
-      else pushWarning('noRockets', world.time)
+      // Пока идут четыре секунды, ракеты уже садятся на пилоны — пуск всё равно закрыт.
+      const rackReady = world.player.missileReload <= 0 && world.player.missileReady > 0
+      if (rackReady || droneAmmo(world.player) > 0) intent.missile = true
+      else if (world.player.missileReload > 0 || missileStock(world.player) > 0) pushWarning('reloading', world.time)
+      else {
+        // Пусковая стоит, трюм пуст — это не «ракет нет»: модуль на месте, покупать на станции.
+        const loaded = world.player.spec.mounts.some((m) => isMissile(m.weapon) || isDrone(m.weapon))
+        pushWarning(loaded ? 'magEmpty' : 'noRockets', world.time)
+      }
     }
     // Аукс-слот ОДИН — значит и клавиша одна: E активирует то, что в нём стоит.
     // Раньше bomb/cloak/ecm висели на B/X/E порознь, и две из трёх всегда били в

@@ -1,9 +1,11 @@
 import { Vector3 } from 'three'
 import {
   CRUISE,
+  missileRackOf,
   STAR_HEAT,
   auxFraction,
-  missileAmmo,
+  isMissile,
+  missileStock,
   laserOverheated,
   meanHeat,
   scooping,
@@ -228,21 +230,26 @@ export function drawReadouts({ ctx, world, height, bush, torusThrust }: HudFrame
     y += step
   }
 
-  // ── РАКЕТ: обойма черепашками ───────────────────────────────────────────────
-  const ammo = missileAmmo(player)
-  if (ammo > 0) {
+  // ── РАКЕТ: места стойки всегда на месте, запас трюма — числом ───────────────
+  // Пусковой нет — рисовать нечего. Есть — черепашки не пропадают при отстреле:
+  // севшая на пилон яркая, пустое место той же иконкой, только прозрачное.
+  // Восемь иконок уже не влезают в шаг четырёх, поэтому у длинной стойки шаг короче.
+  if (player.spec.mounts.some((m) => isMissile(m.weapon))) {
+    const stock = missileStock(player)
+    const ready = player.missileReady
+    const rack = missileRackOf(player.loadout.chassis)
     y += 4 * S
     text(ctx, t('hud.rockets'), x, y, HUD_COLORS.DIM)
-    // Восемь значков должны уместиться в ширину столбца (barWidth): мельче панцирь,
-    // чуть шире шаг — на глаз черепашки не слипаются, а обойма влезает целиком.
     const r = 2 * S
-    const gap = 8 * S
+    const gap = (rack > 4 ? 6 : 8) * S
     const iconX = x + labelWidth + 3 * S
     const iconY = y + 5 * S
-    const maxIcons = 8 // столько ракет в обойме максимум — рисуем все, без «остатка числом»
-    const shown = Math.min(ammo, maxIcons)
-    for (let i = 0; i < shown; i++) turtle(ctx, iconX + i * gap, iconY, r, HUD_COLORS.WARN)
-    // Страховка, если обойму когда-нибудь расширят: остаток — числом.
-    if (ammo > maxIcons) text(ctx, `×${ammo}`, iconX + shown * gap + 2 * S, y, HUD_COLORS.WARN)
+    const opaque = ctx.globalAlpha
+    for (let i = 0; i < rack; i++) {
+      ctx.globalAlpha = i < ready ? opaque : opaque * 0.28
+      turtle(ctx, iconX + i * gap, iconY, r, HUD_COLORS.WARN)
+    }
+    ctx.globalAlpha = opaque
+    text(ctx, `×${stock}`, iconX + rack * gap + 2 * S, y, HUD_COLORS.WARN)
   }
 }

@@ -24,6 +24,15 @@ export {
 export { destroyWarBase, damageWarBaseFixture, killWarBaseFixture, stepWarBaseWrecks, warBaseWreckDone } from './warBase'
 export { stepWarBaseTurrets } from './warBaseGuns'
 export { stepMissiles } from './missiles'
+export {
+  armMissileReload,
+  chamberMissiles,
+  isMissileRoundId,
+  missileCommodity,
+  missileRoom,
+  missileStock,
+  stepMissileReload,
+} from './ordnance'
 export { assessThreat, threatLevel, type ThreatAssessment, type ThreatLevel } from './threat'
 export { stepBolts } from './bolts'
 export { castLaser, type LaserHit, type ShotSource } from './raycast'

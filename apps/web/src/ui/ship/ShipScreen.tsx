@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useReducer, useState } from 'react'
 import {
   deriveShipSpec,
+  missileStock,
   stackWithFactory,
   shipyardOffers,
   swapHull,
@@ -89,7 +90,8 @@ export function ShipScreen({
   // мастерскую), а листая ЧУЖОЙ корпус на верфи, видим ЕГО раскладку слотов (сколько чего
   // и что пусто) в выбранной сборке — но только на просмотр, оснащать чужой корабль нельзя.
   const shownLoadout = docked && !owned ? previewLoadout : player.loadout
-  const slots = buildSlots(shownLoadout)
+  // Свой борт — ракеты в трюме, не паспорт модуля. Витрина чужого корпуса паспорт оставляет.
+  const slots = buildSlots(shownLoadout, owned ? () => missileStock(player) : undefined)
   // Свой борт интерактивен всегда: в полёте — переставить своё железо из трюма, у причала — верфь.
   const slotsInteractive = owned
   const openSlot = slotsInteractive ? slots.find((s) => s.key === openKey) ?? null : null

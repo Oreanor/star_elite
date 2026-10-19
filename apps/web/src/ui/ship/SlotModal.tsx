@@ -16,9 +16,10 @@ import {
   type CopilotRepairOutcome,
   moduleResaleValue,
   moduleStat,
+  buyMissiles,
+  missileRoom,
+  missileStock,
   priceOf,
-  rearm,
-  rearmCost,
   repair,
   repairModule,
   repairModuleQuote,
@@ -32,6 +33,7 @@ import {
   upgradeCashCost,
   upgradedStatValue,
   upgradeModule,
+  SHOP,
   type CargoItem,
   type ShipModule,
   type World,
@@ -142,9 +144,36 @@ export function SlotModal({
   // закрываем окно (чини/дозаряжай/улучшай подряд). Провал денег не берёт, но может доломать.
   const doRepair = () => {
     if (!module) return
+    if (module.kind === 'missile') {
+      askBuyRounds()
+      return
+    }
     const outcome = runRepair(world, module)
     onChange()
     setConfirm({ message: t(('ship.repair.' + outcome) as Key), actions: [] })
+  }
+
+  // Ракеты — груз, не обойма. Сколько влезет в трюм: одна, стойка из четырёх или весь остаток места.
+  const askBuyRounds = () => {
+    const room = missileRoom(world.player)
+    const price = SHOP.MISSILE_ROUND_COST
+    const cap = Math.min(room, Math.floor(world.credits / price))
+    if (cap <= 0) {
+      setConfirm({ message: room <= 0 ? t('hud.holdFull') : t('ship.repair.no-money'), actions: [] })
+      return
+    }
+    const buy = (n: number) => buyMissiles(world, world.player, n)
+    const actions: Confirm['actions'] = [
+      { label: t('ship.buyRounds.one', { price }), run: () => buy(1), stay: true },
+    ]
+    if (cap >= 4) actions.push({ label: t('ship.buyRounds.rack', { price: price * 4 }), run: () => buy(4), stay: true })
+    if (cap !== 1 && cap !== 4) {
+      actions.push({ label: t('ship.buyRounds.fill', { n: cap, price: price * cap }), run: () => buy(cap), stay: true })
+    }
+    setConfirm({
+      message: t('ship.buyRounds.ask', { have: missileStock(world.player), room }),
+      actions,
+    })
   }
 
   // В полёте чинит ВТОРОЙ ПИЛОТ — только за детали, без броска (`copilotRepair`).
@@ -562,8 +591,8 @@ function repairInfoFor(world: World, module: ShipModule): RepairInfo {
     return { price: q.price, can: world.credits >= q.price, refused: false }
   }
   if (module.kind === 'missile') {
-    const price = rearmCost(world.player)
-    return { price, can: price > 0 && world.credits >= price, refused: false }
+    const room = missileRoom(world.player)
+    return { price: 0, can: room > 0 && world.credits >= SHOP.MISSILE_ROUND_COST, refused: false }
   }
   if (moduleFault(module) > 0) {
     const q = repairModuleQuote(world, module)
@@ -591,7 +620,6 @@ function copilotTargetOf(module: ShipModule): RepairTarget | null {
 /** Собственно ремонт. Возвращает КЛЮЧ исхода для сообщения игроку (ремонт — бросок). */
 function runRepair(world: World, module: ShipModule): string {
   if (module.kind === 'armour') return repair(world, world.player) // 'repaired'|'botched'|'refused'|...
-  if (module.kind === 'missile') return rearm(world, world.player) ? 'rearmed' : 'no-money'
   // Поломка детали — тот же бросок мастеров, но свой текст (не «корпус», а «деталь»).
   const o = repairModule(world, world.player, module)
   return o === 'repaired' ? 'partRepaired' : o === 'botched' ? 'partBotched' : o === 'refused' ? 'partRefused' : o

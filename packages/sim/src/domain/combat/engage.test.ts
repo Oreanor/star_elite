@@ -8,6 +8,7 @@ import type { ShipEntity } from '../world/entities'
 import { refreshSpec } from '../world/factory'
 import { stepMissiles } from './missiles'
 import { fireMissile } from './weapons'
+import { issueFactoryMissiles } from './ordnance'
 import { isEngageable } from './engage'
 
 /**
@@ -32,6 +33,7 @@ function withPirate(): { world: World; pirate: ShipEntity } {
   // поэтому ставим серийную «Аврору»: та же рама плюс два пилона.
   world.player.loadout = auroraOneLoadout()
   refreshSpec(world.player)
+  issueFactoryMissiles(world.player)
   world.player.state.pos.set(0, 0, 0)
   pirate.state.pos.set(0, 0, -400)
   pirate.ai = createAIState(new Vector3(0, 0, -400), world.rng)

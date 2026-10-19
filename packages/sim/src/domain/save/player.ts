@@ -6,7 +6,8 @@ import { findChassis } from '../../config/chassis'
 import { findModule } from '../../config/modules'
 import { addItem, createHold } from '../cargo/hold'
 import { COMMODITIES, type CargoItem, type Commodity, type FigurineSpecimen } from '../cargo/items'
-import { createLoadout, isWeapon, NO_HULL_UPGRADES, type HullUpgrades, type Loadout, type ShipModule, type WeaponModule } from '../loadout'
+import { createLoadout, isMissile, isWeapon, NO_HULL_UPGRADES, type HullUpgrades, type Loadout, type ShipModule, type WeaponModule } from '../loadout'
+import { chamberMissiles, isMissileRoundId, migrateLegacyMissileAmmo, missileCommodity, missileStock } from '../combat/ordnance'
 import { refreshSpec } from '../world/factory'
 import { combinedScale, scaleToBase } from '../station/moduleState'
 import type { Acquaintance } from '../world/acquaintance'
@@ -97,8 +98,14 @@ export interface PlayerSave {
   jumpCharge: number
   /** Заряд батареи доп-отсека, ед. Необязателен: старые сейвы (с bombCharge) грузятся полными. */
   auxEnergy?: number
-  /** Боезапас по индексам подвесок (`spec.mounts`): у ствола 0, у ракеты/БПЛА — остаток. */
+  /** Боезапас по индексам подвесок (`spec.mounts`): у ствола 0, у БПЛА — остаток. Ракеты — в трюме. */
   guns: number[]
+  /**
+   * Ракеты в направляющих и секунды до следующей подачи. Нет полей — сейв старый,
+   * ракеты ещё лежали на стволе (`guns`) и перекладываются в трюм при загрузке.
+   */
+  missileReady?: number
+  missileReload?: number
   /** Боевой опыт. Необязателен: старые сейвы — новичок, ранг 10. */
   pilotXp?: number
   /** Второй пилот на борту. Необязателен: старые сейвы — без него. Чистые данные. */
@@ -109,6 +116,16 @@ export interface PlayerSave {
 const COMMODITY_BY_ID: ReadonlyMap<string, Commodity> = new Map(
   Object.values(COMMODITIES).map((c) => [c.id, c]),
 )
+
+/** Рыночный товар или ракета из трюма (`round:<модуль>`). Неизвестный id — undefined. */
+function commodityBySavedId(id: string): Commodity | undefined {
+  const known = COMMODITY_BY_ID.get(id)
+  if (known) return known
+  if (!isMissileRoundId(id)) return undefined
+  const mod = findModule(id.slice('round:'.length))
+  if (!mod || !isMissile(mod)) return undefined
+  return missileCommodity(mod)
+}
 
 function serializeModule(m: ShipModule): SavedModule {
   // Прокачку и поломку пишем, только если они есть: заводской модуль остаётся коротким `{id}`.
@@ -159,7 +176,7 @@ export function rehydrateCargoItem(saved: SavedCargoItem): CargoItem | null {
     const module = rehydrateModule(saved.module)
     return module ? { kind: 'module', module } : null
   }
-  const commodity = COMMODITY_BY_ID.get(saved.commodity)
+  const commodity = commodityBySavedId(saved.commodity)
   if (!commodity || !(saved.units > 0)) return null
   return saved.specimens?.length
     ? { kind: 'commodity', commodity, units: saved.units, specimens: saved.specimens.map((sp) => ({ ...sp })) }
@@ -247,6 +264,8 @@ export function serializePlayer(world: World): PlayerSave {
     jumpCharge: p.jumpCharge,
     auxEnergy: p.auxEnergy,
     guns: p.guns.map((g) => g.ammo),
+    missileReady: p.missileReady,
+    missileReload: p.missileReload,
     pilotXp: world.pilotXp,
     copilot: world.copilot ? { ...world.copilot, persona: { ...world.copilot.persona } } : null,
   }
@@ -297,7 +316,7 @@ export function applyPlayerSave(world: World, save: PlayerSave): void {
   p.hold = createHold(0)
   refreshSpec(p)
   for (const stack of save.hold) {
-    const commodity = COMMODITY_BY_ID.get(stack.commodity)
+    const commodity = commodityBySavedId(stack.commodity)
     if (!commodity) continue // товар вырезали из игры — пропускаем, а не роняем
     addItem(p.hold, { kind: 'commodity', commodity, units: stack.units, costBasis: stack.costBasis })
   }
@@ -322,4 +341,14 @@ export function applyPlayerSave(world: World, save: PlayerSave): void {
     const g = p.guns[i]
     if (g) g.ammo = ammo
   })
+  // Старый сейв ракет в трюме не знал: они лежали на стволе. Новый уже привёз стойку.
+  if (save.missileReady === undefined) {
+    migrateLegacyMissileAmmo(p)
+    refreshSpec(p)
+    chamberMissiles(p)
+  } else {
+    p.missileReady = save.missileReady
+    p.missileReload = save.missileReload ?? 0
+    if (p.missileReady > missileStock(p)) p.missileReady = missileStock(p)
+  }
 }

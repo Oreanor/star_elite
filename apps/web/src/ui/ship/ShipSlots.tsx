@@ -40,10 +40,12 @@ export interface CategoryCard {
  * вернуть, да и куда ставить новый — было бы не видно.
  *
  * Ракеты НЕ считаются по пилонам: пилоны несут один тип разом («либо одни, либо
- * другие»), поэтому все схлопнуты в одну плитку с суммарным боезапасом.
+ * другие»), поэтому все схлопнуты в одну плитку. `remaining` — сколько ракет
+ * лежит в трюме (общий запас, не обойма пилона). Нет его — на плитке паспорт
+ * заводской выдачи: столько чужой корпус берёт с верфи.
  * Действия верфи над ней идут по первому пилону — остальные того же вида.
  */
-export function buildSlots(loadout: Loadout): SlotView[] {
+export function buildSlots(loadout: Loadout, remaining?: (hardpoint: number) => number): SlotView[] {
   const rows: SlotView[] = []
 
   // Внутренние слоты заданы корпусом (chassis.slots). Раздаём установленные модули
@@ -74,7 +76,10 @@ export function buildSlots(loadout: Loadout): SlotView[] {
   // Дрон-ракеты предлагаются тут же, как другой тип: слот принимает и 'missile', и 'drone'.
   const loaded = pylons.filter((i) => loadout.weapons[i])
   if (loaded.length > 0) {
-    const ammoTotal = loaded.reduce((sum, i) => sum + moduleStat(loadout.weapons[i]!).value, 0)
+    // Запас один на все пилоны (трюм), поэтому остаток берём один раз, а не суммой по подвескам.
+    const ammoTotal = remaining
+      ? remaining(loaded[0]!)
+      : loaded.reduce((sum, i) => sum + moduleStat(loadout.weapons[i]!).value, 0)
     rows.push({
       key: 'missiles',
       module: loadout.weapons[loaded[0]!]!,

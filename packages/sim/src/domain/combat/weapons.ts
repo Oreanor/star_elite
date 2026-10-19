@@ -3,6 +3,7 @@ import { GUNNERY } from '../../config/weapons'
 import { aimDirection, gunQuat, shipAxes } from '../flight/axes'
 import { phasedOut } from '../scale/scale'
 import { isLaser, isMissile, type LaserModule } from '../loadout'
+import { armMissileReload, missileStock, retuneMissileMass, spendMissile, stepMissileReload } from './ordnance'
 import type { BoltEntity, MissileEntity, ShipEntity, World } from '../world/entities'
 import { applyRay, resolveLaserHit, strikeYield, type LaserStrike } from './bolts'
 import { isRayEffect } from './laserEffects'
@@ -259,17 +260,28 @@ export function fireMissile(world: World, e: ShipEntity, targetId: number | null
    * опустевший пилон выпадал из поиска сам. Стоило зарядить по две — и залп
    * превращался в одну ракету раз в 0.8 с.
    */
+  // Перезарядка четырёх — все четыре секунды, даже если первая уже села на пилон.
+  // Пустая стойка молчит и без таймера: трюм есть, а на пилоне ещё нечего пускать.
+  if (e.missileReload > 0 || e.missileReady <= 0) return false
   const index = e.spec.mounts.findIndex(
-    (m, i) => isMissile(m.weapon) && (e.guns[i]?.ammo ?? 0) > 0 && (e.guns[i]?.cooldown ?? 0) <= 0,
+    (m, i) => isMissile(m.weapon) && (e.guns[i]?.cooldown ?? 0) <= 0,
   )
   if (index < 0) return false
 
   const mount = e.spec.mounts[index]
   const gun = e.guns[index]
   if (!mount || !gun || !isMissile(mount.weapon)) return false
+  // Трюм и стойка разъехались — не пускаем воздух.
+  if (!spendMissile(e)) {
+    e.missileReady = missileStock(e)
+    return false
+  }
 
-  gun.ammo -= 1
-  gun.cooldown = 0.8 // перезарядка пусковой, не орудия
+  e.missileReady -= 1
+  gun.cooldown = 0.8 // перезарядка пусковой, не подача из трюма
+  armMissileReload(e)
+  // Тонна ушла с борта — ускорения надо пересчитать, стволы при этом не сбрасывать.
+  retuneMissileMass(e)
 
   muzzleWorldPos(e, index, _muzzle)
   shipAxes(e.state.quat, _fwd, _right, _up)
@@ -338,6 +350,7 @@ export function cycleLaserGroup(e: ShipEntity): number | null {
 
 /** Остывание и перезарядка. Зовётся каждый шаг для каждого корабля. */
 export function coolGuns(e: ShipEntity, now: number, dt: number): void {
+  stepMissileReload(e, dt)
   let coolSum = 0
   let lasers = 0
   e.spec.mounts.forEach((mount, i) => {
@@ -385,11 +398,7 @@ export function meanHeat(e: ShipEntity): number {
   return e.laserHeat.heat
 }
 
-/** Осталось ракет всего. */
+/** Сколько ракет ещё на борту — в трюме, вместе со стойкой. Пуск смотрит `missileReady`. */
 export function missileAmmo(e: ShipEntity): number {
-  let total = 0
-  e.spec.mounts.forEach((mount, i) => {
-    if (isMissile(mount.weapon)) total += e.guns[i]?.ammo ?? 0
-  })
-  return total
+  return missileStock(e)
 }

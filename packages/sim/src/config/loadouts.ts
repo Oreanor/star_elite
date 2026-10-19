@@ -129,8 +129,8 @@ export function pirateLeaderLoadout(): Loadout {
   return createLoadout(
     ORION,
     [ENGINE_CIVILIAN, RCS_STANDARD, SHIELD_LIGHT, HYPERDRIVE_COMPACT, ECM_UNIT],
-    // «Орион» — три орудийные точки и два пилона: ствол + две ракеты на ПИЛОНАХ (оружие — по
-    // номерам точек). Компактный привод для ПОБЕГА.
+    // «Орион» — три орудийные точки и две пары подвесов. Главарю вооружена первая пара
+    // (оружие — по номерам точек). Компактный привод для ПОБЕГА.
     [PULSE_LASER, null, null, MISSILE_PYLON, MISSILE_PYLON],
   )
 }

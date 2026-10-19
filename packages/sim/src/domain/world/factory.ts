@@ -13,7 +13,8 @@ import { createAIState } from '../ai/types'
 import { addFigurineSpecimens, cargoMass, createHold } from '../cargo/hold'
 import { createCruiseState } from '../cruise/drive'
 import { createControls, createShipState } from '../flight/types'
-import { deriveShipSpec, isDrone, isMissile, NO_HULL_UPGRADES, type Loadout, type WeaponModule } from '../loadout'
+import { deriveShipSpec, isDrone, NO_HULL_UPGRADES, type Loadout } from '../loadout'
+import { issueFactoryMissiles, missileStock } from '../combat/ordnance'
 import type {
   AsteroidBeltEntity,
   AsteroidEntity,
@@ -56,9 +57,6 @@ import { stationSeat } from '../galaxy/arrival'
  * из `SystemDef` — фабрику не нужно трогать, чтобы добавить новую систему.
  */
 
-/** Подвеска со счётным боезапасом: ракета или контейнер БПЛА, но не ствол. */
-const hasAmmo = (w: WeaponModule): w is Extract<WeaponModule, { ammo: number }> => isMissile(w) || isDrone(w)
-
 export function makeShip(
   ids: IdSource,
   faction: Faction,
@@ -77,9 +75,9 @@ export function makeShip(
 
   const guns: GunState[] = spec.mounts.map((mount) => ({
     cooldown: 0,
-    // Боезапас есть у всего, что СХОДИТ с подвески: и у ракеты, и у контейнера
-    // БПЛА. Спрашивать «ракета ли это» значило бы оставить контейнер пустым.
-    ammo: hasAmmo(mount.weapon) ? mount.weapon.ammo : 0,
+    // Ракеты лежат в трюме, не на стволе. У контейнера БПЛА боезапас по-прежнему здесь:
+    // спрашивать «ракета ли это» и ставить ноль значило бы оставить контейнер пустым.
+    ammo: isDrone(mount.weapon) ? mount.weapon.ammo : 0,
   }))
 
   // Персона и имя пилота — из одного источника случайности: имя даётся ПО ВИДУ
@@ -96,7 +94,7 @@ export function makeShip(
     addFigurineSpecimens(hold, specimens)
   }
 
-  return {
+  const ship: ShipEntity = {
     id: ids.next(),
     kind: 'ship',
     faction,
@@ -134,6 +132,8 @@ export function makeShip(
     cloaked: false,
     hold,
     guns,
+    missileReady: 0,
+    missileReload: 0,
     cruise: createCruiseState(),
     landedOn: null,
     alive: true,
@@ -151,6 +151,9 @@ export function makeShip(
     laserHeat: { heat: 0, overheatUntil: 0, lastHeatAt: -Infinity },
     laserGroup: null,
   }
+  // Заводская выдача — в трюм, тонна за штуку. Пустой спек этих тонн не видел.
+  issueFactoryMissiles(ship)
+  return ship
 }
 
 const _slovoQuat = /* @__PURE__ */ new Quaternion()
@@ -221,10 +224,10 @@ export function refreshSpec(e: ShipEntity): void {
   const spec = deriveShipSpec(e.loadout, cargoMass(e.hold), e.hullUp)
   // Состояние стволов переносим по НОМЕРУ ПОДВЕСКИ, поэтому старую раскладку надо
   // снять до подмены spec.
-  const wasByHardpoint = new Map<number, ShipEntity['guns'][number]>()
+  const wasByHardpoint = new Map<number, { ammo: number; drone: boolean }>()
   e.spec.mounts.forEach((mount, i) => {
     const gun = e.guns[i]
-    if (gun) wasByHardpoint.set(mount.index, gun)
+    if (gun) wasByHardpoint.set(mount.index, { ammo: gun.ammo, drone: isDrone(mount.weapon) })
   })
   e.spec = spec
   e.hold.capacity = spec.cargoCapacity
@@ -238,23 +241,20 @@ export function refreshSpec(e: ShipEntity): void {
   e.jumpCharge = Math.min(e.jumpCharge, spec.jumpRange)
 
   /**
-   * Стволы могли смениться: сохраняем боезапас там, где подвеска осталась подвеской.
-   *
-   * Ключ — `mount.index` (номер подвески на раме), а НЕ позиция в `spec.mounts`.
-   * `mounts` — сжатый список: пустые подвески в него не попадают (`derive.ts`), поэтому
-   * стоит снять или поставить оружие, как позиции всех последующих съезжают, и состояние
-   * перетекает между чужими подвесками. Пойманный случай: смена корпуса на «Аврору» с
-   * двумя пилонами давала боезапас 2 вместо 4 — первый пилон наследовал `ammo: 0` от
-   * лазера, стоявшего на его прежнем месте, а `??` такой ноль считает законным значением
-   * и не заменяет его штатным боекомплектом.
+   * Стволы могли смениться. Боезапас БПЛА переносим по НОМЕРУ подвески, не по позиции
+   * в `spec.mounts`: список сжатый, пустые точки из него выпали, и индекс съезжает.
+   * Копируем остаток только если на точке уже стоял контейнер. Ноль лазера или ракеты
+   * (у ракеты на стволе всегда 0 — запас в трюме) иначе затирал бы свежую обойму БПЛА.
    */
   e.guns = spec.mounts.map((mount) => {
     const prev = wasByHardpoint.get(mount.index)
     return {
       cooldown: 0,
-      ammo: hasAmmo(mount.weapon) ? (prev?.ammo ?? mount.weapon.ammo) : 0,
+      ammo: isDrone(mount.weapon) ? (prev?.drone ? prev.ammo : mount.weapon.ammo) : 0,
     }
   })
+  // Продали или выбросили ракеты — стойка не может быть полнее трюма.
+  if (e.missileReady > missileStock(e)) e.missileReady = missileStock(e)
 }
 
 /**

@@ -1,6 +1,7 @@
 import { SHOP, STOCK } from '../../config/station'
 import { clamp, makeRng } from '../../core/math'
-import { addItem, cargoMass, freeCapacity, removeItem } from '../cargo/hold'
+import { addCommodity, addItem, cargoMass, freeCapacity, removeItem } from '../cargo/hold'
+import { chamberMissiles, missileCommodity, missileRoom, fittedMissile } from '../combat/ordnance'
 import type { Settlement } from '../galaxy/types'
 import { MODULE_CATALOGUE } from '../../config/modules'
 import {
@@ -584,35 +585,25 @@ export function sellModule(world: World, ship: ShipEntity, module: ShipModule): 
 
 // ─── Боезапас ────────────────────────────────────────────────────────────────
 
-/** Сколько ракет не хватает до полного боекомплекта во всех пусковых. */
-export function missingRounds(ship: ShipEntity): number {
-  let missing = 0
-  ship.spec.mounts.forEach((mount, i) => {
-    if (!isMissile(mount.weapon)) return
-    missing += Math.max(0, mount.weapon.ammo - (ship.guns[i]?.ammo ?? 0))
-  })
-  return missing
-}
-
-export function rearmCost(ship: ShipEntity): number {
-  return missingRounds(ship) * SHOP.MISSILE_ROUND_COST
-}
-
 /**
- * Пополнить ракеты во всех пусковых. Пусковая — модуль, ракета — расходник:
- * без этой операции ракетное вооружение работало ровно один вылет.
+ * Купить ракеты в трюм. Сколько просили, но не больше свободных тонн и денег.
+ * На станции стойка заряжается сразу: секунда подачи — это бой, не прилавок.
  *
- * Бомбы здесь нет намеренно: она копится от реактора, а не покупается.
+ * @returns сколько штук легло в трюм. Ноль — нет пусковой, места или кредитов.
  */
-export function rearm(world: World, ship: ShipEntity): boolean {
-  const cost = rearmCost(ship)
-  if (cost === 0 || world.credits < cost) return false
-
-  world.credits -= cost
-  ship.spec.mounts.forEach((mount, i) => {
-    if (!isMissile(mount.weapon)) return
-    const gun = ship.guns[i]
-    if (gun) gun.ammo = mount.weapon.ammo
-  })
-  return true
+export function buyMissiles(world: World, ship: ShipEntity, want: number): number {
+  const fitted = fittedMissile(ship)
+  if (!fitted || want <= 0) return 0
+  const price = SHOP.MISSILE_ROUND_COST
+  const n = Math.min(Math.floor(want), missileRoom(ship), Math.floor(world.credits / price))
+  if (n <= 0) return 0
+  const added = addCommodity(ship.hold, missileCommodity(fitted), n)
+  if (added <= 0) return 0
+  const id = missileCommodity(fitted).id
+  const stack = ship.hold.items.find((i) => i.kind === 'commodity' && i.commodity.id === id)
+  if (stack && stack.kind === 'commodity') stack.costBasis = (stack.costBasis ?? 0) + added * price
+  world.credits -= added * price
+  refreshSpec(ship)
+  chamberMissiles(ship)
+  return added
 }

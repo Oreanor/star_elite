@@ -58,7 +58,8 @@ export function WingMissiles() {
       // Только настоящие ракеты: дрон-ракеты (тот же слот, другой тип) на крыле рисует не эта
       // подвеска — иначе контейнер БПЛА висел бы боеголовкой.
       if (!isMissile(mount.weapon)) continue
-      if ((player.guns[mountIndex]?.ammo ?? 0) <= 0) continue
+      // На крыле видно только то, что уже в направляющих. Остальное — в трюме, его не навесить.
+      if (count >= player.missileReady) continue
 
       const [x, y, z] = mount.hardpoint.offset
       _pos

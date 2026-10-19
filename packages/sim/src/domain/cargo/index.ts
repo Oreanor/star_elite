@@ -3,10 +3,12 @@ export {
   addFigurineSpecimens,
   addItem,
   cargoMass,
+  commodityUnits,
   createHold,
   freeCapacity,
   removeItem,
   setCapacity,
+  takeCommodity,
   usedCapacityOf,
   type CargoHold,
 } from './hold'

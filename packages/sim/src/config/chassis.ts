@@ -108,6 +108,10 @@ const HERMES_HARDPOINTS: Chassis['hardpoints'] = [
   { offset: [0, 3.42, -1.41], kind: 'gun', maxClass: 3, bore: 2, nozzles: [[0, 3.42, -1.41]] },
   { offset: [-9.59, -1.5, 7.5], kind: 'pylon', maxClass: 1 },
   { offset: [9.59, -1.5, 7.5], kind: 'pylon', maxClass: 1 },
+  // Вторая пара — отдельный подвес в редакторе (первая пара там одна строка).
+  // Место черновое: силуэт правится в редакторе, индексы старых точек не сдвигаем.
+  { offset: [-6.4, -1.5, 2.6], kind: 'pylon', maxClass: 1 },
+  { offset: [6.4, -1.5, 2.6], kind: 'pylon', maxClass: 1 },
 ]
 
 /** «Персей»: законцовки отнесены назад по стреловидности, нос длинный. */
@@ -135,6 +139,9 @@ const ORION_HARDPOINTS: Chassis['hardpoints'] = [
   { offset: [0, -0.84, -8.15], kind: 'gun', maxClass: 3, bore: 2, nozzles: [[0, -0.84, -8.15]] },
   { offset: [-4.78, -1.24, 1.61], kind: 'pylon', maxClass: 1 },
   { offset: [4.78, -1.24, 1.61], kind: 'pylon', maxClass: 1 },
+  // Вторая пара, ближе к хвосту. В редакторе это второй подвес, не продолжение первой пары.
+  { offset: [-3.2, -0.9, 4.8], kind: 'pylon', maxClass: 1 },
+  { offset: [3.2, -0.9, 4.8], kind: 'pylon', maxClass: 1 },
 ]
 
 /** «Тесей»: законцовки далеко от оси, нос короткий. */
@@ -204,6 +211,8 @@ export const HERMES: Chassis = {
   id: 'hermes', name: 'Гермес', class: 3, baseMass: 24, baseHull: 900, cargoCapacity: 32, auxCapacity: 200,
   radius: 8 * HERMES_SIZE, inertiaFactor: 1.15, aerobatics: false, assistLateralDamp: 1.0, assistSpeedDamp: 0.35,
   hardpoints: HERMES_HARDPOINTS, slots: HERMES_SLOTS, cost: 2_400_000,
+  // Вершина лестницы: залп восемь и вторая пара подвесов.
+  missileRack: 8,
 }
 
 /** «Персей» — сбалансированный перехватчик. */
@@ -225,6 +234,8 @@ export const ORION: Chassis = {
   id: 'orion', name: 'Орион', class: 3, baseMass: 14, baseHull: 680, cargoCapacity: 24, auxCapacity: 160,
   radius: 10, inertiaFactor: 0.98, assistLateralDamp: 1.1, assistSpeedDamp: 0.35,
   hardpoints: ORION_HARDPOINTS, slots: FIGHTER_SLOTS, cost: 1_200_000,
+  // Тяжёлый истребитель, следом за «Гермесом»: тоже восемь и второй подвес.
+  missileRack: 8,
 }
 
 /** «Афина» — серийный истребитель между «Тесеем» и «Орионом». */
@@ -232,6 +243,8 @@ export const ATHENA: Chassis = {
   id: 'athena', name: 'Афина', class: 3, baseMass: 11, baseHull: 500, cargoCapacity: 20, auxCapacity: 150,
   radius: 8, inertiaFactor: 0.85, assistLateralDamp: 1.25, assistSpeedDamp: 0.35,
   hardpoints: ATHENA_HARDPOINTS, slots: FIGHTER_SLOTS, cost: 600_000,
+  // Сильная, но серийная: залп восемь с тем же одним подвесом. Вторая пара не обязательна.
+  missileRack: 8,
 }
 
 /** «Икар» — легче и вёртче «Афины», но и шкура тоньше: скорость вместо брони. */
@@ -279,6 +292,8 @@ export const ATLAS: Chassis = {
     { kind: 'aux', maxClass: 3 },
   ],
   cost: 480_000,
+  // Ковчег толще «Афины», хотя дешевле: восемь ракет, подвес по-прежнему один.
+  missileRack: 8,
 }
 
 /**
@@ -305,6 +320,17 @@ export const CHASSIS_CATALOGUE: readonly Chassis[] = [
 
 export function findChassis(id: string): Chassis | null {
   return CHASSIS_CATALOGUE.find((c) => c.id === id) ?? null
+}
+
+/**
+ * Залп ракет этой рамы. Нет поля — четыре.
+ *
+ * Восемь только у сильных, и ряд не гладкий: «Атлас» дешевле «Афины», но толще,
+ * поэтому восемь у него есть, а у «Персея» (класс 3, но середина цен) — нет.
+ * Вторая пара подвесов — отдельно и не у всех с восьмёркой: «Гермес» и «Орион».
+ */
+export function missileRackOf(chassis: Chassis): 4 | 8 {
+  return chassis.missileRack ?? 4
 }
 
 /**
