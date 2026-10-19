@@ -12,7 +12,7 @@ import { torusTuning, torusTuningSnippet } from '../render/scene/torusTuning'
 const SLIDERS = [
   { key: 'puff', label: 'ГАЛАКТИКИ', min: 0, max: 1.5, step: 0.01 },
   { key: 'dot', label: 'РЁБРА', min: 0, max: 1.5, step: 0.01 },
-  { key: 'spread', label: 'РАЗДВИЖКА', min: 0.3, max: 4, step: 0.05 },
+  { key: 'spread', label: 'РАЗДВИЖКА', min: 1, max: 30, step: 0.5 },
 ] as const
 
 /** Открытость панели держит App: пока она открыта, меню паузы не должно закрыть комнату. */
