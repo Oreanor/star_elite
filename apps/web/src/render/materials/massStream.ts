@@ -11,7 +11,7 @@ import { AdditiveBlending, Color, DoubleSide, ShaderMaterial } from 'three'
  * `logdepthbuf_*` обязателен: сцена с логарифмической глубиной (см. `starBeam`).
  */
 
-const NOISE = /* glsl */ `
+export const STREAM_NOISE = /* glsl */ `
   float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
   float noise(vec2 p) {
     vec2 i = floor(p);
@@ -42,7 +42,7 @@ const STREAM_FRAG = /* glsl */ `
   uniform float uEndFade;
   uniform float uSpread;
   varying vec2 vUv;
-  ${NOISE}
+  ${STREAM_NOISE}
   void main() {
     #include <logdepthbuf_fragment>
     float s = vUv.x;
@@ -87,7 +87,7 @@ const DISK_FRAG = /* glsl */ `
   uniform float uInner;
   uniform float uOuter;
   varying vec2 vPos;
-  ${NOISE}
+  ${STREAM_NOISE}
   void main() {
     #include <logdepthbuf_fragment>
     float r = length(vPos);

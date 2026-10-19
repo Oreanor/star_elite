@@ -1,5 +1,6 @@
 import { AdditiveBlending, Color, DoubleSide, ShaderMaterial } from 'three'
 import { TORUS } from '../config'
+import { STREAM_NOISE } from './massStream'
 
 /**
  * Материалы гипертора: галактика-пуф и непрерывная полупрозрачная нить.
@@ -38,6 +39,7 @@ const PUFF_FRAG = /* glsl */ `
 #include <logdepthbuf_pars_fragment>
 
 uniform float uGain;
+uniform vec3 uHalo;
 
 varying vec3 vTint;
 varying float vFog;
@@ -49,9 +51,10 @@ void main() {
   float r = length(vUv - 0.5) * 2.0;
   if (r > 1.0) discard;
   float core = exp(-r * r * 16.0);     // тугое ядро — видно, ГДЕ галактика
-  float halo = exp(-r * r * 3.0) * 0.35; // слабое гало вокруг
+  float halo = exp(-r * r * 3.0) * 0.35 * (1.0 - smoothstep(0.7, 1.0, r));
   float puff = core + halo;
-  vec3 col = mix(vTint, vec3(1.0), core * 0.6); // сердцевина светлее — читается точкой
+  vec3 hot = mix(vTint, vec3(1.0), core * 0.35);
+  vec3 col = mix(uHalo, hot, core / max(0.0001, puff));
   float alpha = puff * vFog * uGain;
   if (alpha < 0.003) discard;
   gl_FragColor = vec4(col, alpha);
@@ -60,7 +63,10 @@ void main() {
 
 export function torusPuffMaterial(): ShaderMaterial {
   return new ShaderMaterial({
-    uniforms: { uGain: { value: TORUS.PUFF_INTENSITY } },
+    uniforms: {
+      uGain: { value: TORUS.PUFF_INTENSITY },
+      uHalo: { value: new Color(TORUS.EDGE_FAR_COLOR) },
+    },
     vertexShader: PUFF_VERT,
     fragmentShader: PUFF_FRAG,
     transparent: true,
@@ -82,19 +88,23 @@ attribute float aBright;
 attribute vec3 aTangent;
 attribute float aWidth;
 attribute float aSide;
+attribute vec2 aFlow;
+uniform float uThickness;
 
 varying float vBright;
 varying float vSide;
+varying vec2 vFlow;
 
 void main() {
   vBright = aBright;
   vSide = aSide;
+  vFlow = aFlow;
   vec4 mv = modelViewMatrix * vec4(position, 1.0);
   vec3 tangent = mat3(modelViewMatrix) * aTangent;
   vec3 across = cross(tangent, -mv.xyz);
   float len = length(across);
   across = len > 0.00001 ? across / len : vec3(1.0, 0.0, 0.0);
-  mv.xyz += across * aWidth * aSide;
+  mv.xyz += across * aWidth * aSide * uThickness;
   gl_Position = projectionMatrix * mv;
   #include <logdepthbuf_vertex>
 }
@@ -107,20 +117,30 @@ const EDGE_FRAG = /* glsl */ `
 uniform vec3 uNear;
 uniform vec3 uFar;
 uniform float uGain;
+uniform float uTime;
 
 varying float vBright;
 varying float vSide;
+varying vec2 vFlow;
+
+${STREAM_NOISE}
 
 void main() {
   #include <logdepthbuf_fragment>
-  float d = abs(vSide);
-  float core = exp(-d * d * 18.0);
-  float halo = exp(-d * d * 4.0);
-  float soft = (core * 0.65 + halo * 0.35) * (1.0 - smoothstep(0.7, 1.0, d));
-  // Жёлтая сердцевина появляется у близкой яркой нити; размытое гало остаётся фиолетовым.
-  float warmth = smoothstep(0.12, 0.5, vBright * vBright * uGain) * core;
+  float s = vFlow.x;
+  float side = vSide;
+  float clock = uTime + vFlow.y;
+  // Те же сгустки и продольные волокна, что у перетекания вещества в звёздной паре.
+  float flow = noise(vec2(s * 38.0 - clock * 1.6, side * 2.5));
+  float fibres = noise(vec2(s * 9.0 - clock * 0.7, side * 7.0 + 3.0));
+  float wisp = noise(vec2(s * 14.0 - clock * 0.9, side * 3.0 + 11.0));
+  float edge = exp(-side * side * (3.0 + 3.5 * wisp)) * (1.0 - side * side);
+  float density = 0.35 + 0.45 * flow + 0.2 * fibres;
+  float fade = smoothstep(0.0, 0.04, s) * (1.0 - smoothstep(0.96, 1.0, s));
+  // Только плотные близкие сгустки теплеют; равномерного жёлтого провода больше нет.
+  float warmth = smoothstep(0.45, 0.9, vBright * density) * exp(-side * side * 3.0);
   vec3 col = mix(uFar, uNear, warmth);
-  float alpha = soft * sqrt(max(0.0, vBright)) * uGain;
+  float alpha = edge * density * fade * vBright * vBright * uGain;
   if (alpha < 0.003) discard;
   gl_FragColor = vec4(col, alpha);
 }
@@ -132,6 +152,8 @@ export function torusEdgeMaterial(): ShaderMaterial {
       uNear: { value: new Color(TORUS.EDGE_NEAR_COLOR) },
       uFar: { value: new Color(TORUS.EDGE_FAR_COLOR) },
       uGain: { value: TORUS.EDGE_INTENSITY },
+      uTime: { value: 0 },
+      uThickness: { value: TORUS.EDGE_THICKNESS },
     },
     vertexShader: EDGE_VERT,
     fragmentShader: EDGE_FRAG,

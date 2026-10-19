@@ -266,6 +266,8 @@ export function HypertorusLayer() {
     const on = bush.active
     puffMat.uniforms.uGain!.value = torusTuning.puff
     edgeMat.uniforms.uGain!.value = torusTuning.edge
+    edgeMat.uniforms.uThickness!.value = torusTuning.thickness
+    edgeMat.uniforms.uTime!.value = renderTime(world) * TORUS.EDGE_FLOW_SPEED
     group.visible = on
     backdrop.visible = on
     if (!on) {
@@ -299,6 +301,7 @@ export function HypertorusLayer() {
     const jetPos = jetGeo.getAttribute('position').array as Float32Array
     const jetCol = jetGeo.getAttribute('color').array as Float32Array
     let jv = 0
+    const puffSize = Math.pow(Math.max(0, torusTuning.puff), TORUS.PUFF_SIZE_POWER)
     for (let i = 0; i < GRID.vertCount; i++) {
       const o = i * 4
       const w = _rot[o + 3]!
@@ -308,7 +311,7 @@ export function HypertorusLayer() {
       const fog = brightnessOf(dist)
       if (fog < 0.02) continue
       const jet = quasarAxes[i]
-      const radius = puffRadius(w) * (jet ? QUASAR_PUFF_GROW : 1)
+      const radius = puffRadius(w) * puffSize * (jet ? QUASAR_PUFF_GROW : 1)
       const colour = jet ? _quasarTint : _base
       _dummy.position.set(_p.x, _p.y, _p.z)
       _dummy.scale.setScalar(radius)

@@ -6,10 +6,12 @@ import { TORUS } from '../config'
  * Только визуальное: на полёт, автопилот и прибытие (они в координатах S³) не влияет.
  */
 export const torusTuning = {
-  /** Яркость пуфов-галактик (`TORUS.PUFF_INTENSITY`). */
+  /** Яркость и связанный с ней размер галактик (`TORUS.PUFF_INTENSITY`). */
   puff: TORUS.PUFF_INTENSITY as number,
   /** Яркость непрерывных рёбер (`TORUS.EDGE_INTENSITY`). */
   edge: TORUS.EDGE_INTENSITY as number,
+  /** Толщина газовых потоков, независимо от яркости. */
+  thickness: TORUS.EDGE_THICKNESS as number,
   /** Яркость джетов квазаров (`TORUS.JET_INTENSITY`). */
   jet: TORUS.JET_INTENSITY as number,
   /** Раздвижка узлов (`TORUS.NODE_SPREAD`). */
@@ -23,6 +25,7 @@ export function torusTuningSnippet(): string {
     `  NODE_SPREAD: ${f(torusTuning.spread)},`,
     `  PUFF_INTENSITY: ${f(torusTuning.puff)},`,
     `  EDGE_INTENSITY: ${f(torusTuning.edge)},`,
+    `  EDGE_THICKNESS: ${f(torusTuning.thickness)},`,
     `  JET_INTENSITY: ${f(torusTuning.jet)},`,
   ].join('\n')
 }
