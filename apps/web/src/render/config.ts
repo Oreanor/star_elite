@@ -417,6 +417,8 @@ export const TORUS = {
   DOTS_PER_EDGE: 7,
   DOT_SIZE_PX: 1.3,
   DOT_INTENSITY: 0.76,
+  /** Яркость джетов квазаров у ядра; к концу луча свет гаснет до нуля. */
+  JET_INTENSITY: 0.5,
   EDGE_COLOR: 0x66e0ff,
   PUFF_COLOR: 0x9fe6ff,
   /**

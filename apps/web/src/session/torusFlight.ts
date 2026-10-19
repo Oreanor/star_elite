@@ -8,7 +8,8 @@ import {
 } from '@elite/sim'
 import { TORUS_FLIGHT } from './config'
 import { isHeld } from '../platform/input/input'
-import { finishTorusApproach, torusAutopilotActive, torusNav } from './torusAutopilot'
+import { disengageTorusAutopilot, finishTorusApproach, torusAutopilotActive, torusNav } from './torusAutopilot'
+import { inputCaptured } from './inputCapture'
 
 /**
  * ПОЛЁТ ПО ГИПЕРТОРУ. Корабль стоит в центре стереопроекции и вертится мышью (это делает
@@ -77,6 +78,14 @@ export function torusThrust(): number {
  */
 export function stepTorusFlight(shipQuat: Quaternion, dt: number): void {
   _fwd.copy(_zBack).applyQuaternion(shipQuat)
+
+  // Ctrl — РУЧНИК, как в обычном полёте: ход в ноль сразу, без сброса темпом сектора.
+  // Автопилот снимается тоже: иначе он в следующем же такте снова дал бы газ на цель.
+  if (!inputCaptured() && (isHeld('ControlLeft') || isHeld('ControlRight'))) {
+    if (torusAutopilotActive()) disengageTorusAutopilot()
+    throttle = 0
+    return
+  }
 
   if (torusAutopilotActive()) {
     // Автопилот ведёт газ: прибыл — гасим и снимаем автопилот (штурвал возвращается мыши);

@@ -10,6 +10,8 @@ export const torusTuning = {
   puff: TORUS.PUFF_INTENSITY as number,
   /** Яркость точек рёбер (`TORUS.DOT_INTENSITY`). */
   dot: TORUS.DOT_INTENSITY as number,
+  /** Яркость джетов квазаров (`TORUS.JET_INTENSITY`). */
+  jet: TORUS.JET_INTENSITY as number,
   /** Раздвижка узлов (`TORUS.NODE_SPREAD`). */
   spread: TORUS.NODE_SPREAD as number,
 }
@@ -21,5 +23,6 @@ export function torusTuningSnippet(): string {
     `  NODE_SPREAD: ${f(torusTuning.spread)},`,
     `  PUFF_INTENSITY: ${f(torusTuning.puff)},`,
     `  DOT_INTENSITY: ${f(torusTuning.dot)},`,
+    `  JET_INTENSITY: ${f(torusTuning.jet)},`,
   ].join('\n')
 }

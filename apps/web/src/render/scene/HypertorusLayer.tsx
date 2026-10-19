@@ -224,8 +224,8 @@ export function HypertorusLayer() {
   const jetGeo = useMemo(() => {
     const n = quasarAxes.filter(Boolean).length
     const g = new BufferGeometry()
-    g.setAttribute('position', new BufferAttribute(new Float32Array(Math.max(1, n) * 2 * 3), 3))
-    g.setAttribute('color', new BufferAttribute(new Float32Array(Math.max(1, n) * 2 * 3), 3))
+    g.setAttribute('position', new BufferAttribute(new Float32Array(Math.max(1, n) * 4 * 3), 3))
+    g.setAttribute('color', new BufferAttribute(new Float32Array(Math.max(1, n) * 4 * 3), 3))
     g.setDrawRange(0, 0)
     return g
   }, [quasarAxes])
@@ -322,22 +322,28 @@ export function HypertorusLayer() {
       tint[count * 3] = colour.r
       tint[count * 3 + 1] = colour.g
       tint[count * 3 + 2] = colour.b
-      // Джет — отрезок сквозь пуф вдоль оси квазара; яркость гасит тот же туман, что и пуф.
+      // Джет — два луча из ядра вдоль оси квазара. Свет ГАСНЕТ к концу (у конца цвет ноль,
+      // а смешение аддитивное): ровная по всей длине черта читалась резкой царапиной поверх
+      // пуфа. Яркость гасит тот же туман, что и пуф, и крутилка `torusTuning.jet`.
       if (jet) {
         const len = radius * QUASAR_JET_PUFFS
-        const o3 = jv * 3
-        jetPos[o3] = _p.x - jet[0] * len
-        jetPos[o3 + 1] = _p.y - jet[1] * len
-        jetPos[o3 + 2] = _p.z - jet[2] * len
-        jetPos[o3 + 3] = _p.x + jet[0] * len
-        jetPos[o3 + 4] = _p.y + jet[1] * len
-        jetPos[o3 + 5] = _p.z + jet[2] * len
-        for (let k = 0; k < 6; k += 3) {
-          jetCol[o3 + k] = _quasarTint.r * fog
-          jetCol[o3 + k + 1] = _quasarTint.g * fog
-          jetCol[o3 + k + 2] = _quasarTint.b * fog
+        const gain = fog * torusTuning.jet
+        for (let sign = -1; sign <= 1; sign += 2) {
+          const o3 = jv * 3
+          jetPos[o3] = _p.x
+          jetPos[o3 + 1] = _p.y
+          jetPos[o3 + 2] = _p.z
+          jetPos[o3 + 3] = _p.x + sign * jet[0] * len
+          jetPos[o3 + 4] = _p.y + sign * jet[1] * len
+          jetPos[o3 + 5] = _p.z + sign * jet[2] * len
+          jetCol[o3] = _quasarTint.r * gain
+          jetCol[o3 + 1] = _quasarTint.g * gain
+          jetCol[o3 + 2] = _quasarTint.b * gain
+          jetCol[o3 + 3] = 0
+          jetCol[o3 + 4] = 0
+          jetCol[o3 + 5] = 0
+          jv += 2
         }
-        jv += 2
       }
       fogArr[count] = fog
       count++

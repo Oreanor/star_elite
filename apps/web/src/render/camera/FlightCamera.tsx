@@ -81,6 +81,12 @@ export function FlightCamera() {
    */
   const camSwing = useRef(new Quaternion()).current
   const camTwist = useRef(new Quaternion()).current
+  /**
+   * Эпоха мира в прошлом кадре. Сменилась — корабль перенесён (прыжок, влёт в комнату-гипертор),
+   * и пружине догонять нечего: она тянула бы камеру через пустоту, и на входе в комнату решётка
+   * «подъезжала» под корабль на глазах. На смене эпохи камера встаёт на место сразу.
+   */
+  const lastEpoch = useRef(-1)
 
   useFrame((_, dt) => {
     /**
@@ -96,6 +102,8 @@ export function FlightCamera() {
      * неподвижна, значит и камера неподвижна: ничто не шевелится.
      */
     const running = session.running
+    const teleported = session.world.epoch !== lastEpoch.current
+    lastEpoch.current = session.world.epoch
 
     const player = session.world.player
     const state = _shown
@@ -348,7 +356,7 @@ export function FlightCamera() {
     // За GIANT_RENDER_CAP отвод камеры и меш уже заморожены: мягкая пружина + vel∝scale
     // дают ложное «стою, а уезжаю вперёд». Жёсткий погон с капа — силуэт в кадре.
     // Ниже капа — пружина с потолком отставания (MAX_AHEAD).
-    if (running && player.state.scale < GIANT_RENDER_CAP) {
+    if (running && !teleported && player.state.scale < GIANT_RENDER_CAP) {
       // Упреждение по скорости, ОБРЕЗАННОЙ базовым MAX_SPEED. Иначе на крейсере
       // член vel·LEAD выносит цель на километры ВПЕРЁД корабля — камера обгоняет.
       const cap = player.spec.tuning.MAX_SPEED
@@ -376,7 +384,7 @@ export function FlightCamera() {
     // turntable отличаются на крен борта). Стиффнес высокий — в устоявшемся ходе слежение не проседает.
     // Сброс по V — жёстко и сразу (без слёрпа): это явная команда «вернуть как было», а не плавный
     // доворот. Иначе накопленный крен ещё пару кадров дотягивался бы и сброс ощущался вязким.
-    camera.quaternion.slerp(_desiredQuat, running && !viewReset ? 1 - Math.exp(-CAMERA.VIEW_STIFFNESS * camDt) : 1)
+    camera.quaternion.slerp(_desiredQuat, running && !viewReset && !teleported ? 1 - Math.exp(-CAMERA.VIEW_STIFFNESS * camDt) : 1)
 
     // ── Крейсер: поле зрения и тряска ────────────────────────────────────────
     const factor = player.cruise.factor
