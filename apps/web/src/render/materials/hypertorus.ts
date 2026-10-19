@@ -159,6 +159,7 @@ const EDGE_FRAG = /* glsl */ `
 uniform vec3 uCore;
 uniform vec3 uFar;
 uniform float uGain;
+uniform float uBlur;
 uniform float uTime;
 
 varying float vBright;
@@ -177,14 +178,19 @@ void main() {
   // не зависят: иначе жёлтое ядро рвалось на пятна и выглядело крученой нитью.
   float flow = noise(vec2(s * 6.0 - clock * 0.5, vFlow.y));
   float density = 0.9 + 0.1 * flow;
-  float core = exp(-side * side * 8.0);
-  float halo = exp(-side * side * 2.8);
-  // Без жёсткой кромки: обрез на 0.7 ширины рисовал торец ленты прямой иголкой.
-  float edge = (0.7 * core + 0.3 * halo) * (1.0 - smoothstep(0.92, 1.0, abs(side)));
+  // Размытость делит показатели гаусса: 1 — прежний профиль. Меньше сужает сердцевину,
+  // больше растягивает гало на всю ширину ленты. Сама ширина задана толщиной, не здесь.
+  float blur = max(uBlur, 0.05);
+  float core = exp(-side * side * (8.0 / blur));
+  float halo = exp(-side * side * (2.8 / blur));
+  // Пока гаусс сам тухнет к краю, обрез почти незаметен. На плоском профиле обрез на 0.92
+  // снова рисует кромку, поэтому при большой размытости он начинается раньше.
+  float rim = smoothstep(clamp(0.92 / blur, 0.15, 0.97), 1.0, abs(side));
+  float edge = (0.7 * core + 0.3 * halo) * (1.0 - rim);
   float fade = smoothstep(0.0, 0.05, s) * (1.0 - smoothstep(0.95, 1.0, s));
   // Цветовой профиль совпадает с галактикой: узкая светлая сердцевина, широкое фиолетовое гало.
-  float colorCore = exp(-side * side * 16.0);
-  float colorHalo = exp(-side * side * 3.0) * 0.35 * (1.0 - smoothstep(0.92, 1.0, abs(side)));
+  float colorCore = exp(-side * side * (16.0 / blur));
+  float colorHalo = exp(-side * side * (3.0 / blur)) * 0.35 * (1.0 - rim);
   vec3 col = glowColor(uCore, uFar, colorCore, colorHalo);
   col = mix(uFar, col, smoothstep(0.15, 0.95, vBright));
   float alpha = edge * density * fade * vBright * vBright * uGain;
@@ -273,6 +279,7 @@ export function torusEdgeMaterial(): ShaderMaterial {
       uCore: { value: new Color(TORUS.PUFF_COLOR) },
       uFar: { value: new Color(TORUS.EDGE_FAR_COLOR) },
       uGain: { value: TORUS.EDGE_INTENSITY },
+      uBlur: { value: TORUS.EDGE_BLUR },
       uTime: { value: 0 },
       uThickness: { value: TORUS.EDGE_THICKNESS },
       uSpread: { value: TORUS.NODE_SPREAD },

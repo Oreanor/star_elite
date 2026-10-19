@@ -257,6 +257,12 @@ export function HypertorusLayer() {
     puffMat.uniforms.uGain!.value = torusTuning.puff
     edgeMat.uniforms.uGain!.value = torusTuning.edge
     edgeMat.uniforms.uThickness!.value = torusTuning.thickness
+    edgeMat.uniforms.uBlur!.value = torusTuning.blur
+    // Устье ребра закрывается по видимому шарику, а не по каталожному радиусу: иначе
+    // уменьшенная галактика оставляет торец ленты торчать наружу.
+    const ball = Math.pow(Math.max(0, torusTuning.puff), TORUS.PUFF_SIZE_POWER) * torusTuning.puffSize
+    edgeMat.uniforms.uPuffAngular!.value = TORUS.PUFF_ANGULAR_R * ball
+    edgeMat.uniforms.uPuffMax!.value = TORUS.PUFF_MAX_R_M * ball
     edgeMat.uniforms.uTime!.value = renderTime(world) * TORUS.EDGE_FLOW_SPEED
     group.visible = on
     backdrop.visible = on
@@ -289,7 +295,6 @@ export function HypertorusLayer() {
     const fogArr = fogAttr.array as Float32Array
     let count = 0
     let jets = 0
-    const puffSize = Math.pow(Math.max(0, torusTuning.puff), TORUS.PUFF_SIZE_POWER)
     const jetLength = torusTuning.jetLength
     const jetBody = torusTuning.jetBody
     for (let i = 0; i < GRID.vertCount; i++) {
@@ -301,7 +306,7 @@ export function HypertorusLayer() {
       const fog = brightnessOf(dist)
       if (fog < 0.02) continue
       const quasar = quasars.flags[i] === 1
-      const radius = puffRadius(w) * puffSize * (quasar ? QUASAR_PUFF_GROW : 1)
+      const radius = puffRadius(w) * ball * (quasar ? QUASAR_PUFF_GROW : 1)
       const colour = quasar ? _quasarTint : _base
       _dummy.position.set(_p.x, _p.y, _p.z)
       _dummy.scale.setScalar(radius)

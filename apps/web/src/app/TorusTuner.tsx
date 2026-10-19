@@ -4,19 +4,34 @@ import { useSession } from '../session/GameContext'
 import { torusTuning, torusTuningSnippet } from '../render/scene/torusTuning'
 
 /**
- * F4 в комнате-гиперторе — ползунки облика: яркость галактик, яркость рёбер, раздвижка узлов.
+ * F4 в комнате-гиперторе — ползунки облика, три группы: узлы, рёбра, общее.
  * Панель в углу, а не модалка: крутишь и сразу видишь комнату. Как схема клавиш (K), отпускает
  * курсор на время и возвращает захват по закрытию. Значения пишутся в `torusTuning`, кадр
  * читает их сам — React в кадре не участвует, только перерисовывает подписи у ползунков.
  */
-const SLIDERS = [
-  { key: 'puff', label: 'ГАЛАКТИКИ', min: 0, max: 3, step: 0.01 },
-  { key: 'edge', label: 'РЁБРА', min: 0, max: 3, step: 0.01 },
-  { key: 'thickness', label: 'ТОЛЩИНА', min: 0.1, max: 10, step: 0.05 },
-  { key: 'curvature', label: 'КРИВИЗНА', min: 0, max: 2, step: 0.01 },
-  { key: 'jetLength', label: 'ДЛИНА ДЖЕТА', min: 0, max: 24, step: 0.1 },
-  { key: 'jetBody', label: 'ТЕЛО ДЖЕТА', min: 0, max: 4, step: 0.01 },
-  { key: 'spread', label: 'РАЗДВИЖКА', min: 1, max: 30, step: 0.5 },
+const GROUPS = [
+  {
+    title: 'УЗЛЫ',
+    sliders: [
+      { key: 'puff', label: 'ЯРКОСТЬ', min: 0, max: 3, step: 0.01 },
+      { key: 'puffSize', label: 'РАЗМЕР', min: 0.2, max: 8, step: 0.01 },
+      { key: 'jetLength', label: 'ДЛИНА ДЖЕТА', min: 0, max: 24, step: 0.1 },
+      { key: 'jetBody', label: 'ТЕЛО ДЖЕТА', min: 0, max: 4, step: 0.01 },
+    ],
+  },
+  {
+    title: 'РЁБРА',
+    sliders: [
+      { key: 'edge', label: 'ЯРКОСТЬ', min: 0, max: 3, step: 0.01 },
+      { key: 'thickness', label: 'ТОЛЩИНА', min: 0.1, max: 10, step: 0.05 },
+      { key: 'blur', label: 'РАЗМЫТОСТЬ', min: 0.15, max: 4, step: 0.01 },
+      { key: 'curvature', label: 'КРИВИЗНА', min: 0, max: 2, step: 0.01 },
+    ],
+  },
+  {
+    title: 'ОБЩЕЕ',
+    sliders: [{ key: 'spread', label: 'РАЗДВИЖКА', min: 1, max: 30, step: 0.5 }],
+  },
 ] as const
 
 /** Открытость панели держит App: пока она открыта, меню паузы не должно закрыть комнату. */
@@ -57,30 +72,37 @@ export function TorusTuner({ open, setOpen }: { open: boolean; setOpen: (open: b
   if (!open) return null
   return (
     <div
-      className="absolute right-4 top-4 z-[65] w-72 space-y-3 rounded-lg border p-4 font-mono text-xs tracking-widest"
+      className="absolute right-4 top-4 z-[65] max-h-[calc(100%-2rem)] w-72 space-y-4 overflow-y-auto rounded-lg border p-4 font-mono text-xs tracking-widest"
       style={{ borderColor: 'rgba(63,115,145,0.7)', background: 'rgba(10,26,47,0.85)', color: '#7fd6ff' }}
       onPointerDown={(e) => e.stopPropagation()}
     >
-      {SLIDERS.map((s) => (
-        <label key={s.key} className="block">
-          <div className="mb-1 flex justify-between">
-            <span>{s.label}</span>
-            <span>{torusTuning[s.key].toFixed(2)}</span>
+      {GROUPS.map((group) => (
+        <div key={group.title} className="space-y-3">
+          <div className="border-b pb-1" style={{ borderColor: 'rgba(63,115,145,0.7)', color: 'rgba(127,214,255,0.55)' }}>
+            {group.title}
           </div>
-          <input
-            type="range"
-            min={s.min}
-            max={s.max}
-            step={s.step}
-            value={torusTuning[s.key]}
-            onChange={(e) => {
-              torusTuning[s.key] = Number(e.target.value)
-              setCopied(false)
-              bump((n) => n + 1)
-            }}
-            className="w-full cursor-pointer accent-[#7fd6ff]"
-          />
-        </label>
+          {group.sliders.map((s) => (
+            <label key={s.key} className="block">
+              <div className="mb-1 flex justify-between">
+                <span>{s.label}</span>
+                <span>{torusTuning[s.key].toFixed(2)}</span>
+              </div>
+              <input
+                type="range"
+                min={s.min}
+                max={s.max}
+                step={s.step}
+                value={torusTuning[s.key]}
+                onChange={(e) => {
+                  torusTuning[s.key] = Number(e.target.value)
+                  setCopied(false)
+                  bump((n) => n + 1)
+                }}
+                className="w-full cursor-pointer accent-[#7fd6ff]"
+              />
+            </label>
+          ))}
+        </div>
       ))}
       <button
         type="button"

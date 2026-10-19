@@ -664,7 +664,7 @@ function Shell({ onRestart }: { onRestart: () => void }) {
       // менять её из-под заставки. Escape выше — единственный выход, он уже обработан.
       if (menu) return
 
-      // P — связь со ВТОРЫМ ПИЛОТОМ, как T с бортом: приказы ему словами. Нет пилота — плашка.
+      // P — связь со вторым пилотом, как T с бортом. Приказы ему словами. Нет пилота — плашка.
       if (e.code === 'KeyP') {
         if (docked || tab !== null || talking || chatWith || dispatching || copiloting) return
         if (!session.world.copilot) {

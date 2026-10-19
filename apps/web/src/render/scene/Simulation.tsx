@@ -5,7 +5,11 @@ import {
   releaseLanding,
   autodockController,
   canEngageAutodock,
+  autofightActive,
   canEngageFlyTo,
+  copilotRank,
+  disengageAutofight,
+  engageAutofight,
   flyToArrived,
   flyToController,
   cycleContact,
@@ -48,6 +52,7 @@ import {
   disengageTorusAutopilot,
   resetTorusAutopilot,
   toggleTorusAutopilot,
+  torusAutopilotActive,
 } from '../../session/torusAutopilot'
 import {
   beginBushExit,
@@ -264,10 +269,21 @@ function exitBushInto(session: Session, vertex: number): boolean {
 /** Во скольких радиусах дыры выпадает корабль. Обоснование — в `exitBushInto`. */
 const BUSH_EXIT_RADII = 100
 
+/**
+ * Окно второго J, с. То же, что у бочки: в более короткое палец не всегда попадал,
+ * а длиннее одиночное нажатие заметно тупит, потому что автопилот ждёт, не второе ли это.
+ */
+const J_TAP_WINDOW = 0.3
+
 export function Simulation() {
   const session = useSession()
   // Отсечка уже сохранённых фактов мира (см. `saveFacts`): время последнего записанного.
   const lastFact = useRef({ value: -Infinity })
+  /**
+   * Жест J. 0 — не начат. Плюс — ждём второе нажатие, минус — глушим остаток дроби
+   * после отмены, чтобы она не включила автопилот заново.
+   */
+  const jTap = useRef(0)
   const camera = useThree((state) => state.camera)
   // Полёт сквозь гипертор идёт по часам мира — в каждом такте, а не раз в кадр из слоя
   // рендера: на паузе он стоит вместе с миром, а темп не зависит от частоты монитора.
@@ -298,7 +314,10 @@ export function Simulation() {
       releaseLock()
       session.onOver?.()
     }
-    if (session.over) return
+    if (session.over) {
+      jTap.current = 0
+      return
+    }
 
     // Стыковка и отчаливание — события, а не состояния кадра: сообщаем о переходе.
     if (world.docked !== session.dockedShown) {
@@ -324,6 +343,7 @@ export function Simulation() {
     // В доке мир стоит, живёт только причал — это решает stepWorld. Курсор отпущен (экран
     // станции), поэтому зовём его здесь, до проверки захвата ниже.
     if (world.docked) {
+      jTap.current = 0
       stepWorld(world, dt, controllers, { unassigned: aiController })
       return
     }
@@ -337,6 +357,8 @@ export function Simulation() {
      *    `menuFlying` гаснет в App, и мы падаем в честную паузу выше.
      */
     if (!input.pointerLocked) {
+      // Жест J не должен дозреть автопилотом, пока смотришь карту: окно сгорело вместе с курсором.
+      jTap.current = 0
       clearPresses()
       if (!session.menuFlying) return
 
@@ -450,11 +472,46 @@ export function Simulation() {
       else if (canEngageAutodock(world)) setPilot(session, 'autodock')
     }
 
-    // J — только в комнате тора: ведёт к выбранной галактике (Tab и карта лишь ВЫБИРАЮТ, ход
-    // даёт J — иначе дорога сквозь S³ выбрасывала бы у первой встречной галактики). В системе
-    // автопилот — дело ВТОРОГО ПИЛОТА: его просят словами, клавиши у этого больше нет.
-    if (consumePress('KeyJ') && session.bush.active) {
-      if (!toggleTorusAutopilot()) pushWarning('noTarget', world.time)
+    // J — штурвал второго пилота. Летит он: без него клавиша молчит.
+    // Одно нажатие — автопилот к цели (в клубке — к выбранной галактике). Двойное — автобой.
+    // Уже ведёт — одно J отдаёт штурвал и глотает второе нажатие той же дроби, чтобы
+    // отмена не читалась как новый приказ. Бить нечего (планета, звезда, пустой захват) —
+    // двойное нажатие не ругается, а просто летит.
+    // Знак jTap: плюс — ждём, не будет ли второго нажатия; минус — глушим остаток дроби после отмены.
+    const jPressed = consumePress('KeyJ')
+    const copilotFlying = session.mode === 'flyto' || autofightActive(world) || (session.bush.active && torusAutopilotActive())
+    if (jPressed && copilotFlying) {
+      jTap.current = -J_TAP_WINDOW
+      if (autofightActive(world)) disengageAutofight(world)
+      if (session.mode === 'flyto') setPilot(session, 'manual')
+      if (session.bush.active && torusAutopilotActive()) disengageTorusAutopilot()
+    } else if (jPressed && jTap.current > 0) {
+      jTap.current = 0
+      if (world.copilot) {
+        if (session.bush.active) {
+          if (!toggleTorusAutopilot()) pushWarning('noTarget', world.time)
+        } else if (engageAutofight(world)) {
+          const ai = world.player.ai
+          if (ai) ai.pilotRank = copilotRank(world.copilot)
+        } else if (canEngageFlyTo(world)) setPilot(session, 'flyto')
+        else pushWarning('noTarget', world.time)
+      }
+    } else if (jPressed && jTap.current < 0) {
+      jTap.current = 0
+    } else if (jPressed) {
+      jTap.current = J_TAP_WINDOW
+    } else if (jTap.current !== 0) {
+      const arming = jTap.current > 0
+      jTap.current = Math.abs(jTap.current) - dt
+      if (jTap.current <= 0) {
+        jTap.current = 0
+        if (arming && world.copilot) {
+          if (session.bush.active) {
+            if (!toggleTorusAutopilot()) pushWarning('noTarget', world.time)
+          } else if (canEngageFlyTo(world)) setPilot(session, 'flyto')
+          else pushWarning('noTarget', world.time)
+        }
+      } else if (!arming) jTap.current = -jTap.current
     }
     // Просьба второго пилота к штурвалу: «веду к цели» или «отдаю управление». Домен режимов
     // сессии не знает — оставляет просьбу, сессия исполняет и гасит.

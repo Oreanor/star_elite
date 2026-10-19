@@ -8,10 +8,14 @@ import { TORUS } from '../config'
 export const torusTuning = {
   /** Яркость и связанный с ней размер галактик (`TORUS.PUFF_INTENSITY`). */
   puff: TORUS.PUFF_INTENSITY as number,
+  /** Множитель размера шариков (`TORUS.PUFF_SIZE`). 1 — текущий размер. */
+  puffSize: TORUS.PUFF_SIZE as number,
   /** Яркость непрерывных рёбер (`TORUS.EDGE_INTENSITY`). */
   edge: TORUS.EDGE_INTENSITY as number,
   /** Толщина газовых потоков, независимо от яркости. */
   thickness: TORUS.EDGE_THICKNESS as number,
+  /** Мягкость профиля ребра (`TORUS.EDGE_BLUR`). 1 — как в конфиге. */
+  blur: TORUS.EDGE_BLUR as number,
   /** Дополнительный изгиб потоков на S³. */
   curvature: TORUS.EDGE_BEND as number,
   /** Длина джета квазара, в радиусах пуфа (`TORUS.JET_LENGTH`). */
@@ -28,8 +32,10 @@ export function torusTuningSnippet(): string {
   return [
     `  NODE_SPREAD: ${f(torusTuning.spread)},`,
     `  PUFF_INTENSITY: ${f(torusTuning.puff)},`,
+    `  PUFF_SIZE: ${f(torusTuning.puffSize)},`,
     `  EDGE_INTENSITY: ${f(torusTuning.edge)},`,
     `  EDGE_THICKNESS: ${f(torusTuning.thickness)},`,
+    `  EDGE_BLUR: ${f(torusTuning.blur)},`,
     `  EDGE_BEND: ${f(torusTuning.curvature)},`,
     `  JET_LENGTH: ${f(torusTuning.jetLength)},`,
     `  JET_BODY: ${f(torusTuning.jetBody)},`,

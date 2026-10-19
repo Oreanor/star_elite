@@ -16,6 +16,7 @@ import { useSession } from '../../session/GameContext'
 import {
   selectTorusTarget,
   toggleTorusAutopilot,
+  torusAutopilotActive,
   torusTargetVertex,
 } from '../../session/torusAutopilot'
 import { torusView } from '../../session/torusFlight'
@@ -36,8 +37,9 @@ import { MapCard, MapFrame, MapRow, useInspect } from './MapFrame'
  * НАПРАВЛЕНИЕ точки на шаре — то самое, куда надо повернуть нос, а ВЫНОС от центра — честная
  * дуга до галактики по S³ (γ = acos(−w), от нуля под ногами до π у противоположного края мира).
  *
- * Карта только ВЫБИРАЕТ цель. Ход даёт J — уже в полёте. Разведено нарочно: дорога к дальней
- * галактике идёт СКВОЗЬ чужие узлы, и «выбрал = полетел» выбрасывало бы у первой встречной.
+ * Карта только ВЫБИРАЕТ цель. Ход даёт J — уже в полёте, и только если на борту второй пилот:
+ * летит он. Разведено нарочно: дорога к дальней галактике идёт СКВОЗЬ чужие узлы, и
+ * «выбрал = полетел» выбрасывало бы у первой встречной.
  */
 
 /** Радиус шара карты в её собственных единицах. Число ни на что не влияет, кроме камеры. */
@@ -466,13 +468,13 @@ export function UniverseMap({ onClose }: { onClose: () => void }) {
           </div>
 
           {/* Цель ставит «ВЫБРАТЬ» в плашке; здесь — тронуться к ней. Закрыть карту — общий выход панели. */}
-          {/* Вести — только из комнаты: автопилот летит по S³. Снаружи цель лишь намечается,
-              а тронуться к ней можно, влетев в дыру ядра. */}
+          {/* Вести — только из комнаты и только со вторым пилотом: летит он. Снаружи цель лишь
+              намечается, а тронуться к ней можно, влетев в дыру ядра. Снять ведение можно и без него. */}
           <button
             type="button"
-            disabled={target === null || !inRoom}
+            disabled={target === null || !inRoom || (!torusAutopilotActive() && !session.world.copilot)}
             onClick={() => {
-              if (!target) return
+              if (!target || (!torusAutopilotActive() && !session.world.copilot)) return
               toggleTorusAutopilot()
               onClose()
             }}

@@ -110,10 +110,10 @@ const CALLOUTS: Callout[] = [
   { keys: ['KeyX'], rows: [['key.laserGroup', 'key.laserGroup.what']] },
   { keys: ['KeyT'], rows: [['key.talk', 'key.talk.what']] },
   { keys: ['KeyI'], rows: [['key.ship', 'key.ship.what']] },
-  { keys: ['KeyP'], rows: [['key.autofight', 'key.autofight.what']] },
+  { keys: ['KeyP'], rows: [['key.copilot', 'key.copilot.what']] },
   { keys: ['KeyG'], rows: [['key.galaxy', 'key.galaxy.what']] },
   { keys: ['KeyH'], rows: [['key.jump', 'key.jump.what']] },
-  { keys: ['KeyJ'], rows: [['key.flyto', 'key.flyto.what']] },
+  { keys: ['KeyJ'], rows: [['key.flyto', 'key.flyto.what'], ['key.autofight', 'key.autofight.what']] },
   // K и L раскладка увела бы в правую колонку через всю клавиатуру — им ближе строки.
   { keys: ['KeyK'], rows: [['key.help', 'key.help.what']], side: 'bottom' },
   { keys: ['KeyL'], rows: [['key.dock', 'key.dock.what']], side: 'top' },
