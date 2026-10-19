@@ -1,16 +1,11 @@
 import { useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef } from 'react'
 import {
-  AdditiveBlending,
   BackSide,
-  BufferAttribute,
-  BufferGeometry,
   Color,
   Group,
   InstancedBufferAttribute,
   InstancedMesh,
-  LineBasicMaterial,
-  LineSegments,
   Mesh,
   MeshBasicMaterial,
   Object3D,
@@ -27,8 +22,9 @@ import { TORUS } from '../config'
 import { torusTuning } from './torusTuning'
 import { crossNeonTubesGeometry } from '../geometry/props'
 import { crossNeonLampMaterial, tickCrossPortal } from '../materials/crossPortal'
-import { torusEdgeMaterial, torusPuffMaterial } from '../materials/hypertorus'
+import { torusEdgeMaterial, torusJetMaterial, torusPuffMaterial } from '../materials/hypertorus'
 import { torusFlowGrid, torusEdgesGeometry, updateTorusEdges } from '../geometry/torusEdges'
+import { torusJetsGeometry, touchTorusJets, writeTorusJet } from '../geometry/torusJets'
 import {
   applyPose,
   buildHypertorusGrid,
@@ -90,13 +86,11 @@ const FLOW_GRID = torusFlowGrid(GRID)
 const _dummy = new Object3D()
 const _base = new Color(TORUS.PUFF_COLOR)
 /**
- * КВАЗАРЫ в клубке — ориентиры: пуф ярче, холоднее и крупнее, и сквозь него два луча-джета.
+ * КВАЗАРЫ в клубке — ориентиры: пуф ярче, холоднее и крупнее, и из него два мягких джета.
  * Остальные семьсот узлов одинаковы, и без ориентиров комната S³ читается как однородная каша.
  */
 const _quasarTint = new Color(0xd6eeff)
 const QUASAR_PUFF_GROW = 1.7
-/** Длина джета — в радиусах пуфа: столб заметно длиннее самой галактики. */
-const QUASAR_JET_PUFFS = 6
 const _p = { x: 0, y: 0, z: 0, depth: 0 }
 /**
  * Ручной выход: была ли ВЫБРАННАЯ цель уже в центре проекции в прошлом кадре, и какая это была
@@ -210,31 +204,24 @@ export function HypertorusLayer() {
   const edgeMat = useMemo(torusEdgeMaterial, [])
 
   // Квазар ли узел и ось его джета — один раз на вселенную: зерно галактики не меняется.
-  const quasarAxes = useMemo(() => {
-    const axes: (readonly [number, number, number] | null)[] = []
+  const quasars = useMemo(() => {
+    const flags = new Uint8Array(GRID.vertCount)
+    const axes = new Float32Array(GRID.vertCount * 3)
+    let beams = 0
     for (let v = 0; v < GRID.vertCount; v++) {
       const node = session.universe.nodes[nodeOfVertex(v)]
-      axes.push(node && v !== TORUS.MONUMENT_NODE ? quasarOf(node.seed) : null)
+      const axis = node && v !== TORUS.MONUMENT_NODE ? quasarOf(node.seed) : null
+      if (!axis) continue
+      flags[v] = 1
+      axes[v * 3] = axis[0]
+      axes[v * 3 + 1] = axis[1]
+      axes[v * 3 + 2] = axis[2]
+      beams += 2
     }
-    return axes
+    return { flags, axes, beams }
   }, [session.universe])
-  const jetGeo = useMemo(() => {
-    const n = quasarAxes.filter(Boolean).length
-    const g = new BufferGeometry()
-    g.setAttribute('position', new BufferAttribute(new Float32Array(Math.max(1, n) * 4 * 3), 3))
-    g.setAttribute('color', new BufferAttribute(new Float32Array(Math.max(1, n) * 4 * 3), 3))
-    g.setDrawRange(0, 0)
-    return g
-  }, [quasarAxes])
-  const jetMat = useMemo(
-    () => new LineBasicMaterial({ vertexColors: true, transparent: true, blending: AdditiveBlending, depthWrite: false, toneMapped: false, fog: false }),
-    [],
-  )
-  useEffect(() => () => {
-    jetGeo.dispose()
-    jetMat.dispose()
-  }, [jetGeo, jetMat])
-  const jetRef = useRef<LineSegments>(null)
+  const jetGeo = useMemo(() => torusJetsGeometry(quasars.beams), [quasars.beams])
+  const jetMat = useMemo(torusJetMaterial, [])
 
   const backdropGeo = useMemo(() => new SphereGeometry(1, 16, 12), [])
   const backdropMat = useMemo(
@@ -248,12 +235,14 @@ export function HypertorusLayer() {
       puffMat.dispose()
       edgeGeo.dispose()
       edgeMat.dispose()
+      jetGeo.dispose()
+      jetMat.dispose()
       backdropGeo.dispose()
       backdropMat.dispose()
       crossGeo.dispose()
       crossMat.dispose()
     },
-    [puffGeo, puffMat, edgeGeo, edgeMat, backdropGeo, backdropMat, crossGeo, crossMat],
+    [puffGeo, puffMat, edgeGeo, edgeMat, jetGeo, jetMat, backdropGeo, backdropMat, crossGeo, crossMat],
   )
 
   useFrame(() => {
@@ -299,10 +288,10 @@ export function HypertorusLayer() {
     const tint = tintAttr.array as Float32Array
     const fogArr = fogAttr.array as Float32Array
     let count = 0
-    const jetPos = jetGeo.getAttribute('position').array as Float32Array
-    const jetCol = jetGeo.getAttribute('color').array as Float32Array
-    let jv = 0
+    let jets = 0
     const puffSize = Math.pow(Math.max(0, torusTuning.puff), TORUS.PUFF_SIZE_POWER)
+    const jetLength = torusTuning.jetLength
+    const jetBody = torusTuning.jetBody
     for (let i = 0; i < GRID.vertCount; i++) {
       const o = i * 4
       const w = _rot[o + 3]!
@@ -311,9 +300,9 @@ export function HypertorusLayer() {
       const dist = Math.hypot(_p.x, _p.y, _p.z)
       const fog = brightnessOf(dist)
       if (fog < 0.02) continue
-      const jet = quasarAxes[i]
-      const radius = puffRadius(w) * puffSize * (jet ? QUASAR_PUFF_GROW : 1)
-      const colour = jet ? _quasarTint : _base
+      const quasar = quasars.flags[i] === 1
+      const radius = puffRadius(w) * puffSize * (quasar ? QUASAR_PUFF_GROW : 1)
+      const colour = quasar ? _quasarTint : _base
       _dummy.position.set(_p.x, _p.y, _p.z)
       _dummy.scale.setScalar(radius)
       _dummy.quaternion.copy(camera.quaternion)
@@ -322,30 +311,18 @@ export function HypertorusLayer() {
       tint[count * 3] = colour.r
       tint[count * 3 + 1] = colour.g
       tint[count * 3 + 2] = colour.b
-      // Джет — два луча из ядра вдоль оси квазара. Свет ГАСНЕТ к концу (у конца цвет ноль,
-      // а смешение аддитивное): ровная по всей длине черта читалась резкой царапиной поверх
-      // пуфа. Яркость гасит тот же туман, что и пуф, и крутилка `torusTuning.jet`.
-      if (jet) {
-        const len = radius * QUASAR_JET_PUFFS
-        const gain = fog * torusTuning.jet
-        for (let sign = -1; sign <= 1; sign += 2) {
-          const o3 = jv * 3
-          jetPos[o3] = _p.x
-          jetPos[o3 + 1] = _p.y
-          jetPos[o3 + 2] = _p.z
-          jetPos[o3 + 3] = _p.x + sign * jet[0] * len
-          jetPos[o3 + 4] = _p.y + sign * jet[1] * len
-          jetPos[o3 + 5] = _p.z + sign * jet[2] * len
-          jetCol[o3] = _quasarTint.r * gain
-          jetCol[o3 + 1] = _quasarTint.g * gain
-          jetCol[o3 + 2] = _quasarTint.b * gain
-          jetCol[o3 + 3] = 0
-          jetCol[o3 + 4] = 0
-          jetCol[o3 + 5] = 0
-          jv += 2
-        }
-      }
       fogArr[count] = fog
+      if (quasar && jetLength > 0 && jetBody > 0 && jets + 2 <= quasars.beams) {
+        const ao = i * 3
+        const len = radius * jetLength
+        const half = radius * TORUS.JET_HALF_WIDTH * jetBody
+        const gain = fog * TORUS.JET_INTENSITY * jetBody
+        const ax = quasars.axes[ao]!
+        const ay = quasars.axes[ao + 1]!
+        const az = quasars.axes[ao + 2]!
+        writeTorusJet(jetGeo, jets++, _p.x, _p.y, _p.z, ax, ay, az, len, half, gain)
+        writeTorusJet(jetGeo, jets++, _p.x, _p.y, _p.z, -ax, -ay, -az, len, half, gain)
+      }
       count++
 
       // Подпись: вершина = именованная галактика. Держим топ-LABEL_COUNT БЛИЖАЙШИХ, а
@@ -369,9 +346,7 @@ export function HypertorusLayer() {
       }
     }
     puffs.count = count
-    jetGeo.getAttribute('position').needsUpdate = true
-    jetGeo.getAttribute('color').needsUpdate = true
-    jetGeo.setDrawRange(0, jv)
+    touchTorusJets(jetGeo, jets)
     // Слоты заполнялись в произвольном порядке — упорядочиваем по возрастанию w, то есть от
     // ближней галактики к дальней: в этом порядке Tab их и листает.
     const slots = _order
@@ -403,7 +378,17 @@ export function HypertorusLayer() {
     tintAttr.needsUpdate = true
     fogAttr.needsUpdate = true
 
-    updateTorusEdges(edgeGeo, FLOW_GRID, _rot, projScale(), brightnessOf, torusTuning.curvature)
+    const spread = torusTuning.spread
+    updateTorusEdges(
+      edgeGeo,
+      edgeMat,
+      FLOW_GRID,
+      torusView(),
+      projScale(),
+      TORUS.FOG_NEAR_M * spread,
+      TORUS.FOG_FAR_M * spread,
+      torusTuning.curvature,
+    )
 
     // ДОМ — узел, ИЗ КОТОРОГО влетел (его записал `enterBush`), а не постоянный номер:
     // вылетев в другую галактику и войдя в её дыру, домом становится она.
@@ -469,7 +454,7 @@ export function HypertorusLayer() {
       <group ref={groupRef} frustumCulled={false} visible={false}>
         <instancedMesh ref={puffRef} args={[puffGeo, puffMat, GRID.vertCount]} frustumCulled={false} />
         <mesh ref={edgeRef} geometry={edgeGeo} material={edgeMat} frustumCulled={false} />
-        <lineSegments ref={jetRef} geometry={jetGeo} material={jetMat} frustumCulled={false} />
+        <mesh geometry={jetGeo} material={jetMat} frustumCulled={false} />
         <mesh ref={crossRef} geometry={crossGeo} material={crossMat} frustumCulled={false} visible={false} />
       </group>
     </>

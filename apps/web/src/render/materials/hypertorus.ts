@@ -1,4 +1,4 @@
-import { AdditiveBlending, Color, DoubleSide, ShaderMaterial } from 'three'
+import { AdditiveBlending, Color, DoubleSide, Matrix4, ShaderMaterial } from 'three'
 import { TORUS } from '../config'
 import { STREAM_NOISE } from './massStream'
 
@@ -88,33 +88,57 @@ export function torusPuffMaterial(): ShaderMaterial {
   })
 }
 
-/** Лента развёрнута к камере; общие вершины сохраняют непрерывность на изгибах. */
+/**
+ * Лента лицом к камере. Точка дуги приходит в покое S³ и крутится позой здесь:
+ * процессор больше не проецирует каждую точку кадра.
+ */
 const EDGE_VERT = /* glsl */ `
 #include <common>
 #include <logdepthbuf_pars_vertex>
 
-attribute float aBright;
-attribute vec3 aTangent;
-attribute float aWidth;
+attribute vec4 aRest;
+attribute vec4 aNext;
+attribute vec4 aPrev;
 attribute float aSide;
 attribute vec2 aFlow;
+uniform mat4 uPose;
+uniform float uScale;
 uniform float uThickness;
+uniform float uAngular;
+uniform float uFogNear;
+uniform float uFogFar;
+uniform float uCut;
 
 varying float vBright;
 varying float vSide;
 varying vec2 vFlow;
 
+vec3 project(vec4 p) {
+  return p.xyz * (uScale / max(1e-4, 1.0 - p.w));
+}
+
 void main() {
-  vBright = aBright;
   vSide = aSide;
   vFlow = aFlow;
-  vec4 mv = modelViewMatrix * vec4(position, 1.0);
-  vec3 tangent = mat3(modelViewMatrix) * aTangent;
+  vec4 p4 = uPose * aRest;
+  // position объявлен трём и обязан быть использован, иначе атрибут выкинут из программы.
+  vec3 pos = project(p4) + position * 0.0;
+  vec4 n4 = uPose * aNext;
+  vec3 nxt = project(n4);
+  // Сосед за полюсом или в тумане — касательная от него рванула бы ленту через весь кадр.
+  if (n4.w > uCut) nxt = project(uPose * aPrev);
+  vec3 tangent = mat3(modelViewMatrix) * (nxt - pos);
+  vec4 mv = modelViewMatrix * vec4(pos, 1.0);
   vec3 across = cross(tangent, -mv.xyz);
   float len = length(across);
   across = len > 0.00001 ? across / len : vec3(1.0, 0.0, 0.0);
-  mv.xyz += across * aWidth * aSide * uThickness;
+  // Середина — узкая струя, к галактике лента раздаётся. Квадрат тянет ширину вдоль последней трети.
+  float along = abs(aFlow.x * 2.0 - 1.0);
+  float neck = 0.5 + 2.4 * along * along;
+  float halfWidth = uAngular * neck * uScale / max(1e-4, 1.0 - p4.w);
+  mv.xyz += across * halfWidth * aSide * uThickness;
   gl_Position = projectionMatrix * mv;
+  vBright = 1.0 - smoothstep(uFogNear, uFogFar, length(pos));
   #include <logdepthbuf_vertex>
 }
 `
@@ -147,7 +171,8 @@ void main() {
   float core = exp(-side * side * 7.0);
   float halo = exp(-side * side * 2.5);
   float edge = (0.6 * core + 0.4 * halo) * (1.0 - smoothstep(0.7, 1.0, abs(side)));
-  float fade = smoothstep(0.0, 0.04, s) * (1.0 - smoothstep(0.96, 1.0, s));
+  // Короткий спад только на самом срезе: устье уже широкое, длинное гашение съедало его.
+  float fade = smoothstep(0.0, 0.015, s) * (1.0 - smoothstep(0.985, 1.0, s));
   // Цветовой профиль совпадает с галактикой: узкая светлая сердцевина, широкое фиолетовое гало.
   float colorCore = exp(-side * side * 16.0);
   float colorHalo = exp(-side * side * 3.0) * 0.35 * (1.0 - smoothstep(0.7, 1.0, abs(side)));
@@ -159,6 +184,80 @@ void main() {
 }
 `
 
+/**
+ * Джет квазара в клубке — лента лицом к камере, не черта. Гаусс поперёк не даёт кромки,
+ * вдоль луч тает: у линии в пиксель получалась иголка.
+ */
+const JET_VERT = /* glsl */ `
+#include <common>
+#include <logdepthbuf_pars_vertex>
+
+attribute vec3 aTangent;
+attribute float aWidth;
+attribute float aSide;
+attribute float aAlong;
+attribute float aBright;
+
+varying float vSide;
+varying float vAlong;
+varying float vBright;
+
+void main() {
+  vSide = aSide;
+  vAlong = aAlong;
+  vBright = aBright;
+  vec4 mv = modelViewMatrix * vec4(position, 1.0);
+  vec3 tangent = mat3(modelViewMatrix) * aTangent;
+  vec3 across = cross(tangent, -mv.xyz);
+  float len = length(across);
+  across = len > 0.00001 ? across / len : vec3(1.0, 0.0, 0.0);
+  mv.xyz += across * aWidth * aSide;
+  gl_Position = projectionMatrix * mv;
+  #include <logdepthbuf_vertex>
+}
+`
+
+const JET_FRAG = /* glsl */ `
+#include <common>
+#include <logdepthbuf_pars_fragment>
+
+uniform vec3 uTint;
+
+varying float vSide;
+varying float vAlong;
+varying float vBright;
+
+void main() {
+  #include <logdepthbuf_fragment>
+  float side = vSide;
+  float core = exp(-side * side * 8.0);
+  float halo = exp(-side * side * 2.2);
+  float beam = (0.7 * core + 0.5 * halo) * (1.0 - smoothstep(0.82, 1.0, abs(side)));
+  float along = pow(max(0.0, 1.0 - vAlong), 1.45);
+  float alpha = beam * along * vBright;
+  if (alpha < 0.003) discard;
+  vec3 col = mix(uTint, vec3(1.0), core);
+  gl_FragColor = vec4(col, alpha);
+}
+`
+
+export function torusJetMaterial(): ShaderMaterial {
+  return new ShaderMaterial({
+    uniforms: {
+      uTint: { value: new Color(0xd6eeff) },
+    },
+    vertexShader: JET_VERT,
+    fragmentShader: JET_FRAG,
+    transparent: true,
+    blending: AdditiveBlending,
+    depthWrite: false,
+    depthTest: true,
+    side: DoubleSide,
+    fog: false,
+    toneMapped: false,
+  })
+}
+
 export function torusEdgeMaterial(): ShaderMaterial {
   return new ShaderMaterial({
     uniforms: {
@@ -167,6 +266,12 @@ export function torusEdgeMaterial(): ShaderMaterial {
       uGain: { value: TORUS.EDGE_INTENSITY },
       uTime: { value: 0 },
       uThickness: { value: TORUS.EDGE_THICKNESS },
+      uPose: { value: new Matrix4() },
+      uScale: { value: TORUS.SCALE },
+      uAngular: { value: TORUS.EDGE_ANGULAR_WIDTH },
+      uFogNear: { value: TORUS.FOG_NEAR_M },
+      uFogFar: { value: TORUS.FOG_FAR_M },
+      uCut: { value: TORUS.POLE_CULL },
     },
     vertexShader: EDGE_VERT,
     fragmentShader: EDGE_FRAG,

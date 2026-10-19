@@ -14,7 +14,8 @@ const SLIDERS = [
   { key: 'edge', label: 'РЁБРА', min: 0, max: 3, step: 0.01 },
   { key: 'thickness', label: 'ТОЛЩИНА', min: 0.1, max: 10, step: 0.05 },
   { key: 'curvature', label: 'КРИВИЗНА', min: 0, max: 2, step: 0.01 },
-  { key: 'jet', label: 'ДЖЕТЫ', min: 0, max: 3, step: 0.01 },
+  { key: 'jetLength', label: 'ДЛИНА ДЖЕТА', min: 0, max: 24, step: 0.1 },
+  { key: 'jetBody', label: 'ТЕЛО ДЖЕТА', min: 0, max: 4, step: 0.01 },
   { key: 'spread', label: 'РАЗДВИЖКА', min: 1, max: 30, step: 0.5 },
 ] as const
 
