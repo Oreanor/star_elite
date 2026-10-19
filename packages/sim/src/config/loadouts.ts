@@ -6,7 +6,6 @@ import {
   ARMOUR_PLATE,
   ARMOUR_STEEL_2,
   ARMOUR_STEEL_3,
-  BEAM_LASER,
   BEAM_LASER_HEAVY,
   BURST_LASER,
   CLOAK_FIELD,
@@ -60,20 +59,16 @@ export function godLoadout(): Loadout {
 }
 
 /**
- * КОРАБЛЬ ИГРОКА — «Ника»: серийный корпус из ДЕШЁВЫХ. Начинаешь снизу лестницы корпусов,
- * чтобы было куда расти: «Афина», «Орион», «Гермес» — уже покупки. Железо — не выше второго
- * класса: маскировка и «Клинок» третьего на старте не стоят, их зарабатывают.
+ * КОРАБЛЬ ИГРОКА — «Ника»: дешёвый корпус и самое слабое железо каталога.
+ * Двигатель, маневровые и щит — гражданские 1E, броня — плиты, трюм — самый
+ * маленький контейнер, стволы — изношенные. Пилоны пустые: ракеты покупают.
+ * Гиперпривод 1E стоит с завода — без него из системы не улететь вовсе.
  */
 export function playerStartLoadout(): Loadout {
   return createLoadout(
     AURORA_ONE,
-    // Базовый гиперпривод стоит с завода: без него не улететь из системы вообще,
-    // а «заработай сорок пять тысяч, чтобы впервые куда-то полететь» — не начало игры.
-    // Дальний рейс всё равно надо покупать: девять световых лет — это соседи.
-    [ENGINE_STANDARD, RCS_STANDARD, SHIELD_STANDARD, ARMOUR_PLATE, CARGO_LARGE, HYPERDRIVE_BASIC],
-    // ЗЕЛЁНЫЙ класс 2 на середине крыла, лучевой класс 2 на законцовках, голубой «Столб» в
-    // носу; пара пилонов снаряжена с завода.
-    [BURST_LASER, BEAM_LASER, PULSE_LASER_CENTRAL, MISSILE_PYLON, MISSILE_PYLON],
+    [ENGINE_CIVILIAN, RCS_CIVILIAN, SHIELD_LIGHT, ARMOUR_PLATE, CARGO_SMALL, HYPERDRIVE_BASIC],
+    [PULSE_LASER_WORN, PULSE_LASER_WORN, PULSE_LASER_WORN, null, null],
   )
 }
 

@@ -57,24 +57,22 @@ describe('поломка детали и её ремонт', () => {
   it('исход ремонта держит инвариант: успех — в норму и платно, провал — хуже и даром', () => {
     const world = createWorld()
     world.credits = 10_000_000
-    // Инвариант «успех платен» осмыслен лишь для детали С ЦЕНОЙ: ремонт даровой пушки и сам
-    // бесплатен. Берём первый ПЛАТНЫЙ лазер — в стартовой сборке первый по счёту может быть даровым.
-    const wi = world.player.loadout.weapons.findIndex((w) => w != null && isLaser(w) && w.cost > 0)
-    const stockId = world.player.loadout.weapons[wi]!.id
+    // Инвариант «успех платен» осмыслен лишь для детали С ЦЕНОЙ: ремонт дарового хлама
+    // и сам бесплатен. Стартовые стволы — как раз такой хлам, берём платную деталь внутри.
+    const wi = world.player.loadout.internals.findIndex((m) => m.cost > 0)
+    const stockId = world.player.loadout.internals[wi]!.id
     const base = findModule(stockId)!
-    if (base.kind !== 'laser') throw new Error('сток лазера обязан быть лазером')
 
-    // Ломаем лазер на месте и чиним ИМЕННО его (клон уже в слоте).
-    const broken = withFault(world.player.loadout.weapons[wi]!, 0.5)
-    world.player.loadout.weapons[wi] = broken as typeof broken & { kind: 'laser' }
+    const broken = withFault(world.player.loadout.internals[wi]!, 0.5)
+    world.player.loadout.internals[wi] = broken
     const faultBefore = moduleFault(broken)
     const money = world.credits
     const outcome = repairModule(world, world.player, broken)
 
-    const now = world.player.loadout.weapons[wi]!
+    const now = world.player.loadout.internals[wi]!
     if (outcome === 'repaired') {
       expect(moduleFault(now)).toBe(0)
-      if (now.kind === 'laser') expect(now.damage).toBeCloseTo(base.damage, 5) // сила вернулась к стоку
+      if (now.kind === 'laser' && base.kind === 'laser') expect(now.damage).toBeCloseTo(base.damage, 5)
       expect(world.credits).toBeLessThan(money) // за успех платят
     } else if (outcome === 'botched') {
       expect(moduleFault(now)).toBeGreaterThan(faultBefore) // доломали

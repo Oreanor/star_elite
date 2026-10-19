@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { auroraOneLoadout } from '../../config/loadouts'
-import { SHIELD_STANDARD } from '../../config/modules'
+import { findModule } from '../../config/modules'
 import { refreshSpec } from '../world/factory'
 import { addItem } from '../cargo/hold'
 import { isMissile, isShield, type MissileModule, type ShieldModule } from '../loadout'
@@ -13,7 +13,7 @@ import { upgradeLevel } from './moduleState'
  * характеристику, копия расходуется, денежная дорога слабее и платная, потолок держит.
  */
 
-/** Установленный щит игрока как ShieldModule — стартовый SHIELD_STANDARD. */
+/** Установленный щит игрока. Какой именно — решает стартовая сборка. */
 function playerShield(world: ReturnType<typeof createWorld>): ShieldModule {
   const shield = world.player.loadout.internals.find(isShield)
   if (!shield) throw new Error('у стартовой Авроры обязан быть щит')
@@ -24,7 +24,9 @@ describe('прокачка модуля', () => {
   it('копия из трюма усиливает щит на +50% и сама расходуется', () => {
     const world = createWorld()
     const before = world.player.spec.hull.shield
-    addItem(world.player.hold, { kind: 'module', module: SHIELD_STANDARD })
+    const copy = findModule(playerShield(world).id)
+    if (!copy) throw new Error('сток щита обязан быть в каталоге')
+    addItem(world.player.hold, { kind: 'module', module: copy })
     const holdBefore = world.player.hold.items.length
 
     expect(upgradeModule(world, world.player, playerShield(world), true)).toBeNull()
