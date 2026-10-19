@@ -2,10 +2,9 @@ import { AdditiveBlending, Color, DoubleSide, ShaderMaterial } from 'three'
 import { TORUS } from '../config'
 
 /**
- * Материалы гипертора: галактика-ПУФ (мягкое туманное облачко) и ребро-ДОТ (нить точек).
+ * Материалы гипертора: галактика-пуф и непрерывная полупрозрачная нить.
  *
- * Оба намеренно скупы на свет: узлов и точек в кадре сотни, а сцена идёт через bloom —
- * жирный аддитив мгновенно выгорает в белое. Пуф — гаусс без ободка, точка — мягкий круг.
+ * Узлов и связей в кадре сотни: мягкий поперечный спад удерживает гало от выгорания в белое.
  */
 
 /** Галактика — билборд-квад с гауссовым спадом. Ни ободка, ни диска: просто дымка. */
@@ -74,28 +73,34 @@ export function torusPuffMaterial(): ShaderMaterial {
   })
 }
 
-/** Ребро — облако ТОЧЕК вдоль дуги. Каждая точка — мягкий круг, яркость несёт `aBright`. */
-const DOT_VERT = /* glsl */ `
+/** Лента развёрнута к камере; общие вершины сохраняют непрерывность на изгибах. */
+const EDGE_VERT = /* glsl */ `
 #include <common>
 #include <logdepthbuf_pars_vertex>
 
 attribute float aBright;
-
-uniform float uSize;
+attribute vec3 aTangent;
+attribute float aWidth;
+attribute float aSide;
 
 varying float vBright;
+varying float vSide;
 
 void main() {
   vBright = aBright;
+  vSide = aSide;
   vec4 mv = modelViewMatrix * vec4(position, 1.0);
+  vec3 tangent = mat3(modelViewMatrix) * aTangent;
+  vec3 across = cross(tangent, -mv.xyz);
+  float len = length(across);
+  across = len > 0.00001 ? across / len : vec3(1.0, 0.0, 0.0);
+  mv.xyz += across * aWidth * aSide;
   gl_Position = projectionMatrix * mv;
-  // Точка немного уменьшается с дальностью, но не исчезает: делитель зажат снизу.
-  gl_PointSize = uSize * (300.0 / max(1.0, -mv.z));
   #include <logdepthbuf_vertex>
 }
 `
 
-const DOT_FRAG = /* glsl */ `
+const EDGE_FRAG = /* glsl */ `
 #include <common>
 #include <logdepthbuf_pars_fragment>
 
@@ -104,37 +109,37 @@ uniform vec3 uFar;
 uniform float uGain;
 
 varying float vBright;
+varying float vSide;
 
 void main() {
   #include <logdepthbuf_fragment>
-  // Мягкий круглый спрайт: гаусс без края — из толпы таких точек и складывается дымная нить.
-  vec2 c = gl_PointCoord - 0.5;
-  float d = length(c) * 2.0;
-  if (d > 1.0) discard;
-  float soft = exp(-d * d * 3.5);
-  // Глубина — ЦВЕТОМ: вблизи розовое, вдали фиолет. Свет при этом гаснет медленнее (sqrt),
-  // чтобы дальний фиолет не исчезал раньше, чем успел прочитаться.
-  vec3 col = mix(uFar, uNear, vBright * vBright);
-  float alpha = soft * sqrt(vBright) * uGain;
+  float d = abs(vSide);
+  float core = exp(-d * d * 18.0);
+  float halo = exp(-d * d * 4.0);
+  float soft = (core * 0.65 + halo * 0.35) * (1.0 - smoothstep(0.7, 1.0, d));
+  // Жёлтая сердцевина появляется у близкой яркой нити; размытое гало остаётся фиолетовым.
+  float warmth = smoothstep(0.12, 0.5, vBright * vBright * uGain) * core;
+  vec3 col = mix(uFar, uNear, warmth);
+  float alpha = soft * sqrt(max(0.0, vBright)) * uGain;
   if (alpha < 0.003) discard;
   gl_FragColor = vec4(col, alpha);
 }
 `
 
-export function torusDotMaterial(): ShaderMaterial {
+export function torusEdgeMaterial(): ShaderMaterial {
   return new ShaderMaterial({
     uniforms: {
       uNear: { value: new Color(TORUS.EDGE_NEAR_COLOR) },
       uFar: { value: new Color(TORUS.EDGE_FAR_COLOR) },
-      uSize: { value: TORUS.DOT_SIZE_PX },
-      uGain: { value: TORUS.DOT_INTENSITY },
+      uGain: { value: TORUS.EDGE_INTENSITY },
     },
-    vertexShader: DOT_VERT,
-    fragmentShader: DOT_FRAG,
+    vertexShader: EDGE_VERT,
+    fragmentShader: EDGE_FRAG,
     transparent: true,
     blending: AdditiveBlending,
     depthWrite: false,
     depthTest: true,
+    side: DoubleSide,
     fog: false,
     toneMapped: false,
   })

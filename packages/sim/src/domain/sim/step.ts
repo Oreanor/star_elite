@@ -1,4 +1,5 @@
 import { awardKillXp } from '../crew/rank'
+import { beginRayHolds, releaseRayHolds } from '../combat/laserEffects'
 import { stepCrew } from '../crew/copilot'
 import { Quaternion, Vector3 } from 'three'
 import { WARP } from '../../config/ai'
@@ -252,7 +253,9 @@ function stepTick(world: World, helm: Helm, dt: number): void {
   stepOrbits(world)
   stepControllers(world, helm, dt)
   stepPhysics(world, dt)
+  beginRayHolds(world)
   stepWeapons(world, helm, dt)
+  releaseRayHolds(world)
   stepAsteroids(world, dt)
   stepRockCollisions(world)
   stepMissiles(world, dt)

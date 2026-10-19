@@ -12,7 +12,9 @@ import { coolGuns, fireLasers } from './weapons'
 import { resolveLaserHit, strikeYield } from './bolts'
 import { withUpgrade } from '../station/moduleState'
 import { castLaser } from './raycast'
-import { rayOnAsteroid, rayOnShip, rayOnStatue } from './laserEffects'
+import { beginRayHolds, releaseRayHolds, rayOnAsteroid, rayOnShip, rayOnStatue, rayOnTitan } from './laserEffects'
+import { stepWorld } from '../sim/step'
+import { NULL_CONTROLLER } from '../sim/controller'
 
 /**
  * Лучи-переделки и школы лазеров. Свойства, а не числа: уменьшающий сжимает, но не мельче
@@ -152,6 +154,65 @@ describe('лучи-переделки', () => {
     enemy.divine = true
     rayOnShip(enemy, 'shrink', GROW_RAY.effectRate!, 5)
     expect(enemy.state.scale).toBe(1)
+  })
+
+  it('после прекращения попаданий возвращает ход и вращение, в том числе при повторном удержании', () => {
+    // Раньше hold навсегда стирал скорость: у камня и кита нет двигателя, чтобы снова разогнаться.
+    const world = scene()
+    const ship = world.ships[0]!
+    const a = rock(world, 20)
+    const titan = {
+      id: world.ids.next(), kind: 'titan' as const, variant: 0, name: 'Атлас',
+      pos: new Vector3(), vel: new Vector3(), quat: new Quaternion(), spin: 0, radius: 1600,
+    }
+    world.titans.push(titan)
+    for (let cycle = 0; cycle < 2; cycle++) {
+      ship.state.vel.set(200, -30, 10)
+      ship.state.angVel.set(1, -2, 3)
+      a.vel.copy(ship.state.vel)
+      a.spin.copy(ship.state.angVel)
+      titan.vel.copy(ship.state.vel)
+      for (let tick = 0; tick < 5; tick++) {
+        beginRayHolds(world)
+        rayOnShip(ship, 'hold', HOLD_RAY.effectRate!, 0.5)
+        rayOnAsteroid(a, 'hold', HOLD_RAY.effectRate!, 0.5)
+        rayOnTitan(titan, 'hold', HOLD_RAY.effectRate!, 0.5)
+        releaseRayHolds(world)
+      }
+      expect(a.vel.length()).toBeLessThan(1)
+      expect(titan.vel.length()).toBeLessThan(1)
+      expect(ship.state.vel.length()).toBeLessThan(1)
+      // Внешний импульс не должен исчезнуть при восстановлении снятой лучом скорости.
+      a.vel.y += 7
+      beginRayHolds(world)
+      releaseRayHolds(world)
+      releaseRayHolds(world) // восстановление не может повторно прибавить скорость
+      expect(ship.state.vel.x).toBeCloseTo(200)
+      expect(ship.state.angVel.distanceTo(new Vector3(1, -2, 3))).toBeCloseTo(0)
+      expect(a.vel.x).toBeCloseTo(200)
+      expect(a.vel.y).toBeCloseTo(-23)
+      expect(a.spin.distanceTo(new Vector3(1, -2, 3))).toBeCloseTo(0)
+      expect(titan.vel.x).toBeCloseTo(200)
+    }
+  })
+
+  it('в шаге мира камень снова движется сразу после отпускания гашетки', () => {
+    const world = scene()
+    arm(world, HOLD_RAY)
+    world.player.state.pos.set(5e9, 0, 0)
+    const a = rock(world, 20, new Vector3(5e9, 0, -400))
+    a.vel.set(10, 0, 0)
+    a.spin.set(0, 0.5, 0)
+    let firing = true
+    const controllers = new Map([[world.player.id, { ...NULL_CONTROLLER, wantsFire: () => firing }]])
+    for (let i = 0; i < 120; i++) stepWorld(world, PHYSICS.FIXED_DT, controllers)
+    expect(a.vel.x).toBeLessThan(1)
+    firing = false
+    const before = a.pos.clone()
+    stepWorld(world, PHYSICS.FIXED_DT, controllers)
+    expect(a.vel.x).toBeCloseTo(10)
+    expect(a.spin.y).toBeCloseTo(0.5)
+    expect(a.pos.x).toBeGreaterThan(before.x)
   })
 })
 

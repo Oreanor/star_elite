@@ -15,7 +15,6 @@ import {
   MeshBasicMaterial,
   Object3D,
   PlaneGeometry,
-  Points,
   SphereGeometry,
 } from 'three'
 import { quasarOf, smoothstep, renderTime } from '@elite/sim'
@@ -28,11 +27,11 @@ import { TORUS } from '../config'
 import { torusTuning } from './torusTuning'
 import { crossNeonTubesGeometry } from '../geometry/props'
 import { crossNeonLampMaterial, tickCrossPortal } from '../materials/crossPortal'
-import { torusDotMaterial, torusPuffMaterial } from '../materials/hypertorus'
+import { torusEdgeMaterial, torusPuffMaterial } from '../materials/hypertorus'
+import { torusEdgesGeometry, updateTorusEdges } from '../geometry/torusEdges'
 import {
   applyPose,
   buildHypertorusGrid,
-  slerpS3,
   stereoProject,
 } from '@elite/sim'
 
@@ -77,7 +76,7 @@ export const torusNearest: number[] = []
  * (`torusFlight` копит вид). Летит — решётка ВЫВОРАЧИВАЕТСЯ и течёт мимо, а не стоит статичным
  * шаром. Мышь вертит корабль (камера за кормой) — куда смотришь, туда и летишь.
  *
- * Галактики — мягкие туманные ПУФЫ в узлах, рёбра — нити ТОЧЕК-дотов. Решётка центрирована на
+ * Галактики — мягкие туманные ПУФЫ в узлах, рёбра — непрерывные светящиеся нити. Решётка центрирована на
  * корабле (группа едет за ним), поэтому в пустой комнате она всегда вокруг тебя.
  */
 
@@ -87,32 +86,6 @@ export const torusNearest: number[] = []
  * не могут разойтись — источник один.
  */
 export const GRID = buildHypertorusGrid(TORUS.NXI, TORUS.NTHETA, TORUS.NPHI)
-const DPE = TORUS.DOTS_PER_EDGE
-const MAX_DOTS = GRID.edgeCount * DPE
-
-/**
- * Разброс точек нити — раз на модуль и по зерну, а не `Math.random` в кадре: иначе волокна
- * кипели бы, а не висели. Смещение поперёк — почти-гаусс (сумма трёх равномерных): точки
- * гуще у оси нити и редеют к краям, поэтому край выходит дымным, а не стриженым.
- * Сдвиг вдоль дуги — внутри своей доли ребра, чтобы точки не сбивались в бусины.
- */
-const _jitter = new Float32Array(MAX_DOTS * 3)
-const _along = new Float32Array(MAX_DOTS)
-{
-  let h = 0x2f6b9a1d
-  const rnd = (): number => {
-    h = (Math.imul(h ^ (h >>> 15), 0x2c1b3c6d) + 0x6d2b79f5) | 0
-    return ((h ^ (h >>> 13)) >>> 0) / 4294967296
-  }
-  const gauss = (): number => rnd() + rnd() + rnd() - 1.5
-  for (let i = 0; i < MAX_DOTS; i++) {
-    _jitter[i * 3] = gauss()
-    _jitter[i * 3 + 1] = gauss()
-    _jitter[i * 3 + 2] = gauss()
-    _along[i] = rnd() - 0.5
-  }
-}
-
 const _dummy = new Object3D()
 const _base = new Color(TORUS.PUFF_COLOR)
 /**
@@ -132,7 +105,6 @@ const _p = { x: 0, y: 0, z: 0, depth: 0 }
 let _manualPrevTarget: number | null = null
 let _manualWasInside = true
 const _rot = new Float64Array(GRID.vertCount * 4)
-const _s4 = new Float64Array(4)
 /**
  * Поставить игрока В УКАЗАННУЮ ВЕРШИНУ решётки (вход в комнату из своей галактики).
  * Сетка живёт здесь, поэтому и перевод «номер вершины → точка S³» тоже здесь.
@@ -218,7 +190,7 @@ export function HypertorusLayer() {
 
   const groupRef = useRef<Group>(null)
   const puffRef = useRef<InstancedMesh>(null)
-  const dotRef = useRef<Points>(null)
+  const edgeRef = useRef<Mesh>(null)
   const backdropRef = useRef<Mesh>(null)
   const crossRef = useRef<Mesh>(null)
 
@@ -233,14 +205,8 @@ export function HypertorusLayer() {
   }, [])
   const puffMat = useMemo(torusPuffMaterial, [])
 
-  const dotGeo = useMemo(() => {
-    const g = new BufferGeometry()
-    g.setAttribute('position', new BufferAttribute(new Float32Array(MAX_DOTS * 3), 3))
-    g.setAttribute('aBright', new BufferAttribute(new Float32Array(MAX_DOTS), 1))
-    g.setDrawRange(0, 0)
-    return g
-  }, [])
-  const dotMat = useMemo(torusDotMaterial, [])
+  const edgeGeo = useMemo(() => torusEdgesGeometry(GRID.edgeCount), [])
+  const edgeMat = useMemo(torusEdgeMaterial, [])
 
   // Квазар ли узел и ось его джета — один раз на вселенную: зерно галактики не меняется.
   const quasarAxes = useMemo(() => {
@@ -279,32 +245,32 @@ export function HypertorusLayer() {
     () => () => {
       puffGeo.dispose()
       puffMat.dispose()
-      dotGeo.dispose()
-      dotMat.dispose()
+      edgeGeo.dispose()
+      edgeMat.dispose()
       backdropGeo.dispose()
       backdropMat.dispose()
       crossGeo.dispose()
       crossMat.dispose()
     },
-    [puffGeo, puffMat, dotGeo, dotMat, backdropGeo, backdropMat, crossGeo, crossMat],
+    [puffGeo, puffMat, edgeGeo, edgeMat, backdropGeo, backdropMat, crossGeo, crossMat],
   )
 
   useFrame(() => {
     const { world, bush } = session
     const group = groupRef.current
     const puffs = puffRef.current
-    const dots = dotRef.current
+    const edges = edgeRef.current
     const backdrop = backdropRef.current
-    if (!group || !puffs || !dots || !backdrop) return
+    if (!group || !puffs || !edges || !backdrop) return
 
     const on = bush.active
     puffMat.uniforms.uGain!.value = torusTuning.puff
-    dotMat.uniforms.uGain!.value = torusTuning.dot
+    edgeMat.uniforms.uGain!.value = torusTuning.edge
     group.visible = on
     backdrop.visible = on
     if (!on) {
       puffs.count = 0
-      dots.geometry.setDrawRange(0, 0)
+      edges.geometry.setDrawRange(0, 0)
       jetGeo.setDrawRange(0, 0)
       return
     }
@@ -433,35 +399,7 @@ export function HypertorusLayer() {
     tintAttr.needsUpdate = true
     fogAttr.needsUpdate = true
 
-    // РЁБРА-ДОТЫ: DPE точек вдоль дуги (slerp в S³), спроецированы. Точка у полюса — пропуск.
-    const posArr = dots.geometry.getAttribute('position').array as Float32Array
-    const brightArr = dots.geometry.getAttribute('aBright').array as Float32Array
-    let d = 0
-    for (let e = 0; e < GRID.edgeCount; e++) {
-      const i = GRID.edges[e * 2]!
-      const j = GRID.edges[e * 2 + 1]!
-      for (let k = 0; k < DPE; k++) {
-        const slot = e * DPE + k
-        const t = (k + 0.5 + _along[slot]! * 0.9) / DPE
-        slerpS3(_rot, i, j, t, _s4)
-        const w = _s4[3]!
-        if (w > TORUS.POLE_CULL) continue
-        stereoProject(_s4[0]!, _s4[1]!, _s4[2]!, w, projScale(), _p)
-        const b = brightnessOf(Math.hypot(_p.x, _p.y, _p.z))
-        if (b < 0.02) continue
-        // Поперечный разброс задан УГЛОМ на S³ и переведён в метры тем же множителем, что и
-        // пуфы: вблизи нить толще, вдали тоньше — как настоящая, а не нарисованная на экране.
-        const spread = (TORUS.EDGE_JITTER * projScale()) / Math.max(1e-4, 1 - w)
-        posArr[d * 3] = _p.x + _jitter[slot * 3]! * spread
-        posArr[d * 3 + 1] = _p.y + _jitter[slot * 3 + 1]! * spread
-        posArr[d * 3 + 2] = _p.z + _jitter[slot * 3 + 2]! * spread
-        brightArr[d] = b
-        d++
-      }
-    }
-    dots.geometry.getAttribute('position').needsUpdate = true
-    dots.geometry.getAttribute('aBright').needsUpdate = true
-    dots.geometry.setDrawRange(0, d)
+    updateTorusEdges(edgeGeo, GRID, _rot, projScale(), brightnessOf)
 
     // ДОМ — узел, ИЗ КОТОРОГО влетел (его записал `enterBush`), а не постоянный номер:
     // вылетев в другую галактику и войдя в её дыру, домом становится она.
@@ -526,7 +464,7 @@ export function HypertorusLayer() {
       />
       <group ref={groupRef} frustumCulled={false} visible={false}>
         <instancedMesh ref={puffRef} args={[puffGeo, puffMat, GRID.vertCount]} frustumCulled={false} />
-        <points ref={dotRef} geometry={dotGeo} material={dotMat} frustumCulled={false} />
+        <mesh ref={edgeRef} geometry={edgeGeo} material={edgeMat} frustumCulled={false} />
         <lineSegments ref={jetRef} geometry={jetGeo} material={jetMat} frustumCulled={false} />
         <mesh ref={crossRef} geometry={crossGeo} material={crossMat} frustumCulled={false} visible={false} />
       </group>

@@ -1,7 +1,44 @@
+import { Vector3 } from 'three'
 import { RAYS } from '../../config/weapons'
 import { clamp } from '../../core/math'
 import type { LaserEffect } from '../../config/schema'
-import type { AsteroidEntity, FigurineEntity, MonolithEntity, ShipEntity, TitanEntity, WarBaseEntity } from '../world/entities'
+import type { AsteroidEntity, FigurineEntity, MonolithEntity, RayHold, ShipEntity, TitanEntity, WarBaseEntity, World } from '../world/entities'
+
+function holdMotion(body: { rayHold?: RayHold }, vel: Vector3, angular: Vector3 | undefined, damp: number): void {
+  const hold = body.rayHold ??= { touched: false, velocity: new Vector3(), angular: new Vector3() }
+  hold.touched = true
+  // Возвращаем только снятое лучом: тяга, тяготение и столкновения не теряются при отпускании.
+  hold.velocity.addScaledVector(vel, 1 - damp)
+  vel.multiplyScalar(damp)
+  if (angular) {
+    hold.angular.addScaledVector(angular, 1 - damp)
+    angular.multiplyScalar(damp)
+  }
+}
+
+/** Все стволы совместно продлевают удержание на текущий такт. */
+export function beginRayHolds(world: World): void {
+  if (world.player.rayHold) world.player.rayHold.touched = false
+  for (const ship of world.ships) if (ship.rayHold) ship.rayHold.touched = false
+  for (const rock of world.asteroids) if (rock.rayHold) rock.rayHold.touched = false
+  for (const titan of world.titans) if (titan.rayHold) titan.rayHold.touched = false
+}
+
+function releaseMotion(hold: RayHold | undefined, vel: Vector3, angular?: Vector3): void {
+  if (!hold || hold.touched) return
+  vel.add(hold.velocity)
+  angular?.add(hold.angular)
+  hold.velocity.set(0, 0, 0)
+  hold.angular.set(0, 0, 0)
+}
+
+/** Нет попаданий в этом такте — удержание закончено, даже если стрелок погиб или перегрелся. */
+export function releaseRayHolds(world: World): void {
+  releaseMotion(world.player.rayHold, world.player.state.vel, world.player.state.angVel)
+  for (const ship of world.ships) releaseMotion(ship.rayHold, ship.state.vel, ship.state.angVel)
+  for (const rock of world.asteroids) releaseMotion(rock.rayHold, rock.vel, rock.spin)
+  for (const titan of world.titans) releaseMotion(titan.rayHold, titan.vel)
+}
 
 /**
  * ЛУЧИ-ПЕРЕДЕЛКИ: что делает с целью луч `shrink` / `grow` / `hold` за `seconds` в луче.
@@ -33,8 +70,7 @@ export function rayOnShip(ship: ShipEntity, effect: LaserEffect, rate: number, s
   if (k !== 1) ship.state.scale = clamp(ship.state.scale * k, RAYS.MIN_SCALE, RAYS.MAX_SCALE)
   if (effect === 'hold') {
     const damp = Math.exp(-rate * seconds)
-    ship.state.vel.multiplyScalar(damp)
-    ship.state.angVel.multiplyScalar(damp)
+    holdMotion(ship, ship.state.vel, ship.state.angVel, damp)
   }
 }
 
@@ -72,14 +108,13 @@ export function rayOnWarBase(base: WarBaseEntity, effect: LaserEffect, rate: num
 /** Кит («Атлас»): размер и дрейф. Его поворот — от времени, крутить нечего, но ход гасится. */
 export function rayOnTitan(titan: TitanEntity, effect: LaserEffect, rate: number, seconds: number): void {
   resize(titan, scaleFactor(effect, rate, seconds))
-  if (effect === 'hold') titan.vel.multiplyScalar(Math.exp(-rate * seconds))
+  if (effect === 'hold') holdMotion(titan, titan.vel, undefined, Math.exp(-rate * seconds))
 }
 
 export function rayOnAsteroid(a: AsteroidEntity, effect: LaserEffect, rate: number, seconds: number): void {
   resize(a, scaleFactor(effect, rate, seconds))
   if (effect === 'hold') {
     const damp = Math.exp(-rate * seconds)
-    a.vel.multiplyScalar(damp)
-    a.spin.multiplyScalar(damp)
+    holdMotion(a, a.vel, a.spin, damp)
   }
 }

@@ -99,7 +99,15 @@ export interface LaserHeat {
   lastHeatAt: number
 }
 
+/** Скорость, временно снятая удерживающим лучом; буферы переиспользуются между попаданиями. */
+export interface RayHold {
+  touched: boolean
+  velocity: Vector3
+  angular: Vector3
+}
+
 export interface ShipEntity {
+  rayHold?: RayHold
   id: number
   kind: 'ship'
   faction: Faction
@@ -330,6 +338,7 @@ export interface AsteroidBeltEntity {
 }
 
 export interface AsteroidEntity {
+  rayHold?: RayHold
   id: number
   kind: 'asteroid'
   pos: Vector3
@@ -712,6 +721,7 @@ export interface WarBaseEntity {
 }
 
 export interface TitanEntity {
+  rayHold?: RayHold
   id: number
   kind: 'titan'
   /** Какой из обликов рисовать. Данные, не ветвление: новый вид — строка таблицы. */

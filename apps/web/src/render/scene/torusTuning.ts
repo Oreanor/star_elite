@@ -8,8 +8,8 @@ import { TORUS } from '../config'
 export const torusTuning = {
   /** Яркость пуфов-галактик (`TORUS.PUFF_INTENSITY`). */
   puff: TORUS.PUFF_INTENSITY as number,
-  /** Яркость точек рёбер (`TORUS.DOT_INTENSITY`). */
-  dot: TORUS.DOT_INTENSITY as number,
+  /** Яркость непрерывных рёбер (`TORUS.EDGE_INTENSITY`). */
+  edge: TORUS.EDGE_INTENSITY as number,
   /** Яркость джетов квазаров (`TORUS.JET_INTENSITY`). */
   jet: TORUS.JET_INTENSITY as number,
   /** Раздвижка узлов (`TORUS.NODE_SPREAD`). */
@@ -22,7 +22,7 @@ export function torusTuningSnippet(): string {
   return [
     `  NODE_SPREAD: ${f(torusTuning.spread)},`,
     `  PUFF_INTENSITY: ${f(torusTuning.puff)},`,
-    `  DOT_INTENSITY: ${f(torusTuning.dot)},`,
+    `  EDGE_INTENSITY: ${f(torusTuning.edge)},`,
     `  JET_INTENSITY: ${f(torusTuning.jet)},`,
   ].join('\n')
 }
