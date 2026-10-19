@@ -151,13 +151,9 @@ export function freighterLoadout(): Loadout {
  * купив, тут же летит — а не собирает корабль из пустых слотов.
  */
 
-/** «Ника» — серийный корпус на верфи. Середина класса 2, не «Стриж» и не «Керамет». */
+/** «Ника» на верфи — та же самая простая сборка, с которой начинают. */
 export function auroraOneLoadout(): Loadout {
-  return createLoadout(
-    AURORA_ONE,
-    [ENGINE_STANDARD, RCS_STANDARD, SHIELD_STANDARD_B, ARMOUR_COMPOSITE, CARGO_SMALL, HYPERDRIVE_LONG],
-    [BURST_LASER, BURST_LASER, null, MISSILE_HEAVY, MISSILE_HEAVY],
-  )
+  return playerStartLoadout()
 }
 
 /**
@@ -174,7 +170,7 @@ export function icarusLoadout(): Loadout {
     [BURST_LASER, null, null, MISSILE_HEAVY, null],
   )
 }
-/** «Тесей» — та же середина класса 2, что у «Ники»: стандарт, композит, «Меридиан». */
+/** «Тесей» — середина класса 2: стандарт, композит, «Меридиан». «Ника» ниже, на гражданском. */
 export function theseusLoadout(): Loadout {
   return createLoadout(
     THESEUS,

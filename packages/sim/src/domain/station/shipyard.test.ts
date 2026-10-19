@@ -179,7 +179,9 @@ describe('верфь корпусов', () => {
       expect(next.chassis.class, next.chassis.name).toBeGreaterThanOrEqual(prev.chassis.class)
       const prevGear = Math.max(...gearClasses(prev))
       const nextGear = Math.max(...gearClasses(next))
-      expect(nextGear, next.chassis.name).toBeGreaterThanOrEqual(prevGear)
+      // «Ника» дороже «Икара», но с завода на ней самое слабое железо каталога.
+      if (next.chassis.id === 'aurora_one') expect(nextGear, next.chassis.name).toBeLessThan(prevGear)
+      else expect(nextGear, next.chassis.name).toBeGreaterThanOrEqual(prevGear)
       for (const cls of gearClasses(next)) {
         expect(cls, next.chassis.name).toBeLessThanOrEqual(next.chassis.class)
       }
@@ -201,7 +203,10 @@ describe('верфь корпусов', () => {
           (other) => other.kind === module.kind && other.class === module.class && other.cost > module.cost,
         )
         expect(dearer, `${offer.chassis.name}: ${module.name}`).toBe(true)
-        if (core.has(module.kind)) expect(module.class, module.name).toBe(offer.chassis.class)
+        if (!core.has(module.kind)) continue
+        // «Ника» — низ лестницы: с завода первый класс, хотя слоты рамы принимают второй.
+        if (offer.chassis.id === 'aurora_one') expect(module.class, module.name).toBe(1)
+        else expect(module.class, module.name).toBe(offer.chassis.class)
       }
     }
   })

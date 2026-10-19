@@ -7,7 +7,7 @@ import { PHYSICS } from '../../config/physics'
 import { ATHENA, ATLAS, AURORA_ONE, HERMES, ICARUS, missileRackOf, ORION, PEGASUS, PERSEUS, SPIRITUS_SANCTUS, THESEUS } from '../../config/chassis'
 import { ECM, GUNNERY } from '../../config/weapons'
 import { raySphere } from '../../core/math'
-import { auroraOneLoadout } from '../../config/loadouts'
+import { theseusLoadout } from '../../config/loadouts'
 import { findEcm, isLaser, isMissile } from '../loadout'
 import { createWorld, STARTER_SYSTEM } from '../world'
 import { refreshSpec } from '../world/factory'
@@ -80,7 +80,7 @@ function withOneEnemy(pylons = false): { world: World; enemy: ShipEntity } {
     // трюме «Авроры» заводская выдача новой пусковой в них не влезает, и тест меряет
     // чужой груз. Боевой фикстуре нужен пустой отсек.
     world.player.hold.items.length = 0
-    world.player.loadout = auroraOneLoadout()
+    world.player.loadout = theseusLoadout()
     refreshSpec(world.player)
     // Пересадка не выдаёт ракеты сама: заводской боезапас кладётся при сборке борта.
     issueFactoryMissiles(world.player)

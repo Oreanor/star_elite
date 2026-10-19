@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { auroraOneLoadout } from '../../config/loadouts'
+import { theseusLoadout } from '../../config/loadouts'
 import { refreshSpec } from '../world/factory'
 import { DRONE_BAY } from '../../config/modules'
 import { selectTarget } from '../ai/targeting'
@@ -25,10 +25,9 @@ function withPirate(): { world: World; pirate: ShipEntity } {
   })
   const pirate = world.ships[0]
   if (!pirate) throw new Error('нет пирата')
-  // У «Spiritus Sanctus» ракетных пилонов нет вовсе (это решение, а не недосмотр —
-  // см. missile-slot.test.ts), а беспилотник живёт именно на пилоне. Поэтому проверяем
-  // на серийной «Авроре», как и остальные операции мунишн-слота.
-  world.player.loadout = auroraOneLoadout()
+  // У «Ники» пилоны пустые, у «Святого Духа» их нет. Беспилотник живёт на пилоне
+  // заводского «Тесея».
+  world.player.loadout = theseusLoadout()
   refreshSpec(world.player)
   // Дрон-ракеты — покупной тип мунишн-слота: на старте их нет, снаряжаем явно.
   world.credits = 1_000_000

@@ -1,7 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { veteranWorld } from '../../testkit'
-import { missileRackOf } from '../../config/chassis'
-import { auroraOneLoadout } from '../../config/loadouts'
+import { theseusLoadout } from '../../config/loadouts'
 import { DRONE_BAY } from '../../config/modules'
 import { isDrone, isMissile } from '../loadout'
 import { missileRoom, missileStock } from '../combat/ordnance'
@@ -32,10 +30,13 @@ function pylonTypes(world: ReturnType<typeof createWorld>): Set<string> {
   return ids
 }
 
-/** Операции слота — на серийной «Авроре» С УЖЕ ВСТАВЛЕННЫМИ ракетами: стартовая идёт с пустыми пилонами. */
+/** Операции слота — на заводском «Тесее»: у «Ники» пилоны пустые. */
 function missileWorld(): ReturnType<typeof createWorld> {
-  const world = veteranWorld()
-  world.player.loadout = auroraOneLoadout()
+  const world = createWorld()
+  // Стартовый трюм пуст, и смена корпуса не должна тащить чужой груз: иначе снятие
+  // пусковой некуда положить.
+  world.player.hold.items.length = 0
+  world.player.loadout = theseusLoadout()
   refreshSpec(world.player)
   return world
 }
@@ -46,24 +47,18 @@ describe('ракетный (мунишн) слот', () => {
    * Раньше это был потолок обоймы на пилоне; теперь потолок — грузовой отсек,
    * а паспорт `ammo` — только сколько кладут с верфи.
    */
-  it('стартовый корабль вылетает с ракетами в трюме', () => {
+  it('стартовый корабль вылетает с пустыми пилонами', () => {
     const world = createWorld()
-    const pylons = missilePylonIndices(world.player)
-    expect(pylons.length).toBeGreaterThan(0)
-    expect(installedMissile(world.player)).not.toBeNull()
-
-    const perPylon = installedMissile(world.player)!.kind === 'missile' ? (installedMissile(world.player) as { ammo: number }).ammo : 0
-    const stock = missileStock(world.player)
-    expect(stock).toBe(pylons.length * perPylon)
-    // Тонна за штуку: в трюме больше ничего нет, масса груза равна числу ракет.
-    expect(cargoMass(world.player.hold)).toBe(stock)
-    expect(world.player.missileReady).toBe(Math.min(missileRackOf(world.player.loadout.chassis), stock))
-    // Дрон-ракеты — покупные: их с завода не ставят.
+    expect(missilePylonIndices(world.player).length).toBeGreaterThan(0)
+    expect(installedMissile(world.player)).toBeNull()
+    expect(missileStock(world.player)).toBe(0)
+    expect(cargoMass(world.player.hold)).toBe(0)
+    expect(world.player.missileReady).toBe(0)
     expect(world.player.loadout.weapons.some((w) => w != null && isDrone(w))).toBe(false)
   })
 
   it('ракет можно купить сколько влезет в трюм, и ни одной сверх', () => {
-    const world = createWorld()
+    const world = missileWorld()
     world.credits = 1_000_000
     const room = missileRoom(world.player)
     expect(room).toBeGreaterThan(0)
