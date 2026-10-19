@@ -1,5 +1,5 @@
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { BufferGeometry, CircleGeometry, DoubleSide, Float32BufferAttribute, MeshBasicMaterial, SphereGeometry, type Mesh } from 'three'
 import { CHASSIS_CATALOGUE } from '@elite/sim'
 import { chassisGeometry, chassisMissileScale, chassisNozzles, glbMaterial, missileGeometry } from '../render/geometry/ships'
@@ -59,6 +59,18 @@ function freshState(index: number): RigState {
   return fromChassis(chassis, chassisNozzles(chassis.id), chassisMissileScale(chassis.id))
 }
 
+/**
+ * Оснастка, которую показывать на этом корпусе. Черновик — только если он про ЭТОТ
+ * корпус; иначе заводская раскладка, и только когда меш уже приехал (сопла известны).
+ * null — меш ещё в пути, точки предыдущего борта показывать нельзя.
+ */
+function stateFor(index: number): RigState | null {
+  const chassis = CHASSIS_CATALOGUE[index]!
+  const draft = loadState(chassis.id)
+  if (draft && draft.chassisId === chassis.id) return draft
+  return glbMaterial(chassis.id) ? freshState(index) : null
+}
+
 export function RigTool() {
   const [hull, setHull] = useState(0)
   const [selected, setSelected] = useState(0)
@@ -71,13 +83,24 @@ export function RigTool() {
   const [saved, setSaved] = useState<'idle' | 'busy' | 'ok' | 'fail'>('idle')
 
   const refresh = useCallback(() => bump((n) => n + 1), [])
+  /**
+   * Номер корпуса, который видит кадр сцены. Сцена живёт в своём корне three и может
+   * нарисовать кадр ещё со СТАРЫМ замыканием — читать индекс надо отсюда, его пишем
+   * в рендере, до эффектов и до requestAnimationFrame.
+   */
+  const hullRef = useRef(hull)
+  hullRef.current = hull
+  /** Состояние, которое затёрла смена корпуса — кадр сцены дописывает его, если правка ещё не осела. */
+  const leaving = useRef<RigState | null>(null)
 
-  // Сменился корпус — забыть прежнее состояние; новое заведёт кадр, когда меш доедет.
-  useEffect(() => {
-    state.current = loadState(chassis.id)
+  // До отрисовки, не после: иначе первый кадр нового корпуса рисует точки предыдущего,
+  // кадр сцены записывает их как состояние нового, и они висят мимо борта, пока не сбросишь.
+  useLayoutEffect(() => {
+    leaving.current = state.current
+    state.current = stateFor(hull)
     setSelected(0)
     refresh()
-  }, [chassis.id, refresh])
+  }, [chassis.id, hull, refresh])
 
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
@@ -161,7 +184,8 @@ export function RigTool() {
           <ambientLight intensity={0.35} />
           <directionalLight position={[5, 8, 6]} intensity={2.2} />
           <Scene
-            hull={hull}
+            hullRef={hullRef}
+            leaving={leaving}
             selected={selected}
             state={state}
             held={held}
@@ -236,21 +260,22 @@ export function RigTool() {
 }
 
 function Scene({
-  hull,
+  hullRef,
+  leaving,
   selected,
   state,
   held,
   onChange,
   onReady,
 }: {
-  hull: number
+  hullRef: React.RefObject<number>
+  leaving: React.RefObject<RigState | null>
   selected: number
   state: React.RefObject<RigState | null>
   held: React.RefObject<Set<string>>
   onChange: () => void
   onReady: (s: RigState) => void
 }) {
-  const chassis = CHASSIS_CATALOGUE[hull]!
   const ship = useRef<Mesh>(null)
   const markers = useRef<Mesh[]>([])
   const missiles = useRef<Mesh[]>([])
@@ -258,6 +283,9 @@ function Scene({
   const holdTime = useRef(0)
   const lastPanel = useRef(0)
   const dirty = useRef(false)
+  /** Корпус, чью правку сейчас копим. Сменился — хвост удержания и несброшенный dirty не переезжают. */
+  const tunedFor = useRef('')
+  const chassis = CHASSIS_CATALOGUE[hullRef.current] ?? CHASSIS_CATALOGUE[0]!
   const missile = useMemo(missileGeometry, [])
   const missileMat = useMemo(missileMaterial, [])
   const beamGeom = useMemo(() => {
@@ -269,20 +297,45 @@ function Scene({
   useOrbit(chassis.radius)
 
   useFrame((_, dt) => {
+    // Индекс — из рефа родителя, не из пропса: пропс может быть ещё от прошлого корпуса,
+    // а реф родитель пишет в том же рендере, что сменил борт.
+    const index = hullRef.current
+    const body = CHASSIS_CATALOGUE[index]
+    if (!body) return
     const mesh = ship.current
     if (mesh) {
-      const g = chassisGeometry(chassis.id)
+      const g = chassisGeometry(body.id)
       if (mesh.geometry !== g) mesh.geometry = g
-      const m = hullMaterialFor(chassis.id)
+      const m = hullMaterialFor(body.id)
       if (mesh.material !== m) mesh.material = m
     }
-    // Меш доехал — теперь сопла корпуса известны: заводим правку (если в памяти не было).
-    if (!state.current && glbMaterial(chassis.id)) onReady(freshState(hull))
-    const s = state.current
-    if (!s || s.chassisId !== chassis.id) return
+    // Уход с корпуса: недосохранённую правку дописать ему, а не следующему. Разгон удержания
+    // тоже его — иначе первая же стрелка на новом борту уносит точку.
+    let switched = false
+    if (tunedFor.current !== body.id) {
+      const prev = leaving.current
+      if (dirty.current && prev && prev.chassisId === tunedFor.current) saveState(prev)
+      leaving.current = null
+      tunedFor.current = body.id
+      holdTime.current = 0
+      dirty.current = false
+      switched = true
+    }
+    let s = state.current
+    if (!s || s.chassisId !== body.id) {
+      // Чужое состояние не оставляем: раньше кадр просто выходил, и точки прошлого корпуса
+      // висели на новом меше, пока не нажмёшь «СБРОСИТЬ КОРПУС».
+      s = stateFor(index)
+      if (!s) {
+        hide()
+        return
+      }
+      onReady(s)
+    }
 
-    edit(s, dt)
-    place(s)
+    // Кадр смены не двигает точки: зажатая стрелка ещё от прошлого корпуса.
+    if (!switched) edit(s, body.radius, dt)
+    place(s, body.radius)
     if (dirty.current && performance.now() - lastPanel.current > PANEL_MS) {
       lastPanel.current = performance.now()
       dirty.current = false
@@ -291,7 +344,13 @@ function Scene({
     }
   })
 
-  function edit(s: RigState, dt: number): void {
+  function hide(): void {
+    for (const m of markers.current) if (m) m.visible = false
+    for (const m of missiles.current) if (m) m.visible = false
+    for (const m of beams.current) if (m) m.visible = false
+  }
+
+  function edit(s: RigState, radius: number, dt: number): void {
     const item = s.items[selected]
     const keys = held.current
     if (!item) return
@@ -310,7 +369,7 @@ function Scene({
     }
     holdTime.current += dt
     // Шаг растёт, пока держишь: тонкая подводка — тычком, дальний перенос — удержанием.
-    const rate = Math.max(0.4, chassis.radius * 0.06) * Math.min(4, 1 + holdTime.current * 1.5) * fine
+    const rate = Math.max(0.4, radius * 0.06) * Math.min(4, 1 + holdTime.current * 1.5) * fine
     const d = rate * dt
     moveItem(item, (right ? d : 0) - (left ? d : 0), shift ? (fwd ? d : 0) - (back ? d : 0) : 0, shift ? 0 : (back ? d : 0) - (fwd ? d : 0))
     if (grow) resizeItem(s, item, Math.exp(0.8 * dt * fine))
@@ -319,11 +378,11 @@ function Scene({
   }
 
   /** Расставить метки: дула — точки с лучом вперёд, подвесы — ракеты, сопла — диски. */
-  function place(s: RigState): void {
+  function place(s: RigState, radius: number): void {
     let mi = 0
     let ri = 0
     let bi = 0
-    const dot = Math.max(0.12, chassis.radius * 0.022)
+    const dot = Math.max(0.12, radius * 0.022)
     s.items.forEach((item, i) => {
       const pick = i === selected
       for (const [x, y, z] of itemPoints(item)) {
@@ -351,7 +410,7 @@ function Scene({
           if (b) {
             b.visible = true
             b.position.set(x, y, z)
-            b.scale.set(dot * 4, dot * 4, chassis.radius * 2.5)
+            b.scale.set(dot * 4, dot * 4, radius * 2.5)
           }
         }
       }
