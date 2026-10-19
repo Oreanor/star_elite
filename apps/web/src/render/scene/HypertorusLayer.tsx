@@ -20,8 +20,8 @@ import {
 } from 'three'
 import { quasarOf, smoothstep, renderTime } from '@elite/sim'
 import { useSession } from '../../session/GameContext'
-import { placeTorusAt, torusView } from '../../session/torusFlight'
-import { setTorusNav, torusAutopilotActive, torusTargetVertex } from '../../session/torusAutopilot'
+import { placeTorusAt, torusThrust, torusView } from '../../session/torusFlight'
+import { finishTorusApproach, setTorusNav, torusAutopilotActive, torusTargetVertex } from '../../session/torusAutopilot'
 import { bushExitScale } from '../../session/bushExit'
 import { nameOfVertex, nodeOfVertex, vertexOfNode } from './torusNodes'
 import { TORUS } from '../config'
@@ -90,6 +90,29 @@ export const GRID = buildHypertorusGrid(TORUS.NXI, TORUS.NTHETA, TORUS.NPHI)
 const DPE = TORUS.DOTS_PER_EDGE
 const MAX_DOTS = GRID.edgeCount * DPE
 
+/**
+ * Разброс точек нити — раз на модуль и по зерну, а не `Math.random` в кадре: иначе волокна
+ * кипели бы, а не висели. Смещение поперёк — почти-гаусс (сумма трёх равномерных): точки
+ * гуще у оси нити и редеют к краям, поэтому край выходит дымным, а не стриженым.
+ * Сдвиг вдоль дуги — внутри своей доли ребра, чтобы точки не сбивались в бусины.
+ */
+const _jitter = new Float32Array(MAX_DOTS * 3)
+const _along = new Float32Array(MAX_DOTS)
+{
+  let h = 0x2f6b9a1d
+  const rnd = (): number => {
+    h = (Math.imul(h ^ (h >>> 15), 0x2c1b3c6d) + 0x6d2b79f5) | 0
+    return ((h ^ (h >>> 13)) >>> 0) / 4294967296
+  }
+  const gauss = (): number => rnd() + rnd() + rnd() - 1.5
+  for (let i = 0; i < MAX_DOTS; i++) {
+    _jitter[i * 3] = gauss()
+    _jitter[i * 3 + 1] = gauss()
+    _jitter[i * 3 + 2] = gauss()
+    _along[i] = rnd() - 0.5
+  }
+}
+
 const _dummy = new Object3D()
 const _base = new Color(TORUS.PUFF_COLOR)
 /**
@@ -101,6 +124,13 @@ const QUASAR_PUFF_GROW = 1.7
 /** Длина джета — в радиусах пуфа: столб заметно длиннее самой галактики. */
 const QUASAR_JET_PUFFS = 6
 const _p = { x: 0, y: 0, z: 0, depth: 0 }
+/**
+ * Ручной выход: была ли ВЫБРАННАЯ цель уже в центре проекции в прошлом кадре, и какая это была
+ * цель. Выход ловит именно ВХОД в узел своим ходом — выбрать узел, в котором стоишь, не значит
+ * из него выпасть, а смена цели переписывает отметку без выхода.
+ */
+let _manualPrevTarget: number | null = null
+let _manualWasInside = true
 const _rot = new Float64Array(GRID.vertCount * 4)
 const _s4 = new Float64Array(4)
 /**
@@ -241,7 +271,7 @@ export function HypertorusLayer() {
 
   const backdropGeo = useMemo(() => new SphereGeometry(1, 16, 12), [])
   const backdropMat = useMemo(
-    () => new MeshBasicMaterial({ color: 0x000306, side: BackSide, fog: false, depthWrite: true }),
+    () => new MeshBasicMaterial({ color: TORUS.BACKDROP_COLOR, side: BackSide, fog: false, depthWrite: true }),
     [],
   )
 
@@ -411,16 +441,20 @@ export function HypertorusLayer() {
       const i = GRID.edges[e * 2]!
       const j = GRID.edges[e * 2 + 1]!
       for (let k = 0; k < DPE; k++) {
-        const t = (k + 1) / (DPE + 1)
+        const slot = e * DPE + k
+        const t = (k + 0.5 + _along[slot]! * 0.9) / DPE
         slerpS3(_rot, i, j, t, _s4)
         const w = _s4[3]!
         if (w > TORUS.POLE_CULL) continue
         stereoProject(_s4[0]!, _s4[1]!, _s4[2]!, w, projScale(), _p)
         const b = brightnessOf(Math.hypot(_p.x, _p.y, _p.z))
         if (b < 0.02) continue
-        posArr[d * 3] = _p.x
-        posArr[d * 3 + 1] = _p.y
-        posArr[d * 3 + 2] = _p.z
+        // Поперечный разброс задан УГЛОМ на S³ и переведён в метры тем же множителем, что и
+        // пуфы: вблизи нить толще, вдали тоньше — как настоящая, а не нарисованная на экране.
+        const spread = (TORUS.EDGE_JITTER * projScale()) / Math.max(1e-4, 1 - w)
+        posArr[d * 3] = _p.x + _jitter[slot * 3]! * spread
+        posArr[d * 3 + 1] = _p.y + _jitter[slot * 3 + 1]! * spread
+        posArr[d * 3 + 2] = _p.z + _jitter[slot * 3 + 2]! * spread
         brightArr[d] = b
         d++
       }
@@ -456,6 +490,7 @@ export function HypertorusLayer() {
     const targetVertex = torusTargetVertex()
     if (targetVertex === null) {
       torusTargetMarker.visible = false
+      _manualPrevTarget = null
     } else {
       const o = targetVertex * 4
       const w = _rot[o + 3]!
@@ -468,6 +503,14 @@ export function HypertorusLayer() {
         if (len > 1e-3) setTorusNav(_p.x / len, _p.y / len, _p.z / len, true, arrived)
         else setTorusNav(0, 0, 0, false, arrived)
       }
+      // ВРУЧНУЮ тоже выходят: долетел своим ходом до выбранной (Tab) галактики — выпадаешь в
+      // неё, как по автопилоту. Невыбранные узлы по-прежнему проходятся насквозь: дорога к
+      // дальней цели идёт сквозь чужие галактики, и выкидывать у первой встречной нельзя.
+      const inside = w < TORUS.AUTOPILOT_ARRIVE_W
+      if (targetVertex !== _manualPrevTarget) _manualWasInside = inside
+      else if (!torusAutopilotActive() && inside && !_manualWasInside && torusThrust() > 0) finishTorusApproach()
+      _manualPrevTarget = targetVertex
+      _manualWasInside = inside
     }
   })
 

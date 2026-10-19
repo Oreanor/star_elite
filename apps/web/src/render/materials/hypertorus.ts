@@ -99,28 +99,33 @@ const DOT_FRAG = /* glsl */ `
 #include <common>
 #include <logdepthbuf_pars_fragment>
 
-uniform vec3 uColor;
+uniform vec3 uNear;
+uniform vec3 uFar;
 uniform float uGain;
 
 varying float vBright;
 
 void main() {
   #include <logdepthbuf_fragment>
-  // Мягкий круглый спрайт из точки: гаусс по расстоянию от центра.
+  // Мягкий круглый спрайт: гаусс без края — из толпы таких точек и складывается дымная нить.
   vec2 c = gl_PointCoord - 0.5;
   float d = length(c) * 2.0;
   if (d > 1.0) discard;
-  float soft = 1.0 - smoothstep(0.2, 1.0, d);
-  float alpha = soft * vBright * uGain;
+  float soft = exp(-d * d * 3.5);
+  // Глубина — ЦВЕТОМ: вблизи розовое, вдали фиолет. Свет при этом гаснет медленнее (sqrt),
+  // чтобы дальний фиолет не исчезал раньше, чем успел прочитаться.
+  vec3 col = mix(uFar, uNear, vBright * vBright);
+  float alpha = soft * sqrt(vBright) * uGain;
   if (alpha < 0.003) discard;
-  gl_FragColor = vec4(uColor, alpha);
+  gl_FragColor = vec4(col, alpha);
 }
 `
 
 export function torusDotMaterial(): ShaderMaterial {
   return new ShaderMaterial({
     uniforms: {
-      uColor: { value: new Color(TORUS.EDGE_COLOR) },
+      uNear: { value: new Color(TORUS.EDGE_NEAR_COLOR) },
+      uFar: { value: new Color(TORUS.EDGE_FAR_COLOR) },
       uSize: { value: TORUS.DOT_SIZE_PX },
       uGain: { value: TORUS.DOT_INTENSITY },
     },
