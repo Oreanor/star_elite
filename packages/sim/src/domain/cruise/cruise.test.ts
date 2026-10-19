@@ -1,9 +1,13 @@
 import { Vector3 } from 'three'
 import { describe, expect, it } from 'vitest'
 import { GRAVITY } from '../../config/bodies'
+import { AURORA_ONE } from '../../config/chassis'
 import { CRUISE } from '../../config/cruise'
+import { MODULE_CATALOGUE } from '../../config/modules'
+import { createLoadout, deriveShipSpec } from '../loadout'
 import { createWorld, STARTER_SYSTEM } from '../world'
 import type { World } from '../world/entities'
+import type { EngineModule } from '../../config/schema'
 import { isPhased, updateCruise, type CruiseWant } from './drive'
 
 /** Астрономическая единица, м. Та же, что в описании системы. */
@@ -28,12 +32,36 @@ function toDeepSpace(world: World): void {
   world.player.state.pos.set(0, 2 * AU, 0)
 }
 
+describe('потолок форсажа', () => {
+  /**
+   * Дальняя скорость — это форсаж, не боевой потолок. Ступени круглые: первые
+   * двигатели от ×10 000, самый мощный берёт весь нынешний потолок, и более
+   * сильный не получает меньший ход.
+   */
+  it('растёт с тягой круглыми ступенями: первые от ×10 000, верх — полный ход', () => {
+    const engines = MODULE_CATALOGUE.filter((m): m is EngineModule => m.kind === 'engine')
+    const weak = engines.reduce((a, b) => (a.thrust <= b.thrust ? a : b))
+    const strong = engines.reduce((a, b) => (a.thrust >= b.thrust ? a : b))
+    const of = (engine: EngineModule) => deriveShipSpec(createLoadout(AURORA_ONE, [engine], [])).cruiseMax
+    expect(of(weak)).toBe(10_000)
+    expect(of(strong)).toBe(CRUISE.MAX_FACTOR)
+    const byThrust = [...engines].sort((a, b) => a.thrust - b.thrust)
+    let prev = 0
+    for (const engine of byThrust) {
+      const cap = of(engine)
+      expect(cap % 10_000).toBe(0)
+      expect(cap).toBeGreaterThanOrEqual(prev)
+      prev = cap
+    }
+  })
+})
+
 describe('крейсерский привод', () => {
   it('в пустоте разгоняется до предела', () => {
     const world = emptySystem()
     toDeepSpace(world)
     spool(world, true, 30)
-    expect(world.player.cruise.factor).toBeGreaterThan(CRUISE.MAX_FACTOR * 0.95)
+    expect(world.player.cruise.factor).toBeGreaterThan(world.player.spec.cruiseMax * 0.95)
     expect(world.player.cruise.block).toBeNull()
   })
 
@@ -71,7 +99,7 @@ describe('крейсерский привод', () => {
     const world = emptySystem()
     toDeepSpace(world)
     spool(world, true, 30)
-    expect(world.player.cruise.factor).toBeGreaterThan(CRUISE.MAX_FACTOR * 0.95)
+    expect(world.player.cruise.factor).toBeGreaterThan(world.player.spec.cruiseMax * 0.95)
 
     world.player.controls.retro = 1
     updateCruise(world.player, world, true, 1 / 120) // даже если пробел ещё зажат
@@ -180,7 +208,7 @@ describe('ограничение у звезды', () => {
     world.player.state.pos.copy(star.pos).add(new Vector3(0, 2 * AU, 0))
 
     spool(world, true, 40)
-    expect(world.player.cruise.factor).toBeGreaterThan(CRUISE.MAX_FACTOR * 0.9)
+    expect(world.player.cruise.factor).toBeGreaterThan(world.player.spec.cruiseMax * 0.9)
   })
 
   it('перед границей притяжения звезды привод начинает выход к единице', () => {
@@ -203,7 +231,7 @@ describe('ограничение у звезды', () => {
     const star = world.bodies.find((body) => body.kind === 'star')!
     const gravityEdge = star.radius * GRAVITY.REACH_RADII
     const buffer = star.radius * CRUISE.STAR_EXIT_BUFFER_RADII
-    const fullSpeed = ship.spec.tuning.MAX_SPEED * CRUISE.MAX_FACTOR
+    const fullSpeed = ship.spec.tuning.MAX_SPEED * ship.spec.cruiseMax
     const brakingDistance = fullSpeed / CRUISE.DECAY_RATE
     ship.state.pos.copy(star.pos).add(new Vector3(
       star.radius + gravityEdge + buffer + brakingDistance - 100,
@@ -211,7 +239,7 @@ describe('ограничение у звезды', () => {
       0,
     ))
     ship.state.vel.set(-fullSpeed, 0, 0)
-    ship.cruise.factor = CRUISE.MAX_FACTOR
+    ship.cruise.factor = ship.spec.cruiseMax
 
     const dt = 1 / 120
     for (let i = 0; i < 20 / dt; i++) {

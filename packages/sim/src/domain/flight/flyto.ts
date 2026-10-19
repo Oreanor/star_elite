@@ -2,7 +2,6 @@ import { Vector3 } from 'three'
 import { GALAXY_FLIGHT } from '../../config/galaxy'
 import { MIELOPHONE } from '../../config/mielophone'
 import { AUTOPILOT } from '../../config/station'
-import { CRUISE } from '../../config/cruise'
 import { PHYSICS } from '../../config/physics'
 import { clamp } from '../../core/math'
 import { placeSystem } from '../galaxy/shape'
@@ -337,7 +336,7 @@ export const flyToController: Controller = {
       if (distLy <= GALAXY_FLIGHT.BRAKE_LY * AUTOPILOT.CRUISE_BRAKE_MARGIN) return false
     } else {
       const top = ship.spec.tuning.MAX_SPEED * speedScaleFactor(ship.state.scale)
-      const factor = Math.min(CRUISE.MAX_FACTOR, (distance * AUTOPILOT.CRUISE_APPROACH_RATE) / Math.max(top, 1))
+      const factor = Math.min(ship.spec.cruiseMax, (distance * AUTOPILOT.CRUISE_APPROACH_RATE) / Math.max(top, 1))
       if (factor < 2) return false
       // Разгон — обычный экспоненциальный (true), а дойдя до нужного — защёлка: множитель
       // стоит и тает вместе с дистанцией, поэтому подход сам замедляется к цели.

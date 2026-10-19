@@ -74,10 +74,15 @@ export interface ShipSpec {
   cloakDrain: number
   /** Стоит ли миелофон: без него борт не растёт (право на масштаб — от устройства). */
   hasMielophone: boolean
+  /**
+   * Потолок форсажа, множитель к боевой скорости. Круглая ступень двигателя:
+   * первые от ×10 000, самый мощный — весь `CRUISE.MAX_FACTOR`.
+   */
+  cruiseMax: number
 }
 
 /** Двигатель без корабля не бывает: эти значения означают «летать нельзя». */
-const DEAD_ENGINE = { thrust: 0, maxSpeed: 0, optimalMass: 1, boostMult: 1, energy: 0, energyRegen: 0 }
+const DEAD_ENGINE = { thrust: 0, maxSpeed: 0, optimalMass: 1, boostMult: 1, cruiseMax: 1, energy: 0, energyRegen: 0 }
 const DEAD_THRUSTERS = {
   lateralThrust: 0,
   torque: [0, 0, 0] as const,
@@ -184,6 +189,7 @@ export function deriveShipSpec(loadout: Loadout, cargoMass = 0, up: HullUpgrades
     jumpRange: findHyperdrive(loadout)?.jumpRange ?? 0,
     cloakDrain: findCloak(loadout)?.drain ?? 0,
     hasMielophone: findMielophone(loadout) != null,
+    cruiseMax: engine.cruiseMax > 1 ? engine.cruiseMax : 1,
   }
 }
 

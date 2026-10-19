@@ -46,6 +46,7 @@ export const ENGINE_CIVILIAN: EngineModule = {
   maxSpeed: 180,
   optimalMass: 11,
   boostMult: 1.8,
+  cruiseMax: 10_000,
   energy: 80,
   energyRegen: 5,
 }
@@ -62,6 +63,7 @@ export const ENGINE_STANDARD: EngineModule = {
   maxSpeed: 220,
   optimalMass: 13,
   boostMult: 2.4,
+  cruiseMax: 1_000_000,
   energy: 110,
   energyRegen: 7,
 }
@@ -78,6 +80,7 @@ export const ENGINE_MILITARY: EngineModule = {
   maxSpeed: 265,
   optimalMass: 16,
   boostMult: 2.8,
+  cruiseMax: 40_000_000,
   energy: 160,
   energyRegen: 10,
 }
@@ -97,6 +100,7 @@ const ENGINE_CIVILIAN_D: EngineModule = {
   maxSpeed: 195,
   optimalMass: 12,
   boostMult: 2.0,
+  cruiseMax: 20_000,
   energy: 90,
   energyRegen: 6,
 }
@@ -115,6 +119,7 @@ const ENGINE_STANDARD_B: EngineModule = {
   maxSpeed: 240,
   optimalMass: 14,
   boostMult: 2.5,
+  cruiseMax: 5_000_000,
   energy: 130,
   energyRegen: 8,
 }
@@ -134,6 +139,7 @@ const ENGINE_SWIFT: EngineModule = {
   maxSpeed: 245,
   optimalMass: 14,
   boostMult: 2.6,
+  cruiseMax: 2_000_000,
   energy: 120,
   energyRegen: 8,
 }
@@ -152,6 +158,7 @@ const ENGINE_SWIFT_B: EngineModule = {
   maxSpeed: 270,
   optimalMass: 15,
   boostMult: 2.9,
+  cruiseMax: 30_000_000,
   energy: 150,
   energyRegen: 10,
 }
@@ -171,6 +178,7 @@ export const ENGINE_MILITARY_C: EngineModule = {
   maxSpeed: 250,
   optimalMass: 15,
   boostMult: 2.6,
+  cruiseMax: 20_000_000,
   energy: 145,
   energyRegen: 9,
 }
@@ -1381,6 +1389,7 @@ const ENGINE_STANDARD_1: EngineModule = {
   maxSpeed: 205,
   optimalMass: 12,
   boostMult: 2.2,
+  cruiseMax: 100_000,
   energy: 100,
   energyRegen: 6,
 }
@@ -1397,6 +1406,7 @@ const ENGINE_SWIFT_1: EngineModule = {
   maxSpeed: 215,
   optimalMass: 12,
   boostMult: 2.3,
+  cruiseMax: 50_000,
   energy: 100,
   energyRegen: 7,
 }
@@ -1413,6 +1423,7 @@ const ENGINE_CIVILIAN_2: EngineModule = {
   maxSpeed: 200,
   optimalMass: 14,
   boostMult: 2.1,
+  cruiseMax: 500_000,
   energy: 100,
   energyRegen: 6,
 }
@@ -1429,6 +1440,7 @@ const ENGINE_MILITARY_2: EngineModule = {
   maxSpeed: 235,
   optimalMass: 15,
   boostMult: 2.5,
+  cruiseMax: 10_000_000,
   energy: 140,
   energyRegen: 8,
 }
@@ -1445,6 +1457,7 @@ const ENGINE_CIVILIAN_3: EngineModule = {
   maxSpeed: 230,
   optimalMass: 16,
   boostMult: 2.3,
+  cruiseMax: 20_000_000,
   energy: 130,
   energyRegen: 8,
 }
@@ -1461,6 +1474,7 @@ const ENGINE_STANDARD_3: EngineModule = {
   maxSpeed: 255,
   optimalMass: 16,
   boostMult: 2.6,
+  cruiseMax: 30_000_000,
   energy: 150,
   energyRegen: 9,
 }

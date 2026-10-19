@@ -30,7 +30,7 @@ const _out = /* @__PURE__ */ new Vector3()
 export type CruiseBlock = 'mass-lock' | 'proximity' | null
 
 export interface CruiseState {
-  /** Текущий множитель, 1..MAX_FACTOR. */
+  /** Текущий множитель, 1..потолок двигателя (`spec.cruiseMax`). */
   factor: number
   /** Почему не разгоняемся. Показывается на HUD: игрок должен понимать причину. */
   block: CruiseBlock
@@ -86,7 +86,7 @@ function starRequiresExit(ship: ShipEntity, world: World, alreadyBraking: boolea
     // При уже начатом выходе держим решение до полной расчётной зоны максимального
     // хода: уменьшающийся каждый шаг тормозной путь не должен включить привод обратно.
     const speed = alreadyBraking
-      ? ship.spec.tuning.MAX_SPEED * CRUISE.MAX_FACTOR * speedScaleFactor(ship.state.scale)
+      ? ship.spec.tuning.MAX_SPEED * ship.spec.cruiseMax * speedScaleFactor(ship.state.scale)
       : ship.state.vel.length()
     const brakingDistance = speed / CRUISE.DECAY_RATE
     if (altitude <= gravityEdge + minimumBuffer + brakingDistance) return true
@@ -116,7 +116,8 @@ export function updateCruise(ship: ShipEntity, world: World, want: CruiseWant, d
     return
   }
 
-  const holdAt = typeof want === 'number' && want > 1 ? want : 0
+  const cap = Math.max(1, ship.spec.cruiseMax)
+  const holdAt = typeof want === 'number' && want > 1 ? Math.min(want, cap) : 0
   const requesting = want === true || holdAt > 0
 
   let target = 1
@@ -128,11 +129,11 @@ export function updateCruise(ship: ShipEntity, world: World, want: CruiseWant, d
     } else if (starRequiresExit(ship, world, cruise.block === 'proximity')) {
       block = 'proximity'
     } else if (holdAt > 0) {
-      // Защёлка: множитель СТОИТ, не ползёт к MAX и не тает.
+      // Защёлка: множитель СТОИТ, не ползёт к потолку двигателя и не тает.
       target = holdAt
       cruise.factor = holdAt
     } else {
-      target = CRUISE.MAX_FACTOR
+      target = cap
     }
   }
 
