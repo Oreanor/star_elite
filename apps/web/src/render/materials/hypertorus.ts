@@ -8,6 +8,14 @@ import { STREAM_NOISE } from './massStream'
  * Узлов и связей в кадре сотни: мягкий поперечный спад удерживает гало от выгорания в белое.
  */
 
+/** Одна цветовая схема для узлов и потоков: светлое тёплое ядро в фиолетовом гало. */
+const GLOW_COLOR = /* glsl */ `
+vec3 glowColor(vec3 tint, vec3 haloTint, float core, float halo) {
+  vec3 hot = mix(tint, vec3(1.0), core * 0.35);
+  return mix(haloTint, hot, core / max(0.0001, core + halo));
+}
+`
+
 /** Галактика — билборд-квад с гауссовым спадом. Ни ободка, ни диска: просто дымка. */
 const PUFF_VERT = /* glsl */ `
 #include <common>
@@ -45,6 +53,8 @@ varying vec3 vTint;
 varying float vFog;
 varying vec2 vUv;
 
+${GLOW_COLOR}
+
 void main() {
   #include <logdepthbuf_fragment>
   // Плотное ядро + короткое гало: узкий гаусс даёт чёткую «звёздочку», а не размазанное пятно.
@@ -53,8 +63,7 @@ void main() {
   float core = exp(-r * r * 16.0);     // тугое ядро — видно, ГДЕ галактика
   float halo = exp(-r * r * 3.0) * 0.35 * (1.0 - smoothstep(0.7, 1.0, r));
   float puff = core + halo;
-  vec3 hot = mix(vTint, vec3(1.0), core * 0.35);
-  vec3 col = mix(uHalo, hot, core / max(0.0001, puff));
+  vec3 col = glowColor(vTint, uHalo, core, halo);
   float alpha = puff * vFog * uGain;
   if (alpha < 0.003) discard;
   gl_FragColor = vec4(col, alpha);
@@ -114,7 +123,7 @@ const EDGE_FRAG = /* glsl */ `
 #include <common>
 #include <logdepthbuf_pars_fragment>
 
-uniform vec3 uNear;
+uniform vec3 uCore;
 uniform vec3 uFar;
 uniform float uGain;
 uniform float uTime;
@@ -124,6 +133,7 @@ varying float vSide;
 varying vec2 vFlow;
 
 ${STREAM_NOISE}
+${GLOW_COLOR}
 
 void main() {
   #include <logdepthbuf_fragment>
@@ -138,9 +148,11 @@ void main() {
   float halo = exp(-side * side * 2.5);
   float edge = (0.6 * core + 0.4 * halo) * (1.0 - smoothstep(0.7, 1.0, abs(side)));
   float fade = smoothstep(0.0, 0.04, s) * (1.0 - smoothstep(0.96, 1.0, s));
-  // Непрерывный тёплый центр и фиолетовые края; дальность плавно гасит и охлаждает нить.
-  float warmth = smoothstep(0.15, 0.95, vBright) * core;
-  vec3 col = mix(uFar, uNear, warmth);
+  // Цветовой профиль совпадает с галактикой: узкая светлая сердцевина, широкое фиолетовое гало.
+  float colorCore = exp(-side * side * 16.0);
+  float colorHalo = exp(-side * side * 3.0) * 0.35 * (1.0 - smoothstep(0.7, 1.0, abs(side)));
+  vec3 col = glowColor(uCore, uFar, colorCore, colorHalo);
+  col = mix(uFar, col, smoothstep(0.15, 0.95, vBright));
   float alpha = edge * density * fade * vBright * vBright * uGain;
   if (alpha < 0.003) discard;
   gl_FragColor = vec4(col, alpha);
@@ -150,7 +162,7 @@ void main() {
 export function torusEdgeMaterial(): ShaderMaterial {
   return new ShaderMaterial({
     uniforms: {
-      uNear: { value: new Color(TORUS.EDGE_NEAR_COLOR) },
+      uCore: { value: new Color(TORUS.PUFF_COLOR) },
       uFar: { value: new Color(TORUS.EDGE_FAR_COLOR) },
       uGain: { value: TORUS.EDGE_INTENSITY },
       uTime: { value: 0 },
