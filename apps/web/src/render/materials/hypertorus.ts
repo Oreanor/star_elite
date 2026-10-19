@@ -130,15 +130,16 @@ void main() {
   float s = vFlow.x;
   float side = vSide;
   float clock = uTime + vFlow.y;
-  // Те же сгустки и продольные волокна, что у перетекания вещества в звёздной паре.
-  float flow = noise(vec2(s * 38.0 - clock * 1.6, side * 2.5));
-  float fibres = noise(vec2(s * 9.0 - clock * 0.7, side * 7.0 + 3.0));
-  float wisp = noise(vec2(s * 14.0 - clock * 0.9, side * 3.0 + 11.0));
-  float edge = exp(-side * side * (3.0 + 3.5 * wisp)) * (1.0 - side * side);
-  float density = 0.35 + 0.45 * flow + 0.2 * fibres;
+  // Течение лишь слегка меняет яркость вдоль дуги. Цвет и ширина профиля от шума
+  // не зависят: иначе жёлтое ядро рвалось на пятна и выглядело крученой нитью.
+  float flow = noise(vec2(s * 6.0 - clock * 0.5, vFlow.y));
+  float density = 0.9 + 0.1 * flow;
+  float core = exp(-side * side * 7.0);
+  float halo = exp(-side * side * 2.5);
+  float edge = (0.6 * core + 0.4 * halo) * (1.0 - smoothstep(0.7, 1.0, abs(side)));
   float fade = smoothstep(0.0, 0.04, s) * (1.0 - smoothstep(0.96, 1.0, s));
-  // Только плотные близкие сгустки теплеют; равномерного жёлтого провода больше нет.
-  float warmth = smoothstep(0.45, 0.9, vBright * density) * exp(-side * side * 3.0);
+  // Непрерывный тёплый центр и фиолетовые края; дальность плавно гасит и охлаждает нить.
+  float warmth = smoothstep(0.15, 0.95, vBright) * core;
   vec3 col = mix(uFar, uNear, warmth);
   float alpha = edge * density * fade * vBright * vBright * uGain;
   if (alpha < 0.003) discard;

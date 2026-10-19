@@ -28,7 +28,7 @@ import { torusTuning } from './torusTuning'
 import { crossNeonTubesGeometry } from '../geometry/props'
 import { crossNeonLampMaterial, tickCrossPortal } from '../materials/crossPortal'
 import { torusEdgeMaterial, torusPuffMaterial } from '../materials/hypertorus'
-import { torusEdgesGeometry, updateTorusEdges } from '../geometry/torusEdges'
+import { torusFlowGrid, torusEdgesGeometry, updateTorusEdges } from '../geometry/torusEdges'
 import {
   applyPose,
   buildHypertorusGrid,
@@ -86,6 +86,7 @@ export const torusNearest: number[] = []
  * не могут разойтись — источник один.
  */
 export const GRID = buildHypertorusGrid(TORUS.NXI, TORUS.NTHETA, TORUS.NPHI)
+const FLOW_GRID = torusFlowGrid(GRID)
 const _dummy = new Object3D()
 const _base = new Color(TORUS.PUFF_COLOR)
 /**
@@ -205,7 +206,7 @@ export function HypertorusLayer() {
   }, [])
   const puffMat = useMemo(torusPuffMaterial, [])
 
-  const edgeGeo = useMemo(() => torusEdgesGeometry(GRID.edgeCount), [])
+  const edgeGeo = useMemo(() => torusEdgesGeometry(FLOW_GRID.edgeCount), [])
   const edgeMat = useMemo(torusEdgeMaterial, [])
 
   // Квазар ли узел и ось его джета — один раз на вселенную: зерно галактики не меняется.
@@ -402,7 +403,7 @@ export function HypertorusLayer() {
     tintAttr.needsUpdate = true
     fogAttr.needsUpdate = true
 
-    updateTorusEdges(edgeGeo, GRID, _rot, projScale(), brightnessOf)
+    updateTorusEdges(edgeGeo, FLOW_GRID, _rot, projScale(), brightnessOf)
 
     // ДОМ — узел, ИЗ КОТОРОГО влетел (его записал `enterBush`), а не постоянный номер:
     // вылетев в другую галактику и войдя в её дыру, домом становится она.

@@ -1,5 +1,5 @@
 import { BufferAttribute, BufferGeometry, DynamicDrawUsage } from 'three'
-import { slerpS3, stereoProject, type HypertorusGrid } from '@elite/sim'
+import { makeRng, slerpS3, stereoProject, type HypertorusGrid } from '@elite/sim'
 import { TORUS } from '../config'
 
 const samples = TORUS.EDGE_SEGMENTS + 1
@@ -10,6 +10,35 @@ const _point = { x: 0, y: 0, z: 0, depth: 0 }
 const _positions = new Float64Array(samples * 3)
 const _widths = new Float32Array(samples)
 const _brightness = new Float32Array(samples)
+
+/** Дополнительные потоки — только облик комнаты; исходная карта и навигация не меняются. */
+export function torusFlowGrid(grid: HypertorusGrid): HypertorusGrid {
+  const edges = Array.from(grid.edges)
+  const used = new Set<number>()
+  const key = (a: number, b: number) => Math.min(a, b) * grid.vertCount + Math.max(a, b)
+  for (let e = 0; e < grid.edgeCount; e++) used.add(key(edges[e * 2]!, edges[e * 2 + 1]!))
+  const rng = makeRng(TORUS.EDGE_SEED)
+  const minDot = Math.cos(TORUS.EDGE_EXTRA_MAX_ANGLE)
+  const candidates: number[] = []
+  for (let from = 0; from < grid.vertCount; from++) {
+    candidates.length = 0
+    for (let to = 0; to < grid.vertCount; to++) {
+      if (to === from || used.has(key(from, to))) continue
+      let dot = 0
+      for (let c = 0; c < 4; c++) dot += grid.verts[from * 4 + c]! * grid.verts[to * 4 + c]!
+      if (dot >= minDot && dot < 1 - 1e-6) candidates.push(to)
+    }
+    for (let n = 0; n < TORUS.EDGE_EXTRA_PER_NODE && candidates.length > 0; n++) {
+      const pick = Math.floor(rng() * candidates.length)
+      const to = candidates[pick]!
+      candidates[pick] = candidates[candidates.length - 1]!
+      candidates.pop()
+      edges.push(from, to)
+      used.add(key(from, to))
+    }
+  }
+  return { ...grid, edges: Int32Array.from(edges), edgeCount: edges.length / 2 }
+}
 
 /** Общие вершины соседних треугольников дают непрерывную нить без бусин и ярких стыков. */
 export function torusEdgesGeometry(edgeCount: number): BufferGeometry {
