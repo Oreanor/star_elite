@@ -25,6 +25,7 @@ import { setTorusNav, torusAutopilotActive, torusTargetVertex } from '../../sess
 import { bushExitScale } from '../../session/bushExit'
 import { nameOfVertex, nodeOfVertex, vertexOfNode } from './torusNodes'
 import { TORUS } from '../config'
+import { torusTuning } from './torusTuning'
 import { crossNeonTubesGeometry } from '../geometry/props'
 import { crossNeonLampMaterial, tickCrossPortal } from '../materials/crossPortal'
 import { torusDotMaterial, torusPuffMaterial } from '../materials/hypertorus'
@@ -137,7 +138,9 @@ const _sorted: TorusLabel[] = Array.from({ length: TORUS.LABEL_COUNT }, () => ({
  * всё ближе ~37 м, так что вокруг корабля зияла чёрная дыра, а автопилот привозил в пустоту.
  */
 function brightnessOf(dist: number): number {
-  return 1 - smoothstep(TORUS.FOG_NEAR_M, TORUS.FOG_FAR_M, dist)
+  // Туман растягивается вместе с раздвижкой: видно те же узлы, что и без неё, только реже.
+  const spread = torusTuning.spread
+  return 1 - smoothstep(TORUS.FOG_NEAR_M * spread, TORUS.FOG_FAR_M * spread, dist)
 }
 
 /**
@@ -146,7 +149,7 @@ function brightnessOf(dist: number): number {
  * а дальний туман её доедает — комната пустеет ровно к тому мигу, когда экран станет чёрным.
  */
 function projScale(): number {
-  return TORUS.SCALE * bushExitScale()
+  return TORUS.SCALE * torusTuning.spread * bushExitScale()
 }
 
 /**
@@ -155,7 +158,8 @@ function projScale(): number {
  * поэтому цель становится больше, а не меньше. Потолок — против взрыва размера у полюса.
  */
 function puffRadius(w: number): number {
-  const k = projScale() / Math.max(1e-4, 1 - w)
+  // Без раздвижки: она разносит узлы, а размер галактики остаётся прежним.
+  const k = (TORUS.SCALE * bushExitScale()) / Math.max(1e-4, 1 - w)
   return Math.min(TORUS.PUFF_MAX_R_M, TORUS.PUFF_ANGULAR_R * k)
 }
 
@@ -264,6 +268,8 @@ export function HypertorusLayer() {
     if (!group || !puffs || !dots || !backdrop) return
 
     const on = bush.active
+    puffMat.uniforms.uGain!.value = torusTuning.puff
+    dotMat.uniforms.uGain!.value = torusTuning.dot
     group.visible = on
     backdrop.visible = on
     if (!on) {

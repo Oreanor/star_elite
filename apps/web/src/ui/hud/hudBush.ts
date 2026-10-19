@@ -3,6 +3,7 @@ import {
   shipAxes,
 } from '@elite/sim'
 import { TORUS } from '../../render/config'
+import { torusTuning } from '../../render/scene/torusTuning'
 import { HUD_COLORS, ellipse, line, text } from './draw'
 import { properName } from '../i18n/dataNames'
 import { projectPoint } from './project'
@@ -89,7 +90,7 @@ function bushBlip(
   const x = _point.dot(_right)
   const z = _point.dot(_fwd)
   const flat = Math.hypot(x, z)
-  const k = Math.min(1, distance / (TORUS.SCALE * 3))
+  const k = Math.min(1, distance / (TORUS.SCALE * torusTuning.spread * 3))
   const px = flat < 1e-6 ? cx : cx + (x / flat) * k * radiusX
   const py = flat < 1e-6 ? cy : cy - (z / flat) * k * radiusY
   const lift = Math.max(-10 * S, Math.min(10 * S, (_point.dot(_up) / distance) * 20 * S))

@@ -9,6 +9,7 @@ import { negotiate, negotiateCopilot, negotiateDispatcher, negotiatorAvailable }
 import { Game } from './Game'
 import { readResume, writeResume } from './resume'
 import { KeyHelp } from './KeyHelp'
+import { TorusTuner } from './TorusTuner'
 import { Paused, GameOver } from './TitleScreen'
 import { clearServerSave, loadServerSave, onAuthChange, signOut } from '../session/net/account'
 import { online } from '../session/net/firebase'
@@ -202,6 +203,8 @@ function Shell({ onRestart }: { onRestart: () => void }) {
    * отпускать нечего, и без этого флага Escape на станции не делал ничего.
    */
   const [menu, setMenu] = useState(false)
+  /** Панель облика комнаты (F4): отпускает курсор, но паузой сцену не закрывает. */
+  const [tuning, setTuning] = useState(false)
   /** Открыт ли канал связи. Отдельный оверлей: ни вкладок, ни причала у него нет. */
   const [talking, setTalking] = useState(false)
   /** Сбрасывает вкладку «Люди» после разговора — знакомство и фильтр дублей. */
@@ -921,7 +924,7 @@ function Shell({ onRestart }: { onRestart: () => void }) {
         // Первый клик берёт pointer lock до конца титульного флориша. Сам по себе lock
         // не должен размонтировать Paused: его эффект ещё ждёт ready и запускает fade.
         // После интро enterPlay скрывает титул, если lock так и не пришёл.
-        (!locked || flourishRef.current) && !enterPlay && pauseMenu
+        (!locked || flourishRef.current) && !enterPlay && !tuning && pauseMenu
       )}
       {/* Чат с живым игроком — поверх всего (консоли или разговора). Один за раз; закрыл —
           вернулся туда, откуда открыл, либо сразу поднялся ждущий входящий. */}
@@ -930,6 +933,7 @@ function Shell({ onRestart }: { onRestart: () => void }) {
       {waiting && <IncomingCall caller={waiting} />}
       {/* K — схема управления поверх всего; клавиатуру, пока открыта, забирает себе. */}
       <KeyHelp />
+      <TorusTuner open={tuning} setOpen={setTuning} />
 
       {/* Выход из комнаты вселенной: тор разлетается, экран гаснет, и из растущей круглой
           прорези проявляется галактика. Мир под пеленой подменяется в самой её черноте. */}
