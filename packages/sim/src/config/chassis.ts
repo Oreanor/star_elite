@@ -52,12 +52,12 @@ export const AURORA_ONE: Chassis = {
     // крупнее калибром: какой ствол туда ни поставь, он бьёт вдвое толще и больнее.
     // Координаты дул — в метрах модельного пространства (нос −Z, размах ±X), сняты редактором
     // дул (K) по силуэту меша и согласованы с его масштабом в ships.ts.
-    { offset: [0, -0.86, 0.53], kind: 'gun', maxClass: 2, nozzles: [[-3.82, -0.86, 0.53], [3.82, -0.86, 0.53]] },
-    { offset: [0, -1.21, -0.02], kind: 'gun', maxClass: 2, nozzles: [[-7.09, -1.21, -0.02], [7.09, -1.21, -0.02]] },
+    { offset: [0, -0.86, 0.53], kind: 'gun', maxClass: 2, nozzles: [[-4.34, -0.86, 0.53], [4.34, -0.86, 0.53]] },
+    { offset: [0, -1.21, -0.02], kind: 'gun', maxClass: 2, nozzles: [[-7.27, -1.21, -0.02], [7.27, -1.21, -0.02]] },
     { offset: [0, -0.87, -8.52], kind: 'gun', maxClass: 2, bore: 2, nozzles: [[0, -0.87, -8.52]] },
     // Одна пара пилонов — стартовой раме хватит.
-    { offset: [-5.0, -0.8, 3.0], kind: 'pylon', maxClass: 1 },
-    { offset: [5.0, -0.8, 3.0], kind: 'pylon', maxClass: 1 },
+    { offset: [-3.34, -0.8, 3], kind: 'pylon', maxClass: 1 },
+    { offset: [3.34, -0.8, 3], kind: 'pylon', maxClass: 1 },
   ],
   slots: [
     { kind: 'engine', maxClass: 2 },
@@ -87,80 +87,81 @@ export const SPIRITUS_SANCTUS: Chassis = {
   // Класс и слоты — прежней «Авроры»: миелофону нужен аукс третьего класса.
   class: 3,
   slots: SANCTUS_SLOTS,
-  // Своя раскладка дул (K): силуэт тот же, но сопло одно центральное, и точки садятся
-  // иначе. Пилонов нет вовсе — потому и не наследуем их у «Авроры».
+  // Своя раскладка дул, снятая редактором оснастки. Пилонов нет — не наследуем их у «Авроры».
+  // Выхлопа нет вовсе: пустой список сопел в ships.ts, иначе габарит нарисует пару факелов.
   hardpoints: [
-    { offset: [0, 1.39, -6.3], kind: 'gun', maxClass: 2, nozzles: [[-7.5, 1.39, -6.3], [7.5, 1.39, -6.3]] },
-    { offset: [0, 0.24, -4.39], kind: 'gun', maxClass: 3, nozzles: [[-3.03, 0.24, -4.39], [3.03, 0.24, -4.39]] },
-    { offset: [0, 0.59, -7.79], kind: 'gun', maxClass: 3, bore: 2, nozzles: [[0, 0.59, -7.79]] },
+    { offset: [0, 1.6, -5.85], kind: 'gun', maxClass: 2, nozzles: [[-7.91, 1.6, -5.85], [7.91, 1.6, -5.85]] },
+    { offset: [0, 0.53, -4.25], kind: 'gun', maxClass: 3, nozzles: [[-3.58, 0.53, -4.25], [3.58, 0.53, -4.25]] },
+    { offset: [-0.03, 0.75, -7.77], kind: 'gun', maxClass: 3, bore: 2, nozzles: [[-0.03, 0.75, -7.77]] },
   ],
 }
 
 /**
- * Истребители из внешних мешей (Meshy GLB). Геометрия — не процедура, а загруженная сетка
- * со своими текстурами (рендер знает по id из реестра GLB_HULLS).
- *
- * Раскладка дул у КАЖДОГО своя: силуэты разные, и общий набор сажал стволы мимо крыла.
- * Три орудийные точки на всех — середина крыла, законцовки, нос (носовая вдвое крупнее
- * калибром) — плюс два пилона. Координаты сняты редактором дул (K) по каждому мешу.
- */
-const FIGHTER_PYLONS: Chassis['hardpoints'] = [
-  { offset: [-3.2, -0.5, 2.5], kind: 'pylon', maxClass: 1 },
-  { offset: [3.2, -0.5, 2.5], kind: 'pylon', maxClass: 1 },
-]
-
-/**
- * «Гермес»: узкий корпус — крыльевые пары сидят тесно, нос приподнят над обводом. Тяжёлый
- * военный корабль ВТРОЕ крупнее истребителей (`HERMES_SIZE`): точки сняты редактором дул на
- * меше истребительного размера и масштабированы тем же множителем, что и сам меш в рендере.
+ * «Гермес» — тяжёлый военный, ВТРОЕ крупнее истребителей (`HERMES_SIZE` крутит и меш).
+ * Точки сняты редактором оснастки уже на этом масштабе: множить истребительную таблицу
+ * больше нельзя, она сажала дула мимо узкого корпуса.
  */
 export const HERMES_SIZE = 3
-const scaleHardpoints = (hps: Chassis['hardpoints'], k: number): Chassis['hardpoints'] =>
-  hps.map((hp) => ({
-    ...hp,
-    offset: [hp.offset[0] * k, hp.offset[1] * k, hp.offset[2] * k] as const,
-    ...(hp.nozzles ? { nozzles: hp.nozzles.map((n) => [n[0] * k, n[1] * k, n[2] * k] as const) } : {}),
-  }))
-const HERMES_HARDPOINTS: Chassis['hardpoints'] = scaleHardpoints(
-  [
-    { offset: [0, -0.78, -6.95], kind: 'gun', maxClass: 3, nozzles: [[-0.74, -0.78, -6.95], [0.74, -0.78, -6.95]] },
-    { offset: [0, -0.95, 0.01], kind: 'gun', maxClass: 3, nozzles: [[-2.44, -0.95, 0.01], [2.44, -0.95, 0.01]] },
-    { offset: [0, 1.22, -0.47], kind: 'gun', maxClass: 3, bore: 2, nozzles: [[0, 1.22, -0.47]] },
-    ...FIGHTER_PYLONS,
-  ],
-  HERMES_SIZE,
-)
+const HERMES_HARDPOINTS: Chassis['hardpoints'] = [
+  { offset: [0, -2.34, -22.52], kind: 'gun', maxClass: 3, nozzles: [[-3.04, -2.34, -22.52], [3.04, -2.34, -22.52]] },
+  { offset: [0, -2.85, 0.03], kind: 'gun', maxClass: 3, nozzles: [[-7.32, -2.85, 0.03], [7.32, -2.85, 0.03]] },
+  { offset: [0, 3.42, -1.41], kind: 'gun', maxClass: 3, bore: 2, nozzles: [[0, 3.42, -1.41]] },
+  { offset: [-9.59, -1.5, 7.5], kind: 'pylon', maxClass: 1 },
+  { offset: [9.59, -1.5, 7.5], kind: 'pylon', maxClass: 1 },
+]
 
 /** «Персей»: законцовки отнесены назад по стреловидности, нос длинный. */
 const PERSEUS_HARDPOINTS: Chassis['hardpoints'] = [
-  { offset: [0, -0.47, 1.85], kind: 'gun', maxClass: 2, nozzles: [[-3, -0.47, 1.85], [3, -0.47, 1.85]] },
-  { offset: [0, -0.18, 4.41], kind: 'gun', maxClass: 3, nozzles: [[-4.8, -0.18, 4.41], [4.8, -0.18, 4.41]] },
-  { offset: [0, -0.92, -7.61], kind: 'gun', maxClass: 3, bore: 2, nozzles: [[0, -0.92, -7.61]] },
-  ...FIGHTER_PYLONS,
+  { offset: [0, -1.12, 0.72], kind: 'gun', maxClass: 2, nozzles: [[-3.11, -1.12, 0.72], [3.11, -1.12, 0.72]] },
+  { offset: [0, -0.08, 4.41], kind: 'gun', maxClass: 3, nozzles: [[-5.34, -0.08, 4.41], [5.34, -0.08, 4.41]] },
+  { offset: [0, -0.72, -7.61], kind: 'gun', maxClass: 3, bore: 2, nozzles: [[0, -0.72, -7.61]] },
+  { offset: [-4.05, -0.25, 3.83], kind: 'pylon', maxClass: 1 },
+  { offset: [4.05, -0.25, 3.83], kind: 'pylon', maxClass: 1 },
 ]
 
 /** «Пегас»: размах шире прочих — законцовки почти в семи метрах от оси. */
 const PEGASUS_HARDPOINTS: Chassis['hardpoints'] = [
-  { offset: [0, -1.11, -2.53], kind: 'gun', maxClass: 2, nozzles: [[-3.55, -1.11, -2.53], [3.55, -1.11, -2.53]] },
+  { offset: [0, -1.01, -2.52], kind: 'gun', maxClass: 2, nozzles: [[-3.55, -1.01, -2.52], [3.55, -1.01, -2.52]] },
   { offset: [0, 0.27, 3.22], kind: 'gun', maxClass: 3, nozzles: [[-6.86, 0.27, 3.22], [6.86, 0.27, 3.22]] },
-  { offset: [0, -1.04, -8.38], kind: 'gun', maxClass: 3, bore: 2, nozzles: [[0, -1.04, -8.38]] },
-  ...FIGHTER_PYLONS,
+  { offset: [0.02, -0.84, -8.13], kind: 'gun', maxClass: 3, bore: 2, nozzles: [[0.02, -0.84, -8.13]] },
+  { offset: [-4.93, -0.38, 2.51], kind: 'pylon', maxClass: 1 },
+  { offset: [4.93, -0.38, 2.51], kind: 'pylon', maxClass: 1 },
 ]
 
 /** «Орион»: тяжёлый истребитель, законцовки разнесены и приспущены. */
 const ORION_HARDPOINTS: Chassis['hardpoints'] = [
-  { offset: [0, -0.98, 0.93], kind: 'gun', maxClass: 2, nozzles: [[-3.46, -0.98, 0.93], [3.46, -0.98, 0.93]] },
-  { offset: [0, -1.62, -0.67], kind: 'gun', maxClass: 3, nozzles: [[-7.57, -1.62, -0.67], [7.57, -1.62, -0.67]] },
+  { offset: [0, -0.98, 1.37], kind: 'gun', maxClass: 2, nozzles: [[-3.25, -0.98, 1.37], [3.25, -0.98, 1.37]] },
+  { offset: [0, -1.69, -0.35], kind: 'gun', maxClass: 3, nozzles: [[-7.38, -1.69, -0.35], [7.38, -1.69, -0.35]] },
   { offset: [0, -0.84, -8.15], kind: 'gun', maxClass: 3, bore: 2, nozzles: [[0, -0.84, -8.15]] },
-  ...FIGHTER_PYLONS,
+  { offset: [-4.78, -1.24, 1.61], kind: 'pylon', maxClass: 1 },
+  { offset: [4.78, -1.24, 1.61], kind: 'pylon', maxClass: 1 },
 ]
 
 /** «Тесей»: законцовки далеко от оси, нос короткий. */
 const THESEUS_HARDPOINTS: Chassis['hardpoints'] = [
-  { offset: [0, -1.12, -2.21], kind: 'gun', maxClass: 2, nozzles: [[-3.59, -1.12, -2.21], [3.59, -1.12, -2.21]] },
+  { offset: [0, -0.71, -3.2], kind: 'gun', maxClass: 2, nozzles: [[-3.59, -0.71, -3.2], [3.59, -0.71, -3.2]] },
   { offset: [0, -0.65, -1.19], kind: 'gun', maxClass: 3, nozzles: [[-7.18, -0.65, -1.19], [7.18, -0.65, -1.19]] },
   { offset: [0, -0.26, -6.9], kind: 'gun', maxClass: 3, bore: 2, nozzles: [[0, -0.26, -6.9]] },
-  ...FIGHTER_PYLONS,
+  { offset: [-5.03, -1.99, 2.5], kind: 'pylon', maxClass: 1 },
+  { offset: [5.03, -1.99, 2.5], kind: 'pylon', maxClass: 1 },
+]
+
+/** «Афина»: своя раскладка, снятая с её меша. Раньше делила точки с «Тесеем» — стволы висели мимо крыла. */
+const ATHENA_HARDPOINTS: Chassis['hardpoints'] = [
+  { offset: [0, -2.95, -0.57], kind: 'gun', maxClass: 2, nozzles: [[-6.54, -2.95, -0.57], [6.54, -2.95, -0.57]] },
+  { offset: [0, 2.96, -0.66], kind: 'gun', maxClass: 3, nozzles: [[-6.54, 2.96, -0.66], [6.54, 2.96, -0.66]] },
+  { offset: [-0.15, 0.39, -7.43], kind: 'gun', maxClass: 3, bore: 2, nozzles: [[-0.15, 0.39, -7.43]] },
+  { offset: [-2.96, -0.03, 2.5], kind: 'pylon', maxClass: 1 },
+  { offset: [2.96, -0.03, 2.5], kind: 'pylon', maxClass: 1 },
+]
+
+/** «Икар»: свой меш и свой разворот, поэтому и точки свои, не тесеевские. */
+const ICARUS_HARDPOINTS: Chassis['hardpoints'] = [
+  { offset: [0, -0.48, -6.09], kind: 'gun', maxClass: 2, nozzles: [[-3.59, -0.48, -6.09], [3.59, -0.48, -6.09]] },
+  { offset: [0, -2.23, 5.89], kind: 'gun', maxClass: 3, nozzles: [[-12.6, -2.23, 5.89], [12.6, -2.23, 5.89]] },
+  { offset: [-0.05, -2.18, -15.87], kind: 'gun', maxClass: 3, bore: 2, nozzles: [[-0.05, -2.18, -15.87]] },
+  { offset: [-8.02, -1.47, 4.23], kind: 'pylon', maxClass: 1 },
+  { offset: [8.02, -1.47, 4.23], kind: 'pylon', maxClass: 1 },
 ]
 const FIGHTER_SLOTS: Chassis['slots'] = [
   { kind: 'engine', maxClass: 3 },
@@ -226,25 +227,21 @@ export const ORION: Chassis = {
   hardpoints: ORION_HARDPOINTS, slots: FIGHTER_SLOTS, cost: 1_200_000,
 }
 
-/** «Тесей» — ещё один лёгкий истребитель (GLB-меш). */
-/**
- * «Афина» и «Икар» — свежие серийные истребители. Раскладка точек ЗАВОДСКАЯ, снятая с
- * «Тесея»: силуэты близкие, а точные места дул и пилонов подбираются глазами в редакторе
- * оснастки (K) — там их и поправят, не трогая ни бой, ни верфь.
- */
+/** «Афина» — серийный истребитель между «Тесеем» и «Орионом». */
 export const ATHENA: Chassis = {
   id: 'athena', name: 'Афина', class: 3, baseMass: 11, baseHull: 500, cargoCapacity: 20, auxCapacity: 150,
   radius: 8, inertiaFactor: 0.85, assistLateralDamp: 1.25, assistSpeedDamp: 0.35,
-  hardpoints: THESEUS_HARDPOINTS, slots: FIGHTER_SLOTS, cost: 600_000,
+  hardpoints: ATHENA_HARDPOINTS, slots: FIGHTER_SLOTS, cost: 600_000,
 }
 
 /** «Икар» — легче и вёртче «Афины», но и шкура тоньше: скорость вместо брони. */
 export const ICARUS: Chassis = {
   id: 'icarus', name: 'Икар', class: 2, baseMass: 4.5, baseHull: 80, cargoCapacity: 8, auxCapacity: 80,
   radius: 7, inertiaFactor: 0.72, assistLateralDamp: 1.45, assistSpeedDamp: 0.35,
-  hardpoints: THESEUS_HARDPOINTS, slots: FIGHTER_SLOTS, cost: 22_000,
+  hardpoints: ICARUS_HARDPOINTS, slots: FIGHTER_SLOTS, cost: 22_000,
 }
 
+/** «Тесей» — лёгкий истребитель. */
 export const THESEUS: Chassis = {
   id: 'theseus', name: 'Тесей', class: 2, baseMass: 6, baseHull: 200, cargoCapacity: 12, auxCapacity: 100,
   radius: 8, inertiaFactor: 0.8, assistLateralDamp: 1.3, assistSpeedDamp: 0.35,
@@ -257,11 +254,11 @@ export const THESEUS: Chassis = {
  * прочих (в рендере scale выше), потому смещения дул разнесены шире.
  */
 const ATLAS_HARDPOINTS: Chassis['hardpoints'] = [
-  { offset: [0, -5.57, -17.14], kind: 'gun', maxClass: 3, nozzles: [[-23.47, -5.57, -17.14], [23.47, -5.57, -17.14]] },
+  { offset: [0, -5.57, -17.14], kind: 'gun', maxClass: 3, nozzles: [[-23.82, -5.57, -17.14], [23.82, -5.57, -17.14]] },
   { offset: [0, 2.31, -17.64], kind: 'gun', maxClass: 3, nozzles: [[-9, 2.31, -17.64], [9, 2.31, -17.64]] },
-  { offset: [0, 2.19, -59.06], kind: 'gun', maxClass: 3, bore: 2, nozzles: [[0, 2.19, -59.06]] },
-  { offset: [-5.0, -1.0, 5.0], kind: 'pylon', maxClass: 2 },
-  { offset: [5.0, -1.0, 5.0], kind: 'pylon', maxClass: 2 },
+  { offset: [1.23, 2.19, -59.99], kind: 'gun', maxClass: 3, bore: 2, nozzles: [[1.23, 2.19, -59.99]] },
+  { offset: [-5, -1, 5], kind: 'pylon', maxClass: 2 },
+  { offset: [5, -1, 5], kind: 'pylon', maxClass: 2 },
 ]
 export const ATLAS: Chassis = {
   id: 'atlas', name: 'Атлас', class: 3, baseMass: 42, baseHull: 620, cargoCapacity: 220, auxCapacity: 160,
