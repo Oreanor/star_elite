@@ -8,6 +8,7 @@ export {
 } from './arrival'
 export { systemDefOf } from './bridge'
 export { quasarLook, quasarOf, type QuasarLook } from './quasar'
+export { SYSTEM_FEATURES, hasFeature, type SystemFeature } from './features'
 export {
   commitPreparedJump,
   jump,

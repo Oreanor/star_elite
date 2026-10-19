@@ -11,7 +11,10 @@ import {
   galaxyShape,
   applyDelta,
   generateGalaxy,
+  hasFeature,
   isInhabited,
+  SYSTEM_FEATURES,
+  type SystemFeature,
   jumpBlock,
   jumpDistance,
   quasarOf,
@@ -28,6 +31,20 @@ import { properName } from '../i18n/dataNames'
 import { CONTACT_MAP, ContactLabels, ContactStars, PLAYER_MAP, PlayerLabels, PlayerStars, contactSystemsOf, playerSystemsOf } from './GalaxyPeople'
 import { GalaxyJets, JumpSphere, OrbitCamera, PulsarMarks, Route, StarLabel, StarRing, Stars, YouAreHere, YouLabel, formatStarSize, positionOf } from './GalaxyScene'
 import { SystemPopup, formatRange } from './SystemPopup'
+
+const LIFE_FILTERS = ['stations', 'primitive', 'empty'] as const
+type LifeFilter = (typeof LIFE_FILTERS)[number]
+type MapFilter = 'all' | LifeFilter | SystemFeature
+/** Порядок пунктов селекта: сперва жизнь (куда лететь торговать), потом тела (на что смотреть). */
+const MAP_FILTERS: readonly MapFilter[] = ['all', ...LIFE_FILTERS, ...SYSTEM_FEATURES]
+
+function isLifeFilter(f: MapFilter): f is LifeFilter {
+  return (LIFE_FILTERS as readonly string[]).includes(f)
+}
+
+function filterLabel(f: MapFilter): string {
+  return f === 'all' || isLifeFilter(f) ? t(`map.filter.${f}`) : t(`map.body.${f}`)
+}
 
 const _origin = /* @__PURE__ */ new Vector3()
 const _screen = new Vector3()
@@ -200,10 +217,10 @@ function GalaxyMapImpl({ onClose, embedded = false }: { onClose: () => void; emb
   // «ВЫБРАТЬ» в плашке; клик мимо плашку закрывает (`useInspect`).
   const card = useInspect<number>()
 
-  // Фильтр по характеру системы: всё / со станциями (разумная раса колонизовала) /
-  // с примитивной жизнью (фауна, без причала) / пустые (нет обитаемых миров). Отсеянные
-  // звёзды гаснут и перестают ловить курсор — глаз не спорит с сотнями лишних точек.
-  const [filter, setFilter] = useState<'all' | 'stations' | 'primitive' | 'empty'>('all')
+  // Один фильтр на всё, что ищут: по жизни (станции / фауна / без жизни) или по телу
+  // (дыра, квазар, пульсар, двойная… — `SYSTEM_FEATURES`). Отсеянные звёзды гаснут и
+  // перестают ловить курсор — глаз не спорит с сотнями лишних точек.
+  const [filter, setFilter] = useState<MapFilter>('all')
   // Показывать ли метки знакомых и живых игроков. По умолчанию да — но их можно убрать.
   const [showContacts, setShowContacts] = useState(true)
   // Поиск по имени системы / её планеты / причала. Совпадение подсвечиваем и наводим камеру.
@@ -219,10 +236,26 @@ function GalaxyMapImpl({ onClose, embedded = false }: { onClose: () => void; emb
       ),
     [systems],
   )
+  const passes = (i: number, f: MapFilter): boolean => {
+    if (f === 'all') return true
+    if (isLifeFilter(f)) return category[i] === f
+    return hasFeature(systems[i]!, f, world.galaxySeed)
+  }
   const visible = useMemo(
-    () => systems.map((_, i) => filter === 'all' || category[i] === filter),
-    [systems, filter, category],
+    () => systems.map((_, i) => passes(i, filter)),
+    [systems, filter, category, world.galaxySeed],
   )
+  // Сколько систем под каждым пунктом — прямо в селекте: «КВАЗАРЫ · 0» отвечает на вопрос
+  // «есть ли тут это вообще» раньше, чем игрок начнёт крутить карту.
+  const counts = useMemo(() => {
+    const out = new Map<MapFilter, number>()
+    for (const f of MAP_FILTERS) {
+      let n = 0
+      for (let i = 0; i < systems.length; i++) if (passes(i, f)) n++
+      out.set(f, n)
+    }
+    return out
+  }, [systems, category, world.galaxySeed])
   const search = query.trim().toLowerCase()
   const searchIndex = useMemo(() => {
     if (search.length < 2) return null
@@ -343,36 +376,31 @@ function GalaxyMapImpl({ onClose, embedded = false }: { onClose: () => void; emb
             }}
           />
 
-          <div className="flex shrink-0 flex-wrap gap-1">
-            {(['all', 'stations', 'primitive', 'empty'] as const).map((f) => {
-              const on = filter === f
-              return (
-                <button
-                  key={f}
-                  type="button"
-                  onClick={() => setFilter(f)}
-                  className="cursor-pointer border px-2 py-1 text-[11px] tracking-widest transition-colors"
-                  style={{
-                    borderColor: on ? UI.PRIMARY : UI.DIM,
-                    backgroundColor: on ? UI.PRIMARY : 'transparent',
-                    color: on ? '#000' : UI.DIM,
-                  }}
-                >
-                  {t(`map.filter.${f}` as 'map.filter.all')}
-                </button>
-              )
-            })}
-          </div>
+          {/* Фильтр и галочка знакомых — одной строкой: оба решают, ЧТО видно на поле. */}
+          <div className="flex shrink-0 items-center gap-3">
+            <select
+              value={filter}
+              onChange={(e) => setFilter(e.target.value as MapFilter)}
+              className="min-w-0 flex-1 cursor-pointer rounded border bg-black/40 px-2 py-1.5 text-xs tracking-widest outline-none"
+              style={{ borderColor: filter === 'all' ? 'rgba(124,196,255,0.35)' : UI.PRIMARY, color: UI.PRIMARY }}
+            >
+              {MAP_FILTERS.map((f) => (
+                <option key={f} value={f} style={{ background: '#03101c' }}>
+                  {filterLabel(f)} · {counts.get(f) ?? 0}
+                </option>
+              ))}
+            </select>
 
-          <label className="flex shrink-0 cursor-pointer items-center gap-2 text-[11px] tracking-widest" style={{ color: UI.DIM }}>
-            <input
-              type="checkbox"
-              checked={showContacts}
-              onChange={(e) => setShowContacts(e.target.checked)}
-              className="cursor-pointer accent-[#7fd6ff]"
-            />
-            {t('map.showContacts')}
-          </label>
+            <label className="flex shrink-0 cursor-pointer items-center gap-2 text-[11px] tracking-widest" style={{ color: UI.DIM }}>
+              <input
+                type="checkbox"
+                checked={showContacts}
+                onChange={(e) => setShowContacts(e.target.checked)}
+                className="cursor-pointer accent-[#7fd6ff]"
+              />
+              {t('map.showContacts')}
+            </label>
+          </div>
 
           {search.length >= 2 && searchIndex == null && (
             <span className="shrink-0 text-[11px] tracking-widest" style={{ color: UI.WARN }}>{t('map.searchNone')}</span>
