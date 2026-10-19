@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { Quaternion, Vector3 } from 'three'
-import { ASTEROID, COMET } from '../../config/world'
+import { ASTEROID, COMET, TRAFFIC } from '../../config/world'
 import { SHIELD } from '../../config/station'
 import { createWorld, STARTER_SYSTEM } from '../world'
 import type { AsteroidEntity, World } from '../world/entities'
+import { despawnDistantAsteroids } from '../world/asteroidEncounter'
 import { spawnComet } from '../world/comets'
 import { asteroidMass, shatter } from './mining'
 import { stepRockCollisions } from './rockCollisions'
@@ -52,6 +53,23 @@ describe('кометы', () => {
     expect(along).toBeGreaterThan(0) // летит к игроку, а не прочь
     expect(miss).toBeGreaterThan(COMET.MISS_MIN * 0.9)
     expect(miss).toBeLessThan(COMET.MISS_MAX * 1.1)
+  })
+
+  /**
+   * Хвост длиннее пузыря трафика. Уборка по 20 км срезала ядро, пока лента ещё
+   * закрывала объектив. Камень на той же дистанции уходит, комета — нет.
+   */
+  it('комета переживает горизонт радара и уходит только за своим пределом', () => {
+    const world = quietWorld()
+    const p = world.player.state.pos
+    const comet = rock(world, new Vector3(TRAFFIC.DESPAWN_RANGE * 2, 0, 0).add(p), new Vector3(), 80, true)
+    const stone = rock(world, new Vector3(TRAFFIC.DESPAWN_RANGE + 500, 0, 0).add(p), new Vector3())
+    const gone = rock(world, new Vector3(COMET.DESPAWN_RANGE + 500, 0, 0).add(p), new Vector3(), 80, true)
+    despawnDistantAsteroids(world)
+    const ids = world.asteroids.map((a) => a.id)
+    expect(ids).toContain(comet.id)
+    expect(ids).not.toContain(stone.id)
+    expect(ids).not.toContain(gone.id)
   })
 
   it('не больше заданного числа комет разом', () => {

@@ -1,5 +1,5 @@
 import { Euler, Quaternion, Vector3 } from 'three'
-import { ASTEROID, TRAFFIC } from '../../config/world'
+import { ASTEROID, COMET, TRAFFIC } from '../../config/world'
 import { randomUnit, signed } from '../../core/math'
 import { retain } from '../../core/list'
 import type { AsteroidEntity, World } from './entities'
@@ -128,9 +128,10 @@ export function spawnAsteroidEncounter(world: World): boolean {
   return spawnAsteroidPack(world).length > 0
 }
 
-/** Убрать камни за горизонтом радара. Захват / нав / посадка — не трогаем. */
+/** Убрать камни за горизонтом радара. Комета живёт дальше: хвост длиннее пузыря. Захват / нав / посадка — не трогаем. */
 export function despawnDistantAsteroids(world: World): void {
-  const limitSq = TRAFFIC.DESPAWN_RANGE * TRAFFIC.DESPAWN_RANGE
+  const rockLimitSq = TRAFFIC.DESPAWN_RANGE * TRAFFIC.DESPAWN_RANGE
+  const cometLimitSq = COMET.DESPAWN_RANGE * COMET.DESPAWN_RANGE
   const player = world.player.state.pos
   const landed = world.player.landedOn
   retain(world.asteroids, (a) => {
@@ -138,6 +139,7 @@ export function despawnDistantAsteroids(world: World): void {
     if (a.id === lockedAsteroidId(world)) return true
     if (a.id === world.navTargetId) return true
     if (landed?.bodyId === a.id) return true
+    const limitSq = a.comet ? cometLimitSq : rockLimitSq
     return a.pos.distanceToSquared(player) <= limitSq
   })
 }
