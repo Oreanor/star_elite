@@ -403,7 +403,7 @@ export function HypertorusLayer() {
     tintAttr.needsUpdate = true
     fogAttr.needsUpdate = true
 
-    updateTorusEdges(edgeGeo, FLOW_GRID, _rot, projScale(), brightnessOf)
+    updateTorusEdges(edgeGeo, FLOW_GRID, _rot, projScale(), brightnessOf, torusTuning.curvature)
 
     // ДОМ — узел, ИЗ КОТОРОГО влетел (его записал `enterBush`), а не постоянный номер:
     // вылетев в другую галактику и войдя в её дыру, домом становится она.

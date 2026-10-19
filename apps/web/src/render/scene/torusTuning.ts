@@ -12,6 +12,8 @@ export const torusTuning = {
   edge: TORUS.EDGE_INTENSITY as number,
   /** Толщина газовых потоков, независимо от яркости. */
   thickness: TORUS.EDGE_THICKNESS as number,
+  /** Дополнительный изгиб потоков на S³. */
+  curvature: TORUS.EDGE_BEND as number,
   /** Яркость джетов квазаров (`TORUS.JET_INTENSITY`). */
   jet: TORUS.JET_INTENSITY as number,
   /** Раздвижка узлов (`TORUS.NODE_SPREAD`). */
@@ -26,6 +28,7 @@ export function torusTuningSnippet(): string {
     `  PUFF_INTENSITY: ${f(torusTuning.puff)},`,
     `  EDGE_INTENSITY: ${f(torusTuning.edge)},`,
     `  EDGE_THICKNESS: ${f(torusTuning.thickness)},`,
+    `  EDGE_BEND: ${f(torusTuning.curvature)},`,
     `  JET_INTENSITY: ${f(torusTuning.jet)},`,
   ].join('\n')
 }

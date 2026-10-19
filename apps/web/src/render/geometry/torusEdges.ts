@@ -52,7 +52,7 @@ export function torusEdgesGeometry(edgeCount: number): BufferGeometry {
   return g
 }
 
-export function updateTorusEdges(g: BufferGeometry, grid: HypertorusGrid, rotated: Float64Array, scale: number, brightness: (distance: number) => number): void {
+export function updateTorusEdges(g: BufferGeometry, grid: HypertorusGrid, rotated: Float64Array, scale: number, brightness: (distance: number) => number, curvature: number): void {
   const pos = g.getAttribute('position') as BufferAttribute
   const tangent = g.getAttribute('aTangent') as BufferAttribute
   const width = g.getAttribute('aWidth') as BufferAttribute
@@ -85,7 +85,7 @@ export function updateTorusEdges(g: BufferGeometry, grid: HypertorusGrid, rotate
       }
     }
     const phase = ((Math.imul(e + 1, 2654435761) >>> 0) / 4294967296)
-    const bendScale = TORUS.EDGE_BEND * length * (0.75 + phase * 0.5) / Math.sqrt(Math.max(norm, 1e-12))
+    const bendScale = curvature * length * (0.75 + phase * 0.5) / Math.sqrt(Math.max(norm, 1e-12))
     for (let k = 0; k < samples; k++) {
       const t = k / TORUS.EDGE_SEGMENTS
       slerpS3(rotated, from, to, t, _arc)
