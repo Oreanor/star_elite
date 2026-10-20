@@ -237,6 +237,7 @@ const JET_FRAG = /* glsl */ `
 #include <logdepthbuf_pars_fragment>
 
 uniform vec3 uTint;
+uniform float uFade;
 
 varying float vSide;
 varying float vAlong;
@@ -249,7 +250,7 @@ void main() {
   float halo = exp(-side * side * 2.2);
   float beam = (0.7 * core + 0.5 * halo) * (1.0 - smoothstep(0.82, 1.0, abs(side)));
   float along = pow(max(0.0, 1.0 - vAlong), 1.45);
-  float alpha = beam * along * vBright;
+  float alpha = beam * along * vBright * uFade;
   if (alpha < 0.003) discard;
   vec3 col = mix(uTint, vec3(1.0), core);
   gl_FragColor = vec4(col, alpha);
@@ -260,6 +261,7 @@ export function torusJetMaterial(): ShaderMaterial {
   return new ShaderMaterial({
     uniforms: {
       uTint: { value: new Color(0xd6eeff) },
+      uFade: { value: 1 },
     },
     vertexShader: JET_VERT,
     fragmentShader: JET_FRAG,

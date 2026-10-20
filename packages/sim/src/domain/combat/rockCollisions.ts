@@ -26,6 +26,9 @@ const RESTITUTION = 0.5
 const _n = new Vector3()
 const _contact = new Vector3()
 const _zero = new Vector3()
+const _sortedRocks: AsteroidEntity[] = []
+let sweepAxis: 'x' | 'y' | 'z' = 'x'
+const byAxis = (a: AsteroidEntity, b: AsteroidEntity) => a.pos[sweepAxis] - b.pos[sweepAxis]
 
 export function stepRockCollisions(world: World): void {
   if (world.trafficRole === 'mirror') return
@@ -38,11 +41,31 @@ export function stepRockCollisions(world: World): void {
     hitBodies(world, a)
     if (a.alive) hitBases(world, a)
   }
+  // В разреженном поясе большинство пар заведомо далеко: отсекаем по одной оси.
+  _sortedRocks.length = 0
+  let maxRadius = 0
+  let minX = Infinity, minY = Infinity, minZ = Infinity
+  let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity
   for (let i = 0; i < count; i++) {
     const a = rocks[i]!
+    if (a.alive) {
+      _sortedRocks.push(a)
+      maxRadius = Math.max(maxRadius, a.radius)
+      minX = Math.min(minX, a.pos.x); maxX = Math.max(maxX, a.pos.x)
+      minY = Math.min(minY, a.pos.y); maxY = Math.max(maxY, a.pos.y)
+      minZ = Math.min(minZ, a.pos.z); maxZ = Math.max(maxZ, a.pos.z)
+    }
+  }
+  // Дуга может идти вдоль любой оси: фиксированный X снова давал бы почти N².
+  sweepAxis = maxX - minX >= maxZ - minZ ? 'x' : 'z'
+  if (maxY - minY > Math.max(maxX - minX, maxZ - minZ)) sweepAxis = 'y'
+  _sortedRocks.sort(byAxis)
+  for (let i = 0; i < _sortedRocks.length; i++) {
+    const a = _sortedRocks[i]!
     if (!a.alive) continue
-    for (let j = i + 1; j < count; j++) {
-      const b = rocks[j]!
+    for (let j = i + 1; j < _sortedRocks.length; j++) {
+      const b = _sortedRocks[j]!
+      if (b.pos[sweepAxis] - a.pos[sweepAxis] > a.radius + maxRadius) break
       if (!b.alive) continue
       rockVsRock(world, a, b)
       if (!a.alive) break

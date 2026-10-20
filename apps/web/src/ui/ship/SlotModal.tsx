@@ -3,7 +3,9 @@ import {
   armMissiles,
   armMissilesFromHold,
   buy,
+  buyToHold,
   canBuy,
+  canFit,
   canUpgrade,
   fitFromHold,
   freeCapacity,
@@ -35,6 +37,8 @@ import {
   upgradeModule,
   SHOP,
   type CargoItem,
+  type FitError,
+  type PurchaseError,
   type ShipModule,
   type World,
 } from '@elite/sim'
@@ -44,7 +48,7 @@ import { ACCENT, Button, DIM, Modal, ModalActions, ModalKicker, Table, type Colu
 import { moduleColumns } from '../station/moduleColumns'
 import { formatStat, statLabel, statNumber } from '../station/format'
 import { Money, tm } from '../station/Money'
-import { displayName, weaponSlot } from '../station/Equipment'
+import { canStow, displayName, refusalNote, weaponSlot } from '../station/Equipment'
 import { type SlotView } from './ShipSlots'
 import { ItemSheet } from '../station/ItemSheet'
 
@@ -71,9 +75,12 @@ export interface Confirm {
    * как в окне продажи из отсека. Есть — `message`/`detail`/`price` не рисуются.
    */
   sheet?: { title: React.ReactNode; lines: React.ReactNode }
+  /** Пояснение под карточкой/сообщением: почему одной из дорог нет (не встанет на корпус). */
+  note?: React.ReactNode
   // `stay` — оставить модалку слота ОТКРЫТОЙ после действия (покупка/установка): деталь
   // встаёт в слот, и пилот тут же жмёт «улучшить», не открывая слот заново.
-  actions: { label: React.ReactNode; run: () => void; stay?: boolean }[]
+  // Строка из `run` — отказ домена: её показывают, а не закрывают окно молча.
+  actions: { label: React.ReactNode; run: () => string | null | void; stay?: boolean }[]
 }
 
 export interface RepairInfo {
@@ -162,7 +169,9 @@ export function SlotModal({
       setConfirm({ message: room <= 0 ? t('hud.holdFull') : t('ship.repair.no-money'), actions: [] })
       return
     }
-    const buy = (n: number) => buyMissiles(world, world.player, n)
+    const buy = (n: number) => {
+      buyMissiles(world, world.player, n)
+    }
     const actions: Confirm['actions'] = [
       { label: t('ship.buyRounds.one', { price }), run: () => buy(1), stay: true },
     ]
@@ -186,26 +195,50 @@ export function SlotModal({
     setConfirm({ message: copilotRepairNote(out, price), actions: [] })
   }
 
+  // Мунишн-слот ставит по своим правилам (`armMissiles*`): из общих проверок ему нужен лишь класс.
+  const munitionClassError = (m: ShipModule) => (m.class > player.loadout.chassis.class ? 'class-too-large' : null)
+  const refused = (m: ShipModule, error: PurchaseError | FitError | null) => (error ? refusalNote(world, m, error) : null)
+
   // Клик по МОЕМУ варианту из трюма — спросить и поставить взамен (даром, железо своё).
-  const askFit = (holdIndex: number, m: ShipModule) =>
+  // Не встанет — сказать почему ДО вопроса «установить?», а не молча не поставить после.
+  const askFit = (holdIndex: number, m: ShipModule) => {
+    const error = isMissileSlot ? munitionClassError(m) : canFit(player, m, slot.hardpointIndex)
+    if (error) {
+      setConfirm({ message: refusalNote(world, m, error), actions: [] })
+      return
+    }
     setConfirm({
       message: t('ship.confirm.fit', { name: displayName(m) }),
       // Установка не закрывает слот: деталь встала — можно сразу улучшить.
       actions: [
         {
           label: t('station.fit'),
-          run: () => (isMissileSlot ? armMissilesFromHold(player, holdIndex) : fitFromHold(player, holdIndex, slot.hardpointIndex)),
+          run: () =>
+            refused(m, isMissileSlot ? armMissilesFromHold(player, holdIndex) : fitFromHold(player, holdIndex, slot.hardpointIndex)),
           stay: true,
         },
       ],
     })
+  }
 
   // Клик по варианту из МАГАЗИНА — спросить, купить и поставить; нет денег — так и сказать.
+  // Не встаёт на этот корпус — объяснить и всё равно дать купить В ТРЮМ: под корпус побольше.
   const askBuy = (m: ShipModule) => {
     const at = weaponSlot(world, m)
-    const affordable = isMissileSlot ? world.credits >= priceOf(m) : canBuy(world, player, m, at) !== 'no-money'
-    if (!affordable) {
+    const error = isMissileSlot
+      ? (munitionClassError(m) ?? (world.credits < priceOf(m) ? 'no-money' : null))
+      : canBuy(world, player, m, at)
+    if (error === 'no-money') {
       setConfirm({ message: tm('ship.confirm.noFunds', { price: <Money amount={priceOf(m)} /> }), actions: [] })
+      return
+    }
+    if (error) {
+      const stow = canStow(world, m)
+      setConfirm({
+        message: refusalNote(world, m, error),
+        ...(stow ? { note: t('ship.refuse.toHold') } : {}),
+        actions: stow ? [{ label: t('station.buy'), run: () => refused(m, buyToHold(world, player, m)), stay: true }] : [],
+      })
       return
     }
     setConfirm({
@@ -214,7 +247,7 @@ export function SlotModal({
       actions: [
         {
           label: t('station.buy'),
-          run: () => (isMissileSlot ? armMissiles(world, player, m) : buy(world, player, m, at)),
+          run: () => refused(m, isMissileSlot ? armMissiles(world, player, m) : buy(world, player, m, at)),
           stay: true,
         },
       ],
@@ -401,8 +434,12 @@ export function SlotModal({
           <ConfirmBox
             confirm={confirm}
             onRun={(a) => {
-              a.run()
+              const refusal = a.run()
               onChange()
+              if (typeof refusal === 'string') {
+                setConfirm({ message: refusal, actions: [] })
+                return
+              }
               setConfirm(null)
               // `stay` (покупка/установка) — слот остаётся открытым: деталь встала, статы
               // догнали (refresh), и «улучшить» уже активно. Прочее закрывает, как и было.
@@ -553,6 +590,11 @@ export function ConfirmBox({
         ) : (
           <div className="mt-2 text-center text-sm">{confirm.detail}</div>
         )
+      )}
+      {confirm.note && (
+        <p className="mt-3 text-xs" style={{ color: DIM }}>
+          {confirm.note}
+        </p>
       )}
       {!confirm.sheet && confirm.price !== undefined && (
         confirm.emphasis === 'detail' ? (

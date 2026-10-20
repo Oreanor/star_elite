@@ -331,6 +331,8 @@ export interface ShipEntity {
 }
 
 export interface AsteroidEntity {
+  /** Постоянный адрес камня в процедурном поясе. */
+  beltKey?: string
   rayHold?: RayHold
   id: number
   kind: 'asteroid'
@@ -1059,6 +1061,7 @@ export interface World {
   player: ShipEntity
   ships: ShipEntity[]
   asteroids: AsteroidEntity[]
+  asteroidBelt?: import('./asteroidBelt').AsteroidBelt
   pods: CargoPodEntity[]
   missiles: MissileEntity[]
   /** Лазерные болты в полёте. Снаряды: летят, заметают отрезок, наносят урон при попадании. */

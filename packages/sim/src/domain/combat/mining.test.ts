@@ -49,6 +49,16 @@ describe('дробление сохраняет вещество', () => {
    *
    * Допуск в одну единицу на осколок — это округление до целого груза, не более.
    */
+  it('осколки сохраняют форму родителя', () => {
+    const world = empty()
+    const parent = rock(world, 40)
+    parent.shape = 3
+    shatter(world, parent)
+    const pieces = world.asteroids.filter(a => a.alive)
+    expect(pieces.length).toBeGreaterThan(1)
+    expect(pieces.every(a => a.shape === 3)).toBe(true)
+  })
+
   it('сумма руды осколков равна руде исходного камня', () => {
     const world = empty()
     const parent = rock(world, ASTEROID.RADIUS_MAX)

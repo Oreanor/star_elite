@@ -188,6 +188,7 @@ export function HypertorusLayer() {
   const edgeRef = useRef<Mesh>(null)
   const backdropRef = useRef<Mesh>(null)
   const crossRef = useRef<Mesh>(null)
+  const entryAge = useRef(-1)
 
   const crossGeo = useMemo(crossNeonTubesGeometry, [])
   const crossMat = useMemo(crossNeonLampMaterial, [])
@@ -245,7 +246,7 @@ export function HypertorusLayer() {
     [puffGeo, puffMat, edgeGeo, edgeMat, jetGeo, jetMat, backdropGeo, backdropMat, crossGeo, crossMat],
   )
 
-  useFrame(() => {
+  useFrame((_, dt) => {
     const { world, bush } = session
     const group = groupRef.current
     const puffs = puffRef.current
@@ -254,8 +255,14 @@ export function HypertorusLayer() {
     if (!group || !puffs || !edges || !backdrop) return
 
     const on = bush.active
-    puffMat.uniforms.uGain!.value = torusTuning.puff
-    edgeMat.uniforms.uGain!.value = torusTuning.edge
+    // Первый видимый кадр — тёмный, даже если предыдущий кадр задержался на загрузке.
+    entryAge.current = !on ? -1 : entryAge.current < 0 ? 0 : Math.min(TORUS.FADE_IN_SECONDS, entryAge.current + dt)
+    const fade = smoothstep(0, TORUS.FADE_IN_SECONDS, Math.max(0, entryAge.current))
+    puffMat.uniforms.uGain!.value = torusTuning.puff * fade
+    edgeMat.uniforms.uGain!.value = torusTuning.edge * fade
+    jetMat.uniforms.uFade!.value = fade
+    crossMat.uniforms.uFade!.value = fade
+    backdropMat.color.setHex(TORUS.BACKDROP_COLOR).multiplyScalar(fade)
     edgeMat.uniforms.uThickness!.value = torusTuning.thickness
     edgeMat.uniforms.uBlur!.value = torusTuning.blur
     // Устье ребра закрывается по видимому шарику, а не по каталожному радиусу: иначе

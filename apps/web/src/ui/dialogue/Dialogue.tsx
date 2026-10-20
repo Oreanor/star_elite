@@ -305,8 +305,8 @@ export function Dialogue({
     let reply = await negotiate(ctx, [...turns, { who: 'you', text }], text)
 
     // Редкий запасной путь: модель запросила блок, который суфлёр не поймал — догружаем без паузы.
-    // `traffic` — справка диспетчера, у пилота её нет: такой запрос пропускаем.
-    if (reply.lookup && reply.lookup !== 'traffic' && !reply.hangup) {
+    // `traffic` и `outfit` — справки диспетчера, у пилота их нет: такой запрос пропускаем.
+    if (reply.lookup && reply.lookup !== 'traffic' && reply.lookup !== 'outfit' && !reply.hangup) {
       const digest = reply.lookup
       const retryFresh = mem.active.includes(digest) ? [] : ([digest] as ContextDigest[])
       if (retryFresh.length) rememberDigest(mem, digest)

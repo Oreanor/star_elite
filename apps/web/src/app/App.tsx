@@ -302,6 +302,7 @@ function Shell({ onRestart }: { onRestart: () => void }) {
    * курсора ещё не пришёл), светлеем уже на игре.
    */
   const [veil, setVeil] = useState(false)
+  const veilSwap = useRef<(() => void) | null>(null)
   /** Под пеленой / пока ждём lock после интро — титул не монтируем. */
   const [enterPlay, setEnterPlay] = useState(false)
   const enterPlayRef = useRef(false)
@@ -349,8 +350,7 @@ function Shell({ onRestart }: { onRestart: () => void }) {
 
   const fadeIntoGame = useCallback(
     (swap: () => void) => {
-      setVeil(true)
-      window.setTimeout(() => {
+      veilSwap.current = () => {
         // Сразу под чёрным: игра началась, заставку убрать — не ждать pointer lock.
         setStarted(true)
         setLaunching(false)
@@ -363,7 +363,8 @@ function Shell({ onRestart }: { onRestart: () => void }) {
         window.setTimeout(() => {
           requestAnimationFrame(() => requestAnimationFrame(() => setVeil(false)))
         }, VEIL_HOLD_MS)
-      }, VEIL_FADE_MS)
+      }
+      setVeil(true)
     },
     [session, startLockPoll],
   )
@@ -944,6 +945,14 @@ function Shell({ onRestart }: { onRestart: () => void }) {
       <div
         className="pointer-events-none absolute inset-0 z-[60] bg-black"
         style={{ opacity: veil ? 1 : 0, transition: `opacity ${VEIL_FADE_MS}ms ease-in-out` }}
+        onTransitionEnd={(event) => {
+          if (event.target !== event.currentTarget || event.propertyName !== 'opacity' || !veil) return
+          // Таймер мог истечь, пока сборка сцены задерживала первый кадр затемнения.
+          // Подменяем меню на готовый UI только после фактического достижения черноты.
+          const swap = veilSwap.current
+          veilSwap.current = null
+          swap?.()
+        }}
       />
     </div>
   )

@@ -135,7 +135,8 @@ export function shatter(world: World, a: AsteroidEntity, oreYield = 1): void {
       spin: new Vector3(signed(rng), signed(rng), signed(rng)).multiplyScalar(0.35),
       radius,
       hull: ASTEROID.HULL,
-      shape: Math.floor(rng() * ASTEROID.SHAPES),
+      // Тот же камень: чужая форма — другая текстура, и осколок меняет цвет.
+      shape: a.shape,
       gen,
       alive: true,
     })
@@ -184,7 +185,7 @@ export function bombShatterAsteroid(world: World, a: AsteroidEntity): void {
       spin: new Vector3(signed(rng), signed(rng), signed(rng)).multiplyScalar(0.35),
       radius: half,
       hull: ASTEROID.HULL,
-      shape: Math.floor(rng() * ASTEROID.SHAPES),
+      shape: a.shape,
       gen,
       alive: true,
     })

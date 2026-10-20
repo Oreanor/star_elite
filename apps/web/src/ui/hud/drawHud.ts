@@ -1,8 +1,10 @@
 import { Quaternion, Vector3 } from 'three'
 import {
+  BELT_NAV_ID,
   GUNNERY,
   MIELOPHONE,
   navTarget,
+  nearestBeltPoint,
   MONOLITH_NAMES,
   distanceLy,
   itemMass,
@@ -54,6 +56,9 @@ const _velocityDir = new Vector3()
 const _gtar = new Vector3()
 /** Позиции/поворот для ПОКАЗА — между тактами (см. `poseTrail`); живут до конца вызова. */
 const _shownAt = new Vector3()
+/** Ближняя точка пояса для метки HUD. Две: своя система и мир за кольцом не делят один вектор. */
+const _beltHud = new Vector3()
+const _beltHudFar = new Vector3()
 const _shownQuat = new Quaternion()
 
 export function drawHud(frame: HudFrame): void {
@@ -379,7 +384,7 @@ function drawTargetLock(frame: HudFrame): void {
     if (!nav) return
     if (stellarOnly && nav.kind !== 'star' && nav.kind !== 'blackhole') return
     // До поверхности любой нав-цели — как панель цели и подсказка причала (`stationRange`).
-    mark(nav.pos, navMarkerColor(nav), properName(nav.name), nav.radius)
+    mark(nav.pos, navMarkerColor(nav), nav.kind === 'belt' ? t('nav.belt') : properName(nav.name), nav.radius)
   }
 }
 
@@ -465,7 +470,7 @@ function labelRank(m: Marker): number {
  * звёзд, хотя именно он и решает, стоит ли туда лететь. Поэтому метки бортов включает
  * только проход мира за кольцом.
  */
-function collectMarkers(world: World, ships = false): Marker[] {
+function collectMarkers(world: World, ships = false, beltAt: Vector3 = _beltHud): Marker[] {
   const out: Marker[] = []
   for (const body of world.bodies) {
     out.push({
@@ -527,6 +532,18 @@ function collectMarkers(world: World, ships = false): Marker[] {
       surfaceR: base.radius,
     })
   }
+  // Пояс — не тело, но выбранный он та же цель, что планета: рамка, имя и путь до края потока.
+  if (world.asteroidBelt && world.navTargetId === BELT_NAV_ID) {
+    nearestBeltPoint(world, beltAt)
+    out.push({
+      pos: beltAt,
+      name: t('nav.belt'),
+      color: '#ba9e78',
+      nav: true,
+      primary: true,
+      surfaceR: world.asteroidBelt.diameter / 2,
+    })
+  }
   if (ships) {
     for (const ship of world.ships) {
       if (!ship.alive || ship.cloaked) continue
@@ -568,7 +585,7 @@ function drawBodyMarkers({ ctx, camera, world, width, height, aperture }: HudFra
   const destWorld = aperture?.world
   const destCamera = aperture?.camera
   if (hole && destWorld && destCamera) {
-    for (const m of collectMarkers(destWorld, true)) {
+    for (const m of collectMarkers(destWorld, true, _beltHudFar)) {
       const p = projectPoint(shownPosition(destWorld, m.pos, _shownAt), destCamera, width, height)
       if (p.behind || !isOnScreen(p.x, p.y, width, height)) continue
       if (!insideAperture(hole, p.x, p.y)) continue

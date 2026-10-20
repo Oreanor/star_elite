@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import { UI } from '../theme'
 import { Vector3 } from 'three'
 import {
+  BELT_NAV_ID,
+  nearestBeltPoint,
   clearContactLock,
   clearNavLock,
   MONOLITH_NAMES,
@@ -69,7 +71,7 @@ const CONTACT = '#b98bff'
 /** Живой игрок: розовый — та же семантика, что на локаторе и карте галактики. */
 const PLAYER = UI.PLAYER
 const MONOLITH = UI.MONOLITH
-type MarkerKind = BodyEntity['kind'] | 'monolith' | 'figurine' | 'ship' | 'contact' | 'player'
+type MarkerKind = BodyEntity['kind'] | 'monolith' | 'figurine' | 'ship' | 'contact' | 'player' | 'belt'
 
 /** Цвет отметки по роду. Таблица, а не лестница тернарников: новый род — строка, не ветка. */
 const MARKER_COLOUR: Partial<Record<MarkerKind, string>> = {
@@ -79,6 +81,7 @@ const MARKER_COLOUR: Partial<Record<MarkerKind, string>> = {
   monolith: MONOLITH,
   figurine: MONOLITH,
   ship: SHIP,
+  belt: '#ba9e78',
   contact: CONTACT,
   player: PLAYER,
 }
@@ -86,7 +89,7 @@ const MARKER_COLOUR: Partial<Record<MarkerKind, string>> = {
 const colourOf = (kind: MarkerKind): string => MARKER_COLOUR[kind] ?? BODY
 
 interface Marker {
-  /** У корабля своего id нет: он не тело. Отрицательный — значит, не выбирается. */
+  /** У корабля своего id нет: он не тело. Отрицательные id бортов не выбираются; пояс — `BELT_NAV_ID`. */
   id: number
   name: string
   kind: MarkerKind
@@ -112,6 +115,7 @@ function radiusOf(orbit: number, min: number, span: number): number {
   return INNER + Math.min(1, Math.max(0, k)) * (DISC - INNER)
 }
 
+const _beltAt = new Vector3()
 const _fwd = new Vector3()
 const _right = new Vector3()
 const _up = new Vector3()
@@ -152,6 +156,16 @@ function markers(world: World): Marker[] {
     .map((s) => ({ id: -2000 - s.id, name: s.name, kind: 'player' as MarkerKind, pos: s.state.pos }))
 
   const raw = [
+    ...(world.asteroidBelt
+      ? [{
+          id: BELT_NAV_ID,
+          name: t('nav.belt'),
+          kind: 'belt' as MarkerKind,
+          pos: nearestBeltPoint(world, _beltAt),
+          // До края потока, как у планеты до поверхности: ось трубки на пять километров дальше.
+          range: Math.max(0, _beltAt.distanceTo(player) - world.asteroidBelt.diameter / 2),
+        }]
+      : []),
     ...world.bodies.map((b) => ({ id: b.id, name: b.name, kind: b.kind as MarkerKind, pos: b.pos, range: distanceToBody(world, b) })),
     ...world.monoliths.map((m) => ({
       id: m.id,
@@ -215,7 +229,7 @@ function markers(world: World): Marker[] {
 // та же величина читалась на карте иначе, чем на HUD.
 
 /**
- * Выбирается всё, что стоит на месте: звезда, планета, луна, причал. Корабль —
+ * Выбирается всё, что стоит на месте: звезда, планета, луна, причал, пояс. Корабль —
  * нет: он летит, и «цель навигации» на нём означала бы преследование, а не курс.
  */
 const selectable = (m: Marker) => m.kind !== 'ship' && m.kind !== 'contact' && m.kind !== 'player'
@@ -460,7 +474,7 @@ function Hologram({
   // (по глубине после поворота) рисуем первыми — ближние лягут поверх, как на локаторе.
   const marks = points
     .map((m) => ({ m, base: proj(m.x, m.y, 0), tip: proj(m.x, m.y, m.lift) }))
-    .sort((a, b) => b.base.depth - a.base.depth)
+    .sort((a, b) => Number(a.m.kind === 'ship') - Number(b.m.kind === 'ship') || b.base.depth - a.base.depth)
 
   return (
     <svg className="absolute inset-0 h-full w-full" viewBox={`${-VIEW / 2} ${-VIEW / 2} ${VIEW} ${VIEW}`}>
@@ -483,8 +497,10 @@ function Hologram({
             rx={m.ring * zoom}
             ry={m.ring * cos * zoom}
             fill="none"
-            stroke="rgba(124,196,255,0.12)"
-            strokeDasharray="2 6"
+            stroke={m.kind === 'belt' ? '#ba9e78' : 'rgba(124,196,255,0.12)'}
+            strokeWidth={m.kind === 'belt' ? 7 : 1}
+            strokeOpacity={m.kind === 'belt' ? 0.55 : 1}
+            strokeDasharray={m.kind === 'belt' ? '1 4 2 5' : '2 6'}
           />
         ))}
 
@@ -529,7 +545,10 @@ function Hologram({
                 </>
               ) : m.kind === 'ship' ? (
                 // Игрок — не точка, а нос: треугольник заметен среди кружков планет.
-                <path d="M 0 -5 L 4 5 L 0 2.5 L -4 5 Z" fill={colour} />
+                <>
+                  <circle r={20} fill="#061725" fillOpacity={0.85} stroke={colour} strokeWidth={2} />
+                  <path d="M 0 -13 L 9 10 L 0 5 L -9 10 Z" fill={colour} stroke="#fff" strokeWidth={1.5} />
+                </>
               ) : m.kind === 'contact' ? (
                 // Знакомый — ромб: не тело (кружок) и не игрок (нос), сразу отличишь.
                 <path d="M 0 -5 L 5 0 L 0 5 L -5 0 Z" fill={colour} fillOpacity={0.85} />
@@ -547,9 +566,12 @@ function Hologram({
               {!active && m.id === hoverId && <circle r={14} fill="none" stroke={colour} strokeOpacity={0.7} />}
 
               <text
-                x={13}
+                x={m.kind === 'ship' ? 26 : 13}
                 y={4}
-                fontSize={11}
+                fontSize={m.kind === 'ship' ? 16 : 11}
+                stroke={m.kind === 'ship' ? '#061725' : undefined}
+                strokeWidth={m.kind === 'ship' ? 4 : 0}
+                paintOrder="stroke"
                 fill={colour}
                 fillOpacity={0.85}
                 style={{ pointerEvents: 'none', userSelect: 'none' }}

@@ -1,0 +1,14 @@
+{
+  "name": "@elite/desktop",
+  "private": true,
+  "version": "0.1.0",
+  "description": "STAR ELITE",
+  "scripts": {
+    "icon": "node scripts/icon.mjs && tauri icon src-tauri/icons/source.png",
+    "start": "tauri dev",
+    "dist": "tauri build"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.12.3"
+  }
+}

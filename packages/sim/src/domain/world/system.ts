@@ -170,6 +170,8 @@ export interface SystemDef {
    */
   extraStations?: readonly StationDef[]
   belt: { center: readonly [number, number, number]; radius: number; count: number } | null
+  /** Постоянный процедурный пояс вокруг главного светила, радиус в метрах. */
+  orbitalBelt?: { radius: number }
   patrols: readonly PatrolDef[]
   /**
    * Пустынная система: НИКАКОГО трафика — ни встреч, ни завсегдатаев у причала, ни китов и
@@ -239,6 +241,7 @@ const STATION_ORBIT = EARTH_RADIUS + STATION_ALTITUDE
 export const STARTER_SYSTEM: SystemDef = {
   name: 'Тиррион',
   seed: 0xc0ffee,
+  orbitalBelt: { radius: 1.4 * AU },
   /** Старт в километре позади станции: нос −Z, причал сразу в кадре. */
   playerStart: [STATION_ORBIT, 0, -AU + 2_000],
   star: { pos: [0, 0, 0], radius: SOLAR_RADIUS, color: 0xffd9a0, massSolar: 1 },

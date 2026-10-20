@@ -4,7 +4,6 @@ import {
   armMissiles,
   buy,
   buyToHold,
-  freeCapacity,
   canBuy,
   moduleStat,
   priceOf,
@@ -17,7 +16,7 @@ import { t, useLang } from '../i18n'
 import { ConfirmBox, type Confirm } from '../ship/SlotModal'
 import { DIM, Table } from './chrome'
 import { moduleColumns } from './moduleColumns'
-import { buyLabel, displayName, headlineCompare, weaponSlot } from './Equipment'
+import { buyLabel, canStow, displayName, headlineCompare, refusalNote, weaponSlot } from './Equipment'
 import { trend } from '../theme'
 import { formatStat, statLabel, statNumber } from './format'
 import { Money } from './Money'
@@ -48,9 +47,6 @@ function canPurchase(world: World, m: ShipModule): PurchaseError | null {
   if (isMunition(m)) return world.credits >= priceOf(m) ? null : 'no-money'
   return canBuy(world, world.player, m, weaponSlot(world, m))
 }
-
-/** Можно ли купить В ТРЮМ, без установки: хватает денег и места. Тот же расчёт, что в `buyToHold`. */
-const canStow = (world: World, m: ShipModule) => world.credits >= priceOf(m) && freeCapacity(world.player.hold) >= m.mass
 
 /**
  * Характеристика детали для окна покупки — тем же языком, что колонка «было → станет»:
@@ -93,14 +89,19 @@ export function Outfitter({ world, onChange }: { world: World; onChange: () => v
   // гаснет, а сюда приходит лишь то, что хоть одной дорогой да купишь.
   const ask = (m: ShipModule) => {
     const actions: Confirm['actions'] = []
+    const fitError = canPurchase(world, m)
+    const refused = (e: Parameters<typeof refusalNote>[2] | null) => (e ? refusalNote(world, m, e) : null)
     // Просто «КУПИТЬ» (в трюм) — первым, «КУПИТЬ И УСТАНОВИТЬ» — следом, как по возрастанию шага.
-    if (canStow(world, m)) actions.push({ label: t('station.buy'), run: () => buyToHold(world, world.player, m) })
-    if (canPurchase(world, m) === null)
+    if (canStow(world, m)) actions.push({ label: t('station.buy'), run: () => refused(buyToHold(world, world.player, m)) })
+    if (fitError === null)
       actions.push({
         label: t('station.buyFit'),
-        run: () => (isMunition(m) ? armMissiles(world, world.player, m) : buy(world, world.player, m, weaponSlot(world, m))),
+        run: () =>
+          refused(isMunition(m) ? armMissiles(world, world.player, m) : buy(world, world.player, m, weaponSlot(world, m))),
       })
     setConfirm({
+      // Установки нет — сказать почему: иначе одинокое «КУПИТЬ» читается как недосмотр.
+      ...(fitError && fitError !== 'no-money' ? { note: refusalNote(world, m, fitError) } : {}),
       message: displayName(m),
       // Та же карточка, что при продаже из отсека: главная характеристика (с изменением),
       // масса, цена.
@@ -147,6 +148,7 @@ export function Outfitter({ world, onChange }: { world: World; onChange: () => v
     <div className="flex min-h-0 flex-1 flex-col">
       <Table
         scrollable
+        fixedLayout
         columns={columns}
         rows={rows}
         rowKey={(m) => m.id}
@@ -158,9 +160,9 @@ export function Outfitter({ world, onChange }: { world: World; onChange: () => v
         <ConfirmBox
           confirm={confirm}
           onRun={(a) => {
-            a.run()
+            const refusal = a.run()
             onChange()
-            setConfirm(null)
+            setConfirm(typeof refusal === 'string' ? { message: refusal, actions: [] } : null)
           }}
           onCancel={() => setConfirm(null)}
         />

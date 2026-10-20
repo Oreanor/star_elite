@@ -253,6 +253,7 @@ const KIND_RANK: Record<string, number> = {
   player: 0,
   station: 1,
   planet: 2,
+  belt: 2.5,
   moon: 3,
   star: 4,
   blackhole: 5,

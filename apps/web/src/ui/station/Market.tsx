@@ -114,10 +114,9 @@ export function Market({ world, onChange }: { world: World; onChange: () => void
     // Высота — остаток консоли, не длина списка. Иначе отсек растёт вместе с грузом,
     // и внутренняя прокрутка (та же, что на вкладке корабля) не включается.
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-      {/* Отсек справа — от 1280 px; уже — он под списком, каждая половина со своей прокруткой.
-          Было 3/2 в пользу прайса, имена в отсеке обрезались. Теперь 2/3: левый список уже,
-          отсек шире. Длинная строка оборудования уходит во внутреннюю прокрутку, не в рост колонки. */}
-      <div className="grid min-h-0 flex-1 grid-cols-1 grid-rows-[minmax(0,1fr)_minmax(0,1fr)] gap-5 xl:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] xl:grid-rows-1">
+      {/* Отсек справа — половина модалки; таблица внутри на всю эту колонку.
+          Уже 1280 px колонки стоят друг под другом. */}
+      <div className="grid min-h-0 flex-1 grid-cols-1 grid-rows-[minmax(0,1fr)_minmax(0,1fr)] gap-5 xl:grid-cols-2 xl:grid-rows-1">
         <div className="flex min-h-0 min-w-0 flex-col">
           <div className="shrink-0">{switcher}</div>
           {section === 'gear' ? (

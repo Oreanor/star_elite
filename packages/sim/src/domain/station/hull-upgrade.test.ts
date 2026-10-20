@@ -47,7 +47,7 @@ describe('прокачка х-к корпуса', () => {
     expect(p.hullUp.aux).toBe(false)
   })
 
-  it('смена корпуса сбрасывает все прокачки: качаешь конкретную раму', () => {
+  it('смена корпуса сбрасывает прокачку: новую раму можно усилить', () => {
     const world = createWorld()
     world.credits = 100_000_000
     world.docked = true
@@ -58,6 +58,22 @@ describe('прокачка х-к корпуса', () => {
 
     const freighter = SHIPYARD.find((o) => o.chassis.id === 'orion')!
     expect(swapHull(world, freighter.chassis, 0)).toBeNull()
-    expect(p.hullUp).toEqual({ hull: false, cargo: false, aux: false }) // новая рама заводская
+    expect(p.hullUp.hull).toBe(false)
+    expect(p.hullUp.chassis).toBe(freighter.chassis.id)
+    // Иначе «Просмотреть» ставило галку: флаги старой рамы переживали покупку.
+    expect(canUpgradeHullStat(world, p, 'hull')).toBeNull()
+    expect(upgradeHullStat(world, p, 'hull')).toBeNull()
+    expect(p.hullUp.hull).toBe(true)
+  })
+
+  it('флаги чужой рамы не усиливают новую и не гасят кнопку', () => {
+    const world = createWorld()
+    world.credits = 100_000_000
+    const p = world.player
+    p.hullUp = { hull: true, cargo: false, aux: false, chassis: 'orion' }
+    expect(canUpgradeHullStat(world, p, 'hull')).toBeNull()
+    expect(upgradeHullStat(world, p, 'hull')).toBeNull()
+    expect(p.hullUp.hull).toBe(true)
+    expect(p.hullUp.chassis).toBe(p.loadout.chassis.id)
   })
 })

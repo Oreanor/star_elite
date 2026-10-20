@@ -363,8 +363,9 @@ export function drawTargetPanels(frame: HudFrame): void {
   // Живучесть базы — доля уцелевших деталей: своей копилки прочности у неё нет, и полоска
   // показывает ровно то, что видно глазами на её боках.
   const navBase = nav.kind === 'warbase' ? world.warBases.find((b) => b.id === nav.id && b.alive) : undefined
+  const navName = nav.kind === 'belt' ? t('nav.belt') : properName(nav.name)
   cell(color, [
-    withoutKind(properName(nav.name), t(kindKey)),
+    withoutKind(navName, t(kindKey)),
     t(kindKey),
     navMass,
     formatDistance(Math.max(0, shipDistance(world, nav.pos) - nav.radius)),

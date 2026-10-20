@@ -96,13 +96,29 @@ const DEAD_THRUSTERS = {
  * без предела, а три независимых тумблера: рама либо усилена по оси, либо нет.
  */
 export interface HullUpgrades {
+  /**
+   * Рама, к которой относятся флаги. Прокачка копится на КОНКРЕТНОМ корпусе: купил новый —
+   * старые флаги не должны ни давать +25% чужой раме, ни гасить кнопку «укрепить».
+   * Старые сейвы поля не знают — тогда флаги относятся к текущей раме, как раньше.
+   */
+  chassis?: string
   hull: boolean
   cargo: boolean
   aux: boolean
 }
 
-/** Заводская рама — ни одна ось не усилена. */
-export const NO_HULL_UPGRADES: HullUpgrades = { hull: false, cargo: false, aux: false }
+/** Заводская рама — ни одна ось не усилена. Заморожена: мутация константы текла бы во все новые корпуса. */
+export const NO_HULL_UPGRADES: HullUpgrades = Object.freeze({ hull: false, cargo: false, aux: false })
+
+/** Флаги этой рамы: чужой корпус читается как заводской, свои — как есть. */
+export function hullUpFor(up: HullUpgrades, chassisId: string): HullUpgrades {
+  return up.chassis === undefined || up.chassis === chassisId ? up : NO_HULL_UPGRADES
+}
+
+/** Свежие флаги под эту раму — то, что ставит верфь при смене корпуса. */
+export function factoryHullUp(chassisId: string): HullUpgrades {
+  return { hull: false, cargo: false, aux: false, chassis: chassisId }
+}
 
 /** Множитель оси: усилена → +HULL_STAT_STEP (+25%), иначе 1. */
 function statMult(on: boolean): number {
@@ -117,6 +133,7 @@ function statMult(on: boolean): number {
  */
 export function deriveShipSpec(loadout: Loadout, cargoMass = 0, up: HullUpgrades = NO_HULL_UPGRADES): ShipSpec {
   const { chassis } = loadout
+  up = hullUpFor(up, chassis.id)
   const engine = findEngine(loadout) ?? DEAD_ENGINE
   const rcs = findThrusters(loadout) ?? DEAD_THRUSTERS
   const shield = findShield(loadout)

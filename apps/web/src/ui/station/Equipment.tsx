@@ -1,9 +1,12 @@
 import {
   fitDeltas,
+  freeCapacity,
   hardpointIndices,
   isWeapon,
   moduleStat,
+  priceOf,
   upgradeSteps,
+  type FitError,
   type PurchaseError,
   type ShipModule,
   type StatKey,
@@ -68,6 +71,30 @@ export function buyLabel(error: PurchaseError): string {
       return t('station.noHardpoint')
     default: // wrong-kind
       return t('station.wrongSlot')
+  }
+}
+
+/** Можно ли купить В ТРЮМ, без установки: хватает денег и места. Тот же расчёт, что в `buyToHold`. */
+export const canStow = (world: World, m: ShipModule) =>
+  world.credits >= priceOf(m) && freeCapacity(world.player.hold) >= m.mass
+
+/**
+ * Почему модуль не встаёт — фразой, а не меткой кнопки. Отказ без объяснения читался
+ * как «нажал купить, а ничего не случилось».
+ */
+export function refusalNote(world: World, module: ShipModule, error: PurchaseError | FitError): string {
+  const name = displayName(module)
+  switch (error) {
+    case 'class-too-large':
+      return t('ship.refuse.class', { name, need: module.class, hull: world.player.loadout.chassis.class })
+    case 'no-room':
+      return t('ship.refuse.room')
+    case 'no-money':
+      return t('station.noFunds')
+    case 'already-installed':
+      return t('station.fitted')
+    default: // wrong-kind / no-hardpoint / not-a-module
+      return t('ship.refuse.slot', { name })
   }
 }
 

@@ -122,12 +122,12 @@ export function buy(
     if (previous) world.credits += resaleOf(previous)
     ship.loadout.weapons[hardpointIndex] = module
   } else {
-    const installed = installedOfKind(ship, module.kind)
-    if (installed.length >= fittingSlots(ship, module)) {
-      // Свободных слотов нет — вытесняем самый дешёвый: он и есть худший.
-      const worst = installed.reduce((a, b) => (a.cost <= b.cost ? a : b))
-      ship.loadout.internals.splice(ship.loadout.internals.indexOf(worst), 1)
-      world.credits += resaleOf(worst)
+    // Вытесняем по КАТЕГОРИИ, как `fitFromHold`: аукс-виды делят один слот, и счёт по виду
+    // поставил бы РЭБ рядом с маскировкой — два модуля в единственном слоте.
+    const displaced = moduleToReplace(ship, module)
+    if (displaced) {
+      ship.loadout.internals.splice(ship.loadout.internals.indexOf(displaced), 1)
+      world.credits += resaleOf(displaced)
     }
     ship.loadout.internals.push(module)
   }
@@ -334,7 +334,8 @@ function withFitted(loadout: Loadout, module: ShipModule): Loadout {
   // когда витрина спрашивала «было → станет» у всего прилавка сразу.
   if (slots === 0) return loadout
   const internals = [...loadout.internals]
-  const installed = internals.filter((m) => m.kind === module.kind)
+  const cat = slotCategoryOf(module.kind)
+  const installed = internals.filter((m) => slotCategoryOf(m.kind) === cat)
   if (installed.length >= slots) {
     const worst = installed.reduce((a, b) => (a.cost <= b.cost ? a : b))
     internals.splice(internals.indexOf(worst), 1)

@@ -310,6 +310,10 @@ export function applyPlayerSave(world: World, save: PlayerSave): void {
   p.loadout = rehydrateLoadout(save.loadout)
   // Прокачки рамы — ДО refreshSpec: от них зависят HP/трюм/аукс сборки.
   p.hullUp = { ...NO_HULL_UPGRADES, ...save.hullUp }
+  // Сейв с флагами чужой рамы (купил корпус, а hullUp не сбросился) — не усиляет новую.
+  if (p.hullUp.chassis !== undefined && p.hullUp.chassis !== p.loadout.chassis.id) {
+    p.hullUp = { ...NO_HULL_UPGRADES, chassis: p.loadout.chassis.id }
+  }
 
   // Свежий трюм: вместимость проставит первый refreshSpec из грузовых контейнеров,
   // затем наполняем — addItem считает свободное место по уже верной вместимости.

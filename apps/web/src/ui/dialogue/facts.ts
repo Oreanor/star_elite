@@ -317,8 +317,8 @@ function contractProgress(world: World, c: Contract): { done: number; of: number
 }
 
 /** Справочники, которые не тащим в каждый запрос — пилот «листает» их по просьбе. */
-/** Справочники пилота — все запросы домена, кроме `traffic` (он только у диспетчера). */
-export type ContextDigest = Exclude<LookupDigest, 'traffic'>
+/** Справочники пилота — все запросы домена, кроме `traffic` и `outfit` (они только у диспетчера). */
+export type ContextDigest = Exclude<LookupDigest, 'traffic' | 'outfit'>
 
 /** Сколько справочников держим в «памяти» одного разговора — старейший выпадает. */
 export const MAX_ACTIVE_DIGESTS = 3

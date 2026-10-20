@@ -41,6 +41,7 @@ export const NAV_COLOR: Record<string, string> = {
   monolith: HUD_COLORS.MONOLITH,
   figurine: HUD_COLORS.MONOLITH,
   asteroid: HUD_COLORS.MONOLITH,
+  belt: '#ba9e78',
   star: HUD_COLORS.STAR,
   blackhole: HUD_COLORS.BLACKHOLE,
   station: HUD_COLORS.STATION,

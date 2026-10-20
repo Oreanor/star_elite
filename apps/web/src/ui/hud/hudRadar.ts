@@ -1,5 +1,8 @@
 import { Vector3, type PerspectiveCamera } from 'three'
 import {
+  BELT,
+  BELT_NAV_ID,
+  nearestBeltPoint,
   LANDING,
   MIELOPHONE,
   MONOLITH_NAMES,
@@ -276,6 +279,11 @@ export function drawRadar(frame: HudFrame): void {
   }
 
   if (stellarOnly) return
+  if (world.asteroidBelt) {
+    nearestBeltPoint(world, _point)
+    const nav = world.navTargetId === BELT_NAV_ID
+    plot(_point, '#ba9e78', Math.round((nav ? 3 : 2) * S), nav, 'round', tr('locator.kind.belt'))
+  }
 
   for (const m of world.monoliths) {
     const nav = m.id === world.navTargetId
@@ -313,7 +321,7 @@ export function drawRadar(frame: HudFrame): void {
     }
     const nav = rock.id === world.navTargetId
     // Нав-глыбу держим на радаре всегда; мелочь — только рядом.
-    if (!nav && rock.pos.distanceToSquared(player.state.pos) > ROCK_RANGE * ROCK_RANGE) continue
+    if (!nav && rock.pos.distanceToSquared(player.state.pos) > (rock.beltKey ? BELT.LOCAL_RANGE ** 2 : ROCK_RANGE * ROCK_RANGE)) continue
     const color = nav ? HUD_COLORS.MONOLITH : HUD_COLORS.ROCK
     const locked = rock.id === lockedAsteroidId(world)
     plot(rock.pos, color, Math.round((nav ? 3 : 1.5) * S), nav || locked, 'round', nav ? NAV_ASTEROID_NAME : undefined)
@@ -338,7 +346,7 @@ export function drawRadar(frame: HudFrame): void {
 }
 
 /** Дальше этого локатор не разбирает дистанцию, м: отметка прижата к ободу. */
-const RADAR_RANGE = 20_000
+const RADAR_RANGE = BELT.LOCAL_RANGE
 /** Ближе этого камни рисуются, м. Дальше они — не препятствие, а пейзаж. */
 const ROCK_RANGE = 4_000
 

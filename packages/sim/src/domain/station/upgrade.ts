@@ -3,6 +3,8 @@ import { roundMoney } from '../../core/math'
 import { cargoMass, removeItem } from '../cargo/hold'
 import {
   deriveShipSpec,
+  factoryHullUp,
+  hullUpFor,
   isAux,
   type ShipModule,
   type WeaponModule,
@@ -154,14 +156,17 @@ export function hullStatPreview(ship: ShipEntity, stat: HullStat): { from: numbe
   const pick = (spec: ReturnType<typeof deriveShipSpec>) =>
     stat === 'hull' ? spec.hull.hull : stat === 'cargo' ? spec.cargoCapacity : spec.power.auxCapacity
   const mass = cargoMass(ship.hold)
-  const from = pick(deriveShipSpec(ship.loadout, mass, ship.hullUp))
-  const to = pick(deriveShipSpec(ship.loadout, mass, { ...ship.hullUp, [stat]: true }))
+  const id = ship.loadout.chassis.id
+  const current = hullUpFor(ship.hullUp, id)
+  const from = pick(deriveShipSpec(ship.loadout, mass, current))
+  const to = pick(deriveShipSpec(ship.loadout, mass, { ...current, chassis: id, [stat]: true }))
   return { from, to }
 }
 
 /** Проверка без побочных эффектов: уже усилена — 'already', не хватает денег — 'no-money'. */
 export function canUpgradeHullStat(world: World, ship: ShipEntity, stat: HullStat): HullUpgradeError | null {
-  if (ship.hullUp[stat]) return 'already'
+  // Флаги чужой рамы не считаются: иначе после покупки нового корпуса кнопка гасла галкой.
+  if (hullUpFor(ship.hullUp, ship.loadout.chassis.id)[stat]) return 'already'
   return world.credits < hullStatUpgradeCost(ship) ? 'no-money' : null
 }
 
@@ -176,7 +181,9 @@ export function upgradeHullStat(world: World, ship: ShipEntity, stat: HullStat):
   world.credits -= hullStatUpgradeCost(ship)
   const beforeHull = ship.spec.hull.hull
   const beforeAux = ship.spec.power.auxCapacity
-  ship.hullUp[stat] = true
+  const id = ship.loadout.chassis.id
+  // Чужие флаги выкидываем: иначе `hullUp[stat] = true` оставило бы +25% от старой рамы.
+  ship.hullUp = { ...factoryHullUp(id), ...hullUpFor(ship.hullUp, id), chassis: id, [stat]: true }
   refreshSpec(ship)
   ship.hull += ship.spec.hull.hull - beforeHull
   ship.auxEnergy += ship.spec.power.auxCapacity - beforeAux

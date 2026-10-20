@@ -83,7 +83,7 @@ function spawnSite(world: World, out: Vector3): void {
 
 export function liveAsteroidCount(world: World): number {
   let n = 0
-  for (const a of world.asteroids) if (a.alive) n++
+  for (const a of world.asteroids) if (a.alive && !a.beltKey) n++
   return n
 }
 
@@ -136,6 +136,7 @@ export function despawnDistantAsteroids(world: World): void {
   const landed = world.player.landedOn
   retain(world.asteroids, (a) => {
     if (!a.alive) return false
+    if (a.beltKey) return true
     if (a.id === lockedAsteroidId(world)) return true
     if (a.id === world.navTargetId) return true
     if (landed?.bodyId === a.id) return true

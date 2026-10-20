@@ -5,7 +5,7 @@ import { addItem, usedCapacityOf } from '../cargo/hold'
 import {
   createLoadout,
   deriveShipSpec,
-  NO_HULL_UPGRADES,
+  factoryHullUp,
   slotCategoryOf,
   type Chassis,
   type HullUpgrades,
@@ -238,7 +238,7 @@ export function swapHull(world: World, chassis: Chassis, cost: number, sellOverf
   world.credits -= cost
   player.loadout = loadout
   // Новый корпус — заводской: прокачки копятся на КОНКРЕТНОЙ раме и не переезжают.
-  player.hullUp = { ...NO_HULL_UPGRADES }
+  player.hullUp = factoryHullUp(chassis.id)
   refreshSpec(player) // пересчитает и вместимость трюма — под неё и кладём overflow
   // Не вставшее — в трюм, либо продано верфи: его цена уже в `cost` (см. `hullPurchase`).
   if (!sellOverflow) for (const module of overflow) addItem(player.hold, { kind: 'module', module })

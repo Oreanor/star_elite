@@ -4,11 +4,14 @@ import { ASTEROID } from '../../config/world'
 import { isVisible } from '../combat/cloak'
 import { shipAxes } from '../flight/axes'
 import type { AsteroidEntity, BodyEntity, ContactKind, ContactLock, ShipEntity, World } from './entities'
+import { BELT_NAV_ID, nearestBeltPoint } from './asteroidBelt'
 import { figurineDisplayName } from './figurines'
 import { findWarBaseFixture, warBaseFixtureWorldPos } from './warBase'
 
 /** Горячий путь: запросы зовутся из кадра HUD, аллокации там недопустимы. */
 const _toPlayer = new Vector3()
+/** Ближняя точка оси пояса. Её же возвращает `navTarget`: вызывающий читает до следующего запроса. */
+const _beltNav = new Vector3()
 /** Место детали базы считается на лету (база вращается) — в кадре без аллокаций. */
 const _fixturePos = new Vector3()
 
@@ -329,7 +332,7 @@ export function isNavBeltAsteroid(a: AsteroidEntity): boolean {
 }
 
 /**
- * Shift+Tab — НЕБЕСНЫЕ (+ статуи + глыбы двора + гигант пояса). Тот же порядок, что у
+ * Shift+Tab — НЕБЕСНЫЕ (+ пояс целиком, статуи, глыбы двора, гигант пояса). Тот же порядок, что у
  * контактов: перед носом, потом по удалению; свежий перебор — с ближайшего видимого.
  * Станцию заодно берём на связь (`lockedStationId`). Контакт гасим — старый фокус не держим.
  * Выше GHOST_BODY — только звезда / дыра текущей системы.
@@ -371,6 +374,7 @@ export function cycleCelestial(world: World): void {
               const rank = facingScore(from, a.pos)
               return { id: a.id, station: false, ...rank }
             }),
+          ...(world.asteroidBelt ? [beltCand(world, from)] : []),
         ]),
   ]
   cands.sort(byFacingThenNear)
@@ -451,6 +455,7 @@ export function retargetNearestCelestial(world: World): void {
               const rank = facingScore(from, a.pos)
               return { id: a.id, station: false, ...rank }
             }),
+          ...(world.asteroidBelt ? [beltCand(world, from)] : []),
         ]),
   ]
   cands.sort(byFacingThenNear)
@@ -479,16 +484,38 @@ export interface NavTarget {
   radius: number
   name: string
   /** Небесное тело, статуя, статуэтка, астероид или военная база — HUD решает метку. */
-  kind: BodyEntity['kind'] | 'monolith' | 'figurine' | 'asteroid' | 'warbase'
+  kind: BodyEntity['kind'] | 'monolith' | 'figurine' | 'asteroid' | 'warbase' | 'belt'
 }
 
 /** Имя нав-глыбы: у двора и у гиганта пояса одно — приборы не плодят «камень / глыба / руда». */
 export const NAV_ASTEROID_NAME = 'Астероид'
 
 /** Что сейчас нав-цель: тело, монолит или глыба. `null` — не выбрано или пропало. */
+/**
+ * Пояс в переборе Shift+Tab. Точка — ближайшая на оси трубки: «куда лететь»,
+ * а не случайный камень. Ранг считается сразу, пока `_beltNav` не перезаписан.
+ */
+function beltCand(world: World, from: Vector3): { id: number; station: false; facing: number; d2: number } {
+  nearestBeltPoint(world, _beltNav)
+  const rank = facingScore(from, _beltNav)
+  return { id: BELT_NAV_ID, station: false, ...rank }
+}
+
 export function navTarget(world: World): NavTarget | null {
   const id = world.navTargetId
   if (id === null) return null
+  // Пояс — не тело: позиция пересчитывается, радиус — до края потока, как поверхность планеты.
+  // Иначе прибор показывает путь до оси, и в самой ленте остаётся «пять километров».
+  if (id === BELT_NAV_ID && world.asteroidBelt) {
+    nearestBeltPoint(world, _beltNav)
+    return {
+      id,
+      pos: _beltNav,
+      radius: world.asteroidBelt.diameter / 2,
+      name: 'Астероидный пояс',
+      kind: 'belt',
+    }
+  }
   const body = world.bodies.find((b) => b.id === id)
   if (body) return { id, pos: body.pos, radius: body.radius, name: body.name, kind: body.kind }
   const monolith = world.monoliths.find((m) => m.id === id)

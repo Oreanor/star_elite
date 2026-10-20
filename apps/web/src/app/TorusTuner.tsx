@@ -1,3 +1,4 @@
+import { BELT, configureAsteroidBelt } from '@elite/sim'
 import { useEffect, useRef, useState } from 'react'
 import { input, releaseLock, requestLock } from '../platform/input/input'
 import { useSession } from '../session/GameContext'
@@ -44,7 +45,7 @@ export function TorusTuner({ open, setOpen }: { open: boolean; setOpen: (open: b
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (!open) {
-        if (e.code !== 'F4' || e.repeat || !session.bush.active) return
+        if (e.code !== 'F4' || e.repeat || (!session.bush.active && !session.world.asteroidBelt)) return
         e.preventDefault()
         e.stopImmediatePropagation()
         relock.current = input.pointerLocked
@@ -70,6 +71,21 @@ export function TorusTuner({ open, setOpen }: { open: boolean; setOpen: (open: b
   }
 
   if (!open) return null
+  if (!session.bush.active) {
+    const belt = session.world.asteroidBelt
+    if (!belt) return null
+    return <div className="absolute right-4 top-4 z-[65] w-80 space-y-4 rounded-lg border p-4 font-mono text-xs" style={{ background: '#0a1a2feb', color: '#7fd6ff' }}>
+      <div>АСТЕРОИДНЫЙ ПОЯС · F4</div>
+      <label className="block">ДИАМЕТР ТРУБЫ: {(belt.diameter / 1000).toFixed(1)} км
+        <input className="w-full" type="range" min={BELT.DIAMETER_MIN} max={BELT.DIAMETER_MAX} step={500} value={belt.diameter} onChange={e => { configureAsteroidBelt(session.world, Number(e.target.value), belt.count); bump(n => n + 1) }} />
+      </label>
+      <label className="block">КАМНЕЙ В ДУГЕ ЛОКАТОРА: ≈{belt.count}
+        <input className="w-full" type="range" min={BELT.COUNT_MIN} max={BELT.COUNT_MAX} step={25} value={belt.count} onChange={e => { configureAsteroidBelt(session.world, belt.diameter, Number(e.target.value)); bump(n => n + 1) }} />
+      </label>
+      <div className="opacity-60">В радиусе 30 км на оси пояса. Точки видны до 100 км. Настройки действуют в текущей системе.</div>
+      <button className="w-full border p-2" onClick={close}>ЗАКРЫТЬ</button>
+    </div>
+  }
   return (
     <div
       className="absolute right-4 top-4 z-[65] max-h-[calc(100%-2rem)] w-72 space-y-4 overflow-y-auto rounded-lg border p-4 font-mono text-xs tracking-widest"

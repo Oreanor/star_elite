@@ -10,6 +10,8 @@
   "scripts": {
     "dev": "npm run dev -w @elite/web",
     "build": "npm run build -w @elite/web",
+    "desktop": "npm run start -w @elite/desktop",
+    "desktop:dist": "npm run dist -w @elite/desktop",
     "test": "npm run test -w @elite/sim && npm run test -w @elite/web",
     "typecheck": "npm run typecheck -w @elite/sim && npm run typecheck -w @elite/web"
   },

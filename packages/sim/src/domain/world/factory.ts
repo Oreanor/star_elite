@@ -47,6 +47,7 @@ import {
   stepOrbitsOnBodies,
 } from './orbits'
 import type { SystemDef, StarCompanionDef, BlackHoleCompanionDef, StationDef } from './system'
+import { createAsteroidBelt } from './asteroidBelt'
 import { STARTER_SYSTEM } from './system'
 import { emptyDelta } from '../galaxy/delta'
 import { stationSeat } from '../galaxy/arrival'
@@ -720,6 +721,7 @@ export function enterVoid(world: World): void {
   world.epoch += 1
   world.ships = []
   world.asteroids = []
+  world.asteroidBelt = undefined
   world.pods = []
   world.missiles = []
   world.bolts = []
@@ -791,6 +793,7 @@ export function enterSystem(
   // Спутники, планеты и станция — на орбитах к `calendarTime` (общие часы сервера).
   stepOrbits(world)
   world.asteroids = makeAsteroids(rng, world.ids, def)
+  world.asteroidBelt = createAsteroidBelt(def)
   // Бог на Кресте: после чистки боя, до спавна резидентов — живой борт на радаре.
   spawnSlovo(world)
   /**
@@ -900,6 +903,7 @@ export function createWorld(
     player,
     ships,
     asteroids: makeAsteroids(rng, ids, def),
+    asteroidBelt: createAsteroidBelt(def),
     pods: [],
     missiles: [],
     bolts: [],

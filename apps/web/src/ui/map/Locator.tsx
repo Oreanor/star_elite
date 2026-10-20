@@ -1,6 +1,9 @@
 import { useEffect, useReducer, useRef, useState } from 'react'
 import { Vector3 } from 'three'
 import {
+  BELT,
+  BELT_NAV_ID,
+  nearestBeltPoint,
   clearContactLock,
   assessThreat,
   distanceToBody,
@@ -47,7 +50,7 @@ const R = 300
 const PAD = 46
 const VIEW = 2 * (R + PAD)
 /** Дальше этого локатор не разбирает дистанцию, м: отметка прижата к ободу (как в кабине). */
-const RANGE = 20_000
+const RANGE = BELT.LOCAL_RANGE
 /** Максимальная высота отметки над плоскостью при наклоне, единицы SVG. */
 const LIFT = 46
 /** Вертикальный FOV погони (град) — из него и соотношения сторон строим конус обзора. */
@@ -59,6 +62,7 @@ const _fwd = new Vector3()
 const _right = new Vector3()
 const _up = new Vector3()
 const _rel = new Vector3()
+const _beltAt = new Vector3()
 
 function shipColor(ship: ShipEntity, world: World): string {
   if (ship.kinematic) return UI.PLAYER
@@ -80,7 +84,7 @@ function bodyColor(body: BodyEntity): string {
 
 type Shape = 'square' | 'round' | 'diamond'
 
-type SelectKind = 'body' | 'monolith' | 'figurine' | 'asteroid' | 'ship' | 'comet'
+type SelectKind = 'body' | 'monolith' | 'figurine' | 'asteroid' | 'ship' | 'comet' | 'belt'
 
 interface Blip {
   key: string
@@ -174,6 +178,30 @@ function blips(world: World): Blip[] {
   // Статуи, статуэтки, глыбы, контейнеры и борта — тем более не ориентиры на таком
   // масштабе: всё это мельче планеты, которую мы только что убрали.
   if (stellarOnly) return out
+
+  // Пояс целиком — та же нав-цель, что планета: клик пишет BELT_NAV_ID, дистанция до края потока.
+  if (world.asteroidBelt) {
+    nearestBeltPoint(world, _beltAt)
+    const surface = Math.max(0, _beltAt.distanceTo(world.player.state.pos) - world.asteroidBelt.diameter / 2)
+    const d = surface === 0 ? { rt: 0, fwd: 0, h: 0, dist: 0 } : toDisc(world, _beltAt)
+    if (d) {
+      out.push({
+        key: 'belt',
+        ...d,
+        dist: surface,
+        color: '#ba9e78',
+        shape: 'round',
+        size: 7,
+        ring: world.navTargetId === BELT_NAV_ID && world.targetFocus === 'nav',
+        kind: t('locator.kind.belt'),
+        rank: 'belt',
+        title: t('nav.belt'),
+        lines: [],
+        selectId: BELT_NAV_ID,
+        selectKind: 'belt',
+      })
+    }
+  }
 
   for (const m of world.monoliths) {
     const d = toDisc(world, m.pos)
@@ -314,7 +342,7 @@ function applySelect(world: World, kind: SelectKind, id: number): void {
     world.targetFocus = 'contact'
     return
   }
-  // Тело, статуя или глыба — нав-цель (как Shift+Tab).
+  // Тело, пояс, статуя или глыба — нав-цель (как Shift+Tab).
   if (world.navTargetId === id && world.targetFocus === 'nav') {
     clearNavLock(world)
     return
@@ -357,6 +385,10 @@ export function Locator({ world }: { world: World }) {
     .map((b) => ({ b, base: proj(b.rt, b.fwd, 0), tip: proj(b.rt, b.fwd, b.h) }))
     // Дальние (больше «вперёд» после поворота) рисуем первыми — ближние лягут поверх.
     .sort((a, b) => b.base.depth - a.base.depth)
+  const beltDots = world.asteroids.filter(a => a.alive && a.beltKey && a.pos.distanceToSquared(world.player.state.pos) < RANGE ** 2).map(a => {
+    const d = toDisc(world, a.pos)
+    return d ? proj(d.rt, d.fwd, d.h) : null
+  })
   // Карточка: выбранная цель важнее наведения — пилот видит, что захватил. Держим и место
   // отметки на экране: карточка висит булавкой У НЕЁ, а не в колонке.
   // Плашка — у РАССМАТРИВАЕМОЙ отметки (клик), а нет её — у наведённой. Цель ставит кнопка
@@ -466,6 +498,7 @@ export function Locator({ world }: { world: World }) {
             {t('locator.nose')}
           </text>
 
+          {beltDots.map((p, i) => p && <circle key={`belt-${i}`} cx={p.x} cy={p.y} r={1.4} fill="#ba9e78" opacity={0.6} />)}
           {/* Игрок в центре — нос вверх. */}
           <path d="M 0 -7 L 5 6 L 0 3 L -5 6 Z" fill={UI.SALVAGE} />
 

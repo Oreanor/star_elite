@@ -261,6 +261,10 @@ export function systemDefOf(system: StarSystem, galaxySeed: number, seatOverride
     extraStations,
     // Камни — встречи трафика, не хардкод-пояс у старта.
     belt: null,
+    // Между внутренними планетами, а не за внешней границей системы.
+    orbitalBelt: planets.length > 1 ? {
+      radius: (Math.hypot(...planets[0]!.pos) + Math.hypot(...planets[1]!.pos)) / 2,
+    } : undefined,
     patrols: patrolsFor(system, start),
   }
 }

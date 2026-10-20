@@ -1,4 +1,5 @@
 import { awardKillXp } from '../crew/rank'
+import { stepAsteroidBelt } from '../world/asteroidBelt'
 import { beginRayHolds, releaseRayHolds } from '../combat/laserEffects'
 import { stepCrew } from '../crew/copilot'
 import { Quaternion, Vector3 } from 'three'
@@ -75,6 +76,7 @@ import {
 import {
   isNavBeltAsteroid,
   MONOLITH_NAMES,
+  navTarget,
   pruneGiantScaleLocks,
 } from '../world/queries'
 import { warBaseFixtureWorldPos } from '../world/warBase'
@@ -250,6 +252,7 @@ function stepTick(world: World, helm: Helm, dt: number): void {
   // Спутники расставляются ПЕРВЫМИ: и пилот, и столкновения, и крейсерский
   // потолок должны видеть луну там, где она в это мгновение находится.
   stepOrbits(world)
+  stepAsteroidBelt(world)
   stepControllers(world, helm, dt)
   stepPhysics(world, dt)
   beginRayHolds(world)
@@ -811,19 +814,10 @@ function cleanup(world: World): void {
   // Захваченное могло погибнуть, быть подобрано, истечь (expirePods выше) или быть
   // отстреленным — снимаем захват, а не показываем рамку в пустоте.
   if (world.contactLock !== null && !contactExists(world, world.contactLock)) world.contactLock = null
-  // Нав-цель могла быть глыбой двора / гигантом пояса / статуэткой — снимаем, если её нет.
-  if (world.navTargetId !== null) {
-    const id = world.navTargetId
-    const stillThere =
-      world.bodies.some((b) => b.id === id) ||
-      world.monoliths.some((m) => m.id === id) ||
-      world.figurines.some((f) => f.id === id && f.alive) ||
-      world.warBases.some((r) => r.id === id && r.alive) ||
-      world.asteroids.some((a) => a.id === id && a.alive)
-    if (!stillThere) {
-      world.navTargetId = null
-    }
-  }
+  // Нав-цель могла быть глыбой, статуэткой или поясом целиком — снимаем, если её больше нет.
+  // Список видов живёт в `navTarget`: свой перебор здесь однажды забыл пояс, и Shift+Tab
+  // ставил его на один такт, а уборка тут же стирала — на HUD рамки не было.
+  if (world.navTargetId !== null && !navTarget(world)) world.navTargetId = null
   // Миелофон: корабли с PHASE_END, планеты/станции с GHOST_BODY — цели снимаем.
   pruneGiantScaleLocks(world)
 }

@@ -127,18 +127,6 @@ export function Hold({
       sortValue: (item) => itemSellValue(world, item),
       cell: (item) => <Money amount={itemSellValue(world, item)} />,
     },
-    {
-      key: 'profit',
-      width: '8rem',
-      header: t('station.col.profit'),
-      align: 'right',
-      // Находка (цены входа нет) — в самом низу по возрастанию: сравнивать её не с чем.
-      sortValue: (item) => (item.costBasis === undefined ? -Infinity : itemSellValue(world, item) - item.costBasis),
-      cell: (item) => {
-        const mark = profitMark(item, itemSellValue(world, item))
-        return <span style={{ color: mark.color }}>{mark.text}</span>
-      },
-    },
   ]
 
   return (

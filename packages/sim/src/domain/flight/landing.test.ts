@@ -164,6 +164,22 @@ describe('посадка на поверхность', () => {
     )
   })
 
+  it('камень пояса не зовёт ховер, даже если крупный', () => {
+    const world = quietWorld()
+    const rock = landableRock(world)
+    rock.beltKey = '1:0'
+    for (const body of world.bodies) {
+      if (body.kind === 'planet' || body.kind === 'moon') body.pos.add(new Vector3(1e9, 0, 0))
+    }
+    const player = world.player
+    const solid = meshSolidRadius(rock.radius)
+    player.state.pos
+      .copy(rock.pos)
+      .add(new Vector3(solid + effectiveRadius(player) + ARM_ALT, 0, 0))
+    expect(landingCue(world)).toBeNull()
+    expect(armAutoland(world)).toBe(false)
+  })
+
   it('мелкий астероид (меньше 10 корпусов) не притягивает к стоянке', () => {
     const world = quietWorld()
     const player = world.player

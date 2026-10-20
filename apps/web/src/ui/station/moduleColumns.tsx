@@ -3,7 +3,7 @@ import { t } from '../i18n'
 import { trend } from '../theme'
 import { DIM, type Column } from './chrome'
 import { displayName, headlineCompare } from './Equipment'
-import { formatStat, statLabel, statNumber } from './format'
+import { formatStat, statLabel } from './format'
 
 /**
  * Колонки таблицы ОБОРУДОВАНИЯ — одни на всю игру: магазин в торговле, магазин и трюм в окне
@@ -25,36 +25,49 @@ export function moduleColumns(
   const mixed = keys.size !== 1
   const compareHeader = mixed ? '' : statLabel([...keys][0]!)
   const columns: Column<ShipModule>[] = [
-    // Ширин колонкам НЕ задаём: таблица сама отдаёт каждой ширину по содержимому. Все числа
-    // в одну строку, переносится лишь название — и только когда места правда не хватает.
-    { key: 'name', header: t('station.col.name'), cell: (m) => displayName(m), sortValue: (m) => displayName(m) },
-    // Сравнение одной ячейкой, прижатой вправо: «156 → 135 м/с ▼». Сортируется по новому значению.
+    // Имя забирает остаток и обрезается: полное «было → станет» раздувало таблицу вбок.
+    {
+      key: 'name',
+      header: t('station.col.name'),
+      cell: (m) => {
+        const name = displayName(m)
+        return <span className="block truncate" title={name}>{name}</span>
+      },
+      sortValue: (m) => displayName(m),
+    },
+    // Только характеристика этого железа и стрелка: зелёная — лучше стоящего, красная — хуже.
+    // «156 → 135» в колонке не пишем: это и был горизонтальный скролл.
     {
       key: 'compare',
+      width: '11rem',
       header: compareHeader,
       align: 'right',
       sortValue: (m) => compareOf(m)?.to ?? moduleStat(m).value,
       cell: (m) => {
         const cmp = compareOf(m)
-        // Сравнить не с чем (пустой слот, другой вид) — просто значение модуля.
         if (!cmp) {
           const own = moduleStat(m)
           return (
-            <span className="whitespace-nowrap" style={{ color: DIM }}>
-              {mixed && `${statLabel(own.key)} `}
-              {formatStat(own.key, own.value)}
+            <span className="inline-flex w-full items-baseline justify-end gap-1 whitespace-nowrap" style={{ color: DIM }}>
+              <span>
+                {mixed && `${statLabel(own.key)} `}
+                {formatStat(own.key, own.value)}
+              </span>
+              <span className="inline-block w-[1em] shrink-0" />
             </span>
           )
         }
-        const same = cmp.to === cmp.from
         const tone = trend(cmp.better)
+        const changed = cmp.to !== cmp.from
         return (
-          <span className="whitespace-nowrap">
-            {mixed && <span style={{ color: DIM }}>{statLabel(cmp.key)} </span>}
-            {/* Единица — один раз, в конце, у нового значения. Равное — без цвета и со «=». */}
-            <span style={{ color: DIM }}>{statNumber(cmp.key, cmp.from)} → </span>
-            <span style={{ color: same ? DIM : tone.color }}>
-              {formatStat(cmp.key, cmp.to)} {same ? '=' : tone.mark}
+          <span className="inline-flex w-full items-baseline justify-end gap-1 whitespace-nowrap">
+            <span style={{ color: DIM }}>
+              {mixed && `${statLabel(cmp.key)} `}
+              {formatStat(cmp.key, cmp.to)}
+            </span>
+            {/* Слот стрелки одной ширины на всех строках: цифры прижаты вправо, стрелки — столбиком. */}
+            <span className="inline-block w-[1em] shrink-0 text-center" style={{ color: changed ? tone.color : 'transparent' }}>
+              {changed ? tone.mark : '▲'}
             </span>
           </span>
         )
@@ -62,6 +75,7 @@ export function moduleColumns(
     },
     {
       key: 'mass',
+      width: '4.5rem',
       header: t('station.col.mass'),
       align: 'right',
       sortValue: (m) => m.mass,
@@ -71,6 +85,8 @@ export function moduleColumns(
   if (opts.price) {
     columns.push({
       key: 'price',
+      // Узкая: иначе table-fixed делит остаток поровну с именем, и между массой и ценой дыра.
+      width: '7rem',
       header: t('station.col.price'),
       align: 'right',
       sortValue: (m) => priceOf(m),

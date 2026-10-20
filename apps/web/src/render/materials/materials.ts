@@ -87,9 +87,18 @@ export function hullMaterialFor(chassisId: string): Material {
 
 let rock: MeshLambertMaterial | null = null
 
-/** Астероиды выпуклы, обход правильный — обратные грани можно отсекать. */
+/**
+ * Астероиды выпуклы, обход правильный — обратные грани можно отсекать.
+ * Своя подсветка: дальняя дуга рисуется незасвеченными точками, и без пола
+ * теневая сторона камня пропадает ровно там, где точка только что светилась.
+ */
 export function rockMaterial(): MeshLambertMaterial {
-  rock ??= new MeshLambertMaterial({ vertexColors: true, flatShading: true })
+  rock ??= new MeshLambertMaterial({
+    vertexColors: true,
+    flatShading: true,
+    emissive: PALETTE.ASTEROID,
+    emissiveIntensity: 0.55,
+  })
   return rock
 }
 
@@ -105,7 +114,13 @@ const texturedRocks = new Map<Texture, MeshLambertMaterial>()
 export function rockTexturedMaterial(map: Texture): MeshLambertMaterial {
   let material = texturedRocks.get(map)
   if (!material) {
-    material = new MeshLambertMaterial({ map, flatShading: true })
+    material = new MeshLambertMaterial({
+      map,
+      flatShading: true,
+      emissive: 0xffffff,
+      emissiveMap: map,
+      emissiveIntensity: 0.55,
+    })
     texturedRocks.set(map, material)
   }
   return material

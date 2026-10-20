@@ -58,6 +58,8 @@ export function isSurfaceLargeEnough(surfaceRadius: number, ship: ShipEntity): b
 export function isLandableAsteroid(rock: AsteroidEntity, ship: ShipEntity): boolean {
   return (
     rock.alive &&
+    // Пояс — поток, не стоянка: тысячи камней звали бы ховер и каждый такт мерили высоту.
+    rock.beltKey === undefined &&
     landingScaleOk(ship) &&
     isSurfaceLargeEnough(rock.radius, ship)
   )

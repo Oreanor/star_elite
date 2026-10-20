@@ -240,7 +240,12 @@ export function ShipScreen({
 
       {/* Мастерская корпуса по кнопке «просмотреть»: починить раму, усилить оси. */}
       {hullWorkshop && hullOpen && (
-        <HullModal world={world} onChange={refresh} onClose={() => setHullOpen(false)} />
+        <HullModal
+          key={player.loadout.chassis.id}
+          world={world}
+          onChange={refresh}
+          onClose={() => setHullOpen(false)}
+        />
       )}
 
       {/* Подтверждение покупки корпуса: зачёт старого, груз-осадок, доплата, перегруз. */}
@@ -252,6 +257,7 @@ export function ShipScreen({
             if (swapHull(world, offer.chassis, net, sellOverflow) === null) {
               refresh()
               setBuyingHull(false)
+              setHullOpen(false)
             }
           }}
           onClose={() => setBuyingHull(false)}

@@ -1,6 +1,6 @@
-import { copilotBriefing, findModule, commodityBuyPrice, commoditySellPrice, commodityStock, dispatcherBriefing, dispatcherTraffic, extractModelJson, localFine, localSettlement, parseModelReply, stationInterlocutor, type DialogueRole, type Persona, type TrafficShip, type Topic, type World } from '@elite/sim'
+import { copilotBriefing, findModule, commodityBuyPrice, commoditySellPrice, commodityStock, dispatcherBriefing, dispatcherTraffic, extractModelJson, localFine, localSettlement, moduleFault, parseModelReply, priceOf, stationInterlocutor, stationStock, upgradeLevel, type DialogueRole, type Persona, type ShipModule, type TrafficShip, type Topic, type World } from '@elite/sim'
 import type { ChatTurn, ContextDigest, CopilotReply, NegotiationContext, NegotiatorReply } from '../../ui/dialogue/facts'
-import { currentLang } from '../../ui/i18n/i18n'
+import { currentLang, t, type Key } from '../../ui/i18n/i18n'
 import { chassisName, moduleName, occupationName, properName } from '../../ui/i18n/dataNames'
 import { negotiatorLocale } from './negotiatorLocale'
 import { chatMessages } from './chatMessages'
@@ -279,8 +279,8 @@ export async function negotiateDispatcher(world: World, history: ChatTurn[], use
     .join('; ')
   const fine = localFine(world)?.amount ?? null
   const system = english
-    ? `You are the station dispatcher at ${station.name}. Speak as a concise in-world radio operator. You know this station and the entire current system. Government: ${brief.settlement.government}; economy: ${brief.settlement.economy}; tech level: ${brief.settlement.techLevel}; dock occupant: ${brief.dockOccupant ?? 'none'}; bodies: ${bodies || 'none'}. Answer the pilot's questions directly. Do not invent missions, prices, or facts absent from this briefing. If details are missing, request lookup: market, worlds, history, guide, or traffic. Ships in the system (who is flying where, who is docked) — ALWAYS request lookup "traffic", every time you are asked: traffic changes constantly, never answer from memory. The commander owes this local authority ${fine == null ? 'nothing' : `${fine} credits`}. On first contact, remind him. If he asks to pay, quote the amount first; set fine confirm:false, and only set fine confirm:true after explicit consent. Reply with one JSON object: {"reply":"...","emotion":"neutral"|"joy"|"pain"|"anger"|"fear"|"sadness"|null,"fine":{"confirm":true|false}|null,"lookup":"market"|"worlds"|"history"|"guide"|"traffic"|null,"hangup":true|false}.`
-    : `Ты диспетчер станции ${station.name}. Говори коротко, как живой оператор связи, и отвечай прямо на вопросы пилота. Ты знаешь эту станцию и всю текущую систему. Строй: ${brief.settlement.government}; экономика: ${brief.settlement.economy}; техуровень: ${brief.settlement.techLevel}; у причала: ${brief.dockOccupant ?? 'никого'}; тела системы: ${bodies || 'нет'}. Не выдумывай миссии, цены и факты, которых нет в этой сводке. Если не хватает деталей, запроси lookup: market, worlds, history, guide или traffic. Про корабли в системе (кто где летает, кто у причала) — ВСЕГДА запрашивай lookup "traffic", каждый раз, когда спрашивают: трафик меняется постоянно, по памяти не отвечай. Командир должен местной власти ${fine == null ? 'ничего' : `${fine} кредитов`}. При первой связи напомни об этом. Если он просит заплатить, сначала назови сумму и поставь fine confirm:false; fine confirm:true ставь только после явного согласия. Ответь одним JSON: {"reply":"…","emotion":"neutral"|"joy"|"pain"|"anger"|"fear"|"sadness"|null,"fine":{"confirm":true|false}|null,"lookup":"market"|"worlds"|"history"|"guide"|"traffic"|null,"hangup":true|false}.`
+    ? `You are the station dispatcher at ${station.name}. Speak as a concise in-world radio operator. You know this station and the entire current system. Government: ${brief.settlement.government}; economy: ${brief.settlement.economy}; tech level: ${brief.settlement.techLevel}; dock occupant: ${brief.dockOccupant ?? 'none'}; bodies: ${bodies || 'none'}. Answer the pilot's questions directly. Do not invent missions, prices, or facts absent from this briefing. If details are missing, request lookup: market, worlds, history, guide, traffic, or outfit. Ships in the system (who is flying where, who is docked) — ALWAYS request lookup "traffic", every time you are asked: traffic changes constantly, never answer from memory. Equipment — what this station sells, and what is fitted or stowed on the commander's ship — ALWAYS request lookup "outfit", every time: do not answer from memory and do not tell the pilot you are checking. The commander owes this local authority ${fine == null ? 'nothing' : `${fine} credits`}. On first contact, remind him. If he asks to pay, quote the amount first; set fine confirm:false, and only set fine confirm:true after explicit consent. Reply with one JSON object: {"reply":"...","emotion":"neutral"|"joy"|"pain"|"anger"|"fear"|"sadness"|null,"fine":{"confirm":true|false}|null,"lookup":"market"|"worlds"|"history"|"guide"|"traffic"|"outfit"|null,"hangup":true|false}.`
+    : `Ты диспетчер станции ${station.name}. Говори коротко, как живой оператор связи, и отвечай прямо на вопросы пилота. Ты знаешь эту станцию и всю текущую систему. Строй: ${brief.settlement.government}; экономика: ${brief.settlement.economy}; техуровень: ${brief.settlement.techLevel}; у причала: ${brief.dockOccupant ?? 'никого'}; тела системы: ${bodies || 'нет'}. Не выдумывай миссии, цены и факты, которых нет в этой сводке. Если не хватает деталей, запроси lookup: market, worlds, history, guide, traffic или outfit. Про корабли в системе (кто где летает, кто у причала) — ВСЕГДА запрашивай lookup "traffic", каждый раз, когда спрашивают: трафик меняется постоянно, по памяти не отвечай. Про оснащение — что продаётся на этой станции и что стоит или лежит у командира — ВСЕГДА запрашивай lookup "outfit", каждый раз: по памяти не отвечай и пилоту про запрос не говори. Командир должен местной власти ${fine == null ? 'ничего' : `${fine} кредитов`}. При первой связи напомни об этом. Если он просит заплатить, сначала назови сумму и поставь fine confirm:false; fine confirm:true ставь только после явного согласия. Ответь одним JSON: {"reply":"…","emotion":"neutral"|"joy"|"pain"|"anger"|"fear"|"sadness"|null,"fine":{"confirm":true|false}|null,"lookup":"market"|"worlds"|"history"|"guide"|"traffic"|"outfit"|null,"hangup":true|false}.`
   const messages: OutboundMessages = [{ role: 'system', content: system }]
   for (const turn of history.slice(-CHAT_RECENT)) {
     if (turn.who === 'you') messages.push({ role: 'user', content: turn.text })
@@ -306,6 +306,60 @@ export async function negotiateDispatcher(world: World, history: ChatTurn[], use
       : `СИСТЕМНЫЙ LOOKUP (${first.lookup}):\n${lookup}\nТеперь ответь на последний вопрос пилота по этим данным. Новый lookup не запрашивай; поставь lookup:null.`,
   }]
   return (await request(followUp)) ?? first
+}
+
+const KIND_KEY = {
+  engine: 'kind.engine',
+  thrusters: 'kind.thrusters',
+  shield: 'kind.shield',
+  armour: 'kind.armour',
+  laser: 'kind.laser',
+  missile: 'kind.missile',
+  drone: 'kind.drone',
+  cargo: 'kind.cargo',
+  hyperdrive: 'kind.hyperdrive',
+  cloak: 'kind.cloak',
+  mielophone: 'kind.mielophone',
+  ecm: 'kind.ecm',
+  bomb: 'kind.bomb',
+  scoop: 'kind.scoop',
+} as const satisfies Record<ShipModule['kind'], Key>
+
+/** Имя модуля для справки: вид, название, прокачка и поломка — без выдуманных чисел. */
+function outfitBit(m: ShipModule, english: boolean): string {
+  const up = upgradeLevel(m)
+  const fault = moduleFault(m)
+  const tags = [
+    up > 0 ? `+${Math.round(up * 100)}%` : '',
+    fault > 0 ? (english ? `fault ${Math.round(fault * 100)}%` : `поломка ${Math.round(fault * 100)}%`) : '',
+  ].filter(Boolean)
+  const name = `${t(KIND_KEY[m.kind])} «${moduleName(m)}»`
+  return tags.length > 0 ? `${name} (${tags.join(', ')})` : name
+}
+
+/**
+ * Витрина станции и борт командира. Не в первой реплике: список длинный и меняется
+ * после покупки, а запрос тихий — пилот слышит только ответ по этим данным.
+ */
+function outfitLookup(world: World, english: boolean): string {
+  const ship = world.player
+  const none = english ? 'none' : 'нет'
+  const sale = stationStock(world)
+  const forSale = sale.length === 0
+    ? none
+    : sale.map((m) => `${outfitBit(m, english)}, ${english ? 'class' : 'класс'} ${m.class}, ${priceOf(m)} cr`).join('; ')
+  const fitted = [
+    ...ship.loadout.weapons.map((w, i) => {
+      const slot = english ? `hardpoint ${i + 1}` : `подвес ${i + 1}`
+      return w ? `${slot}: ${outfitBit(w, english)}` : `${slot}: ${english ? 'empty' : 'пусто'}`
+    }),
+    ...ship.loadout.internals.map((m) => outfitBit(m, english)),
+  ]
+  const held = ship.hold.items.flatMap((item) => (item.kind === 'module' ? [outfitBit(item.module, english)] : []))
+  const hull = chassisName(ship.loadout.chassis.name)
+  return english
+    ? `FOR SALE HERE: ${forSale}. FITTED on «${hull}»: ${fitted.join('; ') || none}. IN THE HOLD: ${held.join('; ') || none}. Quote only these names and prices.`
+    : `ПРОДАЁТСЯ ЗДЕСЬ: ${forSale}. СТОИТ на «${hull}»: ${fitted.join('; ') || none}. В ТРЮМЕ: ${held.join('; ') || none}. Называй только эти имена и цены.`
 }
 
 function dispatcherLookup(world: World, kind: NonNullable<NegotiatorReply['lookup']>, english: boolean): string {
@@ -338,6 +392,7 @@ function dispatcherLookup(world: World, kind: NonNullable<NegotiatorReply['looku
       })
       .join('; ')
   }
+  if (kind === 'outfit') return outfitLookup(world, english)
   if (kind === 'history') return english ? 'The dispatcher has no personal history with the commander.' : 'У диспетчера пока нет личной истории с командиром.'
   return english
     ? 'Station operations: trade and fitting are available while docked; navigation and system information are available by radio.'

@@ -115,6 +115,7 @@ const LAMP_FRAG = /* glsl */ `
 #include <common>
 #include <logdepthbuf_pars_fragment>
 uniform vec3 uNeon;
+uniform float uFade;
 uniform float uTime;
 varying vec2 vUv;
 void main() {
@@ -124,7 +125,7 @@ void main() {
   float a = across * pulse;
   if (a < 0.03) discard;
   vec3 col = mix(uNeon, vec3(1.0), across * across * 0.85);
-  gl_FragColor = vec4(col, a);
+  gl_FragColor = vec4(col, a * uFade);
 }
 `
 
@@ -162,6 +163,7 @@ export function crossNeonLampMaterial(): ShaderMaterial {
   return new ShaderMaterial({
     uniforms: {
       uNeon: { value: NEON.clone() },
+      uFade: { value: 1 },
       uTime: { value: 0 },
     },
     vertexShader: LAMP_VERT,

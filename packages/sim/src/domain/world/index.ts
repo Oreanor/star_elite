@@ -32,6 +32,7 @@ export {
 } from './entities'
 export { enterSystem, enterVoid, createWorld, layoutSystemBodies, makeShip, refreshSpec, spawnSlovo, startAtStation, applyPilotProfile } from './factory'
 export { createIdSource, type IdSource } from './ids'
+export { BELT_NAV_ID, configureAsteroidBelt, nearestBeltPoint, stepAsteroidBelt, createAsteroidBelt } from './asteroidBelt'
 export {
   type Persona,
   type PilotProfile,

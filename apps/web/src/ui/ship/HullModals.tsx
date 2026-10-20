@@ -100,8 +100,9 @@ export function HullModal({
 
       <div className="mt-5 space-y-1">
         {HULL_STATS.map((stat) => {
-          const done = player.hullUp[stat]
-          const active = canUpgradeHullStat(world, player, stat) === null
+          const error = canUpgradeHullStat(world, player, stat)
+          const done = error === 'already'
+          const active = error === null
           // Что улучшится — числом: «ОТСЕК 22 → 27 т», а не «укрепить ось». Усилено — итог с галкой.
           const { from, to } = hullStatPreview(player, stat)
           return (
