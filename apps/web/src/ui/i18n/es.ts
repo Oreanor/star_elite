@@ -375,7 +375,9 @@ export const ES: Record<keyof typeof RU, string> = {
   'dialogue.stance.hostile': 'HOSTIL',
 
   'dispatcher.off': 'CAMBIO Y CORTO',
-  'chat.incoming': 'LLAMADA ENTRANTE',
+  'chat.incoming': 'NUEVO MENSAJE',
+  'chat.incoming.key': 'T — responder',
+  'chat.incoming.answer': 'RESPONDER',
   'chat.incoming.hint': 'termina tu llamada actual para responder',
   'hud.contactLost': '{name} PERDIDO DEL RADAR — SE PRESUME MUERTO',
   'hud.playerLeft': '{name} PARECE HABERSE IDO',

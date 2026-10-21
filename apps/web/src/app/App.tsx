@@ -530,11 +530,10 @@ function Shell({ onRestart }: { onRestart: () => void }) {
     setDispatching(true)
     if (!session.world.docked) releaseLock()
   }, [session])
-  // Открыть разговор с живым игроком — ровно как с ботом по T: окно на весь экран, курсор
-  // отпущен (значит мир на паузе). Занят (говоришь с ботом или уже в чате) — новый вызов не
-  // перебивает текущий, а встаёт баннером «входящий»: закончишь один — перейдёшь к другому.
-  // Стабильна (без deps): актуальное состояние читаем через ref-ы, чтобы подписку инбокса
-  // не пересобирать. Тот же путь и для клика «СВЯЗАТЬСЯ», и для входящего пинга.
+  // Открыть разговор с живым игроком по клику «СВЯЗАТЬСЯ» — ровно как с ботом по T: окно на
+  // весь экран, курсор отпущен (мир на паузе). Занят (говоришь с ботом или уже в чате) — не
+  // перебивает текущий, а встаёт плашкой: закончишь один — перейдёшь к другому.
+  // Стабильна (без deps): актуальное состояние читаем через ref-ы.
   const hail = useCallback((player: OnlinePlayer) => {
     if (chatUidRef.current === player.uid) return
     if (busyRef.current) {
@@ -542,6 +541,21 @@ function Shell({ onRestart }: { onRestart: () => void }) {
       return
     }
     setChatWith(player)
+    releaseLock()
+  }, [])
+  // Входящее СООБЩЕНИЕ — только плашка «НОВОЕ СООБЩЕНИЕ · кто», а не распахнутое окно: прежде
+  // чат открывался сам (или молча ждал, если был занят), и непонятно было, кто и когда написал.
+  // Окно с ним уже открыто — сообщение и так в ленте, оповещать не о чем.
+  const incoming = useCallback((player: OnlinePlayer) => {
+    if (chatUidRef.current === player.uid) return
+    setWaiting(player)
+  }, [])
+  // Ответить на плашку: T в полёте или кнопка, когда курсор свободен (у причала, в консоли).
+  const answer = useCallback(() => {
+    const next = waitingRef.current
+    if (!next || busyRef.current) return
+    setWaiting(null)
+    setChatWith(next)
     releaseLock()
   }, [])
   // Положить трубку: есть входящий — сразу поднимаем его (окно не гаснет, курсор так и
@@ -557,8 +571,8 @@ function Shell({ onRestart }: { onRestart: () => void }) {
     if (!session.world.docked) void requestLock()
   }, [session])
 
-  // Входящие вызовы: живой игрок написал — окно всплывает само, как разговор по T (или
-  // встаёт баннером, если занят). Подписываемся на инбокс ТОЛЬКО когда вход подтверждён:
+  // Входящие сообщения: живой игрок написал — плашка «НОВОЕ СООБЩЕНИЕ» (`incoming`).
+  // Подписываемся на инбокс ТОЛЬКО когда вход подтверждён:
   // firebase восстанавливает сессию асинхронно, а subscribeInbox без uid тихо не слушает —
   // раньше из-за этого входящие «не выпрыгивали», пока сам не откроешь. `hail` стабильна.
   useEffect(() => {
@@ -566,13 +580,13 @@ function Shell({ onRestart }: { onRestart: () => void }) {
     let stop = () => {}
     const off = onAuthChange((uid) => {
       stop()
-      stop = uid ? subscribeInbox(hail) : () => {}
+      stop = uid ? subscribeInbox(incoming) : () => {}
     })
     return () => {
       stop()
       off()
     }
-  }, [hail])
+  }, [incoming])
 
   // Клик по пристыкованному пилоту в доке: наводимся на него и открываем канал.
   // Курсор у причала уже свободен, мир стоит — только показать окно разговора.
@@ -700,6 +714,11 @@ function Shell({ onRestart }: { onRestart: () => void }) {
 
       if (e.code === 'KeyT') {
         if (docked || tab !== null || talking || chatWith || dispatching || copiloting) return
+        // Живой человек написал — ему первому: плашка «НОВОЕ СООБЩЕНИЕ · T — ответить».
+        if (waitingRef.current) {
+          answer()
+          return
+        }
         // Входящий вызов — первым. HUD пишет «◄ … ВЫЗЫВАЕТ · T — ОТВЕТИТЬ» по тому же
         // `pendingHail ?? offerHail`, и T обязана исполнять обещанное на плашке: прежде
         // захваченная цель (станция, пират) перехватывала T, и ответить каравану было нельзя.
@@ -854,7 +873,7 @@ function Shell({ onRestart }: { onRestart: () => void }) {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [session, over, docked, menu, tab, talking, dispatching, copiloting, chatWith, openConsole, closeConsole, closeTalk, closeChat, closeDispatch, closeCopilot, openCopilot])
+  }, [session, over, docked, menu, tab, talking, dispatching, copiloting, chatWith, openConsole, closeConsole, closeTalk, closeChat, closeDispatch, closeCopilot, openCopilot, answer])
 
   /**
    * Меню паузы — ОДНА панель на три случая: титул, пауза в полёте (курсор отпущен) и
@@ -953,7 +972,14 @@ function Shell({ onRestart }: { onRestart: () => void }) {
           вернулся туда, откуда открыл, либо сразу поднялся ждущий входящий. */}
       {chatWith && <PlayerChat player={chatWith} onClose={closeChat} />}
       {/* Второй вызов пока занят — баннер поверх текущего окна. Заверши текущий, чтобы перейти. */}
-      {waiting && <IncomingCall caller={waiting} />}
+      {waiting && (
+        <IncomingCall
+          caller={waiting}
+          busy={talking || chatWith !== null || dispatching || copiloting}
+          cursorFree={docked || tab !== null}
+          onAnswer={answer}
+        />
+      )}
       {/* K — схема управления поверх всего; клавиатуру, пока открыта, забирает себе. */}
       <KeyHelp />
       <TorusTuner open={tuning} setOpen={setTuning} />

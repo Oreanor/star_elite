@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { PilotPortrait } from '../station/chrome'
+import { Button, PilotPortrait } from '../station/chrome'
 import { PilotIdentity } from '../station/PilotIdentity'
 import { DialogueWindow, SayBar, Transcript } from '../dialogue/DialogueShell'
 import { UI } from '../theme'
@@ -71,11 +71,24 @@ export function PlayerChat({ player, onClose }: { player: OnlinePlayer; onClose:
 }
 
 /**
- * Баннер «второй входящий»: живой игрок зовёт, пока ты занят другим разговором. Не
- * перебивает — висит сверху, пока не положишь трубку текущего. По одному за раз, чтобы
- * было понятно, какой разговор закрывает T.
+ * НОВОЕ СООБЩЕНИЕ от живого игрока — оповещение, как вызов на связь, а не внезапно
+ * распахнутое окно: прежде входящее само открывало чат (или молча копилось, если ты был занят),
+ * и было непонятно, кто и когда тебе написал. Висит сверху, пока не ответишь.
+ *
+ * Ответ — тем, что под рукой: в полёте клавиша T, у причала и в консоли (курсор свободен) —
+ * кнопка на самой плашке. Занят другим разговором — подсказка дождаться его конца.
  */
-export function IncomingCall({ caller }: { caller: OnlinePlayer }) {
+export function IncomingCall({
+  caller,
+  busy,
+  cursorFree,
+  onAnswer,
+}: {
+  caller: OnlinePlayer
+  busy: boolean
+  cursorFree: boolean
+  onAnswer: () => void
+}) {
   useLang()
   return (
     <div className="pointer-events-none absolute inset-x-0 top-6 flex justify-center font-mono">
@@ -88,10 +101,19 @@ export function IncomingCall({ caller }: { caller: OnlinePlayer }) {
           <div className="text-xs tracking-[0.3em]" style={{ color: UI.WARN }}>
             {t('chat.incoming')} · {caller.name.toUpperCase()}
           </div>
-          <div className="text-[0.65rem] tracking-widest" style={{ color: UI.DIM }}>
-            {t('chat.incoming.hint')}
-          </div>
+          {(busy || !cursorFree) && (
+            <div className="text-[0.65rem] tracking-widest" style={{ color: UI.DIM }}>
+              {t(busy ? 'chat.incoming.hint' : 'chat.incoming.key')}
+            </div>
+          )}
         </div>
+        {!busy && cursorFree && (
+          <div className="pointer-events-auto">
+            <Button small onClick={onAnswer}>
+              {t('chat.incoming.answer')}
+            </Button>
+          </div>
+        )}
       </div>
     </div>
   )

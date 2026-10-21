@@ -394,7 +394,9 @@ export const RU = {
   'dialogue.stance.hostile': 'ВРАЖДЕБНЫЙ',
 
   'dispatcher.off': 'ОТБОЙ',
-  'chat.incoming': 'ВХОДЯЩИЙ ВЫЗОВ',
+  'chat.incoming': 'НОВОЕ СООБЩЕНИЕ',
+  'chat.incoming.key': 'T — ответить',
+  'chat.incoming.answer': 'ОТВЕТИТЬ',
   'chat.incoming.hint': 'заверши текущий разговор, чтобы ответить',
   // Весть на HUD, когда знакомый пропал (погиб вне поля зрения или на глазах).
   'hud.contactLost': '{name} ПРОПАЛ С РАДАРА — ВЕРОЯТНО, ПОГИБ',

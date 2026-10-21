@@ -394,7 +394,9 @@ export const PT: Record<keyof typeof RU, string> = {
   'dialogue.stance.hostile': 'HOSTIL',
 
   'dispatcher.off': 'CÂMBIO E DESLIGO',
-  'chat.incoming': 'CHAMADA RECEBIDA',
+  'chat.incoming': 'NOVA MENSAGEM',
+  'chat.incoming.key': 'T — responder',
+  'chat.incoming.answer': 'RESPONDER',
   'chat.incoming.hint': 'encerre a chamada atual para atender',
   // Aviso no HUD quando um conhecido some (morto fora de vista ou diante de você).
   'hud.contactLost': '{name} SUMIU DO RADAR — PROVAVELMENTE MORTO',
