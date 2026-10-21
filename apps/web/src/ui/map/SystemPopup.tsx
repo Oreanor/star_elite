@@ -83,8 +83,9 @@ export function SystemPopup({
   // заслонял её менее полезным сообщением «сначала отчальте».
   const beyondDriveRange =
     index !== world.systemIndex && world.player.spec.jumpRange > 0 && distance > world.player.spec.jumpRange
-  // Неустранимое (вне дальности, без привода, своя же система) пишем всегда — и у причала:
-  // по нему гаснет «ВЫБРАТЬ», и серая кнопка без причины читалась бы как поломка.
+  // Неустранимое для ГИПЕРПРЫЖКА (вне дальности, без привода, своя же система) пишем всегда —
+  // и у причала. Но выбрать звезду это не мешает: пространство связное, к любой можно лететь
+  // своим ходом (и J ведёт), так что «ВЫБРАТЬ» и выход у причала доступны всегда.
   // Временное (в доке, мало заряда, крейсер) — только в полёте и цель не запрещает.
   const permanent = beyondDriveRange
     ? 'out-of-range'
@@ -94,7 +95,6 @@ export function SystemPopup({
         ? 'no-drive'
         : null
   const blocked = permanent ?? (docked ? null : jumpBlock(world, index))
-  const unreachable = permanent !== null
 
   // Все причалы системы — индексы их планет. Порядок планет в карте и в мире совпадает
   // (мост строит SystemDef.planets один-к-одному), поэтому индекс годится и для выхода.
@@ -116,7 +116,7 @@ export function SystemPopup({
       name={properName(system.name).toUpperCase()}
       color={UI.PRIMARY}
       lines={[]}
-      action={{ ...action, disabled: unreachable }}
+      action={action}
       extra={
         <div style={{ color: UI.PRIMARY }}>
           {/* Две колонки по смыслу: слева звезда и путь к ней (длинные значения), справа счёт
@@ -153,10 +153,9 @@ export function SystemPopup({
                   stationPlanets={stationPlanets}
                   stationNames={stationNames}
                   selected={action.selected ? world.jumpArrivalPlanet : null}
-                  // К недостижимой звезде выхода не назначишь: туда не прыгнуть вовсе.
-                  onPick={unreachable && !action.selected ? null : onArrival}
+                  onPick={onArrival}
                 />
-                {!unreachable && stations.length > 1 && (
+                {stations.length > 1 && (
                   <p className="mt-2 text-[10px] leading-tight" style={{ color: UI.DIM }}>
                     {t('map.pickStation', { n: stations.length })}
                   </p>
