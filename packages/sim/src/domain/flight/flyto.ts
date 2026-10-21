@@ -1,12 +1,10 @@
 import { Vector3 } from 'three'
 import { GALAXY_FLIGHT } from '../../config/galaxy'
-import { MIELOPHONE } from '../../config/mielophone'
 import { AUTOPILOT } from '../../config/station'
 import { PHYSICS } from '../../config/physics'
 import { clamp } from '../../core/math'
-import { placeSystem } from '../galaxy/shape'
 import type { Controller } from '../sim/controller'
-import { galaxyAnchorLocal, metersPerLy, speedScaleFactor } from '../scale/scale'
+import { jumpStarWorldPos, metersPerLy, speedScaleFactor } from '../scale/scale'
 import type { ShipEntity, World } from '../world/entities'
 import { findShip, navTarget } from '../world/queries'
 import { steerToward } from './steering'
@@ -16,7 +14,8 @@ import { lockedShipId } from '../world/queries'
  * Автопилот-НА-ЦЕЛЬ. Третий режим рядом с автостыковкой и автобоем: «лети к тому,
  * что в фокусе» — последний перебор. Tab (`targetFocus: contact`) → захваченный борт;
  * Shift+Tab / карта (`targetFocus: nav`) → нав-тело или статуя; на галактическом
- * масштабе Tab пишет `jumpTargetIndex` (захват системы недоступен) — J ведёт туда.
+ * масштабе Tab пишет `jumpTargetIndex`; с карты галактики та же метка живёт
+ * на любом × — J ведёт туда и в системе (путь через промежуточные звёзды).
  * В отличие от автостыковки он не заходит в створ и не садится, а просто подводит
  * нос к цели, тормозит у неё и возвращает штурвал (см. `flyToArrived`).
  *
@@ -43,7 +42,6 @@ const _perp = new Vector3()
 const _nose = new Vector3()
 const _aim = new Vector3()
 const _jumpPos = new Vector3()
-const _anchor = new Vector3()
 
 type Dest = {
   pos: Vector3
@@ -58,21 +56,11 @@ type Dest = {
  * Оси как у слоя: мир(x,y,z) ← ly(x,z,y). Якорь — true-coords слоя или своя звезда.
  */
 function jumpStarDestination(world: World): Dest | null {
-  const idx = world.jumpTargetIndex
-  if (idx == null || idx === world.systemIndex) return null
-  // Ниже GHOST_BODY св.годы в метрах абсурдны — J там про нав/контакт.
-  if (world.player.state.scale < MIELOPHONE.GHOST_BODY_SCALE) return null
-
-  const origin = placeSystem(world.systemIndex, world.galaxySeed)
-  const star = placeSystem(idx, world.galaxySeed)
+  // Цель с карты — маршрут на любом ×. Не гасим, пока systemIndex совпал с ближайшей:
+  // за пузырём это ещё не «прилетели», J должен вести дальше в BUBBLE_LY.
+  if (world.jumpTargetIndex == null) return null
+  if (!jumpStarWorldPos(world, _jumpPos)) return null
   const mPerLy = metersPerLy(world.player.state.scale)
-  const dx = (star.x - origin.x) * mPerLy
-  const dy = (star.z - origin.z) * mPerLy
-  const dz = (star.y - origin.y) * mPerLy
-
-  galaxyAnchorLocal(world, _anchor)
-  _jumpPos.set(_anchor.x + dx, _anchor.y + dy, _anchor.z + dz)
-  // radius = зона прибытия: approachDist дойдёт до 0 за ARRIVE_LY до точки.
   return { pos: _jumpPos, radius: GALAXY_FLIGHT.ARRIVE_LY * mPerLy, bodyId: null, galaxy: true }
 }
 

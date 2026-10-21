@@ -38,7 +38,7 @@ import {
 import { drawStarBall } from './starPortrait'
 import { drawPlanetBall } from './planetPortrait'
 import { drawAsteroidChunk, drawPodCrate, drawStationWheel, drawWarBaseIcon } from './objectPortrait'
-import { HudFrame, S, formatLy, hudGalaxyFor, navMarkerColor, radarColor, shipDistance } from './hudShared'
+import { HudFrame, S, formatLy, hudGalaxyFor, jumpTargetAim, navMarkerColor, radarColor, shipDistance } from './hudShared'
 
 /**
  * Карточки целей над локатором: захваченный контакт и нав-цель — портрет, имя, дистанция,
@@ -237,32 +237,24 @@ export function drawTargetPanels(frame: HudFrame): void {
     cellCaption(ctx, x - 6 * S, y + 1 * S, lines)
   }
 
-  // Перебор звёзд галактики (Tab при активном слое) — не контакт и не нав системы.
-  const gr = galaxyRadar()
-  if (gr.active) {
+  // Звезда с карты галактики — цель маршрута на любом × (слой спит или нет).
+  {
     const tgt = world.jumpTargetIndex
-    if (tgt == null || tgt === world.systemIndex || tgt < 0 || tgt >= gr.systemCount) return
-    const sys = hudGalaxyFor(world)[tgt]
-    if (!sys) return
-    const color = `#${sys.star.color.toString(16).padStart(6, '0')}`
-    const b = tgt * 3
-    const pos = gr.positions
-    let remLy = 0
-    if (pos && gr.layerScale > 0) {
-      _gtar.set(
-        gr.anchor.x + pos[b]! * gr.layerScale,
-        gr.anchor.y + pos[b + 1]! * gr.layerScale,
-        gr.anchor.z + pos[b + 2]! * gr.layerScale,
+    const pin = tgt != null ? jumpTargetAim(world, _gtar) : null
+    const sys = tgt != null ? hudGalaxyFor(world)[tgt] : undefined
+    if (pin && sys) {
+      const color = `#${sys.star.color.toString(16).padStart(6, '0')}`
+      cell(
+        color,
+        [properName(sys.name), starClassName(sys.star), formatLy(pin.remainingLy)],
+        (cx, cy) => cellStar(ctx, cx, cy, color, sys.star.class, world.time),
       )
-      remLy = shipDistance(world, _gtar) / gr.layerScale
+      return
     }
-    cell(
-      color,
-      [properName(sys.name), starClassName(sys.star), formatLy(remLy)],
-      (cx, cy) => cellStar(ctx, cx, cy, color, sys.star.class, world.time),
-    )
-    return
   }
+
+  const gr = galaxyRadar()
+  if (gr.active) return
 
   if (world.targetFocus === 'contact') {
     const ship = lockedShipId(world) == null ? null : world.ships.find((s) => s.id === lockedShipId(world))

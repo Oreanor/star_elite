@@ -537,6 +537,17 @@ function makeBodies(ids: IdSource, def: SystemDef): BodyEntity[] {
   // Дополнительные: хозяин — только названный. Без него станция ничья (монумент «Крест»).
   for (const extra of def.extraStations ?? []) bodies.push(makeStation(extra, planetAt(extra.planet)))
 
+  // Витрина привязана к причалу после его создания: календарь не унесёт её со спавна.
+  if (station) {
+    for (let i = 0; i < def.planets.length; i++) {
+      const offset = def.planets[i]!.stationOffset
+      const planet = planets[i]
+      if (!offset || !planet) continue
+      planet.pos.copy(station.pos).add(new Vector3(...offset))
+      planet.orbit = orbitFromOffset(station.id, station.pos, planet.pos, 0)
+    }
+  }
+
   // (военные базы — не тела, см. `placeWarBases`: у них ни гравитации, ни орбиты.)
   for (const pair of def.streamPairs ?? []) {
     const offset = new Vector3(...pair.stationOffset)
@@ -764,18 +775,26 @@ export function enterSystem(
   systemIndex: number,
   /** Куда выйти. По умолчанию — туда, где система велит начинать. */
   start: readonly [number, number, number] = def.playerStart,
+  /**
+   * Только звезда/дыра: межзвёздная пустота за пузырём системы. Планеты, пояс и
+   * трафик появятся, когда борт войдёт в BUBBLE_LY ближайшей звезды.
+   */
+  stellarOnly = false,
 ): void {
   const rng = makeRng(def.seed)
 
   world.rng = rng
   world.systemName = def.name
   world.desolate = def.desolate ?? false
-  world.dyson = def.dyson
+  world.dyson = stellarOnly ? null : def.dyson
   world.systemIndex = systemIndex
   world.epoch += 1
 
-  world.ships = makePatrols(rng, world.ids, def)
+  world.ships = stellarOnly ? [] : makePatrols(rng, world.ids, def)
   world.bodies = makeBodies(world.ids, def)
+  if (stellarOnly) {
+    world.bodies = world.bodies.filter((b) => b.kind === 'star' || b.kind === 'blackhole')
+  }
   // Бой старой системы гасим ДО орбит: stepOrbits двигает ракеты/трассы вместе со
   // станцией — чужой мусор (и тесты с заглушками) не должен переживать вход.
   world.pods = []
@@ -792,28 +811,39 @@ export function enterSystem(
   world.jumpGates = []
   // Спутники, планеты и станция — на орбитах к `calendarTime` (общие часы сервера).
   stepOrbits(world)
-  world.asteroids = makeAsteroids(rng, world.ids, def)
-  world.asteroidBelt = createAsteroidBelt(def)
-  // Бог на Кресте: после чистки боя, до спавна резидентов — живой борт на радаре.
-  spawnSlovo(world)
-  /**
-   * Статуи ставим ПОСЛЕ чистки списков, а не до неё: сам `placeMonoliths` начинает с
-   * `monoliths = []` и заполняет заново. Стоя выше, он честно расставлял их — и тут же терял,
-   * потому что общая чистка обнуляла список в том же кадре. Статуй не было вовсе.
-   *
-   * Тела к этому мигу уже на своих орбитах (`stepOrbits` выше), поэтому веер считается от
-   * НАСТОЯЩЕГО места станции, а не от точки, где её нарисовала фабрика.
-   */
-  placeMonoliths(world)
-  placeWarBases(world, def)
-  placeFigurines(world)
+  if (stellarOnly) {
+    world.asteroids = []
+    world.asteroidBelt = undefined
+    world.monoliths = []
+    world.figurines = []
+    world.warBases = []
+  } else {
+    world.asteroids = makeAsteroids(rng, world.ids, def)
+    world.asteroidBelt = createAsteroidBelt(def)
+    // Бог на Кресте: после чистки боя, до спавна резидентов — живой борт на радаре.
+    spawnSlovo(world)
+    /**
+     * Статуи ставим ПОСЛЕ чистки списков, а не до неё: сам `placeMonoliths` начинает с
+     * `monoliths = []` и заполняет заново. Стоя выше, он честно расставлял их — и тут же терял,
+     * потому что общая чистка обнуляла список в том же кадре. Статуй не было вовсе.
+     *
+     * Тела к этому мигу уже на своих орбитах (`stepOrbits` выше), поэтому веер считается от
+     * НАСТОЯЩЕГО места станции, а не от точки, где её нарисовала фабрика.
+     */
+    placeMonoliths(world)
+    placeWarBases(world, def)
+    placeFigurines(world)
+  }
   world.contactLock = null
-  world.navTargetId = world.bodies.find((b) => b.kind === 'station')?.id ?? null
+  world.navTargetId = stellarOnly
+    ? world.bodies.find((b) => b.kind === 'star' || b.kind === 'blackhole')?.id ?? null
+    : world.bodies.find((b) => b.kind === 'station')?.id ?? null
   world.targetFocus = 'nav'
   // Прибыли — выбранная для прыжка система достигнута, метку и точку выхода снимаем.
   world.jumpTargetIndex = null
   world.jumpArrivalPlanet = null
   world.galaxyAnchorTrue = null // слой галактики встанет заново в новой системе
+  world.galaxyFrameIndex = systemIndex
   world.trafficTimer = TRAFFIC.FIRST_DELAY
 
   world.docked = false
@@ -936,6 +966,7 @@ export function createWorld(
     celestialCycleAt: -1e9,
     jumpTargetIndex: null,
     galaxyAnchorTrue: null,
+    galaxyFrameIndex: WORLD.HOME_INDEX,
     jumpArrivalPlanet: null,
     trafficTimer: TRAFFIC.FIRST_DELAY,
     originOffset: new Vector3(),

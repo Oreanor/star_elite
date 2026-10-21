@@ -1,7 +1,7 @@
 export { PHYSICS } from './physics'
 export { BELT } from './belt'
 export { MIELOPHONE } from './mielophone'
-export { BODY_KINDS, GRAVITY, MOON, type BodyKind } from './bodies'
+export { BODY_KINDS, GRAVITY, MOON, PLANET_FOCUS, type BodyKind } from './bodies'
 export { ASTEROID, COMET, DEBRIS, SCORE, WORLD } from './world'
 export { TITAN } from './titans'
 export { MONOLITH } from './monoliths'

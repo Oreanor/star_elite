@@ -33,7 +33,8 @@ import { createCityLightsMaterial } from '../materials/cityLights'
 import { createCoronaMaterial } from '../materials/starCorona'
 import { createStarSurfaceMaterial, loadStarSurface } from '../materials/starSurface'
 import { loadRockTexture, rockTextureOf } from '../materials/rockTextures'
-import { loadPlanetTexture, pickVariant, planetLook, planetSeed } from '../sky/planets'
+import { hasPlanetRings, loadPlanetTexture, planetVariant, planetLook, planetSeed } from '../sky/planets'
+import { planetRingGeometry, planetRingMaterial } from '../geometry/planetRings'
 import { MoonSwarm } from './Moons'
 
 /**
@@ -108,7 +109,7 @@ function Planet({ body }: { body: BodyEntity }) {
   useEffect(
     () => body.kind === 'moon'
       ? loadRockTexture(rockTextureOf(body.id), setTexture)
-      : loadPlanetTexture(look, pickVariant(look, seed), setTexture),
+      : loadPlanetTexture(look, planetVariant(body), setTexture),
     [body.kind, body.id, look, seed],
   )
 
@@ -194,7 +195,11 @@ function Planet({ body }: { body: BodyEntity }) {
 
   return (
     <>
-      <mesh ref={ref} geometry={geometry} material={material} scale={body.radius} frustumCulled={false} />
+      <mesh ref={ref} geometry={geometry} material={material} scale={body.radius} frustumCulled={false}>
+        {hasPlanetRings(body.surface, body.name) && (
+          <mesh geometry={planetRingGeometry} material={planetRingMaterial(planetVariant(body))} frustumCulled={false} />
+        )}
+      </mesh>
       {lightsMaterial && (
         <mesh
           ref={lightsRef}

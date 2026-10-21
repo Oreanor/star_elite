@@ -5,7 +5,7 @@
  */
 
 import type { BodyEntity } from '@elite/sim'
-import { planetLook, planetSeed, planetTextureUrl, pickVariant } from '../../render/sky/planets'
+import { planetLook, planetSeed, planetTextureUrl, planetVariant } from '../../render/sky/planets'
 import { rockTextureOf, rockTextureUrl } from '../../render/materials/rockTextures'
 import { drawSampledBall, drawTextureBall, hash2 } from './textureBall'
 
@@ -45,7 +45,7 @@ export function drawPlanetBall(
 ): void {
   const look = planetLook(body.surface)
   const seed = planetSeed(body.id)
-  const variant = pickVariant(look, seed)
+  const variant = planetVariant(body)
   // Луна — тот же КАМЕНЬ по id, что в мире и на вкладке ПЛАНЕТА: спутник это большой камень.
   // Мелкая копия карты: клетка портрета — полтора десятка пикселей, и полновесные
   // 2048×1024 здесь только съедали бы память (портрет ещё и читает пиксели попиксельно).

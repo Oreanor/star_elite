@@ -1,5 +1,6 @@
 import { Vector3 } from 'three'
 import { MIELOPHONE } from '../../config/mielophone'
+import { PLANET_FOCUS } from '../../config/bodies'
 import { ASTEROID } from '../../config/world'
 import { isVisible } from '../combat/cloak'
 import { shipAxes } from '../flight/axes'
@@ -7,6 +8,7 @@ import type { AsteroidEntity, BodyEntity, ContactKind, ContactLock, ShipEntity, 
 import { BELT_NAV_ID, nearestBeltPoint } from './asteroidBelt'
 import { figurineDisplayName } from './figurines'
 import { findWarBaseFixture, warBaseFixtureWorldPos } from './warBase'
+import { findStation, stationHost } from '../station/docking'
 
 /** Горячий путь: запросы зовутся из кадра HUD, аллокации там недопустимы. */
 const _toPlayer = new Vector3()
@@ -37,6 +39,59 @@ export function capitalBody(world: World): BodyEntity | null {
   let best: BodyEntity | null = null
   for (const b of world.bodies) {
     if (b.population > 0 && (!best || b.population > best.population)) best = b
+  }
+  return best
+}
+
+/**
+ * Планеты и причалы загружены: борт внутри пузыря системы. На галактическом ×
+ * кадр ещё держит тела, пока не усадили — это «система в памяти», не «ты в ней».
+ */
+export function systemPopulated(world: World): boolean {
+  return world.bodies.some((b) => b.kind === 'planet' || b.kind === 'moon' || b.kind === 'station')
+}
+
+/**
+ * Пилот в системе: пузырь загружен и масштаб ещё системный. Иначе карта системы
+ * и вкладка планеты гаснут — мерить нечего, хотя трафик в пустоте может быть.
+ */
+export function inSystem(world: World): boolean {
+  return world.player.state.scale < MIELOPHONE.GHOST_BODY_SCALE && systemPopulated(world)
+}
+
+/**
+ * Мир, «у которого» сейчас пилот — паспорт вкладки ПЛАНЕТА.
+ *
+ * У причала — хозяин станции. В полёте — ближайшая планета или луна, над которой
+ * высота не больше PLANET_FOCUS.BUBBLE_RADII её радиуса. Иначе null: вкладка гаснет,
+ * даже если система загружена. Столица сюда не подставляется — иначе перелёт
+ * между мирами одной системы не менял бы паспорт.
+ */
+export function focusedPlanet(world: World): BodyEntity | null {
+  if (world.player.state.scale >= MIELOPHONE.GHOST_BODY_SCALE) return null
+
+  if (world.docked) {
+    const station = findStation(world)
+    return station ? stationHost(world, station) : null
+  }
+
+  const landedId = world.player.landedOn?.bodyId
+  if (landedId != null) {
+    const body = world.bodies.find((b) => b.id === landedId)
+    if (body && (body.kind === 'planet' || body.kind === 'moon')) return body
+  }
+
+  const from = world.player.state.pos
+  let best: BodyEntity | null = null
+  let bestAlt = Infinity
+  for (const b of world.bodies) {
+    if (b.kind !== 'planet' && b.kind !== 'moon') continue
+    const alt = Math.max(0, from.distanceTo(b.pos) - b.radius)
+    if (alt > b.radius * PLANET_FOCUS.BUBBLE_RADII) continue
+    if (alt < bestAlt) {
+      bestAlt = alt
+      best = b
+    }
   }
   return best
 }

@@ -23,7 +23,7 @@ import { galaxyRadar } from '../../render/scene/galaxyRadar'
 import { HUD_COLORS, circle, corners, dot, ellipse, line, text } from './draw'
 import { figurineTitleLocal, properName } from '../i18n/dataNames'
 import { formatDistance, projectPoint } from './project'
-import { HudFrame, S, bodyColor, formatLy, galaxyStarName, hudFont, hudGalaxyFor, isOnScreen, offscreenArrow, radarColor } from './hudShared'
+import { HudFrame, S, bodyColor, formatLy, galaxyStarName, hudFont, hudGalaxyFor, isOnScreen, jumpTargetAim, offscreenArrow, radarColor } from './hudShared'
 
 /**
  * Локатор в углу кабины (эллипс с метками тел, бортов, камней, деталей баз) и высотомер
@@ -268,13 +268,24 @@ export function drawRadar(frame: HudFrame): void {
   // Иначе на миллионах × ромб Кориолиса и планеты ещё висят, пока галактика не проснулась.
   const stellarOnly = world.player.state.scale >= MIELOPHONE.GHOST_BODY_SCALE
 
+  // Звезда с карты галактики — цель на любом ×, пока слой спит (проснувшийся рисует её выше).
+  // Если цель — звезда текущего кадра, её уже даст цикл тел (не двоим точку).
+  const jumpIdx = world.jumpTargetIndex
+  const jumpLocal = jumpIdx != null && jumpIdx === world.galaxyFrameIndex
+  const pin = !jumpLocal ? jumpTargetAim(world, _gtar) : null
+  if (pin) {
+    const sys = jumpIdx != null ? hudGalaxyFor(world)[jumpIdx] : undefined
+    plot(_gtar, HUD_COLORS.NAV, Math.round(3 * S), true, 'round', sys ? properName(sys.name) : undefined)
+  }
+
   // Круг = место (звезда/планета/дыра/статуя), ромб = станция, квадрат = борт/обломок.
-  // Кольцо — только у активной цели (захват или нав).
+  // Кольцо — только у активной цели (захват, нав или звезда с карты в этом кадре).
   for (const body of world.bodies) {
     if (stellarOnly && body.kind !== 'star' && body.kind !== 'blackhole') continue
-    const nav = body.id === world.navTargetId
+    const stellar = body.kind === 'star' || body.kind === 'blackhole'
+    const nav = body.id === world.navTargetId || (jumpLocal && stellar)
     const shape = body.kind === 'station' ? 'diamond' : 'round'
-    const base = body.kind === 'star' || body.kind === 'blackhole' ? 3 : 2
+    const base = stellar ? 3 : 2
     plot(body.pos, bodyColor(body), Math.round((nav ? base + 1 : base) * S), nav, shape, nav ? properName(body.name) : undefined)
   }
 

@@ -25,6 +25,7 @@ import { threatColor, UI } from '../theme'
 import { t, useLang } from '../i18n'
 import { figurineTitleLocal, chassisName, occupationName, properName } from '../i18n/dataNames'
 import { formatDistance } from '../hud/project'
+import { formatLy, hudGalaxyFor, jumpTargetAim } from '../hud/hudShared'
 import { useWheelZoom } from './useWheelZoom'
 import { bySort, discProject, MapCard, MapFrame, MapPin, MapRow, SortToggle, useInspect, type ListSort } from './MapFrame'
 import { PilotPortrait } from '../station/chrome'
@@ -63,6 +64,7 @@ const _right = new Vector3()
 const _up = new Vector3()
 const _rel = new Vector3()
 const _beltAt = new Vector3()
+const _jumpAt = new Vector3()
 
 function shipColor(ship: ShipEntity, world: World): string {
   if (ship.kinematic) return UI.PLAYER
@@ -111,11 +113,13 @@ interface Blip {
   lines: string[]
   /** До игрока, метры: по нему выстроен список — ближнее сверху. */
   dist: number
+  /** Подпись дистанции, если не метры (звезда с карты галактики — св.г). */
+  distLabel?: string
   /** Род ключом для сортировки «по типу» (`kindRank`): ship, planet, station… */
   rank: string
   /** Клик пишет захват в мир — тот же id, что у тела/борта/статуи. */
-  selectId: number
-  selectKind: SelectKind
+  selectId?: number
+  selectKind?: SelectKind
 }
 
 
@@ -149,6 +153,8 @@ function blips(world: World): Blip[] {
    * Остаются только звёзды и чёрные дыры — на них ещё можно править.
    */
   const stellarOnly = world.player.state.scale >= MIELOPHONE.GHOST_BODY_SCALE
+  const jumpTgt = world.jumpTargetIndex
+  const jumpLocal = jumpTgt != null && jumpTgt === world.galaxyFrameIndex
 
   for (const body of world.bodies) {
     if (stellarOnly && body.kind !== 'star' && body.kind !== 'blackhole') continue
@@ -157,6 +163,7 @@ function blips(world: World): Blip[] {
     const range = distanceToBody(world, body)
     const d = range === 0 ? { rt: 0, fwd: 0, h: 0, dist: 0 } : toDisc(world, body.pos)
     if (!d) continue
+    const stellar = body.kind === 'star' || body.kind === 'blackhole'
     out.push({
       key: `body-${body.id}`,
       ...d,
@@ -164,8 +171,8 @@ function blips(world: World): Blip[] {
       dist: range,
       color: bodyColor(body),
       shape: body.kind === 'station' ? 'diamond' : 'round',
-      size: body.kind === 'star' || body.kind === 'blackhole' ? 11 : 7,
-      ring: body.id === world.navTargetId && world.targetFocus === 'nav',
+      size: stellar ? 11 : 7,
+      ring: (body.id === world.navTargetId && world.targetFocus === 'nav') || (jumpLocal && stellar),
       kind: t(body.kind === 'blackhole' && body.beams ? 'locator.kind.quasar' : (`locator.kind.${body.kind}` as 'locator.kind.planet')),
       rank: body.kind,
       title: properName(body.name),
@@ -173,6 +180,32 @@ function blips(world: World): Blip[] {
       selectId: body.id,
       selectKind: 'body',
     })
+  }
+
+  // Звезда, выбранная на карте галактики: цель маршрута на любом ×. Кадр ещё чужой —
+  // своей звезды в `bodies` нет, поэтому отдельная отметка (как на HUD).
+  if (jumpTgt != null && !jumpLocal) {
+    const pin = jumpTargetAim(world, _jumpAt)
+    const sys = hudGalaxyFor(world)[jumpTgt]
+    if (pin && sys) {
+      const d = toDisc(world, _jumpAt)
+      if (d) {
+        out.push({
+          key: 'jump-star',
+          ...d,
+          dist: d.dist,
+          distLabel: formatLy(pin.remainingLy),
+          color: UI.NAV,
+          shape: 'round',
+          size: 11,
+          ring: true,
+          kind: t('locator.kind.star'),
+          rank: 'star',
+          title: properName(sys.name),
+          lines: [],
+        })
+      }
+    }
   }
 
   // Статуи, статуэтки, глыбы, контейнеры и борта — тем более не ориентиры на таком
@@ -425,12 +458,18 @@ export function Locator({ world }: { world: World }) {
                 kind={b.row?.kind ?? b.kind}
                 name={b.row?.name ?? b.title}
                 strong={b.row?.strong}
-                meta={formatDistance(b.dist)}
+                meta={b.distLabel ?? formatDistance(b.dist)}
                 color={b.color}
                 active={b.ring}
                 hover={b.key === hover}
                 onHover={(on) => setHover((h) => (on ? b.key : h === b.key ? null : h))}
                 onClick={() => card.inspect(b.key)}
+                onDoubleClick={(() => {
+                  const kind = b.selectKind
+                  const id = b.selectId
+                  if (kind == null || id == null) return undefined
+                  return () => applySelect(world, kind, id)
+                })()}
               />
             </li>
           ))}
@@ -542,18 +581,19 @@ export function Locator({ world }: { world: World }) {
               kind={active.b.kind}
               name={active.b.title}
               color={active.b.color}
-              lines={[...active.b.lines, `${t('map.distance')}: ${formatDistance(active.b.dist)}`]}
-              action={
-                pickActive
-                  ? {
-                      selected: pickActive.b.ring,
-                      onClick: () => {
-                        applySelect(world, pickActive.b.selectKind, pickActive.b.selectId)
-                        bump()
-                      },
-                    }
-                  : undefined
-              }
+              lines={[...active.b.lines, `${t('map.distance')}: ${active.b.distLabel ?? formatDistance(active.b.dist)}`]}
+              action={(() => {
+                const kind = pickActive?.b.selectKind
+                const id = pickActive?.b.selectId
+                if (kind == null || id == null || !pickActive) return undefined
+                return {
+                  selected: pickActive.b.ring,
+                  onClick: () => {
+                    applySelect(world, kind, id)
+                    bump()
+                  },
+                }
+              })()}
               body={
                 active.b.ship ? (
                   // Борт — тем же паспортом пилота, что во вкладке «Люди» и в разговоре;

@@ -20,6 +20,7 @@ export {
   type JumpBlock,
   type JumpOptions,
 } from './jump'
+export { nearestSystemIndex, stepGalaxyPresence } from './presence'
 export { generateGalaxy, generateSystem } from './generate'
 export {
   applyDelta,

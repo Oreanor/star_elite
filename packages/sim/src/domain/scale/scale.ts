@@ -2,6 +2,7 @@ import { Vector3 } from 'three'
 import { GALAXY_FLIGHT } from '../../config/galaxy'
 import { MIELOPHONE } from '../../config/mielophone'
 import { clamp } from '../../core/math'
+import { placeSystem } from '../galaxy/shape'
 import type { ShipEntity, World } from '../world/entities'
 
 /**
@@ -58,6 +59,58 @@ export function galaxyAnchorLocal(world: World, out: Vector3): Vector3 {
   const home = world.bodies.find((b) => b.kind === 'star')
   if (home) return out.copy(home.pos)
   return out.copy(world.player.state.pos)
+}
+
+/**
+ * Каталог ly (x, y, z) → смещение мира. Оси как у слоя: мир(x,y,z) ← ly(x,z,y).
+ * Единый источник: иначе зум, автопилот и «ближайшая система» разъедутся.
+ */
+export function catalogLyToWorld(dx: number, dy: number, dz: number, meters: number, out: Vector3): Vector3 {
+  return out.set(dx * meters, dz * meters, dy * meters)
+}
+
+/** Обратная к `catalogLyToWorld`: смещение мира → каталог ly. */
+export function worldToCatalogLy(
+  wx: number,
+  wy: number,
+  wz: number,
+  meters: number,
+): { x: number; y: number; z: number } {
+  const inv = meters > 0 ? 1 / meters : 0
+  return { x: wx * inv, y: wz * inv, z: wy * inv }
+}
+
+/**
+ * Галактический локус борта в св.г (абсолютные, не от якоря).
+ * Считается от `galaxyFrameIndex`: это система, вокруг которой стоит кадр слоя,
+ * а не ближайшая — иначе локус прыгал бы вместе с Voronoi-клеткой.
+ */
+export function playerGalaxyLy(
+  world: World,
+  scale: number,
+): { x: number; y: number; z: number } {
+  const m = metersPerLy(scale)
+  galaxyAnchorLocal(world, _anchor)
+  const p = world.player.state.pos
+  const loc = worldToCatalogLy(p.x - _anchor.x, p.y - _anchor.y, p.z - _anchor.z, m)
+  const origin = placeSystem(world.galaxyFrameIndex, world.galaxySeed)
+  return { x: origin.x + loc.x, y: origin.y + loc.y, z: origin.z + loc.z }
+}
+
+/**
+ * Мировая точка выбранной на карте звезды (`jumpTargetIndex`).
+ * Та же геометрия, что у слоя и автопилота: якорь кадра + Δly·м/св.г.
+ * `false` — цели нет.
+ */
+export function jumpStarWorldPos(world: World, out: Vector3): boolean {
+  const idx = world.jumpTargetIndex
+  if (idx == null) return false
+  const scale = world.player.state.scale
+  const here = playerGalaxyLy(world, scale)
+  const star = placeSystem(idx, world.galaxySeed)
+  catalogLyToWorld(star.x - here.x, star.y - here.y, star.z - here.z, metersPerLy(scale), out)
+  out.add(world.player.state.pos)
+  return true
 }
 
 /**

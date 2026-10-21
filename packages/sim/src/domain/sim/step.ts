@@ -55,6 +55,7 @@ import { COMMODITIES } from '../cargo/items'
 import { oreUnits } from '../combat/mining'
 import { MIELOPHONE } from '../../config/mielophone'
 import { effectiveRadius, stepScale } from '../scale/scale'
+import { stepGalaxyPresence } from '../galaxy/presence'
 import { gravityAt, stepGravity } from '../flight/gravity'
 import { stepJumpGateCollision } from '../flight/jumpGate'
 import {
@@ -313,7 +314,11 @@ function stepPhysics(world: World, dt: number): void {
       stepShip(ship.state, ship.controls, ship.spec.tuning, dt)
       // Миелофон: рост/усадка масштаба от сигнала. До столкновений — они считаются по
       // свежему размеру этого шага.
+      const oldScale = ship.state.scale
       stepScale(ship, dt, world)
+      if (ship === world.player) stepGalaxyPresence(world, oldScale)
+    } else if (ship === world.player) {
+      stepGalaxyPresence(world, ship.state.scale)
     }
     // Нагрев звездой ДО регенерации щита: если корона течёт, `applyDamage`
     // пометит попадание, и щит в этом же шаге восстанавливаться не станет.

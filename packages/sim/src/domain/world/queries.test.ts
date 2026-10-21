@@ -2,7 +2,7 @@ import { Quaternion, Vector3 } from 'three'
 import { describe, expect, it } from 'vitest'
 import { MIELOPHONE } from '../../config/mielophone'
 import { createWorld, makeShip, STARTER_SYSTEM, type World } from '.'
-import { cycleCelestial, cycleTarget, pruneGiantScaleLocks, targetablesOf } from './queries'
+import { cycleCelestial, cycleTarget, focusedPlanet, pruneGiantScaleLocks, targetablesOf } from './queries'
 import { lockContact, lockedShipId, lockedStationId } from './queries'
 
 /** Мир с пиратом и нейтралом перед носом игрока. */
@@ -132,5 +132,41 @@ describe('пристыкованный борт — внутри станции'
 
     ship.ai!.dock = 'done'
     expect(targetablesOf(world).map((s) => s.id)).toContain(ship.id)
+  })
+})
+
+describe('вкладка ПЛАНЕТА — пузырь мира', () => {
+  it('у старта паспорт — мир, над которым стоишь', () => {
+    const world = createWorld()
+    expect(focusedPlanet(world)?.name).toBe('Оссиания')
+  })
+
+  it('межпланетная пустота — вкладки нет, столицу не подставляем', () => {
+    const world = createWorld()
+    // 1 а.е. по +X: Оссиания на −Z, гигант ещё дальше. Ничей пузырь.
+    world.player.state.pos.set(1.5e11, 0, 0)
+    expect(focusedPlanet(world)).toBeNull()
+  })
+
+  it('у другого мира паспорт меняется', () => {
+    const world = createWorld()
+    const giant = world.bodies.find((b) => b.name === 'Тиррион IV')
+    if (!giant) throw new Error('нужен гигант')
+    world.player.state.pos.copy(giant.pos).add(new Vector3(giant.radius + 1_000, 0, 0))
+    expect(focusedPlanet(world)?.id).toBe(giant.id)
+  })
+
+  it('у луны — луна, даже если гигант тоже в пузыре', () => {
+    const world = createWorld()
+    const moon = world.bodies.find((b) => b.kind === 'moon' && b.name === 'Тиррион IV a')
+    if (!moon) throw new Error('нужна луна гиганта')
+    world.player.state.pos.copy(moon.pos).add(new Vector3(moon.radius + 500, 0, 0))
+    expect(focusedPlanet(world)?.id).toBe(moon.id)
+  })
+
+  it('выше GHOST_BODY мира нет', () => {
+    const world = createWorld()
+    world.player.state.scale = MIELOPHONE.GHOST_BODY_SCALE
+    expect(focusedPlanet(world)).toBeNull()
   })
 })

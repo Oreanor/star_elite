@@ -1,6 +1,10 @@
 import { Vector3, type Camera } from 'three'
 import {
   canDockAt,
+  distanceLy,
+  jumpStarWorldPos,
+  placeSystem,
+  playerGalaxyLy,
   stanceTo,
   applyDelta,
   generateGalaxy,
@@ -206,6 +210,18 @@ export function offscreenArrow(
 /** Рамочка активной цели в окне — того же цвета, что значок. */
 export function navReticle(ctx: CanvasRenderingContext2D, x: number, y: number, color: string): void {
   corners(ctx, x, y, 16 * S, color, 2)
+}
+
+/**
+ * Выбранная на карте галактики звезда: мировая точка и остаток пути в св.г.
+ * `null` — метки нет. Не гасим, когда nearest совпал с целью: за пузырём это ещё полёт.
+ */
+export function jumpTargetAim(world: World, out: Vector3): { remainingLy: number } | null {
+  const tgt = world.jumpTargetIndex
+  if (tgt == null) return null
+  if (!jumpStarWorldPos(world, out)) return null
+  const here = playerGalaxyLy(world, world.player.state.scale)
+  return { remainingLy: distanceLy(here, placeSystem(tgt, world.galaxySeed)) }
 }
 
 /** Остаток / карта в св.г — для подписи звезды галактики. */

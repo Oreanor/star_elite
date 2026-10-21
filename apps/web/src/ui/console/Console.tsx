@@ -5,15 +5,14 @@ import {
   contactWhereabouts,
   findStation,
   isBerthed,
-  capitalBody,
   copilotRank,
-  stationHost,
+  focusedPlanet,
   dispatcherName,
   dispatcherPersona,
   generateSystem,
+  inSystem,
   livingContacts,
   stanceTo,
-  type BodyEntity,
   type Contact,
   type Relationship,
   type ShipEntity,
@@ -87,12 +86,14 @@ const isMapView = (tab: ConsoleTab): tab is MapView => (MAP_VIEWS as readonly st
  *  • в комнате вселенной локатор и карта системы мерить нечего (мир вокруг спрятан);
  *  • МИР доступен всегда: клубок галактик есть и снаружи, и цель перехода удобно наметить
  *    заранее — до того, как влетишь в дыру ядра;
- *  • за масштабом (миелофон) единичная система растворилась — её карта неактивна.
+ *  • за масштабом (миелофон) единичная система растворилась — её карта неактивна;
+ *  • вне пузыря системы (межзвёздная пустота) карты системы тоже нет: планет нет.
  */
-function mapViewEnabled(view: MapView, bush: boolean, giant: boolean): boolean {
+function mapViewEnabled(view: MapView, bush: boolean, giant: boolean, charted: boolean): boolean {
   if (view === 'universe') return true
   if (bush) return view === 'galaxy'
-  return !(view === 'system' && giant)
+  if (view === 'system') return !giant && charted
+  return true
 }
 
 /** Что показать, если выбранный вид сейчас погашен: ближайший осмысленный сосед. */
@@ -148,21 +149,28 @@ export function Console({
 
   const saveFailed = useSyncExternalStore(subscribeSaveStatus, lastSaveFailed)
   const station = findStation(world)
-  // У причала «где я» — планета ЭТОЙ станции, а не столица: станций в системе по одной на
-  // населённый мир, и шапка прежде клеила аванпост одной планеты к имени другой.
-  // Станция не на орбите (монумент «Крест») — место это лишь звёздная система: планеты нет,
-  // и вкладки ПЛАНЕТА тоже. В полёте «где я» — столица системы.
-  const planet = docked ? (station ? stationHost(world, station) : null) : capitalWorld(world)
-  // ПЛАНЕТА — вкладка «по умолчанию» у вызывающих; без планеты на её месте СТАНЦИЯ (люди).
+  // У причала «где я» — планета ЭТОЙ станции. Станция не на орбите (монумент «Крест») —
+  // вкладки ПЛАНЕТА нет. В полёте паспорт жив только внутри пузыря мира: перелёт
+  // между планетами одной системы меняет вкладку, а в межпланетной пустоте она гаснет.
+  const planet = focusedPlanet(world)
+  const charted = inSystem(world)
+  const giant = world.player.state.scale >= MIELOPHONE.PHASE_START
+  // ПЛАНЕТА — вкладка «по умолчанию» у вызывающих; без мира под бортом (пустота,
+  // межпланетный перегон, галактика) и без планеты у причала на её месте — ЛЮДИ.
   const tab: ConsoleTab = requestedTab === 'planet' && !planet ? 'people' : requestedTab
 
   // Верфь и магазин — только у причала: в полёте оснастку не сменить и не поторговать.
   // Вкладка корабля зовётся «КОРАБЛЬ» и там, и там — это один и тот же экран; у причала
   // он лишь обрастает действиями (починить, купить, улучшить), а имя ему незачем менять.
-  const tabs: { id: ConsoleTab; label: string; active?: boolean }[] = [
+  const tabs: { id: ConsoleTab; label: string; active?: boolean; disabled?: boolean }[] = [
     // У причала первая вкладка — СТАНЦИЯ (шапка места + кто пристыкован); в полёте
     // станции под тобой нет, и та же вкладка показывает паспорт мира — ПЛАНЕТА.
-    ...(planet ? [{ id: 'planet' as const, label: t('station.nav.planet') }] : []),
+    // Вне пузыря мира вкладка остаётся, но гаснет: иначе «пропала» и непонятно, куда делась.
+    ...(docked
+      ? planet
+        ? [{ id: 'planet' as const, label: t('station.nav.planet') }]
+        : []
+      : [{ id: 'planet' as const, label: t('station.nav.planet'), disabled: !planet }]),
     // ЛЮДИ — сразу за местом: кто здесь и с кем связаться. Есть и у причала, и в полёте.
     // У причала вкладка — про СТАНЦИЮ: кто здесь, диспетчер, Слово. В полёте станции под
     // тобой нет, и там это знакомые и игроки онлайн — ЛЮДИ.
@@ -178,7 +186,7 @@ export function Console({
     // КАРТА — одна кнопка на ЧЕТЫРЕ вида (локатор/система/галактика/мир). Подсвечена, пока
     // открыт любой из них; клик ведёт на первый осмысленный в текущей обстановке.
     {
-      id: fallbackView(bushActive, world.player.state.scale >= MIELOPHONE.PHASE_START),
+      id: fallbackView(bushActive, giant),
       label: t('station.nav.map'),
       active: isMapView(tab),
     },
@@ -234,18 +242,21 @@ export function Console({
         <nav className="mt-4 flex flex-wrap gap-2" style={{ boxShadow: `inset 0 -1px 0 ${DIM}` }}>
           {tabs.map((item) => {
             const on = item.active ?? item.id === tab
+            const disabled = !!item.disabled
             return (
               <button
                 key={item.id}
                 type="button"
                 // КАРТА, уже открытая, не сбрасывает выбранный вид: клик по ней остаётся на нём.
-                onClick={() => onTab(item.active ? tab : item.id)}
+                onClick={disabled ? undefined : () => onTab(item.active ? tab : item.id)}
+                disabled={disabled}
                 aria-current={on ? 'page' : undefined}
-                className="cursor-pointer border px-5 py-2 text-xs tracking-[0.25em] transition-colors ui-btn"
+                className="border px-5 py-2 text-xs tracking-[0.25em] transition-colors disabled:cursor-not-allowed enabled:cursor-pointer ui-btn"
                 style={{
                   borderColor: on ? ACCENT : DIM,
                   backgroundColor: on ? ACCENT : 'transparent',
                   color: on ? '#000' : DIM,
+                  opacity: disabled ? 0.35 : 1,
                 }}
               >
                 {item.label}
@@ -269,8 +280,7 @@ export function Console({
           {isMapView(tab) && (() => {
             // Выбранный вид мог погаснуть от обстановки (влетел в комнату, вырос миелофоном) —
             // тогда показываем ближайший осмысленный, а кнопка гаснет.
-            const giant = world.player.state.scale >= MIELOPHONE.PHASE_START
-            const view: MapView = mapViewEnabled(tab, bushActive, giant)
+            const view: MapView = mapViewEnabled(tab, bushActive, giant, charted)
               ? tab
               : fallbackView(bushActive, giant)
             return (
@@ -281,7 +291,7 @@ export function Console({
               <div className="mb-4 flex gap-2">
                 {MAP_VIEWS.map((v) => {
                   const on = v === view
-                  const disabled = !mapViewEnabled(v, bushActive, giant)
+                  const disabled = !mapViewEnabled(v, bushActive, giant, charted)
                   return (
                     <button
                       key={v}
@@ -605,25 +615,6 @@ function DockPlaque({ ship, you, world, onTalk }: { ship: ShipEntity; you: boole
       onTalk={you ? undefined : () => onTalk(ship.id)}
     />
   )
-}
-
-/** Столица системы — самое населённое тело: «где я» в полёте, пока ни к какому причалу не привязан. */
-function capitalWorld(world: World): BodyEntity | null {
-  const capital = capitalBody(world)
-  if (capital) return capital
-  // Необитаемая система: столицы нет, но мир под тобой есть — берём БЛИЖАЙШУЮ планету.
-  // Иначе вкладка ПЛАНЕТА пустовала бы там, где смотреть как раз интереснее всего.
-  let near: BodyEntity | null = null
-  let dist = Infinity
-  for (const b of world.bodies) {
-    if (b.kind !== 'planet' && b.kind !== 'moon') continue
-    const d = b.pos.distanceTo(world.player.state.pos)
-    if (d < dist) {
-      dist = d
-      near = b
-    }
-  }
-  return near
 }
 
 /**

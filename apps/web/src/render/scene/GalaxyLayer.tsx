@@ -248,7 +248,7 @@ export function GalaxyLayer() {
     if (!awake) return null
     const world = session.world
     const galaxy = applyDelta(generateGalaxy(world.galaxySeed), world.galaxyDelta)
-    const origin = galaxy[world.systemIndex] ?? galaxy[0]!
+    const origin = galaxy[world.galaxyFrameIndex] ?? galaxy[0]!
     const systemCount = galaxy.length
     let companionCount = 0
     for (const s of galaxy) if (s.companion) companionCount++
@@ -264,6 +264,7 @@ export function GalaxyLayer() {
 
     const pair = homePair(world.bodies)
     const homePrimary = pair[0] ?? null
+    const home = world.galaxyFrameIndex
     let homeCompanionIndex = -1
     let write = systemCount
 
@@ -273,14 +274,14 @@ export function GalaxyLayer() {
       positions[i * 3 + 1] = s.z - origin.z
       positions[i * 3 + 2] = s.y - origin.y
       const primaryColor =
-        i === world.systemIndex && homePrimary ? homePrimary.color : s.star.color
+        i === home && homePrimary ? homePrimary.color : s.star.color
       _colour.setHex(primaryColor)
       colors[i * 3] = _colour.r
       colors[i * 3 + 1] = _colour.g
       colors[i * 3 + 2] = _colour.b
       colorHex[i] = primaryColor
       radiusUnits[i] =
-        i === world.systemIndex && homePrimary
+        i === home && homePrimary
           ? homePrimary.radius / SCALE.STAR_RADIUS
           : s.star.radius
       sizes[i] = sizeLy(radiusUnits[i]!)
@@ -293,18 +294,18 @@ export function GalaxyLayer() {
       positions[b + 1] = positions[i * 3 + 1]! + _tmp.y * sep
       positions[b + 2] = positions[i * 3 + 2]! + _tmp.z * sep
       const companionColor =
-        i === world.systemIndex && pair[1] ? pair[1].color : s.companion.color
+        i === home && pair[1] ? pair[1].color : s.companion.color
       _colour.setHex(companionColor)
       colors[b] = _colour.r
       colors[b + 1] = _colour.g
       colors[b + 2] = _colour.b
       colorHex[write] = companionColor
       radiusUnits[write] =
-        i === world.systemIndex && pair[1]
+        i === home && pair[1]
           ? pair[1].radius / SCALE.STAR_RADIUS
           : s.companion.radius
       sizes[write] = sizeLy(radiusUnits[write]!)
-      if (i === world.systemIndex) homeCompanionIndex = write
+      if (i === home) homeCompanionIndex = write
       write++
     }
 
@@ -442,7 +443,7 @@ export function GalaxyLayer() {
 
     // Своя пара: на малом × совмещаем точку слоя с телом (шов). На миллионах
     // (pos−bary)/layerScale раздувается до сотен св.г — откатываем в каталог.
-    const home = world.systemIndex
+    const home = world.galaxyFrameIndex
     if (pair[0] && layerScale > 0) {
       const posAttr = points.geometry.getAttribute('position') as BufferAttribute
       const pos = posAttr.array as Float32Array

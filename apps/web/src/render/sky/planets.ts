@@ -1,7 +1,18 @@
 import type { Texture } from 'three'
 import { loadSurfaceTexture } from '../materials/surfaceTexture'
-import type { PlanetType } from '@elite/sim'
+import type { BodyEntity, PlanetType } from '@elite/sim'
 import type { PlanetLook } from '../geometry/bodies'
+import { PLANET_RINGS } from '../config'
+
+/** Облик по имени: не зависит от порядка создания тел и не расходует RNG мира. */
+export function hasPlanetRings(surface: PlanetType | null | undefined, name: string): boolean {
+  if (surface !== 'Газовый гигант') return false
+  let hash = 0x811c9dc5
+  for (let i = 0; i < name.length; i++) hash = Math.imul(hash ^ name.charCodeAt(i), 0x01000193)
+  hash = Math.imul(hash ^ (hash >>> 16), 0x85ebca6b)
+  hash = Math.imul(hash ^ (hash >>> 13), 0xc2b2ae35)
+  return ((hash ^ (hash >>> 16)) >>> 0) / 0x100000000 < PLANET_RINGS.GIANT_SHARE
+}
 
 /**
  * Текстуры планет. Такая же равнопромежуточная развёртка 2:1, что и у неба,
@@ -62,6 +73,13 @@ export function pickVariant(look: PlanetLook, seed: number): number {
   // Целочисленное перемешивание: младшие биты seed сами по себе почти не гуляют.
   const mixed = Math.imul(seed ^ 0x9e3779b9, 0x85ebca6b) >>> 0
   return mixed % count
+}
+
+/** Один выбор для поверхности, колец, портрета и прогрева текстур. */
+export function planetVariant(body: Pick<BodyEntity, 'id' | 'name' | 'surface'>): number {
+  // ВРЕМЕННО: у демонстрационного Сатурна в Люриларе золотистая полосатая карта gas/0.
+  if (body.surface === 'Газовый гигант' && body.name === 'Сатурн') return 0
+  return pickVariant(planetLook(body.surface), planetSeed(body.id))
 }
 
 /**

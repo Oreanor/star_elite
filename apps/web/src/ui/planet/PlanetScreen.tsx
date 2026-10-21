@@ -16,7 +16,8 @@ import {
   type Texture,
 } from 'three'
 import { bodyMass, stationHost, type BodyEntity, type World } from '@elite/sim'
-import { loadPlanetTexture, pickVariant, planetLook, planetSeed } from '../../render/sky/planets'
+import { hasPlanetRings, loadPlanetTexture, planetVariant, planetLook, planetSeed } from '../../render/sky/planets'
+import { planetRingGeometry, planetRingMaterial } from '../../render/geometry/planetRings'
 import { loadRockTexture, rockTextureOf } from '../../render/materials/rockTextures'
 import { t, useLang } from '../i18n'
 import {
@@ -189,7 +190,7 @@ function Globe({ body, spin, radius, tilt }: { body: BodyEntity; spin: number; r
     `${body.kind}/${body.id}/${look}/${seed}`,
     body.kind === 'moon'
       ? (onLoaded, onMissing) => loadRockTexture(rockTextureOf(body.id), onLoaded, onMissing)
-      : (onLoaded, onMissing) => loadPlanetTexture(look, pickVariant(look, seed), onLoaded, onMissing),
+      : (onLoaded, onMissing) => loadPlanetTexture(look, planetVariant(body), onLoaded, onMissing),
   )
 
   // Драг живёт на окне, а не на самом шаре: увёл курсор за край планеты — вращение не
@@ -249,7 +250,11 @@ function Globe({ body, spin, radius, tilt }: { body: BodyEntity; spin: number; r
         e.stopPropagation()
         drag.current = { x: e.clientX, y: e.clientY, at: e.timeStamp }
       }}
-    />
+    >
+      {hasPlanetRings(body.surface, body.name) && (
+        <mesh geometry={planetRingGeometry} material={planetRingMaterial(planetVariant(body))} />
+      )}
+    </mesh>
   )
 }
 

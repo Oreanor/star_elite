@@ -198,6 +198,7 @@ export function MapRow({
   active,
   hover,
   onClick,
+  onDoubleClick,
   onHover,
   strong,
 }: {
@@ -212,6 +213,8 @@ export function MapRow({
   /** Под курсором — здесь или на поле. */
   hover?: boolean
   onClick: () => void
+  /** Двойной клик сразу ставит цель — то же, что кнопка «ВЫБРАТЬ» в плашке. */
+  onDoubleClick?: () => void
   onHover?: (on: boolean) => void
 }) {
   return (
@@ -219,6 +222,7 @@ export function MapRow({
       type="button"
       data-active={active}
       onClick={onClick}
+      onDoubleClick={onDoubleClick}
       onMouseEnter={() => onHover?.(true)}
       onMouseLeave={() => onHover?.(false)}
       // Строка как в таблицах торговли: без рамки, наведение и захват — фоном.

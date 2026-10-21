@@ -359,6 +359,7 @@ export function SystemMap({
                   hover={m.id === hover}
                   onHover={(on) => setHover((h) => (on ? m.id : h === m.id ? null : h))}
                   onClick={() => card.inspect(m.id)}
+                  onDoubleClick={() => applySelect(m.id)}
                 />
               </li>
             ))}

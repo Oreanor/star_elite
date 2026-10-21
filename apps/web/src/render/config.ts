@@ -21,6 +21,30 @@ const GALAXY_ON_SCALE = MIELOPHONE.GHOST_BODY_SCALE
  */
 export const PIXEL_SCALE = 1
 
+/** Видимые ледяные кольца; радиусы в долях радиуса планеты. */
+export const PLANET_RINGS = {
+  GIANT_SHARE: 0.25,
+  INNER: 1.28,
+  OUTER: 2.35,
+  SEGMENTS: 192,
+  BANDS: 80,
+  GAP_INNER: 1.94,
+  GAP_OUTER: 2.03,
+  /** Ширина мягкого края в долях радиуса планеты. */
+  EDGE_FADE: 0.015,
+  LIGHT_GAIN: 1.35,
+  /** Оттенки текстур gas/*.webp: цветные, но светлее самой атмосферы. */
+  COLORS: [
+    0xffd394, // 0: золотисто-песочный.
+    0x8fc8ff, // 1: небесно-голубой.
+    0xd3a5ff, // 2: светлый аметист.
+    0xafe8cd, // 3: мятный.
+    0xb4b2ff, // 4: сине-сиреневый.
+    0xffc16e, // 5: янтарный.
+    0x88dbea, // 6: бирюзовый.
+  ],
+} as const
+
 export const RENDER = {
   PIXEL_SCALE,
   /**

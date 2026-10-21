@@ -178,9 +178,9 @@ describe('автопилот-к-цели', () => {
     faceToward(world, starPos)
     expect(flyToController.wantsCruise?.(world.player, world)).toBe(true)
 
-    // Ниже порога галактики jumpTarget для J не считается — иначе метры св.года абсурдны.
+    // Цель с карты — маршрут и в системе: J ведёт через промежуточные звёзды.
     world.player.state.scale = 1
-    expect(canEngageFlyTo(world)).toBe(false)
+    expect(canEngageFlyTo(world)).toBe(true)
   })
 
   /**

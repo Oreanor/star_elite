@@ -6,7 +6,6 @@ import {
   navTarget,
   nearestBeltPoint,
   MONOLITH_NAMES,
-  distanceLy,
   itemMass,
   itemName,
   nearestPod,
@@ -34,7 +33,7 @@ import { drawFlare } from './drawFlare'
 import { drawBeamFlash } from './hudBeamFlash'
 import { angularSize, formatDistance, projectPoint } from './project'
 import { apertureEllipse, insideAperture } from './aperture'
-import { HudFrame, S, bodyColor, fitHudScale, formatLy, hudGalaxyFor, isOnScreen, navMarkerColor, navReticle, offscreenArrow, radarColor, shipDistance } from './hudShared'
+import { HudFrame, S, bodyColor, fitHudScale, formatLy, hudGalaxyFor, isOnScreen, jumpTargetAim, navMarkerColor, navReticle, offscreenArrow, radarColor, shipDistance } from './hudShared'
 import { drawBushLocator, drawTorusLabels, drawTorusMarkers } from './hudBush'
 import { drawRadar } from './hudRadar'
 import { drawReadouts } from './hudReadouts'
@@ -126,8 +125,8 @@ export function drawHud(frame: HudFrame): void {
     // глючат. Но ВЫБРАННУЮ цель пилот терять не должен: рисуем ровно её — рамку на ней и
     // стрелку за кадром — до самого пробуждения галактического слоя (тот берёт звёзды на себя).
     drawTargetLock(frame)
-    // Галактика: портрет над локатором — кружок класса при переборе Tab (иначе панель молчит).
-    if (galaxyRadar().active) drawTargetPanels(frame)
+    // Портрет: выбранная на карте звезда — на любом ×; при проснувшемся слое ещё и Tab-перебор.
+    if (galaxyRadar().active || world.jumpTargetIndex != null) drawTargetPanels(frame)
   }
 
   // Прикреплённая с карты звезда (jumpTargetIndex) — целью В ПОЛЁТЕ на любом масштабе, пока
@@ -407,26 +406,23 @@ function drawPinnedStar(frame: HudFrame): void {
   // порталом): маркер не рисовал никто — ни здесь, ни в `drawRadar`, — и выбранная на карте
   // звезда пропадала совсем. `galaxyRadarUsable` требует живых буферов, а не намерения.
   if (galaxyRadarUsable()) return
+  const aim = jumpTargetAim(world, _gtar)
+  if (!aim) return
   const tgt = world.jumpTargetIndex
-  if (tgt == null || tgt === world.systemIndex) return
+  const star = tgt != null ? hudGalaxyFor(world)[tgt] : undefined
+  if (!star) return
 
-  const systems = hudGalaxyFor(world)
-  const star = systems[tgt]
-  const origin = systems[world.systemIndex]
-  if (!star || !origin) return
-
-  // Направление на звезду в МИРОВЫХ осях — тем же отображением, что кладёт слой галактики.
-  _pinDir.set(star.x - origin.x, star.z - origin.z, star.y - origin.y)
-  if (_pinDir.lengthSq() < 1e-9) return
-  _pinDir.normalize()
-
-  // Звезда практически на бесконечности: проецируем точку далеко по направлению от борта.
-  // Дистанцию к ней меряем не в метрах (их триллионы), а в СВЕТОВЫХ ГОДАХ — из геометрии.
-  const FAR = 1e9 // м — заведомо дальше любого тела системы, но в пределах проекции
-  _gtar.copy(renderPos(world, world.player.state, _shownAt)).addScaledVector(_pinDir, FAR)
   const color = `#${star.star.color.toString(16).padStart(6, '0')}`
   const title = properName(star.name)
-  const range = formatLy(distanceLy(origin, star))
+  const range = formatLy(aim.remainingLy)
+
+  // Точка звезды в метрах может быть в триллионах — проекция шумит. Берём направление
+  // и ставим маркер далеко, но в пределах float камеры.
+  _pinDir.copy(_gtar).sub(world.player.state.pos)
+  if (_pinDir.lengthSq() < 1e-9) return
+  _pinDir.normalize()
+  const FAR = 1e9
+  _gtar.copy(renderPos(world, world.player.state, _shownAt)).addScaledVector(_pinDir, FAR)
 
   const p = projectPoint(_gtar, camera, width, height)
   if (!p.behind && isOnScreen(p.x, p.y, width, height, 20 * S)) {
