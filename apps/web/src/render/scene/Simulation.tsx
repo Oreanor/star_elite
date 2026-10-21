@@ -165,6 +165,10 @@ function stepBush(session: Session): void {
     resetBushExit()
     // Систему покидаем по-настоящему: под задником она не живёт (см. `enterVoid`).
     enterVoid(world)
+    // В клубок — своим размером: дыра съёживает гиганта до ×1. Клубок не знает масштаба
+    // (корабль стоит в центре проекции), а выйдешь в галактику уже обычным бортом.
+    world.player.state.scale = 1
+    world.player.controls.grow = 0
     session.onSystemChange?.(world.epoch)
     setPilot(session, 'bush')
     pushWarning('bushEnter', world.time, {
