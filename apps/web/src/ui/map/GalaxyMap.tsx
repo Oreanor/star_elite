@@ -426,6 +426,11 @@ function GalaxyMapImpl({ onClose, embedded = false }: { onClose: () => void; emb
                   hover={s.index === hovered}
                   onHover={(on) => setHovered((h) => (on ? s.index : h === s.index ? null : h))}
                   onClick={() => card.inspect(s.index)}
+                  // Двойной — карточка и цель сразу, как «ВЫБРАТЬ» в ней (и как в системе).
+                  onDoubleClick={() => {
+                    card.inspect(s.index)
+                    chooseSystem(s.index)
+                  }}
                 />
               </li>
             ))}

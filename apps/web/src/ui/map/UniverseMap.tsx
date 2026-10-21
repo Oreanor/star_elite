@@ -463,6 +463,11 @@ export function UniverseMap({ onClose }: { onClose: () => void }) {
                 color={UI.PRIMARY}
                 active={it.vertex === selected}
                 onClick={() => card.inspect(it.vertex)}
+                // Двойной — карточка и цель сразу, как «ВЫБРАТЬ» в ней (и как в системе).
+                onDoubleClick={() => {
+                  card.inspect(it.vertex)
+                  choose(it.vertex)
+                }}
               />
             ))}
           </div>
