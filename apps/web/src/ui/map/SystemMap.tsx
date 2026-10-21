@@ -14,7 +14,7 @@ import {
   type World,
 } from '@elite/sim'
 import { t, useLang } from '../i18n'
-import { figurineTitleLocal, properName } from '../i18n/dataNames'
+import { figurineTitleLocal, governmentName, properName, speciesName } from '../i18n/dataNames'
 import { formatDistance } from '../hud/project'
 import { useWheelZoom } from './useWheelZoom'
 import { bySort, discProject, MapCard, MapFrame, MapPin, MapRow, SortToggle, useInspect, type ListSort } from './MapFrame'
@@ -235,6 +235,22 @@ function markers(world: World): Marker[] {
 const selectable = (m: Marker) => m.kind !== 'ship' && m.kind !== 'contact' && m.kind !== 'player'
 
 /**
+ * Жизнь мира для карточки: тех-уровень, строй и население с видом жителей. Только у
+ * обитаемых тел (`settlement`); у звезды, станции, камня и пустого мира — ничего.
+ */
+function lifeLines(world: World, id: number): string[] {
+  const body = world.bodies.find((b) => b.id === id)
+  const s = body?.settlement
+  if (!body || !s) return []
+  const pop = t('station.popUnit', { n: Math.round(body.population * 10) / 10 })
+  return [
+    `${t('station.tech')}: ${s.techLevel}`,
+    `${t('station.government')}: ${governmentName(s.government)}`,
+    `${t('station.population')}: ${pop} · ${speciesName(s.species)}`,
+  ]
+}
+
+/**
  * Род объекта словом — он пишется перед именем и в списке, и в карточке. Имя без рода
  * не читается: «Церера» может быть и спутником, и причалом, а цвет метки виден лишь
  * на диске. Слова берём из общего словаря локатора — прибор разный, а мир один.
@@ -408,7 +424,7 @@ export function SystemMap({
                 kind={kindWord(shown.kind)}
                 name={properName(shown.name)}
                 color={shown.tint ?? colourOf(shown.kind)}
-                lines={[`${t('map.distance')}: ${formatDistance(shown.range)}`]}
+                lines={[`${t('map.distance')}: ${formatDistance(shown.range)}`, ...lifeLines(world, shown.id)]}
                 action={
                   inspecting
                     ? { selected: world.navTargetId === shown.id && world.targetFocus === 'nav', onClick: () => applySelect(shown.id) }

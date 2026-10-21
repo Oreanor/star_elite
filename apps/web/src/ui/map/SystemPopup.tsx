@@ -60,6 +60,13 @@ export interface Ring {
  * разные действия: кнопка ставит цель прыжка, и только у цели схема выхода кликается
  * (`onArrival`). Кнопки прыжка нет: гипер — клавишей H в космосе.
  */
+/** Наибольший тех-уровень среди обитаемых миров системы; «—», если жизни нет. */
+function maxTechOf(system: StarSystem): string {
+  let best = 0
+  for (const p of system.planets) if (p.settlement && p.settlement.techLevel > best) best = p.settlement.techLevel
+  return best > 0 ? String(best) : '—'
+}
+
 export function SystemPopup({
   system,
   world,
@@ -132,6 +139,8 @@ export function SystemPopup({
             <Row label={t('map.planets')} value={String(system.planets.length)} />
             <Row label={t('map.distance')} value={formatRange(distance)} />
             <Row label={t('map.life')} value={lifeName(systemLife(system))} />
+            {/* Самый развитый мир системы: тех-уровень решает, что продают на её причалах. */}
+            <Row label={t('map.maxTech')} value={maxTechOf(system)} />
             <Row label={t('map.size')} value={formatStarSize(system.star.radius)} />
             <Row label={t('map.stations')} value={String(stations.length)} />
           </dl>

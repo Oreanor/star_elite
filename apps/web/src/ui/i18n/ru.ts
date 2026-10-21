@@ -487,6 +487,7 @@ export const RU = {
   'map.planets': 'ПЛАНЕТ',
   'map.stations': 'СТАНЦИИ',
   'map.life': 'ЖИЗНЬ',
+  'map.maxTech': 'МАКС. УРОВЕНЬ',
   'map.life.none': 'нет',
   'map.life.primitive': 'примитивная',
   'map.life.developed': 'развитая',

@@ -464,6 +464,7 @@ export const IT: Record<keyof typeof RU, string> = {
   'map.planets': 'PIANETI',
   'map.stations': 'STAZIONI',
   'map.life': 'VITA',
+  'map.maxTech': 'TECH MAX',
   'map.life.none': 'nessuna',
   'map.life.primitive': 'primitiva',
   'map.life.developed': 'sviluppata',
