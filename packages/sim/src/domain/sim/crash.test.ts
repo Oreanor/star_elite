@@ -9,6 +9,7 @@ import { shipAxes } from '../flight/axes'
 import { armAutoland, releaseLanding } from '../flight/landing'
 import { createWorld, STARTER_SYSTEM, type BodyEntity, type World } from '../world'
 import { stepWorld } from './step'
+import { bodySizeFactor } from '../scale/scale'
 import { quietWorld } from '../../testkit'
 
 /**
@@ -171,18 +172,21 @@ describe('удар о крупное тело', () => {
     const player = world.player
     player.state.scale = 40
     const planet = bodyOf(world, 'planet')
-    ram(world, planet, 40)
+    // Сфера планеты для выросшего — ВИДИМАЯ (закон зума `bodySizeFactor`), корпус — раздутый.
+    const planetR = planet.radius * bodySizeFactor(player.state.scale)
+    const hullR = player.spec.hull.radius * player.state.scale
+    player.state.pos.copy(planet.pos)
+    player.state.pos.x += planetR + hullR - 1
+    player.state.vel.set(-40, 0, 0)
+    player.controls.throttle = 0
 
     oneStep(world)
 
-    // Столкновение считается по effectiveRadius: гигант не сквозит сквозь планету —
-    // отскакивает, как обычный корабль, и метит крушение для пуша.
+    // Гигант не сквозит сквозь планету — отскакивает, как обычный корабль, и метит крушение.
     expect(player.alive).toBe(true)
     expect(player.lastCrashAt).toBe(world.time)
     expect(player.lastCrashHit).toEqual({ kind: 'planet', name: planet.name })
-    expect(player.state.pos.distanceTo(planet.pos)).toBeGreaterThanOrEqual(
-      planet.radius + player.spec.hull.radius * player.state.scale - 1,
-    )
+    expect(player.state.pos.distanceTo(planet.pos)).toBeGreaterThanOrEqual(planetR + hullR - 1)
   })
 
   it('L — вход без шва: место и ход прежние, брюхом к грунту ложится мягко', () => {

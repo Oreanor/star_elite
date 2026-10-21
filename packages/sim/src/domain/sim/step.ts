@@ -54,7 +54,7 @@ import { hasBomb, hasEcm } from '../loadout'
 import { COMMODITIES } from '../cargo/items'
 import { oreUnits } from '../combat/mining'
 import { MIELOPHONE } from '../../config/mielophone'
-import { effectiveRadius, phasedOut, stepScale } from '../scale/scale'
+import { bodySizeFactor, effectiveRadius, phasedOut, starSizeFactor, stepScale } from '../scale/scale'
 import { stepGalaxyPresence } from '../galaxy/presence'
 import { gravityAt, stepGravity } from '../flight/gravity'
 import { stepJumpGateCollision } from '../flight/jumpGate'
@@ -477,7 +477,7 @@ function stepCollisions(world: World, dt: number): void {
       const landable = isLandableAsteroid(a, ship)
       if (isPhased(ship) && !landable) continue
       // Посадочная глыба: твердь ближе к текстуре, чем bounding sphere меша.
-      const hitR = landable ? meshSolidRadius(a.radius) : a.radius
+      const hitR = (landable ? meshSolidRadius(a.radius) : a.radius) * bodySizeFactor(ship.state.scale)
       if (!hitsBodySphere(ship, a.pos, hitR, dt)) continue
 
       // Уже на ховере над этим камнем — сфера сама держит высоту.
@@ -505,7 +505,7 @@ function stepCollisions(world: World, dt: number): void {
 
       // Астероид на порядок тяжелее: он почти не сдвигается, корабль отлетает.
       const impact = resolveShipVsSphere(
-        ship, a.pos, a.vel, a.radius, a.radius * ASTEROID.MASS_PER_RADIUS, world.time,
+        ship, a.pos, a.vel, hitR, a.radius * ASTEROID.MASS_PER_RADIUS, world.time,
       )
       // Пуш и при росте (миелофон): урон гиганту не идёт, но «не разбивает» должно быть видно.
       noteCrash(world, ship, { kind: 'asteroid', name: '' })
@@ -606,6 +606,9 @@ function stepBodyCollisions(world: World, dt: number): void {
     // С GHOST_BODY_SCALE крупная твердь (планеты/звёзды/станции/статуи) сквозная.
     // При 1 < scale < GHOST_BODY твердь остаётся — это как раз Shift+Tab-навигация.
     const ghostBody = ship.state.scale >= MIELOPHONE.GHOST_BODY_SCALE
+    // Твердь — того размера, что видна этому борту (закон зума): выросшему тела меньше.
+    const k = bodySizeFactor(ship.state.scale)
+    const ks = starSizeFactor(ship.state.scale)
 
     if (!ghostBody) {
       for (const body of world.bodies) {
@@ -616,9 +619,10 @@ function stepBodyCollisions(world: World, dt: number): void {
         // Звезда: касание поверхности. Игрок — отскок + «корабль потерян» (щиты полные,
         // игра дальше). Бот — сгорает. Перегрев короны убивает раньше, см. stepStarHeat.
         if (body.kind === 'star') {
-          if (!hitsBodySphere(ship, body.pos, body.radius, dt)) continue
+          const starR = body.radius * ks
+          if (!hitsBodySphere(ship, body.pos, starR, dt)) continue
           if (ship.faction === 'player') {
-            bounceOffSolid(ship, body.pos, body.radius, dt)
+            bounceOffSolid(ship, body.pos, starR, dt)
             ship.cruise.factor = 1
             surviveLethal(ship, world.time, { kind: 'star', name: body.name })
             continue
@@ -635,7 +639,7 @@ function stepBodyCollisions(world: World, dt: number): void {
           if (isPhased(ship)) continue
           // Допуск — билет сквозь поле: корабль идёт коридором на стыковку, поле молчит.
           if (ship.clearance) continue
-          const shieldR = body.radius * SHIELD.RADIUS_FACTOR
+          const shieldR = body.radius * k * SHIELD.RADIUS_FACTOR
           const reach = shieldR + effectiveRadius(ship)
           if (body.pos.distanceToSquared(ship.state.pos) > reach * reach) continue
           // Вспышка при любом касании поля (`impact >= 0`), но ЯРКОСТЬ — по силе удара:
@@ -655,13 +659,14 @@ function stepBodyCollisions(world: World, dt: number): void {
 
         // Планета / луна — твёрдые и в фазе крейсера.
         if (body.kind !== 'planet' && body.kind !== 'moon') continue
-        if (!hitsBodySphere(ship, body.pos, body.radius, dt)) continue
+        const bodyR = body.radius * k
+        if (!hitsBodySphere(ship, body.pos, bodyR, dt)) continue
 
         // УПРАВЛЯЕМО — мягкая посадка. НЕУПРАВЛЯЕМО — отскок без урона («КРУШЕНИЕ»).
         if (ship.landedOn?.bodyId === body.id) {
           landShip(ship, body)
         } else {
-          crashBounce(world, ship, body.pos, body.radius, dt, {
+          crashBounce(world, ship, body.pos, bodyR, dt, {
             kind: body.kind,
             name: body.name,
           })
@@ -671,8 +676,9 @@ function stepBodyCollisions(world: World, dt: number): void {
 
       // Статуи / статуэтки — крупная твердь, до GHOST_BODY_SCALE.
       for (const monolith of world.monoliths) {
-        if (!hitsBodySphere(ship, monolith.pos, monolith.radius, dt)) continue
-        crashBounce(world, ship, monolith.pos, monolith.radius, dt, {
+        const monolithR = monolith.radius * k
+        if (!hitsBodySphere(ship, monolith.pos, monolithR, dt)) continue
+        crashBounce(world, ship, monolith.pos, monolithR, dt, {
           kind: 'monolith',
           name: MONOLITH_NAMES[monolith.variant] ?? 'Монолит',
         })
@@ -681,9 +687,10 @@ function stepBodyCollisions(world: World, dt: number): void {
 
       for (const fig of world.figurines) {
         if (!fig.alive) continue
-        if (!hitsBodySphere(ship, fig.pos, fig.radius, dt)) continue
+        const figR = fig.radius * k
+        if (!hitsBodySphere(ship, fig.pos, figR, dt)) continue
         if (canAttractFigurine(ship, fig)) continue
-        crashBounce(world, ship, fig.pos, fig.radius, dt, {
+        crashBounce(world, ship, fig.pos, figR, dt, {
           kind: 'figurine',
           name: figurineDisplayName(fig),
         })
@@ -695,8 +702,9 @@ function stepBodyCollisions(world: World, dt: number): void {
     if (ghostBody) continue
     for (const rock of world.warBases) {
       if (!rock.alive) continue
-      if (bounceOffFixtures(world, ship, rock, dt)) break
-      const hitR = warBaseSolidRadius(rock.radius)
+      // Детали базы рисуются ужатыми к её центру; выросшему они — часть общей сферы базы.
+      if (k === 1 && bounceOffFixtures(world, ship, rock, dt)) break
+      const hitR = warBaseSolidRadius(rock.radius) * k
       if (!hitsBodySphere(ship, rock.pos, hitR, dt)) continue
       if (ship.landedOn?.bodyId === rock.id) continue
       crashBounce(world, ship, rock.pos, hitR, dt, { kind: 'warbase', name: '' })

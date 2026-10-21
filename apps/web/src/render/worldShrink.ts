@@ -1,14 +1,15 @@
+import { bodySizeFactor, starSizeFactor } from '@elite/sim'
 import { BODY_FADE, GALAXY_LAYER } from './config'
 
 /**
- * Визуальное сжатие мира с 1×: worldR ∝ 1/scale — синхронно с ростом борта и отводом
- * камеры. С порога галактики (`BODY_FADE.START` = FADE_IN слоя) системных тел нет:
- * планеты/станции исчезают сразу, кадр отдаётся точкам галактики.
+ * Визуальное сжатие мира с 1× — ЗАКОН ЗУМА домена (`bodySizeFactor`): тот же, по которому
+ * тела твёрды для выросшего борта. Своей копии здесь нет — иначе картинка и твердь разойдутся
+ * (на ×276 разбивался о планету, видную точкой). С порога галактики (`BODY_FADE.START`)
+ * системных тел нет: кадр отдаётся точкам галактики.
  */
 export function worldShrink(scale: number): number {
-  const s = Math.max(scale, 1)
-  if (s >= BODY_FADE.START) return 0
-  return 1 / s
+  if (Math.max(scale, 1) >= BODY_FADE.START) return 0
+  return bodySizeFactor(scale)
 }
 
 /**
@@ -20,10 +21,7 @@ export function worldShrink(scale: number): number {
  * к честному R, иначе только что сжатая в точку звезда снова закрывает кадр.
  */
 export function starRadiusFactor(scale: number): number {
-  const s = Math.max(scale, 1)
-  const inflate = GALAXY_LAYER.STAR_INFLATE
-  if (inflate <= 1) return 1 / s
-  return s < inflate ? 1 : inflate / s
+  return starSizeFactor(scale)
 }
 
 /**

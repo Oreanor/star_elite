@@ -6,6 +6,7 @@ import { AUTOPILOT } from '../../config/station'
 import { placeSystem } from '../galaxy/shape'
 import { createWorld, STARTER_SYSTEM } from '../world'
 import { canEngageFlyTo, flyToArrived, flyToController } from './flyto'
+import { bodySizeFactor } from '../scale/scale'
 import { lockContact, lockedShipId } from '../world/queries'
 import { stepWorld } from '../sim'
 import { NULL_CONTROLLER } from '../sim/controller'
@@ -129,12 +130,13 @@ describe('автопилот-к-цели', () => {
   it('на ×scale начинает тормозить по фактическому тормозному пути, а не по фиксированной зоне', () => {
     const { world } = withTarget(50_000)
     const planet = world.bodies.find((b) => b.kind === 'planet')!
-    const standOff = planet.radius * AUTOPILOT.BODY_STANDOFF_RADII
+    world.player.state.scale = 1_000
+    // Подход — к ВИДИМОЙ планете (закон зума): выросшему она в scale раз меньше.
+    const standOff = planet.radius * bodySizeFactor(world.player.state.scale) * AUTOPILOT.BODY_STANDOFF_RADII
     const remaining = AUTOPILOT.BRAKE_RANGE * 4
 
     world.targetFocus = 'nav'
     world.navTargetId = planet.id
-    world.player.state.scale = 1_000
     world.player.state.pos.copy(planet.pos).add(new Vector3(0, 0, standOff + remaining))
     // Выбег v/k заметно длиннее остатка: независимо от масштаба здесь уже нужен ручник.
     world.player.state.vel.set(0, 0, -remaining * 30)

@@ -3,15 +3,19 @@ import { Vector3 } from 'three'
 import { MIELOPHONE } from '../../config/mielophone'
 import { MIELOPHONE_DEVICE } from '../../config/modules'
 import { stepWorld } from '../sim'
+import { quietWorld } from '../../testkit'
 import { createWorld, refreshSpec, STARTER_SYSTEM } from '../world'
 import type { ShipEntity, World } from '../world/entities'
 import {
+  apparentRadius,
+  bodySizeFactor,
   effectiveMass,
   effectiveRadius,
   galaxyAnchorLocal,
   metersPerLy,
   preserveGalaxyLocus,
   speedScaleFactor,
+  starSizeFactor,
   stepScale,
 } from './scale'
 
@@ -266,3 +270,45 @@ describe('миелофон: галактический локус', () => {
     expect(locusX(player, world)).toBeCloseTo(before, 6)
   })
 })
+
+describe('закон зума: твердь — та, что видна', () => {
+  /**
+   * Пойманное: на ×276 «КРУШЕНИЕ · ПЛАНЕТА АРДИН», а планета на экране — точка «в 3 км».
+   * Рендер делил радиус тел на рост, столкновение считалось по полному: борт был глубоко
+   * внутри настоящей сферы, которой не видно. Закон один — `bodySizeFactor`.
+   */
+  function grownNearPlanet(altitudeInApparentRadii: number): World {
+    const world = quietWorld()
+    world.docked = false
+    const planet = world.bodies.find((b) => b.kind === 'planet')!
+    const p = world.player
+    p.state.scale = 276
+    p.state.vel.set(0, 0, 0)
+    const apparent = apparentRadius(planet.radius, false, p.state.scale)
+    const dist = apparent * (1 + altitudeInApparentRadii) + effectiveRadius(p)
+    p.state.pos.copy(planet.pos).add(new Vector3(0, dist, 0))
+    return world
+  }
+
+  it('внутри настоящей сферы, но снаружи видимой — не крушение', () => {
+    const world = grownNearPlanet(0.5)
+    const planet = world.bodies.find((b) => b.kind === 'planet')!
+    // Борт глубоко внутри НАСТОЯЩЕГО радиуса — это и был баг.
+    expect(world.player.state.pos.distanceTo(planet.pos)).toBeLessThan(planet.radius)
+    stepWorld(world, 1 / 60, new Map())
+    expect(world.player.lastCrashAt).toBeLessThan(0)
+  })
+
+  it('коснулся видимой поверхности — крушение, как у любой тверди', () => {
+    const world = grownNearPlanet(-0.05)
+    stepWorld(world, 1 / 60, new Map())
+    expect(world.player.lastCrashAt).toBeGreaterThan(0)
+  })
+
+  it('рендер и физика берут один закон: звезда с отставанием, прочие 1/scale', () => {
+    expect(bodySizeFactor(276)).toBeCloseTo(1 / 276)
+    expect(starSizeFactor(MIELOPHONE.STAR_LAG / 2)).toBe(1)
+    expect(starSizeFactor(276)).toBeCloseTo(MIELOPHONE.STAR_LAG / 276)
+  })
+})
+

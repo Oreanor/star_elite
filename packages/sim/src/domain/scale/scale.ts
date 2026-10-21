@@ -41,6 +41,28 @@ export function effectiveMass(e: ShipEntity): number {
 }
 
 /**
+ * ЗАКОН ЗУМА для тел мира: во сколько раз они меньше для борта этого роста. Растёшь — мир
+ * уменьшается; так тела и РИСУЮТСЯ, и так же они ТВЁРДЫ. Прежде рендер делил радиус на рост, а
+ * столкновение считалось по полному: на ×276 Ардин виден точкой «в 3 км» — и разбиваешься о
+ * планету, которой на экране нет. Один закон — одна сфера.
+ */
+export function bodySizeFactor(scale: number): number {
+  return 1 / Math.max(scale, 1)
+}
+
+/** Звезда — с отставанием (`MIELOPHONE.STAR_LAG`): полка, потом STAR_LAG/scale. */
+export function starSizeFactor(scale: number): number {
+  const s = Math.max(scale, 1)
+  const lag = MIELOPHONE.STAR_LAG
+  return s < lag ? 1 : lag / s
+}
+
+/** Видимый и твёрдый радиус тела для борта этого роста. */
+export function apparentRadius(radius: number, star: boolean, scale: number): number {
+  return radius * (star ? starSizeFactor(scale) : bodySizeFactor(scale))
+}
+
+/**
  * Метров кадра в одном св.году при данном росте — та же формула, что у галактического
  * слоя и аима J. Единый источник: иначе зум, локатор и автопилот разъедутся.
  */

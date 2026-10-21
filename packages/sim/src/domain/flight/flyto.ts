@@ -5,7 +5,7 @@ import { AUTOPILOT } from '../../config/station'
 import { PHYSICS } from '../../config/physics'
 import { clamp } from '../../core/math'
 import type { Controller } from '../sim/controller'
-import { jumpStarWorldPos, metersPerLy, speedScaleFactor } from '../scale/scale'
+import { apparentRadius, bodySizeFactor, effectiveRadius, jumpStarWorldPos, metersPerLy, speedScaleFactor } from '../scale/scale'
 import type { ShipEntity, World } from '../world/entities'
 import { findShip, navTarget } from '../world/queries'
 import { steerToward } from './steering'
@@ -86,9 +86,13 @@ function lockDestination(world: World): Dest | null {
     if (!nav) return null
     // Автопилот «к планете» означает выйти к ней, а не целиться в центр шара.
     // Сфера 2R оставляет один радиус высоты — достаточно, чтобы штатно погасить ход.
+    // Радиус — ВИДИМЫЙ (закон зума): выросший подходит к тому, что видит, а не тормозит за
+    // тысячи километров от точки. Пояс — лента точек, его ширина от роста не зависит.
+    const scale = world.player.state.scale
+    const r = nav.kind === 'belt' ? nav.radius : apparentRadius(nav.radius, nav.kind === 'star', scale)
     return {
       pos: nav.pos,
-      radius: nav.radius * AUTOPILOT.BODY_STANDOFF_RADII,
+      radius: r * AUTOPILOT.BODY_STANDOFF_RADII,
       bodyId: nav.id,
       galaxy: false,
     }
@@ -171,19 +175,23 @@ function aimAround(
   _blocked = false
   // Гигант за GHOST_BODY проходит твердь насквозь — обходить нечего.
   if (ship.state.scale >= MIELOPHONE.GHOST_BODY_SCALE) return false
-  const shipR = ship.spec.hull.radius
+  // Препятствия — того размера, что видны и тверды этому борту (закон зума), и сам борт —
+  // в своём росте: выросший не облетает невидимых сфер и не цепляет их своим корпусом.
+  const shipR = effectiveRadius(ship)
+  const scale = ship.state.scale
+  const k = bodySizeFactor(scale)
   for (const body of world.bodies) {
     if (skipBodyId !== null && body.id === skipBodyId) continue // это и есть цель, не препятствие
-    avoidSphere(pos, dist, body.pos, body.radius, shipR, out)
+    avoidSphere(pos, dist, body.pos, apparentRadius(body.radius, body.kind === 'star', scale), shipR, out)
   }
   for (const m of world.monoliths) {
-    if (m.id !== skipBodyId) avoidSphere(pos, dist, m.pos, m.radius, shipR, out)
+    if (m.id !== skipBodyId) avoidSphere(pos, dist, m.pos, m.radius * k, shipR, out)
   }
   for (const f of world.figurines) {
-    if (f.alive && f.id !== skipBodyId) avoidSphere(pos, dist, f.pos, f.radius, shipR, out)
+    if (f.alive && f.id !== skipBodyId) avoidSphere(pos, dist, f.pos, f.radius * k, shipR, out)
   }
   for (const b of world.warBases) {
-    if (b.alive && b.id !== skipBodyId) avoidSphere(pos, dist, b.pos, b.radius, shipR, out)
+    if (b.alive && b.id !== skipBodyId) avoidSphere(pos, dist, b.pos, b.radius * k, shipR, out)
   }
   return _blocked
 }
