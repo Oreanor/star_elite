@@ -2,9 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import { applyCommand, copilotRank, copilotSalary, type World } from '@elite/sim'
 import type { ChatTurn, CopilotReply } from './facts'
 import { Button, PilotPortrait } from '../station/chrome'
-import { GLASS_PANEL, screenBackground } from '../station/backdrop'
 import { PilotIdentity } from '../station/PilotIdentity'
-import { UI } from '../theme'
+import { DialogueWindow, SayBar, Transcript } from './DialogueShell'
 import { properName } from '../i18n/dataNames'
 import { phraseText } from '../i18n/phraseText'
 import { faceOfName } from '../portrait'
@@ -80,72 +79,20 @@ export function CopilotChat({
   }
 
   return (
-    <div
-      className={`absolute inset-0 flex items-center justify-center font-mono ${world.docked ? '' : 'backdrop-blur-md'}`}
-      style={{ color: UI.PRIMARY, background: screenBackground(world, world.docked) }}
+    <DialogueWindow
+      world={world}
+      onClose={onClose}
+      identity={
+        <PilotIdentity
+          portrait={<PilotPortrait name={copilot.name} species={copilot.persona.species} face={faceOfName(copilot.name)} size={108} />}
+          name={name}
+          role={t('copilot.title')}
+          craft={`${t('copilot.rank', { rank })} · ${copilotSalary(rank)}`}
+        />
+      }
     >
-      <div
-        className="flex h-[38rem] max-h-[85vh] w-[40rem] flex-col rounded-2xl border px-8 py-6 backdrop-blur-md"
-        style={{ ...GLASS_PANEL, color: UI.PRIMARY }}
-      >
-        <div className="mb-4 flex items-start justify-between gap-4">
-          <PilotIdentity
-            portrait={<PilotPortrait name={copilot.name} species={copilot.persona.species} face={faceOfName(copilot.name)} size={108} />}
-            name={name}
-            role={t('copilot.title')}
-            craft={`${t('copilot.rank', { rank })} · ${copilotSalary(rank)}`}
-          />
-          <div className="flex shrink-0 flex-col items-end gap-2">
-            <Button small onClick={onClose}>
-              {t('dialogue.end')}
-            </Button>
-          </div>
-        </div>
-
-        <div ref={scroller} className="mb-4 min-h-[8rem] flex-1 overflow-y-auto pr-1 text-sm leading-relaxed">
-          <div className="flex flex-col gap-2">
-            {turns.map((turn, i) => (
-              <div key={i}>
-                {turn.who === 'you' ? (
-                  <span>
-                    <span style={{ color: UI.DIM }}>{world.player.pilotName}:&nbsp;</span>
-                    {turn.text}
-                  </span>
-                ) : turn.who === 'system' ? (
-                  <span className="text-xs tracking-widest" style={{ color: UI.WARN }}>
-                    · {turn.text} ·
-                  </span>
-                ) : (
-                  <span>
-                    <span style={{ color: UI.PRIMARY }}>{name}:&nbsp;</span>
-                    {turn.text}
-                  </span>
-                )}
-              </div>
-            ))}
-            {busy && <span style={{ color: UI.DIM }}>…</span>}
-          </div>
-        </div>
-
-        <div className="flex gap-2 border-t pt-4" style={{ borderColor: UI.DIM }}>
-          <input
-            ref={inputRef}
-            autoFocus
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') void send()
-            }}
-            disabled={busy}
-            placeholder={t('chat.placeholder')}
-            className="flex-1 border bg-transparent px-3 py-2 text-sm outline-none disabled:opacity-50"
-            style={{ borderColor: UI.DIM, color: UI.PRIMARY }}
-          />
-          <Button small onClick={() => void send()} disabled={busy || !input.trim()}>
-            {t('chat.send')}
-          </Button>
-        </div>
-      </div>
-    </div>
+      <Transcript scroller={scroller} turns={turns} myName={world.player.pilotName} theirName={name} busy={busy} />
+      <SayBar inputRef={inputRef} value={input} onChange={setInput} onSend={() => void send()} busy={busy} />
+    </DialogueWindow>
   )
 }

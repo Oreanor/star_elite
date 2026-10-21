@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
-import { Button, PilotPortrait } from '../station/chrome'
+import { PilotPortrait } from '../station/chrome'
+import { PilotIdentity } from '../station/PilotIdentity'
+import { DialogueWindow, SayBar, Transcript } from '../dialogue/DialogueShell'
 import { UI } from '../theme'
 import { t, useLang } from '../i18n'
 import { properName, professionName } from '../i18n/dataNames'
@@ -42,67 +44,29 @@ export function PlayerChat({ player, onClose }: { player: OnlinePlayer; onClose:
     ? t('people.online.dock', { place: properName(player.place), sys: properName(player.systemName) })
     : t('people.online.sys', { sys: properName(player.systemName) })
 
+  // Тот же корпус, что у разговора с ботом (`DialogueWindow`): чат с человеком — не другое
+  // приложение. Прежде у него была своя квадратная рамка, «ТЫ:»/тире и ссылка вместо кнопки.
+  const turns = messages.map((m) => ({ who: m.from === me ? 'you' : 'them', text: m.text }))
   return (
-    <div className="absolute inset-0 flex items-center justify-center bg-black/80 font-mono" style={{ color: UI.PRIMARY }}>
-      {/* Тот же корпус, что у окна разговора: фиксированная высота, лента забирает остаток. */}
-      <div className="flex h-[38rem] max-h-[85vh] w-[40rem] flex-col border px-8 py-6" style={{ borderColor: UI.PRIMARY }}>
-        {/* Портрет из вида+лица (пришли в presence), имя, род занятий и где он сейчас. */}
-        <div className="mb-4 flex items-center gap-4">
-          <PilotPortrait species={player.species} face={player.face} size={108} />
-          <div className="min-w-0">
-            <div className="text-lg tracking-[0.3em]">{player.name.toUpperCase()}</div>
-            <div className="text-xs tracking-widest" style={{ color: UI.DIM }}>
-              {professionName(player.profession).toUpperCase()} · {t('chat.online')} · {where}
-            </div>
+    <DialogueWindow
+      world={session.world}
+      onClose={onClose}
+      identity={
+        // Портрет из вида+лица (пришли в presence), имя, род занятий и где он сейчас.
+        <PilotIdentity
+          portrait={<PilotPortrait species={player.species} face={player.face} size={108} />}
+          name={player.name}
+          role={`${professionName(player.profession)} · ${t('chat.online')}`}
+        >
+          <div className="text-xs tracking-widest" style={{ color: UI.DIM }}>
+            {where}
           </div>
-        </div>
-
-        {/* Лента: свои реплики с меткой «ТЫ», чужие — тире, как в разговоре с ботом. */}
-        <div ref={scroller} className="mb-4 min-h-[8rem] flex-1 overflow-y-auto pr-1 text-sm leading-relaxed">
-          {messages.length === 0 ? (
-            <span style={{ color: UI.DIM }}>{t('chat.empty')}</span>
-          ) : (
-            <div className="flex flex-col gap-2">
-              {messages.map((m, i) => (
-                <div key={i}>
-                  {m.from === me ? (
-                    <span>
-                      <span style={{ color: UI.DIM }}>{t('chat.you')}:&nbsp;</span>
-                      {m.text}
-                    </span>
-                  ) : (
-                    <span style={{ color: UI.PRIMARY }}>— {m.text}</span>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        <div className="mb-3 flex gap-2">
-          <input
-            autoFocus
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') send()
-            }}
-            placeholder={t('chat.placeholder')}
-            className="flex-1 border bg-transparent px-3 py-2 text-sm outline-none"
-            style={{ borderColor: UI.DIM, color: UI.PRIMARY }}
-          />
-          <Button small onClick={send} disabled={!input.trim()}>
-            {t('chat.send')}
-          </Button>
-        </div>
-
-        <div className="mt-1 text-center text-xs tracking-widest" style={{ color: UI.DIM }}>
-          <button type="button" className="cursor-pointer hover:underline" onClick={onClose}>
-            {t('chat.close')}
-          </button>
-        </div>
-      </div>
-    </div>
+        </PilotIdentity>
+      }
+    >
+      <Transcript scroller={scroller} turns={turns} myName={session.world.player.pilotName} theirName={player.name} />
+      <SayBar value={input} onChange={setInput} onSend={send} />
+    </DialogueWindow>
   )
 }
 

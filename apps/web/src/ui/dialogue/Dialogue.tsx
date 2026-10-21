@@ -17,7 +17,7 @@ import {
 import { useSession } from '../../session/GameContext'
 import { Button, PilotPortrait } from '../station/chrome'
 import { PilotIdentity } from '../station/PilotIdentity'
-import { GLASS_PANEL, screenBackground } from '../station/backdrop'
+import { DialogueWindow, SayBar, Transcript } from './DialogueShell'
 import { clearOutcomeEmotion, markOutcomeEmotion, type DivineEmotion, type Emotion } from '../portrait'
 import { UI } from '../theme'
 import { chassisName, occupationName } from '../i18n/dataNames'
@@ -328,143 +328,84 @@ export function Dialogue({
   }
 
   return (
-    <div
-      // Фон под окном — тот же, что у консоли: у причала снимок станции (не теряем его в
-      // космос), в полёте тёмное стекло с блюром поверх боя. Разговор — не отдельный мир.
-      className={`absolute inset-0 flex items-center justify-center font-mono ${world.docked ? '' : 'backdrop-blur-md'}`}
-      style={{ color: UI.PRIMARY, background: screenBackground(world, world.docked) }}
+    <DialogueWindow
+      world={world}
+      onClose={onClose}
+      hangUp={!ended}
+      identity={
+        // Паспорт — тот же блок, что карточка во вкладке «Люди»: один пилот, один вид.
+        <PilotIdentity
+          portrait={
+            <PilotPortrait ship={other} world={world} emotion={faceEmo} divineEmotion={other.divine ? divineFace ?? undefined : undefined} size={108} />
+          }
+          name={other.pilotName}
+          role={other.divine ? occupationName(other.originKind, other.faction) : `${occupationName(other.originKind, other.faction)} · ${t('copilot.rank', { rank: other.rank })}`}
+          craft={chassisName(other.loadout.chassis.name)}
+          stance={stance}
+        />
+      }
+      actions={
+        !ended && (
+          <>
+            {hireLine && (
+              <Button
+                small
+                onClick={() => speak(hireLine.topic)}
+                disabled={hireLine.blocked !== null || busy}
+              >
+                {hireFee != null ? tm('dialogue.hire', { fee: <Money amount={hireFee} /> }) : t('dialogue.hirePlain')}
+              </Button>
+            )}
+            {canAskJob && (
+              <Button small onClick={jobAsk} disabled={busy}>
+                {t('job.ask')}
+              </Button>
+            )}
+            {offer?.revealed && (
+              <>
+                <Button small onClick={jobAccept} disabled={busy || jobBlock !== null}>
+                  {t('job.accept')}
+                </Button>
+                <Button small onClick={jobDecline} disabled={busy}>
+                  {t('job.decline')}
+                </Button>
+                {jobBlock && jobBlock !== 'no-offer' && (
+                  <span className="max-w-[11rem] text-right text-[0.65rem] leading-snug tracking-widest" style={{ color: UI.DIM }}>
+                    {t(jobBlock === 'hold-full' ? 'job.block.hold' : jobBlock === 'remote' ? 'job.block.remote' : 'job.block.busy')}
+                  </span>
+                )}
+              </>
+            )}
+            {other.mirror && !offer?.revealed && trafficSync.claimState(other.id) === 'refused' && (
+              <span className="max-w-[11rem] text-right text-[0.65rem] leading-snug tracking-widest" style={{ color: UI.DIM }}>
+                {t('job.block.remote')}
+              </span>
+            )}
+            {hireLine?.blocked && (
+              <span className="max-w-[11rem] text-right text-[0.65rem] leading-snug tracking-widest" style={{ color: UI.DIM }}>
+                {phraseText(hireLine.blocked, ' ')}
+              </span>
+            )}
+          </>
+        )
+      }
     >
-      {/* Высота окна ФИКСИРОВАНА: лента (`flex-1`) забирает остаток и скроллится внутри,
-          поэтому окно не прыгает по мере набегания реплик — растёт лишь прокрутка.
-          Панель — единое «стекло» (`GLASS_PANEL`), как консоль и модалки. */}
-      <div
-        className="flex h-[38rem] max-h-[85vh] w-[40rem] flex-col rounded-2xl border px-8 py-6 backdrop-blur-md"
-        style={{ ...GLASS_PANEL, color: UI.PRIMARY }}
-      >
-        {/* Шапка: портрет и паспорт слева; «нанять» и «положить трубку» — столбиком справа. */}
-        <div className="mb-4 flex items-start justify-between gap-4">
-          {/* Паспорт — тот же блок, что карточка во вкладке «Люди»: один пилот, один вид. */}
-          <PilotIdentity
-            portrait={
-              <PilotPortrait ship={other} world={world} emotion={faceEmo} divineEmotion={other.divine ? divineFace ?? undefined : undefined} size={108} />
-            }
-            name={other.pilotName}
-            role={other.divine ? occupationName(other.originKind, other.faction) : `${occupationName(other.originKind, other.faction)} · ${t('copilot.rank', { rank: other.rank })}`}
-            craft={chassisName(other.loadout.chassis.name)}
-            stance={stance}
-          />
+      {/* Лента разговора: и болтовня, и обмен по кнопкам ложатся сюда. */}
+      <Transcript scroller={scroller} turns={turns} myName={playerName} theirName={otherName} busy={busy} />
 
-          {!ended && (
-            <div className="flex shrink-0 flex-col items-end gap-2">
-              {hireLine && (
-                <Button
-                  small
-                  onClick={() => speak(hireLine.topic)}
-                  disabled={hireLine.blocked !== null || busy}
-                >
-                  {hireFee != null ? tm('dialogue.hire', { fee: <Money amount={hireFee} /> }) : t('dialogue.hirePlain')}
-                </Button>
-              )}
-              {canAskJob && (
-                <Button small onClick={jobAsk} disabled={busy}>
-                  {t('job.ask')}
-                </Button>
-              )}
-              {offer?.revealed && (
-                <>
-                  <Button small onClick={jobAccept} disabled={busy || jobBlock !== null}>
-                    {t('job.accept')}
-                  </Button>
-                  <Button small onClick={jobDecline} disabled={busy}>
-                    {t('job.decline')}
-                  </Button>
-                  {jobBlock && jobBlock !== 'no-offer' && (
-                    <span className="max-w-[11rem] text-right text-[0.65rem] leading-snug tracking-widest" style={{ color: UI.DIM }}>
-                      {t(jobBlock === 'hold-full' ? 'job.block.hold' : jobBlock === 'remote' ? 'job.block.remote' : 'job.block.busy')}
-                    </span>
-                  )}
-                </>
-              )}
-              <Button small onClick={onClose}>
-                {t('dialogue.end')}
-              </Button>
-              {other.mirror && !offer?.revealed && trafficSync.claimState(other.id) === 'refused' && (
-                <span className="max-w-[11rem] text-right text-[0.65rem] leading-snug tracking-widest" style={{ color: UI.DIM }}>
-                  {t('job.block.remote')}
-                </span>
-              )}
-              {hireLine?.blocked && (
-                <span className="max-w-[11rem] text-right text-[0.65rem] leading-snug tracking-widest" style={{ color: UI.DIM }}>
-                  {phraseText(hireLine.blocked, ' ')}
-                </span>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* Лента разговора: и болтовня, и обмен по кнопкам ложатся сюда. */}
-        <div ref={scroller} className="mb-4 min-h-[8rem] flex-1 overflow-y-auto pr-1 text-sm leading-relaxed">
-          {turns.length === 0 && !busy ? (
-            <span style={{ color: UI.DIM }}>{t('chat.empty')}</span>
-          ) : (
-            <div className="flex flex-col gap-2">
-              {turns.map((t, i) => (
-                <div key={i}>
-                  {t.who === 'you' ? (
-                    <span>
-                      <span style={{ color: UI.DIM }}>{playerName}:&nbsp;</span>
-                      {t.text}
-                    </span>
-                  ) : t.who === 'system' ? (
-                    <span className="text-xs tracking-widest" style={{ color: UI.WARN }}>
-                      · {t.text} ·
-                    </span>
-                  ) : (
-                    <span>
-                      <span style={{ color: UI.PRIMARY }}>{otherName}:&nbsp;</span>
-                      {t.text}
-                    </span>
-                  )}
-                </div>
-              ))}
-              {busy && <span style={{ color: UI.DIM }}>…</span>}
-            </div>
-          )}
-        </div>
-
-        {ended ? (
-          // Панель обрыва: канал закрыт, остаётся только уйти.
-          <div className="border-t pt-4" style={{ borderColor: UI.DIM }}>
-            <div className="mb-3 text-sm tracking-widest" style={{ color: UI.WARN }}>
-              {ended}
-            </div>
-            <Button small onClick={onClose}>
-              {t('dialogue.closeChannel')}
-            </Button>
+      {ended ? (
+        // Панель обрыва: канал закрыт, остаётся только уйти.
+        <div className="border-t pt-4" style={{ borderColor: UI.DIM }}>
+          <div className="mb-3 text-sm tracking-widest" style={{ color: UI.WARN }}>
+            {ended}
           </div>
-        ) : (
-          chatAvailable && (
-            <div className="flex gap-2 border-t pt-4" style={{ borderColor: UI.DIM }}>
-              <input
-                ref={inputRef}
-                autoFocus
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') send()
-                }}
-                disabled={busy}
-                placeholder={t('chat.placeholder')}
-                className="flex-1 border bg-transparent px-3 py-2 text-sm outline-none disabled:opacity-50"
-                style={{ borderColor: UI.DIM, color: UI.PRIMARY }}
-              />
-              <Button small onClick={send} disabled={busy || !input.trim()}>
-                {t('chat.send')}
-              </Button>
-            </div>
-          )
-        )}
-      </div>
-    </div>
+          <Button small onClick={onClose}>
+            {t('dialogue.closeChannel')}
+          </Button>
+        </div>
+      ) : (
+        chatAvailable && <SayBar inputRef={inputRef} value={input} onChange={setInput} onSend={send} busy={busy} />
+      )}
+    </DialogueWindow>
   )
 }
