@@ -437,3 +437,50 @@ describe('связное пространство', () => {
   })
 })
 
+
+describe('зум в пустоте ниже GHOST', () => {
+  it('рост и усадка между звёздами не двигают локус: зум — вокруг борта, не вокруг звезды вылета', () => {
+    // Пойманное: на ×200–800 в 20 св.г. от звезды вылета локус не вёлся, и ly = (pos−якорь)·S/L
+    // растягивался вокруг неё. Цель «ускакивала» с экрана, дистанция прыгала с 25 на 90 св.г.
+    const world = createWorld()
+    const dest = neighbourBeyond(world, 5)
+    const s = 300
+    world.player.state.scale = s
+    const home = world.systemIndex
+    const sep = distanceLy(placeSystem(home, world.galaxySeed), placeSystem(dest, world.galaxySeed))
+    // Сначала из пузыря дома — систему снимает до звезды, — потом в пустоту на полпути.
+    putAtLy(world, along(home, dest, (GALAXY_FLIGHT.BUBBLE_LY * 2) / sep, world.galaxySeed), s)
+    stepGalaxyPresence(world, s)
+    expect(world.systemStellarOnly).toBe(true)
+    putAtLy(world, along(home, dest, 0.5, world.galaxySeed), s)
+    stepGalaxyPresence(world, s)
+
+    const before = { ...playerGalaxyLy(world, s) }
+    let old = s
+    for (const next of [450, 800, 2000, 120, 7]) {
+      preserveGalaxyLocus(world.player, world, old, next)
+      world.player.state.scale = next
+      stepGalaxyPresence(world, old)
+      old = next
+      expect(distanceLy(playerGalaxyLy(world, next), before)).toBeLessThan(1e-9)
+    }
+  })
+
+  it('прибытие в пузырь ниже GHOST не перескакивает к звезде', () => {
+    // Борт ставился мерой GHOST, а локус мерился мерой своего роста: на ×500 прибытие
+    // сдвигало борт к звезде в S/GHOST раз — из 0.08 св.г. сразу в 0.008.
+    const world = createWorld()
+    const dest = neighbourBeyond(world, 5)
+    const s = 500
+    world.player.state.scale = s
+    const star = placeSystem(dest, world.galaxySeed)
+    putAtLy(world, along(world.systemIndex, dest, 0.9, world.galaxySeed), s)
+    stepGalaxyPresence(world, s)
+    const at = { x: star.x + GALAXY_FLIGHT.BUBBLE_LY * 0.9, y: star.y, z: star.z }
+    catalogLyToWorld(at.x - placeSystem(world.galaxyFrameIndex, world.galaxySeed).x, at.y - placeSystem(world.galaxyFrameIndex, world.galaxySeed).y, at.z - placeSystem(world.galaxyFrameIndex, world.galaxySeed).z, metersPerLy(s), world.player.state.pos)
+    world.player.state.pos.sub(world.originOffset)
+    stepGalaxyPresence(world, s)
+    expect(world.galaxyFrameIndex).toBe(dest)
+    expect(distanceLy(playerGalaxyLy(world, s), at)).toBeLessThan(1e-6)
+  })
+})

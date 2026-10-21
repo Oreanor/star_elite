@@ -135,9 +135,22 @@ export function jumpStarWorldPos(world: World, out: Vector3): boolean {
 }
 
 /**
+ * Ведёт ли зум локус при этом росте. Выше GHOST_BODY — всегда. Ниже — только в пустоте
+ * (кадр — одна звезда, `systemStellarOnly`): в собранной системе метры системные, ремап к
+ * якорю двигал бы борт относительно орбит.
+ *
+ * Пойманное: в пустоте ниже порога локус НЕ вёлся, и ly = (pos − якорь)·S/L тянулся вместе с
+ * ростом вокруг звезды ВЫЛЕТА, а не вокруг борта. В 20 св.г. от неё ×200→×800 отбрасывало
+ * борт на десятки св.г.: цель «ускакивала» с экрана, дистанция прыгала с 25 на 90.
+ */
+export function locusFollowsZoom(world: World, oldScale: number, newScale: number): boolean {
+  return Math.min(oldScale, newScale) >= MIELOPHONE.GHOST_BODY_SCALE || world.systemStellarOnly
+}
+
+/**
  * Сохранить галактический локус при смене масштаба: ly = (pos−anchor)/m(S) неподвижен.
  * Полёт двигает pos (и локус); зум лишь перепроецирует текущий локус в новые метры.
- * Ниже GHOST_BODY — системные метры, ремап к якорю ломал бы орбиты.
+ * Когда — решает `locusFollowsZoom`.
  */
 export function preserveGalaxyLocus(
   ship: ShipEntity,
@@ -146,7 +159,7 @@ export function preserveGalaxyLocus(
   newScale: number,
 ): void {
   if (oldScale === newScale) return
-  if (Math.min(oldScale, newScale) < MIELOPHONE.GHOST_BODY_SCALE) return
+  if (!locusFollowsZoom(world, oldScale, newScale)) return
   const mOld = metersPerLy(oldScale)
   const mNew = metersPerLy(newScale)
   if (mOld === mNew || mOld <= 0) return

@@ -5,6 +5,7 @@ import {
   catalogLyToWorld,
   effectiveRadius,
   galaxyAnchorLocal,
+  locusFollowsZoom,
   metersPerLy,
   playerGalaxyLy,
   preserveGalaxyLocus,
@@ -148,24 +149,24 @@ function standOffFromStar(world: World): void {
   maybeShiftOrigin(world)
 }
 
-/** Борт в точку `ly` кадра в GHOST-метрах: от барицентра системы кадра. */
-function placeAtLocus(world: World, ly: { x: number; y: number; z: number }): void {
+/**
+ * Борт в точку `ly` кадра: от барицентра системы кадра, в метрах роста `scale` — того, при
+ * котором `ly` померен. Иная мера сдвигала локус в S/GHOST раз: на ×500 прибытие ставило
+ * борт к звезде вдесятеро ближе, чем он к ней подлетел.
+ */
+function placeAtLocus(world: World, ly: { x: number; y: number; z: number }, scale: number): void {
   const origin = placeSystem(world.galaxyFrameIndex, world.galaxySeed)
-  catalogLyToWorld(
-    ly.x - origin.x,
-    ly.y - origin.y,
-    ly.z - origin.z,
-    metersPerLy(MIELOPHONE.GHOST_BODY_SCALE),
-    _start,
-  )
+  catalogLyToWorld(ly.x - origin.x, ly.y - origin.y, ly.z - origin.z, metersPerLy(scale), _start)
   galaxyAnchorLocal(world, world.player.state.pos).add(_start)
   maybeShiftOrigin(world)
 }
 
+/** `lyScale` — рост, при котором померен `playerLy` (мера постановки), `scale` — новый рост. */
 function arriveAt(
   world: World,
   index: number,
   playerLy: { x: number; y: number; z: number },
+  lyScale: number,
   scale: number,
   stellarOnly: boolean,
 ): void {
@@ -177,16 +178,8 @@ function arriveAt(
   const grow = player.controls.grow
   const jumpTarget = world.jumpTargetIndex
   const star = placeSystem(index, world.galaxySeed)
-  // Ниже GHOST координаты — системные. Сжатие ly тем же ×, что у слоя, раздувает
-  // св.год до триллионов метров и ломает float32 (пыль, сопла).
-  const meters = metersPerLy(scale >= MIELOPHONE.GHOST_BODY_SCALE ? scale : MIELOPHONE.GHOST_BODY_SCALE)
-  catalogLyToWorld(
-    playerLy.x - star.x,
-    playerLy.y - star.y,
-    playerLy.z - star.z,
-    meters,
-    _start,
-  )
+  // Мера — та же, что у `placeAtLocus`: локус после прибытия равен локусу до него.
+  catalogLyToWorld(playerLy.x - star.x, playerLy.y - star.y, playerLy.z - star.z, metersPerLy(lyScale), _start)
   const def = systemDefFor(index, world.galaxySeed)
   syncLiveContactsFromShips(world)
   enterSystem(world, def, index, def.playerStart, stellarOnly)
@@ -200,6 +193,8 @@ function arriveAt(
   maybeShiftOrigin(world)
   standOffFromStar(world)
   player.state.scale = scale
+  // В пустоте зум ведёт локус: из меры постановки — в метры нового роста.
+  if (stellarOnly) preserveGalaxyLocus(player, world, lyScale, scale)
   player.state.quat.copy(_quat)
   player.state.vel.copy(_vel)
   player.state.angVel.copy(_ang)
@@ -259,17 +254,16 @@ export function stepGalaxyPresence(world: World, oldScale: number): void {
     world.galaxyFrameIndex = world.systemIndex
   }
 
-  if (oldScale >= ghost && newScale < ghost) {
-    // Пересекли порог вниз: сначала сохранить ly в метрах GHOST, потом решать систему.
-    preserveGalaxyLocus(player, world, oldScale, ghost)
-  }
-
-  const lyScale = newScale >= ghost ? newScale : oldScale >= ghost ? ghost : newScale
+  const crossingDown = oldScale >= ghost && newScale < ghost
+  // В пустоте `stepScale` уже перевёл локус в метры нового роста (`locusFollowsZoom`). В
+  // собранной системе — нет: довести его до порога, ниже метры уже системные.
+  const zoomed = locusFollowsZoom(world, oldScale, newScale)
+  if (crossingDown && !zoomed) preserveGalaxyLocus(player, world, oldScale, ghost)
+  const lyScale = crossingDown && !zoomed ? ghost : newScale
   let ly = playerGalaxyLy(world, lyScale)
   // «Пузырь загружен» — по флагу входа, не по наличию планет: у Ядра их нет,
   // и пустая система иначе пересобиралась каждый такт.
   const populated = !world.systemStellarOnly
-  const crossingDown = oldScale >= ghost && newScale < ghost
   // В своём пузыре ближайшая не меняется — не сканируем каталог каждый такт.
   // Усадка через GHOST сюда не входит: ly ещё галактические, 0.02 св.г. часто
   // внутри звезды, и без пересчёта борт влипает в твердь.
@@ -310,15 +304,15 @@ export function stepGalaxyPresence(world: World, oldScale: number): void {
 
   if (crossingDown) {
     if (world.galaxyFrameIndex === nearest) {
-      // Свой кадр: координаты уже GHOST-метры (preserveGalaxyLocus). Подтянутую к
+      // Свой кадр: локус уже в метрах кадра (preserveGalaxyLocus). Подтянутую к
       // пузырю точку ПРИМЕНЯЕМ — иначе борт оставался за пузырём (в 1 св.г.·GHOST),
       // система снималась тактом позже и собиралась снова при дальнейшей усадке.
-      if (pulled) placeAtLocus(world, ly)
-      if (bodies && !populated) arriveAt(world, nearest, ly, newScale, false)
+      if (pulled) placeAtLocus(world, ly, lyScale)
+      if (bodies && !populated) arriveAt(world, nearest, ly, lyScale, newScale, false)
       else standOffFromStar(world)
       return
     }
-    arriveAt(world, nearest, ly, newScale, !bodies)
+    arriveAt(world, nearest, ly, lyScale, newScale, !bodies)
     return
   }
 
@@ -326,7 +320,7 @@ export function stepGalaxyPresence(world: World, oldScale: number): void {
 
   const loaded = world.galaxyFrameIndex
   if (bodies) {
-    if (loaded !== nearest || !populated) arriveAt(world, nearest, ly, newScale, false)
+    if (loaded !== nearest || !populated) arriveAt(world, nearest, ly, lyScale, newScale, false)
     return
   }
   if (populated && loaded === nearest) {
@@ -335,6 +329,6 @@ export function stepGalaxyPresence(world: World, oldScale: number): void {
   }
   if (oldScale >= ghost) {
     // Усадка в пустоте: нужна хотя бы звезда ближайшей, иначе кадр остаётся у дома.
-    arriveAt(world, nearest, ly, newScale, true)
+    arriveAt(world, nearest, ly, lyScale, newScale, true)
   }
 }
