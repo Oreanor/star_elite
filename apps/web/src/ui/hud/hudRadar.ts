@@ -82,7 +82,7 @@ export function drawRadar(frame: HudFrame): void {
     const plz = (player.state.pos.z - gr.anchor.z) * invLy
 
     // Проецирует звезду (индекс·3) на локатор. `force` игнорирует сферу видимости (для
-    // своей звезды — её показываем всегда). Возвращает экранную точку или null.
+    // выбранной цели — её показываем всегда). Возвращает экранную точку или null.
     const projStar = (b: number, force: boolean): { px: number; my: number } | null => {
       _point.set(pos[b]! - plx, pos[b + 1]! - ply, pos[b + 2]! - plz)
       const distSq = _point.lengthSq()
@@ -101,20 +101,18 @@ export function drawRadar(frame: HudFrame): void {
       return { px, my }
     }
 
+    // Своя звезда — такая же точка, как прочие: отдельной метки дома нет.
     for (let i = 0; i < gr.count; i++) {
-      // Своя главная — ниже с кольцом; спутник своей двойной рисуем тут же (force).
-      if (i === gr.originIndex) continue
       const b = i * 3
-      const homeComp = i === gr.homeCompanionIndex
-      const p = projStar(b, homeComp)
+      const p = projStar(b, false)
       if (!p) continue
       const color = `rgb(${Math.round(col[b]! * 255)},${Math.round(col[b + 1]! * 255)},${Math.round(col[b + 2]! * 255)})`
-      dot(ctx, p.px, p.my, Math.max(1, (homeComp ? 2 : 1.5) * S), color)
+      dot(ctx, p.px, p.my, Math.max(1, 1.5 * S), color)
     }
 
     // ВЫБРАННАЯ звезда (Tab / карта → jumpTargetIndex): только главные (systemCount).
     const tgt = world.jumpTargetIndex
-    if (tgt != null && tgt !== gr.originIndex && tgt >= 0 && tgt < gr.systemCount) {
+    if (tgt != null && tgt >= 0 && tgt < gr.systemCount) {
       const b = tgt * 3
       // Мир для ретикулы/стрелки; на локаторе — ly через projStar (стабильнее на большом ×).
       _gtar.set(
@@ -149,23 +147,6 @@ export function drawRadar(frame: HudFrame): void {
       } else {
         offscreenArrow(frame, _gtar, HUD_COLORS.NAV, true, arrowLabel)
       }
-    }
-
-    // СВОЯ звезда (текущая система) — ВСЕГДА, кольцом и подписью, даже вне сферы: это
-    // бесшовная подмена «система → звезда галактики» и точка отсчёта. Прочие подтянутся
-    // на радар по мере роста — игрок видит, куда всё сходится.
-    const ownB = gr.originIndex * 3
-    const own = projStar(ownB, true)
-    if (own) {
-      // Цвет — НАСТОЯЩИЙ цвет своей звезды из буфера слоя, а не HUD_COLORS.PRIMARY.
-      // `PRIMARY` и `PLANET` — один и тот же #7fd6ff, и голубая точка своей звезды, которая
-      // вдобавок нарисована `force` (вне сферы видимости, всегда), читалась как зависшая
-      // планета: «Люрилар голубой так и висит на локаторе». Кольцо и подпись отличают её от
-      // прочих звёзд, а цвет класса — от планеты.
-      const ownColor = `rgb(${Math.round(col[ownB]! * 255)},${Math.round(col[ownB + 1]! * 255)},${Math.round(col[ownB + 2]! * 255)})`
-      dot(ctx, own.px, own.my, Math.max(1, 2 * S), ownColor)
-      circle(ctx, own.px, own.my, 3 * S, ownColor)
-      text(ctx, properName(world.systemName), own.px - 5 * S, own.my - 3 * S, ownColor, 'right')
     }
     return
   }

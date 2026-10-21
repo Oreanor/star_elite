@@ -171,6 +171,12 @@ function threatened(w: World): boolean {
 const VEIL_FADE_MS = 400
 /** Держим чёрное между затемнением и просветлением, мс: переход не рвётся встык. */
 const VEIL_HOLD_MS = 500
+/**
+ * Страховка подмены под пеленой, мс. Подмену ведёт `transitionend` (таймер на VEIL_FADE_MS
+ * истекал раньше черноты, пока сборка сцены держала первый кадр). Но перехода может и не
+ * быть — пелена уже чёрная, анимации выключены, — и без страховки игра не стартовала бы.
+ */
+const VEIL_SWAP_FALLBACK_MS = 2_000
 
 function Shell({ onRestart }: { onRestart: () => void }) {
   const session = useSession()
@@ -302,7 +308,17 @@ function Shell({ onRestart }: { onRestart: () => void }) {
    * курсора ещё не пришёл), светлеем уже на игре.
    */
   const [veil, setVeil] = useState(false)
+  const veilOn = useRef(false)
+  useEffect(() => {
+    veilOn.current = veil
+  }, [veil])
   const veilSwap = useRef<(() => void) | null>(null)
+  /** Подмена под пеленой — ровно один раз, кто бы её ни вызвал первым. */
+  const runVeilSwap = useCallback(() => {
+    const swap = veilSwap.current
+    veilSwap.current = null
+    swap?.()
+  }, [])
   /** Под пеленой / пока ждём lock после интро — титул не монтируем. */
   const [enterPlay, setEnterPlay] = useState(false)
   const enterPlayRef = useRef(false)
@@ -364,9 +380,15 @@ function Shell({ onRestart }: { onRestart: () => void }) {
           requestAnimationFrame(() => requestAnimationFrame(() => setVeil(false)))
         }, VEIL_HOLD_MS)
       }
+      // Уже черно — перехода не будет, подменяем сразу.
+      if (veilOn.current) {
+        runVeilSwap()
+        return
+      }
       setVeil(true)
+      window.setTimeout(runVeilSwap, VEIL_SWAP_FALLBACK_MS)
     },
-    [session, startLockPoll],
+    [session, startLockPoll, runVeilSwap],
   )
 
   /**
@@ -949,9 +971,7 @@ function Shell({ onRestart }: { onRestart: () => void }) {
           if (event.target !== event.currentTarget || event.propertyName !== 'opacity' || !veil) return
           // Таймер мог истечь, пока сборка сцены задерживала первый кадр затемнения.
           // Подменяем меню на готовый UI только после фактического достижения черноты.
-          const swap = veilSwap.current
-          veilSwap.current = null
-          swap?.()
+          runVeilSwap()
         }}
       />
     </div>

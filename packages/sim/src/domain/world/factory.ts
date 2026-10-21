@@ -39,7 +39,9 @@ import { placeFigurines, rollFigurineSpecimen, stockSlovoCollection } from './fi
 import { placeMonoliths, placeWarBases } from './monoliths'
 import { maybeShiftOrigin } from './origin'
 import {
+  isLuminary,
   keplerRate,
+  luminary,
   orbitFromOffset,
   planetMass,
   starMassSolar,
@@ -788,12 +790,13 @@ export function enterSystem(
   world.desolate = def.desolate ?? false
   world.dyson = stellarOnly ? null : def.dyson
   world.systemIndex = systemIndex
+  world.systemStellarOnly = stellarOnly
   world.epoch += 1
 
   world.ships = stellarOnly ? [] : makePatrols(rng, world.ids, def)
   world.bodies = makeBodies(world.ids, def)
   if (stellarOnly) {
-    world.bodies = world.bodies.filter((b) => b.kind === 'star' || b.kind === 'blackhole')
+    world.bodies = world.bodies.filter(isLuminary)
   }
   // Бой старой системы гасим ДО орбит: stepOrbits двигает ракеты/трассы вместе со
   // станцией — чужой мусор (и тесты с заглушками) не должен переживать вход.
@@ -809,6 +812,10 @@ export function enterSystem(
   // Устья принадлежат системе. Свой портал после перехода добавит новое ближнее
   // устье, сетевые — заново материализуются из RTDB-проекции новой системы.
   world.jumpGates = []
+  // Начало координат — у новой системы ДО расстановки орбит: `stepOrbits` кладёт тела от
+  // барицентра (−originOffset), и со старым сдвигом система первый такт стояла бы мимо
+  // своего места, а статуи и базы, поставленные от станции, — навсегда.
+  world.originOffset.set(0, 0, 0)
   // Спутники, планеты и станция — на орбитах к `calendarTime` (общие часы сервера).
   stepOrbits(world)
   if (stellarOnly) {
@@ -836,7 +843,7 @@ export function enterSystem(
   }
   world.contactLock = null
   world.navTargetId = stellarOnly
-    ? world.bodies.find((b) => b.kind === 'star' || b.kind === 'blackhole')?.id ?? null
+    ? luminary(world.bodies, 0)?.id ?? null
     : world.bodies.find((b) => b.kind === 'station')?.id ?? null
   world.targetFocus = 'nav'
   // Прибыли — выбранная для прыжка система достигнута, метку и точку выхода снимаем.
@@ -967,6 +974,7 @@ export function createWorld(
     jumpTargetIndex: null,
     galaxyAnchorTrue: null,
     galaxyFrameIndex: WORLD.HOME_INDEX,
+    systemStellarOnly: false,
     jumpArrivalPlanet: null,
     trafficTimer: TRAFFIC.FIRST_DELAY,
     originOffset: new Vector3(),

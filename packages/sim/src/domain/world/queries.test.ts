@@ -2,7 +2,7 @@ import { Quaternion, Vector3 } from 'three'
 import { describe, expect, it } from 'vitest'
 import { MIELOPHONE } from '../../config/mielophone'
 import { createWorld, makeShip, STARTER_SYSTEM, type World } from '.'
-import { cycleCelestial, cycleTarget, focusedPlanet, pruneGiantScaleLocks, targetablesOf } from './queries'
+import { cycleCelestial, cycleTarget, focusedPlanet, jumpIsRoute, pruneGiantScaleLocks, targetablesOf } from './queries'
 import { lockContact, lockedShipId, lockedStationId } from './queries'
 
 /** Мир с пиратом и нейтралом перед носом игрока. */
@@ -94,6 +94,19 @@ describe('гигантский масштаб гасит системный на
       expect(world.navTargetId).toBe(star!.id)
       expect(world.targetFocus).toBe('nav')
     }
+  })
+})
+
+describe('jumpIsRoute', () => {
+  // Баг: выбранная на карте чужая звезда рисовалась вместе со старой нав —
+  // две стрелки за кадром (св.с своей и св.г. выбранной).
+  it('чужая звезда с карты — маршрут, своя — нет', () => {
+    const world = createWorld({ ...STARTER_SYSTEM, belt: null, patrols: [] })
+    expect(jumpIsRoute(world)).toBe(false)
+    world.jumpTargetIndex = world.galaxyFrameIndex
+    expect(jumpIsRoute(world)).toBe(false)
+    world.jumpTargetIndex = world.galaxyFrameIndex === 0 ? 1 : 0
+    expect(jumpIsRoute(world)).toBe(true)
   })
 })
 

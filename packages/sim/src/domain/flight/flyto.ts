@@ -1,5 +1,6 @@
 import { Vector3 } from 'three'
 import { GALAXY_FLIGHT } from '../../config/galaxy'
+import { MIELOPHONE } from '../../config/mielophone'
 import { AUTOPILOT } from '../../config/station'
 import { PHYSICS } from '../../config/physics'
 import { clamp } from '../../core/math'
@@ -64,12 +65,21 @@ function jumpStarDestination(world: World): Dest | null {
   return { pos: _jumpPos, radius: GALAXY_FLIGHT.ARRIVE_LY * mPerLy, bodyId: null, galaxy: true }
 }
 
-/** Куда ведём и какой «поверхностный» радиус цели (у борта — 0: точка). null — вести некуда. */
+/**
+ * Куда ведём и какой «поверхностный» радиус цели (у борта — 0: точка). null — вести некуда.
+ *
+ * В системе захват в фокусе (Tab/Shift+Tab) сильнее маршрута с карты: залочил пирата —
+ * J ведёт к нему, а не к звезде за световые годы. Гиганту захватов нет — ведёт маршрут.
+ */
 function destination(world: World): Dest | null {
-  // Галактика: Tab/карта → jumpTarget. Захвата системы нет — это и есть «цель» для J.
-  const jump = jumpStarDestination(world)
-  if (jump) return jump
+  if (world.player.state.scale < MIELOPHONE.GHOST_BODY_SCALE) {
+    const local = lockDestination(world)
+    if (local) return local
+  }
+  return jumpStarDestination(world)
+}
 
+function lockDestination(world: World): Dest | null {
   // Фокус — единственный ответ «куда J»: захваты независимы, иначе пират перебивает планету.
   if (world.targetFocus === 'nav') {
     const nav = navTarget(world)
@@ -110,7 +120,11 @@ function avoidSphere(pos: Vector3, dist: number, center: Vector3, radius: number
   _closest.copy(pos).addScaledVector(_dir, along) // ближайшая к центру точка луча
   _lateral.copy(_closest).sub(center)
   const lat = _lateral.length()
-  const clearance = radius * AUTOPILOT.AVOID_CLEARANCE + shipRadius
+  // Зазор — не ниже, чем борт уже стоит: внутри зоны обхода (взлёт с орбиты в 500 км)
+  // касательный курс планету не задевает, а «обходить» сферу, в которой стоишь, значит
+  // вечно сворачивать. Тогда в ответе ближнее настоящее препятствие (станция на пути).
+  const hard = radius + shipRadius
+  const clearance = Math.max(hard, Math.min(radius * AUTOPILOT.AVOID_CLEARANCE + shipRadius, _toBody.length() - 1))
   if (lat >= clearance || along >= _nearest) return
   _nearest = along
   _blocked = true
@@ -155,6 +169,8 @@ function aimAround(
 
   _nearest = Infinity
   _blocked = false
+  // Гигант за GHOST_BODY проходит твердь насквозь — обходить нечего.
+  if (ship.state.scale >= MIELOPHONE.GHOST_BODY_SCALE) return false
   const shipR = ship.spec.hull.radius
   for (const body of world.bodies) {
     if (skipBodyId !== null && body.id === skipBodyId) continue // это и есть цель, не препятствие

@@ -502,14 +502,21 @@ describe('ход над поверхностью не съедается нак�
     shipAxes(ship.state.quat, fwd, right, up)
     expect(up.dot(normal)).toBeGreaterThan(0.9) // сели брюхом вниз
 
+    // Крен периодичен: один снимок в конце мог попасть ровно на целый оборот (так и было
+    // со слабыми маневровыми стартового борта — к шагу 600 ровно два оборота). Смотрим весь
+    // прогон: брюхо должно хоть раз отвернуться от поверхности, а нос — ни разу не выйти
+    // из касательной плоскости.
     ship.controls.roll = 1
-    for (let i = 0; i < 600; i++) stepLanding(ship, world, PHYSICS.FIXED_DT)
-
-    shipAxes(ship.state.quat, fwd, right, up)
-    // Успел провернуться заметно (не обязательно ровно вверх ногами — важно, что крен идёт).
-    expect(up.dot(normal)).toBeLessThan(0.5)
-    // А нос всё это время остаётся в касательной плоскости: тяга идёт вдоль сферы.
-    expect(Math.abs(fwd.dot(normal))).toBeLessThan(1e-4)
+    let lowestUp = 1
+    let worstNose = 0
+    for (let i = 0; i < 600; i++) {
+      stepLanding(ship, world, PHYSICS.FIXED_DT)
+      shipAxes(ship.state.quat, fwd, right, up)
+      lowestUp = Math.min(lowestUp, up.dot(normal))
+      worstNose = Math.max(worstNose, Math.abs(fwd.dot(normal)))
+    }
+    expect(lowestUp).toBeLessThan(0.5)
+    expect(worstNose).toBeLessThan(1e-4)
   })
 })
 

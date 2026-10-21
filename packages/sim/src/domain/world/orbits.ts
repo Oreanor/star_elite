@@ -24,6 +24,27 @@ const _offset = /* @__PURE__ */ new Vector3()
 const _stationShift = /* @__PURE__ */ new Vector3()
 const _playerReferenceShift = /* @__PURE__ */ new Vector3()
 
+/**
+ * Светило системы — звезда или дыра, вокруг которой (или вокруг барицентра пары) всё
+ * обращается. Не светило: декоративная тесная пара (`faint`) и дыра, привязанная к
+ * станции (Дверь). Различаем по орбите, а не по виду: иначе Дверь у причала становилась
+ * «компаньоном» солнца, и якорь галактики уезжал на полпути между ними.
+ */
+export function isLuminary(b: BodyEntity): boolean {
+  return (b.kind === 'star' || b.kind === 'blackhole') && !b.faint && (b.orbit == null || b.orbit.parentId == null)
+}
+
+/** `n`-е светило (0 — главное, 1 — компаньон двойной) или null. Без аллокаций: зовётся в кадре. */
+export function luminary(bodies: readonly BodyEntity[], n: number): BodyEntity | null {
+  let k = 0
+  for (const b of bodies) {
+    if (!isLuminary(b)) continue
+    if (k === n) return b
+    k++
+  }
+  return null
+}
+
 /** Момент для орбит: общие физические секунды с серверного якоря. */
 export function orbitTime(world: World): number {
   return orbitSec(world.calendarTime)

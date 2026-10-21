@@ -12,25 +12,52 @@ export function worldShrink(scale: number): number {
 }
 
 /**
- * Звезда системы: вид честного 1/scale, но с отставанием ×STAR_INFLATE.
+ * Множитель видимого радиуса звезды к честному R. Одна кривая на всю дорогу роста:
+ * системное тело и шар слоя.
  *
- * До scale≈INFLATE — короткий выход с 1× на полку (вблизи солнце не ×10).
- * Дальше I=INFLATE постоянно → радиус R·INFLATE/scale: параллель планетной 1/scale,
- * у границы BODY_FADE стык размер-в-размер с шаром галактического слоя.
+ * До STAR_INFLATE — полка 1 (вблизи солнце не прыгает вслед за первыми ×).
+ * Дальше INFLATE/scale и без потолка: на пороге галактики шар не возвращается
+ * к честному R, иначе только что сжатая в точку звезда снова закрывает кадр.
  */
-export function starWorldShrink(scale: number): number {
+export function starRadiusFactor(scale: number): number {
   const s = Math.max(scale, 1)
-  const S0 = BODY_FADE.START
-  if (s >= S0) return 0
   const inflate = GALAXY_LAYER.STAR_INFLATE
   if (inflate <= 1) return 1 / s
-  let I: number
-  if (s < inflate) {
-    // 1 → INFLATE пока scale идёт 1 → INFLATE; дальше полка.
-    const u = (s - 1) / (inflate - 1)
-    I = 1 + (inflate - 1) * u
-  } else {
-    I = inflate
-  }
-  return I / s
+  return s < inflate ? 1 : inflate / s
+}
+
+/**
+ * Системная звезда гаснет на пороге слоя (`BODY_FADE`): дальше её рисует слой,
+ * тем же `starRadiusFactor`, уже как точку.
+ */
+export function starWorldShrink(scale: number): number {
+  if (Math.max(scale, 1) >= BODY_FADE.START) return 0
+  return starRadiusFactor(scale)
+}
+
+/**
+ * Радиус шара слоя в св.г его группы. Мировой размер = это × layerScale
+ * = R·`starRadiusFactor`, не честный R.
+ */
+export function starLayerRadiusLy(radiusMeters: number, layerScale: number): number {
+  if (layerScale <= 0) return 0
+  const scale = GALAXY_LAYER.LY_TO_M / layerScale
+  return (radiusMeters * starRadiusFactor(scale)) / layerScale
+}
+
+/**
+ * Метров КАДРА на св.год для слоя галактики. Домен держит L/scale (`metersPerLy`), а вид
+ * сверх того сжат вокруг борта степенью: от 1 на FADE_IN_START до TOP_VIEW_M_PER_LY на
+ * LOCK_SCALE. Камера упёрта в потолок отъезда — без этого зум галактики на глаз стоял бы.
+ * Сжатие вокруг борта не трогает ни направлений с него, ни локуса: только картинку.
+ */
+export function galaxyViewMetersPerLy(scale: number): number {
+  const fade = GALAXY_LAYER.FADE_IN_START
+  const lock = GALAXY_LAYER.LOCK_SCALE
+  const s = Math.min(Math.max(scale, 1), lock)
+  const domain = GALAXY_LAYER.LY_TO_M / s
+  if (s <= fade) return domain
+  const atLock = GALAXY_LAYER.LY_TO_M / lock
+  const p = Math.log(GALAXY_LAYER.TOP_VIEW_M_PER_LY / atLock) / Math.log(fade / lock)
+  return domain * (fade / s) ** p
 }

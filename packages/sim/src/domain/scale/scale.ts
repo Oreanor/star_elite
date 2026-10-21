@@ -4,6 +4,7 @@ import { MIELOPHONE } from '../../config/mielophone'
 import { clamp } from '../../core/math'
 import { placeSystem } from '../galaxy/shape'
 import type { ShipEntity, World } from '../world/entities'
+import { luminary } from '../world/orbits'
 
 /**
  * Миелофон: непрерывный масштаб борта. Чистый домен — ни рендера, ни камеры, только
@@ -56,7 +57,7 @@ export function galaxyAnchorLocal(world: World, out: Vector3): Vector3 {
   if (world.galaxyAnchorTrue) {
     return out.copy(world.galaxyAnchorTrue).sub(world.originOffset)
   }
-  const home = world.bodies.find((b) => b.kind === 'star')
+  const home = luminary(world.bodies, 0)
   if (home) return out.copy(home.pos)
   return out.copy(world.player.state.pos)
 }

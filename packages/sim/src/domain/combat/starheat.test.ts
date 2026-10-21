@@ -1,6 +1,7 @@
 import { Vector3 } from 'three'
 import { describe, expect, it } from 'vitest'
 import { STAR_HEAT } from '../../config/heat'
+import { MIELOPHONE } from '../../config/mielophone'
 import { type World } from '../world'
 import { starExposure, stepStarHeat } from './starheat'
 import { quietWorld } from '../../testkit'
@@ -137,5 +138,18 @@ describe('нагрев у звезды', () => {
       stepStarHeat(bot, world, DT)
     }
     expect(bot.hullHeat).toBeGreaterThan(0.3)
+  })
+  it('на галактическом × корона и лучи не греют: гигант сквозь звезду не перегревается', () => {
+    // Пойманное: за GHOST_BODY касание звезды выключено, а жар — нет. Высота внутри
+    // светила отрицательна, и проходящий сквозь него гигант ловил «критический перегрев».
+    const world = quietWorld()
+    const star = world.bodies.find((b) => b.kind === 'star')!
+    const p = world.player
+    p.state.scale = MIELOPHONE.GHOST_BODY_SCALE
+    p.state.pos.copy(star.pos) // в самом центре светила
+    p.hullHeat = 0.5
+    for (let i = 0; i < 600; i++) stepStarHeat(p, world, 1 / 120)
+    expect(p.alive).toBe(true)
+    expect(p.hullHeat).toBeLessThan(0.5)
   })
 })

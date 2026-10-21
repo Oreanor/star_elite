@@ -1,14 +1,17 @@
 import { Quaternion, Vector3 } from 'three'
-import { GALAXY, GALAXY_FLIGHT } from '../../config/galaxy'
+import { ARRIVAL, GALAXY, GALAXY_FLIGHT } from '../../config/galaxy'
 import { MIELOPHONE } from '../../config/mielophone'
 import {
   catalogLyToWorld,
+  effectiveRadius,
   metersPerLy,
   playerGalaxyLy,
   preserveGalaxyLocus,
 } from '../scale/scale'
-import { clearContactLock, clearNavLock, systemPopulated } from '../world/queries'
+import { clearContactLock, clearNavLock, jumpIsRoute } from '../world/queries'
 import { enterSystem } from '../world/factory'
+import { maybeShiftOrigin } from '../world/origin'
+import { isLuminary, luminary } from '../world/orbits'
 import { spawnResidentContacts } from '../world/traffic'
 import { carryFollowersOnJump, syncLiveContactsFromShips } from '../world/plan'
 import type { World } from '../world/entities'
@@ -69,6 +72,44 @@ function adoptCurrent(world: World, index: number): void {
   world.systemName = generateSystem(index, world.galaxySeed).name
 }
 
+/**
+ * Точка на луче звезда→пилот на `maxLy` от звезды. Иначе усадка в 1 св.г. от
+ * цели ставила борт в системные метры гигантского кадра — дыра «в 1000 км»
+ * не приближалась, сопла дрожали (float32).
+ */
+function pullIntoBubble(
+  playerLy: { x: number; y: number; z: number },
+  star: { x: number; y: number; z: number },
+  maxLy: number,
+): { x: number; y: number; z: number } {
+  const d = distanceLy(playerLy, star)
+  if (d <= maxLy || d < 1e-12) return playerLy
+  const t = maxLy / d
+  return {
+    x: star.x + (playerLy.x - star.x) * t,
+    y: star.y + (playerLy.y - star.y) * t,
+    z: star.z + (playerLy.z - star.z) * t,
+  }
+}
+
+/**
+ * 0.02 св.г на галактическом × — меньше истинного радиуса гиганта (и часто карлика
+ * после перевода в метры GHOST). Выше порога твердь сквозная; усадка её включает,
+ * борт оказывается внутри, отскок — на корпус (~60 км при ×5к). Всегда снаружи.
+ */
+function standOffFromStar(world: World): void {
+  const player = world.player
+  const live = luminary(world.bodies, 0)
+  if (!live) return
+  const minDist = live.radius + effectiveRadius(player) + ARRIVAL.STANDOFF
+  _start.copy(player.state.pos).sub(live.pos)
+  if (_start.lengthSq() < 1e-8) _start.set(1, 0, 0)
+  if (_start.length() >= minDist) return
+  _start.setLength(minDist)
+  player.state.pos.copy(live.pos).add(_start)
+  maybeShiftOrigin(world)
+}
+
 function arriveAt(
   world: World,
   index: number,
@@ -84,25 +125,29 @@ function arriveAt(
   const grow = player.controls.grow
   const jumpTarget = world.jumpTargetIndex
   const star = placeSystem(index, world.galaxySeed)
+  // Ниже GHOST координаты — системные. Сжатие ly тем же ×, что у слоя, раздувает
+  // св.год до триллионов метров и ломает float32 (пыль, сопла).
+  const meters = metersPerLy(scale >= MIELOPHONE.GHOST_BODY_SCALE ? scale : MIELOPHONE.GHOST_BODY_SCALE)
   catalogLyToWorld(
     playerLy.x - star.x,
     playerLy.y - star.y,
     playerLy.z - star.z,
-    metersPerLy(scale),
+    meters,
     _start,
   )
   const def = systemDefFor(index, world.galaxySeed)
-  const start: [number, number, number] = [
-    def.star.pos[0] + _start.x,
-    def.star.pos[1] + _start.y,
-    def.star.pos[2] + _start.z,
-  ]
   syncLiveContactsFromShips(world)
-  enterSystem(world, def, index, start, stellarOnly)
+  enterSystem(world, def, index, def.playerStart, stellarOnly)
   carryFollowersOnJump(world)
   driftContacts(world)
   if (!stellarOnly) spawnResidentContacts(world)
 
+  // После орбит: смещение от ЖИВОЙ звезды/дыры, не от [0,0,0] фабрики.
+  // Иначе двойная уезжает, и борт остаётся «в 1000 км» от пустого центра.
+  const live = luminary(world.bodies, 0)
+  if (live) player.state.pos.copy(live.pos).add(_start)
+  maybeShiftOrigin(world)
+  standOffFromStar(world)
   player.state.scale = scale
   player.state.quat.copy(_quat)
   player.state.vel.copy(_vel)
@@ -118,7 +163,8 @@ function arriveAt(
 }
 
 function stripToStar(world: World): void {
-  world.bodies = world.bodies.filter((b) => b.kind === 'star' || b.kind === 'blackhole')
+  world.bodies = world.bodies.filter(isLuminary)
+  world.systemStellarOnly = true
   // Трафик в пустоте остаётся: кинематика причала (Слово в Крестах) — нет, станции уже нет.
   world.ships = world.ships.filter((s) => !s.kinematic)
   for (const s of world.ships) {
@@ -138,7 +184,9 @@ function stripToStar(world: World): void {
   world.warBases = []
   world.dyson = null
   if (world.contactLock?.kind !== 'ship') world.contactLock = null
-  world.navTargetId = world.bodies[0]?.id ?? null
+  // Маршрут на другую звезду уже цель: не вешать нав на оставшуюся свою —
+  // HUD рисовал две стрелки (264 св.с своей и св.г. выбранной).
+  world.navTargetId = jumpIsRoute(world) ? null : world.bodies[0]?.id ?? null
   world.epoch += 1
 }
 
@@ -165,18 +213,57 @@ export function stepGalaxyPresence(world: World, oldScale: number): void {
   }
 
   const lyScale = newScale >= ghost ? newScale : oldScale >= ghost ? ghost : newScale
-  const ly = playerGalaxyLy(world, lyScale)
-  const populated = systemPopulated(world)
+  let ly = playerGalaxyLy(world, lyScale)
+  // «Пузырь загружен» — по флагу входа, не по наличию планет: у Ядра их нет,
+  // и пустая система иначе пересобиралась каждый такт.
+  const populated = !world.systemStellarOnly
+  const crossingDown = oldScale >= ghost && newScale < ghost
   // В своём пузыре ближайшая не меняется — не сканируем каталог каждый такт.
-  if (newScale < ghost && populated && world.galaxyFrameIndex === world.systemIndex) {
+  // Усадка через GHOST сюда не входит: ly ещё галактические, 0.02 св.г. часто
+  // внутри звезды, и без пересчёта борт влипает в твердь.
+  if (
+    !crossingDown
+    && newScale < ghost
+    && populated
+    && world.galaxyFrameIndex === world.systemIndex
+  ) {
     const here = distanceLy(ly, placeSystem(world.systemIndex, world.galaxySeed))
     if (here < GALAXY_FLIGHT.BUBBLE_LY) return
   }
-  const nearest = nearestSystemIndex(world, ly, newScale >= ghost)
-  const dist = distanceLy(ly, placeSystem(nearest, world.galaxySeed))
+  let nearest = nearestSystemIndex(world, ly, newScale >= ghost)
+  let dist = distanceLy(ly, placeSystem(nearest, world.galaxySeed))
+
+  // Усадка из галактики. Кадр в полёте не пересобираем (enterSystem каждый
+  // Voronoi — дёрганье). Куда садимся: ближайшая, если явно ближе кадра
+  // (долетели); иначе кадр (выросли и сразу сжались — AU не считаем св.г.).
+  if (crossingDown) {
+    const frame = world.galaxyFrameIndex
+    const dFrame = distanceLy(ly, placeSystem(frame, world.galaxySeed))
+    if (dist + GALAXY_FLIGHT.CURRENT_HYSTERESIS_LY >= dFrame) {
+      nearest = frame
+      dist = dFrame
+    }
+    if (dist > GALAXY_FLIGHT.BUBBLE_LY) {
+      const star = placeSystem(nearest, world.galaxySeed)
+      ly = pullIntoBubble(ly, star, GALAXY_FLIGHT.BUBBLE_LY * 0.8)
+      dist = distanceLy(ly, star)
+    }
+  }
+
   const bodies = wantBodies(dist, populated && world.galaxyFrameIndex === nearest)
 
   adoptCurrent(world, nearest)
+
+  if (crossingDown) {
+    // Свой кадр уже загружен: enterSystem только дёрнет эпоху. Координаты —
+    // GHOST-метры после preserveGalaxyLocus; вытолкнуть из звезды достаточно.
+    if (world.galaxyFrameIndex === nearest) {
+      standOffFromStar(world)
+      return
+    }
+    arriveAt(world, nearest, ly, newScale, !bodies)
+    return
+  }
 
   if (newScale >= ghost) return
 
@@ -189,7 +276,7 @@ export function stepGalaxyPresence(world: World, oldScale: number): void {
     stripToStar(world)
     return
   }
-  if (oldScale >= ghost && loaded !== nearest) {
+  if (oldScale >= ghost) {
     // Усадка в пустоте: нужна хотя бы звезда ближайшей, иначе кадр остаётся у дома.
     arriveAt(world, nearest, ly, newScale, true)
   }

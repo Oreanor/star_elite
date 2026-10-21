@@ -4,6 +4,7 @@ import {
   GUNNERY,
   MIELOPHONE,
   navTarget,
+  jumpIsRoute,
   nearestBeltPoint,
   MONOLITH_NAMES,
   itemMass,
@@ -342,6 +343,8 @@ function drawOffscreenArrows(frame: HudFrame): void {
     offscreenArrow(frame, ship.state.pos, radarColor(ship, world), locked)
   }
 
+  // Маршрут на другую звезду — единственная стрелка курса; нав системы не двоим.
+  if (jumpIsRoute(world)) return
   const nav = navTarget(world)
   if (nav) offscreenArrow(frame, nav.pos, navMarkerColor(nav), true, formatDistance(Math.max(0, shipDistance(world, nav.pos) - nav.radius)))
 }
@@ -379,6 +382,12 @@ function drawTargetLock(frame: HudFrame): void {
     const pod = lockedPodId(world) != null ? world.pods.find((p) => p.id === lockedPodId(world)) : null
     if (pod && pod.alive) mark(pod.pos, HUD_COLORS.WARN, null)
   } else {
+    // Выбранная на карте ЧУЖАЯ звезда владеет маркером курса (`drawPinnedStar` /
+    // слой галактики). Своя нав в том же кадре — вторая стрелка с другой шкалой.
+    if (jumpIsRoute(world)) return
+    // Свою звезду на слое метит локатор (рамка в кадре и стрелка). Тело системы
+    // к этому моменту уже не совпадает с точкой слоя — вторая рамка врала бы.
+    if (stellarOnly && galaxyRadarUsable()) return
     const nav = navTarget(world)
     if (!nav) return
     if (stellarOnly && nav.kind !== 'star' && nav.kind !== 'blackhole') return
@@ -406,6 +415,8 @@ function drawPinnedStar(frame: HudFrame): void {
   // порталом): маркер не рисовал никто — ни здесь, ни в `drawRadar`, — и выбранная на карте
   // звезда пропадала совсем. `galaxyRadarUsable` требует живых буферов, а не намерения.
   if (galaxyRadarUsable()) return
+  // Своя звезда уже тело кадра: её метит нав / кольцо на локаторе. Здесь — только маршрут.
+  if (!jumpIsRoute(world)) return
   const aim = jumpTargetAim(world, _gtar)
   if (!aim) return
   const tgt = world.jumpTargetIndex

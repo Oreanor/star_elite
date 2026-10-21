@@ -1,5 +1,6 @@
 import { HYPERDRIVE, STAR_HEAT } from '../../config/heat'
 import { clamp } from '../../core/math'
+import { MIELOPHONE } from '../../config/mielophone'
 import type { ShipEntity, World } from '../world/entities'
 import { applyDamage } from './damage'
 import { beamExposure, beamSourceName } from '../world/beams'
@@ -62,8 +63,12 @@ export function stepStarHeat(ship: ShipEntity, world: World, dt: number): void {
   if (!ship.alive) return
 
   // Корпус один — калится от того, что жжёт сильнее: корона звезды или луч (джет, маяк).
-  const fromStar = starExposure(ship, world)
-  const fromBeam = beamExposure(ship, world)
+  // Гигант за GHOST_BODY сквозь тела — и сквозь жар: тот же порог, что гасит касание
+  // звезды. Иначе галактический борт, проходя сквозь светило (высота < 0) или вдоль
+  // джета, ловил «критический перегрев» и гибель. Не ноль сразу, а остывание — без рывка.
+  const ghost = ship.state.scale >= MIELOPHONE.GHOST_BODY_SCALE
+  const fromStar = ghost ? 0 : starExposure(ship, world)
+  const fromBeam = ghost ? 0 : beamExposure(ship, world)
   const target = Math.max(fromStar, fromBeam)
   const rate = target > ship.hullHeat ? STAR_HEAT.RISE_RATE : STAR_HEAT.COOL_RATE
   // Устойчивое экспоненциальное приближение: не зависит от величины шага.

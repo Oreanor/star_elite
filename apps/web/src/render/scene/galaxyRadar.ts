@@ -97,7 +97,15 @@ function starDistLySq(player: World['player'], index: number): number {
 }
 
 /**
- * Круг Tab/Q: чужие в сфере локатора и в модели привода.
+ * Выбираема ли звезда на галактике. Своя (кадр и текущая) — как все: привод её
+ * «не достаёт» лишь потому, что ты уже в ней, а лететь к ней своим ходом можно.
+ */
+function selectable(world: World, i: number): boolean {
+  return i === state.originIndex || i === world.systemIndex || jumpInDriveRange(world, i)
+}
+
+/**
+ * Круг Tab/Q: звёзды в сфере локатора и в модели привода, своя — наравне с прочими.
  * Текущую метку карты/прыжка держим в круге даже вне сферы — иначе Tab
  * «срывается» с выбранной на G звезды в пустоту без маркера.
  */
@@ -109,8 +117,7 @@ function collectGalaxyCands(world: World): { index: number; dist: number }[] {
   const seen = new Set<number>()
 
   for (let i = 0; i < n; i++) {
-    if (i === state.originIndex) continue
-    if (!jumpInDriveRange(world, i)) continue
+    if (!selectable(world, i)) continue
     const d2 = starDistLySq(world.player, i)
     if (d2 > range2) continue
     cands.push({ index: i, dist: d2 })
@@ -125,8 +132,7 @@ function collectGalaxyCands(world: World): { index: number; dist: number }[] {
    */
   if (cands.length === 0) {
     for (let i = 0; i < n; i++) {
-      if (i === state.originIndex) continue
-      if (!jumpInDriveRange(world, i)) continue
+      if (!selectable(world, i)) continue
       cands.push({ index: i, dist: starDistLySq(world.player, i) })
       seen.add(i)
     }
@@ -137,11 +143,10 @@ function collectGalaxyCands(world: World): { index: number; dist: number }[] {
   const pinned = world.jumpTargetIndex
   if (
     pinned != null
-    && pinned !== state.originIndex
     && pinned >= 0
     && pinned < n
     && !seen.has(pinned)
-    && jumpInDriveRange(world, pinned)
+    && selectable(world, pinned)
   ) {
     cands.push({ index: pinned, dist: starDistLySq(world.player, pinned) })
   }
@@ -167,34 +172,25 @@ export function cycleGalaxyStar(world: World): boolean {
   _galaxyCycleAt = world.time
   const curIdx = world.jumpTargetIndex
   const cur =
-    fresh || curIdx == null || curIdx === state.originIndex
+    fresh || curIdx == null
       ? -1
       : cands.findIndex((c) => c.index === curIdx)
   world.jumpTargetIndex = cands[(cur + 1) % cands.length]!.index
   return true
 }
 
-/**
- * Q на галактике: ближайшая из круга Tab (в сфере). Если СВОЯ ближе —
- * метку снимаем (иначе у Люрилара вечно всплывал бы сосед).
- */
+/** Q на галактике: ближайшая из круга Tab (в сфере), своя — наравне с прочими. */
 export function retargetNearestGalaxyStar(world: World): void {
   if (!state.active || !state.positions || state.sphereRadius <= 0) return
   const rangeLy = state.layerScale > 0 ? state.sphereRadius / state.layerScale : 0
   const range2 = rangeLy * rangeLy
-
-  let ownDist = starDistLySq(world.player, state.originIndex)
-  if (state.homeCompanionIndex >= 0) {
-    ownDist = Math.min(ownDist, starDistLySq(world.player, state.homeCompanionIndex))
-  }
 
   // Q — только сфера локатора (без «приколотой» дальней с карты).
   const n = state.systemCount
   let best = -1
   let bestDist = Infinity
   for (let i = 0; i < n; i++) {
-    if (i === state.originIndex) continue
-    if (!jumpInDriveRange(world, i)) continue
+    if (!selectable(world, i)) continue
     const d2 = starDistLySq(world.player, i)
     if (d2 > range2 || d2 >= bestDist) continue
     bestDist = d2
@@ -202,10 +198,6 @@ export function retargetNearestGalaxyStar(world: World): void {
   }
 
   if (best < 0) {
-    world.jumpTargetIndex = null
-    return
-  }
-  if (ownDist <= bestDist && ownDist <= range2) {
     world.jumpTargetIndex = null
     return
   }

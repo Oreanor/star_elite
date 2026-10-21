@@ -183,6 +183,21 @@ describe('автопилот-к-цели', () => {
     expect(canEngageFlyTo(world)).toBe(true)
   })
 
+  it('в системе захват в фокусе сильнее маршрута с карты', () => {
+    // Выбрал звезду на карте, вернулся в систему, залочил борт — J ведёт к борту, а не
+    // к звезде за световые годы.
+    const { world } = withTarget(5000, 3000)
+    flyToController.update(world.player, world, 1 / 120)
+    const plain = { ...world.player.controls }
+
+    world.jumpTargetIndex = world.systemIndex === 0 ? 1 : 0
+    flyToController.update(world.player, world, 1 / 120)
+    const c = world.player.controls
+    expect(c.pitch).toBe(plain.pitch)
+    expect(c.yaw).toBe(plain.yaw)
+    expect(c.throttle).toBe(plain.throttle)
+  })
+
   /**
    * РЕГРЕССИЯ: срыв в петлю. На большом ходу поперёк цели борт не сближался и не уходил
    * назад — он ходил ВОКРУГ, и ни один из двух прежних тормозов не срабатывал: первый судит
@@ -220,12 +235,21 @@ describe('автопилот-к-цели', () => {
 describe('автопилот пользуется форсажем на системных дистанциях', () => {
   // Пойманный баг: крейсер включался только дальше полного тормозного пути на МАКСИМУМЕ
   // (≈7.7 млн км), и к цели в сотнях тысяч километров J полз на боевых 220 м/с — сутками.
-  it('цель в 200 000 км — долетает за минуту-полторы и останавливается у неё', () => {
-    const { world, target } = withTarget(2e8)
+  //
+  // Второй: обход считал перекрытием планету, над которой борт стоит в 500 км (зона 1.5R
+  // больше его высоты), и вечно «облетал» её — а станция на самом луче оставалась незамеченной.
+  //
+  // Срок — из паспорта, не числом: двигатель ограничивает форсаж (`cruiseMax`), и путь
+  // на потолке хода плюс полминуты на разгон и подход должен укладываться вдвое.
+  it('цель в 200 000 км — долетает на форсаже и останавливается у неё', () => {
+    const dist = 2e8
+    const { world, target } = withTarget(dist)
     faceToward(world, target.state.pos)
     target.ai = null // цель стоит: проверяем подход, а не погоню
+    const spec = world.player.spec
+    const limit = 2 * (dist / (spec.tuning.MAX_SPEED * spec.cruiseMax) + 30)
     const controllers = new Map([[world.player.id, flyToController]])
-    for (let i = 0; i < 90 * 60 && !flyToArrived(world); i++) {
+    for (let i = 0; i < limit * 60 && !flyToArrived(world); i++) {
       stepWorld(world, 1 / 60, controllers, { unassigned: NULL_CONTROLLER })
     }
     expect(world.player.state.pos.distanceTo(target.state.pos)).toBeLessThan(AUTOPILOT.ARRIVE_RANGE * 3)

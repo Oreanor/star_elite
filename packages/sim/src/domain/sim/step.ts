@@ -304,6 +304,7 @@ function stepControllers(world: World, helm: Helm, dt: number): void {
 }
 
 function stepPhysics(world: World, dt: number): void {
+  const playerOldScale = world.player.state.scale
   for (const ship of allShips(world)) {
     if (!ship.alive) continue
     // Кинематический борт не интегрируем: его позу ставит внешний источник.
@@ -314,11 +315,7 @@ function stepPhysics(world: World, dt: number): void {
       stepShip(ship.state, ship.controls, ship.spec.tuning, dt)
       // Миелофон: рост/усадка масштаба от сигнала. До столкновений — они считаются по
       // свежему размеру этого шага.
-      const oldScale = ship.state.scale
       stepScale(ship, dt, world)
-      if (ship === world.player) stepGalaxyPresence(world, oldScale)
-    } else if (ship === world.player) {
-      stepGalaxyPresence(world, ship.state.scale)
     }
     // Нагрев звездой ДО регенерации щита: если корона течёт, `applyDamage`
     // пометит попадание, и щит в этом же шаге восстанавливаться не станет.
@@ -327,6 +324,10 @@ function stepPhysics(world: World, dt: number): void {
     chargeHyperdrive(ship, dt)
     regenShield(ship, dt, world.time)
   }
+  // Смена системы — ПОСЛЕ прохода по бортам, не посреди него: пересборка подменяет
+  // ships/bodies, и хвост снимка `allShips` (трафик покинутой системы) иначе получил бы
+  // нагрев и щит от тел новой.
+  if (world.player.alive) stepGalaxyPresence(world, playerOldScale)
 }
 
 function stepWeapons(world: World, helm: Helm, dt: number): void {

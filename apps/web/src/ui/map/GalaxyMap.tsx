@@ -15,6 +15,7 @@ import {
   isInhabited,
   SYSTEM_FEATURES,
   type SystemFeature,
+  clearNavLock,
   jumpBlock,
   jumpDistance,
   quasarOf,
@@ -297,6 +298,11 @@ function GalaxyMapImpl({ onClose, embedded = false }: { onClose: () => void; emb
     // умолчанию ставим на причал системы (место станции), если он там есть.
     // Это и есть «цель гиперпрыжка»: HUD метит звезду, H прыгает, когда можно.
     world.jumpTargetIndex = index
+    // Чужая звезда сменила цель: старая нав системы иначе остаётся второй стрелкой за кадром.
+    if (index !== world.galaxyFrameIndex) {
+      clearNavLock(world)
+      world.targetFocus = 'nav'
+    }
     const seat = stationSeat(systemDefFor(index, world.galaxySeed))
     world.jumpArrivalPlanet = seat >= 0 ? seat : null
     bump()

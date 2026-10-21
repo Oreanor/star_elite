@@ -3,6 +3,7 @@ import {
   canDockAt,
   distanceLy,
   jumpStarWorldPos,
+  metersPerLy,
   placeSystem,
   playerGalaxyLy,
   stanceTo,
@@ -15,6 +16,7 @@ import {
   type World,
 } from '@elite/sim'
 import { HUD_SCALE, PIXEL_SCALE } from '../../render/config'
+import { galaxyViewMetersPerLy } from '../../render/worldShrink'
 import { HUD_COLORS, corners, text } from './draw'
 import { t } from '../i18n'
 import { formatDistance, projectPoint } from './project'
@@ -220,7 +222,15 @@ export function jumpTargetAim(world: World, out: Vector3): { remainingLy: number
   const tgt = world.jumpTargetIndex
   if (tgt == null) return null
   if (!jumpStarWorldPos(world, out)) return null
-  const here = playerGalaxyLy(world, world.player.state.scale)
+  // Домен ставит звезду в св.г домена; слой рисует кадр сжатее (`galaxyViewMetersPerLy`).
+  // Метка — там же, где точка: то же сжатие вокруг борта (направление с борта не меняется).
+  const scale = world.player.state.scale
+  const view = galaxyViewMetersPerLy(scale) / metersPerLy(scale)
+  if (view !== 1) {
+    const at = world.player.state.pos
+    out.sub(at).multiplyScalar(view).add(at)
+  }
+  const here = playerGalaxyLy(world, scale)
   return { remainingLy: distanceLy(here, placeSystem(tgt, world.galaxySeed)) }
 }
 

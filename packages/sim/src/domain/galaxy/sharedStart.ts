@@ -1,4 +1,4 @@
-import { GALAXY } from '../../config/galaxy'
+import { GALAXY, SCALE } from '../../config/galaxy'
 import type { SystemDef } from '../world/system'
 import type { StarSystem } from './types'
 
@@ -16,6 +16,9 @@ export const SHARED_START_INDEX = 1 as const
 const SYSTEM_NAME = 'Люрилар'
 /** Вход на куст галактик. Одна на всю игру — там, где игрок начинает. */
 const DOOR_NAME = 'Дверь'
+const PREVIEW_PLANET = 'Сатурн'
+/** Радиус временного Сатурна, м. */
+const PREVIEW_RADIUS = 58_232_000
 
 function isSharedStart(index: number, galaxySeed: number): boolean {
   return index === SHARED_START_INDEX && galaxySeed === GALAXY.SEED
@@ -24,7 +27,20 @@ function isSharedStart(index: number, galaxySeed: number): boolean {
 /** Каталог карты: у общего старта своё ИМЯ СИСТЕМЫ, причал — как у всех. */
 export function applySharedStartCatalog(system: StarSystem, galaxySeed: number): StarSystem {
   if (!isSharedStart(system.index, galaxySeed)) return system
-  return { ...system, name: SYSTEM_NAME }
+  return {
+    ...system,
+    name: SYSTEM_NAME,
+    // ВРЕМЕННО: витрина есть и в каталоге, чтобы карта и сцена перечисляли одни миры.
+    planets: [...system.planets, {
+      name: PREVIEW_PLANET,
+      type: 'Газовый гигант',
+      radius: PREVIEW_RADIUS / SCALE.PLANET_RADIUS,
+      orbit: system.planets.find((p) => p.station)?.orbit ?? 1,
+      moons: [],
+      settlement: null,
+      station: null,
+    }],
+  }
 }
 
 /**
@@ -47,6 +63,16 @@ export function applySharedStartWorld(def: SystemDef, index: number, galaxySeed:
   return {
     ...def,
     name: SYSTEM_NAME,
+    // ВРЕМЕННО: Сатурн для осмотра колец со стартового причала. Удалить после просмотра.
+    // Центр в четырёх радиусах: кольца целиком в небе, причал далеко от поверхности.
+    planets: def.planets.map((p) => p.name !== PREVIEW_PLANET ? p : {
+      ...p,
+      pos: def.station?.pos ?? def.playerStart,
+      stationOffset: [100_000_000, 80_000_000, -220_000_000] as const,
+      color: 0xcbb994,
+      spin: 0.000164,
+      tilt: 0.47,
+    }),
     // ВРЕМЕННО для теста: Дверь — квазар (джеты вертикально, мимо станции). Снять `jets`.
     blackHoles: [{ name: DOOR_NAME, radius: 300, stationOffset: [0, 0, 60_000], jets: true }],
     // ВРЕМЕННО для теста: тесная пара с перетеканием вещества в ~260 км от причала, в стороне

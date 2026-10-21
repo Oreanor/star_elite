@@ -261,7 +261,7 @@ function Star({ body }: { body: BodyEntity }) {
 
   useFrame((state) => {
     const at = renderPos(session.world, body, _starAt)
-    // К границе — starWorldShrink (догон к ×STAR_INFLATE); дальше точка слоя.
+    // До порога — starWorldShrink. Дальше тело гаснет, шар слоя продолжает ту же кривую.
     const shrink = starWorldShrink(session.world.player.state.scale)
     const on = shrink > 0
     if (ref.current) {
