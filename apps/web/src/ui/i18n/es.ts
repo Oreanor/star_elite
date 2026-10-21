@@ -158,6 +158,7 @@ export const ES: Record<keyof typeof RU, string> = {
 
   'hud.noJumpInRoom': 'NO HAY SALTO DESDE LA SALA',
   'hud.bushEnter': 'UNIVERSO',
+  'hud.scaleReset': 'ESCALA RESTABLECIDA AL ENTRAR EN EL AGUJERO NEGRO',
   'hud.bushArrive': 'GALAXIA',
   'hud.portalClosed': 'PORTAL CERRADO',
   'hud.portalOpening': 'ABRIENDO ANILLO HIPER',

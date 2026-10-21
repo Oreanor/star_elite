@@ -161,6 +161,7 @@ export const RU = {
 
   'hud.noJumpInRoom': 'ИЗ КОМНАТЫ ПРЫЖКА НЕТ',
   'hud.bushEnter': 'ВСЕЛЕННАЯ',
+  'hud.scaleReset': 'МАСШТАБ СБРОШЕН ПРИ ВХОДЕ В ЧЁРНУЮ ДЫРУ',
   'hud.bushArrive': 'ГАЛАКТИКА',
   'hud.portalClosed': 'ПОРТАЛ ЗАКРЫТ',
   'hud.portalOpening': 'ОТКРЫТИЕ ГИПЕРКОЛЬЦА',

@@ -80,6 +80,8 @@ const STYLE: Record<WarnCode, Style> = {
   // Вселенная: вход на куст и прибытие в узел. Голубые, высокий ранг — это событие
   // масштаба «сменилась галактика», его нельзя перебить бытовой подсказкой.
   bushEnter: { color: UI.PRIMARY, hz: 2, key: 'hud.bushEnter' },
+  // Дыра съёжила гиганта до ×1 — следом за «вселенной», жёлтая: заметная, но не угроза.
+  scaleReset: { color: UI.WARN, hz: 0, key: 'hud.scaleReset' },
   bushArrive: { color: UI.PRIMARY, hz: 0, key: 'hud.bushArrive' },
 }
 
@@ -99,6 +101,6 @@ export function plateOf(warning: Warning): Plate {
     hz: warning.hz ?? style.hz,
     rank: warning.rank,
     label: warning.label ?? t(style.key),
-    born: warning.born,
+    born: warning.shownAt,
   }
 }

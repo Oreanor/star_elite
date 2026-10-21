@@ -158,6 +158,7 @@ export const IT: Record<keyof typeof RU, string> = {
 
   'hud.noJumpInRoom': 'NESSUN SALTO DALLA STANZA',
   'hud.bushEnter': 'UNIVERSO',
+  'hud.scaleReset': 'SCALA AZZERATA ENTRANDO NEL BUCO NERO',
   'hud.bushArrive': 'GALASSIA',
   'hud.portalClosed': 'PORTALE CHIUSO',
   'hud.portalOpening': 'APERTURA ANELLO IPER',

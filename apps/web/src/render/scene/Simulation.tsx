@@ -71,7 +71,7 @@ import { TORUS } from '../config'
 import { persistSave } from '../../session/save/saveStore'
 import { clearPresses, consumePress, input, isHeld, releaseLock } from '../../platform/input/input'
 import { gameTimeSec } from '../../session/net/worldClock'
-import { clearWarnings, pushWarning } from '../../session/warnings'
+import { clearWarnings, pushWarning, WARN_LIFE } from '../../session/warnings'
 
 /** Миелофон «есть у игрока», если он в аукс-слоте ИЛИ лежит в трюме: дев-выдача кладёт
  *  его в ТРЮМ, а не в слот, поэтому проверка только по слоту давала ложное «прибор не
@@ -167,6 +167,7 @@ function stepBush(session: Session): void {
     enterVoid(world)
     // В клубок — своим размером: дыра съёживает гиганта до ×1. Клубок не знает масштаба
     // (корабль стоит в центре проекции), а выйдешь в галактику уже обычным бортом.
+    const shrunk = world.player.state.scale > 1
     world.player.state.scale = 1
     world.player.controls.grow = 0
     session.onSystemChange?.(world.epoch)
@@ -175,6 +176,8 @@ function stepBush(session: Session): void {
       label: universe.nodes[bush.node]?.name ?? '',
       repeat: 0,
     })
+    // Следом за «вселенной» — иначе гигант не поймёт, куда делся его рост.
+    if (shrunk) pushWarning('scaleReset', world.time, { repeat: 0, delay: WARN_LIFE })
     return
   }
 

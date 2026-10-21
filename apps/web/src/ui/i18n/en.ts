@@ -156,6 +156,7 @@ export const EN: Record<keyof typeof RU, string> = {
 
   'hud.noJumpInRoom': 'NO JUMP FROM THE ROOM',
   'hud.bushEnter': 'UNIVERSE',
+  'hud.scaleReset': 'SCALE RESET ON ENTERING THE BLACK HOLE',
   'hud.bushArrive': 'GALAXY',
   'hud.portalClosed': 'PORTAL CLOSED',
   'hud.portalOpening': 'HYPER RING OPENING',

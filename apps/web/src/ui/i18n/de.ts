@@ -158,6 +158,7 @@ export const DE: Record<keyof typeof RU, string> = {
 
   'hud.noJumpInRoom': 'AUS DEM RAUM GIBT ES KEINEN SPRUNG',
   'hud.bushEnter': 'UNIVERSUM',
+  'hud.scaleReset': 'MASSSTAB BEIM EINTRITT INS SCHWARZE LOCH ZURÜCKGESETZT',
   'hud.bushArrive': 'GALAXIE',
   'hud.portalClosed': 'PORTAL GESCHLOSSEN',
   'hud.portalOpening': 'HYPERRING ÖFFNET',

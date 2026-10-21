@@ -163,6 +163,7 @@ export const PT: Record<keyof typeof RU, string> = {
 
   'hud.noJumpInRoom': 'SEM SALTO A PARTIR DA SALA',
   'hud.bushEnter': 'UNIVERSO',
+  'hud.scaleReset': 'ESCALA REDEFINIDA AO ENTRAR NO BURACO NEGRO',
   'hud.bushArrive': 'GALÁXIA',
   'hud.portalClosed': 'PORTAL FECHADO',
   'hud.portalOpening': 'ABRINDO ANEL HIPER',

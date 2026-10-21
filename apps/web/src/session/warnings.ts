@@ -59,6 +59,7 @@ export type WarnCode =
   | 'cruiseLatch'
   | 'cruiseUnlatch'
   | 'bushEnter'
+  | 'scaleReset'
   | 'bushArrive'
 
 /**
@@ -112,6 +113,7 @@ const RANK: Record<WarnCode, number> = {
   cruiseLatch: 41,
   cruiseUnlatch: 41,
   bushEnter: 92,
+  scaleReset: 90,
   bushArrive: 91,
 }
 
@@ -129,6 +131,8 @@ export interface Warning {
   label?: string
   /** Переопределение частоты мигания (ракета мигает чаще по мере приближения). */
   hz?: number
+  /** С какого мига показывать (`born` + `delay`); до того плашка ждёт в очереди. */
+  shownAt: number
 }
 
 const active = new Map<WarnCode, Warning>()
@@ -139,6 +143,11 @@ interface PushOpts {
   hz?: number
   /** Переопределить кулдаун. 0 — обновлять каждый кадр (держать, пока толкают). */
   repeat?: number
+  /**
+   * Показать позже, с, — вслед за другой вестью того же мига. Плашка на экране одна (старшая),
+   * и две разом родившиеся не видны обе: младшая истекла бы под старшей.
+   */
+  delay?: number
 }
 
 /**
@@ -153,7 +162,7 @@ export function pushWarning(code: WarnCode, now: number, opts: PushOpts = {}): v
   // новые вести — иначе после перезапуска предупреждения молчали бы, пока время нагонит.
   if (now >= last && now - last < repeat) return
   lastFired.set(code, now)
-  active.set(code, { code, rank: RANK[code], born: now, label: opts.label, hz: opts.hz })
+  active.set(code, { code, rank: RANK[code], born: now, label: opts.label, hz: opts.hz, shownAt: now + (opts.delay ?? 0) })
 }
 
 /**
@@ -173,10 +182,11 @@ export function activeWarning(now: number): Warning | null {
   for (const [code, warning] of active) {
     // Просрочено ИЛИ время ушло НАЗАД (перезапуск мира после гибели): сигнал из прошлой
     // жизни родился в будущем относительно нового времени — выметаем, иначе висит вечно.
-    if (now - warning.born > WARN_LIFE || now < warning.born) {
+    if (now - warning.shownAt > WARN_LIFE || now < warning.born) {
       active.delete(code)
       continue
     }
+    if (now < warning.shownAt) continue
     if (!best || warning.rank > best.rank) best = warning
   }
   return best

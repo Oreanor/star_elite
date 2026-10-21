@@ -157,6 +157,7 @@ export const FR: Record<keyof typeof RU, string> = {
 
   'hud.noJumpInRoom': 'PAS DE SAUT DEPUIS LA SALLE',
   'hud.bushEnter': 'UNIVERS',
+  'hud.scaleReset': 'ÉCHELLE RÉINITIALISÉE EN ENTRANT DANS LE TROU NOIR',
   'hud.bushArrive': 'GALAXIE',
   'hud.portalClosed': 'PORTAIL FERMÉ',
   'hud.portalOpening': 'OUVERTURE DE L’ANNEAU',
