@@ -59,14 +59,15 @@ describe('кадр галактики на росте', () => {
   })
 
   it('убывает гладко и сильнее домена — галактика заметно отдаляется до самого верха', () => {
-    let prev = galaxyViewMetersPerLy(fade)
-    for (let s = fade * 1.01; s <= lock; s *= 1.01) {
-      const v = galaxyViewMetersPerLy(s)
-      expect(v).toBeLessThan(prev)
-      expect(prev / v).toBeLessThan(1.03)
-      expect(v).toBeLessThan(GALAXY_LAYER.LY_TO_M / s)
-      prev = v
+    // Гладко = без ступенек: наклон в логарифмах (степень) один на всём отрезке.
+    const slope = (a: number, b: number) =>
+      Math.log(galaxyViewMetersPerLy(b) / galaxyViewMetersPerLy(a)) / Math.log(b / a)
+    const k = slope(fade, lock)
+    for (let s = fade; s * 1.01 <= lock; s *= 1.01) {
+      expect(slope(s, s * 1.01)).toBeCloseTo(k, 6)
+      expect(galaxyViewMetersPerLy(s * 1.01)).toBeLessThan(GALAXY_LAYER.LY_TO_M / (s * 1.01))
     }
+    expect(k).toBeLessThan(-1) // сжимается быстрее домена (1/scale)
   })
 
   it('на потолке камера «отъезжает» дальше поперечника галактики — та видна целиком', () => {
