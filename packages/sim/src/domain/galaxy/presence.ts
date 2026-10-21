@@ -246,7 +246,8 @@ function stripToStar(world: World): void {
  * там локус ещё в метрах крупного ×, и без ремапа к порогу усадка вернула бы домой.
  */
 export function stepGalaxyPresence(world: World, oldScale: number): void {
-  if (world.docked || world.player.landedOn) return
+  // Кресты — вне галактик: ближайшей звезды у комнаты нет, пересобирать её некуда.
+  if (world.docked || world.player.landedOn || world.inMonument) return
   const player = world.player
   const newScale = player.state.scale
   const ghost = MIELOPHONE.GHOST_BODY_SCALE

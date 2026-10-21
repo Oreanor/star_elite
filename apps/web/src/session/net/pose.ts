@@ -101,8 +101,8 @@ let lastPath: string | null = null
  * систему — прежний узел стирается, `onDisconnect` вешается на новый (отвалилась вкладка —
  * метка исчезнет у соседей сама).
  */
-/** Канал позы: индекс системы или `'bush'` — общая комната-гипертор между галактиками. */
-export type PoseChannel = number | 'bush'
+/** Канал позы: индекс системы, `'bush'` — комната-гипертор, `'monument'` — комната Крестов. */
+export type PoseChannel = number | 'bush' | 'monument'
 
 export async function publishPose(systemIndex: PoseChannel, pose: PoseUpdate): Promise<void> {
   if (!rtdb) return

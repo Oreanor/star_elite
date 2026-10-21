@@ -751,6 +751,7 @@ export function startAtStation(world: World, gap = 2_500, station?: BodyEntity):
  */
 export function enterVoid(world: World): void {
   world.desolate = true
+  world.inMonument = false
   world.epoch += 1
   world.ships = []
   world.asteroids = []
@@ -811,6 +812,7 @@ export function enterSystem(
   world.dyson = stellarOnly ? null : def.dyson
   world.systemIndex = systemIndex
   world.systemStellarOnly = stellarOnly
+  world.inMonument = def.room === 'monument'
   world.epoch += 1
 
   world.ships = stellarOnly ? [] : makePatrols(rng, world.ids, def)
@@ -993,6 +995,7 @@ export function createWorld(
     jumpTargetIndex: null,
     galaxyFrameIndex: WORLD.HOME_INDEX,
     systemStellarOnly: false,
+    inMonument: def.room === 'monument',
     jumpArrivalPlanet: null,
     trafficTimer: TRAFFIC.FIRST_DELAY,
     originOffset: new Vector3(),

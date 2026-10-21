@@ -23,3 +23,4 @@ export {
   stepBushTravel,
   type BushTravel,
 } from './travel'
+export { MONUMENT_SYSTEM } from './monument'

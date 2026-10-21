@@ -68,11 +68,15 @@ export function RemotePlayers() {
   const pubAcc = useRef(0)
 
   const sys = session.world.systemIndex
+  // Кресты — своя комната вне галактик: свой канал, иначе нас видели бы в системе кадра, а друзей
+  // в комнате мы бы не видели. Компонент пересоздаётся на смене мира — значение свежее.
+  const monument = session.world.inMonument
+  const channel = monument ? ('monument' as const) : sys
 
   // Подписка на быстрые позы ТЕКУЩЕЙ системы. Прыжок меняет `sys` → переподписка.
   useEffect(() => {
-    return subscribePoses(sys, (snaps) => interp.ingest(snaps, performance.now()))
-  }, [sys, interp])
+    return subscribePoses(channel, (snaps) => interp.ingest(snaps, performance.now()))
+  }, [channel, interp])
 
   // Уборка при размонтировании: удалить только локальные копии чужих бортов.
   // Глобальную pose здесь не снимаем: при handoff старый слот уходит уже после активации
@@ -155,7 +159,7 @@ export function RemotePlayers() {
       if (pubAcc.current >= 1 / PUBLISH_HZ) {
         pubAcc.current = 0
         // Свои часы в пакете: получатель сглаживает по ним, а не по неровному приходу.
-        void publishPose(world.systemIndex, { ...selfPose(world), c: performance.now() })
+        void publishPose(world.inMonument ? 'monument' : world.systemIndex, { ...selfPose(world), c: performance.now() })
       }
     }
 
@@ -166,7 +170,8 @@ export function RemotePlayers() {
     const fresh = interp.freshUids(now)
     const want = new Map<string, (typeof peersRef.current)[number]>()
     for (const p of peersRef.current) {
-      if (p.systemIndex === sys && fresh.has(p.uid)) want.set(p.uid, p)
+      // В Крестах кто в комнате — решает свежая поза её канала, а не номер системы в presence.
+      if ((monument || p.systemIndex === sys) && fresh.has(p.uid)) want.set(p.uid, p)
     }
 
     // 3) Деспавн ушедших (сменили систему, вышли, зависли, встали в док).

@@ -37,6 +37,7 @@ import {
   emptyDelta,
   CORE_INDEX,
   UNIVERSE,
+  MONUMENT_SYSTEM,
   GALAXY,
   type Controller,
   type World,
@@ -149,7 +150,10 @@ function stepBush(session: Session): void {
     // Влетев в дыру, оказываемся В СВОЁМ узле, а не в случайной точке вселенной: галактику
     // узнаём по зерну мира (оно и есть её удостоверение), а поза полёта ставит этот узел
     // ровно под игрока. Не нашли (чужое зерно, дев-старт) — считаем домом узел из конфига.
-    const homeNode = universe.nodes.findIndex((n) => n.seed === world.galaxySeed)
+    // Из Крестов — в узел Крестов: комната вне галактик, её узел — корень, а не зерно мира.
+    const homeNode = world.inMonument
+      ? UNIVERSE.MONUMENT_NODE
+      : universe.nodes.findIndex((n) => n.seed === world.galaxySeed)
     enterBush(bush, homeNode >= 0 ? homeNode : GALAXY.HOME_NODE)
     resetBushTraffic()
     session.monumentCross = null
@@ -176,10 +180,8 @@ function stepBush(session: Session): void {
   // Прибыли — не подменяем мир на месте, а ЗАПУСКАЕМ ПЕРЕХОД (`bushExit`): тор разлетается,
   // экран гаснет, и уже под чернотой меняется мир. Подмену делает шаг перехода ниже.
   const arrivedVertex = consumeTorusArrival()
-  if (arrivedVertex !== null && !bushExitActive()) {
-    // К кресту переход не заводим: монумент — не галактика, выходить в него некуда.
-    if (nodeOfVertex(arrivedVertex) !== UNIVERSE.MONUMENT_NODE) beginBushExit(arrivedVertex)
-  }
+  // В Кресты — тем же переходом: там комната-монумент (`MONUMENT_SYSTEM`), а не галактика.
+  if (arrivedVertex !== null && !bushExitActive()) beginBushExit(arrivedVertex)
 
   // Корабль СТОИТ В ЦЕНТРЕ проекции и только вертится мышью (bushPilot глушит тягу). Полёт —
   // это поток S³ сквозь него (`stepTorusFlight` в такте мира), а не перемещение борта. Держим борт в
@@ -231,13 +233,13 @@ function saveFacts(world: World, lastAt: { value: number }): void {
  * галактики и в которой стоит дыра-дверь; так дорога симметрична: влетел в дыру одной,
  * вылетел из дыры другой.
  *
- * Крест — не галактика (корень куста, монумент): в него «влететь» некуда, там автопилот
- * просто отдаёт штурвал. Возвращает: вышли ли на самом деле.
+ * Крест — не галактика, а корень куста: из него выпадаем в КОМНАТУ-МОНУМЕНТ (`exitBushToMonument`).
+ * Возвращает: вышли ли на самом деле.
  */
 function exitBushInto(session: Session, vertex: number): boolean {
   const { world, universe, bush } = session
   const node = nodeOfVertex(vertex)
-  if (node === UNIVERSE.MONUMENT_NODE) return false
+  if (node === UNIVERSE.MONUMENT_NODE) return exitBushToMonument(session)
   const galaxy = universe.nodes[node]
   if (!galaxy) return false
 
@@ -267,6 +269,25 @@ function exitBushInto(session: Session, vertex: number): boolean {
   setPilot(session, 'manual')
   session.onSystemChange?.(world.epoch)
   pushWarning('bushArrive', world.time, { label: galaxy.name, repeat: 0 })
+  return true
+}
+
+/**
+ * ВЫХОД В КРЕСТЫ — комнату-монумент вне галактик: крест «Вечность» (дом Слова), вдали Люцифер,
+ * рядом Дверь назад в клубок. Зерно галактики не трогаем: комната не принадлежит ни одной, а
+ * вернувшись в клубок, окажешься у Крестов. Номер системы кадра оставляем прежним — галактическое
+ * присутствие в комнате молчит (`world.inMonument`).
+ */
+function exitBushToMonument(session: Session): boolean {
+  const { world, universe, bush } = session
+  enterSystem(world, MONUMENT_SYSTEM, world.systemIndex, MONUMENT_SYSTEM.playerStart)
+  world.navTargetId = world.bodies.find((b) => b.kind === 'station')?.id ?? null
+  leaveBush(bush)
+  resetTorusFlight()
+  resetTorusAutopilot()
+  setPilot(session, 'manual')
+  session.onSystemChange?.(world.epoch)
+  pushWarning('bushArrive', world.time, { label: universe.nodes[UNIVERSE.MONUMENT_NODE]?.name ?? MONUMENT_SYSTEM.name, repeat: 0 })
   return true
 }
 
