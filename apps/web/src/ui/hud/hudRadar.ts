@@ -77,9 +77,10 @@ export function drawRadar(frame: HudFrame): void {
     const pos = gr.positions
     const col = gr.colors
     const invLy = 1 / gr.layerScale
-    const plx = (player.state.pos.x - gr.anchor.x) * invLy
-    const ply = (player.state.pos.y - gr.anchor.y) * invLy
-    const plz = (player.state.pos.z - gr.anchor.z) * invLy
+    // От центра сжатия кадра, как слой: сырая поза такта впереди на путь за такт.
+    const plx = (gr.viewCenter.x - gr.anchor.x) * invLy
+    const ply = (gr.viewCenter.y - gr.anchor.y) * invLy
+    const plz = (gr.viewCenter.z - gr.anchor.z) * invLy
 
     // Проецирует звезду (индекс·3) на локатор. `force` игнорирует сферу видимости (для
     // выбранной цели — её показываем всегда). Возвращает экранную точку или null.

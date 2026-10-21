@@ -3,7 +3,8 @@ import { CRUISE } from '../../config/cruise'
 import { GRAVITY } from '../../config/bodies'
 import { isHostileTo } from '../ai/targeting'
 import { forward } from '../flight/axes'
-import { speedScaleFactor } from '../scale/scale'
+import { phasedOut, speedScaleFactor } from '../scale/scale'
+import { MIELOPHONE } from '../../config/mielophone'
 import type { ShipEntity, World } from '../world/entities'
 
 const _fwd = /* @__PURE__ */ new Vector3()
@@ -124,9 +125,17 @@ export function updateCruise(ship: ShipEntity, world: World, want: CruiseWant, d
   let block: CruiseBlock = null
 
   if (requesting && ship.alive) {
-    if (massLocked(ship, world)) {
+    // Выросший вне мелкого мира: блокировка чужими бортами (за PHASE_END их для него нет) и
+    // выход у звезды (за GHOST_BODY светило сквозное, гравитации нет) — не про него. Иначе на
+    // ×16k тормозной путь ∝ скорости выключал крейсер за много радиусов до тела, сквозь
+    // которое гигант и так проходит.
+    const scale = ship.state.scale
+    if (!phasedOut(scale) && massLocked(ship, world)) {
       block = 'mass-lock'
-    } else if (starRequiresExit(ship, world, cruise.block === 'proximity')) {
+    } else if (
+      scale < MIELOPHONE.GHOST_BODY_SCALE
+      && starRequiresExit(ship, world, cruise.block === 'proximity')
+    ) {
       block = 'proximity'
     } else if (holdAt > 0) {
       // Защёлка: множитель СТОИТ, не ползёт к потолку двигателя и не тает.

@@ -17,6 +17,11 @@ export interface GalaxyRadarState {
   systemCount: number
   /** Барицентр системы кадра в пространстве КАДРА: точка = anchor + pos·layerScale. */
   anchor: Vector3
+  /**
+   * Центр сжатия кадра — показанная позиция борта. Локус борта в св.г = (viewCenter − anchor)
+   * / layerScale; от СЫРОЙ позы такта считать нельзя — она впереди на путь за такт.
+   */
+  viewCenter: Vector3
   /** Метров кадра на св.г (`galaxyViewMetersPerLy`). */
   layerScale: number
   /** Радиус сферы ЛОКАТОРА / Tab (м кадра) — уже, чем охват точек в 3D. */
@@ -30,6 +35,7 @@ const state: GalaxyRadarState = {
   count: 0,
   systemCount: 0,
   anchor: new Vector3(),
+  viewCenter: new Vector3(),
   layerScale: 1,
   sphereRadius: 0,
 }
@@ -78,13 +84,14 @@ const FAR_CANDS = 12
  * Дистанция до звезды в св.г кадра (локус борта − точка слоя).
  * Считаем в ly, не в метрах: на миллионах × вычитание огромных world-координат шумит.
  */
-function starDistLySq(player: World['player'], index: number): number {
+function starDistLySq(index: number): number {
   const pos = state.positions!
   const inv = state.layerScale > 0 ? 1 / state.layerScale : 0
   const b = index * 3
-  const plx = (player.state.pos.x - state.anchor.x) * inv
-  const ply = (player.state.pos.y - state.anchor.y) * inv
-  const plz = (player.state.pos.z - state.anchor.z) * inv
+  const c = state.viewCenter
+  const plx = (c.x - state.anchor.x) * inv
+  const ply = (c.y - state.anchor.y) * inv
+  const plz = (c.z - state.anchor.z) * inv
   const dx = pos[b]! - plx
   const dy = pos[b + 1]! - ply
   const dz = pos[b + 2]! - plz
@@ -113,7 +120,7 @@ function collectGalaxyCands(world: World): { index: number; dist: number }[] {
 
   for (let i = 0; i < n; i++) {
     if (!selectable(world, i)) continue
-    const d2 = starDistLySq(world.player, i)
+    const d2 = starDistLySq(i)
     if (d2 > range2) continue
     cands.push({ index: i, dist: d2 })
     seen.add(i)
@@ -128,7 +135,7 @@ function collectGalaxyCands(world: World): { index: number; dist: number }[] {
   if (cands.length === 0) {
     for (let i = 0; i < n; i++) {
       if (!selectable(world, i)) continue
-      cands.push({ index: i, dist: starDistLySq(world.player, i) })
+      cands.push({ index: i, dist: starDistLySq(i) })
       seen.add(i)
     }
     cands.sort((a, b) => a.dist - b.dist)
@@ -143,7 +150,7 @@ function collectGalaxyCands(world: World): { index: number; dist: number }[] {
     && !seen.has(pinned)
     && selectable(world, pinned)
   ) {
-    cands.push({ index: pinned, dist: starDistLySq(world.player, pinned) })
+    cands.push({ index: pinned, dist: starDistLySq(pinned) })
   }
 
   return cands
@@ -186,7 +193,7 @@ export function retargetNearestGalaxyStar(world: World): void {
   let bestDist = Infinity
   for (let i = 0; i < n; i++) {
     if (!selectable(world, i)) continue
-    const d2 = starDistLySq(world.player, i)
+    const d2 = starDistLySq(i)
     if (d2 > range2 || d2 >= bestDist) continue
     bestDist = d2
     best = i

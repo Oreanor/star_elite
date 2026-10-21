@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { GRAVITY } from '../../config/bodies'
 import { AURORA_ONE } from '../../config/chassis'
 import { CRUISE } from '../../config/cruise'
+import { MIELOPHONE } from '../../config/mielophone'
 import { MODULE_CATALOGUE } from '../../config/modules'
 import { createLoadout, deriveShipSpec } from '../loadout'
 import { createWorld, STARTER_SYSTEM } from '../world'
@@ -274,3 +275,39 @@ describe('вне фазы', () => {
     expect(isPhased(world.player)).toBe(false)
   })
 })
+
+describe('крейсер гиганта', () => {
+  /**
+   * Пойманное: на ×16k «торможение у тела». Выход у звезды считается по тормозному пути
+   * ∝ скорости — у гиганта он огромен, и крейсер глох за много радиусов до светила,
+   * сквозь которое гигант за GHOST_BODY и так проходит. Блокировку чужими бортами за
+   * PHASE_END (мелкого мира для него нет) — туда же.
+   */
+  it('звезда у самого носа не выключает крейсер гиганта', () => {
+    const world = emptySystem()
+    const star = world.bodies.find((b) => b.kind === 'star')!
+    const gravityEdge = star.radius * GRAVITY.REACH_RADII
+    world.player.state.pos.copy(star.pos).add(new Vector3(star.radius + gravityEdge * 0.5, 0, 0))
+    world.player.state.quat.setFromUnitVectors(new Vector3(0, 0, -1), new Vector3(-1, 0, 0)) // нос на звезду
+    world.player.state.scale = MIELOPHONE.GHOST_BODY_SCALE * 3
+
+    spool(world, true, 10)
+    expect(world.player.cruise.block).toBeNull()
+    expect(world.player.cruise.factor).toBeGreaterThan(1)
+  })
+
+  it('враг под боком не держит гиганта за PHASE_END', () => {
+    const world = createWorld({
+      ...STARTER_SYSTEM,
+      belt: null,
+      patrols: [{ count: 1, at: [0, 0, -300], spread: 0, faction: 'hostile', name: 'Пират' }],
+    })
+    toDeepSpace(world)
+    world.ships[0]!.state.pos.copy(world.player.state.pos).add(new Vector3(0, 0, -300))
+    world.player.state.scale = MIELOPHONE.PHASE_END * 2
+
+    spool(world, true, 10)
+    expect(world.player.cruise.block).toBeNull()
+  })
+})
+

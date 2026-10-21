@@ -21,6 +21,7 @@ import {
   generateGalaxy,
   luminary,
   metersPerLy,
+  renderPos,
   SCALE,
   renderTime,
   type BodyEntity,
@@ -178,6 +179,7 @@ void main() {
 const _colour = new Color()
 const _bary = new Vector3()
 const _anchorView = new Vector3()
+const _shown = new Vector3()
 const _playerLy = new Vector3()
 const _tmp = new Vector3()
 const _obj = new Object3D()
@@ -453,7 +455,12 @@ export function GalaxyLayer() {
     // и усадка. Группа — на пилоте, чтобы меши ближних звёзд не складывали десятки св.г.
     // в float32.
     galaxyAnchorLocal(world, _bary)
-    group.position.copy(world.player.state.pos)
+    // Центр сжатия кадра — ПОКАЗАННАЯ позиция борта (между тактами), та же, за которой идёт
+    // камера. Сырая поза такта опережает показанную на путь за такт — на ×1e7 это 10⁷ м
+    // НЕсжатых метров: галактика уезжала вперёд по ходу на сотни отъездов камеры, дёргалась,
+    // а газ её «отдалял». Локус от этой же точки — иначе локатор разошёлся бы со слоем.
+    const shown = renderPos(world, world.player.state, _shown)
+    group.position.copy(shown)
 
     const effScale = Math.min(scale, GALAXY_LAYER.LOCK_SCALE)
     // Две меры св.года: домена (локус, полёт, шов с телами) и КАДРА (сильнее сжат вокруг
@@ -464,9 +471,9 @@ export function GalaxyLayer() {
     group.scale.setScalar(layerScale)
     material.uniforms.uLayerScale!.value = layerScale
     backgroundGlowMaterial.uniforms.uLayerScale!.value = layerScale
-    _playerLy.copy(world.player.state.pos).sub(_bary).divideScalar(domainScale)
+    _playerLy.copy(shown).sub(_bary).divideScalar(domainScale)
     // Барицентр в пространстве кадра — для локатора и HUD: борт − локус·layerScale.
-    _anchorView.copy(world.player.state.pos).addScaledVector(_playerLy, -layerScale)
+    _anchorView.copy(shown).addScaledVector(_playerLy, -layerScale)
 
     // Своя пара: на малом × совмещаем точку слоя с телом (шов). На миллионах
     // (pos−bary)/layerScale раздувается до сотен св.г — откатываем в каталог.
@@ -587,11 +594,11 @@ export function GalaxyLayer() {
     const edgeM = radiusM * GALAXY_LAYER.SPHERE_EDGE_FRAC
     material.uniforms.uRadius!.value = radiusM
     material.uniforms.uEdge!.value = edgeM
-    ;(material.uniforms.uPlayer!.value as Vector3).copy(world.player.state.pos)
+    ;(material.uniforms.uPlayer!.value as Vector3).copy(shown)
     ;(material.uniforms.uPlayerLy!.value as Vector3).copy(_playerLy)
     backgroundGlowMaterial.uniforms.uRadius!.value = radiusM
     backgroundGlowMaterial.uniforms.uEdge!.value = edgeM
-    ;(backgroundGlowMaterial.uniforms.uPlayer!.value as Vector3).copy(world.player.state.pos)
+    ;(backgroundGlowMaterial.uniforms.uPlayer!.value as Vector3).copy(shown)
     ;(backgroundGlowMaterial.uniforms.uPlayerLy!.value as Vector3).copy(_playerLy)
 
     const locatorLy =
@@ -623,7 +630,7 @@ export function GalaxyLayer() {
       if (tm) tm.visible = false
     }
     const posArr = data.positions
-    const player = world.player.state.pos
+    const player = shown
     const plx = _playerLy.x
     const ply = _playerLy.y
     const plz = _playerLy.z
@@ -764,6 +771,7 @@ export function GalaxyLayer() {
     const gr = galaxyRadar()
     gr.active = on
     gr.anchor.copy(_anchorView)
+    gr.viewCenter.copy(shown)
     gr.layerScale = layerScale
     gr.sphereRadius = locatorRadiusM
     gr.systemCount = data.systemCount
