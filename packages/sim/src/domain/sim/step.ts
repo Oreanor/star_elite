@@ -54,7 +54,7 @@ import { hasBomb, hasEcm } from '../loadout'
 import { COMMODITIES } from '../cargo/items'
 import { oreUnits } from '../combat/mining'
 import { MIELOPHONE } from '../../config/mielophone'
-import { effectiveRadius, stepScale } from '../scale/scale'
+import { effectiveRadius, phasedOut, stepScale } from '../scale/scale'
 import { stepGalaxyPresence } from '../galaxy/presence'
 import { gravityAt, stepGravity } from '../flight/gravity'
 import { stepJumpGateCollision } from '../flight/jumpGate'
@@ -193,8 +193,11 @@ export function stepWorld(world: World, frameDt: number, controllers: Controller
 /** Урон, присланный по сети между тактами, — ложится здесь, в такте (см. `incomingHits`). */
 function applyIncomingHits(world: World): void {
   if (world.incomingHits.length === 0) return
+  // Чужой клиент мог прицелиться по нам до того, как мы выросли за PHASE_END:
+  // ушедший из мелкого мира урона из него не получает.
+  const reachable = world.player.alive && !phasedOut(world.player.state.scale)
   for (const damage of world.incomingHits) {
-    if (world.player.alive) applyDamage(world.player, damage, world.time)
+    if (reachable) applyDamage(world.player, damage, world.time)
   }
   world.incomingHits.length = 0
 }

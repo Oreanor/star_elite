@@ -1,4 +1,5 @@
 import type { ShipEntity } from '../world/entities'
+import { phasedOut } from '../scale/scale'
 import { isVisible } from './cloak'
 
 /**
@@ -13,5 +14,10 @@ import { isVisible } from './cloak'
  * по нему бить. Смешать эти два вопроса значило бы сделать стыкующегося
  * невидимкой: он пропал бы с радара ровно тогда, когда за ним интереснее всего
  * следить.
+ *
+ * Третья — фаза: выросший за PHASE_END ушёл из мелкого мира, и мелкий мир его не
+ * ловит (как и он сам не стреляет, см. `fireLasers`). Без этого гиганта в тысячу
+ * километров расстреливал любой пират системы — промахнуться было некуда.
  */
-export const isEngageable = (e: ShipEntity): boolean => isVisible(e) && !e.clearance
+export const isEngageable = (e: ShipEntity): boolean =>
+  isVisible(e) && !e.clearance && !phasedOut(e.state.scale)

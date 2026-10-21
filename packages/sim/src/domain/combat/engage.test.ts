@@ -10,6 +10,8 @@ import { stepMissiles } from './missiles'
 import { fireMissile } from './weapons'
 import { issueFactoryMissiles } from './ordnance'
 import { isEngageable } from './engage'
+import { castLaser } from './raycast'
+import { MIELOPHONE } from '../../config/mielophone'
 
 /**
  * Створ станции. Нажал стыковку — по тебе прекращают огонь, и это правило мира,
@@ -118,5 +120,23 @@ describe('допуск в створ станции', () => {
     player.clearance = false
     player.cloaked = true
     expect(isEngageable(player)).toBe(false)
+  })
+})
+
+describe('гигант за PHASE_END вне мелкого мира', () => {
+  /**
+   * Пойманное: на ×48k «корабль потерян · лазер». Корпус в тысячу километров ловил
+   * каждый пиратский луч системы — сам гигант стрелять не мог, а в него попадали.
+   * На галактике предметных взаимодействий нет: ни прицела, ни луча, ни ракеты.
+   */
+  it('его не берут на прицел и луч проходит мимо', () => {
+    const { world, pirate } = withPirate()
+    world.player.state.scale = MIELOPHONE.PHASE_END * 24
+    expect(isEngageable(world.player)).toBe(false)
+
+    const origin = pirate.state.pos.clone()
+    const dir = world.player.state.pos.clone().sub(origin).normalize()
+    const hit = castLaser(world, origin, dir, pirate, 1e6)
+    expect(hit.ship).toBeNull()
   })
 })

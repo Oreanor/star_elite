@@ -3,6 +3,7 @@ import type { ShipEntity, World } from '../world/entities'
 import { applyDamage } from './damage'
 import { spawnExplosion, spawnShockwave } from './effects'
 import { bombShatterAsteroid } from './mining'
+import { phasedOut } from '../scale/scale'
 
 /**
  * Энергетическая бомба. Импульс сжигает всё враждебное вокруг корабля.
@@ -27,7 +28,8 @@ import { bombShatterAsteroid } from './mining'
  * оружие массового поражения не должно делать этот выбор за пилота.
  */
 export function fireBomb(world: World, e: ShipEntity): boolean {
-  if (!e.alive || e.auxEnergy <= 0) return false
+  // Гигант за PHASE_END вне мелкого мира — как и лазер, бомба ему не оружие.
+  if (!e.alive || e.auxEnergy <= 0 || phasedOut(e.state.scale)) return false
 
   // Мощность — доля батареи доп-отсека: залил маскировку/ПРО — бомба выйдет слабее.
   const cap = e.spec.power.auxCapacity
@@ -41,6 +43,7 @@ export function fireBomb(world: World, e: ShipEntity): boolean {
     if (!ship.alive || ship.faction === e.faction) continue
     // Бомба — ответ на нападение. Мирные и полиция ей не по адресу.
     if (ship.faction !== 'hostile') continue
+    if (phasedOut(ship.state.scale)) continue
     if (ship.state.pos.distanceToSquared(e.state.pos) > radiusSq) continue
 
     // Полный запас цели: при power = 1 это ровно смертельный удар, кем бы она ни была.

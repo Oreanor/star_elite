@@ -3,7 +3,7 @@ import { GUNNERY } from '../../config/weapons'
 import { SHIELD } from '../../config/station'
 import { raySphere } from '../../core/math'
 import { isStationBot } from '../world/queries'
-import { effectiveRadius } from '../scale/scale'
+import { effectiveRadius, phasedOut } from '../scale/scale'
 import { warBaseFixtureWorldPos } from './warBase'
 import type {
   AsteroidEntity,
@@ -120,6 +120,8 @@ export function castLaser(
      */
     if (isStationBot(target)) continue
     if (cloaked && !target.ai?.dormant) continue
+    // Ушедший из мелкого мира (миелофон за PHASE_END) для луча не существует.
+    if (phasedOut(target.state.scale)) continue
     // Дешёвая отбраковка до точного теста, как у астероидов/ракет: болт заметает
     // отрезок в 1/120 с (~200 м), большинство кораблей дальше — их не проверяем лучом.
     // Радиус — с МАСШТАБОМ (`effectiveRadius`), как у столкновений и рендера: раздутый лучом
@@ -129,7 +131,7 @@ export function castLaser(
     const t = raySphere(origin, dir, target.state.pos, r)
     if (closer(t)) set(t, { ship: target })
   }
-  if (!cloaked && shooter.id !== world.player.id && world.player.alive) {
+  if (!cloaked && shooter.id !== world.player.id && world.player.alive && !phasedOut(world.player.state.scale)) {
     const r = effectiveRadius(world.player)
     if (world.player.state.pos.distanceToSquared(origin) <= (range + r) ** 2) {
       const t = raySphere(origin, dir, world.player.state.pos, r)
