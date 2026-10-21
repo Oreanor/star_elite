@@ -7,12 +7,23 @@ import { STARTER_SYSTEM } from './system'
 import { BELT_NAV_ID, configureAsteroidBelt, nearestBeltPoint, stepAsteroidBelt } from './asteroidBelt'
 import { stepWorld } from '../sim/step'
 import { cycleCelestial, navTarget } from './queries'
+import type { World } from './entities'
 
 function fixture() {
   const world = createWorld({ ...STARTER_SYSTEM, belt: null, patrols: [] })
   nearestBeltPoint(world, world.player.state.pos)
   stepAsteroidBelt(world)
   return world
+}
+
+/** Точки дальней дуги в координатах мира (истинные минус плавающее начало). */
+function dotPositions(w: World): Vector3[] {
+  const dots = w.asteroidBelt!.dots
+  const out: Vector3[] = []
+  for (let i = 0; i < dots.count; i++) {
+    out.push(new Vector3(dots.pos[i * 3]!, dots.pos[i * 3 + 1]!, dots.pos[i * 3 + 2]!).sub(w.originOffset))
+  }
+  return out
 }
 
 describe('постоянный астероидный пояс', () => {
@@ -29,9 +40,11 @@ describe('постоянный астероидный пояс', () => {
     const w = fixture()
     const player = w.player.state.pos
     const belt = w.asteroidBelt!
+    // Дальняя дуга — точки (`belt.dots`, истинные координаты), не тела мира.
+    const dots = dotPositions(w)
     const band = (min: number, max: number) =>
-      w.asteroids.filter(a => {
-        const d = a.pos.distanceTo(player)
+      dots.filter(p => {
+        const d = p.distanceTo(player)
         return d >= min && d < max
       }).length
     // Два шага по 100 км — дальняя сотня должна быть заметно реже ближней.
@@ -49,16 +62,32 @@ describe('постоянный астероидный пояс', () => {
     const axisY = belt.center.y - w.originOffset.y
     const axisZ = belt.center.z - w.originOffset.z
     let widest = 0
-    for (const a of w.asteroids) {
-      const d = a.pos.distanceTo(player)
+    for (const p of dots) {
+      const d = p.distanceTo(player)
       if (d < 200_000 || d > 350_000) continue
-      const radial = Math.hypot(a.pos.x - axisX, a.pos.z - axisZ)
-      const cross = Math.hypot(radial - belt.radius, a.pos.y - axisY)
+      const radial = Math.hypot(p.x - axisX, p.z - axisZ)
+      const cross = Math.hypot(radial - belt.radius, p.y - axisY)
       if (cross > widest) widest = cross
     }
     // На паре сотен километров сечение уже не во всю трубу — иначе дуга снова в палец.
     expect(widest).toBeGreaterThan(0)
     expect(widest).toBeLessThan(belt.diameter / 2 * 0.45)
+  })
+
+  it('телами живут только камни окна мешей, дальше — точки дуги до самого края', () => {
+    // Дальняя дуга была тысячами тел: их каждый такт гнала физика, вёл след позы и
+    // перебирал рендер (6690 тел ради 600 ближних) — пояс едва тянул 60 кадров.
+    const w = fixture()
+    const player = w.player.state.pos
+    for (const a of w.asteroids) {
+      if (!a.beltKey) continue
+      expect(a.pos.distanceTo(player)).toBeLessThanOrEqual(BELT.ENTITY_RANGE)
+    }
+    const dots = dotPositions(w)
+    expect(dots.length).toBeGreaterThan(0)
+    for (const p of dots) expect(p.distanceTo(player)).toBeGreaterThan(BELT.ENTITY_RANGE)
+    // Черта на небе тянется дальше прежних 50 000 км.
+    expect(dots.some(p => p.distanceTo(player) > 50_000_000)).toBe(true)
   })
 
   it('из одного зерна получает те же камни и не дублирует их при обновлении', () => {
