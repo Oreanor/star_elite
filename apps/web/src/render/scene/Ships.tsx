@@ -3,7 +3,6 @@ import { useEffect, useMemo, useRef } from 'react'
 import { InstancedMesh, Mesh, Object3D, Plane, type Material } from 'three'
 import {
   CHASSIS_CATALOGUE,
-  clamp,
   isDroneShip,
   isVisible,
   renderPos,
@@ -15,7 +14,7 @@ import {
 import { useSession } from '../../session/GameContext'
 import { shownShipQuat } from '../shownPose'
 import { jumpPortal, portalOpen } from '../../session/jumpPortal'
-import { GIANT_HIDE, GIANT_RENDER_CAP } from '../config'
+import { GIANT_RENDER_CAP } from '../config'
 import { chassisGeometry, chassisSizeMul, droneGeometry, placeholderGeometry } from '../geometry/ships'
 import { cloakMaterial, hullMaterial, hullMaterialFor } from '../materials/materials'
 import { usePortalRenderSide } from './portalRenderContext'
@@ -79,15 +78,11 @@ export function PlayerShip() {
     shownShipQuat(session.world, player, mesh.quaternion)
     renderPos(session.world, player.state, mesh.position)
 
-    // Гигант-режим: выше GIANT_HIDE.START свой корпус тает НА МЕСТЕ (масштаб → 0).
-    // Раньше уводили назад к камере — с pitch камеры это читалось как «уполз вниз
-    // под камеру» на миллионных ×. Центр кадра и так освобождается, сдвиг не нужен.
-    const hide = clamp((player.state.scale - GIANT_HIDE.START) / (GIANT_HIDE.FULL - GIANT_HIDE.START), 0, 1)
-    // Живой множитель размера из редактора оснастки (клавиша K): дефолт 1, в игре не влияет.
-    mesh.scale.setScalar(capped * (1 - hide) * chassisSizeMul(player.loadout.chassis.id))
+    // Свой корпус виден на всём пути роста, до потолка: прятать его у верха зума читалось
+    // как «корабль уехал». Живой множитель размера из редактора оснастки (клавиша K): дефолт 1.
+    mesh.scale.setScalar(capped * chassisSizeMul(player.loadout.chassis.id))
     // Корабль исчезает, канув в кольцо прыжка: с этого мига его в старой системе уже нет.
-    // И в гигант-режиме на FULL — уже в ноль, снимаем с отрисовки.
-    mesh.visible = player.alive && hide < 1
+    mesh.visible = player.alive
 
     // Свой корабль под полем видно — иначе пилот теряет собственный нос.
     // Чужой не видно вовсе, и это разные вещи: одна про интерфейс, другая про мир.
