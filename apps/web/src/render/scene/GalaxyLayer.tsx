@@ -28,7 +28,7 @@ import {
 } from '@elite/sim'
 import { useSession } from '../../session/GameContext'
 import { GALAXY_LAYER, RENDER } from '../config'
-import { galaxyViewMetersPerLy, starLayerRadiusLy } from '../worldShrink'
+import { galaxyStarSizeMul, galaxyViewMetersPerLy, starLayerRadiusLy } from '../worldShrink'
 import {
   createGalaxyStarDiscMaterial,
   createGalaxyStarShellMaterial,
@@ -67,6 +67,7 @@ uniform float uEdge;
 uniform vec3 uPlayer;
 uniform vec3 uPlayerLy; // локус борта в осях буфера (position − якорь кадра)
 uniform float uLayerScale;
+uniform float uSizeMul; // продолжение усадки звезды за порогом (galaxyStarSizeMul)
 uniform float uProj;
 uniform float uSpeckPx;
 uniform float uMaxPx;
@@ -98,7 +99,7 @@ void main() {
     return;
   }
 
-  float rRender = size * uLayerScale;
+  float rRender = size * uSizeMul * uLayerScale;
   float camDist = max(length(mv.xyz), 1.0);
   float diamPx = 2.0 * uProj * rRender / camDist;
   float sizeMul = mix(uCalmSize, uActiveSize, boost);
@@ -194,6 +195,9 @@ const _lodOrder = new Int32Array(32)
 const _texTaken = new Uint8Array(32)
 
 /** Радиус в св.г слоя. Мировой = R·starRadiusFactor: та же кривая, что у системной звезды. */
+/** Метров на св.г домена на пороге слоя: размеры звёзд в буфере — как в этот миг. */
+const FADE_SCALE = GALAXY_LAYER.LY_TO_M / GALAXY_LAYER.FADE_IN_START
+
 function sizeLy(radiusUnits: number, layerScale: number): number {
   return starLayerRadiusLy(radiusUnits * SCALE.STAR_RADIUS, layerScale)
 }
@@ -311,7 +315,7 @@ export function GalaxyLayer() {
         i === home && homePrimary
           ? homePrimary.radius / SCALE.STAR_RADIUS
           : s.star.radius
-      sizes[i] = sizeLy(radiusUnits[i]!, GALAXY_LAYER.LY_TO_M / GALAXY_LAYER.FADE_IN_START)
+      sizes[i] = sizeLy(radiusUnits[i]!, FADE_SCALE)
 
       if (!s.companion) continue
       const b = write * 3
@@ -331,7 +335,7 @@ export function GalaxyLayer() {
         i === home && pair[1]
           ? pair[1].radius / SCALE.STAR_RADIUS
           : s.companion.radius
-      sizes[write] = sizeLy(radiusUnits[write]!, GALAXY_LAYER.LY_TO_M / GALAXY_LAYER.FADE_IN_START)
+      sizes[write] = sizeLy(radiusUnits[write]!, FADE_SCALE)
       if (i === home) homeCompanionIndex = write
       write++
     }
@@ -370,6 +374,7 @@ export function GalaxyLayer() {
           uPlayer: { value: new Vector3() },
           uPlayerLy: { value: new Vector3() },
           uLayerScale: { value: 1 },
+          uSizeMul: { value: 1 },
           uProj: { value: 1000 },
           uSpeckPx: { value: GALAXY_LAYER.SPECK_PX },
           uMaxPx: { value: GALAXY_LAYER.MAX_PIXELS },
@@ -471,6 +476,10 @@ export function GalaxyLayer() {
     group.scale.setScalar(layerScale)
     material.uniforms.uLayerScale!.value = layerScale
     backgroundGlowMaterial.uniforms.uLayerScale!.value = layerScale
+    // Размеры в буфере — как на пороге; дальше шар усаживается множителем (без перезаливки).
+    const starMul = galaxyStarSizeMul(effScale)
+    material.uniforms.uSizeMul!.value = starMul
+    backgroundGlowMaterial.uniforms.uSizeMul!.value = starMul
     _playerLy.copy(shown).sub(_bary).divideScalar(domainScale)
     // Барицентр в пространстве кадра — для локатора и HUD: борт − локус·layerScale.
     _anchorView.copy(shown).addScaledVector(_playerLy, -layerScale)
@@ -544,7 +553,7 @@ export function GalaxyLayer() {
       sizeKey.current = sk
       const sizeAttr = points.geometry.getAttribute('size') as BufferAttribute
       const sizes = sizeAttr.array as Float32Array
-      for (let i = 0; i < data.count; i++) sizes[i] = sizeLy(data.radiusUnits[i]!, domainScale)
+      for (let i = 0; i < data.count; i++) sizes[i] = sizeLy(data.radiusUnits[i]!, FADE_SCALE)
       sizeAttr.needsUpdate = true
       material.uniforms.uSpeckPx!.value = GALAXY_LAYER.SPECK_PX
       material.uniforms.uMaxPx!.value = GALAXY_LAYER.MAX_PIXELS
@@ -647,7 +656,7 @@ export function GalaxyLayer() {
         const edgeT = (radiusM - dist) / Math.max(edgeM, 1)
         if (edgeT <= 0) continue
 
-        const rLy = sizeLy(data.radiusUnits[i]!, domainScale)
+        const rLy = sizeLy(data.radiusUnits[i]!, FADE_SCALE) * starMul
         const rRender = rLy * layerScale
         const camDist = Math.hypot(wx - cam.position.x, wy - cam.position.y, wz - cam.position.z)
         // Тот же множитель метки, что у точки в шейдере: иначе на переходе точка → меш
@@ -685,7 +694,7 @@ export function GalaxyLayer() {
         const mat = starSurfaceMaterial(hex)
         const tm = texMeshRefs.current[texUsed]
         if (!mat || !tm) continue
-        const rLy = sizeLy(data.radiusUnits[i]!, domainScale)
+        const rLy = sizeLy(data.radiusUnits[i]!, FADE_SCALE) * starMul
         const sizeMul = data.boost[i]! > 0.5 ? GALAXY_LAYER.ACTIVE_SIZE_MUL : GALAXY_LAYER.CALM_SIZE_MUL
         tm.position.set(posArr[i * 3]! - plx, posArr[i * 3 + 1]! - ply, posArr[i * 3 + 2]! - plz)
         tm.scale.setScalar(rLy * sizeMul)
@@ -702,7 +711,7 @@ export function GalaxyLayer() {
         const i = _lodIdx[j]!
         if (i < 0) continue
         data.lod[i] = 1
-        const rLy = sizeLy(data.radiusUnits[i]!, domainScale)
+        const rLy = sizeLy(data.radiusUnits[i]!, FADE_SCALE) * starMul
         const sizeMul = data.boost[i]! > 0.5 ? GALAXY_LAYER.ACTIVE_SIZE_MUL : GALAXY_LAYER.CALM_SIZE_MUL
         const visualRadiusLy = rLy * sizeMul
         const diamPx = _lodPx[j]!

@@ -61,3 +61,17 @@ export function galaxyViewMetersPerLy(scale: number): number {
   const p = Math.log(GALAXY_LAYER.TOP_VIEW_M_PER_LY / atLock) / Math.log(fade / lock)
   return domain * (fade / s) ** p
 }
+
+/**
+ * Во сколько раз шар звезды слоя меньше, чем на пороге галактики. Видимый радиус тела
+ * системы идёт как `starRadiusFactor` (10/scale) при НЕсжатых расстояниях; в слое расстояния
+ * сжаты вместе с ростом, и тот же 10/scale в сжатых метрах давал постоянный угловой размер —
+ * звезда переставала уменьшаться, а пиксельные полы превращали это в ступеньки. Множитель
+ * продолжает кривую тела: угловой размер звезды ∝ 1/scale на всей дороге роста.
+ */
+export function galaxyStarSizeMul(scale: number): number {
+  const fade = GALAXY_LAYER.FADE_IN_START
+  const s = Math.min(Math.max(scale, fade), GALAXY_LAYER.LOCK_SCALE)
+  return starRadiusFactor(s) / starRadiusFactor(fade)
+}
+

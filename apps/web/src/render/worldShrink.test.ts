@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { MIELOPHONE } from '@elite/sim'
-import { GALAXY_LAYER } from './config'
-import { galaxyViewMetersPerLy, starLayerRadiusLy, starRadiusFactor, starWorldShrink } from './worldShrink'
+import { GALAXY } from '@elite/sim'
+import { CAMERA, GALAXY_LAYER, GIANT_RENDER_CAP } from './config'
+import { galaxyStarSizeMul, galaxyViewMetersPerLy, starLayerRadiusLy, starRadiusFactor, starWorldShrink } from './worldShrink'
 
 /**
  * Баг: системная звезда честно сжималась с ростом, а на пороге галактики слой
@@ -67,4 +68,28 @@ describe('кадр галактики на росте', () => {
       prev = v
     }
   })
+
+  it('на потолке камера «отъезжает» дальше поперечника галактики — та видна целиком', () => {
+    // Сжатие кадра вокруг борта = отъезд камеры; на экране меняется лишь то, что ближе
+    // отъезда в св.г. С калибровкой 8000 м/св.г на потолке выходило 12 св.г — изнутри
+    // галактики радиусом 92, и вид с ×4·10⁵ до потолка стоял.
+    const [ox, oy, oz] = CAMERA.CHASE_OFFSET
+    const camera = Math.hypot(ox, oy, oz) * GIANT_RENDER_CAP
+    const pulledLy = camera / galaxyViewMetersPerLy(lock)
+    expect(pulledLy).toBeGreaterThan(2 * GALAXY.RADIUS_LY)
+  })
 })
+
+describe('звезда слоя за порогом', () => {
+  // Баг: радиус 10/scale в СЖАТЫХ метрах слоя при сжатых же расстояниях давал постоянный
+  // угловой размер — звезда переставала уменьшаться, полы пикселей делали ступеньки.
+  const fade = GALAXY_LAYER.FADE_IN_START
+
+  it('на пороге — без шва, дальше угловой размер ∝ 1/scale', () => {
+    expect(galaxyStarSizeMul(fade)).toBe(1)
+    for (const s of [fade * 2, 4e5, 1e6, GALAXY_LAYER.LOCK_SCALE]) {
+      expect(galaxyStarSizeMul(s) * s).toBeCloseTo(fade, 6)
+    }
+  })
+})
+
