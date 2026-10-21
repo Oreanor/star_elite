@@ -15,10 +15,9 @@ export interface GalaxyRadarState {
   count: number
   /** Только системы — Tab / jumpTargetIndex. */
   systemCount: number
-  /** Индекс буфера спутника своей системы, или -1. */
-  homeCompanionIndex: number
-  originIndex: number
+  /** Барицентр системы кадра в пространстве КАДРА: точка = anchor + pos·layerScale. */
   anchor: Vector3
+  /** Метров кадра на св.г (`galaxyViewMetersPerLy`). */
   layerScale: number
   /** Радиус сферы ЛОКАТОРА / Tab (м кадра) — уже, чем охват точек в 3D. */
   sphereRadius: number
@@ -30,8 +29,6 @@ const state: GalaxyRadarState = {
   colors: null,
   count: 0,
   systemCount: 0,
-  homeCompanionIndex: -1,
-  originIndex: 0,
   anchor: new Vector3(),
   layerScale: 1,
   sphereRadius: 0,
@@ -57,8 +54,6 @@ export function resetGalaxyRadar(): void {
   state.colors = null
   state.count = 0
   state.systemCount = 0
-  state.homeCompanionIndex = -1
-  state.originIndex = 0
   state.layerScale = 1
   state.sphereRadius = 0
 }
@@ -101,7 +96,7 @@ function starDistLySq(player: World['player'], index: number): number {
  * «не достаёт» лишь потому, что ты уже в ней, а лететь к ней своим ходом можно.
  */
 function selectable(world: World, i: number): boolean {
-  return i === state.originIndex || i === world.systemIndex || jumpInDriveRange(world, i)
+  return i === world.galaxyFrameIndex || i === world.systemIndex || jumpInDriveRange(world, i)
 }
 
 /**

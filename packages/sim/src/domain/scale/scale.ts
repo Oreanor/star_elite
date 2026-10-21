@@ -4,7 +4,6 @@ import { MIELOPHONE } from '../../config/mielophone'
 import { clamp } from '../../core/math'
 import { placeSystem } from '../galaxy/shape'
 import type { ShipEntity, World } from '../world/entities'
-import { luminary } from '../world/orbits'
 
 /**
  * Миелофон: непрерывный масштаб борта. Чистый домен — ни рендера, ни камеры, только
@@ -50,16 +49,15 @@ export function metersPerLy(scale: number): number {
 }
 
 /**
- * Якорь галактики в ЛОКАЛЬНЫХ метрах кадра (true − originOffset).
- * Тот же выбор, что у `jumpStarDestination`: слой → своя звезда → pos борта.
+ * Якорь галактики в ЛОКАЛЬНЫХ метрах кадра: барицентр системы кадра. Он — истинный ноль
+ * мира (от него `stepOrbits` расставляет светила), значит в кадре это −originOffset.
+ *
+ * Один владелец на домен, слой, локатор и автопилот. Прежде якорь писал рендер (середина
+ * пары светил), а до его пробуждения домен брал главную звезду: сервер без рендера считал
+ * бы локус от другой точки, а у двойной на пробуждении слоя локус прыгал на полразноса.
  */
 export function galaxyAnchorLocal(world: World, out: Vector3): Vector3 {
-  if (world.galaxyAnchorTrue) {
-    return out.copy(world.galaxyAnchorTrue).sub(world.originOffset)
-  }
-  const home = luminary(world.bodies, 0)
-  if (home) return out.copy(home.pos)
-  return out.copy(world.player.state.pos)
+  return out.copy(world.originOffset).negate()
 }
 
 /**
@@ -166,7 +164,9 @@ export function stepScale(e: ShipEntity, dt: number, world?: World): void {
   }
   e.state.scale = clamp(e.state.scale, MIELOPHONE.MIN_SCALE, MIELOPHONE.MAX_SCALE)
 
-  if (world && e.state.scale !== oldScale) {
+  // Локус — в кадре ИГРОКА (якорь — барицентр его системы). Бот с миелофоном растёт
+  // на месте: переносить его к чужому якорю значило бы телепортировать по системе.
+  if (world && e === world.player && e.state.scale !== oldScale) {
     preserveGalaxyLocus(e, world, oldScale, e.state.scale)
   }
 

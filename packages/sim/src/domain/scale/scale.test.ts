@@ -8,6 +8,7 @@ import type { ShipEntity, World } from '../world/entities'
 import {
   effectiveMass,
   effectiveRadius,
+  galaxyAnchorLocal,
   metersPerLy,
   preserveGalaxyLocus,
   speedScaleFactor,
@@ -16,9 +17,7 @@ import {
 
 /** Локус в св.г по X от якоря (для тестов инварианта зума). */
 function locusX(ship: ShipEntity, world: World): number {
-  const anchor = world.galaxyAnchorTrue
-    ? world.galaxyAnchorTrue.clone().sub(world.originOffset)
-    : new Vector3()
+  const anchor = galaxyAnchorLocal(world, new Vector3())
   return (ship.state.pos.x - anchor.x) / metersPerLy(ship.state.scale)
 }
 
@@ -209,8 +208,7 @@ describe('миелофон: галактический локус', () => {
     const { world } = withBot()
     const player = world.player
     fitMielophone(player)
-    world.originOffset.set(0, 0, 0)
-    world.galaxyAnchorTrue = new Vector3(0, 0, 0)
+    world.originOffset.set(0, 0, 0) // якорь — барицентр, в кадре −originOffset = 0
     const s0 = MIELOPHONE.GHOST_BODY_SCALE
     player.state.scale = s0
     player.state.pos.set(ly * metersPerLy(s0), 0, 0)
@@ -249,7 +247,6 @@ describe('миелофон: галактический локус', () => {
     const { world } = withBot()
     const p = world.player
     fitMielophone(p)
-    world.galaxyAnchorTrue = new Vector3(0, 0, 0)
     world.originOffset.set(0, 0, 0)
     p.state.scale = 10
     p.state.pos.set(12_000, 0, 0)

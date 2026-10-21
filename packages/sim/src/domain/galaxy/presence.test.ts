@@ -4,7 +4,9 @@ import { ARRIVAL, CORE_INDEX, GALAXY, GALAXY_FLIGHT } from '../../config/galaxy'
 import { MIELOPHONE } from '../../config/mielophone'
 import { catalogLyToWorld, metersPerLy, playerGalaxyLy, preserveGalaxyLocus } from '../scale/scale'
 import { createWorld, inSystem, makeShip, type World } from '../world'
+import { makeRng } from '../../core/math'
 import { generateSystem } from './generate'
+import { systemDefFor } from './jump'
 import { nearestSystemIndex, stepGalaxyPresence } from './presence'
 import { distanceLy, placeSystem } from './shape'
 
@@ -337,4 +339,101 @@ describe('связное пространство', () => {
     expect(world.epoch).toBe(epoch)
     expect(world.player.state.pos.x - before.x).toBeCloseTo(10_000, 0)
   })
+
+  it('усадка в 1 св.г. от СВОЕЙ звезды подтягивает к пузырю и не пересобирает систему дважды', () => {
+    // Подтянутую точку вычисляли и выбрасывали: борт оставался в 1 св.г.·GHOST от дома,
+    // систему снимало тактом позже, а дальнейшая усадка собирала её снова.
+    const world = createWorld()
+    const home = world.systemIndex
+    const ghost = MIELOPHONE.GHOST_BODY_SCALE
+    const far = ghost * 4
+    world.player.state.scale = far
+    stepGalaxyPresence(world, 1)
+
+    const homeLy = placeSystem(home, world.galaxySeed)
+    const dirs = [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]] as const
+    let placed = false
+    for (const [x, y, z] of dirs) {
+      putAtLy(world, { x: homeLy.x + x, y: homeLy.y + y, z: homeLy.z + z }, far)
+      if (nearestSystemIndex(world, playerGalaxyLy(world, far), true) === home) {
+        placed = true
+        break
+      }
+    }
+    expect(placed).toBe(true)
+
+    const epoch = world.epoch
+    let s = far
+    while (s > 1) {
+      const old = s
+      s = Math.max(1, s / 1.5)
+      preserveGalaxyLocus(world.player, world, old, s)
+      world.player.state.scale = s
+      stepGalaxyPresence(world, old)
+    }
+    expect(world.systemIndex).toBe(home)
+    expect(world.systemStellarOnly).toBe(false)
+    expect(world.epoch - epoch).toBeLessThanOrEqual(1)
+    const star = world.bodies.find((b) => b.kind === 'star' || b.kind === 'blackhole')!
+    const range = world.player.state.pos.distanceTo(star.pos)
+    expect(range).toBeLessThan(metersPerLy(ghost) * GALAXY_FLIGHT.BUBBLE_LY)
+  })
+
+  it('ближайшая с кешем перебора — та же, что у полного перебора, на любом блуждании', () => {
+    // Кеш пропускает перебор, пока локус не ушёл на полразрыва до второй звезды;
+    // ответ обязан совпасть с честным перебором — иначе рассыплется детерминизм.
+    const world = createWorld()
+    const rng = makeRng(7)
+    const brute = (ly: { x: number; y: number; z: number }): number => {
+      let best = 0
+      let bestD = Infinity
+      for (let i = 0; i < GALAXY.COUNT; i++) {
+        const d = distanceLy(ly, placeSystem(i, world.galaxySeed))
+        if (d < bestD) {
+          bestD = d
+          best = i
+        }
+      }
+      return best
+    }
+    const ly = { ...placeSystem(world.systemIndex, world.galaxySeed) }
+    for (let step = 0; step < 400; step++) {
+      const big = rng() < 0.1
+      const k = big ? 8 : 0.05
+      ly.x += (rng() - 0.5) * k
+      ly.y += (rng() - 0.5) * k
+      ly.z += (rng() - 0.5) * k * 0.2
+      expect(nearestSystemIndex(world, ly, false)).toBe(brute(ly))
+    }
+  })
+
+  it('прибытие к двойной ставит борт от барицентра: локус не сдвигается на разнос пары', () => {
+    // Прежде борт ставился от главной звезды, а локус меряется от барицентра — у двойной
+    // сразу после прибытия точка галактики расходилась с той, где борт сжался.
+    const world = createWorld()
+    const home = world.systemIndex
+    let binary = -1
+    for (let i = 0; i < GALAXY.COUNT && binary < 0; i++) {
+      if (i === home) continue
+      if (systemDefFor(i, world.galaxySeed).companion) binary = i
+    }
+    expect(binary).toBeGreaterThanOrEqual(0)
+
+    const ghost = MIELOPHONE.GHOST_BODY_SCALE
+    const far = ghost * 4
+    world.player.state.scale = far
+    stepGalaxyPresence(world, 1)
+    const star = placeSystem(binary, world.galaxySeed)
+    putAtLy(world, { x: star.x + 0.03, y: star.y, z: star.z }, far)
+    stepGalaxyPresence(world, far)
+    const before = { ...playerGalaxyLy(world, far) }
+
+    preserveGalaxyLocus(world.player, world, far, ghost * 0.99)
+    world.player.state.scale = ghost * 0.99
+    stepGalaxyPresence(world, far)
+
+    expect(world.galaxyFrameIndex).toBe(binary)
+    expect(distanceLy(playerGalaxyLy(world, ghost), before)).toBeLessThan(1e-9)
+  })
 })
+

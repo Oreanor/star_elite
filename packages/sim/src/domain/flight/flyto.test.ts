@@ -155,7 +155,6 @@ describe('автопилот-к-цели', () => {
     world.player.state.scale = MIELOPHONE.GHOST_BODY_SCALE
     const jump = world.systemIndex === 0 ? 1 : 0
     world.jumpTargetIndex = jump
-    world.galaxyAnchorTrue = world.player.state.pos.clone().add(world.originOffset)
 
     expect(canEngageFlyTo(world)).toBe(true)
     expect(flyToArrived(world)).toBe(false)
@@ -165,16 +164,16 @@ describe('автопилот-к-цели', () => {
     expect(world.player.controls.throttle).toBeGreaterThan(0)
     expect(world.player.controls.throttle).toBeLessThanOrEqual(GALAXY_FLIGHT.THROTTLE_CRUISE)
 
-    // Мировая точка звезды — как в flyto (якорь + Δly·м/св.г).
-    const origin = placeSystem(world.systemIndex, world.galaxySeed)
+    // Мировая точка звезды — как в flyto: якорь (барицентр кадра, −originOffset) + Δly·м/св.г.
+    const origin = placeSystem(world.galaxyFrameIndex, world.galaxySeed)
     const star = placeSystem(jump, world.galaxySeed)
     const mPerLy =
       GALAXY_FLIGHT.LY_TO_M / Math.min(world.player.state.scale, MIELOPHONE.MAX_SCALE)
     const starPos = new Vector3(
-      world.player.state.pos.x + (star.x - origin.x) * mPerLy,
-      world.player.state.pos.y + (star.z - origin.z) * mPerLy,
-      world.player.state.pos.z + (star.y - origin.y) * mPerLy,
-    )
+      (star.x - origin.x) * mPerLy,
+      (star.z - origin.z) * mPerLy,
+      (star.y - origin.y) * mPerLy,
+    ).sub(world.originOffset)
     faceToward(world, starPos)
     expect(flyToController.wantsCruise?.(world.player, world)).toBe(true)
 

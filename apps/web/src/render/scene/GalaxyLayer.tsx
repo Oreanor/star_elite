@@ -14,7 +14,17 @@ import {
   ShaderMaterial,
   Vector3,
 } from 'three'
-import { applyDelta, GALAXY, generateGalaxy, luminary, SCALE, renderTime, type BodyEntity } from '@elite/sim'
+import {
+  applyDelta,
+  GALAXY,
+  galaxyAnchorLocal,
+  generateGalaxy,
+  luminary,
+  metersPerLy,
+  SCALE,
+  renderTime,
+  type BodyEntity,
+} from '@elite/sim'
 import { useSession } from '../../session/GameContext'
 import { GALAXY_LAYER, RENDER } from '../config'
 import { galaxyViewMetersPerLy, starLayerRadiusLy } from '../worldShrink'
@@ -250,8 +260,9 @@ export function GalaxyLayer() {
   const texMeshRefs = useRef<(Mesh | null)[]>([])
 
   const [awake, setAwake] = useState(false)
-  const anchorTrue = useRef(new Vector3())
   const starData = useRef<StarBuffers | null>(null)
+  /** Звёзды, отданные мешам в прошлом кадре, — чтобы гасить и заливать только разницу. */
+  const lodPrev = useRef({ list: new Int32Array(32), count: 0, dirty: true, data: null as StarBuffers | null })
   const sizeKey = useRef(0)
 
   useEffect(() => {
@@ -423,7 +434,6 @@ export function GalaxyLayer() {
       const gr = galaxyRadar()
       gr.active = false
       gr.sphereRadius = 0
-      world.galaxyAnchorTrue = null
       if (scale >= GALAXY_LAYER.WAKE_SCALE) setAwake(true)
       return
     }
@@ -439,24 +449,17 @@ export function GalaxyLayer() {
     }
 
     const pair = homePair(world.bodies)
-    if (pair.length >= 2) {
-      _bary.copy(pair[0]!.pos).add(pair[1]!.pos).multiplyScalar(0.5)
-    } else if (pair[0]) {
-      _bary.copy(pair[0].pos)
-    } else {
-      _bary.copy(world.player.state.pos)
-    }
-    // Истина якоря — барицентр кадра (локус, локатор). Группа — на пилоте, чтобы
-    // меши ближних звёзд не складывали десятки св.г. в float32.
-    anchorTrue.current.copy(_bary).add(world.originOffset)
-    world.galaxyAnchorTrue = anchorTrue.current
+    // Якорь — у домена (барицентр системы кадра): тот же, от которого локус, автопилот
+    // и усадка. Группа — на пилоте, чтобы меши ближних звёзд не складывали десятки св.г.
+    // в float32.
+    galaxyAnchorLocal(world, _bary)
     group.position.copy(world.player.state.pos)
 
     const effScale = Math.min(scale, GALAXY_LAYER.LOCK_SCALE)
     // Две меры св.года: домена (локус, полёт, шов с телами) и КАДРА (сильнее сжат вокруг
     // борта, см. `galaxyViewMetersPerLy`). Всё, что в св.г, — от domainScale; всё, что
     // рисуется и меряется на экране, — от layerScale.
-    const domainScale = GALAXY_LAYER.LY_TO_M / effScale
+    const domainScale = metersPerLy(effScale)
     const layerScale = galaxyViewMetersPerLy(effScale)
     group.scale.setScalar(layerScale)
     material.uniforms.uLayerScale!.value = layerScale
@@ -470,6 +473,10 @@ export function GalaxyLayer() {
     const home = world.galaxyFrameIndex
     if (pair[0] && domainScale > 0) {
       const posAttr = points.geometry.getAttribute('position') as BufferAttribute
+      // В GPU — только точки своей пары, не все 10k: остальной каталог не двигается.
+      posAttr.clearUpdateRanges()
+      posAttr.addUpdateRange(home * 3, 3)
+      if (data.homeCompanionIndex >= 0) posAttr.addUpdateRange(data.homeCompanionIndex * 3, 3)
       const pos = posAttr.array as Float32Array
       const seamMax = GALAXY_LAYER.HOME_SEAM_MAX_LY
       _tmp.copy(pair[0].pos).sub(_bary).divideScalar(domainScale)
@@ -603,7 +610,14 @@ export function GalaxyLayer() {
       _lodPx[j] = -1
       _texTaken[j] = 0
     }
-    data.lod.fill(0)
+    // Флаг «рисует меш» гасим только у прошлых отобранных (≤ MESH_MAX), не у всех 10k.
+    const lodWas = lodPrev.current
+    if (lodWas.data !== data) {
+      lodWas.data = data
+      lodWas.count = 0
+      lodWas.dirty = true
+    }
+    for (let k = 0; k < lodWas.count; k++) data.lod[lodWas.list[k]!] = 0
     for (let t = 0; t < texMax; t++) {
       const tm = texMeshRefs.current[t]
       if (tm) tm.visible = false
@@ -728,17 +742,31 @@ export function GalaxyLayer() {
       shell.visible = false
     }
 
-    const lodAttr = points.geometry.getAttribute('lod') as BufferAttribute
-    lodAttr.needsUpdate = true
+    // В GPU — лишь когда набор мешей сменился (или буфер новый): на ровном полёте
+    // это не каждый кадр, а при смене ближайших звёзд.
+    let picked = 0
+    let changed = lodWas.dirty
+    for (let j = 0; j < meshMax; j++) {
+      const i = _lodIdx[j]!
+      if (i < 0 || data.lod[i] !== 1) continue
+      if (!changed) {
+        let was = false
+        for (let k = 0; k < lodWas.count; k++) if (lodWas.list[k] === i) was = true
+        if (!was) changed = true
+      }
+      lodWas.list[picked++] = i
+    }
+    if (picked !== lodWas.count) changed = true
+    lodWas.count = picked
+    lodWas.dirty = false
+    if (changed) (points.geometry.getAttribute('lod') as BufferAttribute).needsUpdate = true
 
     const gr = galaxyRadar()
     gr.active = on
     gr.anchor.copy(_anchorView)
     gr.layerScale = layerScale
     gr.sphereRadius = locatorRadiusM
-    gr.originIndex = world.galaxyFrameIndex
     gr.systemCount = data.systemCount
-    gr.homeCompanionIndex = data.homeCompanionIndex
     gr.positions = data.positions
     gr.colors = data.colors
     gr.count = data.count

@@ -4,6 +4,7 @@ import { MIELOPHONE } from '../../config/mielophone'
 import {
   catalogLyToWorld,
   effectiveRadius,
+  galaxyAnchorLocal,
   metersPerLy,
   playerGalaxyLy,
   preserveGalaxyLocus,
@@ -40,6 +41,50 @@ function wantBodies(distLy: number, populated: boolean): boolean {
   return populated ? distLy < leave : distLy < enter
 }
 
+/**
+ * Последний полный перебор каталога для мира: где был локус, кто ближайший и запас.
+ * Ближайшая не сменится, пока локус ушёл меньше чем на (d₂ − d₁)/2 (неравенство
+ * треугольника): ответ тот же, что у полного перебора, — детерминизм цел. Без этого
+ * на галактическом × каждый такт перебирались все 10 000 систем.
+ */
+interface NearestScan {
+  seed: number
+  x: number
+  y: number
+  z: number
+  best: number
+  margin: number
+}
+const _scans = new WeakMap<World, NearestScan>()
+
+function scanNearest(world: World, ly: { x: number; y: number; z: number }): number {
+  const seed = world.galaxySeed
+  const c = _scans.get(world)
+  if (c && c.seed === seed && Math.hypot(ly.x - c.x, ly.y - c.y, ly.z - c.z) < c.margin) return c.best
+  let best = 0
+  let bestD = Infinity
+  let secondD = Infinity
+  for (let i = 0; i < GALAXY.COUNT; i++) {
+    const d = distanceLy(ly, placeSystem(i, seed))
+    if (d < bestD) {
+      secondD = bestD
+      bestD = d
+      best = i
+    } else if (d < secondD) {
+      secondD = d
+    }
+  }
+  const scan = c ?? { seed, x: 0, y: 0, z: 0, best: 0, margin: 0 }
+  scan.seed = seed
+  scan.x = ly.x
+  scan.y = ly.y
+  scan.z = ly.z
+  scan.best = best
+  scan.margin = (secondD - bestD) / 2
+  if (!c) _scans.set(world, scan)
+  return best
+}
+
 /** Ближайшая система к локусу. С гистерезисом — не прыгаем на равной границе. */
 export function nearestSystemIndex(
   world: World,
@@ -47,15 +92,8 @@ export function nearestSystemIndex(
   hysteresis: boolean,
 ): number {
   const seed = world.galaxySeed
-  let best = 0
-  let bestD = Infinity
-  for (let i = 0; i < GALAXY.COUNT; i++) {
-    const d = distanceLy(ly, placeSystem(i, seed))
-    if (d < bestD) {
-      bestD = d
-      best = i
-    }
-  }
+  const best = scanNearest(world, ly)
+  const bestD = distanceLy(ly, placeSystem(best, seed))
   if (hysteresis) {
     const cur = world.systemIndex
     if (cur >= 0 && cur < GALAXY.COUNT) {
@@ -110,6 +148,20 @@ function standOffFromStar(world: World): void {
   maybeShiftOrigin(world)
 }
 
+/** Борт в точку `ly` кадра в GHOST-метрах: от барицентра системы кадра. */
+function placeAtLocus(world: World, ly: { x: number; y: number; z: number }): void {
+  const origin = placeSystem(world.galaxyFrameIndex, world.galaxySeed)
+  catalogLyToWorld(
+    ly.x - origin.x,
+    ly.y - origin.y,
+    ly.z - origin.z,
+    metersPerLy(MIELOPHONE.GHOST_BODY_SCALE),
+    _start,
+  )
+  galaxyAnchorLocal(world, world.player.state.pos).add(_start)
+  maybeShiftOrigin(world)
+}
+
 function arriveAt(
   world: World,
   index: number,
@@ -142,10 +194,9 @@ function arriveAt(
   driftContacts(world)
   if (!stellarOnly) spawnResidentContacts(world)
 
-  // После орбит: смещение от ЖИВОЙ звезды/дыры, не от [0,0,0] фабрики.
-  // Иначе двойная уезжает, и борт остаётся «в 1000 км» от пустого центра.
-  const live = luminary(world.bodies, 0)
-  if (live) player.state.pos.copy(live.pos).add(_start)
+  // От барицентра — того же якоря, от которого меряется локус (`galaxyAnchorLocal`):
+  // иначе у двойной локус сразу после прибытия расходился с `ly` на разнос пары.
+  galaxyAnchorLocal(world, player.state.pos).add(_start)
   maybeShiftOrigin(world)
   standOffFromStar(world)
   player.state.scale = scale
@@ -232,6 +283,7 @@ export function stepGalaxyPresence(world: World, oldScale: number): void {
   }
   let nearest = nearestSystemIndex(world, ly, newScale >= ghost)
   let dist = distanceLy(ly, placeSystem(nearest, world.galaxySeed))
+  let pulled = false
 
   // Усадка из галактики. Кадр в полёте не пересобираем (enterSystem каждый
   // Voronoi — дёрганье). Куда садимся: ближайшая, если явно ближе кадра
@@ -247,6 +299,7 @@ export function stepGalaxyPresence(world: World, oldScale: number): void {
       const star = placeSystem(nearest, world.galaxySeed)
       ly = pullIntoBubble(ly, star, GALAXY_FLIGHT.BUBBLE_LY * 0.8)
       dist = distanceLy(ly, star)
+      pulled = true
     }
   }
 
@@ -255,10 +308,13 @@ export function stepGalaxyPresence(world: World, oldScale: number): void {
   adoptCurrent(world, nearest)
 
   if (crossingDown) {
-    // Свой кадр уже загружен: enterSystem только дёрнет эпоху. Координаты —
-    // GHOST-метры после preserveGalaxyLocus; вытолкнуть из звезды достаточно.
     if (world.galaxyFrameIndex === nearest) {
-      standOffFromStar(world)
+      // Свой кадр: координаты уже GHOST-метры (preserveGalaxyLocus). Подтянутую к
+      // пузырю точку ПРИМЕНЯЕМ — иначе борт оставался за пузырём (в 1 св.г.·GHOST),
+      // система снималась тактом позже и собиралась снова при дальнейшей усадке.
+      if (pulled) placeAtLocus(world, ly)
+      if (bodies && !populated) arriveAt(world, nearest, ly, newScale, false)
+      else standOffFromStar(world)
       return
     }
     arriveAt(world, nearest, ly, newScale, !bodies)

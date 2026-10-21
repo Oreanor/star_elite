@@ -849,7 +849,6 @@ export function enterSystem(
   // Прибыли — выбранная для прыжка система достигнута, метку и точку выхода снимаем.
   world.jumpTargetIndex = null
   world.jumpArrivalPlanet = null
-  world.galaxyAnchorTrue = null // слой галактики встанет заново в новой системе
   world.galaxyFrameIndex = systemIndex
   world.trafficTimer = TRAFFIC.FIRST_DELAY
 
@@ -972,7 +971,6 @@ export function createWorld(
     contactCycleAt: -1e9,
     celestialCycleAt: -1e9,
     jumpTargetIndex: null,
-    galaxyAnchorTrue: null,
     galaxyFrameIndex: WORLD.HOME_INDEX,
     systemStellarOnly: false,
     jumpArrivalPlanet: null,
