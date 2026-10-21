@@ -261,34 +261,44 @@ function GalaxyMapImpl({ onClose, embedded = false }: { onClose: () => void; emb
   const searchIndex = useMemo(() => {
     if (search.length < 2) return null
     const hit = (name: string) => properName(name).toLowerCase().includes(search)
+    // Система по своему имени — прежде системы, где так зовут лишь планету или станцию.
+    let byWorld: number | null = null
     for (let i = 0; i < systems.length; i++) {
       const s = systems[i]!
       if (hit(s.name)) return i
-      if (s.planets.some((p) => hit(p.name) || (p.station != null && hit(p.station.name)))) return i
+      if (byWorld == null && s.planets.some((p) => hit(p.name) || (p.station != null && hit(p.station.name)))) byWorld = i
     }
-    return null
+    return byWorld
   }, [search, systems])
 
   /**
    * Список звёзд для левой колонки: то же, что видно на поле (фильтр) и что нашёл поиск,
    * ближние первыми. Обрезан двумя сотнями — колонка не читальный зал на 2500 строк, а
    * длинный список всё равно разбирают поиском.
+   *
+   * Поиск находит и систему, где так зовут лишь планету или станцию, — тогда в строке после
+   * точки найденное имя: иначе на «таллин» выпадал десяток чужих имён без объяснения. Системы,
+   * совпавшие своим именем, — первыми.
    */
   const listed = useMemo(() => {
+    const searching = search.length >= 2
     const hit = (name: string) => properName(name).toLowerCase().includes(search)
-    const out: { index: number; name: string; distance: number }[] = []
+    const out: { index: number; name: string; via: string | null; distance: number }[] = []
     for (let i = 0; i < systems.length; i++) {
       if (!visible[i]) continue
       const s = systems[i]!
-      if (
-        search.length >= 2 &&
-        !hit(s.name) &&
-        !s.planets.some((p) => hit(p.name) || (p.station != null && hit(p.station.name)))
-      )
-        continue
-      out.push({ index: i, name: s.name, distance: jumpDistance(world, i) })
+      let via: string | null = null
+      if (searching && !hit(s.name)) {
+        for (const p of s.planets) {
+          if (hit(p.name)) via = p.name
+          else if (p.station != null && hit(p.station.name)) via = p.station.name
+          if (via) break
+        }
+        if (!via) continue
+      }
+      out.push({ index: i, name: s.name, via, distance: jumpDistance(world, i) })
     }
-    out.sort((a, b) => a.distance - b.distance)
+    out.sort((a, b) => Number(a.via != null) - Number(b.via != null) || a.distance - b.distance)
     return out.slice(0, 200)
   }, [systems, visible, search, world.systemIndex, world.galaxySeed])
 
@@ -419,7 +429,9 @@ function GalaxyMapImpl({ onClose, embedded = false }: { onClose: () => void; emb
               <li key={s.index}>
                 <MapRow
                   kind=""
-                  name={properName(s.name).toUpperCase()}
+                  name={
+                    properName(s.name).toUpperCase() + (s.via ? ` · ${properName(s.via).toUpperCase()}` : '')
+                  }
                   meta={`${s.distance.toFixed(1)} ${t('unit.ly')}`}
                   color={UI.PRIMARY}
                   active={s.index === selected}
