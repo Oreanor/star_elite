@@ -12,11 +12,20 @@ import type { PoseSnapshot } from './pose'
  * переводит вызывающий, вычитая свой `originOffset`. Часы (`performance.now()`) — снаружи:
  * так класс остаётся чистым и проверяемым, без обращения к времени.
  *
- * ВРЕМЁН ЗДЕСЬ ДВА, и путать их нельзя. Время ПРИХОДА (`Sample.t`, монотонные локальные мс) —
- * для сглаживания: только оно и годится для окна в 120 мс, потому что не зависит ни от чужих
- * часов, ни от оценки их сдвига. Отметка ОТПРАВИТЕЛЯ (`Sample.stamp`, серверные мс) — не для
- * счёта времени вовсе, а как доказательство жизни: она отвечает на вопрос «пакет новый или это
- * тот же узел приехал снова». Свежесть — производная от второго, но меряется первым.
+ * ВРЕМЁН ЗДЕСЬ ТРИ, и путать их нельзя. Часы ОТПРАВИТЕЛЯ (`Sample.k` — его монотонные мс в миг
+ * сборки пакета; у прежних сборок — серверная отметка) — ось СГЛАЖИВАНИЯ: пакеты собираются
+ * ровно, раз в ~66 мс. Серверная отметка (`Sample.stamp`) — доказательство жизни и порядок:
+ * новый ли пакет. Время ПРИХОДА (`Sample.t`, наши мс) — для свежести и оценки сдвига часов.
+ *
+ * Прежде сглаживали по приходу — и борт мотало «туда-сюда на десятки метров». `onValue` слушает
+ * систему целиком и отдаёт пакеты ПАЧКАМИ (будит нас и наша собственная поза, 15 раз в секунду):
+ * ровно отправленные пакеты ложатся на ось прихода неровно, бывает по два в одно мгновение.
+ * Интерполяция по такой оси то стоит, то прыгает, экстраполяция перелетает и откатывается.
+ *
+ * Сдвиг часов отправителя к нашим (`offset`) — МИНИМУМ «приход − k» по пакетам: самый быстрый
+ * пакет ближе всех к истинному сдвигу. Обе стороны — ПЛАВНО: скачок оценки — это скачок момента
+ * показа, а он рывок борта на v·Δ. Вниз (нашёлся пакет быстрее) — не больше OFFSET_FALL мс за
+ * пакет, вверх (дрейф часов) — долей OFFSET_RISE. Первый пакет ставит оценку сразу.
  */
 
 interface Sample {
@@ -24,6 +33,8 @@ interface Sample {
   t: number
   /** Отметка ОТПРАВИТЕЛЯ (серверные мс). Ею отличаем новый пакет от повтора того же узла. */
   stamp: number
+  /** Ось сглаживания: часы отправителя (`c`), а у прежних сборок — серверная отметка. */
+  k: number
   x: number
   y: number
   z: number
@@ -38,8 +49,18 @@ interface Sample {
   s: number
 }
 
-/** Насколько показываем в прошлом, мс. ~1.5 пакета при 12 Гц — почти всегда есть пара. */
-const INTERP_DELAY = 120
+/**
+ * Насколько показываем в прошлом, мс, от оценки «самого быстрого» пакета: ~2 пакета при 15 Гц
+ * плюс запас на разброс задержки — почти всегда есть пара по обе стороны.
+ */
+const INTERP_DELAY = 150
+/** Доля, на которую оценка сдвига часов ползёт вверх за пакет (дрейф часов, смена маршрута). */
+const OFFSET_RISE = 0.01
+/**
+ * Предел, на который оценка опускается за пакет, мс: при 15 Гц это 3% скорости воспроизведения —
+ * глазу незаметно, а сдвиг в десятки мс выбирается за секунду-две без рывка.
+ */
+const OFFSET_FALL = 2
 /** Дольше без пакетов — игрок «пропал»: буфер чистится, спавн решает выше по грейсу. */
 const MAX_AGE = 2500
 /** Экстраполяция скоростью не дольше этого, с: дальше поза «уезжает» в никуда. */
@@ -52,6 +73,8 @@ const _qb = new Quaternion()
 
 export class PoseInterp {
   private readonly buffers = new Map<string, Sample[]>()
+  /** uid → сдвиг «наши мс − серверные мс» (оценка по быстрейшим пакетам). */
+  private readonly offsets = new Map<string, number>()
 
   /** Принять батч поз (`subscribePoses` отдаёт всех разом). `now` — performance.now(), мс. */
   ingest(snaps: PoseSnapshot[], now: number): void {
@@ -75,7 +98,17 @@ export class PoseInterp {
        */
       const last = buf[buf.length - 1]
       if (last && last.stamp === s.t) continue
-      buf.push({ t: now, stamp: s.t, x: s.x, y: s.y, z: s.z, qx: s.qx, qy: s.qy, qz: s.qz, qw: s.qw, vx: s.vx, vy: s.vy, vz: s.vz, s: s.s })
+      // Порядок — по часам отправителя: пачка могла привезти пакеты не по порядку, а серверная
+      // отметка пляшет вместе с задержкой отправки и отбросила бы пакет зря.
+      const k = s.c ?? s.t
+      if (last && k <= last.k) continue
+      const lag = now - k
+      const was = this.offsets.get(s.uid)
+      this.offsets.set(
+        s.uid,
+        was === undefined ? lag : lag < was ? Math.max(lag, was - OFFSET_FALL) : was + (lag - was) * OFFSET_RISE,
+      )
+      buf.push({ t: now, stamp: s.t, k, x: s.x, y: s.y, z: s.z, qx: s.qx, qy: s.qy, qz: s.qz, qw: s.qw, vx: s.vx, vy: s.vy, vz: s.vz, s: s.s })
       if (buf.length > BUFFER) buf.shift()
     }
   }
@@ -86,7 +119,10 @@ export class PoseInterp {
     for (const [uid, buf] of this.buffers) {
       const last = buf[buf.length - 1]
       if (last && now - last.t < MAX_AGE) out.add(uid)
-      else this.buffers.delete(uid)
+      else {
+        this.buffers.delete(uid)
+        this.offsets.delete(uid)
+      }
     }
     return out
   }
@@ -106,15 +142,16 @@ export class PoseInterp {
       return true
     }
 
-    const target = now - INTERP_DELAY
+    // Момент показа — на оси ОТПРАВИТЕЛЯ: наше «сейчас» в его часах, минус задержка.
+    const target = now - (this.offsets.get(uid) ?? 0) - INTERP_DELAY
 
     // Пара, окружающая target: интерполируем между ними.
     for (let i = buf.length - 1; i > 0; i--) {
       const b = buf[i]!
       const a = buf[i - 1]!
-      if (a.t <= target && target <= b.t) {
-        const span = b.t - a.t
-        const f = span > 1e-3 ? (target - a.t) / span : 1
+      if (a.k <= target && target <= b.k) {
+        const span = b.k - a.k
+        const f = span > 1e-3 ? (target - a.k) / span : 1
         outPos.set(a.x + (b.x - a.x) * f, a.y + (b.y - a.y) * f, a.z + (b.z - a.z) * f)
         _qa.set(a.qx, a.qy, a.qz, a.qw)
         _qb.set(b.qx, b.qy, b.qz, b.qw)
@@ -125,7 +162,7 @@ export class PoseInterp {
 
     const first = buf[0]!
     // target раньше всех пакетов (только подписались) — держим старейший.
-    if (target < first.t) {
+    if (target < first.k) {
       outPos.set(first.x, first.y, first.z)
       outQuat.set(first.qx, first.qy, first.qz, first.qw)
       return true
@@ -133,7 +170,7 @@ export class PoseInterp {
 
     // target позже всех — экстраполируем последний скоростью, ограниченно по времени.
     const s = buf[buf.length - 1]!
-    const dt = Math.min((target - s.t) / 1000, MAX_EXTRAP)
+    const dt = Math.min((target - s.k) / 1000, MAX_EXTRAP)
     outPos.set(s.x + s.vx * dt, s.y + s.vy * dt, s.z + s.vz * dt)
     outQuat.set(s.qx, s.qy, s.qz, s.qw)
     return true
@@ -152,5 +189,6 @@ export class PoseInterp {
   /** Забыть игрока (вышел из системы/из игры). */
   drop(uid: string): void {
     this.buffers.delete(uid)
+    this.offsets.delete(uid)
   }
 }

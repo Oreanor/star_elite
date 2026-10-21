@@ -90,16 +90,87 @@ describe('поза между пакетами', () => {
     const pos = new Vector3()
     const quat = new Quaternion()
 
-    interp.ingest([snap('a', 1000, { x: 0 })], 0)
-    interp.ingest([snap('a', 2000, { x: 200 })], 200)
+    // Отметки отправителя 1000 и 1200, пришли с задержкой в 1000 мс наших часов.
+    interp.ingest([snap('a', 1000, { x: 0 })], 2000)
+    interp.ingest([snap('a', 1200, { x: 200 })], 2200)
 
-    // Показываем в прошлом на INTERP_DELAY=120 мс: при now=320 цель = 200 мс, ровно второй пакет.
-    expect(interp.sample('a', 320, pos, quat)).toBe(true)
+    // Показ — в прошлом на задержку интерполяции (150 мс) по оси отправителя: при now=2350
+    // цель — отметка 1200, ровно второй пакет.
+    expect(interp.sample('a', 2350, pos, quat)).toBe(true)
     expect(pos.x).toBeCloseTo(200, 3)
 
-    // Ровно посередине между пакетами — половина пути. Проверяем свойство, не число.
-    expect(interp.sample('a', 220, pos, quat)).toBe(true)
+    // Между пакетами — между позициями. Проверяем свойство, не число.
+    expect(interp.sample('a', 2250, pos, quat)).toBe(true)
     expect(pos.x).toBeGreaterThan(0)
     expect(pos.x).toBeLessThan(200)
   })
+
+  it('пакеты, пришедшие пачками, всё равно дают ровный ход — без «туда-сюда»', () => {
+    // Пойманное: «лагает туда-сюда на несколько десятков метров». Сглаживали по времени
+    // ПРИХОДА, а Firebase отдаёт систему пачками: ровно отправленные пакеты ложатся неровно,
+    // по два разом, — интерполяция стояла и прыгала, экстраполяция перелетала и откатывалась.
+    const interp = new PoseInterp()
+    const pos = new Vector3()
+    const quat = new Quaternion()
+    const speed = 300 // м/с, обычный ход
+    const send = 66 // мс между пакетами отправителя
+    // Пачки: пакеты копятся и приходят по два-три разом, задержка 80…260 мс.
+    const arrivals: { at: number; stamp: number }[] = []
+    let jitter = 0
+    for (let k = 0; k < 120; k++) {
+      const stamp = 10_000 + k * send
+      jitter = (jitter * 7 + 13) % 180
+      arrivals.push({ at: stamp + 80 + jitter - (stamp % 200 < 66 ? 0 : (stamp % 200)), stamp })
+    }
+    arrivals.sort((a, b) => a.at - b.at)
+    let next = 0
+    let prev = -Infinity
+    let maxBack = 0
+    for (let now = 10_300; now < 10_000 + 110 * send; now += 16) {
+      while (next < arrivals.length && arrivals[next]!.at <= now) {
+        const a = arrivals[next++]!
+        interp.ingest([snap('a', a.stamp, { x: ((a.stamp - 10_000) / 1000) * speed, vx: speed })], a.at)
+      }
+      interp.sample('a', now, pos, quat)
+      if (prev !== -Infinity) maxBack = Math.max(maxBack, prev - pos.x)
+      prev = pos.x
+    }
+    // Летит вперёд ровно: ни одного шага назад.
+    expect(maxBack).toBeLessThan(1e-6)
+  })
+
+  it('по часам отправителя ход ровный, даже когда серверные отметки пляшут', () => {
+    // Серверная отметка ставится, когда пакет ДОШЁЛ, — с разбросом задержки отправки. Часы
+    // отправителя (`c`) ровные: по ним скорость на экране постоянна.
+    const interp = new PoseInterp()
+    const pos = new Vector3()
+    const quat = new Quaternion()
+    const speed = 300
+    let jitter = 0
+    const arrivals: { at: number; stamp: number; c: number }[] = []
+    for (let k = 0; k < 120; k++) {
+      const c = 500 + k * 66
+      jitter = (jitter * 11 + 17) % 60
+      const stamp = 9_000 + c + jitter // доехал до сервера с разбросом 0…60 мс
+      arrivals.push({ at: stamp + 40 + ((k * 37) % 90), stamp, c })
+    }
+    arrivals.sort((a, b) => a.at - b.at)
+    let next = 0
+    const xs: number[] = []
+    for (let now = 9_900; now < 9_000 + 500 + 110 * 66; now += 16) {
+      while (next < arrivals.length && arrivals[next]!.at <= now) {
+        const a = arrivals[next++]!
+        interp.ingest([snap('a', a.stamp, { x: (a.c / 1000) * speed, vx: speed, c: a.c })], a.at)
+      }
+      interp.sample('a', now, pos, quat)
+      xs.push(pos.x)
+    }
+    // Шаг кадра почти постоянен: 300 м/с · 16 мс = 4.8 м, без рывков вдвое и откатов.
+    const steps = xs.slice(40).map((x, i, a) => (i === 0 ? null : x - a[i - 1]!)).filter((d): d is number => d !== null)
+    for (const d of steps) {
+      expect(d).toBeGreaterThan(speed * 0.016 * 0.5)
+      expect(d).toBeLessThan(speed * 0.016 * 1.5)
+    }
+  })
 })
+

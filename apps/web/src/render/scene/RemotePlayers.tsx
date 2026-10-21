@@ -154,7 +154,8 @@ export function RemotePlayers() {
       pubAcc.current += dt
       if (pubAcc.current >= 1 / PUBLISH_HZ) {
         pubAcc.current = 0
-        void publishPose(world.systemIndex, selfPose(world))
+        // Свои часы в пакете: получатель сглаживает по ним, а не по неровному приходу.
+        void publishPose(world.systemIndex, { ...selfPose(world), c: performance.now() })
       }
     }
 

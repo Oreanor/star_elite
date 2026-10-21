@@ -167,7 +167,7 @@ export function BushShips() {
       void publishPose('bush', {
         x: _me[0]!, y: _me[1]!, z: _me[2]!, w: _me[3]!,
         tx: _t[0]!, ty: _t[1]!, tz: _t[2]!, tw: _t[3]!,
-        qx: q.x, qy: q.y, qz: q.z, qw: q.w, vx: 0, vy: 0, vz: 0, s: 1,
+        qx: q.x, qy: q.y, qz: q.z, qw: q.w, vx: 0, vy: 0, vz: 0, s: 1, c: performance.now(),
       })
     }
 
