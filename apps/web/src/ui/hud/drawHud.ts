@@ -35,7 +35,7 @@ import { drawBeamFlash } from './hudBeamFlash'
 import { angularSize, formatDistance, projectPoint } from './project'
 import { apertureEllipse, insideAperture } from './aperture'
 import { HudFrame, S, bodyColor, fitHudScale, formatLy, hudGalaxyFor, isOnScreen, jumpTargetAim, navMarkerColor, navReticle, offscreenArrow, radarColor, shipDistance } from './hudShared'
-import { drawBushLocator, drawTorusLabels, drawTorusMarkers } from './hudBush'
+import { drawBushLocator, drawBushPeers, drawTorusLabels, drawTorusMarkers } from './hudBush'
 import { drawRadar } from './hudRadar'
 import { drawReadouts } from './hudReadouts'
 import { drawWallet } from './hudWallet'
@@ -104,6 +104,7 @@ export function drawHud(frame: HudFrame): void {
     drawGunsight(frame)
     drawTorusLabels(frame)
     drawTorusMarkers(frame)
+    drawBushPeers(frame)
     drawBushLocator(frame)
     const plate = gatherWarnings(frame)
     if (plate) paintWarningPlate(frame, plate)

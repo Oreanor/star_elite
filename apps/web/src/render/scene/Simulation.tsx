@@ -48,6 +48,7 @@ import { stepCameraView } from '../../session/cameraView'
 import { cycleHull, rigEditorActive, stepRigEditor, toggleRigEditor } from '../dev/rigEditor'
 import { stepWarBaseEditor } from '../dev/warBaseEditor'
 import { resetTorusFlight, stepTorusFlight } from '../../session/torusFlight'
+import { resetBushTraffic, stepBushTraffic } from '../../session/bushTraffic'
 import {
   consumeTorusArrival,
   cycleTorusTarget,
@@ -150,6 +151,7 @@ function stepBush(session: Session): void {
     // ровно под игрока. Не нашли (чужое зерно, дев-старт) — считаем домом узел из конфига.
     const homeNode = universe.nodes.findIndex((n) => n.seed === world.galaxySeed)
     enterBush(bush, homeNode >= 0 ? homeNode : GALAXY.HOME_NODE)
+    resetBushTraffic()
     session.monumentCross = null
     placeTorusAtVertex(vertexOfNode(bush.node))
     // Цель, намеченную на карте «Мир» ещё снаружи, не стираем — сбрасываем лишь ведение.
@@ -291,7 +293,9 @@ export function Simulation() {
   // рендера: на паузе он стоит вместе с миром, а темп не зависит от частоты монитора.
   const torusTick = useMemo<TickHook>(
     () => (dt) => {
-      if (session.bush.active) stepTorusFlight(session.world.player.state.quat, dt)
+      if (!session.bush.active) return
+      stepTorusFlight(session.world.player.state.quat, dt)
+      stepBushTraffic(session.world, dt)
     },
     [session],
   )

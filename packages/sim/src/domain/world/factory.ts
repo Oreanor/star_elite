@@ -31,7 +31,7 @@ import {
   makePersona,
   type PilotProfile,
 } from './persona'
-import { SLOVO_KIND, SLOVO_NAME, SLOVO_PERSONA } from './slovo'
+import { SLOVO_KIND, SLOVO_NAME, SLOVO_PERSONA, slovoAtHome } from './slovo'
 import { makePilotName } from './names'
 import { RANK } from '../../config/crew'
 import { botRank } from '../crew/rank'
@@ -178,7 +178,7 @@ export function spawnSlovo(world: World): void {
    * ТОЛЬКО КРЕСТЫ. Бог сидел у КАЖДОГО причала галактики — и переставал быть богом: тот, кого
    * встречаешь на любой заправке, это не божество, а вахтёр. Его место — монумент-храм
    * (`stationStyle: 'cross'`), а по мирам он ходит трафиком, изредка и в своём масштабе
-   * (см. `spawnSlovoTraffic`).
+   * (см. `spawnTravellingSlovo`). И дома он не всегда: «то есть, то нет» (`slovoAtHome`).
    */
   const stations = world.bodies.filter((b) => b.kind === 'station' && b.stationStyle === 'cross')
   if (stations.length === 0) return
@@ -187,7 +187,8 @@ export function spawnSlovo(world: World): void {
   // `spawnResidentContacts` воскресить его через несуществующий ENCOUNTERS['god'].
   const known = world.acquaintances.find((a) => a.kindId === SLOVO_KIND)
 
-  for (const station of stations) {
+  const home = slovoAtHome(world.galaxySeed, world.calendarTime)
+  for (const station of home ? stations : []) {
     // Бог у ЭТОГО причала уже сидит — второго не заводим.
     if (world.ships.some((s) => s.divine && s.state.pos.distanceToSquared(station.pos) < 1)) continue
 
@@ -219,6 +220,25 @@ export function spawnSlovo(world: World): void {
     // Бог сейчас в этой системе — отмечаем в записи, чтобы карты и вкладка ЛЮДИ знали, где он.
     known.systemIndex = world.systemIndex
   }
+}
+
+/**
+ * Бог приходит домой и уходит по календарю (`slovoAtHome`) — и при тебе тоже, а не только на
+ * входе в систему: сидишь у Крестов неделю — увидишь, как его не стало. Пока ты пристыкован,
+ * не трогаем: собеседник не исчезает посреди разговора, уйдёт, когда отчалишь.
+ *
+ * Дёшево по такту: без аллокаций, пока ничего менять не надо.
+ */
+export function stepSlovoRota(world: World): void {
+  if (world.docked) return
+  let cross = false
+  for (const b of world.bodies) if (b.kind === 'station' && b.stationStyle === 'cross') cross = true
+  if (!cross) return
+  let seated = false
+  for (const s of world.ships) if (s.divine && s.kinematic) seated = true
+  const home = slovoAtHome(world.galaxySeed, world.calendarTime)
+  if (home && !seated) spawnSlovo(world)
+  else if (!home && seated) world.ships = world.ships.filter((s) => !(s.divine && s.kinematic))
 }
 
 /** Пересобрать характеристики после смены модулей или груза. Вызывать на СОБЫТИЕ. */

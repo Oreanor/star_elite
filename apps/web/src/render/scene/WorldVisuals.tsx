@@ -39,6 +39,7 @@ import { Drones, EnemyShips, PlayerShip } from './Ships'
 import { RigEditorMarks } from './RigEditorMarks'
 import { PlasmaBeams } from './PlasmaBeams'
 import { RemotePlayers } from './RemotePlayers'
+import { BushShips } from './BushShips'
 import { RemoteJumpPortals } from './RemoteJumpPortals'
 import { Sky } from './Sky'
 import { Starfield } from './Starfield'
@@ -72,6 +73,7 @@ export function WorldVisuals() {
     <>
       <Lighting />
       <HypertorusLayer />
+      <BushShips />
       <PlayerShip />
       {/* Маркеры оснастки (K). Вне группы мира — как и сам корабль: правку видно и на кусте. */}
       <RigEditorMarks />

@@ -145,7 +145,8 @@ export function RemotePlayers() {
 
     // 1) Публикуем свою позу ~PUBLISH_HZ, пока в космосе. В доке — снимаем: у причала
     //    борт не летает, соседи видят метку станции из presence, а не корабль.
-    if (!activeWorld) {
+    //    На КУСТЕ молчим: позу комнаты шлёт `BushShips` в свой канал, а мир системы скрыт.
+    if (!activeWorld || session.bush.active) {
       pubAcc.current = 0
     } else if (world.docked) {
       void clearPose()

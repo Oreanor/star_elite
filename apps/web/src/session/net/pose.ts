@@ -39,6 +39,15 @@ export interface PoseSnapshot {
   /** Масштаб борта (миелофон): чужой видит тебя гигантом, если ты вырос. По умолчанию 1. */
   s: number
   /**
+   * Только на КУСТЕ (`poses/bush`): x,y,z + `w` — точка на S³, а `tx..tw` — касательная носа.
+   * Комната общая для всей вселенной, систем в ней нет: место — точка 3-сферы, не метры.
+   */
+  w?: number
+  tx?: number
+  ty?: number
+  tz?: number
+  tw?: number
+  /**
    * Отметка записи по часам СЕРВЕРА, мс — ДОКАЗАТЕЛЬСТВО ЖИЗНИ отправителя, а не время.
    *
    * Без неё «свежесть» мерили временем ПРИХОДА пакета — и это было неверно в самой основе.
@@ -85,7 +94,10 @@ let lastPath: string | null = null
  * систему — прежний узел стирается, `onDisconnect` вешается на новый (отвалилась вкладка —
  * метка исчезнет у соседей сама).
  */
-export async function publishPose(systemIndex: number, pose: PoseUpdate): Promise<void> {
+/** Канал позы: индекс системы или `'bush'` — общая комната-гипертор между галактиками. */
+export type PoseChannel = number | 'bush'
+
+export async function publishPose(systemIndex: PoseChannel, pose: PoseUpdate): Promise<void> {
   if (!rtdb) return
   const uid = currentUserId()
   if (!uid) return
@@ -113,7 +125,7 @@ export async function clearPose(): Promise<void> {
  * Подписка на позы всех в системе `systemIndex`, КРОМЕ себя. Возвращает отписку. Прыгнул —
  * вызывающий переподписывается на новый индекс (старая отписка снимает прежний слушатель).
  */
-export function subscribePoses(systemIndex: number, cb: (snaps: PoseSnapshot[]) => void): () => void {
+export function subscribePoses(systemIndex: PoseChannel, cb: (snaps: PoseSnapshot[]) => void): () => void {
   if (!rtdb) return () => {}
   const me = currentUserId()
   return onValue(ref(rtdb, `poses/${systemIndex}`), (snap) => {
@@ -142,6 +154,9 @@ export function subscribePoses(systemIndex: number, cb: (snaps: PoseSnapshot[]) 
         vy: p.vy ?? 0,
         vz: p.vz ?? 0,
         s: p.s ?? 1,
+        ...(typeof p.w === 'number'
+          ? { w: p.w, tx: p.tx ?? 0, ty: p.ty ?? 0, tz: p.tz ?? 0, tw: p.tw ?? 0 }
+          : {}),
       })
     }
     cb(list)

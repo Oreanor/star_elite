@@ -1,6 +1,6 @@
 import { GRIEVANCE } from '../../config/ai'
 import { DIALOGUE } from '../../config/dialogue'
-import { applyStance } from '../world/acquaintance'
+import { applyStance, mayHailPlayer } from '../world/acquaintance'
 import type { ShipEntity, World } from '../world/entities'
 
 /**
@@ -90,7 +90,7 @@ export function pendingHail(world: World): ShipEntity | null {
   let best: ShipEntity | null = null
   let bestDist = Infinity
   for (const ship of world.ships) {
-    if (!hasGrievance(ship)) continue
+    if (!hasGrievance(ship) || !mayHailPlayer(ship)) continue
     const dist = ship.state.pos.distanceTo(world.player.state.pos)
     if (dist <= DIALOGUE.RANGE && dist < bestDist) {
       best = ship

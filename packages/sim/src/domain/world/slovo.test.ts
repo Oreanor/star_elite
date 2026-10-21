@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { createWorld, enterSystem, spawnSlovo } from './factory'
+import { createWorld, enterSystem, spawnSlovo, stepSlovoRota } from './factory'
 import { rememberPilot } from './acquaintance'
 import { spawnResidentContacts } from './traffic'
-import { SLOVO_KIND, SLOVO_NAME } from './slovo'
+import { SLOVO_KIND, SLOVO_NAME, slovoAtHome } from './slovo'
+import { TIME } from '../../config/time'
+import { mayHailPlayer } from './acquaintance'
+import type { World } from './entities'
 import { STARTER_SYSTEM } from './system'
 import type { SystemDef } from './system'
 import type { ShipEntity } from './entities'
@@ -29,13 +32,32 @@ const CROSS_SYS: SystemDef = {
   desolate: true,
 }
 
+/** Игровые сутки в единицах calendarTime. */
+const DAY = 86_400 / TIME.SCALE
+
+/** Первый момент от `from`, когда бог дома (или в отлучке) — шагом в сутки. */
+function momentWhen(seed: number, home: boolean, from = 0): number {
+  for (let t = from; t < from + 400 * DAY; t += DAY) if (slovoAtHome(seed, t) === home) return t
+  throw new Error('расписание застряло')
+}
+
+/** Система с Крестом в момент, когда бог ДОМА: проверяем то, что от расписания не зависит. */
+function crossWorld(): World {
+  const probe = createWorld(CROSS_SYS)
+  const world = createWorld(CROSS_SYS)
+  world.ships = world.ships.filter((s) => !s.divine)
+  world.calendarTime = momentWhen(probe.galaxySeed, true)
+  spawnSlovo(world)
+  return world
+}
+
 /** Боги среди бортов. Тип держим `ShipEntity`: иначе фильтр сужал бы его до `{divine?}`,
  *  и до полей борта (имя, ИИ, поза) было бы не добраться. */
 const divineShips = (ships: readonly ShipEntity[]): ShipEntity[] => ships.filter((s) => s.divine)
 
 describe('Слово (бог на Крестах)', () => {
   it('сидит ТОЛЬКО на Кресте, кинематический и без ИИ', () => {
-    const world = createWorld(CROSS_SYS)
+    const world = crossWorld()
     const gods = divineShips(world.ships)
     const stations = world.bodies.filter((b) => b.kind === 'station')
     const crosses = stations.filter((b) => b.stationStyle === 'cross')
@@ -67,7 +89,7 @@ describe('Слово (бог на Крестах)', () => {
   })
 
   it('повторный спавн не плодит двойников', () => {
-    const world = createWorld(CROSS_SYS)
+    const world = crossWorld()
     const crosses = world.bodies.filter((b) => b.kind === 'station' && b.stationStyle === 'cross').length
     spawnSlovo(world)
     spawnSlovo(world)
@@ -76,7 +98,7 @@ describe('Слово (бог на Крестах)', () => {
   })
 
   it('знакомство создаёт ОДНУ запись-бога: он вездесущ, но существо одно', () => {
-    const world = createWorld(CROSS_SYS)
+    const world = crossWorld()
     const slovo = divineShips(world.ships)[0]!
 
     rememberPilot(world, slovo)
@@ -103,7 +125,7 @@ describe('Слово (бог на Крестах)', () => {
    * Повторный вызов `spawnSlovo` (его и делает вход в игру) обязан починить связь задним числом.
    */
   it('перецепляется к записи, если журнал приехал ПОСЛЕ его посадки', () => {
-    const world = createWorld(CROSS_SYS)
+    const world = crossWorld()
     const slovo = divineShips(world.ships)[0]!
     rememberPilot(world, slovo)
     const record = world.acquaintances.find((a) => a.kindId === SLOVO_KIND)!
@@ -122,7 +144,7 @@ describe('Слово (бог на Крестах)', () => {
   })
 
   it('трафик резидентов не воскрешает бога случайным бортом', () => {
-    const world = createWorld(CROSS_SYS)
+    const world = crossWorld()
     const slovo = divineShips(world.ships)[0]!
     rememberPilot(world, slovo)
 
@@ -132,4 +154,56 @@ describe('Слово (бог на Крестах)', () => {
     const born = spawnResidentContacts(world)
     expect(born.some((s) => s.name === SLOVO_NAME || s.originKind === SLOVO_KIND)).toBe(false)
   })
+
+  it('«то есть, то нет»: дома примерно половину времени, пластами от недели до месяца', () => {
+    const seed = createWorld(CROSS_SYS).galaxySeed
+    let home = 0
+    let runs = 0
+    let runLen = 0
+    let shortest = Infinity
+    let prev = slovoAtHome(seed, 0)
+    const days = 3000
+    for (let d = 0; d < days; d++) {
+      const now = slovoAtHome(seed, d * DAY + DAY / 2)
+      if (now) home++
+      if (now === prev) runLen++
+      else {
+        if (runs > 0) shortest = Math.min(shortest, runLen)
+        runs++
+        runLen = 1
+        prev = now
+      }
+    }
+    expect(home / days).toBeGreaterThan(0.4)
+    expect(home / days).toBeLessThan(0.6)
+    // Пласт не короче недели: бог не мигает туда-сюда через день.
+    expect(shortest).toBeGreaterThanOrEqual(7)
+  })
+
+  it('приходит и уходит по календарю при тебе, но не посреди стоянки у причала', () => {
+    const world = crossWorld()
+    expect(divineShips(world.ships).length).toBeGreaterThan(0)
+
+    world.calendarTime = momentWhen(world.galaxySeed, false, world.calendarTime)
+    world.docked = true
+    stepSlovoRota(world)
+    expect(divineShips(world.ships).length).toBeGreaterThan(0) // пристыкован — не уходит
+
+    world.docked = false
+    stepSlovoRota(world)
+    expect(divineShips(world.ships)).toHaveLength(0)
+
+    world.calendarTime = momentWhen(world.galaxySeed, true, world.calendarTime)
+    stepSlovoRota(world)
+    expect(divineShips(world.ships).length).toBeGreaterThan(0)
+  })
+
+  it('незнакомый бог сам не окликает; знакомый — как все', () => {
+    const world = crossWorld()
+    const slovo = divineShips(world.ships)[0]!
+    expect(mayHailPlayer(slovo)).toBe(false)
+    rememberPilot(world, slovo)
+    expect(mayHailPlayer(slovo)).toBe(true)
+  })
 })
+

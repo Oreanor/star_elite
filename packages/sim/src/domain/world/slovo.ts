@@ -1,4 +1,6 @@
 import { HUMAN_SPECIES } from '../../config/galaxy'
+import { TIME } from '../../config/time'
+import { SLOVO_ROTA } from '../../config/world'
 import type { Persona } from './persona'
 
 /**
@@ -38,3 +40,33 @@ export const SLOVO_PERSONA: Persona = {
   // Главный коллекционер статуэток богов: знает всех, zeal на потолке.
   figurineHobby: { aware: true, zeal: 1 },
 }
+
+/** Игровые сутки в единицах `calendarTime`: календарь при показе ускорен ×TIME.SCALE. */
+const GAME_DAY = 86_400 / TIME.SCALE
+
+/**
+ * Дома ли Слово (на Крестах) в этот момент календаря. Чистая функция зерна и общего
+ * календаря — у всех игроков и на сервере ответ один, хранить и синхронизировать нечего.
+ *
+ * Отрезок календаря (SEGMENT_DAYS) делится одной сменой в день из [SWITCH_MIN, SWITCH_MAX]:
+ * первая часть — дома или нет (монета от зерна), вторая — наоборот. Отсюда пласты от недели
+ * до месяца и поровну дома и в отлучке.
+ */
+export function slovoAtHome(galaxySeed: number, calendarTime: number): boolean {
+  const segment = SLOVO_ROTA.SEGMENT_DAYS * GAME_DAY
+  const k = Math.floor(calendarTime / segment)
+  const h = (galaxySeed ^ Math.imul(k + 1, 0x9e3779b1) ^ 0x51a7e) >>> 0
+  const firstHome = hashUnit(h) < 0.5
+  const span = SLOVO_ROTA.SWITCH_MAX_DAYS - SLOVO_ROTA.SWITCH_MIN_DAYS
+  const switchAt = (SLOVO_ROTA.SWITCH_MIN_DAYS + hashUnit(h ^ 0x85ebca6b) * span) * GAME_DAY
+  return calendarTime - k * segment < switchAt ? firstHome : !firstHome
+}
+
+/** Хеш целого в [0, 1) — шаг mulberry32 без замыкания: зовётся каждый такт. */
+function hashUnit(seed: number): number {
+  let t = (seed + 0x6d2b79f5) >>> 0
+  t = Math.imul(t ^ (t >>> 15), t | 1)
+  t ^= t + Math.imul(t ^ (t >>> 7), t | 61)
+  return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+}
+

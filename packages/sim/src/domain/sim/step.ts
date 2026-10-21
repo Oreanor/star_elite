@@ -88,6 +88,7 @@ import { markContactLost } from '../world/acquaintance'
 import { stepWarpEmergence } from '../world/warp'
 import { stepDivineScale, stepDockTraffic, stepTraffic } from '../world/traffic'
 import { stepTitans } from '../world/titans'
+import { stepSlovoRota } from '../world/factory'
 import { stepPlatforms } from '../world/platforms'
 import { stepGrievances } from '../combat/grievance'
 import { stepRockCollisions } from '../combat/rockCollisions'
@@ -276,6 +277,7 @@ function stepTick(world: World, helm: Helm, dt: number): void {
 
   cleanup(world)
   stepTraffic(world, dt)
+  stepSlovoRota(world)
   // Бог, идущий к причалу, ужимается до обычного борта: масштаб — свойство облика.
   stepDivineScale(world, dt)
   stepTitans(world, dt)

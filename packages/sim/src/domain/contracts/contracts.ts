@@ -5,7 +5,7 @@ import { isFoe } from '../ai/targeting'
 import { enqueueTask } from '../ai/tasks'
 import { addCommodity, freeCapacity } from '../cargo/hold'
 import { applyPosture, acquaintanceOf } from '../world/plan'
-import { recordEvent, recordJournal, rememberPilot, type Acquaintance, type Relationship } from '../world/acquaintance'
+import { mayHailPlayer, recordEvent, recordJournal, rememberPilot, type Acquaintance, type Relationship } from '../world/acquaintance'
 import type { ShipEntity, World } from '../world/entities'
 import { refreshSpec } from '../world/factory'
 import { spawnPlatform } from '../world/platforms'
@@ -403,6 +403,7 @@ function hailCandidate(world: World): ShipEntity | null {
   let bestD: number = DIALOGUE.RANGE
   for (const s of world.ships) {
     if (!s.alive || !s.offer || s.offer.revealed || s.faction === 'hostile' || s.warpDeparting) continue
+    if (!mayHailPlayer(s)) continue
     const d = s.state.pos.distanceTo(world.player.state.pos)
     if (d < bestD) {
       bestD = d

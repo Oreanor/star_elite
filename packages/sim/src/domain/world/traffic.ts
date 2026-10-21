@@ -18,7 +18,7 @@ import { rollOffer } from '../contracts/offers'
 import { CONTRACTS } from '../../config/contracts'
 import { declareFoe } from '../ai/targeting'
 import { residentAcquaintances } from './acquaintance'
-import { SLOVO_KIND, SLOVO_NAME, SLOVO_PERSONA } from './slovo'
+import { SLOVO_KIND, SLOVO_NAME, SLOVO_PERSONA, slovoAtHome } from './slovo'
 import { rehydrateContactShip } from './plan'
 import { spawnPlatform } from './platforms'
 import { beginWarpArrival } from './warp'
@@ -243,6 +243,19 @@ export function spawnBountyPirates(world: World, count: number, contractId: numb
   return born
 }
 
+/** Случайная обычная станция системы (не Кресты), или null. Без аллокаций на пустом. */
+function randomPlainStation(world: World): BodyEntity | null {
+  let n = 0
+  for (const b of world.bodies) if (b.kind === 'station' && b.stationStyle !== 'cross') n++
+  if (n === 0) return null
+  let pick = Math.floor(world.rng() * n)
+  for (const b of world.bodies) {
+    if (b.kind !== 'station' || b.stationStyle === 'cross') continue
+    if (pick-- === 0) return b
+  }
+  return null
+}
+
 /**
  * СЛОВО ПРОЛЁТОМ. Не житель системы, а гость: приходит трафиком, летит своим делом, с ним
  * можно заговорить. Отличия от того, что сидит на Крестах: он ЛЕТИТ (не кинематический,
@@ -259,8 +272,20 @@ export function spawnBountyPirates(world: World, count: number, contractId: numb
  * Неуязвим и безоружен: бог не дерётся, но и сбить его нельзя.
  */
 function spawnTravellingSlovo(world: World): ShipEntity | null {
-  const anchor = residentAnchor(world)
-  spawnFromRadarEdge(world, _scratch, _offset, true)
+  // Половину раз — уже у станции (любой, кроме Крестов: он сейчас НЕ дома), иначе с края
+  // радара. Бога встречаешь и «где-то у причала», а не только на подлёте.
+  const station = world.rng() < TRAFFIC.GOD_AT_STATION_SHARE ? randomPlainStation(world) : null
+  let anchor: Vector3
+  if (station) {
+    anchor = station.pos
+    _offset.set(signed(world.rng), signed(world.rng) * 0.4, signed(world.rng))
+    if (_offset.lengthSq() < 1e-6) _offset.set(1, 0, 0)
+    _offset.setLength(station.radius * TRAFFIC.GOD_AT_STATION_RADII)
+    _scratch.copy(station.pos).add(_offset)
+  } else {
+    anchor = residentAnchor(world)
+    spawnFromRadarEdge(world, _scratch, _offset, true)
+  }
   const quat = new Quaternion().setFromUnitVectors(
     new Vector3(0, 0, -1),
     _offset.copy(anchor).sub(_scratch).normalize(),
@@ -787,7 +812,12 @@ export function stepTraffic(world: World, dt: number): ShipEntity[] {
    * В СВОЁМ МАСШТАБЕ: от обычного борта до стометровой громады. Один на систему: двух Слов
    * в одном небе быть не может.
    */
-  if (world.rng() < TRAFFIC.GOD_SHARE && !world.ships.some((s) => s.divine)) {
+  // Путником он бывает лишь в отлучке: дома (`slovoAtHome`) он сидит на Крестах.
+  if (
+    world.rng() < TRAFFIC.GOD_SHARE
+    && !world.ships.some((s) => s.divine)
+    && !slovoAtHome(world.galaxySeed, world.calendarTime)
+  ) {
     const god = spawnTravellingSlovo(world)
     if (god) return born.concat([god])
   }

@@ -4,6 +4,7 @@ import {
 } from '@elite/sim'
 import { TORUS } from '../../render/config'
 import { torusTuning } from '../../render/scene/torusTuning'
+import { bushPeerLabels } from '../../render/scene/BushShips'
 import { HUD_COLORS, ellipse, line, text } from './draw'
 import { properName } from '../i18n/dataNames'
 import { projectPoint } from './project'
@@ -39,6 +40,25 @@ function markOne(
     text(ctx, name, p.x, p.y + 12 * S, color, 'center')
   } else {
     offscreenArrow(frame, _gtar, color, true, name)
+  }
+}
+
+/**
+ * ДРУЗЬЯ в комнате: другие игроки на кусте. Имя под кораблём (зелёным, как свои), за кадром —
+ * стрелка: в тумане S³ корабль быстро тает в точку, и без метки друга не найти.
+ */
+export function drawBushPeers(frame: HudFrame): void {
+  const { ctx, camera, width, height } = frame
+  ctx.font = hudFont(8 * S)
+  for (let i = 0; i < bushPeerLabels.count; i++) {
+    const peer = bushPeerLabels.items[i]!
+    _gtar.set(peer.x, peer.y, peer.z)
+    const p = projectPoint(_gtar, camera, width, height)
+    if (!p.behind && isOnScreen(p.x, p.y, width, height, 20 * S)) {
+      text(ctx, peer.name, p.x, p.y + 10 * S, HUD_COLORS.ALLY, 'center')
+    } else {
+      offscreenArrow(frame, _gtar, HUD_COLORS.ALLY, true, peer.name)
+    }
   }
 }
 
