@@ -1016,6 +1016,7 @@ export function createWorld(
     policeFineHailEpoch: -1,
     acquaintances: [],
     fines: [],
+    market: {},
     notices: [],
     credits: WORLD.START_CREDITS,
     pilotXp: 0,

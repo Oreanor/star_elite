@@ -5,7 +5,7 @@ import { findStation, stationHost } from './docking'
 import type { Settlement } from '../galaxy/types'
 import type { ShipEntity, World } from '../world/entities'
 import { refreshSpec } from '../world/factory'
-import { stockLevel, unitBuyPrice, unitSellPrice } from './market'
+import { stockAt, stockKey, stockLevel, unitBuyPrice, unitSellPrice } from './market'
 import { issueFine, localFine } from './legal'
 import { isMissileRoundId } from '../combat/ordnance'
 
@@ -44,7 +44,7 @@ export function commodityStock(): readonly Commodity[] {
 
 /** Цена покупки единицы здесь. Выше цены продажи на спред — прилавок не благотворитель. */
 export function commodityBuyPrice(world: World, commodity: Commodity): number {
-  return unitBuyPrice(commodity, localSettlement(world), world.systemIndex, world.galaxySeed)
+  return unitBuyPrice(commodity, localSettlement(world), world.systemIndex, world.galaxySeed, commodityStockAt(world, commodity))
 }
 
 /** Цена, по которой станция ПРИНИМАЕТ единицу. Ниже покупки — отсюда и убыток на месте. */
@@ -52,12 +52,33 @@ export function commoditySellPrice(world: World, commodity: Commodity): number {
   // Ракеты покупаются по твёрдой цене у пусковой, не на рынке. Иначе прилавок
   // платил бы за них по формуле товара — и покупка пачки печатала бы кредиты.
   if (isMissileRoundId(commodity.id)) return commodity.basePrice
-  return unitSellPrice(commodity, localSettlement(world), world.systemIndex, world.galaxySeed)
+  return unitSellPrice(commodity, localSettlement(world), world.systemIndex, world.galaxySeed, commodityStockAt(world, commodity))
 }
 
-/** Сколько единиц товара на складе станции. Мало — цена выше, много — ниже. */
+/**
+ * Сколько единиц товара на складе станции СЕЙЧАС: исходный запас из зерна минус выкупленное
+ * (плюс сданное), которое склад постепенно возвращает к норме (`stockAt`). Мало — цена
+ * выше, много — ниже; выкупил всё — пусто, пока не подвезут.
+ */
 export function commodityStockAt(world: World, commodity: Commodity): number {
-  return stockLevel(commodity, localSettlement(world), world.systemIndex, world.galaxySeed)
+  const base = stockLevel(commodity, localSettlement(world), world.systemIndex, world.galaxySeed)
+  const key = stockKey(commodity, world.systemIndex, world.galaxySeed)
+  const entry = world.market[key]
+  const delta = entry ? stockAt(entry, base, key, world.calendarTime).delta : 0
+  return Math.max(0, Math.round(base - delta))
+}
+
+/** Записать сделку в склад: `units` > 0 — забрали со склада, < 0 — сдали на склад. */
+function recordStock(world: World, commodity: Commodity, units: number): void {
+  const base = stockLevel(commodity, localSettlement(world), world.systemIndex, world.galaxySeed)
+  const key = stockKey(commodity, world.systemIndex, world.galaxySeed)
+  const entry = world.market[key]
+  // Подвоз уже выкупленного идёт своим отсчётом: сделка его не откладывает. Склад был в норме —
+  // отсчёт с этой сделки.
+  const now = entry ? stockAt(entry, base, key, world.calendarTime) : null
+  const delta = (now?.delta ?? 0) + units
+  if (delta === 0) delete world.market[key]
+  else world.market[key] = { delta, at: now && now.delta !== 0 ? now.at : world.calendarTime }
 }
 
 /** Выручка за один предмет трюма здесь. Товар — по рынку, модуль — по остаточной цене. */
@@ -114,7 +135,8 @@ export function buyCommodity(world: World, ship: ShipEntity, commodity: Commodit
     commodity.unitMass <= 0
       ? units
       : Math.floor(freeCapacity(ship.hold) / commodity.unitMass)
-  const taken = Math.min(units, affordable, fits)
+  // Больше, чем лежит на складе, не продадут: выкупил — пусто, пока не подвезут.
+  const taken = Math.min(units, affordable, fits, commodityStockAt(world, commodity))
   if (taken <= 0) return 0
 
   const added = addCommodity(ship.hold, commodity, taken)
@@ -127,6 +149,7 @@ export function buyCommodity(world: World, ship: ShipEntity, commodity: Commodit
   if (stack) stack.costBasis = (stack.costBasis ?? 0) + added * price
 
   world.credits -= added * price
+  recordStock(world, commodity, added)
   // Тонны в трюме меняют ускорения. Это считается, а не назначается.
   refreshSpec(ship)
   return added
@@ -193,6 +216,7 @@ export function sellCommodity(world: World, ship: ShipEntity, commodity: Commodi
     if (idx >= 0) removeItem(ship.hold, idx)
   }
   world.credits += value
+  recordStock(world, commodity, -sold)
   refreshSpec(ship)
   return value
 }

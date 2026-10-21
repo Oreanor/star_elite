@@ -1,3 +1,4 @@
+import type { StockEntry } from '../station/market'
 import type { Contract, ContractOffer } from '../contracts/types'
 import { Quaternion, Vector3 } from 'three'
 import type { BodyKind } from '../../config/bodies'
@@ -1253,6 +1254,12 @@ export interface World {
   acquaintances: Acquaintance[]
   /** Штрафы перед местными властями; один и тот же груз не создаёт глобальный розыск. */
   fines: FineRecord[]
+  /**
+   * Склады станций: на сколько товар сейчас отличается от исходного запаса из зерна и с какого
+   * момента календаря (`StockEntry`, ключ — `stockKey`). Выкупил — склад пуст, пока не подвезут
+   * (`stockAt`). Пустые записи не хранятся. Сеть пока не делит: склад видит свой клиент.
+   */
+  market: Record<string, StockEntry>
 
   /**
    * Вести о событиях вне поля зрения (пропавший знакомый). Домен добавляет, HUD

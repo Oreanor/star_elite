@@ -1,3 +1,4 @@
+import type { StockEntry } from '../station/market'
 import type { Copilot } from '../crew/copilot'
 import { rankOfXp } from '../crew/rank'
 import { isPortable } from '../contracts/contracts'
@@ -76,6 +77,8 @@ export interface PlayerSave {
   acquaintances: Acquaintance[]
   /** Местные штрафы; старые сейвы загружаются без долгов. */
   fines?: FineRecord[]
+  /** Склады станций (`World.market`): выкупленное не воскресает перезагрузкой. Старые — без. */
+  market?: Record<string, StockEntry>
   /**
    * Дела. Хранятся только те, что переживают прыжок (доставка, «привези», сопровождение), и
    * закрытые — для истории. Дела «здесь и сейчас» (спасти, охота, снос) привязаны к целям в
@@ -253,6 +256,7 @@ export function serializePlayer(world: World): PlayerSave {
       entrusted: a.entrusted.map((e) => ({ ...e })),
     })),
     fines: world.fines.map((fine) => ({ ...fine })),
+    market: Object.fromEntries(Object.entries(world.market).map(([k, e]) => [k, { ...e }])),
     contracts: world.contracts.filter((c) => c.status !== 'active' || isPortable(c)).map(cloneContract),
     loadout: serializeLoadout(p.loadout),
     hullUp: { ...p.hullUp },
@@ -297,6 +301,7 @@ export function applyPlayerSave(world: World, save: PlayerSave): void {
     entrusted: a.entrusted ? a.entrusted.map((e) => ({ ...e })) : [],
   }))
   world.fines = save.fines ? save.fines.map((fine) => ({ ...fine })) : []
+  world.market = save.market ? Object.fromEntries(Object.entries(save.market).map(([k, e]) => [k, { ...e }])) : {}
   world.contracts = save.contracts ? save.contracts.map(cloneContract) : []
   world.pilotXp = save.pilotXp ?? 0
   world.copilot = save.copilot ? { ...save.copilot, persona: { ...save.copilot.persona } } : null
