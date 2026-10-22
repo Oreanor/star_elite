@@ -652,3 +652,23 @@ export function incomingMissile(world: World): { seconds: number; distance: numb
   }
   return soonest
 }
+
+const _softFixture = new Vector3()
+
+/**
+ * Где «мягкая» цель захвата — контейнер, камень или деталь военной базы. Один ответ для
+ * автобоя и автопилота: прежде его знал лишь автобой, и J к контейнеру отвечал «нет цели».
+ * Деталь едет вместе с базой — место считаем на лету. null — цели нет.
+ */
+export function softTargetPos(world: World, soft: { kind: 'pod' | 'asteroid' | 'fixture'; id: number }): Vector3 | null {
+  if (soft.kind === 'fixture') {
+    const found = findWarBaseFixture(world.warBases, soft.id)
+    return found ? warBaseFixtureWorldPos(found.base, found.fixture, world.time, _softFixture) : null
+  }
+  if (soft.kind === 'pod') {
+    const pod = world.pods.find((p) => p.id === soft.id && p.alive)
+    return pod?.pos ?? null
+  }
+  const rock = world.asteroids.find((a) => a.id === soft.id && a.alive)
+  return rock?.pos ?? null
+}

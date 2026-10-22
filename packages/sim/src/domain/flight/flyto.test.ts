@@ -9,6 +9,7 @@ import { canEngageFlyTo, flyToArrived, flyToController } from './flyto'
 import { bodySizeFactor } from '../scale/scale'
 import { lockContact, lockedShipId } from '../world/queries'
 import { stepWorld } from '../sim'
+import { COMMODITIES } from '../cargo/items'
 import { NULL_CONTROLLER } from '../sim/controller'
 
 const _nose = new Vector3(0, 0, -1)
@@ -54,6 +55,25 @@ describe('автопилот-к-цели', () => {
     lockContact(world, 'ship', target.id)
     world.docked = true
     expect(canEngageFlyTo(world)).toBe(false) // в доке не летают
+  })
+
+  it('захваченный контейнер — J ведёт к нему и паркуется рядом', () => {
+    // Пойманное: автопилот знал из захвата только борт, и J к контейнеру отвечал «нет цели».
+    const world = createWorld({ ...STARTER_SYSTEM, patrols: [], belt: null })
+    const p = world.player
+    const pos = p.state.pos.clone().add(new Vector3(0, 0, -3000).applyQuaternion(p.state.quat))
+    world.pods.push({
+      id: world.ids.next(), kind: 'pod', pos, vel: new Vector3(), quat: p.state.quat.clone(),
+      spin: new Vector3(), item: { kind: 'commodity', commodity: COMMODITIES.MINERALS, units: 1 },
+      born: 0, alive: true, tractored: false,
+    })
+    lockContact(world, 'pod', world.pods[0]!.id)
+    world.targetFocus = 'contact'
+    expect(canEngageFlyTo(world)).toBe(true)
+    const controllers = new Map([[p.id, flyToController]])
+    for (let i = 0; i < 60 * 60 && !flyToArrived(world); i++) stepWorld(world, 1 / 60, controllers)
+    expect(flyToArrived(world)).toBe(true)
+    expect(p.state.pos.distanceTo(pos)).toBeLessThan(AUTOPILOT.ARRIVE_RANGE + 50)
   })
 
   it('фокус нав (Shift+Tab) — J ведёт к телу, а не к старому борту', () => {

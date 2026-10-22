@@ -9,7 +9,7 @@ import { apparentRadius, bodySizeFactor, effectiveRadius, jumpStarWorldPos, mete
 import type { ShipEntity, World } from '../world/entities'
 import { findShip, navTarget } from '../world/queries'
 import { steerToward } from './steering'
-import { lockedShipId } from '../world/queries'
+import { lockedAsteroidId, lockedFixtureId, lockedPodId, lockedShipId, softTargetPos } from '../world/queries'
 
 /**
  * Автопилот-НА-ЦЕЛЬ. Третий режим рядом с автостыковкой и автобоем: «лети к тому,
@@ -101,7 +101,23 @@ function lockDestination(world: World): Dest | null {
   if (ship && ship !== world.player && ship.alive) {
     return { pos: ship.state.pos, radius: 0, bodyId: null, galaxy: false }
   }
+  // Контейнер, камень, деталь базы — тот же захват Tab, что и борт: J ведёт и к ним.
+  const pod = lockedPodId(world)
+  if (pod !== null) return softDest(world, 'pod', pod, 0)
+  const rock = lockedAsteroidId(world)
+  if (rock !== null) {
+    // К камню — до поверхности (видимой), а не в центр глыбы.
+    const r = world.asteroids.find((a) => a.id === rock)?.radius ?? 0
+    return softDest(world, 'asteroid', rock, r * bodySizeFactor(world.player.state.scale))
+  }
+  const fixture = lockedFixtureId(world)
+  if (fixture !== null) return softDest(world, 'fixture', fixture, 0)
   return null
+}
+
+function softDest(world: World, kind: 'pod' | 'asteroid' | 'fixture', id: number, radius: number): Dest | null {
+  const pos = softTargetPos(world, { kind, id })
+  return pos ? { pos, radius, bodyId: null, galaxy: false } : null
 }
 
 /** Дистанция до «зоны прибытия»: у тела — до поверхности, у борта — до центра. */

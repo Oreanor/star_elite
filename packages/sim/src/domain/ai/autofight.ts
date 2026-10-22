@@ -1,14 +1,13 @@
-import { Vector3 } from 'three'
+import { findWarBaseFixture } from '../world/warBase'
 import { AI } from '../../config/ai'
 import { COPILOT } from '../../config/crew'
 import { isEngageable } from '../combat/engage'
 import { findShip } from '../world/queries'
-import { findWarBaseFixture, warBaseFixtureWorldPos } from '../world/warBase'
 import type { ShipEntity, World } from '../world/entities'
 import { lockContact } from '../world/queries'
 import { isFoe } from './targeting'
 import { createAIState } from './types'
-import { lockedShipId, lockedPodId, lockedAsteroidId, lockedFixtureId } from '../world/queries'
+import { lockedShipId, lockedPodId, lockedAsteroidId, lockedFixtureId, softTargetPos } from '../world/queries'
 
 /**
  * Автобой. Пилот-бот садится за штурвал ИГРОКА и дерётся с захваченной целью.
@@ -154,7 +153,7 @@ export function autofightSpent(world: World): boolean {
   if (!player.alive) return true
 
   if (ai.orderedSoft) {
-    const pos = softPos(world, ai.orderedSoft)
+    const pos = softTargetPos(world, ai.orderedSoft)
     if (!pos) return true
     return pos.distanceTo(player.state.pos) > ABORT_RANGE
   }
@@ -165,18 +164,3 @@ export function autofightSpent(world: World): boolean {
   return target.state.pos.distanceTo(player.state.pos) > ABORT_RANGE
 }
 
-const _softFixture = new Vector3()
-
-function softPos(world: World, soft: { kind: 'pod' | 'asteroid' | 'fixture'; id: number }): Vector3 | null {
-  if (soft.kind === 'fixture') {
-    // Деталь едет вместе с базой: место считаем на лету, а не помним точку прицеливания.
-    const found = findWarBaseFixture(world.warBases, soft.id)
-    return found ? warBaseFixtureWorldPos(found.base, found.fixture, world.time, _softFixture) : null
-  }
-  if (soft.kind === 'pod') {
-    const pod = world.pods.find((p) => p.id === soft.id && p.alive)
-    return pod?.pos ?? null
-  }
-  const rock = world.asteroids.find((a) => a.id === soft.id && a.alive)
-  return rock?.pos ?? null
-}
