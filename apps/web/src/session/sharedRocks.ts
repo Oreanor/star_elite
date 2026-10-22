@@ -15,7 +15,7 @@ import { applyRockHit, dropNetRock, revokeScoop, spawnNetRock, type World } from
 import { currentUserId } from './net/account'
 import { rtdb, serverNow } from './net/firebase'
 import { peerShips } from './net/peers'
-import { trafficKey } from './net/trafficNet'
+import { subscribeHost, trafficKey } from './net/trafficNet'
 
 /**
  * ОБЩИЕ КАМНИ. Пояс и встречные глыбы у всех одни: хозяин системы объявляет каждый камень
@@ -50,7 +50,10 @@ export class SharedRocks {
   private hits: { id: string; dmg: number; bomb: boolean; blast: boolean }[] = []
   /** Ключи камней, живых в мире на прошлом кадре. У хозяина пропажа = раскол/уход → снять узел. */
   private alive = new Set<string>()
-  private wasHost = false
+  /** Стёр ли я узел прошлых сессий за это хозяйство. */
+  private wiped = false
+  /** Хозяин системы по БАЗЕ, а не по своей роли: роль ставится сразу, база отвечает позже. */
+  private hostUid: string | null = null
   /** Хозяин ли я прямо сейчас — для колбэка ударов: забирает удар только тот, кто колет. */
   private isHost = false
 
@@ -68,12 +71,15 @@ export class SharedRocks {
     const o = world.originOffset
 
     // Стал хозяином пустой системы — чужие узлы прошлых сессий не правда: стереть и объявить своё.
-    if (host && !this.wasHost && peerShips.size === 0) {
+    // Ждём, пока БАЗА запишет меня хозяином: роль у трафика ставится сразу, до ответа сети, и
+    // стирание в этот миг правила отклоняли (`permission_denied` при каждом входе в систему).
+    if (!host) this.wiped = false
+    else if (!this.wiped && this.hostUid === this.me && peerShips.size === 0) {
+      this.wiped = true
       void set(ref(rtdb, base), null).catch(() => {})
       for (const a of world.asteroids) a.netId = undefined
       this.alive.clear()
     }
-    this.wasHost = host
 
     // 1) Чужие объявленные — в мир.
     for (const { id, node } of this.incoming) {
@@ -159,7 +165,8 @@ export class SharedRocks {
     this.gone.length = 0
     this.hits.length = 0
     this.alive.clear()
-    this.wasHost = false
+    this.wiped = false
+    this.hostUid = null
   }
 
   private attach(key: string): void {
@@ -169,6 +176,9 @@ export class SharedRocks {
     if (!rtdb) return
     const rocks = ref(rtdb, `traffic/${key}/rocks`)
     this.unsub.push(
+      subscribeHost(key, (h) => {
+        this.hostUid = h?.uid ?? null
+      }),
       onChildAdded(rocks, (snap) => {
         const v = snap.val() as RockNode | null
         if (snap.key && v && typeof v.t === 'number') this.incoming.push({ id: snap.key, node: v })
