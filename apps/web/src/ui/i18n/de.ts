@@ -267,6 +267,9 @@ export const DE: Record<keyof typeof RU, string> = {
   'station.dear': 'teuer',
   'station.trade.buy': 'KAUFEN',
   'station.trade.sell': 'VERKAUFEN',
+  'station.trade.fined': 'HANDEL BIS ZUR ZAHLUNG DER STRAFE {amount} EINGESCHRÄNKT',
+  'station.fine.title': 'STRAFE',
+  'station.fine.issued': 'Für den Handel mit Schmuggelware wurde Ihnen eine Strafe von {amount} auferlegt. Der Handel ist bis zur Zahlung eingeschränkt.',
   'station.trade.line': '{mass} × {price}',
 
   'station.hold.title': 'FRACHT',

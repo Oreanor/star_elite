@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import {
+  localFine,
   buyCommodity,
   cargoMass,
   commodityBuyPrice,
@@ -11,7 +12,7 @@ import {
   type Commodity,
   type World,
 } from '@elite/sim'
-import { trend } from '../theme'
+import { trend, UI } from '../theme'
 import { t, useLang } from '../i18n'
 import { ACCENT, Button, Column, DIM, Modal, ModalActions, ModalTitle, Table } from './chrome'
 import { Hold } from './Hold'
@@ -216,24 +217,53 @@ function TradeModal({
   const selling = initialSell
   const max = selling ? held : buyMax
   const [qty, setQty] = useState(0)
+  // Только что выписанный штраф (кредиты) — окно сделки сменяется извещением о нём.
+  const [issued, setIssued] = useState<number | null>(null)
   const value = Math.min(Math.max(0, qty), max)
   const units = value
   const unitPrice = selling ? sellPrice : buyPrice
   const totalMass = Math.round(units * commodity.unitMass * 10) / 10
-  const disabled = value === 0
+  // Местный штраф (контрабанда) закрывает станции ВСЮ торговлю до оплаты: без строки об этом
+  // кнопка просто молчала — «то продаётся, то остаётся».
+  const fine = localFine(world)
+  const disabled = value === 0 || fine != null
 
   // Купил/продал — сделка сделана, окно закрывается; перерисовка (onChange) обновит список,
   // отсек и кошелёк под ним.
   const act = () => {
     if (disabled) return
+    const before = localFine(world)?.amount ?? 0
     const ok =
       selling
         ? sellCommodity(world, player, commodity, units) > 0
         : buyCommodity(world, player, commodity, units) > 0
+    // Сделка с запрещёнкой выписала штраф — сказать об этом сразу, а не молча закрыть торговлю.
+    const after = localFine(world)?.amount ?? 0
+    if (after > before) {
+      onChange()
+      setIssued(after - before)
+      return
+    }
     if (ok) {
       onChange()
       onClose()
     }
+  }
+
+  if (issued != null) {
+    return (
+      <Modal onClose={onClose}>
+        <ModalTitle>{t('station.fine.title')}</ModalTitle>
+        <p className="mt-6 text-center text-base leading-7" style={{ color: UI.DANGER }}>
+          {tm('station.fine.issued', { amount: <Money amount={issued} /> })}
+        </p>
+        <ModalActions>
+          <Button small variant="primary" onClick={onClose}>
+            {t('ship.ok')}
+          </Button>
+        </ModalActions>
+      </Modal>
+    )
   }
 
   return (
@@ -252,6 +282,12 @@ function TradeModal({
           <Money amount={units * unitPrice} />
         </div>
       </div>
+
+      {fine && (
+        <p className="mt-4 text-center text-xs tracking-widest" style={{ color: UI.DANGER }}>
+          {tm('station.trade.fined', { amount: <Money amount={fine.amount} /> })}
+        </p>
+      )}
 
       <div className="mt-5 flex items-center gap-3 text-xs tabular-nums">
         <span className="w-10 text-right text-base" style={{ color: DIM }}>0</span>

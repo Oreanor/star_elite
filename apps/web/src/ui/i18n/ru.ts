@@ -277,6 +277,9 @@ export const RU = {
   'station.dear': 'дорого',
   'station.trade.buy': 'КУПИТЬ',
   'station.trade.sell': 'ПРОДАТЬ',
+  'station.trade.fined': 'ТОРГОВЛЯ ОГРАНИЧЕНА ДО ОПЛАТЫ ШТРАФА {amount}',
+  'station.fine.title': 'ШТРАФ',
+  'station.fine.issued': 'За торговлю запрещёнкой вам выписан штраф {amount}. Торговля ограничена до оплаты.',
   'station.trade.line': '{mass} × {price}',
 
   // ─── Грузовой отсек ─────────────────────────────────────────────────────────

@@ -266,6 +266,9 @@ export const FR: Record<keyof typeof RU, string> = {
   'station.dear': 'cher',
   'station.trade.buy': 'ACHETER',
   'station.trade.sell': 'VENDRE',
+  'station.trade.fined': 'COMMERCE RESTREINT JUSQU’AU PAIEMENT DE L’AMENDE {amount}',
+  'station.fine.title': 'AMENDE',
+  'station.fine.issued': 'Une amende de {amount} vous a été infligée pour commerce de contrebande. Le commerce est restreint jusqu’au paiement.',
   'station.trade.line': '{mass} × {price}',
 
   'station.hold.title': 'CARGAISON',

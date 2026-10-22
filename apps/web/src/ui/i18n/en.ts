@@ -265,6 +265,9 @@ export const EN: Record<keyof typeof RU, string> = {
   'station.dear': 'pricey',
   'station.trade.buy': 'BUY',
   'station.trade.sell': 'SELL',
+  'station.trade.fined': 'TRADE RESTRICTED UNTIL FINE {amount} IS PAID',
+  'station.fine.title': 'FINE',
+  'station.fine.issued': 'You have been fined {amount} for trading contraband. Trade is restricted until it is paid.',
   'station.trade.line': '{mass} × {price}',
 
   'station.hold.title': 'CARGO',

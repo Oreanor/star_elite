@@ -88,6 +88,7 @@
           }
         },
         "rocks": {
+          ".write": "auth != null && !newData.exists() && root.child('traffic').child($key).child('host').child('uid').val() === auth.uid",
           "$rid": {
             ".write": "auth != null",
             ".validate": "!newData.exists() || newData.hasChildren(['p', 'v', 't', 'r', 'sh'])"

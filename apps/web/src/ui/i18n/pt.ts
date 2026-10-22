@@ -279,6 +279,9 @@ export const PT: Record<keyof typeof RU, string> = {
   'station.dear': 'caro',
   'station.trade.buy': 'COMPRAR',
   'station.trade.sell': 'VENDER',
+  'station.trade.fined': 'COMÉRCIO RESTRITO ATÉ PAGAR A MULTA {amount}',
+  'station.fine.title': 'MULTA',
+  'station.fine.issued': 'Você foi multado em {amount} por comercializar contrabando. O comércio fica restrito até o pagamento.',
   'station.trade.line': '{mass} × {price}',
 
   // ─── Porão de carga ──────────────────────────────────────────────────────────
