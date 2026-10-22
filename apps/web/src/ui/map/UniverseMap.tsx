@@ -172,18 +172,25 @@ function Field({
     geometry.getAttribute('color').needsUpdate = true
   }, [geometry, items, selected, homeVertex])
 
-  const material = useMemo(
-    () =>
-      new PointsMaterial({
-        size: R * 0.022,
-        sizeAttenuation: true,
-        vertexColors: true,
-        transparent: true,
-        depthWrite: false,
-        toneMapped: false,
-      }),
-    [],
-  )
+  const material = useMemo(() => {
+    const m = new PointsMaterial({
+      size: R * 0.022,
+      sizeAttenuation: true,
+      vertexColors: true,
+      transparent: true,
+      depthWrite: false,
+      toneMapped: false,
+    })
+    // Точка WebGL — квадрат спрайта: галактики висели квадратиками. Отсекаем всё вне вписанного
+    // круга — кружок, как у звёзд на карте галактики (`GalaxyScene`).
+    m.onBeforeCompile = (shader) => {
+      shader.fragmentShader = shader.fragmentShader.replace(
+        'void main() {',
+        'void main() {\n  if (length(gl_PointCoord - vec2(0.5)) > 0.5) discard;',
+      )
+    }
+    return m
+  }, [])
   useEffect(() => () => material.dispose(), [material])
 
   // Каркас предельной сферы: её край — противоположный конец замкнутого мира, дальше некуда.
