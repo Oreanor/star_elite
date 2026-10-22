@@ -7,7 +7,7 @@ import { rememberPilot } from './acquaintance'
 import { emptyPlan } from './contactPlan'
 import { createWorld, STARTER_SYSTEM } from './index'
 import type { ShipEntity, World } from './entities'
-import { ENCOUNTERS, biasedWeight, remoteness, spawnResidentContacts, stepDockedBerth, stepDockTraffic, stepTraffic } from './traffic'
+import { ENCOUNTERS, biasedWeight, remoteness, spawnResidentContacts, spawnTravellingSlovo, stepDockedBerth, stepDockTraffic, stepTraffic } from './traffic'
 import { quietWorld } from '../../testkit'
 import { lockContact } from './queries'
 
@@ -463,5 +463,21 @@ describe('знакомые при входе в систему', () => {
     expect(born[0]!.warpEmerging).toBe(true)
     expect(world.warpPortals).toHaveLength(1)
     expect(world.warpPortals[0]!.shipId).toBe(born[0]!.id)
+  })
+})
+
+describe('бог-путник', () => {
+  it('у станции и с края радара у него всегда дело — швартовка или рейс, а не патруль', () => {
+    // Пойманное: бога ставили у станции без дела, ИИ падал в патруль и нарезал петли вокруг
+    // станции. Теперь он швартуется, стоит и уходит или сразу уходит своим рейсом.
+    for (let seed = 1; seed <= 40; seed++) {
+      const world = quietWorld()
+      world.rng = makeRng(seed)
+      const god = spawnTravellingSlovo(world)
+      expect(god).not.toBeNull()
+      const ai = god!.ai!
+      expect(ai.dock === 'inbound' || ai.tasks.some((t) => t.kind === 'depart')).toBe(true)
+      world.ships = world.ships.filter((s) => s !== god)
+    }
   })
 })

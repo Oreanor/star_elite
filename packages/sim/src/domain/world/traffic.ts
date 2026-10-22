@@ -13,7 +13,8 @@ import { randomUnit, signed, weightedPick, type Rng } from '../../core/math'
 import { countWhere, retain } from '../../core/list'
 import type { Loadout } from '../loadout'
 import { createAIState } from '../ai/types'
-import { assignVoyage } from '../ai/tasks'
+import { assignVoyage, enqueueTask } from '../ai/tasks'
+import { findStation } from '../station/docking'
 import { rollOffer } from '../contracts/offers'
 import { CONTRACTS } from '../../config/contracts'
 import { declareFoe } from '../ai/targeting'
@@ -271,20 +272,23 @@ function randomPlainStation(world: World): BodyEntity | null {
  *
  * Неуязвим и безоружен: бог не дерётся, но и сбить его нельзя.
  */
-function spawnTravellingSlovo(world: World): ShipEntity | null {
+export function spawnTravellingSlovo(world: World): ShipEntity | null {
   // Половину раз — уже у станции (любой, кроме Крестов: он сейчас НЕ дома), иначе с края
   // радара. Бога встречаешь и «где-то у причала», а не только на подлёте.
   const station = world.rng() < TRAFFIC.GOD_AT_STATION_SHARE ? randomPlainStation(world) : null
   let anchor: Vector3
+  // Куда уйти рейсом: от станции — прочь по той же линии; с края радара — насквозь.
+  const exit = new Vector3()
   if (station) {
     anchor = station.pos
     _offset.set(signed(world.rng), signed(world.rng) * 0.4, signed(world.rng))
     if (_offset.lengthSq() < 1e-6) _offset.set(1, 0, 0)
     _offset.setLength(station.radius * TRAFFIC.GOD_AT_STATION_RADII)
     _scratch.copy(station.pos).add(_offset)
+    exit.copy(_offset).setLength(TRAFFIC.DESTINATION_RANGE).add(_scratch)
   } else {
     anchor = residentAnchor(world)
-    spawnFromRadarEdge(world, _scratch, _offset, true)
+    spawnFromRadarEdge(world, _scratch, exit, true)
   }
   const quat = new Quaternion().setFromUnitVectors(
     new Vector3(0, 0, -1),
@@ -297,6 +301,7 @@ function spawnTravellingSlovo(world: World): ShipEntity | null {
   ship.divine = true
   ship.clearance = true
   ship.ai = createAIState(anchor.clone(), world.rng)
+  planSlovoVisit(world, ship, station, exit)
   ship.controls.throttle = 0.5
   ship.state.scale = TRAFFIC.GOD_SCALE_MIN + world.rng() * (TRAFFIC.GOD_SCALE_MAX - TRAFFIC.GOD_SCALE_MIN)
   stockSlovoCollection(ship.hold, world.rng)
@@ -304,6 +309,36 @@ function spawnTravellingSlovo(world: World): ShipEntity | null {
   if (known) ship.acquaintanceId = known.id
   world.ships.push(ship)
   return ship
+}
+
+/**
+ * Дело бога в системе. Без него ИИ падал в патруль и кружил петлями вокруг станции. У станции —
+ * поровну: швартоваться, постоять и уйти, сразу уйти; с края радара — к причалу или насквозь.
+ * Швартуется лишь к станции, у которой игрок (`findStation`): к ней ведёт причальный полёт ИИ.
+ */
+function planSlovoVisit(world: World, ship: ShipEntity, station: BodyEntity | null, exit: Vector3): void {
+  const ai = ship.ai!
+  const berth = findStation(world)
+  const dockable = berth != null && berth.stationStyle !== 'cross' && (station == null || station === berth)
+  const u = world.rng()
+  if (station) {
+    if (u < 1 / 3 && dockable) {
+      ai.dock = 'inbound'
+      return
+    }
+    if (u < 2 / 3) {
+      const wait = TRAFFIC.GOD_HOLD_MIN + world.rng() * (TRAFFIC.GOD_HOLD_MAX - TRAFFIC.GOD_HOLD_MIN)
+      enqueueTask(ship, { kind: 'hold', anchor: ship.state.pos.clone(), radius: 150, until: world.time + wait, own: true })
+    }
+    assignVoyage(ship, exit)
+    return
+  }
+  if (u < TRAFFIC.GOD_DOCK_SHARE && dockable) {
+    ai.dock = 'inbound'
+    ai.home.copy(berth.pos)
+    return
+  }
+  assignVoyage(ship, exit)
 }
 
 /**

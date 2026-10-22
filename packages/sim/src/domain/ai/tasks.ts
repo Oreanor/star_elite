@@ -63,7 +63,13 @@ type TaskBody =
    * бот висит, пока её не снимут (`clearTasks`) или не сменят приказ. Это примитив «подожди
    * там»: конечный член цепочки вроде «лети → купи → жди». Держим через тот же полёт-с-тормозом.
    */
-  | { kind: 'hold'; anchor: Vector3; radius: number }
+  | {
+      kind: 'hold'
+      anchor: Vector3
+      radius: number
+      /** Ждать до этого `world.time`, с, и сняться. Нет — ждать, пока не снимут. */
+      until?: number
+    }
   /**
    * Уйти из системы прыжком. Мгновенная: открывает портал и снимается. Конец рейса
    * торговца — он не кружит вечно там, куда прилетел, а уходит дальше по своим делам.
@@ -211,8 +217,10 @@ function runTask(e: ShipEntity, world: World, task: Task): TaskStep {
       return { done: false, intent: { target: task.anchor, scoop: false, arriveRadius: LEAD_HOLD_RADIUS } }
     }
     case 'hold': {
-      // Никогда не done: держит позицию, пока задачу не снимут. Полёт-с-тормозом сам гасит
-      // ход у точки, и бот висит в радиусе, а не нарезает круги.
+      // Без срока — не done никогда: держит позицию, пока задачу не снимут. Со сроком — отстоял
+      // и снялся (следующая задача — рейс прочь). Полёт-с-тормозом сам гасит ход у точки, и бот
+      // висит в радиусе, а не нарезает круги.
+      if (task.until != null && world.time >= task.until) return { done: true, intent: null }
       return { done: false, intent: { target: task.anchor, scoop: false, arriveRadius: task.radius } }
     }
   }
