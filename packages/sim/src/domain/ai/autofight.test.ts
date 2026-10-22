@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { COMMODITIES } from '../cargo/items'
 import { createWorld, STARTER_SYSTEM, type World } from '../world'
 import { stepWorld } from '../sim'
-import { autofightActive, autofightSpent, disengageAutofight, engageAutofight, retargetAutofight } from './autofight'
+import { autofightActive, autofightSpent, continueAutofight, disengageAutofight, engageAutofight, retargetAutofight } from './autofight'
 import { aiController } from './pilot'
 import { lockContact } from '../world/queries'
 
@@ -216,6 +216,34 @@ describe('автобой: следующая цель', () => {
 
     b!.alive = false
     expect(retargetAutofight(world)).toBe(false)
+  })
+
+  it('цикл автобоя сам берёт следующего из группы, дальних за обзором — нет', () => {
+    // Пойманное: перевод на соседа жил лишь в приказе «бей всех» второму пилоту, а обычный
+    // автобой по одному пирату из группы, сбив его, отдавал штурвал посреди остальных.
+    const world = createWorld({
+      ...STARTER_SYSTEM,
+      belt: null,
+      patrols: [{ count: 3, at: [0, 0, 0], spread: 0, faction: 'hostile', name: 'Пират' }],
+    })
+    const p = world.player
+    p.state.pos.set(30_000, 0, 0)
+    const [a, b, far] = world.ships
+    a!.state.pos.copy(p.state.pos).add(new Vector3(0, 0, -300))
+    b!.state.pos.copy(p.state.pos).add(new Vector3(200, 0, -400))
+    far!.state.pos.copy(p.state.pos).add(new Vector3(0, 0, -50_000))
+    lockContact(world, 'ship', a!.id)
+    world.targetFocus = 'contact'
+    expect(engageAutofight(world)).toBe(true)
+
+    a!.alive = false
+    expect(continueAutofight(world)).toBe(true)
+    expect(p.ai!.orderedTargetId).toBe(b!.id)
+
+    // Сбит и второй — дальний (за обзором) не в счёт: бой окончен.
+    b!.alive = false
+    expect(continueAutofight(world)).toBe(false)
+    expect(autofightActive(world)).toBe(false)
   })
 
   it('побитый корабль в автобое не бежит: бой — приказ игрока, а не выбор пилота', () => {

@@ -119,8 +119,9 @@ export function retargetAutofight(world: World, range: number = AI.AWARENESS): b
 
 /**
  * Такт автобоя (зовёт слой ввода): идёт ли он дальше. Поручение второго пилота («собери»,
- * «уходим») держит штурвал, пока не исполнено; бой — пока цель жива и рядом, а «бей всех»
- * (`chainFoes`) берёт следующего врага на локаторе. Иначе штурвал возвращается.
+ * «уходим») держит штурвал, пока не исполнено; бой — пока цель жива и рядом. Сбитую цель
+ * сменяет ближайший враг поблизости, «бей всех» (`chainFoes`) — любой на локаторе. Иначе
+ * штурвал возвращается.
  */
 export function continueAutofight(world: World): boolean {
   const ai = world.player.ai
@@ -132,8 +133,18 @@ export function continueAutofight(world: World): boolean {
   if (ai.tasks.length > 0) return true
   if (!autofightSpent(world)) return true
   if (ai.chainFoes && retargetAutofight(world, COPILOT.SCAN_RANGE)) return true
+  // Сбил одного из группы — бой не кончен: следующий враг поблизости (`AI.AWARENESS`), по
+  // очереди. Только за сбитым: ушедшую за горизонт цель не подменяем чужой — штурвал тебе.
+  if (!ai.chainFoes && targetDown(world, ai.orderedTargetId) && retargetAutofight(world)) return true
   disengageAutofight(world)
   return false
+}
+
+/** Приказанный борт сбит (или пропал из мира) — а не просто ушёл далеко. */
+function targetDown(world: World, id: number | null): boolean {
+  if (id == null) return false
+  const target = findShip(world, id)
+  return !target || !target.alive
 }
 
 /** Вернуть штурвал. Идемпотентно: снять несуществующий автобой не ошибка. */
