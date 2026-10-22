@@ -12,7 +12,8 @@ const _v = new Vector3()
 
 function chunk(seed: number): BufferGeometry {
   // detail=0: двадцать граней. Мелкий осколок — угловатая галька, не скульптура.
-  const geometry = new IcosahedronGeometry(1, 0).toNonIndexed()
+  // Многогранники three уже без индексов: у каждой грани свои вершины — грани плоские сами.
+  const geometry = new IcosahedronGeometry(1, 0)
   const rng = makeRng(seed)
   const position = geometry.getAttribute('position') as BufferAttribute
   const offsets = new Map<string, number>()

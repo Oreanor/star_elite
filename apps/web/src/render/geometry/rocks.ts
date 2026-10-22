@@ -15,7 +15,8 @@ const _color = new Color()
 
 function deformed(seed: number): BufferGeometry {
   // detail=1: 80 граней. Больше не нужно — камень должен быть угловатым.
-  const geometry = new IcosahedronGeometry(1, 1).toNonIndexed()
+  // Многогранники three уже без индексов: у каждой грани свои вершины — грани плоские сами.
+  const geometry = new IcosahedronGeometry(1, 1)
   const rng = makeRng(seed)
   const position = geometry.getAttribute('position') as BufferAttribute
 
