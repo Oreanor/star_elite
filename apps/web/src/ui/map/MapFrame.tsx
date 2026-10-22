@@ -55,7 +55,7 @@ export function MapFrame({
       </div>
 
       <div className="flex min-h-0 w-2/3 min-w-0 flex-col">
-        {title !== undefined && <h1 className="mb-3 shrink-0 text-center text-xl tracking-title">{title}</h1>}
+        {title !== undefined && <h1 className="mb-3 shrink-0 text-center text-xl uppercase tracking-title">{title}</h1>}
         <div className="flex min-h-0 flex-1 items-center justify-center">
           {square ? (
             // Квадрат меряется высотой поля под заголовком, чтобы не резало обод.

@@ -271,7 +271,7 @@ export function Panel({ title, children, flush, className = '' }: { title: strin
   return (
     <section className={`${flush ? '' : 'mt-6 '}border p-5 ${className}`} style={{ borderColor: DIM }}>
       {/* Пустой заголовок не рисуем: под вкладкой «модули / отсек» повтор того же слова шумит. */}
-      {title ? <h2 className="mb-3 shrink-0 text-sm tracking-title">{title}</h2> : null}
+      {title ? <h2 className="mb-3 shrink-0 text-sm uppercase tracking-title">{title}</h2> : null}
       {children}
     </section>
   )
@@ -322,7 +322,7 @@ export function Modal({
 
 /** Заголовок модалки: имя того, о чём окно (модуль, товар, корпус). Один кегль на все окна. */
 export function ModalTitle({ children }: { children: React.ReactNode }) {
-  return <h3 className="mb-4 text-base tracking-title">{children}</h3>
+  return <h3 className="mb-4 text-base uppercase tracking-title">{children}</h3>
 }
 
 /** Надзаголовок модалки: вид окна словом («ЛАЗЕР», «ПОКУПКА КОРПУСА»), тусклый, над именем. */

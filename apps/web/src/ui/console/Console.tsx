@@ -210,7 +210,7 @@ export function Console({
             В полёте причала нет — тогда пишем хотя бы систему, чтобы шапка не пустовала.
             Планета подробнее показана в первой вкладке. */}
         <div className="flex items-center justify-between gap-6">
-            <h1 className="min-w-0 text-xl tracking-title">
+            <h1 className="min-w-0 text-xl uppercase tracking-title">
               {docked && station
                 ? planet
                   ? t('station.atPlanet', { station: properName(station.name), planet: properName(planet.name) })
@@ -428,7 +428,7 @@ function PeopleTab({
     <div>
       {copilot && (
         <div className="mb-6">
-          <h2 className="text-sm tracking-title">{t('copilot.title')}</h2>
+          <h2 className="text-sm uppercase tracking-title">{t('copilot.title')}</h2>
           <div className={CARD_GRID}>
             <PersonPlaque
               name={properName(copilot.name)}
@@ -445,7 +445,7 @@ function PeopleTab({
           временем, а пока стоишь в доке, мир на паузе. */}
       {docked && (
         <div>
-          <h2 className="text-sm tracking-title">{t('people.atStation')}</h2>
+          <h2 className="text-sm uppercase tracking-title">{t('people.atStation')}</h2>
           {slovo || dockedHere.length > 0 ? (
             <div className={CARD_GRID}>
               {station && dispatcher && (
@@ -484,7 +484,7 @@ function PeopleTab({
       {/* ЗНАКОМЫЕ — с кем говорил и кто ещё жив, где бы ни были. */}
       {contacts.length > 0 && (
         <div className="mt-6">
-          <h2 className="text-sm tracking-title" style={{ color: ACCENT }}>
+          <h2 className="text-sm uppercase tracking-title" style={{ color: ACCENT }}>
             {t('people.acquaintances')}
           </h2>
           <p className="mt-1 text-xs tracking-meta" style={{ color: DIM }}>
@@ -512,7 +512,7 @@ function OnlineList({ onChat }: { onChat: (player: OnlinePlayer) => void }) {
 
   return (
     <div className="mt-6">
-      <h2 className="text-sm tracking-title" style={{ color: ACCENT }}>
+      <h2 className="text-sm uppercase tracking-title" style={{ color: ACCENT }}>
         {t('people.online')}
       </h2>
       <div className={CARD_GRID}>

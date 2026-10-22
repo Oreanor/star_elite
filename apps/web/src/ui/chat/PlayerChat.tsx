@@ -98,7 +98,7 @@ export function IncomingCall({
       >
         <PilotPortrait species={caller.species} face={caller.face} size={44} />
         <div className="min-w-0">
-          <div className="text-xs tracking-title" style={{ color: UI.WARN }}>
+          <div className="text-xs uppercase tracking-title" style={{ color: UI.WARN }}>
             {t('chat.incoming')} · {caller.name.toUpperCase()}
           </div>
           {(busy || !cursorFree) && (

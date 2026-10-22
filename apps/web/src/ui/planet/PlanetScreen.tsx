@@ -464,7 +464,7 @@ export function PlanetScreen({ world, planet }: { world: World; planet: BodyEnti
     // прокрутки. Паспорт слева прокручивается сам, внутри своей колонки.
     <div className="flex min-h-0 w-full flex-1 items-stretch gap-6 overflow-hidden font-mono" style={{ color: ACCENT }}>
       <div className="flex min-h-0 w-1/3 min-w-0 shrink-0 flex-col">
-        <h1 className="text-xl tracking-title">{properName(planet.name).toUpperCase()}</h1>
+        <h1 className="text-xl uppercase tracking-title">{properName(planet.name).toUpperCase()}</h1>
         <p className="mb-4 mt-1 text-2xs tracking-meta opacity-50">
           {t('station.system')} {properName(world.systemName).toUpperCase()}
         </p>

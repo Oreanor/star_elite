@@ -69,10 +69,10 @@ export function AuthScreen() {
           className="flex w-full max-w-[26rem] flex-col gap-5 rounded-2xl border p-8 backdrop-blur-md"
           style={{ borderColor: 'rgba(63,115,145,0.7)', background: 'rgba(10,26,47,0.82)' }}
         >
-          <h1 className="text-center text-xl tracking-title">{t(register ? 'auth.register' : 'auth.login')}</h1>
+          <h1 className="text-center text-xl uppercase tracking-title">{t(register ? 'auth.register' : 'auth.login')}</h1>
 
           <label className="flex flex-col gap-1">
-            <span className="text-xs tracking-title text-[#3f7391]">{t('auth.email')}</span>
+            <span className="text-xs uppercase tracking-title text-[#3f7391]">{t('auth.email')}</span>
             <input
               autoFocus
               type="email"
@@ -85,7 +85,7 @@ export function AuthScreen() {
           </label>
 
           <label className="flex flex-col gap-1">
-            <span className="text-xs tracking-title text-[#3f7391]">{t('auth.password')}</span>
+            <span className="text-xs uppercase tracking-title text-[#3f7391]">{t('auth.password')}</span>
             <input
               type="password"
               autoComplete={register ? 'new-password' : 'current-password'}
@@ -110,7 +110,7 @@ export function AuthScreen() {
           <button
             type="submit"
             disabled={busy || !email.trim() || !password}
-            className="mt-1 self-center border border-[#7fd6ff] bg-[#0a1a2f]/[0.82] px-8 py-3 text-base tracking-title
+            className="mt-1 self-center border border-[#7fd6ff] bg-[#0a1a2f]/[0.82] px-8 py-3 text-base uppercase tracking-title
                        text-[#7fd6ff] transition-colors ui-btn
                        disabled:cursor-not-allowed disabled:border-[#3f7391] disabled:bg-transparent disabled:text-[#3f7391]"
           >

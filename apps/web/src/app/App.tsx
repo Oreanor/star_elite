@@ -80,7 +80,7 @@ function BootSplash({ label }: { label: string }) {
       style={{ backgroundImage: 'url(/bg.webp)' }}
     >
       <div className="absolute inset-0 bg-black/60" />
-      <div className="relative text-sm tracking-title">{label}</div>
+      <div className="relative text-sm uppercase tracking-title">{label}</div>
     </div>
   )
 }
@@ -1016,7 +1016,7 @@ function LoadingVeil({ progress }: { progress: number }) {
       onPointerDown={(e) => e.stopPropagation()}
       onClick={(e) => e.stopPropagation()}
     >
-      <div className="text-sm tracking-title">{t('loading.scene')}</div>
+      <div className="text-sm uppercase tracking-title">{t('loading.scene')}</div>
       <div className="h-1 w-64 border" style={{ borderColor: UI.DIM }}>
         <div className="h-full" style={{ width: `${Math.round(progress * 100)}%`, background: UI.PRIMARY }} />
       </div>

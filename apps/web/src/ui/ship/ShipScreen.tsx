@@ -127,7 +127,7 @@ export function ShipScreen({
       {!embedded && (
         <div className="flex items-start justify-between gap-6">
           <div>
-            <h1 className="text-xl tracking-title">{docked ? t('station.shipyard.title') : t('ship.title')}</h1>
+            <h1 className="text-xl uppercase tracking-title">{docked ? t('station.shipyard.title') : t('ship.title')}</h1>
             <p className="mt-1 text-sm tracking-meta" style={{ color: DIM }}>
               {t('station.system')} {properName(world.systemName).toUpperCase()}
             </p>

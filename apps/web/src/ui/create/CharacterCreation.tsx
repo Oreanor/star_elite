@@ -98,7 +98,7 @@ export function CharacterCreation({
         style={{ ...GLASS_PANEL, color: ACCENT }}
       >
         <div className="flex flex-col gap-6">
-          <h1 className="text-center text-xl tracking-title">{t('create.title')}</h1>
+          <h1 className="text-center text-xl uppercase tracking-title">{t('create.title')}</h1>
           <p className="text-center text-xs tracking-meta" style={{ color: DIM }}>
             {t('create.startAt', {
               station: properName(world.bodies.find((b) => b.kind === 'station')?.name ?? '—'),
@@ -124,7 +124,7 @@ export function CharacterCreation({
           </div>
 
           <label className="mx-auto flex w-full max-w-md flex-col gap-1.5">
-            <span className="text-center text-xs tracking-title" style={{ color: DIM }}>
+            <span className="text-center text-xs uppercase tracking-title" style={{ color: DIM }}>
               {t('create.name')}
             </span>
             <input
@@ -139,7 +139,7 @@ export function CharacterCreation({
           </label>
 
           <div className="flex flex-col items-center gap-3">
-            <span className="text-xs tracking-title" style={{ color: DIM }}>
+            <span className="text-xs uppercase tracking-title" style={{ color: DIM }}>
               {t('create.profession')}
             </span>
             {/* Профессия — один селект из пяти (включая Путешественника). */}
@@ -171,7 +171,7 @@ export function CharacterCreation({
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex flex-col items-center gap-2">
-      <span className="text-xs tracking-title" style={{ color: DIM }}>
+      <span className="text-xs uppercase tracking-title" style={{ color: DIM }}>
         {label}
       </span>
       <div className="flex flex-wrap justify-center gap-2">{children}</div>

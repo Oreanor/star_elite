@@ -105,7 +105,7 @@ function MenuPanel({
     >
       {/* ШАПКА: заголовок модалки, отделён линией, прижат к верху. */}
       {title && (
-        <div className="mb-5 shrink-0 border-b border-[#3f7391]/40 pb-4 text-center text-lg tracking-title text-[#7fd6ff]">
+        <div className="mb-5 shrink-0 border-b border-[#3f7391]/40 pb-4 text-center text-lg uppercase tracking-title text-[#7fd6ff]">
           {title}
         </div>
       )}
@@ -145,7 +145,7 @@ function MenuButton({
       // 38% тонули, и светлый текст сливался с белым. 82% тёмного тёмно-синего держит
       // контраст на любом фоне. Наведение по-прежнему заливает кнопку целиком.
       className="min-w-56 w-max cursor-pointer whitespace-nowrap border border-[#7fd6ff] bg-[#0a1a2f]/[0.82] px-8 py-3 text-base
-                 backdrop-blur-md tracking-title text-[#7fd6ff] transition-colors
+                 backdrop-blur-md uppercase tracking-title text-[#7fd6ff] transition-colors
                  ui-btn
                  disabled:cursor-wait disabled:border-[#3f7391] disabled:bg-[#0a1a2f]/[0.7]
                  disabled:text-[#8fb4cc]"
@@ -801,7 +801,7 @@ export function Paused({
     <div className="absolute inset-0 cursor-default overflow-hidden bg-black font-mono text-[#7fd6ff]">
       {!gfxReady ? (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-4">
-          <span className="text-sm tracking-title">{t('menu.loadingGfx')}</span>
+          <span className="text-sm uppercase tracking-title">{t('menu.loadingGfx')}</span>
           <div
             className="h-0.5 w-48 overflow-hidden rounded-full bg-[#0a1a2f]"
             role="progressbar"
@@ -1081,13 +1081,13 @@ export function GameOver({ score, onRestart }: { score: number; onRestart: () =>
   return (
     <div className="absolute inset-0 flex items-center justify-center bg-black/85">
       <div className="px-8 text-center font-mono text-[#ff7a5c]">
-        <h1 className="mb-2 text-5xl tracking-title">{t('menu.lost')}</h1>
+        <h1 className="mb-2 text-5xl uppercase tracking-title">{t('menu.lost')}</h1>
         <p className="mb-10 text-sm tracking-meta text-[#7a4438]">{t('menu.score', { score })}</p>
 
         <button
           type="button"
           onClick={onRestart}
-          className="cursor-pointer border border-[#7fd6ff] px-8 py-3 text-base tracking-title text-[#7fd6ff]
+          className="cursor-pointer border border-[#7fd6ff] px-8 py-3 text-base uppercase tracking-title text-[#7fd6ff]
                      transition-colors ui-btn"
         >
           {t('menu.restart')}

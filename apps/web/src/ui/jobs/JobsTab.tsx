@@ -26,7 +26,7 @@ export function JobsTab({ world }: { world: World }) {
     <div className="flex min-h-0 w-full flex-1 flex-col gap-6 overflow-y-auto pr-1 font-mono" style={{ color: ACCENT }}>
       {active.length > 0 && (
         <section>
-          <h2 className="mb-2 text-sm tracking-title">{t('jobs.active')}</h2>
+          <h2 className="mb-2 text-sm uppercase tracking-title">{t('jobs.active')}</h2>
           <div className="flex flex-col gap-3">
             {active.map((c) => (
               <JobCard key={c.id} c={c} world={world} />
@@ -36,7 +36,7 @@ export function JobsTab({ world }: { world: World }) {
       )}
       {closed.length > 0 && (
         <section>
-          <h2 className="mb-2 text-sm tracking-title" style={{ color: DIM }}>
+          <h2 className="mb-2 text-sm uppercase tracking-title" style={{ color: DIM }}>
             {t('jobs.closed')}
           </h2>
           <div className="flex flex-col gap-2">
