@@ -98,7 +98,7 @@ export function Market({ world, onChange }: { world: World; onChange: () => void
             type="button"
             onClick={() => setSection(s)}
             aria-current={on ? 'page' : undefined}
-            className="cursor-pointer border px-4 py-1.5 text-xs tracking-[0.25em] transition-colors ui-btn"
+            className="cursor-pointer border px-3 py-1 text-xs tracking-label transition-colors ui-btn"
             style={{ borderColor: on ? ACCENT : DIM, backgroundColor: on ? ACCENT : 'transparent', color: on ? '#000' : DIM }}
           >
             {t(s === 'goods' ? 'station.market.title' : 'station.outfit.title')}
@@ -284,7 +284,7 @@ function TradeModal({
       </div>
 
       {fine && (
-        <p className="mt-4 text-center text-xs tracking-widest" style={{ color: UI.DANGER }}>
+        <p className="mt-4 text-center text-xs tracking-meta" style={{ color: UI.DANGER }}>
           {tm('station.trade.fined', { amount: <Money amount={fine.amount} /> })}
         </p>
       )}

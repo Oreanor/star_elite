@@ -26,7 +26,7 @@ export function JobsTab({ world }: { world: World }) {
     <div className="flex min-h-0 w-full flex-1 flex-col gap-6 overflow-y-auto pr-1 font-mono" style={{ color: ACCENT }}>
       {active.length > 0 && (
         <section>
-          <h2 className="mb-2 text-base tracking-[0.12em]">{t('jobs.active')}</h2>
+          <h2 className="mb-2 text-sm tracking-title">{t('jobs.active')}</h2>
           <div className="flex flex-col gap-3">
             {active.map((c) => (
               <JobCard key={c.id} c={c} world={world} />
@@ -36,7 +36,7 @@ export function JobsTab({ world }: { world: World }) {
       )}
       {closed.length > 0 && (
         <section>
-          <h2 className="mb-2 text-base tracking-[0.12em]" style={{ color: DIM }}>
+          <h2 className="mb-2 text-sm tracking-title" style={{ color: DIM }}>
             {t('jobs.closed')}
           </h2>
           <div className="flex flex-col gap-2">
@@ -59,19 +59,19 @@ function JobCard({ c, world }: { c: Contract; world: World }) {
   return (
     <div className="rounded border px-4 py-3" style={{ borderColor: open ? ACCENT : DIM, opacity: open ? 1 : 0.7 }}>
       <div className="flex items-baseline justify-between gap-4">
-        <span className="text-sm tracking-[0.15em]">{kindLabel(c)}</span>
+        <span className="text-sm tracking-label">{kindLabel(c)}</span>
         {open ? (
-          <span className="text-[11px] tracking-widest" style={{ color: urgent ? UI.WARN : DIM }}>
+          <span className="text-2xs tracking-meta" style={{ color: urgent ? UI.WARN : DIM }}>
             {deadlineText(c)}
           </span>
         ) : (
-          <span className="text-[11px] tracking-widest" style={{ color: endColor }}>
+          <span className="text-2xs tracking-meta" style={{ color: endColor }}>
             {c.end ? t(`jobs.end.${c.end}` as Key) : ''}
           </span>
         )}
       </div>
       <div className="mt-1 text-sm">{goalText(c)}</div>
-      <div className="mt-1 flex flex-wrap gap-x-4 text-[11px] tracking-widest" style={{ color: DIM }}>
+      <div className="mt-1 flex flex-wrap gap-x-4 text-2xs tracking-meta" style={{ color: DIM }}>
         <span>{t('jobs.from', { name: properName(c.giverName), system: properName(c.systemName) })}</span>
         <span>{rewardText(c)}</span>
         {c.paid > 0 && <span>{t('jobs.paid', { paid: c.paid })}</span>}

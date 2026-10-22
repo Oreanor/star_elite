@@ -145,10 +145,10 @@ export function SystemPopup({
             <Row label={t('map.stations')} value={String(stations.length)} />
           </dl>
 
-          {core && <p className="mt-3 text-[11px] leading-relaxed" style={{ color: UI.WARN }}>{t('map.core')}</p>}
+          {core && <p className="mt-3 text-2xs leading-relaxed" style={{ color: UI.WARN }}>{t('map.core')}</p>}
 
           {blocked && (
-            <p className="pt-3 text-[11px] tracking-widest" style={{ color: UI.WARN }}>
+            <p className="pt-3 text-2xs tracking-meta" style={{ color: UI.WARN }}>
               {blockLabel(blocked)}
             </p>
           )}
@@ -165,7 +165,7 @@ export function SystemPopup({
                   onPick={onArrival}
                 />
                 {stations.length > 1 && (
-                  <p className="mt-2 text-[10px] leading-tight" style={{ color: UI.DIM }}>
+                  <p className="mt-2 text-2xs leading-tight" style={{ color: UI.DIM }}>
                     {t('map.pickStation', { n: stations.length })}
                   </p>
                 )}

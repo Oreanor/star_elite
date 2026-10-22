@@ -127,15 +127,15 @@ export function ShipScreen({
       {!embedded && (
         <div className="flex items-start justify-between gap-6">
           <div>
-            <h1 className="text-3xl tracking-[0.35em]">{docked ? t('station.shipyard.title') : t('ship.title')}</h1>
-            <p className="mt-1 text-sm tracking-widest" style={{ color: DIM }}>
+            <h1 className="text-xl tracking-title">{docked ? t('station.shipyard.title') : t('ship.title')}</h1>
+            <p className="mt-1 text-sm tracking-meta" style={{ color: DIM }}>
               {t('station.system')} {properName(world.systemName).toUpperCase()}
             </p>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="cursor-pointer border px-4 py-2 text-sm tracking-[0.3em] transition-colors ui-btn"
+            className="cursor-pointer border px-5 py-2 text-xs tracking-label transition-colors ui-btn"
             style={{ borderColor: ACCENT }}
           >
             {docked ? t('menu.back') : `I — ${t('ship.close')}`}
@@ -184,7 +184,7 @@ export function ShipScreen({
               <button
                 type="button"
                 onClick={() => (hullWorkshop ? setHullOpen(true) : setBuyingHull(true))}
-                className="cursor-pointer border bg-black/40 px-5 py-2 text-sm tracking-[0.2em] whitespace-nowrap backdrop-blur-sm transition-colors ui-btn"
+                className="cursor-pointer border bg-black/40 px-5 py-2 text-xs tracking-label whitespace-nowrap backdrop-blur-sm transition-colors ui-btn"
                 style={{ borderColor: ACCENT, color: ACCENT }}
               >
                 {owned ? t('ship.inspect') : tm('ship.buyHull', { price: <Money amount={offer.cost} /> })}
@@ -198,7 +198,7 @@ export function ShipScreen({
                 cargoUsed={usedCapacityOf(player.hold)}
                 corner={
                   docked && !owned ? (
-                    <label className="flex cursor-pointer items-center gap-2 text-xs tracking-[0.15em]" style={{ color: ACCENT }}>
+                    <label className="flex cursor-pointer items-center gap-2 text-xs tracking-label" style={{ color: ACCENT }}>
                       <input type="checkbox" checked={tryFit} onChange={(e) => setTryFit(e.target.checked)} />
                       {t('ship.tryFit')}
                     </label>
@@ -292,7 +292,7 @@ function RightTabs({ value, onChange }: { value: RightTab; onChange: (v: RightTa
             type="button"
             onClick={() => onChange(k)}
             aria-current={on ? 'true' : undefined}
-            className="cursor-pointer border px-3 py-1 text-xs tracking-[0.2em] transition-colors ui-btn"
+            className="cursor-pointer border px-3 py-1 text-xs tracking-label transition-colors ui-btn"
             style={{ borderColor: on ? ACCENT : DIM, backgroundColor: on ? ACCENT : 'transparent', color: on ? '#000' : DIM }}
           >
             {t(k === 'modules' ? 'ship.tab.modules' : 'station.hold.title')}

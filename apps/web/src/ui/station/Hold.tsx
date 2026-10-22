@@ -153,7 +153,7 @@ export function Hold({
 
       {/* Вне прокрутки: строка занятого и выброс остаются на месте, когда список длинный. */}
       <div className={scrollable ? 'mt-auto shrink-0' : undefined}>
-        <p className="text-xs tracking-widest" style={{ color: DIM }}>
+        <p className="text-xs tracking-meta" style={{ color: DIM }}>
           {t('ship.cargo.used', { used: Math.round(cargoMass(hold)), cap: hold.capacity })}
         </p>
         {hold.items.length > 0 && (

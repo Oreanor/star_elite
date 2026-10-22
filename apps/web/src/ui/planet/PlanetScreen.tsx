@@ -404,7 +404,7 @@ function CameraRig({ dist }: { dist: React.RefObject<number> }) {
 function Fact({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-baseline justify-between gap-3 border-b py-1" style={{ borderColor: 'rgba(124,196,255,0.12)' }}>
-      <span className="shrink-0 text-xs tracking-widest" style={{ color: DIM }}>
+      <span className="shrink-0 text-xs tracking-meta" style={{ color: DIM }}>
         {label}:
       </span>
       <span className="min-w-0 truncate text-right text-sm">{value}</span>
@@ -464,8 +464,8 @@ export function PlanetScreen({ world, planet }: { world: World; planet: BodyEnti
     // прокрутки. Паспорт слева прокручивается сам, внутри своей колонки.
     <div className="flex min-h-0 w-full flex-1 items-stretch gap-6 overflow-hidden font-mono" style={{ color: ACCENT }}>
       <div className="flex min-h-0 w-1/3 min-w-0 shrink-0 flex-col">
-        <h1 className="text-xl tracking-[0.12em]">{properName(planet.name).toUpperCase()}</h1>
-        <p className="mb-4 mt-1 text-[11px] tracking-widest opacity-50">
+        <h1 className="text-xl tracking-title">{properName(planet.name).toUpperCase()}</h1>
+        <p className="mb-4 mt-1 text-2xs tracking-meta opacity-50">
           {t('station.system')} {properName(world.systemName).toUpperCase()}
         </p>
 
@@ -552,7 +552,7 @@ export function PlanetScreen({ world, planet }: { world: World; planet: BodyEnti
               if (el) labels.current.set(b.id, el)
               else labels.current.delete(b.id)
             }}
-            className="pointer-events-none absolute left-0 top-0 whitespace-nowrap text-[11px] tracking-widest opacity-0"
+            className="pointer-events-none absolute left-0 top-0 whitespace-nowrap text-2xs tracking-meta opacity-0"
             style={{ color: b.kind === 'station' ? UI.STATION : UI.PLANET, willChange: 'transform' }}
           >
             {properName(b.name)}

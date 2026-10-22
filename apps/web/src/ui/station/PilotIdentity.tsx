@@ -25,7 +25,7 @@ const STANCE_KEY: Record<Relationship, Key> = {
 export function StanceTag({ stance }: { stance: Relationship }) {
   const color = stanceColor(stance)
   return (
-    <span className="text-[0.65rem] font-bold tracking-[0.2em]" style={{ color }}>
+    <span className="text-2xs font-bold tracking-label" style={{ color }}>
       {t(STANCE_KEY[stance])}
     </span>
   )
@@ -63,12 +63,12 @@ export function PilotIdentity({
           {/* Занятие — почти белым (`ROLE_TONE`): «торговец», «пират», «патруль» решает, о чём с
               ним говорить и стоит ли стрелять, — это важнее корабля под ним. */}
           {role ? (
-            <div className="truncate text-xs leading-4 tracking-widest" style={{ color: ROLE_TONE }}>
+            <div className="truncate text-xs leading-4 tracking-meta" style={{ color: ROLE_TONE }}>
               {role.toUpperCase()}
             </div>
           ) : null}
           {craft ? (
-            <div className="truncate text-xs leading-4 tracking-widest" style={{ color: DIM }}>
+            <div className="truncate text-xs leading-4 tracking-meta" style={{ color: DIM }}>
               {/* Корабль — именем собственным, в кавычках: «ПЕГАС», а не род занятий. */}
             {/* Уже в кавычках (станция «…») — вторые не ставим. */}
             {craft.includes('«') ? craft.toUpperCase() : `«${craft.toUpperCase()}»`}

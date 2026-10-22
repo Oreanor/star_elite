@@ -370,19 +370,19 @@ export function Dialogue({
                   {t('job.decline')}
                 </Button>
                 {jobBlock && jobBlock !== 'no-offer' && (
-                  <span className="max-w-[11rem] text-right text-[0.65rem] leading-snug tracking-widest" style={{ color: UI.DIM }}>
+                  <span className="max-w-[11rem] text-right text-2xs leading-snug tracking-meta" style={{ color: UI.DIM }}>
                     {t(jobBlock === 'hold-full' ? 'job.block.hold' : jobBlock === 'remote' ? 'job.block.remote' : 'job.block.busy')}
                   </span>
                 )}
               </>
             )}
             {other.mirror && !offer?.revealed && trafficSync.claimState(other.id) === 'refused' && (
-              <span className="max-w-[11rem] text-right text-[0.65rem] leading-snug tracking-widest" style={{ color: UI.DIM }}>
+              <span className="max-w-[11rem] text-right text-2xs leading-snug tracking-meta" style={{ color: UI.DIM }}>
                 {t('job.block.remote')}
               </span>
             )}
             {hireLine?.blocked && (
-              <span className="max-w-[11rem] text-right text-[0.65rem] leading-snug tracking-widest" style={{ color: UI.DIM }}>
+              <span className="max-w-[11rem] text-right text-2xs leading-snug tracking-meta" style={{ color: UI.DIM }}>
                 {phraseText(hireLine.blocked, ' ')}
               </span>
             )}
@@ -396,7 +396,7 @@ export function Dialogue({
       {ended ? (
         // Панель обрыва: канал закрыт, остаётся только уйти.
         <div className="border-t pt-4" style={{ borderColor: UI.DIM }}>
-          <div className="mb-3 text-sm tracking-widest" style={{ color: UI.WARN }}>
+          <div className="mb-3 text-sm tracking-meta" style={{ color: UI.WARN }}>
             {ended}
           </div>
           <Button small onClick={onClose}>

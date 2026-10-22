@@ -613,7 +613,7 @@ export function Locator({ world }: { world: World }) {
                     </PilotIdentity>
                     {/* Расстояние — последней строкой ПОД паспортом, от левого края карточки, с
                         подписью, как в карточках прочих объектов. */}
-                    <div className="mt-2 text-xs tracking-widest" style={{ color: UI.DIM }}>
+                    <div className="mt-2 text-xs tracking-meta" style={{ color: UI.DIM }}>
                       {t('map.distance')}: {formatDistance(active.b.dist)}
                     </div>
                   </div>
@@ -636,7 +636,7 @@ function ThreatBadge({ ship, reference }: { ship: ShipEntity; reference: ShipEnt
   const threat = assessThreat(ship, reference)
   const color = threatColor(threat.level)
   return (
-    <span className="inline-flex items-center gap-1 text-[0.65rem] font-bold tracking-widest" style={{ color }}>
+    <span className="inline-flex items-center gap-1 text-2xs font-bold tracking-meta" style={{ color }}>
       <svg viewBox="0 0 12 11" className="h-[1em] w-[1.1em]" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth={1.3}>
         <path d="M6 1 L11.2 10 H0.8 Z" strokeLinejoin="round" />
         <path d="M6 4.2 V6.8 M6 8.2 V8.6" strokeLinecap="round" />

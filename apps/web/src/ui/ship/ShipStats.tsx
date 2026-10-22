@@ -108,7 +108,7 @@ export function Stats({
   return (
     <section className="border px-4 py-3" style={{ borderColor: DIM }}>
       <div className="mb-1.5 flex items-center justify-between gap-3">
-        <h2 className="text-sm tracking-[0.3em]">{name}</h2>
+        <h2 className="text-sm tracking-title">{name}</h2>
         {corner}
       </div>
       {/* Две колонки по порядку чтения: своё корпуса, затем от оборудования. Половина

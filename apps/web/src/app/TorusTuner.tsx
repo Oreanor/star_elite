@@ -88,7 +88,7 @@ export function TorusTuner({ open, setOpen }: { open: boolean; setOpen: (open: b
   }
   return (
     <div
-      className="absolute right-4 top-4 z-[65] max-h-[calc(100%-2rem)] w-72 space-y-4 overflow-y-auto rounded-lg border p-4 font-mono text-xs tracking-widest"
+      className="absolute right-4 top-4 z-[65] max-h-[calc(100%-2rem)] w-72 space-y-4 overflow-y-auto rounded-lg border p-4 font-mono text-xs tracking-meta"
       style={{ borderColor: 'rgba(63,115,145,0.7)', background: 'rgba(10,26,47,0.85)', color: '#7fd6ff' }}
       onPointerDown={(e) => e.stopPropagation()}
     >

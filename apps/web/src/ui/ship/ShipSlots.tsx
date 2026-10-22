@@ -156,11 +156,11 @@ export function SlotGrid({
             <div key={cat} className="flex flex-col gap-1 border px-2.5 py-2" style={{ borderColor: DIM }}>
               {/* Шапка карточки: имя категории и «занято/всего», если под-слотов больше одного. */}
               <div className="flex items-baseline justify-between">
-                <span className="text-[0.6rem] tracking-[0.2em]" style={{ color: DIM }}>
+                <span className="text-2xs tracking-label" style={{ color: DIM }}>
                   {t(('kind.' + cat) as Key).toUpperCase()}
                 </span>
                 {subs.length > 1 && (
-                  <span className="text-[0.6rem]" style={{ color: DIM }}>
+                  <span className="text-2xs" style={{ color: DIM }}>
                     {filled.length}/{subs.length}
                   </span>
                 )}
@@ -186,7 +186,7 @@ export function SlotGrid({
                     // Сломанную деталь метим красным процентом поломки вместо массы —
                     // видно прямо на карточке, какую вести на ремонт, не открывая слот.
                     <span
-                      className="shrink-0 text-[0.6rem]"
+                      className="shrink-0 text-2xs"
                       style={{ color: moduleFault(s.module) > 0 ? UI.DANGER : DIM }}
                     >
                       {moduleFault(s.module) > 0

@@ -57,7 +57,7 @@ export function KeyHelp() {
         style={{ borderColor: 'rgba(63,115,145,0.7)', background: 'rgba(10,26,47,0.82)' }}
         onPointerDown={(e) => e.stopPropagation()}
       >
-        <div className="mb-4 shrink-0 border-b border-[#3f7391]/40 pb-3 text-center text-lg tracking-[0.35em] text-[#7fd6ff]">
+        <div className="mb-4 shrink-0 border-b border-[#3f7391]/40 pb-3 text-center text-lg tracking-title text-[#7fd6ff]">
           {t('menu.keys')}
         </div>
         <KeyMap />

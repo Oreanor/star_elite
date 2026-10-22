@@ -58,7 +58,7 @@ export function PlayerChat({ player, onClose }: { player: OnlinePlayer; onClose:
           name={player.name}
           role={`${professionName(player.profession)} · ${t('chat.online')}`}
         >
-          <div className="text-xs tracking-widest" style={{ color: UI.DIM }}>
+          <div className="text-xs tracking-meta" style={{ color: UI.DIM }}>
             {where}
           </div>
         </PilotIdentity>
@@ -98,11 +98,11 @@ export function IncomingCall({
       >
         <PilotPortrait species={caller.species} face={caller.face} size={44} />
         <div className="min-w-0">
-          <div className="text-xs tracking-[0.3em]" style={{ color: UI.WARN }}>
+          <div className="text-xs tracking-title" style={{ color: UI.WARN }}>
             {t('chat.incoming')} · {caller.name.toUpperCase()}
           </div>
           {(busy || !cursorFree) && (
-            <div className="text-[0.65rem] tracking-widest" style={{ color: UI.DIM }}>
+            <div className="text-2xs tracking-meta" style={{ color: UI.DIM }}>
               {t(busy ? 'chat.incoming.hint' : 'chat.incoming.key')}
             </div>
           )}

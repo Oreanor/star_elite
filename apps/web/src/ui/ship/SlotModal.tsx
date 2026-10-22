@@ -281,7 +281,7 @@ export function SlotModal({
         message: t('ship.confirm.upgrade', { name: displayName(module) }),
         detail: (
           <>
-            <div className="text-xs font-normal tracking-[0.2em]" style={{ color: DIM }}>
+            <div className="text-xs font-normal tracking-label" style={{ color: DIM }}>
               {statLabel(stat.key)}
               {main ? ` · ${t('station.byCopy')}` : ''}
             </div>
@@ -340,7 +340,7 @@ export function SlotModal({
         <div>
           {module ? (
             <>
-              <p className="text-base tracking-[0.2em]">{displayName(module)}</p>
+              <p className="text-base tracking-label">{displayName(module)}</p>
               <p className="text-sm" style={{ color: DIM }}>
                 {statLabel(moduleStat(module).key)} {formatStat(moduleStat(module).key, moduleStat(module).value)}
               </p>
@@ -352,7 +352,7 @@ export function SlotModal({
               )}
             </>
           ) : (
-            <p className="text-base tracking-[0.2em]" style={{ color: DIM }}>
+            <p className="text-base tracking-label" style={{ color: DIM }}>
               {t('ship.slotEmpty')}
             </p>
           )}
@@ -550,7 +550,7 @@ function OptionTable({
 }) {
   return (
     <div className="mt-6">
-      <h4 className="mb-2 text-xs tracking-[0.25em]" style={{ color: DIM }}>
+      <h4 className="mb-2 text-xs tracking-label" style={{ color: DIM }}>
         {title}
       </h4>
       {rows.length > 0 ? (

@@ -210,7 +210,7 @@ export function Console({
             В полёте причала нет — тогда пишем хотя бы систему, чтобы шапка не пустовала.
             Планета подробнее показана в первой вкладке. */}
         <div className="flex items-center justify-between gap-6">
-            <h1 className="min-w-0 text-xl tracking-[0.12em]">
+            <h1 className="min-w-0 text-xl tracking-title">
               {docked && station
                 ? planet
                   ? t('station.atPlanet', { station: properName(station.name), planet: properName(planet.name) })
@@ -219,7 +219,7 @@ export function Console({
             </h1>
           <div className="ml-auto flex shrink-0 items-center gap-8">
             <div
-              className="flex items-center gap-5 rounded-lg border px-4 py-2 text-sm tracking-widest"
+              className="flex items-center gap-5 rounded-lg border px-4 py-2 text-sm tracking-meta"
               style={{ borderColor: DIM, color: DIM, background: 'rgba(8,22,42,0.75)' }}
             >
               {/* Дата мира — общий календарь для всех игроков (`worldClock`). */}
@@ -251,7 +251,7 @@ export function Console({
                 onClick={disabled ? undefined : () => onTab(item.active ? tab : item.id)}
                 disabled={disabled}
                 aria-current={on ? 'page' : undefined}
-                className="border px-5 py-2 text-xs tracking-[0.25em] transition-colors disabled:cursor-not-allowed enabled:cursor-pointer ui-btn"
+                className="border px-5 py-2 text-xs tracking-label transition-colors disabled:cursor-not-allowed enabled:cursor-pointer ui-btn"
                 style={{
                   borderColor: on ? ACCENT : DIM,
                   backgroundColor: on ? ACCENT : 'transparent',
@@ -299,7 +299,7 @@ export function Console({
                       onClick={disabled ? undefined : () => onTab(v)}
                       disabled={disabled}
                       aria-current={on ? 'page' : undefined}
-                      className="border px-4 py-1.5 text-xs tracking-[0.25em] transition-colors disabled:cursor-not-allowed enabled:cursor-pointer ui-btn"
+                      className="border px-3 py-1 text-xs tracking-label transition-colors disabled:cursor-not-allowed enabled:cursor-pointer ui-btn"
                       style={{
                         borderColor: on ? ACCENT : DIM,
                         backgroundColor: on ? ACCENT : 'transparent',
@@ -428,7 +428,7 @@ function PeopleTab({
     <div>
       {copilot && (
         <div className="mb-6">
-          <h2 className="text-base">{t('copilot.title')}</h2>
+          <h2 className="text-sm tracking-title">{t('copilot.title')}</h2>
           <div className={CARD_GRID}>
             <PersonPlaque
               name={properName(copilot.name)}
@@ -445,7 +445,7 @@ function PeopleTab({
           временем, а пока стоишь в доке, мир на паузе. */}
       {docked && (
         <div>
-          <h2 className="text-base">{t('people.atStation')}</h2>
+          <h2 className="text-sm tracking-title">{t('people.atStation')}</h2>
           {slovo || dockedHere.length > 0 ? (
             <div className={CARD_GRID}>
               {station && dispatcher && (
@@ -484,10 +484,10 @@ function PeopleTab({
       {/* ЗНАКОМЫЕ — с кем говорил и кто ещё жив, где бы ни были. */}
       {contacts.length > 0 && (
         <div className="mt-6">
-          <h2 className="text-sm tracking-[0.3em]" style={{ color: ACCENT }}>
+          <h2 className="text-sm tracking-title" style={{ color: ACCENT }}>
             {t('people.acquaintances')}
           </h2>
-          <p className="mt-1 text-xs tracking-widest" style={{ color: DIM }}>
+          <p className="mt-1 text-xs tracking-meta" style={{ color: DIM }}>
             {t('people.subtitle')}
           </p>
           <div className={CARD_GRID}>
@@ -512,7 +512,7 @@ function OnlineList({ onChat }: { onChat: (player: OnlinePlayer) => void }) {
 
   return (
     <div className="mt-6">
-      <h2 className="text-sm tracking-[0.3em]" style={{ color: ACCENT }}>
+      <h2 className="text-sm tracking-title" style={{ color: ACCENT }}>
         {t('people.online')}
       </h2>
       <div className={CARD_GRID}>

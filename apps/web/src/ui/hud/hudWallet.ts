@@ -8,7 +8,7 @@ import type { HudFrame } from './hudShared'
  * размера: игрок видит один прибор в полёте и у причала.
  *
  * Размеры — те же числа, что у станционной вёрстки (Tailwind: `text-sm`, `px-4 py-2`,
- * `gap-5`, `rounded-lg`, `tracking-widest`), в rem страницы. Канвас HUD в CSS-пикселях
+ * `gap-5`, `rounded-lg`, `tracking-meta`), в rem страницы. Канвас HUD в CSS-пикселях
  * один к одному (`PIXEL_SCALE = 1`), а кегль страницы зависит от окна (см. styles.css),
  * поэтому rem берём живым — плашки совпадают на любом экране.
  *
@@ -50,7 +50,7 @@ export function drawWallet({ ctx, world }: HudFrame): void {
   const money = moneyNumber(world.credits)
   const saved = { font: ctx.font, spacing: ctx.letterSpacing, align: ctx.textAlign, base: ctx.textBaseline }
 
-  ctx.letterSpacing = `${(0.1 * fontPx).toFixed(2)}px` // tracking-widest
+  ctx.letterSpacing = `${(0.1 * fontPx).toFixed(2)}px` // tracking-meta
   ctx.font = `${fontPx}px ${FONT_FAMILY}`
   const dateW = ctx.measureText(date).width
   ctx.font = `600 ${fontPx}px ${FONT_FAMILY}` // font-semibold

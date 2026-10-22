@@ -385,7 +385,7 @@ export function SystemMap({
             <button
               type="button"
               onClick={onClose}
-              className="shrink-0 cursor-pointer rounded border py-2 text-sm tracking-[0.3em] transition-colors hover:bg-white/10"
+              className="shrink-0 cursor-pointer border py-2 text-xs tracking-label transition-colors ui-btn"
               style={{ borderColor: CHROME }}
             >
               {t('map.close')}

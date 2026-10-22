@@ -111,7 +111,7 @@ export function HullModal({
               type="button"
               disabled={!active}
               onClick={() => doUpgrade(stat)}
-              className={`flex w-full items-center justify-between border px-4 py-2 text-sm tracking-[0.15em] transition-colors ${
+              className={`flex w-full items-center justify-between border px-4 py-2 text-sm tracking-label transition-colors ${
                 active ? 'cursor-pointer ui-btn' : 'cursor-not-allowed opacity-40'
               }`}
               style={{ borderColor: done ? DIM : ACCENT, color: done ? DIM : ACCENT }}
@@ -126,7 +126,7 @@ export function HullModal({
       </div>
 
       {note && (
-        <p className="mt-3 text-xs tracking-widest" style={{ color: ACCENT }}>
+        <p className="mt-3 text-xs tracking-meta" style={{ color: ACCENT }}>
           {note}
         </p>
       )}
@@ -193,7 +193,7 @@ export function HullBuyModal({
       {/* Что не встаёт в слоты новой рамы — поимённо, с массой; и выбор: в трюм или продать. */}
       {q.overflow.length > 0 && (
         <div className="mt-3 text-xs" style={{ color: DIM }}>
-          <div className="tracking-[0.15em]">{t('ship.hullBuy.overflowList')}</div>
+          <div className="tracking-label">{t('ship.hullBuy.overflowList')}</div>
           {q.overflow.map((m, i) => (
             <div key={`${m.id}-${i}`} className="flex justify-between gap-3">
               <span className="truncate">{displayName(m)}</span>
@@ -220,7 +220,7 @@ export function HullBuyModal({
 
       {q.fits ? (
         <div className="mt-4 border-t pt-3 text-center" style={{ borderColor: DIM }}>
-          <div className="text-xs tracking-[0.2em]" style={{ color: DIM }}>
+          <div className="text-xs tracking-label" style={{ color: DIM }}>
             {q.net >= 0 ? t('ship.hullBuy.toPay') : t('ship.hullBuy.youGet')}
           </div>
           <div className="text-2xl tabular-nums" style={{ color: q.net >= 0 ? ACCENT : UI.ALLY }}>

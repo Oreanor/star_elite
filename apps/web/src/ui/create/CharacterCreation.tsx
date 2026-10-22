@@ -98,8 +98,8 @@ export function CharacterCreation({
         style={{ ...GLASS_PANEL, color: ACCENT }}
       >
         <div className="flex flex-col gap-6">
-          <h1 className="text-center text-xl tracking-[0.4em]">{t('create.title')}</h1>
-          <p className="text-center text-xs tracking-widest" style={{ color: DIM }}>
+          <h1 className="text-center text-xl tracking-title">{t('create.title')}</h1>
+          <p className="text-center text-xs tracking-meta" style={{ color: DIM }}>
             {t('create.startAt', {
               station: properName(world.bodies.find((b) => b.kind === 'station')?.name ?? '—'),
               system: properName(world.systemName),
@@ -124,7 +124,7 @@ export function CharacterCreation({
           </div>
 
           <label className="mx-auto flex w-full max-w-md flex-col gap-1.5">
-            <span className="text-center text-xs tracking-[0.3em]" style={{ color: DIM }}>
+            <span className="text-center text-xs tracking-title" style={{ color: DIM }}>
               {t('create.name')}
             </span>
             <input
@@ -133,20 +133,20 @@ export function CharacterCreation({
               onFocus={(e) => e.currentTarget.select()}
               placeholder={t('create.name.placeholder')}
               maxLength={24}
-              className="border px-3 py-2.5 text-center text-sm tracking-widest outline-none transition-colors focus:border-[#7fd6ff]"
+              className="border px-3 py-2.5 text-center text-sm tracking-meta outline-none transition-colors focus:border-[#7fd6ff]"
               style={INPUT_FIELD}
             />
           </label>
 
           <div className="flex flex-col items-center gap-3">
-            <span className="text-xs tracking-[0.3em]" style={{ color: DIM }}>
+            <span className="text-xs tracking-title" style={{ color: DIM }}>
               {t('create.profession')}
             </span>
             {/* Профессия — один селект из пяти (включая Путешественника). */}
             <select
               value={profession}
               onChange={(e) => setProfession(e.target.value as Profession)}
-              className="w-full max-w-md border px-3 py-2.5 text-center text-sm tracking-widest outline-none transition-colors focus:border-[#7fd6ff]"
+              className="w-full max-w-md border px-3 py-2.5 text-center text-sm tracking-meta outline-none transition-colors focus:border-[#7fd6ff]"
               style={SELECT_FIELD}
             >
               {PROFESSIONS.map((p) => (
@@ -171,7 +171,7 @@ export function CharacterCreation({
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex flex-col items-center gap-2">
-      <span className="text-xs tracking-[0.3em]" style={{ color: DIM }}>
+      <span className="text-xs tracking-title" style={{ color: DIM }}>
         {label}
       </span>
       <div className="flex flex-wrap justify-center gap-2">{children}</div>
@@ -193,7 +193,7 @@ function Choice({
     <button
       type="button"
       onClick={onClick}
-      className="shrink-0 cursor-pointer border px-5 py-2 text-xs uppercase tracking-[0.25em] transition-colors ui-btn"
+      className="shrink-0 cursor-pointer border px-5 py-2 text-xs uppercase tracking-label transition-colors ui-btn"
       style={{
         borderColor: active ? ACCENT : DIM,
         backgroundColor: active ? ACCENT : 'transparent',
@@ -211,7 +211,7 @@ function Nudge({ onClick, children }: { onClick: () => void; children: React.Rea
     <button
       type="button"
       onClick={onClick}
-      className="flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center border text-base leading-none tracking-[0.2em]
+      className="flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center border text-base leading-none tracking-label
                  transition-colors ui-btn"
       style={{ borderColor: ACCENT, color: ACCENT }}
     >

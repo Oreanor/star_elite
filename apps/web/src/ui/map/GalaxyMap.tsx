@@ -385,7 +385,7 @@ function GalaxyMapImpl({ onClose, embedded = false }: { onClose: () => void; emb
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder={t('map.search')}
-            className="w-full shrink-0 rounded border bg-black/40 px-3 py-1.5 text-xs tracking-widest outline-none placeholder:opacity-40"
+            className="w-full shrink-0 rounded border bg-black/40 px-3 py-1.5 text-xs tracking-meta outline-none placeholder:opacity-40"
             style={{
               borderColor: search.length >= 2 && searchIndex == null ? UI.WARN : 'rgba(124,196,255,0.35)',
               color: UI.PRIMARY,
@@ -397,7 +397,7 @@ function GalaxyMapImpl({ onClose, embedded = false }: { onClose: () => void; emb
             <select
               value={filter}
               onChange={(e) => setFilter(e.target.value as MapFilter)}
-              className="min-w-0 flex-1 cursor-pointer rounded border bg-black/40 px-2 py-1.5 text-xs tracking-widest outline-none"
+              className="min-w-0 flex-1 cursor-pointer rounded border bg-black/40 px-2 py-1.5 text-xs tracking-meta outline-none"
               style={{ borderColor: filter === 'all' ? 'rgba(124,196,255,0.35)' : UI.PRIMARY, color: UI.PRIMARY }}
             >
               {MAP_FILTERS.map((f) => (
@@ -407,7 +407,7 @@ function GalaxyMapImpl({ onClose, embedded = false }: { onClose: () => void; emb
               ))}
             </select>
 
-            <label className="flex shrink-0 cursor-pointer items-center gap-2 text-[11px] tracking-widest" style={{ color: UI.DIM }}>
+            <label className="flex shrink-0 cursor-pointer items-center gap-2 text-2xs tracking-meta" style={{ color: UI.DIM }}>
               <input
                 type="checkbox"
                 checked={showContacts}
@@ -419,7 +419,7 @@ function GalaxyMapImpl({ onClose, embedded = false }: { onClose: () => void; emb
           </div>
 
           {search.length >= 2 && searchIndex == null && (
-            <span className="shrink-0 text-[11px] tracking-widest" style={{ color: UI.WARN }}>{t('map.searchNone')}</span>
+            <span className="shrink-0 text-2xs tracking-meta" style={{ color: UI.WARN }}>{t('map.searchNone')}</span>
           )}
 
           {/* Список звёзд: наведение зажигает точку на поле, клик выбирает цель прыжка —
@@ -511,7 +511,7 @@ function GalaxyMapImpl({ onClose, embedded = false }: { onClose: () => void; emb
         {/* Подпись «ВЫ» и имя под курсором живут всегда: их двигает кадр, а не React. */}
         <div
           ref={you}
-          className="pointer-events-none absolute left-0 top-0 text-[11px] font-bold tracking-widest opacity-0"
+          className="pointer-events-none absolute left-0 top-0 text-2xs font-bold tracking-meta opacity-0"
           style={{ color: UI.PRIMARY, willChange: 'transform' }}
         >
           {t('map.you')}
@@ -521,7 +521,7 @@ function GalaxyMapImpl({ onClose, embedded = false }: { onClose: () => void; emb
           className="pointer-events-none absolute left-0 top-0 text-sm leading-tight opacity-0"
           style={{ willChange: 'transform' }}
         >
-          <div className="tracking-widest">{picked ? properName(picked.system.name).toUpperCase() : ''}</div>
+          <div className="tracking-meta">{picked ? properName(picked.system.name).toUpperCase() : ''}</div>
           <div style={{ color: UI.DIM }}>{picked ? formatRange(picked.distance) : ''}</div>
           <div style={{ color: UI.DIM }}>
             {picked
@@ -540,7 +540,7 @@ function GalaxyMapImpl({ onClose, embedded = false }: { onClose: () => void; emb
               if (el) contactBoxes.current.set(s.index, el)
               else contactBoxes.current.delete(s.index)
             }}
-            className="pointer-events-none absolute left-0 top-0 text-[11px] tracking-widest opacity-0"
+            className="pointer-events-none absolute left-0 top-0 text-2xs tracking-meta opacity-0"
             style={{ color: CONTACT_MAP, willChange: 'transform' }}
           >
             {s.names.map((n) => properName(n)).join(', ').toUpperCase()}
@@ -557,7 +557,7 @@ function GalaxyMapImpl({ onClose, embedded = false }: { onClose: () => void; emb
               if (el) playerBoxes.current.set(s.index, el)
               else playerBoxes.current.delete(s.index)
             }}
-            className="pointer-events-none absolute left-0 top-0 text-[11px] font-bold tracking-widest opacity-0"
+            className="pointer-events-none absolute left-0 top-0 text-2xs font-bold tracking-meta opacity-0"
             style={{ color: PLAYER_MAP, willChange: 'transform' }}
           >
             {s.names.join(', ').toUpperCase()}

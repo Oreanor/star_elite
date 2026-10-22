@@ -66,7 +66,7 @@ export function Button({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className={`border tracking-[0.2em] transition-colors ${small ? 'px-3 py-1 text-xs' : 'mt-4 px-6 py-2 text-sm'} ${
+      className={`border text-xs tracking-label transition-colors ${small ? 'px-3 py-1' : 'mt-4 px-5 py-2'} ${
         disabled ? 'cursor-not-allowed opacity-35' : 'cursor-pointer ui-btn'
       }`}
       style={{
@@ -105,7 +105,7 @@ export function Tabs<T extends string>({
             type="button"
             onClick={() => onSelect(tab)}
             aria-current={on ? 'page' : undefined}
-            className="cursor-pointer border px-5 py-2 text-xs tracking-[0.25em] transition-colors ui-btn"
+            className="cursor-pointer border px-5 py-2 text-xs tracking-label transition-colors ui-btn"
             style={{
               borderColor: on ? ACCENT : DIM,
               backgroundColor: on ? ACCENT : 'transparent',
@@ -146,7 +146,7 @@ export function SideTabs<T extends string>({
             disabled={disabled}
             onClick={() => onSelect(id)}
             aria-current={on ? 'page' : undefined}
-            className="whitespace-nowrap border px-2 py-1.5 text-left text-xs tracking-[0.08em] transition-colors enabled:cursor-pointer ui-btn disabled:cursor-not-allowed disabled:opacity-35"
+            className="whitespace-nowrap border px-2 py-1.5 text-left text-xs tracking-label transition-colors enabled:cursor-pointer ui-btn disabled:cursor-not-allowed disabled:opacity-35"
             style={{
               borderColor: on ? ACCENT : DIM,
               backgroundColor: on ? ACCENT : 'transparent',
@@ -271,7 +271,7 @@ export function Panel({ title, children, flush, className = '' }: { title: strin
   return (
     <section className={`${flush ? '' : 'mt-6 '}border p-5 ${className}`} style={{ borderColor: DIM }}>
       {/* Пустой заголовок не рисуем: под вкладкой «модули / отсек» повтор того же слова шумит. */}
-      {title ? <h2 className="mb-3 shrink-0 text-sm tracking-[0.3em]">{title}</h2> : null}
+      {title ? <h2 className="mb-3 shrink-0 text-sm tracking-title">{title}</h2> : null}
       {children}
     </section>
   )
@@ -322,13 +322,13 @@ export function Modal({
 
 /** Заголовок модалки: имя того, о чём окно (модуль, товар, корпус). Один кегль на все окна. */
 export function ModalTitle({ children }: { children: React.ReactNode }) {
-  return <h3 className="mb-4 text-base tracking-[0.2em]">{children}</h3>
+  return <h3 className="mb-4 text-base tracking-title">{children}</h3>
 }
 
 /** Надзаголовок модалки: вид окна словом («ЛАЗЕР», «ПОКУПКА КОРПУСА»), тусклый, над именем. */
 export function ModalKicker({ children }: { children: React.ReactNode }) {
   return (
-    <h3 className="mb-4 text-sm tracking-[0.25em]" style={{ color: DIM }}>
+    <h3 className="mb-4 text-sm tracking-label" style={{ color: DIM }}>
       {children}
     </h3>
   )
@@ -456,7 +456,7 @@ export function Table<Row>({
                   key={c.key}
                   colSpan={span}
                   // Общий заголовок пары — по ЛЕВОМУ краю, с началом её первой колонки; одиночный — как его колонка.
-                  className={`px-2 pb-1 text-xs font-normal tracking-widest first:pl-0 last:pr-0 ${span > 1 ? 'text-left' : alignClass(c.align)} ${c.sortValue ? 'cursor-pointer select-none hover:text-[#7fd6ff]' : ''}`}
+                  className={`px-2 pb-1 text-xs font-normal tracking-meta first:pl-0 last:pr-0 ${span > 1 ? 'text-left' : alignClass(c.align)} ${c.sortValue ? 'cursor-pointer select-none hover:text-[#7fd6ff]' : ''}`}
                   style={{ color: sort?.key === c.key ? ACCENT : DIM }}
                   onClick={c.sortValue ? () => cycleSort(c.key) : undefined}
                 >
@@ -504,7 +504,7 @@ export function Table<Row>({
                 {columns.map((c, ci) => (
                   <td
                     key={c.key}
-                    className={`px-2 py-1 first:pl-0 last:pr-0 ${alignClass(c.align)} ${ci === 0 && interactive ? 'tracking-wide' : ''}`}
+                    className={`px-2 py-1 first:pl-0 last:pr-0 ${alignClass(c.align)}`}
                     style={{ width: c.width, color: ci === 0 && interactive ? ACCENT : undefined }}
                   >
                     {ci === 0 && interactive ? (

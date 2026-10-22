@@ -444,7 +444,7 @@ export function UniverseMap({ onClose }: { onClose: () => void }) {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="ПОИСК ГАЛАКТИКИ"
-            className="w-full shrink-0 border bg-transparent px-3 py-2 text-xs tracking-widest outline-none"
+            className="w-full shrink-0 border bg-transparent px-3 py-2 text-xs tracking-meta outline-none"
             style={{ borderColor: 'rgba(124,196,255,0.35)', color: UI.PRIMARY }}
           />
 
@@ -483,7 +483,7 @@ export function UniverseMap({ onClose }: { onClose: () => void }) {
               toggleTorusAutopilot()
               onClose()
             }}
-            className="shrink-0 cursor-pointer border px-4 py-2 text-xs tracking-widest disabled:opacity-40"
+            className="shrink-0 border px-5 py-2 text-xs tracking-label transition-colors enabled:cursor-pointer ui-btn disabled:cursor-not-allowed disabled:opacity-35"
             style={{ borderColor: 'rgba(124,196,255,0.35)' }}
           >
             ВЕСТИ

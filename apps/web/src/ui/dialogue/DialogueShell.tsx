@@ -92,7 +92,7 @@ export function Transcript({
                   {turn.text}
                 </span>
               ) : turn.who === 'system' ? (
-                <span className="text-xs tracking-widest" style={{ color: UI.WARN }}>
+                <span className="text-xs tracking-meta" style={{ color: UI.WARN }}>
                   · {turn.text} ·
                 </span>
               ) : (

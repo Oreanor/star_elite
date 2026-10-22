@@ -55,7 +55,7 @@ export function MapFrame({
       </div>
 
       <div className="flex min-h-0 w-2/3 min-w-0 flex-col">
-        {title !== undefined && <h1 className="mb-3 shrink-0 text-center text-xl tracking-[0.12em]">{title}</h1>}
+        {title !== undefined && <h1 className="mb-3 shrink-0 text-center text-xl tracking-title">{title}</h1>}
         <div className="flex min-h-0 flex-1 items-center justify-center">
           {square ? (
             // Квадрат меряется высотой поля под заголовком, чтобы не резало обод.
@@ -124,14 +124,14 @@ export function MapCard({
     >
       {body ?? (
         <>
-          <div className="truncate text-base tracking-widest" style={{ color }}>
+          <div className="truncate text-base tracking-meta" style={{ color }}>
             <span className="opacity-60">{kind.toUpperCase()}: </span>
             {name}
           </div>
           {lines
             .filter((s): s is string => typeof s === 'string' && s.length > 0)
             .map((s, i) => (
-              <div key={i} className="mt-1 truncate text-xs tracking-widest opacity-70">
+              <div key={i} className="mt-1 truncate text-xs tracking-meta opacity-70">
                 {s}
               </div>
             ))}
@@ -144,7 +144,7 @@ export function MapCard({
             type="button"
             disabled={action.disabled && !action.selected}
             onClick={action.onClick}
-            className="cursor-pointer border px-4 py-1.5 text-xs tracking-[0.25em] transition-colors ui-btn disabled:cursor-not-allowed disabled:opacity-40"
+            className="cursor-pointer border px-3 py-1 text-xs tracking-label transition-colors ui-btn disabled:cursor-not-allowed disabled:opacity-40"
             style={{ borderColor: UI.PRIMARY, color: UI.PRIMARY }}
           >
             {action.selected ? t('map.unselect') : t('map.select')}
@@ -288,7 +288,7 @@ export function SortToggle({ value, onChange }: { value: ListSort; onChange: (v:
             type="button"
             onClick={() => onChange(k)}
             aria-current={on ? 'true' : undefined}
-            className="cursor-pointer border px-3 py-1 text-xs tracking-[0.2em] transition-colors ui-btn"
+            className="cursor-pointer border px-3 py-1 text-xs tracking-label transition-colors ui-btn"
             style={{ borderColor: on ? UI.PRIMARY : UI.DIM, backgroundColor: on ? UI.PRIMARY : 'transparent', color: on ? '#000' : UI.DIM }}
           >
             {t(k === 'dist' ? 'locator.sort.dist' : 'locator.sort.type')}
