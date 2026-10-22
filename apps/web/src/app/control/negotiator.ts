@@ -1,7 +1,7 @@
-import { copilotBriefing, findModule, commodityBuyPrice, commoditySellPrice, commodityStock, dispatcherBriefing, dispatcherTraffic, extractModelJson, localFine, localSettlement, moduleFault, parseModelReply, priceOf, stationInterlocutor, stationStock, upgradeLevel, type DialogueRole, type Persona, type ShipModule, type TrafficShip, type Topic, type World } from '@elite/sim'
-import type { ChatTurn, ContextDigest, CopilotReply, NegotiationContext, NegotiatorReply } from '../../ui/dialogue/facts'
+import { copilotBriefing, findModule, galaxyDirectory, type DirectoryEntry, type DirectoryNotable, commodityBuyPrice, commoditySellPrice, commodityStock, dispatcherBriefing, dispatcherTraffic, extractModelJson, localFine, localSettlement, moduleFault, parseModelReply, priceOf, stationInterlocutor, stationStock, upgradeLevel, type DialogueRole, type Persona, type ShipModule, type TrafficShip, type Topic, type World } from '@elite/sim'
+import { galaxyFor, type ChatTurn, type ContextDigest, type CopilotReply, type NegotiationContext, type NegotiatorReply } from '../../ui/dialogue/facts'
 import { currentLang, t, type Key } from '../../ui/i18n/i18n'
-import { chassisName, moduleName, occupationName, properName } from '../../ui/i18n/dataNames'
+import { chassisName, economyName, governmentName, moduleName, occupationName, properName, speciesName } from '../../ui/i18n/dataNames'
 import { negotiatorLocale } from './negotiatorLocale'
 import { chatMessages } from './chatMessages'
 
@@ -279,8 +279,8 @@ export async function negotiateDispatcher(world: World, history: ChatTurn[], use
     .join('; ')
   const fine = localFine(world)?.amount ?? null
   const system = english
-    ? `You are the station dispatcher at ${station.name}. Speak as a concise in-world radio operator. You know this station and the entire current system. Government: ${brief.settlement.government}; economy: ${brief.settlement.economy}; tech level: ${brief.settlement.techLevel}; dock occupant: ${brief.dockOccupant ?? 'none'}; bodies: ${bodies || 'none'}. Answer the pilot's questions directly. Do not invent missions, prices, or facts absent from this briefing. If details are missing, request lookup: market, worlds, history, guide, traffic, or outfit. Ships in the system (who is flying where, who is docked) — ALWAYS request lookup "traffic", every time you are asked: traffic changes constantly, never answer from memory. Equipment — what this station sells, and what is fitted or stowed on the commander's ship — ALWAYS request lookup "outfit", every time: do not answer from memory and do not tell the pilot you are checking. The commander owes this local authority ${fine == null ? 'nothing' : `${fine} credits`}. On first contact, remind him. If he asks to pay, quote the amount first; set fine confirm:false, and only set fine confirm:true after explicit consent. Reply with one JSON object: {"reply":"...","emotion":"neutral"|"joy"|"pain"|"anger"|"fear"|"sadness"|null,"fine":{"confirm":true|false}|null,"lookup":"market"|"worlds"|"history"|"guide"|"traffic"|"outfit"|null,"hangup":true|false}.`
-    : `Ты диспетчер станции ${station.name}. Говори коротко, как живой оператор связи, и отвечай прямо на вопросы пилота. Ты знаешь эту станцию и всю текущую систему. Строй: ${brief.settlement.government}; экономика: ${brief.settlement.economy}; техуровень: ${brief.settlement.techLevel}; у причала: ${brief.dockOccupant ?? 'никого'}; тела системы: ${bodies || 'нет'}. Не выдумывай миссии, цены и факты, которых нет в этой сводке. Если не хватает деталей, запроси lookup: market, worlds, history, guide, traffic или outfit. Про корабли в системе (кто где летает, кто у причала) — ВСЕГДА запрашивай lookup "traffic", каждый раз, когда спрашивают: трафик меняется постоянно, по памяти не отвечай. Про оснащение — что продаётся на этой станции и что стоит или лежит у командира — ВСЕГДА запрашивай lookup "outfit", каждый раз: по памяти не отвечай и пилоту про запрос не говори. Командир должен местной власти ${fine == null ? 'ничего' : `${fine} кредитов`}. При первой связи напомни об этом. Если он просит заплатить, сначала назови сумму и поставь fine confirm:false; fine confirm:true ставь только после явного согласия. Ответь одним JSON: {"reply":"…","emotion":"neutral"|"joy"|"pain"|"anger"|"fear"|"sadness"|null,"fine":{"confirm":true|false}|null,"lookup":"market"|"worlds"|"history"|"guide"|"traffic"|"outfit"|null,"hangup":true|false}.`
+    ? `You are the station dispatcher at ${station.name}. Speak as a concise in-world radio operator. You know this station and the entire current system. Government: ${brief.settlement.government}; economy: ${brief.settlement.economy}; tech level: ${brief.settlement.techLevel}; dock occupant: ${brief.dockOccupant ?? 'none'}; bodies: ${bodies || 'none'}. Answer the pilot's questions directly. Do not invent missions, prices, or facts absent from this briefing. If details are missing, request lookup: market, worlds, history, guide, traffic, outfit, or galaxy. Other star systems — neighbours, distances, where the nearest high-tech world or class-4 gear is, black holes, quasars, pulsars, Dyson spheres, supergiants, binaries — ALWAYS request lookup "galaxy" (the station's star directory); never guess about other systems. Ships in the system (who is flying where, who is docked) — ALWAYS request lookup "traffic", every time you are asked: traffic changes constantly, never answer from memory. Equipment — what this station sells, and what is fitted or stowed on the commander's ship — ALWAYS request lookup "outfit", every time: do not answer from memory and do not tell the pilot you are checking. The commander owes this local authority ${fine == null ? 'nothing' : `${fine} credits`}. On first contact, remind him. If he asks to pay, quote the amount first; set fine confirm:false, and only set fine confirm:true after explicit consent. Reply with one JSON object: {"reply":"...","emotion":"neutral"|"joy"|"pain"|"anger"|"fear"|"sadness"|null,"fine":{"confirm":true|false}|null,"lookup":"market"|"worlds"|"history"|"guide"|"traffic"|"outfit"|"galaxy"|null,"hangup":true|false}.`
+    : `Ты диспетчер станции ${station.name}. Говори коротко, как живой оператор связи, и отвечай прямо на вопросы пилота. Ты знаешь эту станцию и всю текущую систему. Строй: ${brief.settlement.government}; экономика: ${brief.settlement.economy}; техуровень: ${brief.settlement.techLevel}; у причала: ${brief.dockOccupant ?? 'никого'}; тела системы: ${bodies || 'нет'}. Не выдумывай миссии, цены и факты, которых нет в этой сводке. Если не хватает деталей, запроси lookup: market, worlds, history, guide, traffic, outfit или galaxy. Про другие звёздные системы — соседей, расстояния, где ближайший высокий тех или железо 4-го класса, чёрные дыры, квазары, пульсары, сферы Дайсона, сверхгиганты, двойные звёзды — ВСЕГДА запрашивай lookup "galaxy" (звёздный справочник станции); о других системах не гадай. Про корабли в системе (кто где летает, кто у причала) — ВСЕГДА запрашивай lookup "traffic", каждый раз, когда спрашивают: трафик меняется постоянно, по памяти не отвечай. Про оснащение — что продаётся на этой станции и что стоит или лежит у командира — ВСЕГДА запрашивай lookup "outfit", каждый раз: по памяти не отвечай и пилоту про запрос не говори. Командир должен местной власти ${fine == null ? 'ничего' : `${fine} кредитов`}. При первой связи напомни об этом. Если он просит заплатить, сначала назови сумму и поставь fine confirm:false; fine confirm:true ставь только после явного согласия. Ответь одним JSON: {"reply":"…","emotion":"neutral"|"joy"|"pain"|"anger"|"fear"|"sadness"|null,"fine":{"confirm":true|false}|null,"lookup":"market"|"worlds"|"history"|"guide"|"traffic"|"outfit"|"galaxy"|null,"hangup":true|false}.`
   const messages: OutboundMessages = [{ role: 'system', content: system }]
   for (const turn of history.slice(-CHAT_RECENT)) {
     if (turn.who === 'you') messages.push({ role: 'user', content: turn.text })
@@ -362,6 +362,56 @@ function outfitLookup(world: World, english: boolean): string {
     : `ПРОДАЁТСЯ ЗДЕСЬ: ${forSale}. СТОИТ на «${hull}»: ${fitted.join('; ') || none}. В ТРЮМЕ: ${held.join('; ') || none}. Называй только эти имена и цены.`
 }
 
+const FEATURE_WORD: Record<DirectoryEntry['features'][number] | 'topTech', [string, string]> = {
+  topTech: ['высокий тех (железо 4-го класса)', 'high tech (class-4 gear)'],
+  blackhole: ['чёрная дыра', 'black hole'],
+  quasar: ['квазар', 'quasar'],
+  pulsar: ['пульсар', 'pulsar'],
+  binary: ['двойная звезда', 'binary star'],
+  supergiant: ['сверхгигант', 'supergiant'],
+  giant: ['гигант', 'giant'],
+  browndwarf: ['коричневый карлик', 'brown dwarf'],
+  dyson: ['сфера Дайсона', 'Dyson sphere'],
+  dysonRuin: ['руины сферы Дайсона', 'Dyson sphere ruin'],
+}
+
+/** Одна система словами: где, какой тех и железо, кто правит, чем примечательна. */
+function directoryLine(e: DirectoryEntry, english: boolean): string {
+  const word = (f: keyof typeof FEATURE_WORD) => FEATURE_WORD[f][english ? 1 : 0]
+  const life = e.capital
+    ? english
+      ? `tech ${e.maxTech}, ${governmentName(e.capital.government)}, ${economyName(e.capital.economy)}, ${speciesName(e.capital.species)}`
+      : `тех ${e.maxTech}, ${governmentName(e.capital.government)}, ${economyName(e.capital.economy)}, ${speciesName(e.capital.species)}`
+    : english ? 'uninhabited' : 'необитаема'
+  const dock = e.canDock ? (english ? `station, gear up to class ${e.gearClass}` : `станция, железо до ${e.gearClass}-го класса`) : english ? 'no station' : 'станции нет'
+  const marks = e.features.length > 0 ? `; ${e.features.map(word).join(', ')}` : ''
+  return `${properName(e.name)} — ${e.ly} ${english ? 'ly' : 'св.г.'}: ${life}; ${dock}${marks}`
+}
+
+/**
+ * Звёздный справочник станции: соседи и ближайшие примечательные системы. По каталогу с
+ * правками бога — тот же, что на карте. Свежим на каждый вопрос: прыгнул — другая округа.
+ */
+function galaxyLookup(world: World, english: boolean): string {
+  const dir = galaxyDirectory(galaxyFor(world), world.systemIndex, world.galaxySeed)
+  const notable = (n: DirectoryNotable) => `${FEATURE_WORD[n.what][english ? 1 : 0].toUpperCase()}: ${directoryLine(n.entry, english)}`
+  // Рода, которого в галактике нет (квазар при спящем ядре), — сказать прямо: молчание модель
+  // заполняла бы догадкой.
+  const absent = (Object.keys(FEATURE_WORD) as (keyof typeof FEATURE_WORD)[])
+    .filter((k) => !dir.notable.some((n) => n.what === k))
+    .map((k) => FEATURE_WORD[k][english ? 1 : 0])
+  const none = absent.length > 0 ? (english ? `
+NOT IN THIS GALAXY AT ALL: ${absent.join(', ')}.` : `
+В ЭТОЙ ГАЛАКТИКЕ НЕТ ВОВСЕ: ${absent.join(', ')}.`) : ''
+  return english
+    ? `NEAREST SYSTEMS: ${dir.near.map((e) => directoryLine(e, english)).join(' | ')}.
+NEAREST OF EACH KIND: ${dir.notable.map(notable).join(' | ')}.${none}
+Distances are from this system. Name only these systems and numbers.`
+    : `БЛИЖАЙШИЕ СИСТЕМЫ: ${dir.near.map((e) => directoryLine(e, english)).join(' | ')}.
+БЛИЖАЙШИЕ ПО РОДУ: ${dir.notable.map(notable).join(' | ')}.${none}
+Расстояния — от этой системы. Называй только эти системы и числа.`
+}
+
 function dispatcherLookup(world: World, kind: NonNullable<NegotiatorReply['lookup']>, english: boolean): string {
   if (kind === 'market') {
     const settlement = localSettlement(world)
@@ -393,6 +443,7 @@ function dispatcherLookup(world: World, kind: NonNullable<NegotiatorReply['looku
       .join('; ')
   }
   if (kind === 'outfit') return outfitLookup(world, english)
+  if (kind === 'galaxy') return galaxyLookup(world, english)
   if (kind === 'history') return english ? 'The dispatcher has no personal history with the commander.' : 'У диспетчера пока нет личной истории с командиром.'
   return english
     ? 'Station operations: trade and fitting are available while docked; navigation and system information are available by radio.'
@@ -464,7 +515,7 @@ You fly, fight, repair and know what a dispatcher knows. Turn the commander's wo
 - "attack X" → attack: ship id from SHIPS; "attack the nearest pirate" → "nearest"; "attack all pirates / everyone in turn" → "all" (these two only on scanner).
 - "get us out of here, it is dangerous" → flee:true. "collect the canisters" → collect:true. "stop / I will take it / hands off" → stop:true.
 - Repair: you charge only for parts (prices above). If asked how much — name the price, no order. If he clearly asks to fix — repair: "hull", "all" or a broken part number.
-- Prices, market, who is flying around: you do not know offhand — set lookup ("market", "traffic" or "worlds") and SAY you are calling the dispatcher (e.g. "Hold on, I will raise the dispatcher").
+- Prices, market, who is flying around, other star systems (high tech, quasars, black holes): you do not know offhand — set lookup ("market", "traffic", "worlds" or "galaxy") and SAY you are calling the dispatcher (e.g. "Hold on, I will raise the dispatcher").
 - "stand down / cancel / belay that / never mind / stop" = stop:true (drop the current order). It is NOT firing you.
 - dismiss:true ONLY if the commander explicitly fires you ("you're fired", "get off my ship"). The game will make you ask "are you sure?" first; set dismiss:true again only if he confirms.
 If you do not understand WHAT to do or WHOM he means — do not nod along: ask back, set clarify:true and no orders. Never invent ids, prices or ships absent above. Several orders at once are fine (stop + goto).
@@ -477,7 +528,7 @@ ${situation}
 - «атакуй такого-то» → attack: id из БОРТОВ; «атакуй ближайшего пирата» → "nearest"; «бей всех пиратов / всех по очереди» → "all" (эти два — только на локаторе).
 - «лети отсюда подальше, тут опасно» → flee:true. «собери контейнеры» → collect:true. «стоп / отставить / сам поведу» → stop:true.
 - Ремонт: берёшь только за детали (цены выше). Спросил «сколько» — назови цену, без приказа. Ясно попросил починить — repair: "hull", "all" или номер сломанной детали.
-- Цены, рынок, кто летает в системе: на память не знаешь — ставь lookup ("market", "traffic" или "worlds") и СКАЖИ, что связываешься с диспетчером (например: «Ща свяжусь с диспетчером, узнаю»).
+- Цены, рынок, кто летает в системе, другие звёздные системы (высокий тех, квазары, чёрные дыры): на память не знаешь — ставь lookup ("market", "traffic", "worlds" или "galaxy") и СКАЖИ, что связываешься с диспетчером (например: «Ща свяжусь с диспетчером, узнаю»).
 - «отбой», «отставить», «отмена», «стоп», «ладно, не надо» = stop:true (снять текущий приказ). Это НЕ увольнение.
 - dismiss:true — ТОЛЬКО если командир прямо тебя увольняет («ты уволен», «вали с моего корабля»). Игра сперва заставит тебя переспросить «точно?»; ставь dismiss:true снова, только если он подтвердил.
 Не понял, ЧТО делать или КОГО он имеет в виду, — не поддакивай: переспроси, поставь clarify:true и никаких приказов. Не выдумывай id, цены и борта, которых нет выше. Несколько приказов сразу можно (stop + goto).

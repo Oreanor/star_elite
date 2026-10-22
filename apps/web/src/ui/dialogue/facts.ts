@@ -318,7 +318,7 @@ function contractProgress(world: World, c: Contract): { done: number; of: number
 
 /** Справочники, которые не тащим в каждый запрос — пилот «листает» их по просьбе. */
 /** Справочники пилота — все запросы домена, кроме `traffic` и `outfit` (они только у диспетчера). */
-export type ContextDigest = Exclude<LookupDigest, 'traffic' | 'outfit'>
+export type ContextDigest = Exclude<LookupDigest, 'traffic' | 'outfit' | 'galaxy'>
 
 /** Сколько справочников держим в «памяти» одного разговора — старейший выпадает. */
 export const MAX_ACTIVE_DIGESTS = 3
@@ -728,7 +728,7 @@ const NEIGHBOUR_COUNT = 4
  * но дёргать это на каждую реплику незачем — разговор редкое событие, кэш живёт сессию.
  */
 let galaxyCache: { seed: number; epoch: number; systems: StarSystem[] } | null = null
-function galaxyFor(world: World): StarSystem[] {
+export function galaxyFor(world: World): StarSystem[] {
   const seed = world.galaxySeed
   const epoch = world.galaxyEpoch
   if (!galaxyCache || galaxyCache.seed !== seed || galaxyCache.epoch !== epoch) {

@@ -16,8 +16,12 @@ export const AI_ORDERS: readonly AIOrder[] = ['attack', 'engageAll', 'hold', 'st
  * `guide` — устройство игры целиком (`docs/GUIDE.md`): что вообще есть, что можно, чего нельзя.
  * Нужен тем, кто говорит о мире по существу (бог-архитектор), чтобы не выдумывать числа.
  */
-/** `traffic` и `outfit` — только диспетчеру, свежим срезом: борта в системе и витрина с бортом командира. */
-export const LOOKUP_DIGESTS = ['market', 'neighbours', 'history', 'worlds', 'guide', 'traffic', 'outfit'] as const
+/**
+ * `traffic` и `outfit` — только диспетчеру, свежим срезом: борта в системе и витрина с бортом
+ * командира. `galaxy` — звёздный справочник станции (`galaxyDirectory`): соседи, ближайший
+ * высокий тех, дыры, квазары, пульсары, сферы — то, чего диспетчер за краем системы не знал.
+ */
+export const LOOKUP_DIGESTS = ['market', 'neighbours', 'history', 'worlds', 'guide', 'traffic', 'outfit', 'galaxy'] as const
 export type LookupDigest = (typeof LOOKUP_DIGESTS)[number]
 
 function asObject(p: unknown): Record<string, unknown> | null {
