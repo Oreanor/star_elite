@@ -3,7 +3,7 @@ import { clamp, makeRng } from '../../core/math'
 import { addCommodity, addItem, cargoMass, freeCapacity, removeItem } from '../cargo/hold'
 import { chamberMissiles, missileCommodity, missileRoom, fittedMissile } from '../combat/ordnance'
 import type { Settlement } from '../galaxy/types'
-import { MODULE_CATALOGUE } from '../../config/modules'
+import { MODULE_CATALOGUE, findModule } from '../../config/modules'
 import {
   deriveShipSpec,
   isArmour,
@@ -344,37 +344,59 @@ function withFitted(loadout: Loadout, module: ShipModule): Loadout {
   return { ...loadout, internals }
 }
 
+/** Заводской экземпляр модуля: без прокачки и без поломки. Нет в каталоге — сам модуль. */
+function stockOf<M extends ShipModule>(m: M): M {
+  return (findModule(m.id) as M | undefined) ?? m
+}
+
+/** Та же сборка, но из заводских модулей. Рама и её усиления — те же. */
+function stockLoadout(loadout: Loadout): Loadout {
+  return {
+    ...loadout,
+    internals: loadout.internals.map(stockOf),
+    weapons: loadout.weapons.map((w) => (w ? stockOf(w) : null)),
+  }
+}
+
 /**
  * Что изменится, если поставить этот модуль ВМЕСТО стоящего. Сразу видно, плюс он
  * или минус: сравниваются посчитанные характеристики, а не обещания каталога.
  * Для внутренних — разница spec (щит, разворот, трюм…), для оружия — урон.
  * Возвращает КЛЮЧИ характеристик; слова к ним подберёт интерфейс.
+ *
+ * Сравниваются МОДЕЛИ, а не экземпляры: обе стороны — заводские (`stockOf`). Пойманное:
+ * свой прокачанный модуль всегда выглядел лучше любого дорогого базового — «щит 375 → 300 ▼»
+ * у модели, что на деле на класс выше. Прокачку можно повторить на купленном; выбирают модель.
  */
 export function fitDeltas(ship: ShipEntity, module: ShipModule, hardpointIndex?: number): StatDelta[] {
+  const stock = stockOf(module)
+  const loadout = stockLoadout(ship.loadout)
   // Маневровые — по моменту, как оружие по урону: их главная ось — модуля, а не корабля.
-  if (module.kind === 'thrusters') {
-    const prev = ship.loadout.internals.find((m) => m.kind === 'thrusters')
+  if (stock.kind === 'thrusters') {
+    const prev = loadout.internals.find((m) => m.kind === 'thrusters')
     const from = prev && prev.kind === 'thrusters' ? prev.torque[0] : 0
-    const to = module.torque[0]
+    const to = stock.torque[0]
     return from === to ? [] : [{ key: 'torque', from, to, higherBetter: true }]
   }
-  if (isWeapon(module)) {
+  if (isWeapon(stock)) {
     // Сравниваем с тем, что стоит В ОТКРЫТОЙ точке подвески. Прежде брали точку, которую
     // выбрала бы автоустановка, — и для удерживающего луча (урон 0) всё в трюме читалось
     // «хуже»: сравнение шло с соседним «Клинком» на 30.
     const slot = hardpointIndex ?? autoHardpoint(ship, module)
-    const prev = slot !== undefined ? ship.loadout.weapons[slot] : null
+    const prev = slot !== undefined ? loadout.weapons[slot] : null
     const from = prev && 'damage' in prev ? prev.damage : 0
-    const to = 'damage' in module ? module.damage : 0
+    const to = 'damage' in stock ? stock.damage : 0
     return from === to ? [] : [{ key: 'damage', from, to, higherBetter: true }]
   }
 
   // С усилениями ЭТОЙ рамы (`hullUp`): без них «после» считалось на голой раме, и любой модуль
   // показывал падение корпуса ровно на купленное усиление (у «Гермеса» −105).
-  const after = deriveShipSpec(withFitted(ship.loadout, module), cargoMass(ship.hold), ship.hullUp)
+  const cargo = cargoMass(ship.hold)
+  const before = deriveShipSpec(loadout, cargo, ship.hullUp)
+  const after = deriveShipSpec(withFitted(loadout, stock), cargo, ship.hullUp)
   const out: StatDelta[] = []
   for (const f of SPEC_FIELDS) {
-    const from = f.get(ship.spec)
+    const from = f.get(before)
     const to = f.get(after)
     if (Math.abs(to - from) > 1e-3) out.push({ key: f.key, from, to, higherBetter: true })
   }

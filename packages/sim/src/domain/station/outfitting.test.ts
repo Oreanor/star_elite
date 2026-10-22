@@ -19,6 +19,7 @@ import { COMMODITIES } from '../cargo/items'
 import { canInstallInternal, createLoadout, hasBomb, hasEcm } from '../loadout'
 import { STARTER_SYSTEM } from '../world'
 import { fitDeltas, fitFromHold, stationStock } from './shop'
+import { withUpgrade } from './moduleState'
 
 /**
  * Перестановка железа из трюма. Проверяем СВОЙСТВА: установка меняет корабль,
@@ -47,6 +48,22 @@ describe('перестановка железа из трюма', () => {
     expect(shield).toBeDefined()
     expect(shield!.to).toBeGreaterThan(shield!.from)
     expect(shield!.higherBetter).toBe(true)
+  })
+
+  it('сравнение — моделей, а не экземпляров: свой прокачанный щит не затмевает тяжёлый', () => {
+    // Пойманное: прокачанный штатный щит выглядел лучше любого дорогого базового, и витрина
+    // красила старший класс в «хуже». Сравниваются заводские версии обеих сторон.
+    const world = veteranWorld()
+    const p = world.player
+    const i = p.loadout.internals.findIndex((m) => m.id === SHIELD_STANDARD.id)
+    expect(i).toBeGreaterThanOrEqual(0)
+    p.loadout.internals[i] = withUpgrade(SHIELD_STANDARD, 2)
+    refreshSpec(p)
+    expect(p.spec.hull.shield).toBeGreaterThan(SHIELD_HEAVY.capacity)
+
+    const shield = fitDeltas(p, SHIELD_HEAVY).find((d) => d.key === 'shield')!
+    expect(shield.from).toBe(SHIELD_STANDARD.capacity)
+    expect(shield.to).toBeGreaterThan(shield.from)
   })
 
   it('сравнение всего каталога не падает, если слота под модуль нет', () => {

@@ -57,7 +57,6 @@ describe('разворот в бою', () => {
   it('цель за спиной — второй пилот крутит разворот и находит её быстрее виража', () => {
     const withFigure = timeToFace(behind(true))
     const plain = timeToFace(behind(false))
-`)
     expect(withFigure.figure).toBe(true)
     expect(plain.figure).toBe(false)
     expect(withFigure.t).toBeLessThan(plain.t)
