@@ -217,4 +217,23 @@ describe('автобой: следующая цель', () => {
     b!.alive = false
     expect(retargetAutofight(world)).toBe(false)
   })
+
+  it('побитый корабль в автобое не бежит: бой — приказ игрока, а не выбор пилота', () => {
+    // Пойманное: страх пилота-бота считался и у автобоя — от нрава персонажа игрока и просевшего
+    // щита. Второй пилот сразу уходил вбок змейкой, лазер молчал, летели одни ракеты.
+    const world = withEnemy()
+    const p = world.player
+    p.hull = p.spec.hull.hull * 0.2
+    p.shield = 0
+    p.energy = 0
+    lockContact(world, 'ship', world.ships[0]!.id)
+    world.targetFocus = 'contact'
+    expect(engageAutofight(world)).toBe(true)
+    const controllers = new Map([[p.id, aiController]])
+    for (let i = 0; i < 120; i++) {
+      stepWorld(world, 1 / 60, controllers)
+      expect(p.ai?.mode).not.toBe('evade')
+    }
+  })
 })
+
