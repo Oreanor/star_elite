@@ -2,6 +2,7 @@ import { Vector3 } from 'three'
 import { AI } from '../../config/ai'
 import { GUNNERY } from '../../config/weapons'
 import { chanceWithin, clamp, signed } from '../../core/math'
+import { beginManoeuvre, canAerobatics, stepManoeuvre } from '../flight/aerobatics'
 import { shipAxes } from '../flight/axes'
 import { isEngageable } from '../combat/engage'
 import { isLaser } from '../loadout'
@@ -83,8 +84,21 @@ export function fight(e: ShipEntity, ai: AIState, target: ShipEntity, world: Wor
     remember(e, target, world.time)
     decideMode(e, ai, target, distance)
     decideMissile(e, ai, world, distance)
+    decideReversal(e, ai, distance)
   }
   updateAimJitter(e, ai, world, distance, dt)
+
+  // Идёт фигура — штурвал у неё целиком, как у игрока: ручку не перебиваем рулёжкой.
+  // Лётный компьютер ведёт фигуру и у пилота-бота (радиус полупетли держит `loopThrottle`).
+  if (stepManoeuvre(e, ai.manoeuvre, dt)) {
+    e.controls.yaw = 0
+    e.controls.flightAssist = true
+    if (ai.mode === 'attack' && isEngageable(target) && distance <= AI.FIRE_RANGE) {
+      leadPoint(e, target, aimSpeed(e), _aim)
+      ai.wantsFire = onTarget(e, _aim, target.spec.hull.radius, distance)
+    }
+    return
+  }
 
   let throttle = 1
   switch (ai.mode) {
@@ -155,6 +169,27 @@ function decideMode(e: ShipEntity, ai: AIState, target: ShipEntity, distance: nu
     ai.modeTimer = 0
     breakWaypoint(e.state, target.state.pos, ai, ai.waypoint)
   }
+}
+
+/**
+ * Разворот через полупетлю, когда цель проскочила за спину. Вираж от хвоста к носу — это
+ * полкруга обычным тангажем, и цель за это время уходит; фигура (SS у игрока) разворачивает
+ * вдвое резче — тем же кодом и тем же корпусом. Направление — к цели: она выше — полупетля
+ * вверх, ниже — вниз (сплит-S).
+ *
+ * Решение — в такте размышления: это и есть реакция, идеально вовремя бот не успевает.
+ * Бегущий не разворачивается — ему цель за спиной и нужна.
+ */
+function decideReversal(e: ShipEntity, ai: AIState, distance: number): void {
+  const m = ai.manoeuvre
+  if (m.kind !== null || m.cooldown > 0 || ai.mode === 'evade' || !canAerobatics(e)) return
+  if (distance <= AI.BREAK_OFF || distance > AI.REVERSAL_RANGE) return
+  shipAxes(e.state.quat, _fwd, _right, _up)
+  _toTarget.divideScalar(Math.max(distance, 1e-6))
+  if (_fwd.dot(_toTarget) > AI.REVERSAL_BEHIND_COS) return
+  beginManoeuvre(m, 'reversal', _up.dot(_toTarget) >= 0 ? 1 : -1)
+  // Отрыв закончен фигурой: после неё — снова в атаку, а не дожигать точку отрыва.
+  if (ai.mode === 'break') setMode(ai, 'attack')
 }
 
 /**

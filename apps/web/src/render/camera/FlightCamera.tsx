@@ -1,7 +1,7 @@
 import { useFrame, useThree } from '@react-three/fiber'
 import { useRef } from 'react'
 import { PerspectiveCamera, Quaternion, Vector3 } from 'three'
-import { CRUISE, clamp, renderPos, renderQuat, renderTime } from '@elite/sim'
+import { CRUISE, clamp, manoeuvreHoldsCamera as figureHoldsCamera, renderPos, renderQuat, renderTime } from '@elite/sim'
 import { manoeuvreHoldsCamera } from '../../session/playerController'
 import { useSession } from '../../session/GameContext'
 import { undocking, undockProgress } from '../../session/undockFx'
@@ -188,7 +188,9 @@ export function FlightCamera() {
      * Когда фигура кончится, пружина сама перенесёт камеру в хвост. После
      * разворота хвост оказывается с другой стороны — это и есть «перебежать».
      */
-    const held = manoeuvreHoldsCamera(session.intent)
+    // Фигуру крутит и автобой (второй пилот): его разворот держит камеру так же, как твой SS.
+    const autoFigure = session.world.player.ai?.manoeuvre
+    const held = manoeuvreHoldsCamera(session.intent) || (autoFigure != null && figureHoldsCamera(autoFigure))
     // Бочка — крен без смены курса. Обрабатывается особо, сразу ниже.
     const barrel = session.intent.manoeuvre.kind === 'barrel'
 

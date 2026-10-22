@@ -1,6 +1,7 @@
 import { Vector3 } from 'three'
 import type { Rng } from '../../core/math'
 import type { Task } from './tasks'
+import { createManoeuvre, type Manoeuvre } from '../flight/aerobatics'
 
 export type AIMode = 'patrol' | 'pursue' | 'attack' | 'break' | 'evade'
 
@@ -138,6 +139,12 @@ export interface AIState {
    */
   pilotRank: number | null
   /**
+   * Фигура пилотажа — та же, что у игрока на двойном тапе (`aerobatics.ts`), тем же кодом.
+   * Бот пускает её решением в такте размышления, не привилегией: ни тангаж, ни крен у него
+   * не быстрее, чем у тебя на SS.
+   */
+  manoeuvre: Manoeuvre
+  /**
    * Бой по очереди: цель пала — брать следующего врага на локаторе (`retargetAutofight`).
    * Нет — после цели штурвал возвращается.
    */
@@ -242,6 +249,7 @@ export function createAIState(home: Vector3, rng: Rng): AIState {
     escortOf: null,
     skill: 1,
     pilotRank: null,
+    manoeuvre: createManoeuvre(),
     chainFoes: false,
     dock: null,
     dockTimer: 0,
