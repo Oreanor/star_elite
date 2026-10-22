@@ -64,10 +64,15 @@ export function avoidBodies(pos: Vector3, aim: Vector3, bodies: readonly BodyEnt
     // и при запасе «почти до корабля» любой такой отрезок считался перекрытым. Точку руления
     // уносило на обход станции, нос бросало туда-сюда, и автобой не мог навестись. С запасом
     // 0.8 хорда в пару сотен метров чиста, а отрезок, что правда режет станцию, — нет.
-    const clear = Math.max(
-      b.radius * AVOID_BODY_FLOOR,
-      Math.min(avoidClearance(b), pos.distanceTo(b.pos) * AVOID_SHRINK, aim.distanceTo(b.pos) * AVOID_SHRINK),
-    )
+    //
+    // Пол — твердь с полосой 5%, но НЕ ВЫШЕ, чем стоят оба конца отрезка. Пойманный баг: бой в
+    // 226 км над планетой радиусом 6820 км — ниже полосы (341 км). Любой отрезок, хоть к цели в
+    // 500 м на той же высоте, «резал» планету, и автобой уходил в обход под 90°, штурвал в нуле.
+    // Сквозь саму твердь (`b.radius`) путь не проложится всё равно.
+    const shipD = pos.distanceTo(b.pos)
+    const aimD = aim.distanceTo(b.pos)
+    const floor = Math.max(b.radius, Math.min(b.radius * AVOID_BODY_FLOOR, shipD - 1, aimD - 1))
+    const clear = Math.max(floor, Math.min(avoidClearance(b), shipD * AVOID_SHRINK, aimD * AVOID_SHRINK))
     _rel.copy(b.pos).sub(pos)
     // Ближайшая к центру тела точка САМОГО ОТРЕЗКА, а не бесконечной прямой. Пойманный баг:
     // мерили до прямой — короткий отрезок у станции, продолженный за цель, «проходил» рядом

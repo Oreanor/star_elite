@@ -22,6 +22,24 @@ describe('облёт тел', () => {
     expect(out.distanceTo(body.pos)).toBeGreaterThan(clear)
   })
 
+  it('низко над планетой бой на одной высоте не уводит в обход', () => {
+    // Пойманный баг: 226 км над Геладеей (R = 6820 км) — ниже полосы 5% радиуса. Отрезок к
+    // торговцу в 500 м «резал» планету, автобой отворачивал на 90°, а штурвал стоял в нуле.
+    const planet = { pos: new Vector3(0, 0, 0), radius: 6_820_000 } as BodyEntity
+    const alt = planet.radius + 226_000
+    const ship = new Vector3(0, alt, 0)
+    const aim = new Vector3(500, alt, 0).setLength(alt)
+    const out = avoidBodies(ship, aim, [planet], new Vector3())
+    expect(out.distanceTo(aim)).toBeLessThan(1e-6)
+  })
+
+  it('цель за планетой — обход остаётся: сквозь твердь путь не идёт', () => {
+    const planet = { pos: new Vector3(0, 0, 0), radius: 6_820_000 } as BodyEntity
+    const alt = planet.radius + 226_000
+    const out = avoidBodies(new Vector3(0, alt, 0), new Vector3(0, -alt, 0), [planet], new Vector3())
+    expect(out.distanceTo(new Vector3(0, -alt, 0))).toBeGreaterThan(1)
+  })
+
   it('путь чист — точка руления та же, что цель', () => {
     const aim = new Vector3(5000, 0, -3000)
     const out = avoidBodies(new Vector3(0, 0, 0), aim, [body], new Vector3())
