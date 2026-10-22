@@ -7,7 +7,6 @@ import type { ShipEntity, World } from '../world/entities'
 import { acquaintanceOf, advanceContactPlan, flyContactPlan } from '../world/plan'
 import { beginWarpDeparture } from '../world/warp'
 import { fight, fightSoft, setMode } from './dogfight'
-import { coolManoeuvre } from '../flight/aerobatics'
 import { patrolWaypoint } from './maneuvers'
 import { forget, memoryFresh, searchPoint, sees } from './perception'
 import { issueDemand, preyOf, settleDemand } from './robbery'
@@ -342,17 +341,6 @@ export function arbitrate(ctx: BehaviorCtx, skip: number): number {
  * оценке тут же; патруль не отказывает никогда, поэтому цикл конечен.
  */
 export function runBehavior(ctx: BehaviorCtx, decide: boolean): void {
-  coolManoeuvre(ctx.ai.manoeuvre, ctx.dt)
-  runChosen(ctx, decide)
-  // Фигура — боевая: ушёл из боя (побег, причал, приказ) — штурвал не держит недокрученная.
-  const m = ctx.ai.manoeuvre
-  if (ctx.ai.behavior !== 'combat' && m.kind !== null) {
-    m.kind = null
-    m.nextKind = null
-  }
-}
-
-function runChosen(ctx: BehaviorCtx, decide: boolean): void {
   let skip = 0
   let index = decide ? arbitrate(ctx, 0) : indexOf(ctx.ai.behavior)
   for (let guard = 0; guard < BEHAVIORS.length; guard++) {
