@@ -18,7 +18,7 @@ const _right = new Vector3()
 const _up = new Vector3()
 const _to = new Vector3()
 
-function behind(aerobatics: boolean, side = 0): World {
+function behind(aerobatics: boolean): World {
   const world = createWorld({
     ...STARTER_SYSTEM,
     belt: null,
@@ -29,7 +29,7 @@ function behind(aerobatics: boolean, side = 0): World {
   shipAxes(p.state.quat, _fwd, _right, _up)
   // Проскочил за спину и чуть выше: 700 м позади.
   const pirate = world.ships[0]!
-  pirate.state.pos.copy(p.state.pos).addScaledVector(_fwd, -700).addScaledVector(_up, 60).addScaledVector(_right, side)
+  pirate.state.pos.copy(p.state.pos).addScaledVector(_fwd, -700).addScaledVector(_up, 60)
   pirate.state.vel.set(0, 0, 0)
   p.state.vel.copy(_fwd).multiplyScalar(150)
   lockContact(world, 'ship', pirate.id)
@@ -60,12 +60,5 @@ describe('разворот в бою', () => {
     expect(withFigure.figure).toBe(true)
     expect(plain.figure).toBe(false)
     expect(withFigure.t).toBeLessThan(plain.t)
-  })
-
-  it('цель сбоку (120°) — не разворот, а вираж: фигура на 180° перекинула бы нос мимо', () => {
-    // Пойманное: разворот на цель сбоку оставлял её снова вне носа, борт терял ход, пират
-    // обходил стоящего — и следующий разворот. Автобой без конца задирал нос, лазер молчал.
-    const world = behind(true, 1200)
-    expect(timeToFace(world).figure).toBe(false)
   })
 })

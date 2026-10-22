@@ -144,8 +144,6 @@ export interface AIState {
    * не быстрее, чем у тебя на SS.
    */
   manoeuvre: Manoeuvre
-  /** Когда (`world.time`, с) начат последний разворот — для `AI.REVERSAL_INTERVAL`. */
-  reversalAt: number
   /**
    * Бой по очереди: цель пала — брать следующего врага на локаторе (`retargetAutofight`).
    * Нет — после цели штурвал возвращается.
@@ -252,7 +250,6 @@ export function createAIState(home: Vector3, rng: Rng): AIState {
     skill: 1,
     pilotRank: null,
     manoeuvre: createManoeuvre(),
-    reversalAt: -1e9,
     chainFoes: false,
     dock: null,
     dockTimer: 0,
