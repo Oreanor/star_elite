@@ -84,7 +84,7 @@ export function fight(e: ShipEntity, ai: AIState, target: ShipEntity, world: Wor
     remember(e, target, world.time)
     decideMode(e, ai, target, distance)
     decideMissile(e, ai, world, distance)
-    decideReversal(e, ai, distance)
+    decideReversal(e, ai, distance, world.time)
   }
   updateAimJitter(e, ai, world, distance, dt)
 
@@ -180,14 +180,17 @@ function decideMode(e: ShipEntity, ai: AIState, target: ShipEntity, distance: nu
  * Решение — в такте размышления: это и есть реакция, идеально вовремя бот не успевает.
  * Бегущий не разворачивается — ему цель за спиной и нужна.
  */
-function decideReversal(e: ShipEntity, ai: AIState, distance: number): void {
+function decideReversal(e: ShipEntity, ai: AIState, distance: number, time: number): void {
   const m = ai.manoeuvre
   if (m.kind !== null || m.cooldown > 0 || ai.mode === 'evade' || !canAerobatics(e)) return
   if (distance <= AI.BREAK_OFF || distance > AI.REVERSAL_RANGE) return
+  if (time - ai.reversalAt < AI.REVERSAL_INTERVAL) return
+  if (e.state.vel.length() < AI.REVERSAL_MIN_SPEED) return
   shipAxes(e.state.quat, _fwd, _right, _up)
   _toTarget.divideScalar(Math.max(distance, 1e-6))
   if (_fwd.dot(_toTarget) > AI.REVERSAL_BEHIND_COS) return
   beginManoeuvre(m, 'reversal', _up.dot(_toTarget) >= 0 ? 1 : -1)
+  ai.reversalAt = time
   // Отрыв закончен фигурой: после неё — снова в атаку, а не дожигать точку отрыва.
   if (ai.mode === 'break') setMode(ai, 'attack')
 }
