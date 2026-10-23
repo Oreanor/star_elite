@@ -1,5 +1,7 @@
 import { awardKillXp } from '../crew/rank'
 import { stepAsteroidBelt } from '../world/asteroidBelt'
+import { reconcileFates, stepCataclysms } from '../world/fates'
+import { stepPulses } from '../combat/cosmic'
 import { beginRayHolds, releaseRayHolds } from '../combat/laserEffects'
 import { stepCrew } from '../crew/copilot'
 import { Quaternion, Vector3 } from 'three'
@@ -23,6 +25,8 @@ import {
   fireEcm,
   fireLasers,
   fireMissile,
+  settlePulseCharges,
+  unholdPulseCharges,
   bounceOffShield,
   bounceOffSolid,
   isDroneShip,
@@ -165,6 +169,9 @@ export function stepWorld(world: World, frameDt: number, controllers: Controller
     const ticks = takeTicks(world, frameDt)
     for (let i = 0; i < ticks; i++) {
       advanceCalendar(world, PHYSICS.FIXED_DT)
+      // Журнал галактики сверяется и у причала: на старте игры он приходит из сети, пока
+      // пилот стоит в доке, — без сверки разбитая планета жила для вкладок и карт до отчаливания.
+      reconcileFates(world)
       stepDockTraffic(world, PHYSICS.FIXED_DT)
       stepCrew(world)
     }
@@ -257,7 +264,9 @@ function stepTick(world: World, helm: Helm, dt: number): void {
   // Спутники расставляются ПЕРВЫМИ: и пилот, и столкновения, и крейсерский
   // потолок должны видеть луну там, где она в это мгновение находится.
   stepOrbits(world)
-  stepAsteroidBelt(world)
+  // Судьбы тел из общего журнала галактики (свой импульс и чужой по сети — одной дорогой).
+  reconcileFates(world)
+  stepAsteroidBelt(world, dt)
   stepControllers(world, helm, dt)
   stepPhysics(world, dt)
   beginRayHolds(world)
@@ -269,6 +278,9 @@ function stepTick(world: World, helm: Helm, dt: number): void {
   // Болты летят и заметают отрезок ПОСЛЕ движения кораблей и ракет этого шага:
   // попадание считается по свежим позициям целей, а не по вчерашним.
   stepBolts(world, dt)
+  // Импульсы разбивающего лазера — после тел и кораблей этого такта, как болты.
+  stepPulses(world, dt)
+  stepCataclysms(world)
   stepCollisions(world, dt)
   for (const gate of world.jumpGates) stepJumpGateCollision(world.player, gate)
   stepBodyCollisions(world, dt)
@@ -339,6 +351,7 @@ function stepWeapons(world: World, helm: Helm, dt: number): void {
   // Струи непрерывных лучей — срез ЭТОГО шага, а не эффект с временем жизни: держат
   // гашетку — список наполнится заново, отпустили — он пуст, и луч гаснет сам собой.
   world.beams.length = 0
+  unholdPulseCharges(allShips(world))
   for (const ship of allShips(world)) {
     // Кинематический борт не стреляет и не «остывает» локально: его залпы и
     // состояние приходят извне. Оружие по нему всё равно работает — он цель, не стрелок.
@@ -403,6 +416,7 @@ function stepWeapons(world: World, helm: Helm, dt: number): void {
       if (!fireMissile(world, ship, target)) launchDrone(world, ship)
     }
   }
+  settlePulseCharges(world, allShips(world))
 }
 
 const _cometPull = new Vector3()

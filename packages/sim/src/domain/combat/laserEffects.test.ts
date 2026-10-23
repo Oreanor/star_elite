@@ -325,11 +325,12 @@ describe('КПД добычи', () => {
   })
 
   // Технический лазер качается в КПД добычи, а не в урон: инструмент, а не оружие.
-  it('прокачка горного растит КПД, а не урон', () => {
+  it('прокачка горного растит и КПД, и резку', () => {
+    // Один КПД упирался в потолок 1 за два шага, и прокачка переставала давать хоть что-то.
     const up = withUpgrade(MINING_LASER, 0.25)
     if (up.kind !== 'laser') throw new Error('лазер остаётся лазером')
     expect(up.oreYield!).toBeGreaterThan(MINING_LASER.oreYield!)
-    expect(up.damage).toBe(MINING_LASER.damage)
+    expect(up.damage).toBeGreaterThan(MINING_LASER.damage)
   })
 })
 

@@ -1,4 +1,4 @@
-import { copilotBriefing, findModule, galaxyDirectory, type DirectoryEntry, type DirectoryNotable, commodityBuyPrice, commoditySellPrice, commodityStock, dispatcherBriefing, dispatcherTraffic, extractModelJson, localFine, localSettlement, moduleFault, parseModelReply, priceOf, stationInterlocutor, stationStock, upgradeLevel, type DialogueRole, type Persona, type ShipModule, type TrafficShip, type Topic, type World } from '@elite/sim'
+import { copilotBriefing, findModule, galaxyDirectory, type DirectoryEntry, type DirectoryNotable, commodityBuyPrice, commoditySellPrice, commodityStock, dispatcherBriefing, dispatcherTraffic, extractModelJson, localFine, localSettlement, moduleFault, parseModelReply, priceOf, stationInterlocutor, stationStock, upgradeLevel, type DialogueRole, type DispatcherBriefing, type Persona, type ShipModule, type TrafficShip, type Topic, type World } from '@elite/sim'
 import { galaxyFor, type ChatTurn, type ContextDigest, type CopilotReply, type NegotiationContext, type NegotiatorReply } from '../../ui/dialogue/facts'
 import { currentLang, t, type Key } from '../../ui/i18n/i18n'
 import { chassisName, economyName, governmentName, moduleName, occupationName, properName, speciesName } from '../../ui/i18n/dataNames'
@@ -278,9 +278,10 @@ export async function negotiateDispatcher(world: World, history: ChatTurn[], use
     .map((body) => `${body.name} (${body.kind}, ${body.distanceKm} km, ${body.populated ? 'inhabited' : 'uninhabited'}${body.hasStation ? ', station' : ''})`)
     .join('; ')
   const fine = localFine(world)?.amount ?? null
+  const fallen = fallenLine(brief.fallen, brief.lostHost, english)
   const system = english
-    ? `You are the station dispatcher at ${station.name}. Speak as a concise in-world radio operator. You know this station and the entire current system. Government: ${brief.settlement.government}; economy: ${brief.settlement.economy}; tech level: ${brief.settlement.techLevel}; dock occupant: ${brief.dockOccupant ?? 'none'}; bodies: ${bodies || 'none'}. Answer the pilot's questions directly. Do not invent missions, prices, or facts absent from this briefing. If details are missing, request lookup: market, worlds, history, guide, traffic, outfit, or galaxy. Other star systems — neighbours, distances, where the nearest high-tech world or class-4 gear is, black holes, quasars, pulsars, Dyson spheres, supergiants, binaries — ALWAYS request lookup "galaxy" (the station's star directory); never guess about other systems. Ships in the system (who is flying where, who is docked) — ALWAYS request lookup "traffic", every time you are asked: traffic changes constantly, never answer from memory. Equipment — what this station sells, and what is fitted or stowed on the commander's ship — ALWAYS request lookup "outfit", every time: do not answer from memory and do not tell the pilot you are checking. The commander owes this local authority ${fine == null ? 'nothing' : `${fine} credits`}. On first contact, remind him. If he asks to pay, quote the amount first; set fine confirm:false, and only set fine confirm:true after explicit consent. Reply with one JSON object: {"reply":"...","emotion":"neutral"|"joy"|"pain"|"anger"|"fear"|"sadness"|null,"fine":{"confirm":true|false}|null,"lookup":"market"|"worlds"|"history"|"guide"|"traffic"|"outfit"|"galaxy"|null,"hangup":true|false}.`
-    : `Ты диспетчер станции ${station.name}. Говори коротко, как живой оператор связи, и отвечай прямо на вопросы пилота. Ты знаешь эту станцию и всю текущую систему. Строй: ${brief.settlement.government}; экономика: ${brief.settlement.economy}; техуровень: ${brief.settlement.techLevel}; у причала: ${brief.dockOccupant ?? 'никого'}; тела системы: ${bodies || 'нет'}. Не выдумывай миссии, цены и факты, которых нет в этой сводке. Если не хватает деталей, запроси lookup: market, worlds, history, guide, traffic, outfit или galaxy. Про другие звёздные системы — соседей, расстояния, где ближайший высокий тех или железо 4-го класса, чёрные дыры, квазары, пульсары, сферы Дайсона, сверхгиганты, двойные звёзды — ВСЕГДА запрашивай lookup "galaxy" (звёздный справочник станции); о других системах не гадай. Про корабли в системе (кто где летает, кто у причала) — ВСЕГДА запрашивай lookup "traffic", каждый раз, когда спрашивают: трафик меняется постоянно, по памяти не отвечай. Про оснащение — что продаётся на этой станции и что стоит или лежит у командира — ВСЕГДА запрашивай lookup "outfit", каждый раз: по памяти не отвечай и пилоту про запрос не говори. Командир должен местной власти ${fine == null ? 'ничего' : `${fine} кредитов`}. При первой связи напомни об этом. Если он просит заплатить, сначала назови сумму и поставь fine confirm:false; fine confirm:true ставь только после явного согласия. Ответь одним JSON: {"reply":"…","emotion":"neutral"|"joy"|"pain"|"anger"|"fear"|"sadness"|null,"fine":{"confirm":true|false}|null,"lookup":"market"|"worlds"|"history"|"guide"|"traffic"|"outfit"|"galaxy"|null,"hangup":true|false}.`
+    ? `You are the station dispatcher at ${station.name}. Speak as a concise in-world radio operator. You know this station and the entire current system. Government: ${brief.settlement.government}; economy: ${brief.settlement.economy}; tech level: ${brief.settlement.techLevel}; dock occupant: ${brief.dockOccupant ?? 'none'}; bodies: ${bodies || 'none'}.${fallen} Answer the pilot's questions directly. Do not invent missions, prices, or facts absent from this briefing. If details are missing, request lookup: market, worlds, history, guide, traffic, outfit, or galaxy. Other star systems — neighbours, distances, where the nearest high-tech world or class-4 gear is, black holes, quasars, pulsars, Dyson spheres, supergiants, binaries — ALWAYS request lookup "galaxy" (the station's star directory); never guess about other systems. Ships in the system (who is flying where, who is docked) — ALWAYS request lookup "traffic", every time you are asked: traffic changes constantly, never answer from memory. Equipment — what this station sells, and what is fitted or stowed on the commander's ship — ALWAYS request lookup "outfit", every time: do not answer from memory and do not tell the pilot you are checking. The commander owes this local authority ${fine == null ? 'nothing' : `${fine} credits`}. On first contact, remind him. If he asks to pay, quote the amount first; set fine confirm:false, and only set fine confirm:true after explicit consent. Reply with one JSON object: {"reply":"...","emotion":"neutral"|"joy"|"pain"|"anger"|"fear"|"sadness"|null,"fine":{"confirm":true|false}|null,"lookup":"market"|"worlds"|"history"|"guide"|"traffic"|"outfit"|"galaxy"|null,"hangup":true|false}.`
+    : `Ты диспетчер станции ${station.name}. Говори коротко, как живой оператор связи, и отвечай прямо на вопросы пилота. Ты знаешь эту станцию и всю текущую систему. Строй: ${brief.settlement.government}; экономика: ${brief.settlement.economy}; техуровень: ${brief.settlement.techLevel}; у причала: ${brief.dockOccupant ?? 'никого'}; тела системы: ${bodies || 'нет'}.${fallen} Не выдумывай миссии, цены и факты, которых нет в этой сводке. Если не хватает деталей, запроси lookup: market, worlds, history, guide, traffic, outfit или galaxy. Про другие звёздные системы — соседей, расстояния, где ближайший высокий тех или железо 4-го класса, чёрные дыры, квазары, пульсары, сферы Дайсона, сверхгиганты, двойные звёзды — ВСЕГДА запрашивай lookup "galaxy" (звёздный справочник станции); о других системах не гадай. Про корабли в системе (кто где летает, кто у причала) — ВСЕГДА запрашивай lookup "traffic", каждый раз, когда спрашивают: трафик меняется постоянно, по памяти не отвечай. Про оснащение — что продаётся на этой станции и что стоит или лежит у командира — ВСЕГДА запрашивай lookup "outfit", каждый раз: по памяти не отвечай и пилоту про запрос не говори. Командир должен местной власти ${fine == null ? 'ничего' : `${fine} кредитов`}. При первой связи напомни об этом. Если он просит заплатить, сначала назови сумму и поставь fine confirm:false; fine confirm:true ставь только после явного согласия. Ответь одним JSON: {"reply":"…","emotion":"neutral"|"joy"|"pain"|"anger"|"fear"|"sadness"|null,"fine":{"confirm":true|false}|null,"lookup":"market"|"worlds"|"history"|"guide"|"traffic"|"outfit"|"galaxy"|null,"hangup":true|false}.`
   const messages: OutboundMessages = [{ role: 'system', content: system }]
   for (const turn of history.slice(-CHAT_RECENT)) {
     if (turn.who === 'you') messages.push({ role: 'user', content: turn.text })
@@ -412,6 +413,33 @@ Distances are from this system. Name only these systems and numbers.`
 Расстояния — от этой системы. Называй только эти системы и числа.`
 }
 
+/**
+ * Погибшие тела системы — строка в сводку диспетчера. Из мира их вынули, и прежде он о них
+ * не знал вовсе: разбитая хозяйка его же причала для него как будто не существовала.
+ */
+function fallenLine(fallen: DispatcherBriefing['fallen'], lostHost: string | null, english: boolean): string {
+  if (fallen.length === 0) return ''
+  const items = fallen.map((f) => {
+    const kind = english ? f.kind : f.kind === 'planet' ? 'планета' : f.kind === 'moon' ? 'луна' : 'звезда'
+    const remains = english
+      ? f.remains === 'belt' ? 'now a debris belt along its old orbit' : f.remains === 'arc' ? 'now an arc of debris on its old orbit' : 'dissolved, nothing left'
+      : f.remains === 'belt' ? 'теперь на её орбите пояс обломков' : f.remains === 'arc' ? 'теперь на её орбите дуга обломков' : 'рассеялась, ничего не осталось'
+    const when = english
+      ? f.daysAgo === 0 ? 'today' : `${f.daysAgo} days ago`
+      : f.daysAgo === 0 ? 'сегодня' : `${f.daysAgo} сут. назад`
+    const was = f.populated ? (english ? ', was inhabited' : ', была обитаема') : ''
+    return `${f.name} (${kind}${f.surface ? `, ${f.surface}` : ''}${was}; ${english ? 'destroyed' : 'уничтожена'} ${when}; ${remains})`
+  })
+  const host = lostHost
+    ? english
+      ? ` This station used to orbit ${lostHost}; the world is gone, the station now orbits the star on its own and has no world of its own.`
+      : ` Эта станция кружила у ${lostHost}; того мира больше нет, станция теперь сама по себе кружит вокруг звезды, своей планеты у неё нет.`
+    : ''
+  return english
+    ? ` DESTROYED in this system (by a world-shattering weapon): ${items.join('; ')}.${host} These bodies no longer exist — never offer them as destinations.`
+    : ` УНИЧТОЖЕНЫ в этой системе (оружием, разбивающим миры): ${items.join('; ')}.${host} Этих тел больше нет — никогда не предлагай их как цель.`
+}
+
 function dispatcherLookup(world: World, kind: NonNullable<NegotiatorReply['lookup']>, english: boolean): string {
   if (kind === 'market') {
     const settlement = localSettlement(world)
@@ -421,10 +449,12 @@ function dispatcherLookup(world: World, kind: NonNullable<NegotiatorReply['looku
       .join('; ') + ` (tech ${settlement.techLevel}, ${settlement.economy})`
   }
   if (kind === 'worlds') {
-    return world.bodies
+    const alive = world.bodies
       .filter((b) => b.kind !== 'star')
       .map((b) => `${b.name}: ${b.kind}, population ${b.population}, radius ${Math.round(b.radius / 1000)} km`)
       .join('; ')
+    const brief = dispatcherBriefing(world)
+    return alive + fallenLine(brief.fallen, brief.lostHost, english)
   }
   if (kind === 'traffic') {
     const where: Record<TrafficShip['status'], string> = english

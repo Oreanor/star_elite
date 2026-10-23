@@ -1,6 +1,6 @@
 import { Color, Vector3 } from 'three'
-import type { BodyEntity, World } from '@elite/sim'
-import { LIGHT } from './config'
+import { renderTime, type BodyEntity, type Cataclysm, type World } from '@elite/sim'
+import { CATACLYSM, LIGHT } from './config'
 
 /**
  * Ближайшая звезда и её спектр для рендера.
@@ -27,6 +27,39 @@ export function nearestStar(world: World, from: Vector3): BodyEntity | null {
   }
   return best
 }
+
+/**
+ * Гибнущая звезда — ещё источник света: домен вынул тело в миг выстрела, а глазу она
+ * светит до конца зрелища (`world.cataclysms`). Возвращает долю солнечного света
+ * (0 — гибнущих нет) и ближайшую из них в `out` (позиция в координатах сцены).
+ */
+export function dyingStarLight(world: World, from: Vector3, out: { pos: Vector3; color: number }): number {
+  let best: Cataclysm | null = null
+  let nearest = Infinity
+  for (const c of world.cataclysms) {
+    if (c.kind !== 'star') continue
+    _at.copy(c.at).sub(world.originOffset)
+    const d = _at.distanceToSquared(from)
+    if (d < nearest) {
+      nearest = d
+      best = c
+    }
+  }
+  if (!best) return 0
+  out.pos.copy(best.at).sub(world.originOffset)
+  out.color = best.color
+  const L = CATACLYSM.STAR_LIGHT
+  const implode = CATACLYSM.LOOK.star.implode
+  const age = renderTime(world) - best.born
+  if (age < implode) {
+    const pre = Math.max(0, age) / implode
+    return 1 + L.PRE_HEAT * pre * pre
+  }
+  const t = age - implode
+  return L.FLASH * Math.exp(-t / L.FLASH_TAU) + L.GLOW * Math.exp(-t / L.GLOW_TAU)
+}
+
+const _at = new Vector3()
 
 /** Цвет ключевого света: тёплый белый ↔ спектр звезды. Пишет в `out`. */
 export function tintedSunColor(starColor: number, out: Color): Color {

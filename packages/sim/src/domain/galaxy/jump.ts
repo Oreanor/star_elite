@@ -1,5 +1,7 @@
 import { isCruising } from '../cruise/drive'
 import { enterSystem } from '../world/factory'
+import { reconcileFates } from '../world/fates'
+import { fateEdits } from './delta'
 import type { SystemDef } from '../world/system'
 import type { World } from '../world/entities'
 import { arrivalPointAt, scatterArrival, type Arrival } from './arrival'
@@ -129,7 +131,7 @@ export function jump(
   const seatOverride = arrival?.kind === 'body' ? arrival.planet : undefined
   const def = systemDefFor(destIndex, world.galaxySeed, seatOverride)
   const drive = world.player.spec.jumpRange
-  const start = scatterArrival(def, arrivalPointAt(def, arrival, world.calendarTime), drive > 0 ? spent / drive : 0, world.rng)
+  const start = scatterArrival(def, arrivalPointAt(def, arrival, world.calendarTime, fateEdits(world.galaxyDelta, destIndex)), drive > 0 ? spent / drive : 0, world.rng)
   syncLiveContactsFromShips(world)
   enterSystem(world, def, destIndex, start)
   if (!options.establishedPortal) {
@@ -176,6 +178,15 @@ export function commitPreparedJump(
   destination.calendarTime = source.calendarTime
   destination.calendarClock = source.calendarClock
   destination.epoch = source.epoch + 1
+  // Журнал галактики один на пилота: портальный мир обязан жить с ним же, иначе за кольцом
+  // разбитое стоит целым, а правки бога теряются на переходе. Сверка с начала безопасна:
+  // уже применённая судьба тела не находит (или находит засеянным) и ничего не делает.
+  if (destination.galaxyDelta !== source.galaxyDelta) {
+    destination.galaxyDelta = source.galaxyDelta
+    destination.fateCursor = 0
+    reconcileFates(destination)
+  }
+  destination.galaxyEpoch = source.galaxyEpoch
   destination.jumpTargetIndex = null
   destination.jumpArrivalPlanet = null
   return true

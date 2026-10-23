@@ -3,7 +3,7 @@ import { useRef } from 'react'
 import { Color, DirectionalLight, Vector3 } from 'three'
 import { useSession } from '../../session/GameContext'
 import { GALAXY_LAYER, LIGHT } from '../config'
-import { nearestStar, tintedSunColor } from '../starLight'
+import { dyingStarLight, nearestStar, tintedSunColor } from '../starLight'
 
 /**
  * Свет сцены.
@@ -23,6 +23,7 @@ import { nearestStar, tintedSunColor } from '../starLight'
 const _sunDirection = new Vector3()
 const _fillOffset = new Vector3()
 const _sunColor = new Color()
+const _dying = { pos: new Vector3(), color: 0 }
 
 export function Lighting() {
   const session = useSession()
@@ -39,19 +40,25 @@ export function Lighting() {
 
     const sun = sunRef.current
     const star = nearestStar(session.world, player)
-    if (sun && star) {
+    // Гибнущая звезда светит, пока идёт зрелище; ближе живой — свет её.
+    const dying = dyingStarLight(session.world, player, _dying)
+    const useDying = dying > 0 && (!star || _dying.pos.distanceToSquared(player) < star.pos.distanceToSquared(player))
+    if (sun && (star || useDying)) {
       // Направленному свету важно только направление. Держим источник рядом
       // с игроком, чтобы дальность не имела значения, а терминатор был верен.
-      _sunDirection.copy(star.pos).sub(player).normalize()
+      _sunDirection.copy(useDying ? _dying.pos : star!.pos).sub(player).normalize()
       sun.position.copy(player).addScaledVector(_sunDirection, 1000)
       sun.target.position.copy(player)
       sun.target.updateMatrixWorld()
       // Свет наследует спектр звезды (подмешан к тёплому белому): у красного карлика
       // сцена теплеет, у голубого гиганта — холодеет. Так класс звезды виден не только
       // на диске, но и на освещении корпуса.
-      tintedSunColor(star.color, _sunColor)
+      tintedSunColor(useDying ? _dying.color : star!.color, _sunColor)
       sun.color.copy(_sunColor)
-      sun.intensity = galaxyOn ? 0 : LIGHT.SUN_INTENSITY
+      sun.intensity = galaxyOn ? 0 : LIGHT.SUN_INTENSITY * (useDying ? dying : 1)
+    } else if (sun) {
+      // Светила нет (растворилось) — ключевой свет гаснет; остаются заливка и небо.
+      sun.intensity = 0
     }
 
     const fill = fillRef.current

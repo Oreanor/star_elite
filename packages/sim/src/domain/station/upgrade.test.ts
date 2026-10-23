@@ -3,7 +3,7 @@ import { theseusLoadout } from '../../config/loadouts'
 import { findModule } from '../../config/modules'
 import { refreshSpec } from '../world/factory'
 import { addItem } from '../cargo/hold'
-import { isMissile, isShield, type MissileModule, type ShieldModule } from '../loadout'
+import { isMissile, isShield, type LaserModule, type MissileModule, type ShieldModule } from '../loadout'
 import { createWorld } from '../world'
 import { canUpgrade, upgradeCashCost, upgradeModule } from './upgrade'
 import { upgradeLevel } from './moduleState'
@@ -131,5 +131,38 @@ describe('маневровые', () => {
     if (after.kind !== 'thrusters') return
     expect(after.torque[0]).toBeGreaterThan(torqueBefore)
     expect([...after.maxRate]).toEqual(rateBefore)
+  })
+
+  /** Поставить модуль каталога на первую оружейную точку игрока. */
+  function mountLaser(world: ReturnType<typeof createWorld>, id: string): LaserModule {
+    const laser = findModule(id) as LaserModule
+    const slot = world.player.loadout.weapons.findIndex((w) => w != null && w.kind === 'laser')
+    world.player.loadout.weapons[slot] = laser
+    refreshSpec(world.player)
+    return laser
+  }
+
+  it('горный лазер качается и в резку, и в добычу — каждый шаг что-то даёт', () => {
+    // Прежде рос один КПД добычи (с потолком 1), а окно показывало урон: «5 → 5», и
+    // третий шаг не давал ничего вовсе.
+    const world = createWorld()
+    world.credits = 10_000_000
+    let laser = mountLaser(world, 'mining_1')
+    for (let i = 0; i < 3; i++) {
+      const before = laser.damage
+      expect(upgradeModule(world, world.player, laser, false), `шаг ${i + 1}`).toBeNull()
+      laser = world.player.loadout.weapons.find((w) => w?.id === 'mining_1') as LaserModule
+      expect(laser.damage, `шаг ${i + 1}`).toBeGreaterThan(before)
+    }
+    expect(laser.oreYield).toBe(1)
+  })
+
+  it('космические лучи не прокачиваются: урона у них нет', () => {
+    const world = createWorld()
+    world.credits = 10_000_000
+    for (const id of ['cosmic_seed', 'cosmic_shatter']) {
+      const laser = mountLaser(world, id)
+      expect(canUpgrade(world, world.player, laser, false), id).toBe('maxed')
+    }
   })
 })

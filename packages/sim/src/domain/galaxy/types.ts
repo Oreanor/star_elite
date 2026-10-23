@@ -34,6 +34,8 @@ export interface Moon {
   readonly radius: number
   /** Радиус орбиты в РАДИУСАХ своей планеты. У настоящей Луны — около шестидесяти. */
   readonly orbit: number
+  /** Луна разбита космическим лазером: на её месте дуга обломков (правка галактики). */
+  readonly remnant?: boolean
 }
 
 /**
@@ -75,6 +77,11 @@ export interface Planet {
   readonly settlement: Settlement | null
   /** Где можно сесть. Пока — только у обитаемых миров. */
   readonly station: Station | null
+  /**
+   * Мир разбит космическим лазером (правка галактики): скала — пояс обломков на его орбите,
+   * газ — рассеялся. Слот держим — номер планеты остаётся её адресом.
+   */
+  readonly remnant?: boolean
 }
 
 export interface StarSystem {
@@ -115,8 +122,9 @@ export interface StarSystem {
 
 export type SettledPlanet = Planet & { settlement: Settlement }
 
+/** Разбитый мир не обитаем, даже если в слоте ещё лежит его прежнее поселение. */
 export function isSettled(p: Planet): p is SettledPlanet {
-  return p.settlement !== null
+  return p.settlement !== null && !p.remnant
 }
 
 export function settledPlanets(s: StarSystem): SettledPlanet[] {

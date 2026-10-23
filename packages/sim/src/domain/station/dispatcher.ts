@@ -1,6 +1,7 @@
+import { CALENDAR_DAY } from '../../config/contracts'
 import { makeRng } from '../../core/math'
 import type { Settlement } from '../galaxy/types'
-import type { BodyEntity, World } from '../world/entities'
+import type { BodyEntity, FallenBody, World } from '../world/entities'
 import { makePersona, type Persona } from '../world/persona'
 import { makePilotName } from '../world/names'
 import { findShip } from '../world/queries'
@@ -8,6 +9,7 @@ import { stanceTo } from '../dialogue/dialogue'
 import { shipWhereabouts } from '../galaxy/contacts'
 import type { Relationship } from '../world/acquaintance'
 import { localSettlement } from './trade'
+import { findStation } from './docking'
 import { lockedStationId } from '../world/queries'
 
 /**
@@ -68,6 +70,24 @@ export interface DispatcherBriefing {
   nearestPopulated: BriefingBody | null
   /** Имя пилота, занявшего причал сейчас, если есть. */
   dockOccupant: string | null
+  /**
+   * Погибшие тела системы. Из мира их вынули, и без этой строки диспетчер честно не знал
+   * бы, что тут был мир, — о разбитой хозяйке собственного причала молчал.
+   */
+  fallen: FallenBriefing[]
+  /** Мир, вокруг которого кружила ЭТА станция и который разбит; null — хозяйка цела (или её не было). */
+  lostHost: string | null
+}
+
+/** Погибшее тело в сводке: что было, что осталось и сколько суток назад. */
+export interface FallenBriefing {
+  name: string
+  kind: FallenBody['kind']
+  surface: string | null
+  populated: boolean
+  remains: FallenBody['remains']
+  /** Суток календаря с гибели (0 — сегодня). */
+  daysAgo: number
 }
 
 /** Собрать сводку диспетчера. Чистое чтение мира: ничего не меняет. */
@@ -86,7 +106,17 @@ export function dispatcherBriefing(world: World): DispatcherBriefing {
     .sort((a, b) => a.distanceKm - b.distanceKm)
 
   const occupant = findShip(world, world.dockOccupantId)
+  const station = findStation(world)
   return {
+    fallen: world.fallen.map((f) => ({
+      name: f.name,
+      kind: f.kind,
+      surface: f.surface,
+      populated: f.populated,
+      remains: f.remains,
+      daysAgo: Math.max(0, Math.floor((world.calendarTime - f.at) / CALENDAR_DAY)),
+    })),
+    lostHost: station ? (world.fallen.find((f) => f.stations.includes(station.name))?.name ?? null) : null,
     settlement: localSettlement(world),
     bodies,
     nearestPopulated: bodies.find((b) => b.populated) ?? null,

@@ -61,6 +61,9 @@ export type WarnCode =
   | 'bushEnter'
   | 'scaleReset'
   | 'bushArrive'
+  | 'pulseCharging'
+  | 'pulseReady'
+  | 'pulseCancelled'
 
 /**
  * Важность сигнала: при нескольких живых показывается плашка с бо́льшим числом.
@@ -115,6 +118,11 @@ const RANK: Record<WarnCode, number> = {
   bushEnter: 92,
   scaleReset: 90,
   bushArrive: 91,
+  // Заряд импульса: готов — выше набора; отмена — выше обоих. Перегрев после выстрела (90)
+  // перебивает «готов»: шар уже улетел.
+  pulseCancelled: 89,
+  pulseReady: 88,
+  pulseCharging: 87,
 }
 
 /** Пара секунд на экране. */
@@ -163,6 +171,14 @@ export function pushWarning(code: WarnCode, now: number, opts: PushOpts = {}): v
   if (now >= last && now - last < repeat) return
   lastFired.set(code, now)
   active.set(code, { code, rank: RANK[code], born: now, label: opts.label, hz: opts.hz, shownAt: now + (opts.delay ?? 0) })
+}
+
+/** Снять плашки сразу, не дожидаясь их срока: состояние, о котором они, кончилось. */
+export function dropWarnings(...codes: WarnCode[]): void {
+  for (const code of codes) {
+    active.delete(code)
+    lastFired.delete(code)
+  }
 }
 
 /**

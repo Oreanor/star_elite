@@ -83,6 +83,11 @@ const STYLE: Record<WarnCode, Style> = {
   // Дыра съёжила гиганта до ×1 — следом за «вселенной», жёлтая: заметная, но не угроза.
   scaleReset: { color: UI.WARN, hz: 0, key: 'hud.scaleReset' },
   bushArrive: { color: UI.PRIMARY, hz: 0, key: 'hud.bushArrive' },
+  // Заряд разбивающего импульса: набор мигает жёлтым, готовый — красный (дальше решает
+  // пилот: отпустить — и мир разбит), отмена — ровная жёлтая.
+  pulseCharging: { color: UI.WARN, hz: 2, key: 'hud.pulseCharging' },
+  pulseReady: { color: UI.DANGER, hz: 3, key: 'hud.pulseReady' },
+  pulseCancelled: { color: UI.WARN, hz: 0, key: 'hud.pulseCancelled' },
 }
 
 /** Плашка на экране: сигнал, одетый в цвет и слова. */

@@ -5,6 +5,7 @@ import {
   MIELOPHONE,
   navTarget,
   jumpIsRoute,
+  nearestBelt,
   nearestBeltPoint,
   MONOLITH_NAMES,
   itemMass,
@@ -541,7 +542,7 @@ function collectMarkers(world: World, ships = false, beltAt: Vector3 = _beltHud)
     })
   }
   // Пояс — не тело, но выбранный он та же цель, что планета: рамка, имя и путь до края потока.
-  if (world.asteroidBelt && world.navTargetId === BELT_NAV_ID) {
+  if (world.asteroidBelts.length > 0 && world.navTargetId === BELT_NAV_ID) {
     nearestBeltPoint(world, beltAt)
     out.push({
       pos: beltAt,
@@ -549,7 +550,7 @@ function collectMarkers(world: World, ships = false, beltAt: Vector3 = _beltHud)
       color: '#ba9e78',
       nav: true,
       primary: true,
-      surfaceR: world.asteroidBelt.diameter / 2,
+      surfaceR: nearestBelt(world)!.diameter / 2,
     })
   }
   if (ships) {

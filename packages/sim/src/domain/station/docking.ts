@@ -36,7 +36,12 @@ export function distanceToBody(world: World, body: BodyEntity): number {
  */
 export function stationHost(world: World, station: BodyEntity): BodyEntity | null {
   const parentId = station.orbit?.parentId
-  return parentId == null ? null : (world.bodies.find((b) => b.id === parentId) ?? null)
+  if (parentId == null) return null
+  const host = world.bodies.find((b) => b.id === parentId)
+  // Хозяин — только мир. Причал разбитой планеты кружит дальше вокруг звезды, но звезда ему
+  // не хозяйка: иначе у причала открывалась вкладка «планеты»-звезды, а рынок брал её пустое
+  // поселение. Без хозяина станция живёт как ничья — рынок и власть от столицы системы.
+  return host && (host.kind === 'planet' || host.kind === 'moon') ? host : null
 }
 
 export function findStation(world: World): BodyEntity | null {

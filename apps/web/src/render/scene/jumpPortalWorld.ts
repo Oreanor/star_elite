@@ -3,6 +3,7 @@ import {
   aiController,
   applyPlayerSave,
   arrivalPointAt,
+  fateEdits,
   createWorld,
   carryFollowersOnJump,
   driftContacts,
@@ -80,13 +81,17 @@ export function prepareJumpPortalWorld(source: Session): PreparedJumpWorld {
   const destIndex = p.index
   const seat = p.arrival?.kind === 'body' ? p.arrival.planet : undefined
   const def = systemDefFor(destIndex, sourceWorld.galaxySeed, seat)
-  const start = arrivalPointAt(def, p.arrival, sourceWorld.calendarTime)
+  const start = arrivalPointAt(def, p.arrival, sourceWorld.calendarTime, fateEdits(sourceWorld.galaxyDelta, destIndex))
 
   _from.set(start[0], start[1], start[2])
   const layoutWorld = createWorld()
   layoutWorld.galaxySeed = sourceWorld.galaxySeed
   layoutWorld.calendarTime = sourceWorld.calendarTime
   layoutWorld.calendarClock = sourceWorld.calendarClock
+  // Журнал галактики — тот же объект, не копия: судьбы тел и правки бога за кольцом те же,
+  // и пришедшая по сети, пока кольцо открыто, сразу сверяется и там.
+  layoutWorld.galaxyDelta = sourceWorld.galaxyDelta
+  layoutWorld.galaxyEpoch = sourceWorld.galaxyEpoch
   enterSystem(layoutWorld, def, destIndex, start)
   layoutWorld.time = sourceWorld.time
   applyPlayerSave(layoutWorld, {

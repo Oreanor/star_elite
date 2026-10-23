@@ -1,5 +1,5 @@
 import { listPrice } from './pricing'
-import { RAYS } from './weapons'
+import { COSMIC, RAYS } from './weapons'
 import { GALAXY } from './galaxy'
 import type {
   ArmourModule,
@@ -678,6 +678,47 @@ export const HOLD_RAY: LaserModule = {
   effect: 'hold',
   // Ход гаснет вчетверо быстрее секунды: цель в луче встаёт почти сразу.
   effectRate: 4,
+}
+
+/**
+ * КОСМИЧЕСКИЕ ЛАЗЕРЫ — орудия для миров (`combat/cosmic.ts`). Класс 1, чтобы встать на любой
+ * корпус; не продаются и не снимаются с обломков: их итог — правка галактики для всех.
+ */
+export const SEED_RAY: LaserModule = {
+  id: 'cosmic_seed',
+  name: 'Засевающий луч',
+  kind: 'laser',
+  class: 1,
+  mass: 1,
+  cost: 500000,
+  notSold: true,
+  salvageChance: 0,
+  beam: true,
+  damage: 0,
+  range: COSMIC.RANGE,
+  cooldown: 0,
+  // Засев — 3 с удержания (`COSMIC.SEED_TIME`): греется так, чтобы на один мир хватало с запасом.
+  heatPerShot: 0.08,
+  heatCool: 0.25,
+  effect: 'seed',
+}
+
+export const SHATTER_CANNON: LaserModule = {
+  id: 'cosmic_shatter',
+  name: 'Разбивающий импульс',
+  kind: 'laser',
+  class: 1,
+  mass: 1,
+  cost: 900000,
+  notSold: true,
+  salvageChance: 0,
+  damage: 0,
+  range: COSMIC.SHATTER_RANGE,
+  // Один шар — и перегрев (`fireLasers`): нагрев не долей, а на весь запас шкалы.
+  cooldown: 3,
+  heatPerShot: 1,
+  heatCool: 0.2,
+  effect: 'shatter',
 }
 
 export const BURST_LASER: LaserModule = {
@@ -1950,7 +1991,7 @@ export const MODULE_CATALOGUE: readonly ShipModule[] = [
   BEAM_LASER_LIGHT, BEAM_LASER_2C, BEAM_LASER, BEAM_LASER_3C, BEAM_LASER_HEAVY,
   ROTARY_LASER, ROTARY_LASER_B, ROTARY_LASER_3,
   PLASMA_GUN_1, PLASMA_GUN, PLASMA_GUN_HEAVY,
-  MINING_LASER, SHRINK_RAY, GROW_RAY, HOLD_RAY,
+  MINING_LASER, SHRINK_RAY, GROW_RAY, HOLD_RAY, SEED_RAY, SHATTER_CANNON,
   MISSILE_STING, MISSILE_PYLON, MISSILE_WASP,
   MISSILE_SWARM, MISSILE_HOMING, MISSILE_HOUND,
   MISSILE_HAMMER_E, MISSILE_HEAVY, MISSILE_SLEDGE,

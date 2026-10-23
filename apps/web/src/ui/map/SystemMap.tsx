@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
+import { useBodiesRevision } from '../useBodiesRevision'
 import { UI } from '../theme'
 import { Vector3 } from 'three'
 import {
   BELT_NAV_ID,
+  nearestBelt,
   nearestBeltPoint,
   clearContactLock,
   clearNavLock,
@@ -156,14 +158,14 @@ function markers(world: World): Marker[] {
     .map((s) => ({ id: -2000 - s.id, name: s.name, kind: 'player' as MarkerKind, pos: s.state.pos }))
 
   const raw = [
-    ...(world.asteroidBelt
+    ...(world.asteroidBelts.length > 0
       ? [{
           id: BELT_NAV_ID,
           name: t('nav.belt'),
           kind: 'belt' as MarkerKind,
           pos: nearestBeltPoint(world, _beltAt),
           // До края потока, как у планеты до поверхности: ось трубки на пять километров дальше.
-          range: Math.max(0, _beltAt.distanceTo(player) - world.asteroidBelt.diameter / 2),
+          range: Math.max(0, _beltAt.distanceTo(player) - nearestBelt(world)!.diameter / 2),
         }]
       : []),
     ...world.bodies.map((b) => ({ id: b.id, name: b.name, kind: b.kind as MarkerKind, pos: b.pos, range: distanceToBody(world, b) })),
@@ -273,6 +275,8 @@ export function SystemMap({
   useLang()
   // Мир мутируется напрямую; React о нём не знает и сам перерисоваться не может.
   const [, bump] = useState(0)
+  // Набор тел сменился (разбито, засеяно) — карта открыта, а тело уже не то.
+  useBodiesRevision(world)
 
   // Масштаб голограммы: 1 — вся система в поле, больше — ближе. Колесо его крутит.
   const [zoom, setZoom] = useState(1)

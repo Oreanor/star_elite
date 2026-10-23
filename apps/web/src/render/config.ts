@@ -954,6 +954,8 @@ export const LASER_SCHOOL_GLOW: Record<LaserSchool, number> = {
   shrink: 0xb54cff, // фиолетовый
   grow: 0x3a9dff, // голубой — холодный синий
   hold: 0xffd23a, // жёлтый — тёплый, не в оранжевый (иначе спорил бы с красным)
+  seed: 0x3dffc0, // изумрудно-бирюзовый: жизнь, не горный лайм
+  shatter: 0xe6c8ff, // белёсо-сиреневый: импульс, раскалённый добела
 }
 
 /** Толщина луча ∝ классу: класс 3 бьёт заметно толстым лучом (одиночное центральное дуло). */
@@ -1312,4 +1314,61 @@ export const CORRIDOR = {
   /** Волна бежит к причалу с такой частотой, Гц. Она и показывает, куда лететь. */
   PULSE_HZ: 0.55,
   COLOR: 0x7fd6ff,
+} as const
+
+/**
+ * ГИБЕЛЬ МИРА — постановка по виду (`Cataclysms`). Радиусы — в радиусах погибшего тела,
+ * времена — секунды. Жизнь целиком — `COSMIC.LIFE` домена (он же убирает событие).
+ *  implode — сколько тело раскаляется и сжимается до разрыва; shrink — насколько сожмётся;
+ *  flash — размер вспышки и её спад; veil/ring/sparks — докуда разлетаются и за какое τ;
+ *  bands — число полос вуали (газовый гигант срывает свою атмосферу полосами), 0 — волокна.
+ */
+export const CATACLYSM = {
+  MAX: 3,
+  SPARKS: 1500,
+  LOOK: {
+    gas: {
+      implode: 1.4, shrink: 0.3, curve: 2,
+      flash: 9, flashTau: 0.9,
+      veil: 7, veilTau: 5, veilAlpha: 1.0, bands: 9,
+      ring: 16, ringTau: 3, ringAlpha: 0.9,
+      sparks: 10, sparksTau: 5, sparkSize: 2,
+      colorA: -1, colorB: -1, hot: 0xfff0d0, ringColor: 0xffe0b0,
+    },
+    star: {
+      // Коллапс глубокий — до 15% радиуса за 1.8 с: за 2.2 с до половины читалось «лениво
+      // сжимается», за 1.2 с — слишком мельком. Ход — pre³: ускорение сжатия растёт ровно
+      // (∝ t), без рывка в конце, как у pre⁴; у pre² оно постоянное — «лениво».
+      implode: 1.8, shrink: 0.85, curve: 3,
+      // Вспышка меньше кольца и короче: при 30R/1.6 с белое глотало ударную волну целиком.
+      flash: 12, flashTau: 0.8,
+      veil: 16, veilTau: 9, veilAlpha: 1.3, bands: 0,
+      // Ударная волна «вжухает»: за ~0.6 с уходит далеко за вуаль и гаснет, не тормозя тарелкой.
+      ring: 45, ringTau: 0.6, ringAlpha: 1.6,
+      sparks: 22, sparksTau: 8, sparkSize: 3,
+      colorA: -1, colorB: 0xff5a46, hot: 0xe8f0ff, ringColor: 0x7ab4ff,
+    },
+    rock: {
+      implode: 0.12, shrink: 0, curve: 2,
+      flash: 3, flashTau: 0.35,
+      veil: 2.2, veilTau: 3, veilAlpha: 0.45, bands: 0,
+      ring: 4, ringTau: 1.5, ringAlpha: 0.5,
+      sparks: 3.5, sparksTau: 2.5, sparkSize: 2,
+      colorA: 0x6b5a48, colorB: 0x9a8670, hot: 0xffa860, ringColor: 0xffc890,
+    },
+    seed: {
+      implode: 0, shrink: 0, curve: 2,
+      flash: 0, flashTau: 1,
+      veil: 0.25, veilTau: 2, veilAlpha: 0.6, bands: 0,
+      ring: 0, ringTau: 1, ringAlpha: 0,
+      sparks: 0.6, sparksTau: 2, sparkSize: 2,
+      colorA: 0x3dffc0, colorB: 0x8cff6a, hot: 0xb0ffd8, ringColor: 0x3dffc0,
+    },
+  },
+  /**
+   * Свет гибнущей звезды (доля обычного солнечного): до разрыва она светит, раскаляясь
+   * (+PRE_HEAT к концу сжатия), в миг вспышки — ×FLASH и гаснет за FLASH_TAU, а сияние
+   * туманности тлеет и уходит за GLOW_TAU секунд. Потом система тёмная: светить нечему.
+   */
+  STAR_LIGHT: { PRE_HEAT: 0.6, FLASH: 2.5, FLASH_TAU: 1.2, GLOW: 0.45, GLOW_TAU: 7 },
 } as const

@@ -5,7 +5,7 @@ import { ASTEROID } from '../../config/world'
 import { isVisible } from '../combat/cloak'
 import { shipAxes } from '../flight/axes'
 import type { AsteroidEntity, BodyEntity, ContactKind, ContactLock, ShipEntity, World } from './entities'
-import { BELT_NAV_ID, nearestBeltPoint } from './asteroidBelt'
+import { BELT_NAV_ID, beltPoint, nearestBelt, nearestBeltPoint } from './asteroidBelt'
 import { figurineDisplayName } from './figurines'
 import { findWarBaseFixture, warBaseFixtureWorldPos } from './warBase'
 import { findStation, stationHost } from '../station/docking'
@@ -439,7 +439,7 @@ export function cycleCelestial(world: World): void {
               const rank = facingScore(from, a.pos)
               return { id: a.id, station: false, ...rank }
             }),
-          ...(world.asteroidBelt ? [beltCand(world, from)] : []),
+          ...(world.asteroidBelts.length > 0 ? [beltCand(world, from)] : []),
         ]),
   ]
   cands.sort(byFacingThenNear)
@@ -520,7 +520,7 @@ export function retargetNearestCelestial(world: World): void {
               const rank = facingScore(from, a.pos)
               return { id: a.id, station: false, ...rank }
             }),
-          ...(world.asteroidBelt ? [beltCand(world, from)] : []),
+          ...(world.asteroidBelts.length > 0 ? [beltCand(world, from)] : []),
         ]),
   ]
   cands.sort(byFacingThenNear)
@@ -571,12 +571,13 @@ export function navTarget(world: World): NavTarget | null {
   if (id === null) return null
   // Пояс — не тело: позиция пересчитывается, радиус — до края потока, как поверхность планеты.
   // Иначе прибор показывает путь до оси, и в самой ленте остаётся «пять километров».
-  if (id === BELT_NAV_ID && world.asteroidBelt) {
-    nearestBeltPoint(world, _beltNav)
+  const belt = id === BELT_NAV_ID ? nearestBelt(world) : null
+  if (belt) {
+    beltPoint(world, belt, _beltNav)
     return {
       id,
       pos: _beltNav,
-      radius: world.asteroidBelt.diameter / 2,
+      radius: belt.diameter / 2,
       name: 'Астероидный пояс',
       kind: 'belt',
     }

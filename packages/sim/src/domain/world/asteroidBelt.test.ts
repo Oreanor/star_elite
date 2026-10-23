@@ -18,7 +18,7 @@ function fixture() {
 
 /** Точки дальней дуги в координатах мира (истинные минус плавающее начало). */
 function dotPositions(w: World): Vector3[] {
-  const dots = w.asteroidBelt!.dots
+  const dots = w.asteroidBelts[0]!.dots
   const out: Vector3[] = []
   for (let i = 0; i < dots.count; i++) {
     out.push(new Vector3(dots.pos[i * 3]!, dots.pos[i * 3 + 1]!, dots.pos[i * 3 + 2]!).sub(w.originOffset))
@@ -39,7 +39,7 @@ describe('постоянный астероидный пояс', () => {
   it('редеет с дистанцией и остаётся виден за десять тысяч км', () => {
     const w = fixture()
     const player = w.player.state.pos
-    const belt = w.asteroidBelt!
+    const belt = w.asteroidBelts[0]!
     // Дальняя дуга — точки (`belt.dots`, истинные координаты), не тела мира.
     const dots = dotPositions(w)
     const band = (min: number, max: number) =>
@@ -141,7 +141,7 @@ describe('постоянный астероидный пояс', () => {
     w.asteroids.push(other)
     configureAsteroidBelt(w, BELT.DIAMETER_MAX, BELT.COUNT_MAX)
     expect(w.asteroids).toContain(other)
-    expect(w.asteroidBelt!.diameter).toBe(BELT.DIAMETER_MAX)
+    expect(w.asteroidBelts[0]!.diameter).toBe(BELT.DIAMETER_MAX)
     const nearby = w.asteroids.filter(a => a.beltKey && a.pos.distanceTo(w.player.state.pos) < BELT.LOCAL_RANGE)
     expect(nearby.length).toBeGreaterThan(BELT.COUNT_MAX * 0.8)
     expect(nearby.length).toBeLessThan(BELT.COUNT_MAX * 1.2)
@@ -158,7 +158,7 @@ describe('постоянный астероидный пояс', () => {
     expect(w.navTargetId).toBe(BELT_NAV_ID)
     const nav = navTarget(w)
     expect(nav?.kind).toBe('belt')
-    expect(nav?.radius).toBe(w.asteroidBelt!.diameter / 2)
+    expect(nav?.radius).toBe(w.asteroidBelts[0]!.diameter / 2)
 
     w.player.state.pos.y += 200_000
     const again = navTarget(w)!
@@ -169,7 +169,7 @@ describe('постоянный астероидный пояс', () => {
     expect(surface).toBeGreaterThan(190_000)
     expect(surface).toBeLessThan(210_000)
 
-    w.asteroidBelt = undefined
+    w.asteroidBelts = []
     expect(navTarget(w)).toBeNull()
   })
 })

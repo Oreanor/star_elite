@@ -7,13 +7,15 @@ import { findModule } from '@elite/sim'
  *  tech     — технический, горный (`cut`: колет камень) — зелёный;
  *  shrink   — уменьшающий луч — фиолетовый;
  *  grow     — увеличивающий луч — голубой;
- *  hold     — удерживающий луч — жёлтый.
+ *  hold     — удерживающий луч — жёлтый;
+ *  seed     — засевающий луч (космический) — изумрудно-бирюзовый;
+ *  shatter  — разбивающий импульс (космический) — белёсо-сиреневый.
  * У каждого луча-переделки свой цвет: какой из трёх бьёт, видно сразу.
  * Неизвестный id — военный: обычный ствол, раз о нём ничего не известно.
  */
-export type LaserSchool = 'military' | 'tech' | 'shrink' | 'grow' | 'hold'
+export type LaserSchool = 'military' | 'tech' | 'shrink' | 'grow' | 'hold' | 'seed' | 'shatter'
 
-export const LASER_SCHOOLS: readonly LaserSchool[] = ['military', 'tech', 'shrink', 'grow', 'hold']
+export const LASER_SCHOOLS: readonly LaserSchool[] = ['military', 'tech', 'shrink', 'grow', 'hold', 'seed', 'shatter']
 
 /** Облик ствола для рендера: школа (цвет) и класс (толщина). */
 export interface LaserLook {
@@ -34,7 +36,7 @@ export function laserLook(weapon: string): LaserLook {
     const m = findModule(weapon)
     const effect = m && m.kind === 'laser' ? m.effect : undefined
     const school: LaserSchool =
-      effect === 'cut' ? 'tech' : effect === 'shrink' || effect === 'grow' || effect === 'hold' ? effect : 'military'
+      effect === 'cut' ? 'tech' : effect === 'shrink' || effect === 'grow' || effect === 'hold' || effect === 'seed' || effect === 'shatter' ? effect : 'military'
     // Класс 4 (если появится) читаем как 3; неизвестный id — класс 1.
     const raw = m?.class ?? 1
     look = { school, cls: (raw >= 3 ? 3 : raw) as 1 | 2 | 3 }

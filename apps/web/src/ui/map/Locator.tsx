@@ -3,6 +3,7 @@ import { Vector3 } from 'three'
 import {
   BELT,
   BELT_NAV_ID,
+  nearestBelt,
   nearestBeltPoint,
   clearContactLock,
   assessThreat,
@@ -213,9 +214,9 @@ function blips(world: World): Blip[] {
   if (stellarOnly) return out
 
   // Пояс целиком — та же нав-цель, что планета: клик пишет BELT_NAV_ID, дистанция до края потока.
-  if (world.asteroidBelt) {
+  if (world.asteroidBelts.length > 0) {
     nearestBeltPoint(world, _beltAt)
-    const surface = Math.max(0, _beltAt.distanceTo(world.player.state.pos) - world.asteroidBelt.diameter / 2)
+    const surface = Math.max(0, _beltAt.distanceTo(world.player.state.pos) - nearestBelt(world)!.diameter / 2)
     const d = surface === 0 ? { rt: 0, fwd: 0, h: 0, dist: 0 } : toDisc(world, _beltAt)
     if (d) {
       out.push({

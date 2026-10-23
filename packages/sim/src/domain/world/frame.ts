@@ -39,6 +39,8 @@ export function translateNeighborhood(world: World, shift: Vector3): void {
     b.pos.add(shift)
     shiftTrail(b, shift)
   }
+  // Шар разбивающего лазера — тоже снаряд окрестности.
+  for (const p of world.pulses) p.pos.add(shift)
   for (const t of world.titans) {
     t.pos.add(shift)
     shiftTrail(t, shift)

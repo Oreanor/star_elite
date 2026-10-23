@@ -7,6 +7,8 @@ import {
   quasarOf,
   stationsOf,
   systemDefFor,
+  fateEdits,
+  isSettled,
   systemLife,
   type StarSystem,
   type SystemDef,
@@ -63,7 +65,7 @@ export interface Ring {
 /** Наибольший тех-уровень среди обитаемых миров системы; «—», если жизни нет. */
 function maxTechOf(system: StarSystem): string {
   let best = 0
-  for (const p of system.planets) if (p.settlement && p.settlement.techLevel > best) best = p.settlement.techLevel
+  for (const p of system.planets) if (isSettled(p) && p.settlement.techLevel > best) best = p.settlement.techLevel
   return best > 0 ? String(best) : '—'
 }
 
@@ -117,6 +119,17 @@ export function SystemPopup({
     [system, stations],
   )
 
+  // Разбитые планеты держат слот (номер = адрес), но миров среди них уже нет.
+  const fallen = useMemo(
+    () => new Set(system.planets.flatMap((p, i) => (p.remnant ? [i] : []))),
+    [system],
+  )
+  // Схема строится по SystemDef генератора, без журнала: цвет светила — из карточки,
+  // где правки уже наложены (растворилось — тусклый остаток, у пары — выживший).
+  const starColor = fateEdits(world.galaxyDelta, index).some((e) => e.ref === 'star' || e.ref === 'star:1')
+    ? system.star.color
+    : def.star.color
+
   return (
     <MapCard
       kind={t('map.view.system')}
@@ -136,7 +149,7 @@ export function SystemPopup({
                 system.companion ? ` · ${t('map.binary')}` : ''
               }${core && quasarOf(world.galaxySeed) ? ` · ${t('map.quasar')}` : ''}`}
             />
-            <Row label={t('map.planets')} value={String(system.planets.length)} />
+            <Row label={t('map.planets')} value={String(system.planets.length - fallen.size)} />
             <Row label={t('map.distance')} value={formatRange(distance)} />
             <Row label={t('map.life')} value={lifeName(systemLife(system))} />
             {/* Самый развитый мир системы: тех-уровень решает, что продают на её причалах. */}
@@ -161,6 +174,8 @@ export function SystemPopup({
                   def={def}
                   stationPlanets={stationPlanets}
                   stationNames={stationNames}
+                  fallen={fallen}
+                  starColor={starColor}
                   selected={action.selected ? world.jumpArrivalPlanet : null}
                   onPick={onArrival}
                 />
@@ -187,6 +202,8 @@ function StationPicker({
   def,
   stationPlanets,
   stationNames,
+  fallen,
+  starColor,
   selected,
   onPick,
 }: {
@@ -195,6 +212,9 @@ function StationPicker({
   stationPlanets: Set<number>
   /** Имя причала по индексу планеты — мелкая подпись у точки. */
   stationNames: Map<number, string>
+  /** Индексы разбитых планет: на их орбите пояс обломков, точки нет. */
+  fallen: Set<number>
+  starColor: number
   /** Индекс планеты-со-станцией, у которой назначен выход, или null — у звезды. */
   selected: number | null
   /** null — схема для справки: система не цель прыжка, выход назначать некуда. */
@@ -212,16 +232,32 @@ function StationPicker({
           cx={ORRERY_CENTRE}
           cy={ORRERY_CENTRE}
           r="6"
-          fill={`#${def.star.color.toString(16).padStart(6, '0')}`}
+          fill={`#${starColor.toString(16).padStart(6, '0')}`}
           className={onPick ? 'cursor-pointer' : undefined}
           data-no-drag={onPick ? true : undefined}
           onClick={onPick ? () => onPick(null) : undefined}
         />
         {plotted.map((p, i) => (
           <g key={p.name}>
-            <circle cx={ORRERY_CENTRE} cy={ORRERY_CENTRE} r={p.radius} fill="none" stroke={UI.DIM} strokeWidth="0.4" opacity="0.5" />
-            {/* Планета со станцией светит фосфором и кликается; прочие — тусклые, мимо них. */}
-            <circle cx={p.x} cy={p.y} r={p.giant ? 3.4 : 2} fill={p.station ? UI.PRIMARY : UI.DIM} opacity={p.station ? 1 : 0.4} />
+            {/* Орбита разбитой планеты — пунктир пояса обломков (у газового — пусто). */}
+            {fallen.has(i) ? (
+              !p.giant && (
+                <circle cx={ORRERY_CENTRE} cy={ORRERY_CENTRE} r={p.radius} fill="none" stroke={UI.DIM} strokeWidth="1.2" strokeDasharray="0.6 1.6" opacity="0.7" />
+              )
+            ) : (
+              <circle cx={ORRERY_CENTRE} cy={ORRERY_CENTRE} r={p.radius} fill="none" stroke={UI.DIM} strokeWidth="0.4" opacity="0.5" />
+            )}
+            {/* Планета со станцией светит фосфором и кликается; прочие — тусклые, мимо них.
+                От разбитой остаётся лишь её причал — малой точкой. */}
+            {(!fallen.has(i) || p.station) && (
+              <circle
+                cx={p.x}
+                cy={p.y}
+                r={fallen.has(i) ? 1.2 : p.giant ? 3.4 : 2}
+                fill={p.station ? UI.PRIMARY : UI.DIM}
+                opacity={p.station ? 1 : 0.4}
+              />
+            )}
             {/* Зона под палец: в точку в 2 единицы мышью не попасть. Только у станций. */}
             {/* Подпись причала — мелко, сбоку от точки, к центру не лезет: справа от звезды
                 пишем вправо, слева — влево. Кликается вместе с точкой. */}

@@ -125,9 +125,14 @@ export function scaleToBase(m: ShipModule, base: ShipModule, k: number): void {
   }
   if (isShield(m) && isShield(base)) { m.capacity = Math.round(base.capacity * k); m.regen = base.regen * k; return }
   if (isArmour(m) && isArmour(base)) { m.hull = Math.round(base.hull * k); return }
-  // Технический (горный) лазер качается в КПД добычи, а не в урон: инструмент, не оружие.
-  // Потолок — вся руда камня; поломка тот же КПД роняет.
-  if (isLaser(m) && isLaser(base) && base.effect === 'cut') { m.oreYield = Math.min(1, (base.oreYield ?? 1) * k); return }
+  // Горный лазер качается и в резку (урон = темп реза камня), и в КПД добычи. Одного КПД
+  // мало: потолок — вся руда камня, и после двух шагов прокачка переставала давать что-либо,
+  // а окно показывало «урон 5 → 5». Поломка роняет оба.
+  if (isLaser(m) && isLaser(base) && base.effect === 'cut') {
+    m.damage = Math.round(base.damage * k)
+    m.oreYield = Math.min(1, (base.oreYield ?? 1) * k)
+    return
+  }
   if (isLaser(m) && isLaser(base)) { m.damage = Math.round(base.damage * k); return }
   // Ракета — расходник: её не чинят, но пусковую УЛУЧШАЮТ бо́льшим боезапасом (не уроном).
   if (isMissile(m) && isMissile(base)) { m.ammo = Math.round(base.ammo * k); return }

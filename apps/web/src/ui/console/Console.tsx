@@ -37,6 +37,7 @@ import { useSession } from '../../session/GameContext'
 import { lastSaveFailed, subscribeSaveStatus } from '../../session/save/saveStore'
 import { UI } from '../theme'
 import { Locator } from '../map/Locator'
+import { useBodiesRevision } from '../useBodiesRevision'
 import { PlanetScreen } from '../planet/PlanetScreen'
 import { Reference } from '../reference/Reference'
 import { Money } from '../station/Money'
@@ -146,6 +147,10 @@ export function Console({
     }, 500)
     return () => window.clearInterval(id)
   }, [docked, world])
+
+  // Разбитая планета исчезает и из вкладок: на старте журнал галактики приходит из сети, пока
+  // консоль уже открыта на «планете».
+  useBodiesRevision(world)
 
   const saveFailed = useSyncExternalStore(subscribeSaveStatus, lastSaveFailed)
   const station = findStation(world)

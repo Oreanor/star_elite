@@ -49,7 +49,9 @@ import {
   stepOrbitsOnBodies,
 } from './orbits'
 import type { SystemDef, StarCompanionDef, BlackHoleCompanionDef, StationDef } from './system'
-import { createAsteroidBelt } from './asteroidBelt'
+import { createAsteroidBelts } from './asteroidBelt'
+import { applyFatesToBodies, reconcileFates } from './fates'
+import type { FateEdit } from '../galaxy/delta'
 import { STARTER_SYSTEM } from './system'
 import { emptyDelta } from '../galaxy/delta'
 import { stationSeat } from '../galaxy/arrival'
@@ -356,11 +358,12 @@ function moonOrbitRate(planetRadius: number, gas: boolean, orbitRadius: number):
   return keplerRate(planetMass(planetRadius, gas), orbitRadius)
 }
 
-function makeMoonBodies(ids: IdSource, planet: BodyEntity, def: SystemDef['planets'][number]): BodyEntity[] {
+function makeMoonBodies(ids: IdSource, planet: BodyEntity, def: SystemDef['planets'][number], planetIndex: number): BodyEntity[] {
   const gas = def.type === 'Газовый гигант'
-  return def.moons.map((moon) => ({
+  return def.moons.map((moon, k) => ({
     id: ids.next(),
     kind: 'moon' as const,
+    ref: `moon:${planetIndex}:${k}`,
     name: moon.name,
     // Точка на орбите досчитается первым же `stepOrbits`. Здесь — центр планеты:
     // положение спутника нигде не ХРАНИТСЯ, оно следует из времени.
@@ -421,6 +424,7 @@ function makeBodies(ids: IdSource, def: SystemDef): BodyEntity[] {
     id: ids.next(),
     // Ядро галактики — чёрная дыра, а не звезда (см. `SystemDef.star.blackHole`).
     kind: hole ? 'blackhole' : 'star',
+    ref: 'star',
     name: def.name,
     pos: new Vector3(...def.star.pos),
     radius: def.star.radius,
@@ -470,6 +474,7 @@ function makeBodies(ids: IdSource, def: SystemDef): BodyEntity[] {
         id: ids.next(),
         // Имя со звёздочкой B — так метят спутник двойной в каталогах (Сириус B).
         kind: 'star',
+        ref: 'star:1',
         name: `${def.name} B`,
         pos: new Vector3(...def.star.pos),
         radius: comp.radius,
@@ -497,7 +502,7 @@ function makeBodies(ids: IdSource, def: SystemDef): BodyEntity[] {
   const barycentricPlanets = comp !== null
   const heliocentricMass = barycentricPlanets ? m1 + m2 : m1
 
-  for (const p of def.planets) {
+  for (const [planetIndex, p] of def.planets.entries()) {
     const planetPos = new Vector3(...p.pos)
     const parentId = barycentricPlanets ? null : primary.id
     const parentPos = barycentricPlanets ? barycentre : starPos
@@ -505,6 +510,7 @@ function makeBodies(ids: IdSource, def: SystemDef): BodyEntity[] {
     const planet: BodyEntity = {
       id: ids.next(),
       kind: 'planet',
+      ref: `planet:${planetIndex}`,
       name: p.name,
       pos: planetPos.clone(),
       radius: p.radius,
@@ -516,7 +522,7 @@ function makeBodies(ids: IdSource, def: SystemDef): BodyEntity[] {
       spinAxis: spinAxis(p.tilt),
       orbit: orbitFromOffset(parentId, parentPos, planetPos, keplerRate(heliocentricMass, orbitRadius)),
     }
-    bodies.push(planet, ...makeMoonBodies(ids, planet, p))
+    bodies.push(planet, ...makeMoonBodies(ids, planet, p, planetIndex))
   }
 
   /**
@@ -571,7 +577,7 @@ function makeBodies(ids: IdSource, def: SystemDef): BodyEntity[] {
   }
 
   // (военные базы — не тела, см. `placeWarBases`: у них ни гравитации, ни орбиты.)
-  for (const pair of def.streamPairs ?? []) {
+  for (const [pairIndex, pair] of (def.streamPairs ?? []).entries()) {
     const offset = new Vector3(...pair.stationOffset)
     const at = station ? station.pos.clone().add(offset) : new Vector3(...def.star.pos).add(offset)
     const star = (name: string, radius: number, color: number): BodyEntity => ({
@@ -590,10 +596,12 @@ function makeBodies(ids: IdSource, def: SystemDef): BodyEntity[] {
       faint: true,
     })
     const donor = star(pair.name, pair.donor.radius, pair.donor.color)
+    donor.ref = `pair:${pairIndex}:0`
     // Донор стоит на смещении от станции (едет с ней), компаньон обращается вокруг донора:
     // скорость — из масс звёзд, как у любой пары, а не назначенная.
     donor.orbit = station ? orbitFromOffset(station.id, station.pos, at, 0) : null
     const accretor = star(`${pair.name} B`, pair.accretor.radius, pair.accretor.color)
+    accretor.ref = `pair:${pairIndex}:1`
     const mass = (r: number) => GRAVITY.STAR_DENSITY * (4 / 3) * Math.PI * r ** 3
     accretor.orbit = {
       parentId: donor.id,
@@ -638,10 +646,20 @@ function makeBodies(ids: IdSource, def: SystemDef): BodyEntity[] {
   return bodies
 }
 
-/** Тела системы на общий момент календаря — для выхода из прыжка и сети. */
-export function layoutSystemBodies(def: SystemDef, calendarTime: number, ids: IdSource = createIdSource()): BodyEntity[] {
+/**
+ * Тела системы на общий момент календаря — для выхода из прыжка и сети. `fates` — судьбы
+ * тел из журнала галактики (`fateEdits`): без них разбитая планета стояла бы на месте,
+ * а её причал считался бы там, где кружил до гибели хозяйки.
+ */
+export function layoutSystemBodies(
+  def: SystemDef,
+  calendarTime: number,
+  ids: IdSource = createIdSource(),
+  fates: readonly FateEdit[] = [],
+): BodyEntity[] {
   const bodies = makeBodies(ids, def)
   stepOrbitsOnBodies(bodies, new Vector3(0, 0, 0), orbitSec(calendarTime))
+  applyFatesToBodies(bodies, fates, orbitSec(calendarTime))
   return bodies
 }
 
@@ -755,7 +773,10 @@ export function enterVoid(world: World): void {
   world.epoch += 1
   world.ships = []
   world.asteroids = []
-  world.asteroidBelt = undefined
+  world.asteroidBelts = []
+  world.pulses = []
+  world.cataclysms = []
+  world.fallen = []
   world.pods = []
   world.missiles = []
   world.bolts = []
@@ -824,6 +845,9 @@ export function enterSystem(
   // станцией — чужой мусор (и тесты с заглушками) не должен переживать вход.
   world.pods = []
   world.missiles = []
+  world.pulses = []
+  world.cataclysms = []
+  world.fallen = []
   world.titans = []
   world.platforms = []
   world.tracers = []
@@ -842,13 +866,13 @@ export function enterSystem(
   stepOrbits(world)
   if (stellarOnly) {
     world.asteroids = []
-    world.asteroidBelt = undefined
+    world.asteroidBelts = []
     world.monoliths = []
     world.figurines = []
     world.warBases = []
   } else {
     world.asteroids = makeAsteroids(rng, world.ids, def)
-    world.asteroidBelt = createAsteroidBelt(def)
+    world.asteroidBelts = createAsteroidBelts(world.ids, def)
     // Бог на Кресте: после чистки боя, до спавна резидентов — живой борт на радаре.
     spawnSlovo(world)
     /**
@@ -863,6 +887,9 @@ export function enterSystem(
     placeWarBases(world, def)
     placeFigurines(world)
   }
+  // Журнал галактики — с начала: разбитое и засеянное в этой системе остаётся таким у всех.
+  world.fateCursor = 0
+  reconcileFates(world)
   world.contactLock = null
   world.navTargetId = stellarOnly
     ? luminary(world.bodies, 0)?.id ?? null
@@ -961,7 +988,12 @@ export function createWorld(
     player,
     ships,
     asteroids: makeAsteroids(rng, ids, def),
-    asteroidBelt: createAsteroidBelt(def),
+    asteroidBelts: createAsteroidBelts(ids, def),
+    pulses: [],
+    cataclysms: [],
+    fallen: [],
+    fateCursor: 0,
+    bodiesRevision: 0,
     pods: [],
     missiles: [],
     bolts: [],

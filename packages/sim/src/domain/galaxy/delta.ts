@@ -1,4 +1,5 @@
-import type { StarSystem } from './types'
+import { FAUNA_SPECIES } from '../../config/galaxy'
+import type { Planet, StarSystem } from './types'
 
 /**
  * ДЕЛЬТА ГАЛАКТИКИ — правки бога поверх сид-галактики.
@@ -26,6 +27,28 @@ export type GalaxyEdit =
   | { op: 'rename'; index: number; name: string }
   | { op: 'remove'; index: number }
   | { op: 'add'; system: StarSystem }
+  | FateEdit
+
+/**
+ * СУДЬБА ТЕЛА СИСТЕМЫ — космический лазер засеял мир жизнью или разбил тело. Это правка
+ * ГАЛАКТИКИ, а не мира одного клиента: ложится в тот же общий журнал, что и правки бога, и
+ * видна всем — и тем, кто сейчас в системе (`reconcileFates`), и тем, кто войдёт позже.
+ *
+ * Тело адресуется ярлыком каталога (`BodyEntity.ref`): 'star', 'star:1' (компаньон двойной),
+ * 'planet:2', 'moon:2:0', 'pair:0:1' (звезда декоративной тесной пары). Ярлык — из места тела
+ * в описании системы, поэтому один и тот же у всех клиентов и после перезахода.
+ *
+ * `at` — календарь мига (`world.calendarTime`): по нему клиент решает, показывать ли взрыв
+ * (свежая правка) или молча принять итог (старая, пришла при входе). И по нему же луны и
+ * причал разбитой планеты встают на орбиту звезды там, где их застал взрыв.
+ */
+export interface FateEdit {
+  op: 'fate'
+  index: number
+  ref: string
+  fate: 'shatter' | 'seed'
+  at: number
+}
 
 /** Изменяемый оверлей поверх базы. Пустой — галактика ровно как из зерна. */
 export interface GalaxyDelta {
@@ -46,6 +69,11 @@ export function popEdit(delta: GalaxyDelta): GalaxyEdit | null {
   return delta.edits.pop() ?? null
 }
 
+/** Судьбы тел одной системы в порядке журнала. Мир применяет их сам (`reconcileFates`). */
+export function fateEdits(delta: GalaxyDelta, index: number): FateEdit[] {
+  return delta.edits.filter((e): e is FateEdit => e.op === 'fate' && e.index === index)
+}
+
 /** Индексы систем, СКРЫТЫХ богом. Слот в массиве держим — читатель просто их пропускает. */
 export function removedIndices(delta: GalaxyDelta): Set<number> {
   const out = new Set<number>()
@@ -62,10 +90,48 @@ interface Override {
   z?: number
   color?: number
   name?: string
+  /** Судьбы тел этой системы по ярлыку (поздняя перекрывает раннюю). */
+  fates?: Map<string, FateEdit['fate']>
 }
+
+/** Цвет остатка звезды на карте: тусклая туманность там, где светило растворилось. */
+const REMNANT_COLOR = 0x4a3a52
+
+/**
+ * Засеянный мир: только ПЕРВОБЫТНАЯ жизнь (тех 1, фауна, без причала). Разум и станции
+ * вырастают веками, а не от луча; правило мира то же, что у генератора (тех ≤ 4 — фауна).
+ */
+function seededPlanet(p: Planet): Planet {
+  if (p.settlement) return p
+  return {
+    ...p,
+    type: p.type === 'Скалистая' || p.type === 'Ледяная' ? 'Земного типа' : p.type,
+    settlement: { economy: 'Аграрная', government: 'Анархия', techLevel: 1, population: 0.05, species: FAUNA_SPECIES },
+  }
+}
+
+/** Применить судьбы к системе. Разбитые тела помечаются `remnant`, а не вынимаются: индекс = ярлык. */
+function withFates(s: StarSystem, fates: Map<string, FateEdit['fate']>): StarSystem {
+  const planets = s.planets.map((p, i) => {
+    let out = p
+    if (fates.get(`planet:${i}`) === 'seed') out = seededPlanet(out)
+    if (fates.get(`planet:${i}`) === 'shatter') out = { ...out, remnant: true }
+    const moons = out.moons.map((m, k) => (fates.get(`moon:${i}:${k}`) === 'shatter' ? { ...m, remnant: true } : m))
+    return moons.some((m, k) => m !== out.moons[k]) ? { ...out, moons } : out
+  })
+  const starGone = fates.get('star') === 'shatter'
+  const companionGone = fates.get('star:1') === 'shatter'
+  // Одиночное светило растворилось — на карте тусклый остаток. У двойной светилом
+  // системы становится выживший: его класс и цвет, а пары больше нет.
+  const companion = companionGone ? null : s.companion
+  const star = !starGone ? s.star : companion ?? { ...s.star, color: REMNANT_COLOR, scoopable: false }
+  return { ...s, planets, star, companion: starGone ? null : companion }
+}
+
 
 function withOverride(s: StarSystem, o: Override): StarSystem {
   // Ни одного поля — вернуть тот же объект (не плодим копий: горячий путь чтения карты).
+  if (o.fates) s = withFates(s, o.fates)
   if (o.x === undefined && o.y === undefined && o.z === undefined && o.color === undefined && o.name === undefined) {
     return s
   }
@@ -121,6 +187,13 @@ export function applyDelta(base: readonly StarSystem[], delta: GalaxyDelta): Sta
       case 'add':
         added.push(e.system)
         break
+      case 'fate': {
+        const o = get(e.index)
+        const fates = (o.fates ??= new Map())
+        // Разбитое не засеять: жизнь не вернёт пыль в планету.
+        if (fates.get(e.ref) !== 'shatter') fates.set(e.ref, e.fate)
+        break
+      }
     }
   }
 

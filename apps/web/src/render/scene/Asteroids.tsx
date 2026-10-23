@@ -103,12 +103,15 @@ const dotMaterial = new PointsMaterial({
  * прошедшее время (`renderTime`), минус текущее плавающее начало. Конец окна гаснет плавно:
  * спад тянется вдоль хорды на весь хвост, чтобы черта не врезалась в небо оборванным концом.
  */
+/** Сколько поясов рисуем разом: постоянный и пара-тройка поясов обломков разбитых миров. */
+const MAX_BELTS = 4
+
 function BeltDots() {
   const session = useSession()
   const geometry = useMemo(() => {
     const g = new BufferGeometry()
-    g.setAttribute('position', new BufferAttribute(new Float32Array(BELT.MAX_DOTS * 3), 3))
-    g.setAttribute('color', new BufferAttribute(new Float32Array(BELT.MAX_DOTS * 4), 4))
+    g.setAttribute('position', new BufferAttribute(new Float32Array(BELT.MAX_DOTS * MAX_BELTS * 3), 3))
+    g.setAttribute('color', new BufferAttribute(new Float32Array(BELT.MAX_DOTS * MAX_BELTS * 4), 4))
     return g
   }, [])
   useEffect(() => () => geometry.dispose(), [geometry])
@@ -117,48 +120,49 @@ function BeltDots() {
     const pos = geometry.getAttribute('position') as BufferAttribute
     const color = geometry.getAttribute('color') as BufferAttribute
     const shrink = worldShrink(world.player.state.scale)
-    const belt = world.asteroidBelt
-    if (!belt || shrink <= 0) {
+    if (world.asteroidBelts.length === 0 || shrink <= 0) {
       geometry.setDrawRange(0, 0)
       return
     }
-    const dots = belt.dots
-    const dt = renderTime(world) - dots.time
     const off = world.originOffset
     const player = world.player.state.pos
-    const p = dots.pos
-    const v = dots.drift
-
-    // Ближайшая точка дуги — начало спада.
-    let near: number = BELT.VISIBLE_RANGE
-    for (let i = 0; i < dots.count; i++) {
-      const o = i * 3
-      const x = p[o]! + v[o]! * dt - off.x - player.x
-      const y = p[o + 1]! + v[o + 1]! * dt - off.y - player.y
-      const z = p[o + 2]! + v[o + 2]! * dt - off.z - player.z
-      const d = Math.hypot(x, y, z)
-      if (d < near) near = d
-    }
-    const reach = Math.max(1, BELT.VISIBLE_RANGE * BELT.VISIBLE_RANGE - near * near)
-
     let n = 0
-    for (let i = 0; i < dots.count; i++) {
-      const o = i * 3
-      const x = p[o]! + v[o]! * dt - off.x
-      const y = p[o + 1]! + v[o + 1]! * dt - off.y
-      const z = p[o + 2]! + v[o + 2]! * dt - off.z
-      const d = Math.hypot(x - player.x, y - player.y, z - player.z)
-      if (d >= BELT.VISIBLE_RANGE) continue
-      pos.setXYZ(n, x, y, z)
-      const along = Math.max(0, d * d - near * near)
-      const t = 1 - Math.min(1, along / reach)
-      const edge = t * t * (3 - 2 * t)
-      // У окна тел точки ещё лежат пачкой на один пиксель — низкий тон, иначе палец.
-      // Дальше потолок нарочно ниже единицы: полная черта на небе слишком резкая.
-      const lone = Math.min(1, Math.max(0, (d - BELT.ENTITY_RANGE) / 200_000))
-      const gain = 0.16 + 0.34 * lone
-      // Чуть серее тёплого: на чёрном небе (0.72, 0.62, 0.48) читается белой чёрточкой.
-      color.setXYZW(n++, 0.55 * gain, 0.53 * gain, 0.5 * gain, edge * shrink * (0.28 + 0.38 * lone))
+    for (let b = 0; b < world.asteroidBelts.length && b < MAX_BELTS; b++) {
+      const dots = world.asteroidBelts[b]!.dots
+      const dt = renderTime(world) - dots.time
+      const p = dots.pos
+      const v = dots.drift
+
+      // Ближайшая точка дуги — начало спада (у каждого пояса своя).
+      let near: number = BELT.VISIBLE_RANGE
+      for (let i = 0; i < dots.count; i++) {
+        const o = i * 3
+        const x = p[o]! + v[o]! * dt - off.x - player.x
+        const y = p[o + 1]! + v[o + 1]! * dt - off.y - player.y
+        const z = p[o + 2]! + v[o + 2]! * dt - off.z - player.z
+        const d = Math.hypot(x, y, z)
+        if (d < near) near = d
+      }
+      const reach = Math.max(1, BELT.VISIBLE_RANGE * BELT.VISIBLE_RANGE - near * near)
+
+      for (let i = 0; i < dots.count; i++) {
+        const o = i * 3
+        const x = p[o]! + v[o]! * dt - off.x
+        const y = p[o + 1]! + v[o + 1]! * dt - off.y
+        const z = p[o + 2]! + v[o + 2]! * dt - off.z
+        const d = Math.hypot(x - player.x, y - player.y, z - player.z)
+        if (d >= BELT.VISIBLE_RANGE) continue
+        pos.setXYZ(n, x, y, z)
+        const along = Math.max(0, d * d - near * near)
+        const t = 1 - Math.min(1, along / reach)
+        const edge = t * t * (3 - 2 * t)
+        // У окна тел точки ещё лежат пачкой на один пиксель — низкий тон, иначе палец.
+        // Дальше потолок нарочно ниже единицы: полная черта на небе слишком резкая.
+        const lone = Math.min(1, Math.max(0, (d - BELT.ENTITY_RANGE) / 200_000))
+        const gain = 0.16 + 0.34 * lone
+        // Чуть серее тёплого: на чёрном небе (0.72, 0.62, 0.48) читается белой чёрточкой.
+        color.setXYZW(n++, 0.55 * gain, 0.53 * gain, 0.5 * gain, edge * shrink * (0.28 + 0.38 * lone))
+      }
     }
     geometry.setDrawRange(0, n)
     pos.needsUpdate = color.needsUpdate = true

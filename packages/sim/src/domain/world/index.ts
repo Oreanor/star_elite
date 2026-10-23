@@ -2,6 +2,9 @@ export {
   type AsteroidEntity,
   type BodyEntity,
   type CargoPodEntity,
+  type Cataclysm,
+  type FallenBody,
+  type PulseEntity,
   type Explosion,
   type Shockwave,
   type Faction,
@@ -32,7 +35,8 @@ export {
 } from './entities'
 export { enterSystem, enterVoid, createWorld, layoutSystemBodies, makeShip, refreshSpec, spawnSlovo, startAtStation, applyPilotProfile } from './factory'
 export { createIdSource, type IdSource } from './ids'
-export { BELT_NAV_ID, configureAsteroidBelt, nearestBeltPoint, stepAsteroidBelt, createAsteroidBelt } from './asteroidBelt'
+export { BELT_NAV_ID, beltPoint, configureAsteroidBelt, nearestBelt, nearestBeltPoint, stepAsteroidBelt, createAsteroidBelts, makeAsteroidBelt, type AsteroidBelt } from './asteroidBelt'
+export { commitFate, reconcileFates } from './fates'
 export {
   type Persona,
   type PilotProfile,

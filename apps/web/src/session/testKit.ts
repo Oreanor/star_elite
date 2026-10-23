@@ -8,7 +8,9 @@ import { addItem, findModule, fitFromHold, refreshSpec, type ShipEntity, type Sh
  *    его нельзя (`notSold`), без набора он остаётся только даром Слова (`divineGift`);
  *  • лучи-переделки (уменьшающий, увеличивающий, удерживающий) — на оружейных точках,
  *    горный лазер — в трюме (прочие лазеры и так военные): менять на экране корабля, перебирать по X;
- *  • ракеты — на всех пустых пилонах, боезапас полон при каждом входе.
+ *  • ракеты — на всех пустых пилонах, боезапас полон при каждом входе;
+ *  • космические лазеры (засевающий луч, разбивающий импульс) — на первых двух оружейных
+ *    точках, снятое — в трюм. Выдаются отдельно от лучей: у кого лучи уже есть, получит и их.
  *
  * Выдаётся ОДИН раз: что уже есть у игрока (в слотах или в трюме), не дублируется, и
  * поставленное им самим набор не переставляет обратно.
@@ -60,6 +62,23 @@ function grantLasers(p: ShipEntity): void {
   }
 }
 
+const COSMIC_IDS = ['cosmic_seed', 'cosmic_shatter'] as const
+
+/** Космические лазеры — на первые оружейные точки (снятое — в трюм). Один раз, как и лучи. */
+function grantCosmic(p: ShipEntity): void {
+  if (COSMIC_IDS.some((id) => owns(p, id))) return
+  const guns = p.loadout.chassis.hardpoints.map((hp, i) => (hp.kind === 'gun' ? i : -1)).filter((i) => i >= 0)
+  COSMIC_IDS.forEach((id, k) => {
+    const laser = findModule(id) as WeaponModule | null
+    const slot = guns[k]
+    if (!laser) return
+    if (slot === undefined) return stash(p, laser)
+    const displaced = p.loadout.weapons[slot]
+    if (displaced) stash(p, displaced)
+    p.loadout.weapons[slot] = laser
+  })
+}
+
 /** Ракеты на все пустые пилоны; боезапас пополняет `refreshSpec`/полный комплект ниже. */
 function grantMissiles(p: ShipEntity): void {
   const missile = findModule(PYLON_MISSILE_ID) as WeaponModule | null
@@ -72,6 +91,7 @@ function grantMissiles(p: ShipEntity): void {
 export function grantTestKit(p: ShipEntity): void {
   grantMielophone(p)
   grantLasers(p)
+  grantCosmic(p)
   grantMissiles(p)
   refreshSpec(p)
   // Боезапас — полный при каждом входе: тест, а не экономика ракет.

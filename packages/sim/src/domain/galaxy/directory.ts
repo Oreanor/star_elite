@@ -1,6 +1,6 @@
 import { SYSTEM_FEATURES, hasFeature, type SystemFeature } from './features'
 import { distanceLy, type Spot3 } from './shape'
-import { canDock, capitalOf, moduleClassAvailable, type StarSystem } from './types'
+import { canDock, capitalOf, isSettled, moduleClassAvailable, type StarSystem } from './types'
 
 /**
  * ЗВЁЗДНЫЙ СПРАВОЧНИК — что станция знает о галактике за пределами своей системы. Диспетчер
@@ -51,7 +51,7 @@ function entryOf(system: StarSystem, from: Spot3, galaxySeed: number): Directory
   let maxTech = 0
   let gearClass = 0
   for (const p of system.planets) {
-    if (p.settlement) maxTech = Math.max(maxTech, p.settlement.techLevel)
+    if (isSettled(p)) maxTech = Math.max(maxTech, p.settlement.techLevel)
     gearClass = Math.max(gearClass, moduleClassAvailable(p))
   }
   const cap = capitalOf(system)
@@ -94,7 +94,7 @@ export function galaxyDirectory(systems: readonly StarSystem[], here: number, ga
   for (const what of wanted) {
     const found = byDistance.find(({ s }) =>
       what === 'topTech'
-        ? s.planets.some((p) => (p.settlement?.techLevel ?? 0) >= DIRECTORY.TOP_TECH)
+        ? s.planets.some((p) => isSettled(p) && p.settlement.techLevel >= DIRECTORY.TOP_TECH)
         : hasFeature(s, what, galaxySeed),
     )
     if (found) notable.push({ what, entry: entryOf(found.s, home, galaxySeed) })

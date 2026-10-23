@@ -222,7 +222,8 @@ function stripToStar(world: World): void {
   }
   world.dockOccupantId = null
   world.asteroids = []
-  world.asteroidBelt = undefined
+  world.asteroidBelts = []
+  world.pulses = []
   world.titans = []
   world.platforms = []
   world.monoliths = []

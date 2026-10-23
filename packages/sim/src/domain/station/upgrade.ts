@@ -12,6 +12,7 @@ import {
 import type { ShipEntity, World } from '../world/entities'
 import { refreshSpec } from '../world/factory'
 import { canServiceHere, moduleStat, upgradeLevel, withUpgrade } from './moduleState'
+import { isCosmic } from '../combat/cosmic'
 
 /**
  * Прокачка: модуля (копией из трюма или деньгами) и собственных характеристик корпуса.
@@ -55,6 +56,8 @@ export function canUpgrade(
   // Аукс-устройства не прокачиваются: каждое работает по-своему, «+25% к ECM» бессмыслен.
   // Гасим как «предельный» — отдельного кода в UI заводить незачем.
   if (isAux(module)) return 'maxed'
+  // Космические лучи бьют миры, а не корабли: урона у них нет, «0 → 0» качать нечего.
+  if (module.kind === 'laser' && isCosmic(module.effect)) return 'maxed'
   // Не больше UPGRADE_MAX_STEPS шагов на экземпляр.
   if (upgradeSteps(module) >= SHOP.UPGRADE_MAX_STEPS) return 'maxed'
   // Мир не тянет этот класс — прокачать его здесь негде (тот же потолок, что и у витрины).

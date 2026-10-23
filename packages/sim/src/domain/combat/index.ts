@@ -68,4 +68,7 @@ export {
   peakHeat,
   meanHeat,
   spawnBolt,
+  settlePulseCharges,
+  unholdPulseCharges,
 } from './weapons'
+export { chargeBallCenter, chargeBallRadius } from './cosmic'

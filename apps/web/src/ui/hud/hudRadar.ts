@@ -272,7 +272,7 @@ export function drawRadar(frame: HudFrame): void {
   }
 
   if (stellarOnly) return
-  if (world.asteroidBelt) {
+  if (world.asteroidBelts.length > 0) {
     nearestBeltPoint(world, _point)
     const nav = world.navTargetId === BELT_NAV_ID
     plot(_point, '#ba9e78', Math.round((nav ? 3 : 2) * S), nav, 'round', tr('locator.kind.belt'))

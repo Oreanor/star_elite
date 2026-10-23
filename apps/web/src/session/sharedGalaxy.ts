@@ -10,12 +10,12 @@ import { rtdb } from './net/firebase'
  * рефреше и не доходили до других.
  *
  * Узел — `galaxy/{зерно}/edits`, журнал только дописывается (как и сама дельта). Подписка
- * держится, пока то же зерно и тот же мир, — НЕ рвётся на прыжке, как у камней: правки
+ * держится, пока то же зерно и та же дельта, — НЕ рвётся на прыжке, как у камней: правки
  * принадлежат галактике, а не системе, и переподписка переиграла бы журнал заново.
  * Свою правку домен уже наложил; её эхо из сети узнаём по ключу и не кладём второй раз.
  */
 
-const KNOWN_OPS = new Set(['move', 'recolor', 'rename', 'remove', 'add'])
+const KNOWN_OPS = new Set(['move', 'recolor', 'rename', 'remove', 'add', 'fate'])
 
 /** Запись из сети — правка, если похожа на правку; чужой мусор в дельту не пускаем. */
 function asEdit(raw: unknown): GalaxyEdit | null {
@@ -38,7 +38,10 @@ class SharedGalaxy {
       world.galaxyEditsOut.length = 0
       return
     }
-    if (world !== this.world || world.galaxySeed !== this.seed) this.attach(world)
+    if (world.galaxySeed !== this.seed || world.galaxyDelta !== this.world?.galaxyDelta) this.attach(world)
+    // Портальный мир делит дельту с прежним: тот же журнал, подписку не рвём —
+    // переподписка наложила бы все правки второй раз.
+    else this.world = world
 
     for (const { seed, edit } of world.galaxyEditsOut) {
       const node = push(ref(rtdb, `galaxy/${seed}/edits`))

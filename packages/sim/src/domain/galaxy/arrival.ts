@@ -2,6 +2,7 @@ import { ARRIVAL } from '../../config/galaxy'
 import type { Rng } from '../../core/math'
 import { layoutSystemBodies } from '../world/factory'
 import type { SystemDef } from '../world/system'
+import type { FateEdit } from './delta'
 
 /**
  * Куда выходит корабль из гиперпрыжка.
@@ -89,13 +90,18 @@ export function arrivalPoint(def: SystemDef, arrival: Arrival | null): Point3 {
  * Точка выхода с учётом орбит на момент `calendarTime`.
  * Два клиента с одними часами выходят к одним и тем же телам.
  */
-export function arrivalPointAt(def: SystemDef, arrival: Arrival | null, calendarTime: number): Point3 {
+export function arrivalPointAt(
+  def: SystemDef,
+  arrival: Arrival | null,
+  calendarTime: number,
+  fates: readonly FateEdit[] = [],
+): Point3 {
   if (!arrival) return def.playerStart
 
-  const bodies = layoutSystemBodies(def, calendarTime)
+  const bodies = layoutSystemBodies(def, calendarTime, undefined, fates)
+  // Разбитое светило оставляет своё место: от него и отходим, как от живого.
   const star = bodies.find((b) => b.kind === 'star')
-  if (!star) return def.playerStart
-  const starPos: Point3 = [star.pos.x, star.pos.y, star.pos.z]
+  const starPos: Point3 = star ? [star.pos.x, star.pos.y, star.pos.z] : [...def.star.pos]
 
   if (arrival.kind === 'point') {
     const bounds = arrivalBounds(def)
@@ -108,9 +114,16 @@ export function arrivalPointAt(def: SystemDef, arrival: Arrival | null, calendar
     ]
   }
 
-  const planets = bodies.filter((b) => b.kind === 'planet')
-  const planet = planets[arrival.planet]
-  if (!planet) return def.playerStart
+  // По адресу, а не по номеру в списке: разбитая планета выпала из тел, и номер сместился бы.
+  const planet = bodies.find((b) => b.ref === `planet:${arrival.planet}`)
+  const station = bodies.find((b) => b.kind === 'station')
+  if (!planet) {
+    // Хозяйку причала разбили, а причал кружит дальше — выходим к нему самому.
+    if (station && stationSeat(def) === arrival.planet) {
+      return standoff([station.pos.x, station.pos.y, station.pos.z], station.radius, starPos, ARRIVAL.STANDOFF)
+    }
+    return def.playerStart
+  }
 
   /*
    * Отсчёт всегда от ПЛАНЕТЫ и наружу ЗА ОРБИТУ ПРИЧАЛА.
@@ -126,7 +139,6 @@ export function arrivalPointAt(def: SystemDef, arrival: Arrival | null, calendar
    * случае (когда она стоит ровно под точкой) и больше в остальных. Лететь есть куда,
    * а врезаться не во что.
    */
-  const station = bodies.find((b) => b.kind === 'station')
   const planetPos: Point3 = [planet.pos.x, planet.pos.y, planet.pos.z]
   if (station && stationSeat(def) === arrival.planet) {
     // Направление — НА ПРИЧАЛ (от центра планеты через станцию), а не вслепую от звезды:

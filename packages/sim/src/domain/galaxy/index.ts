@@ -26,10 +26,12 @@ export { generateGalaxy, generateSystem } from './generate'
 export {
   applyDelta,
   emptyDelta,
+  fateEdits,
   popEdit,
   pushEdit,
   removedIndices,
   type GalaxyDelta,
+  type FateEdit,
   type GalaxyEdit,
 } from './delta'
 export { driftContacts, contactWhereabouts, shipWhereabouts, type Whereabouts } from './contacts'

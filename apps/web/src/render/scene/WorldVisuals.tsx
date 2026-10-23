@@ -45,6 +45,9 @@ import { Sky } from './Sky'
 import { Starfield } from './Starfield'
 import { WingMissiles } from './WingMissiles'
 import { useSession } from '../../session/GameContext'
+import { useBodiesRevision } from './useBodiesRevision'
+import { Cataclysms } from './Cataclysms'
+import { Pulses } from './Pulses'
 
 /**
  * Полное визуальное содержимое одного World без симуляции, камеры, HUD и postprocess.
@@ -61,6 +64,8 @@ export function WorldVisuals() {
   const session = useSession()
   const world = session.world
   const worldRef = useRef<Group>(null)
+  // Тело разбито или засеяно посреди визита — тела и всё, что держится за них, пересобираются.
+  const bodies = useBodiesRevision()
   // bush.active меняется в useFrame симуляции, а не в React — переключаем видимость кадром.
   useFrame(() => {
     if (worldRef.current) worldRef.current.visible = !session.bush.active
@@ -83,12 +88,12 @@ export function WorldVisuals() {
         <Starfield />
         <GalaxyLayer />
 
-        <Bodies />
+        <Bodies key={`b${bodies}`} />
         <BlackHole />
-        <StarBeams />
-        <MassStreams />
+        <StarBeams key={`s${bodies}`} />
+        <MassStreams key={`m${bodies}`} />
         <QuasarDisks />
-        <Dyson />
+        <Dyson key={`d${bodies}`} />
         <AsteroidField />
         <Comets />
         <Titans />
@@ -116,6 +121,8 @@ export function WorldVisuals() {
         <Explosions />
         <ExplosionChunks />
         <Blastwaves />
+        <Pulses />
+        <Cataclysms />
         <WarpFlashes />
         <WarpArrivalPortals />
         <StationShields />

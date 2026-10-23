@@ -20,7 +20,7 @@ import { HUD_COLORS, line } from './draw'
 import { t, type Key } from '../i18n'
 import { moduleName, properName } from '../i18n/dataNames'
 import { formatDistance } from './project'
-import { activeWarning, pushWarning, WARN_LIFE } from '../../session/warnings'
+import { activeWarning, dropWarnings, pushWarning, WARN_LIFE } from '../../session/warnings'
 import { plateOf, type Plate } from './warningStyle'
 import { HudFrame, MISSILE_ALERT_SECONDS, S, dockState, hudFont } from './hudShared'
 
@@ -89,6 +89,26 @@ function noteLaserGroup(player: ShipEntity, now: number): void {
   pushWarning('laserGroup', now, { label, repeat: 0 })
 }
 
+/**
+ * Заряд разбивающего импульса — три состояния, одна плашка: набор, готов, отмена. Смена
+ * состояния гасит прежнюю сразу: иначе «готов» дожигал бы свой срок над улетевшим шаром,
+ * а «отменён» — над новым набором.
+ */
+const seenCharge: { state: 'none' | 'charging' | 'ready' | 'cancelled' } = { state: 'none' }
+function notePulseCharge(player: HudFrame['world']['player'], now: number): void {
+  const c = player.pulseCharge
+  const state = !c ? 'none' : c.cancelledAt !== null ? 'cancelled' : c.level >= 1 ? 'ready' : 'charging'
+  if (state !== seenCharge.state) {
+    // «Отменён» гаснет сам, своим сроком; снимает его только новый набор.
+    if (state === 'cancelled' || state === 'none') dropWarnings('pulseCharging', 'pulseReady')
+    else dropWarnings('pulseCharging', 'pulseReady', 'pulseCancelled')
+    seenCharge.state = state
+    if (state === 'cancelled') pushWarning('pulseCancelled', now)
+  }
+  if (state === 'charging') pushWarning('pulseCharging', now, { repeat: 0 })
+  else if (state === 'ready') pushWarning('pulseReady', now, { repeat: 0 })
+}
+
 /** Собирает живую плашку-предупреждение; рисование — отдельно (`paintWarningPlate`). */
 export function gatherWarnings(frame: HudFrame): Plate | null {
   const { world, autodock } = frame
@@ -108,6 +128,7 @@ export function gatherWarnings(frame: HudFrame): Plate | null {
   // Ствол в отключке перегрева: жёлтая мигающая «ПЕРЕГРЕВ ЛАЗЕРА · ОХЛАЖДЕНИЕ» все 5 секунд.
   if (laserOverheated(player, now)) pushWarning('laserHot', now)
   noteLaserGroup(player, now)
+  notePulseCharge(player, now)
   if (player.cruise.block === 'mass-lock') pushWarning('massLock', now)
   else if (player.cruise.block === 'proximity') pushWarning('gravityBrake', now)
   if (scooping(player)) pushWarning('refuel', now)

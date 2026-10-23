@@ -45,7 +45,7 @@ export function TorusTuner({ open, setOpen }: { open: boolean; setOpen: (open: b
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (!open) {
-        if (e.code !== 'F4' || e.repeat || (!session.bush.active && !session.world.asteroidBelt)) return
+        if (e.code !== 'F4' || e.repeat || (!session.bush.active && session.world.asteroidBelts.length === 0)) return
         e.preventDefault()
         e.stopImmediatePropagation()
         relock.current = input.pointerLocked
@@ -72,7 +72,7 @@ export function TorusTuner({ open, setOpen }: { open: boolean; setOpen: (open: b
 
   if (!open) return null
   if (!session.bush.active) {
-    const belt = session.world.asteroidBelt
+    const belt = session.world.asteroidBelts[0]
     if (!belt) return null
     return <div className="absolute right-4 top-4 z-[65] w-80 space-y-4 rounded-lg border p-4 font-mono text-xs" style={{ background: '#0a1a2feb', color: '#7fd6ff' }}>
       <div>АСТЕРОИДНЫЙ ПОЯС · F4</div>
