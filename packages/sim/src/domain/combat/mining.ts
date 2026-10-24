@@ -93,14 +93,14 @@ export function blastAsteroid(world: World, a: AsteroidEntity, oreYield: number 
   if (!a.alive) return
   if (forwardRock(world, a, a.hull + 1, 'blast', oreYield)) return
   a.alive = false
-  spawnExplosion(world, a.pos, fragmentVelocity(a, _fragVel), a.radius * 0.12)
+  spawnExplosion(world, a.pos, fragmentVelocity(a, _fragVel), a.radius * 0.12, undefined, a.pos)
   crumble(world, a, oreYield)
 }
 
 export function shatter(world: World, a: AsteroidEntity, oreYield = 1): void {
   if (forwardRock(world, a, a.hull + 1, 'laser', oreYield)) return
   a.alive = false
-  spawnExplosion(world, a.pos, fragmentVelocity(a, _fragVel), a.radius * 0.12)
+  spawnExplosion(world, a.pos, fragmentVelocity(a, _fragVel), a.radius * 0.12, undefined, a.pos)
 
   if (!splittable(a)) {
     crumble(world, a, oreYield)
@@ -160,7 +160,7 @@ export function bombShatterAsteroid(world: World, a: AsteroidEntity): void {
   if (!a.alive) return
   if (forwardRock(world, a, a.hull + 1, 'bomb')) return
   a.alive = false
-  spawnExplosion(world, a.pos, fragmentVelocity(a, _fragVel), a.radius * 0.12)
+  spawnExplosion(world, a.pos, fragmentVelocity(a, _fragVel), a.radius * 0.12, undefined, a.pos)
 
   const half = Math.floor(a.radius / 2)
   const gen = (a.gen ?? 0) + 1
@@ -255,7 +255,7 @@ export function dropNetRock(world: World, netId: string, burst: boolean): void {
   for (const a of world.asteroids) {
     if (a.netId !== netId || !a.alive) continue
     a.alive = false
-    if (burst) spawnExplosion(world, a.pos, a.vel, a.radius * 0.12)
+    if (burst) spawnExplosion(world, a.pos, a.vel, a.radius * 0.12, undefined, a.pos)
   }
 }
 

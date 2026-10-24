@@ -6,7 +6,7 @@ import { LINKED_PORTAL } from '../../config/galaxy'
 import {
   crossedJumpGate,
   fitsInsideJumpGate,
-  jumpGateSide,
+  jumpGateRel,
   linkedPortalAhead,
   linkedPortalTargetRadius,
   stepJumpGateCollision,
@@ -82,13 +82,35 @@ describe('твёрдый обод гиперпортала', () => {
     const mouth = gate()
 
     ship.state.pos.set(0, 0, -1)
-    const behind = jumpGateSide(ship, mouth)
+    const behind = jumpGateRel(ship, mouth, new Vector3())
     ship.state.pos.set(0, 0, 1)
-    const ahead = jumpGateSide(ship, mouth)
-
     expect(fitsInsideJumpGate(ship, mouth)).toBe(true)
-    expect(crossedJumpGate(behind, ahead, true)).toBe(true)
-    expect(crossedJumpGate(ahead, behind, true)).toBe(true)
+    expect(crossedJumpGate(behind, ship, mouth)).toBe(true)
+    const ahead = jumpGateRel(ship, mouth, new Vector3())
+    ship.state.pos.set(0, 0, -1)
+    expect(crossedJumpGate(ahead, ship, mouth)).toBe(true)
+  })
+
+  it('на форсаже засчитывает проход по точке пересечения, а не по конечной точке кадра', () => {
+    // Пойманное: за кадр на форсаже корабль уходил на километры за кольцо; при наклоне курса
+    // в пару градусов конечная точка оказывалась сбоку от оси — «мимо отверстия», перехода нет.
+    const ship = veteranWorld().player
+    const mouth = gate()
+    ship.state.pos.set(0, 0, -100)
+    const before = jumpGateRel(ship, mouth, new Vector3())
+    // 2.7 км за кадр с уклоном ~3°: через плоскость — у самой оси, в конце — в 140 м сбоку.
+    ship.state.pos.set(140, 0, 2_600)
+    expect(fitsInsideJumpGate(ship, mouth)).toBe(false)
+    expect(crossedJumpGate(before, ship, mouth)).toBe(true)
+  })
+
+  it('пролёт мимо кольца — не переход, даже если в конце кадра корабль на оси', () => {
+    const ship = veteranWorld().player
+    const mouth = gate()
+    ship.state.pos.set(500, 0, -100)
+    const before = jumpGateRel(ship, mouth, new Vector3())
+    ship.state.pos.set(0, 0, 100)
+    expect(crossedJumpGate(before, ship, mouth)).toBe(false)
   })
 
   it('не пропускает корпус, который центром попал в отверстие, но цепляет трубу', () => {

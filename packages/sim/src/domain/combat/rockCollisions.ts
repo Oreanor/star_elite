@@ -97,7 +97,7 @@ function hitBodies(world: World, a: AsteroidEntity): void {
     a.alive = false
     _n.copy(a.pos).sub(body.pos).normalize()
     _contact.copy(body.pos).addScaledVector(_n, body.radius)
-    if (body.kind !== 'star') spawnExplosion(world, _contact, _zero, a.radius * 0.2)
+    if (body.kind !== 'star') spawnExplosion(world, _contact, _zero, a.radius * 0.2, undefined, _contact)
     return
   }
 }

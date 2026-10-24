@@ -42,6 +42,7 @@ export {
   crossedJumpGate,
   fitsInsideJumpGate,
   jumpGateSide,
+  jumpGateRel,
   linkedPortalAhead,
   linkedPortalTargetRadius,
   stepJumpGateCollision,

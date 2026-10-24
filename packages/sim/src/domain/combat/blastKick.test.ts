@@ -34,7 +34,7 @@ describe('удар окончательного взрыва', () => {
       // facing 1: взрыв перед носом; −1: за кормой, а корабль уже летит прочь на ходу.
       const at = world.player.state.pos.clone().addScaledVector(fwd, 500 * facing)
       if (facing < 0) world.player.state.vel.copy(fwd).multiplyScalar(150)
-      blastKick(world, at, 5_000)
+      blastKick(world, at, 1_000, false, 5)
       const away = world.player.state.pos.clone().sub(at).normalize()
       expect(world.player.blastDrift.dot(away)).toBeGreaterThan(0)
       expect(world.player.lastBlastAt).toBe(world.time)
@@ -44,7 +44,7 @@ describe('удар окончательного взрыва', () => {
   it('дальше досягаемости — ни толчка, ни тряски: улетевшему на форсаже всё равно', () => {
     const world = startWorld()
     const at = world.player.state.pos.clone().add(new Vector3(10_000, 0, 0))
-    blastKick(world, at, 5_000)
+    blastKick(world, at, 1_000, false, 5)
     expect(world.player.blastDrift.length()).toBe(0)
     expect(world.player.lastBlastAt).toBeLessThan(0)
   })
@@ -56,7 +56,7 @@ describe('удар окончательного взрыва', () => {
     const world = startWorld()
     const twin = startWorld()
     const at = world.player.state.pos.clone().add(new Vector3(300, 0, 0))
-    blastKick(world, at, 5_000)
+    blastKick(world, at, 1_000, false, 5)
     // Закрут уводит нос и меняет дальнейший путь — здесь меряем лишь сам рывок.
     world.player.state.angVel.set(0, 0, 0)
     for (let i = 0; i < 60 * 3; i++) {

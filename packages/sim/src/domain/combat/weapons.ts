@@ -327,21 +327,28 @@ export function isCombatLaser(laser: LaserModule): boolean {
 
 /**
  * Стреляет ли установка `i` в текущем режиме. Выбран один лазер (X) — только он. Режим
- * «ВСЕ БОЕВЫЕ» — только боевые: спецлучи (удержание, рост/сжатие, горный, засев, разбиение)
- * стреляют лишь выбранными поодиночке, иначе залп смешивал эффекты — горный колол камень,
- * который обычный рассыпает, удержание цепляло то, что жгут. Стоят только спецлучи — в
- * «ВСЕ» стреляет первый из них: корабль с одним горным не должен молчать.
+ * «ВСЕ БОЕВЫЕ» (`null`, есть лишь при двух боевых и больше) — только боевые: спецлучи
+ * (удержание, рост/сжатие, горный, засев, разбиение) стреляют лишь выбранными поодиночке,
+ * иначе залп смешивал эффекты — горный колол камень, который обычный рассыпает.
  */
 function firesIn(e: ShipEntity, group: number | null, i: number): boolean {
   if (group !== null) return i === group
   const w = e.spec.mounts[i]?.weapon
-  if (!w || !isLaser(w)) return false
-  if (isCombatLaser(w)) return true
-  return !hasCombatLaser(e) && firstLaserMount(e) === i
+  return !!w && isLaser(w) && isCombatLaser(w)
 }
 
-function hasCombatLaser(e: ShipEntity): boolean {
-  return e.spec.mounts.some((m) => isLaser(m.weapon) && isCombatLaser(m.weapon))
+function combatLaserCount(e: ShipEntity): number {
+  let n = 0
+  for (const m of e.spec.mounts) if (isLaser(m.weapon) && isCombatLaser(m.weapon)) n++
+  return n
+}
+
+/**
+ * Есть ли режим «ВСЕ БОЕВЫЕ». При одном боевом он — тот же единственный ствол, при ни одном
+ * — пустой (прежде он молча стрелял первым спецлучом, хоть импульсом жизни): выбора нет.
+ */
+export function volleyAllowed(e: ShipEntity): boolean {
+  return combatLaserCount(e) >= 2
 }
 
 function firstLaserMount(e: ShipEntity): number {
@@ -450,29 +457,37 @@ function addLaserHeat(e: ShipEntity, now: number, amount: number): void {
 }
 
 
-/** Выбранная установка — если она ещё лазер; иначе null («все»): оснастку могли сменить. */
+/**
+ * Какой лазер стреляет: выбранный (если он ещё лазер — оснастку могли сменить), иначе
+ * «ВСЕ БОЕВЫЕ» (`null`), а где такого режима нет — один ствол: первый боевой, без боевых —
+ * первый лазер. Нет лазеров — `null` (стрелять нечем).
+ */
 export function selectedLaser(e: ShipEntity): number | null {
   const g = e.laserGroup
-  return g !== null && e.spec.mounts[g] && isLaser(e.spec.mounts[g].weapon) ? g : null
+  if (g !== null && e.spec.mounts[g] && isLaser(e.spec.mounts[g].weapon)) return g
+  if (volleyAllowed(e)) return null
+  const combat = e.spec.mounts.findIndex((m) => isLaser(m.weapon) && isCombatLaser(m.weapon))
+  if (combat >= 0) return combat
+  const first = firstLaserMount(e)
+  return first >= 0 ? first : null
 }
 
 /**
- * Следующий выбор по кругу: все → первый лазер → … → последний → все. Один лазер (или ни
- * одного) — выбирать нечего, остаётся «все». Возвращает новый выбор.
+ * Следующий выбор по кругу: [все боевые →] первый лазер → … → последний → по новой.
+ * «Все боевые» в круге лишь при двух боевых и больше (`volleyAllowed`). Возвращает выбор.
  */
 export function cycleLaserGroup(e: ShipEntity): number | null {
-  const lasers: number[] = []
+  const options: (number | null)[] = volleyAllowed(e) ? [null] : []
   e.spec.mounts.forEach((m, i) => {
-    if (isLaser(m.weapon)) lasers.push(i)
+    if (isLaser(m.weapon)) options.push(i)
   })
-  const current = selectedLaser(e)
-  if (lasers.length <= 1) e.laserGroup = null
-  else if (current === null) e.laserGroup = lasers[0]!
-  else {
-    const at = lasers.indexOf(current)
-    e.laserGroup = at >= 0 && at < lasers.length - 1 ? lasers[at + 1]! : null
+  if (options.length === 0) {
+    e.laserGroup = null
+    return null
   }
-  return e.laserGroup
+  const at = options.indexOf(selectedLaser(e))
+  e.laserGroup = options[(at + 1) % options.length]!
+  return selectedLaser(e)
 }
 
 /** Остывание и перезарядка. Зовётся каждый шаг для каждого корабля. */

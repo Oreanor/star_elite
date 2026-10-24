@@ -4,6 +4,7 @@ import {
   crossedJumpGate,
   fitsInsideJumpGate,
   jumpGateSide,
+  jumpGateRel,
   linkedPortalAhead,
   linkedPortalTargetRadius,
   stepLinkedPortalRadius,
@@ -56,7 +57,12 @@ export interface JumpPortal {
    * начиналось рывком. Теперь кольцо рождается уже после них и растёт гладко.
    */
   destWarm: boolean
-  prevSide: number | null
+  /**
+   * Прежнее место корабля относительно устья (`jumpGateRel`) — по нему ищется ТОЧКА пересечения
+   * плоскости (`crossedJumpGate`). `hasPrev` — есть ли прежнее: вектор живёт с модулем, без аллокаций.
+   */
+  prevRel: Vector3
+  hasPrev: boolean
   committing: boolean
   /** Клип «этой» стороны (отсекает кусок за плоскостью кольца). */
   clipHere: Plane
@@ -92,7 +98,8 @@ const portal: JumpPortal = {
   destNormal: new Vector3(0, 0, -1),
   destReady: false,
   destWarm: false,
-  prevSide: null,
+  prevRel: new Vector3(),
+  hasPrev: false,
   committing: false,
   clipHere: new Plane(),
   clipThere: new Plane(),
@@ -188,7 +195,7 @@ export function openPortal(world: World, index: number, arrival: Arrival | null,
   portal.hereIndex = world.systemIndex
   portal.index = index
   portal.arrival = arrival
-  portal.prevSide = null
+  portal.hasPrev = false
   portal.committing = false
   portal.destReady = false
   portal.destWarm = false
@@ -238,7 +245,7 @@ export function closePortal(): void {
   activeWorld = null
   portal.open = false
   portal.committing = false
-  portal.prevSide = null
+  portal.hasPrev = false
   portal.destReady = false
   portal.destWarm = false
   notifyPortalChanged()
@@ -285,14 +292,14 @@ export function completePortalTransit(world: World): void {
   activeWorld = null
   portal.open = false
   portal.committing = false
-  portal.prevSide = null
+  portal.hasPrev = false
   portal.destReady = false
   portal.destWarm = false
 }
 
 /** Неудачный переход не уничтожает уже открытый тоннель. */
 export function cancelPortalCommit(): void {
-  portal.prevSide = null
+  portal.hasPrev = false
   portal.committing = false
   portal.open = true
 }
@@ -391,11 +398,12 @@ export function tickPortal(world: World, growHeld: boolean, now: number): 'cross
       destWarm: portal.destWarm,
     })
   }
-  if (portal.destWarm && crossedJumpGate(portal.prevSide, side, fits)) {
-    hlog('ПЕРЕСЕЧЕНИЕ плоскости — переход', { prevSide: portal.prevSide, side })
+  if (portal.destWarm && crossedJumpGate(portal.hasPrev ? portal.prevRel : null, world.player, localGate)) {
+    hlog('ПЕРЕСЕЧЕНИЕ плоскости — переход', { prevSide: portal.prevRel.dot(localGate.normal), side })
     beginPortalCommit()
     return 'cross'
   }
-  portal.prevSide = side
+  jumpGateRel(world.player, localGate, portal.prevRel)
+  portal.hasPrev = true
   return null
 }

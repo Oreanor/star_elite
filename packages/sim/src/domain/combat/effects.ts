@@ -28,8 +28,14 @@ export function spawnTracer(
  * очаги в разных фазах: рождаем их разом, но с разным временем старта, а рендер пропускает
  * то, чему ещё не время. Иначе десяток вспышек — это десяток одинаковых копий.
  */
-export function spawnExplosion(world: World, pos: Vector3, vel: Vector3, scale: number, startAt?: number): void {
-  world.explosions.push({ pos: pos.clone(), vel: vel.clone(), born: startAt ?? world.time, scale })
+export function spawnExplosion(world: World, pos: Vector3, vel: Vector3, scale: number, startAt?: number, zoomAt?: Vector3): void {
+  world.explosions.push({
+    pos: pos.clone(),
+    vel: vel.clone(),
+    born: startAt ?? world.time,
+    scale,
+    ...(zoomAt ? { zoomAt: zoomAt.clone() } : {}),
+  })
 }
 
 /**

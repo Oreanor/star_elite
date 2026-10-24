@@ -1,7 +1,7 @@
 import { Quaternion, Vector3 } from 'three'
 import { veteranWorld } from '../../testkit'
 import { describe, expect, it } from 'vitest'
-import { MISSILE_PYLON, MODULE_CATALOGUE, PULSE_LASER } from '../../config/modules'
+import { MISSILE_PYLON, MODULE_CATALOGUE, PULSE_LASER, SEED_PULSE } from '../../config/modules'
 import { ASTEROID } from '../../config/world'
 import { PHYSICS } from '../../config/physics'
 import { ATHENA, ATLAS, AURORA_ONE, HERMES, ICARUS, missileRackOf, ORION, PEGASUS, PERSEUS, SPIRITUS_SANCTUS, THESEUS } from '../../config/chassis'
@@ -16,7 +16,7 @@ import { stepBolts } from './bolts'
 import { applyDamage, regenShield } from './damage'
 import { fireEcm, regenEnergy } from './ecm'
 import { stepMissiles } from './missiles'
-import { coolGuns, cycleLaserGroup, fireLasers, fireMissile, missileAmmo } from './weapons'
+import { coolGuns, cycleLaserGroup, fireLasers, fireMissile, missileAmmo, selectedLaser, volleyAllowed } from './weapons'
 import { addCommodity } from '../cargo/hold'
 import { issueFactoryMissiles, missileCommodity, missileStock } from './ordnance'
 import { quietWorld } from '../../testkit'
@@ -277,13 +277,31 @@ describe('лазер', () => {
     expect(world.bolts.some((b) => b.weapon === PULSE_LASER.id)).toBe(true)
   })
 
-  it('X перебирает лазеры по кругу и возвращается к «все»', () => {
+  it('X перебирает лазеры по кругу и возвращается к «все боевые»', () => {
     const p = withOneEnemy().world.player
+    p.loadout = { ...p.loadout, weapons: p.loadout.weapons.map((w) => (w && w.kind === 'laser' ? PULSE_LASER : w)) }
+    refreshSpec(p)
     const lasers = p.spec.mounts.map((m, i) => (isLaser(m.weapon) ? i : -1)).filter((i) => i >= 0)
+    if (lasers.length < 2) return
     p.laserGroup = null
     const seen: (number | null)[] = []
     for (let k = 0; k <= lasers.length; k++) seen.push(cycleLaserGroup(p))
-    expect(seen).toEqual(lasers.length > 1 ? [...lasers, null] : lasers.map(() => null).concat([null]))
+    expect(seen).toEqual([...lasers, null])
+  })
+
+  it('«все боевые» — лишь при двух боевых: один боевой и импульс жизни — выбор только поштучно', () => {
+    // Импульс жизни — не боевой; при одном боевом залп «все» — тот же ствол, при ни одном —
+    // пустой режим, прежде стрелявший первым спецлучом. В круге X такого режима нет.
+    const p = withOneEnemy().world.player
+    const slots = p.loadout.weapons.map((w, i) => (w && w.kind === 'laser' ? i : -1)).filter((i) => i >= 0)
+    if (slots.length < 2) return
+    p.loadout = { ...p.loadout, weapons: p.loadout.weapons.map((w, i) => (i === slots[0] ? SEED_PULSE : i === slots[1] ? PULSE_LASER : w && w.kind === 'laser' ? null : w)) } as typeof p.loadout
+    refreshSpec(p)
+    p.laserGroup = null
+    expect(volleyAllowed(p)).toBe(false)
+    // Без выбора стреляет единственный боевой, а не импульс жизни.
+    expect(p.spec.mounts[selectedLaser(p)!]!.weapon).toBe(PULSE_LASER)
+    for (let k = 0; k < 4; k++) expect(cycleLaserGroup(p)).not.toBeNull()
   })
 })
 

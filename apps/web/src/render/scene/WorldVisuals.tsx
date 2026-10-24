@@ -35,6 +35,7 @@ import { Figurines } from './Figurines'
 import { Monoliths } from './Monoliths'
 import { RockDebris } from './RockDebris'
 import { WarBases } from './WarBases'
+import { WarBaseRays } from './WarBaseRays'
 import { WarShards } from './WarShards'
 import { FirePuffs } from './FirePuffs'
 import { Drones, EnemyShips, PlayerShip } from './Ships'
@@ -109,6 +110,7 @@ export function WorldVisuals() {
         <Figurines />
         <WarBases />
         <WarShards />
+        <WarBaseRays />
         <FirePuffs />
         <RockDebris />
         <Drones />

@@ -1,7 +1,7 @@
 import { Vector3 } from 'three'
 import { COSMIC } from '../../config/weapons'
 import { randomUnit } from '../../core/math/random'
-import { effectiveRadius } from '../scale/scale'
+import { apparentRadius, effectiveRadius } from '../scale/scale'
 import type { ShipEntity, World } from '../world/entities'
 
 /**
@@ -19,19 +19,21 @@ const _away = new Vector3()
 const _twist = new Vector3()
 
 /**
- * Толкнуть всех в радиусе `reach` от `at` (локальные координаты). Полная сила — ближе
- * `KICK.FULL · reach`, дальше линейно до нуля на краю.
+ * Толкнуть всех у взрыва тела (или базы) радиуса `radius` в `at` (локальные координаты).
+ * Досягаемость — `reachMul` радиусов тела ТОГО размера, что виден кораблю (закон зума):
+ * выросшему борту и взрыв меньше. Полная сила — ближе `KICK.FULL` досягаемости.
  */
-export function blastKick(world: World, at: Vector3, reach: number): void {
-  kick(world, world.player, at, reach)
+export function blastKick(world: World, at: Vector3, radius: number, star: boolean, reachMul: number): void {
+  kick(world, world.player, at, radius, star, reachMul)
   // У зеркала чужими кораблями правит хозяин — толкаем лишь своего; остальных сдвинет он.
   if (world.trafficRole === 'mirror') return
-  for (const ship of world.ships) kick(world, ship, at, reach)
+  for (const ship of world.ships) kick(world, ship, at, radius, star, reachMul)
 }
 
-function kick(world: World, ship: ShipEntity, at: Vector3, reach: number): void {
+function kick(world: World, ship: ShipEntity, at: Vector3, radius: number, star: boolean, reachMul: number): void {
   if (!ship.alive) return
   const K = COSMIC.KICK
+  const reach = apparentRadius(radius, star, ship.state.scale) * reachMul
   _away.copy(ship.state.pos).sub(at)
   const d = _away.length()
   if (d >= reach) return
@@ -71,6 +73,6 @@ export function stepCataclysmKicks(world: World): void {
     if (world.time < c.born + COSMIC.BURST[c.kind]) continue
     c.kicked = true
     _away.copy(c.at).sub(world.originOffset)
-    blastKick(world, _away, c.radius * COSMIC.KICK.REACH[c.kind])
+    blastKick(world, _away, c.radius, c.kind === 'star', COSMIC.KICK.REACH[c.kind])
   }
 }

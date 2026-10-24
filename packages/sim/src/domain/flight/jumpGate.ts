@@ -8,6 +8,7 @@ const _rel = new Vector3()
 const _radial = new Vector3()
 const _nearest = new Vector3()
 const _normal = new Vector3()
+const _cross = new Vector3()
 
 /** Предельный осевой радиус: чистый проход задаётся в диаметрах корпуса конфигом. */
 export function linkedPortalTargetRadius(ship: ShipEntity): number {
@@ -49,10 +50,29 @@ export function fitsInsideJumpGate(ship: ShipEntity, gate: JumpGate): boolean {
   return radialSq <= clearRadius * clearRadius
 }
 
-/** Пересечение двустороннее: знак плоскости может смениться в любом направлении. */
-export function crossedJumpGate(previousSide: number | null, side: number, fits: boolean): boolean {
-  if (previousSide === null || !fits) return false
-  return (previousSide <= 0 && side > 0) || (previousSide >= 0 && side < 0)
+/** Место корабля относительно центра устья — в `out`. Хранят его от шага к шагу (`crossedJumpGate`). */
+export function jumpGateRel(ship: ShipEntity, gate: JumpGate, out: Vector3): Vector3 {
+  return out.copy(ship.state.pos).sub(gate.pos)
+}
+
+/**
+ * Прошёл ли корпус СКВОЗЬ отверстие за шаг — от прежнего места `prevRel` (относительно устья,
+ * `jumpGateRel`) к нынешнему. Пересечение двустороннее: знак плоскости может смениться в любую
+ * сторону. Вписанность меряется в ТОЧКЕ ПЕРЕСЕЧЕНИЯ плоскости, а не в конечной: на форсаже за
+ * кадр корабль уходит на километры за кольцо, и наклон курса в пару градусов уводил конечную
+ * точку мимо отверстия — переход терялся, корабль проскакивал кольцо насквозь.
+ */
+export function crossedJumpGate(prevRel: Vector3 | null, ship: ShipEntity, gate: JumpGate): boolean {
+  if (!prevRel) return false
+  _rel.copy(ship.state.pos).sub(gate.pos)
+  const a = prevRel.dot(gate.normal)
+  const b = _rel.dot(gate.normal)
+  if (!((a <= 0 && b > 0) || (a >= 0 && b < 0))) return false
+  _cross.copy(prevRel).lerp(_rel, a === b ? 0 : a / (a - b))
+  const axial = _cross.dot(gate.normal)
+  const radialSq = Math.max(0, _cross.lengthSq() - axial * axial)
+  const clearRadius = Math.max(0, gate.radius - gate.tube - effectiveRadius(ship))
+  return radialSq <= clearRadius * clearRadius
 }
 
 /**

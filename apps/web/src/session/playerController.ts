@@ -463,7 +463,7 @@ export function createPlayerController(intent: PlayerIntent): Controller {
       // правка глубины дёргала бы корабль, и подстраивать устье приходилось бы на торможении.
       c.retro = !inputCaptured() && (isHeld('ControlLeft') || isHeld('ControlRight')) ? 1 : 0
 
-      // X — какой лазер стреляет: все → первый → … → все. Выбор живёт в домене (`laserGroup`),
+      // X — какой лазер стреляет: [все боевые →] первый → … → по новой. Выбор живёт в домене (`laserGroup`),
       // плашку о нём рисует HUD, заметив смену.
       if (consumePress('KeyX')) cycleLaserGroup(ship)
 

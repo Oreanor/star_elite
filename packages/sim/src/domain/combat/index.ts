@@ -63,6 +63,7 @@ export {
   laserOverheated,
   cycleLaserGroup,
   selectedLaser,
+  volleyAllowed,
   missileAmmo,
   muzzleWorldPos,
   peakHeat,

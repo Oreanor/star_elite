@@ -4,7 +4,7 @@ import { Color, IcosahedronGeometry, InstancedMesh, Object3D } from 'three'
 import { renderTime } from '@elite/sim'
 import { useSession } from '../../session/GameContext'
 import { firePuffMaterial } from '../materials/firePuff'
-import { worldShrink } from '../worldShrink'
+import { worldShrink, zoomAround } from '../worldShrink'
 
 /**
  * КЛУБЫ ОГНЯ очагов (`world.firePuffs`): каждый рождается мелким, распухает с замедлением и
@@ -38,7 +38,7 @@ export function FirePuffs() {
         if (u < 0 || u >= 1) continue
         // Распухает быстро вначале и дотягивает к концу: 30% → 100% размера.
         const grow = 0.3 + 0.7 * (1 - (1 - u) ** 3)
-        _dummy.position.copy(f.pos)
+        zoomAround(f.pos, f.zoomAt, shrink, _dummy.position)
         _dummy.scale.setScalar(f.size * grow * shrink)
         _dummy.updateMatrix()
         mesh.setMatrixAt(n, _dummy.matrix)

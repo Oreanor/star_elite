@@ -4,8 +4,7 @@ import { Matrix4, Quaternion, Vector3 } from 'three'
 import {
   LINKED_PORTAL,
   crossedJumpGate,
-  fitsInsideJumpGate,
-  jumpGateSide,
+  jumpGateRel,
   type JumpGate,
 } from '@elite/sim'
 import { jumpTo, useSession } from '../session/GameContext'
@@ -19,7 +18,8 @@ import {
 interface RemotePortal {
   snapshot: SharedPortalSnapshot
   gate: JumpGate
-  previousSide: number | null
+  /** Прежнее место корабля относительно устья; null — ещё не было (`crossedJumpGate`). */
+  previousRel: Vector3 | null
 }
 
 const _sourcePos = new Vector3()
@@ -85,7 +85,7 @@ export function RemotePortalDirector() {
               radius: snapshot.radius,
               tube: LINKED_PORTAL.TUBE,
             },
-            previousSide: null,
+            previousRel: null,
           }
           records.set(snapshot.uid, record)
         }
@@ -127,13 +127,9 @@ export function RemotePortalDirector() {
         continue
       }
 
-      const side = jumpGateSide(world.player, record.gate)
-      const crossed = crossedJumpGate(
-        record.previousSide,
-        side,
-        fitsInsideJumpGate(world.player, record.gate),
-      )
-      record.previousSide = side
+      const crossed = crossedJumpGate(record.previousRel, world.player, record.gate)
+      // Вектор заводится однажды на устье и дальше переписывается: без аллокаций в кадре.
+      record.previousRel = jumpGateRel(world.player, record.gate, record.previousRel ?? new Vector3())
       if (!crossed) continue
 
       const fromHere = snapshot.fromSystem === world.systemIndex

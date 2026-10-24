@@ -37,7 +37,7 @@ function detonate(world: World, base: WarBaseEntity, startAt = world.time, step:
     _blastAt.multiplyScalar(base.radius * depth).add(base.pos)
     const scale =
       base.radius * (WARBASE.BLAST_SCALE_MIN + world.rng() * (WARBASE.BLAST_SCALE_MAX - WARBASE.BLAST_SCALE_MIN))
-    spawnExplosion(world, _blastAt, _still, scale, startAt + i * step)
+    spawnExplosion(world, _blastAt, _still, scale, startAt + i * step, base.pos)
   }
 }
 
@@ -95,7 +95,7 @@ export function stepWarBaseWrecks(world: World): void {
     if (base.violent) {
       flingShards(world, base)
       // Общий взрыв от разбивающего шара толкает и трясёт корабли вокруг — у каждого свой.
-      blastKick(world, base.pos, base.radius * COSMIC.KICK.BASE_REACH)
+      blastKick(world, base.pos, base.radius, false, COSMIC.KICK.BASE_REACH)
     }
     spawnBlastwave(world, base.pos, base.radius * (base.violent ? WARBASE.SHATTER.WAVE_REACH : WARBASE.WAVE_REACH))
     if (world.trafficRole === 'mirror') continue
@@ -141,6 +141,7 @@ export function shatterWarBase(world: World, base: WarBaseEntity, impact?: Vecto
 
   const final = S.BUILD + S.FINAL_DELAY
   base.wreckSpan = final
+  base.rays = []
   const foci = S.FOCI_MIN + Math.floor(rng() * (S.FOCI_MAX - S.FOCI_MIN + 1))
   // Сторона удара: к месту попадания, а без него (удар пришёл по сети) — к своему кораблю.
   _hitDir.copy(impact ?? world.player.state.pos).sub(base.pos)
@@ -153,6 +154,8 @@ export function shatterWarBase(world: World, base: WarBaseEntity, impact?: Vecto
     const radius = base.radius * (S.FOCUS_START + (S.FOCUS_END - S.FOCUS_START) * u)
     coneDir(rng, _hitDir, S.FOCI_SPREAD * Math.sqrt(rng()), _spotDir)
     _focus.copy(_spotDir).multiplyScalar(base.radius * (1 + S.FOCI_LIFT)).add(base.pos)
+    // Первые очаги прорываются и лучом из ядра — через себя, в миг своего разгара.
+    if (k < S.RAYS) base.rays.push({ dir: _spotDir.clone(), at: world.time + start })
     for (let n = 0; n < S.PUFFS; n++) {
       randomUnit(rng, _puffDir).multiplyScalar(radius * S.PUFF_OFFSET * Math.cbrt(rng()))
       world.firePuffs.push({
@@ -161,6 +164,7 @@ export function shatterWarBase(world: World, base: WarBaseEntity, impact?: Vecto
         life: S.PUFF_LIFE_MIN + rng() * (S.PUFF_LIFE_MAX - S.PUFF_LIFE_MIN),
         size: radius * (S.PUFF_SIZE_MIN + rng() * (S.PUFF_SIZE_MAX - S.PUFF_SIZE_MIN)),
         seed: rng() * 100,
+        zoomAt: base.pos.clone(),
       })
     }
     // Детали у очага рвутся вместе с ним: с этого мига они — огрызки.
@@ -181,6 +185,7 @@ export function shatterWarBase(world: World, base: WarBaseEntity, impact?: Vecto
       life: S.FINAL_LIFE_MIN + rng() * (S.FINAL_LIFE_MAX - S.FINAL_LIFE_MIN),
       size: base.radius * S.FINAL_PUFF_SIZE * (0.6 + 0.6 * rng()),
       seed: rng() * 100,
+      zoomAt: base.pos.clone(),
     })
   }
 }
@@ -189,6 +194,30 @@ export function shatterWarBase(world: World, base: WarBaseEntity, impact?: Vecto
  * Раскалённое ядро общего взрыва: сперва слепящая вспышка «реактора» (белые клубы на весь шар
  * за полсекунды), под ней — клубы ядра, ярче и крупнее прочих, долго тлеющие.
  */
+/**
+ * Вспышка попадания шара в базу — у всех, кто видел шар (не только у хозяина, который сносит).
+ * Без `world.rng`: у зеркала и хозяина число бросков разное, а зрелище от этого не зависит —
+ * разброс клубов — от номера клуба.
+ */
+export function warBaseImpactFlash(world: World, base: WarBaseEntity, point: Vector3): void {
+  const S = WARBASE.SHATTER
+  // Чуть над обшивкой, со стороны удара: корпус не съедает нижнюю половину вспышки.
+  _puffDir.copy(point).sub(base.pos).setLength(base.radius * (1 + S.FOCI_LIFT))
+  for (let n = 0; n < S.IMPACT_PUFFS; n++) {
+    const a = n * 2.399
+    const r = base.radius * S.IMPACT_SIZE * 0.3 * Math.sqrt(n / S.IMPACT_PUFFS)
+    world.firePuffs.push({
+      pos: base.pos.clone().add(_puffDir).add(_blastAt.set(Math.cos(a) * r, Math.sin(a * 1.7) * r, Math.sin(a) * r)),
+      born: world.time + n * 0.04,
+      life: S.IMPACT_LIFE * (0.85 + 0.1 * n),
+      size: base.radius * S.IMPACT_SIZE * (1 - 0.12 * n),
+      seed: (base.slot * 17 + n * 31) % 100,
+      heat: S.FLASH_HEAT,
+      zoomAt: base.pos.clone(),
+    })
+  }
+}
+
 function coreFlash(world: World, base: WarBaseEntity, at: number): void {
   const S = WARBASE.SHATTER
   const rng = world.rng
@@ -201,6 +230,7 @@ function coreFlash(world: World, base: WarBaseEntity, at: number): void {
       size: base.radius * S.FLASH_SIZE * (0.8 + 0.4 * rng()),
       seed: rng() * 100,
       heat: S.FLASH_HEAT,
+      zoomAt: base.pos.clone(),
     })
   }
   for (let n = 0; n < S.CORE_PUFFS; n++) {
@@ -212,6 +242,7 @@ function coreFlash(world: World, base: WarBaseEntity, at: number): void {
       size: base.radius * S.CORE_SIZE * (0.7 + 0.5 * rng()),
       seed: rng() * 100,
       heat: S.CORE_HEAT,
+      zoomAt: base.pos.clone(),
     })
   }
 }
@@ -276,6 +307,7 @@ function shard(
     size,
     born: world.time,
     life: S.SHARD_LIFE * (0.7 + rng() * 0.6),
+    zoomAt: base.pos.clone(),
   })
 }
 
@@ -329,7 +361,7 @@ export function damageWarBaseFixture(world: World, base: WarBaseEntity, fix: War
   if (fix.hitsLeft > 0) return
   fix.alive = false
   warBaseFixtureWorldPos(base, fix, world.time, _fixWorld)
-  spawnExplosion(world, _fixWorld, _still, fix.size * 1.2)
+  spawnExplosion(world, _fixWorld, _still, fix.size * 1.2, undefined, base.pos)
   if (livingFixtures(base) === 0) destroyWarBase(world, base)
 }
 
@@ -342,6 +374,6 @@ export function killWarBaseFixture(world: World, base: WarBaseEntity, fix: WarBa
   fix.hitsLeft = 0
   fix.alive = false
   warBaseFixtureWorldPos(base, fix, world.time, _fixWorld)
-  spawnExplosion(world, _fixWorld, _still, fix.size * 1.2)
+  spawnExplosion(world, _fixWorld, _still, fix.size * 1.2, undefined, base.pos)
   if (livingFixtures(base) === 0) destroyWarBase(world, base)
 }

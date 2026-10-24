@@ -30,6 +30,7 @@ import {
 import { missileGeometry } from '../geometry/ships'
 import { boltGeometry, podGeometry } from '../geometry/props'
 import { explosionSheetMaterial } from '../materials/explosionSheet'
+import { worldShrink, zoomAround } from '../worldShrink'
 
 /**
  * Эфемерные объекты: трассы, взрывы, контейнеры, ракеты.
@@ -63,6 +64,7 @@ const _expCool = /* @__PURE__ */ new Color(EXPLOSION.COOL)
 const _expTint = /* @__PURE__ */ new Color()
 
 const _dummy = new Object3D()
+const _blastAt = /* @__PURE__ */ new Vector3()
 const _nose = new Vector3()
 const _muzzle = new Vector3()
 const _warpTint = /* @__PURE__ */ new Color()
@@ -305,6 +307,7 @@ export function Explosions() {
     if (!mesh) return
 
     const now = renderTime(session.world)
+    const shrink = worldShrink(session.world.player.state.scale)
     let count = 0
 
     for (const blast of session.world.explosions) {
@@ -314,13 +317,17 @@ export function Explosions() {
       // раскатывается во времени, а не показывает десять одинаковых копий одной фазы.
       if (dt < 0) continue
       const age = dt / EXPLOSION.LIFE
+      // Взрыв сооружения (база, камень) ужат с ним к его центру; корабельный — своего размера.
+      const k = blast.zoomAt ? shrink : 1
+      if (k <= 0) continue
 
-      _dummy.position.copy(blast.pos)
+      _blastAt.copy(blast.pos)
       // Разлетается и наследует скорость того, что взорвалось.
-      _dummy.position.addScaledVector(blast.vel, dt)
+      _blastAt.addScaledVector(blast.vel, dt)
+      zoomAround(_blastAt, blast.zoomAt, k, _dummy.position)
       // К камере: квад всегда лицом к глазу — спрайт не должен показывать ребро.
       _dummy.quaternion.copy(camera.quaternion)
-      _dummy.scale.setScalar(blast.scale * (1 + age * EXPLOSION.CORE_GROWTH))
+      _dummy.scale.setScalar(blast.scale * k * (1 + age * EXPLOSION.CORE_GROWTH))
       _dummy.updateMatrix()
       mesh.setMatrixAt(count, _dummy.matrix)
       // Флипбук САМ несёт цвет огня — тон лишь слегка подкрашиваем к концу и приглушаем
@@ -366,6 +373,7 @@ export function ExplosionChunks() {
     if (!mesh) return
 
     const now = renderTime(session.world)
+    const shrink = worldShrink(session.world.player.state.scale)
     let count = 0
 
     for (const blast of session.world.explosions) {
@@ -374,23 +382,25 @@ export function ExplosionChunks() {
       // Не зажёгся — не сыплет: осколки идут вместе со своей вспышкой, не раньше неё.
       if (dt < 0) continue
       const age = dt / EXPLOSION.LIFE
+      const zk = blast.zoomAt ? shrink : 1
+      if (zk <= 0) continue
 
       const k = Math.min(EXPLOSION.CHUNK_MAX_PER, Math.round(blast.scale * EXPLOSION.CHUNK_PER_SCALE))
       // Сдвиг стартового направления по взрыву — чтобы соседние гибели не разлетались одинаково.
       const offset = (blast.born * 13) | 0
-      const spread = blast.scale * EXPLOSION.CHUNK_SPREAD
+      const spread = blast.scale * zk * EXPLOSION.CHUNK_SPREAD
       const tint = explosionTint(age, _expTint)
 
       for (let i = 0; i < k; i++) {
         if (count >= EXPLOSION.MAX_CHUNKS) break
         const dir = CHUNK_DIRS[(offset + i) % CHUNK_DIRS.length]!
 
-        _dummy.position.copy(blast.pos)
-        _dummy.position.addScaledVector(blast.vel, dt)
+        _blastAt.copy(blast.pos).addScaledVector(blast.vel, dt)
+        zoomAround(_blastAt, blast.zoomAt, zk, _dummy.position)
         // Летит наружу, замедляясь (ease-out), — как разлёт от вспышки.
         _dummy.position.addScaledVector(dir, spread * age * (2 - age))
         // Кусок мельче ядра и усыхает к концу.
-        _dummy.scale.setScalar(blast.scale * 0.5 * (1 - age * 0.6))
+        _dummy.scale.setScalar(blast.scale * zk * 0.5 * (1 - age * 0.6))
         _dummy.rotation.set(age * 6 + i, age * 5 - i, i)
         _dummy.updateMatrix()
         mesh.setMatrixAt(count, _dummy.matrix)

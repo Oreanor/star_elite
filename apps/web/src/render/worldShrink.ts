@@ -1,3 +1,4 @@
+import type { Vector3 } from 'three'
 import { bodySizeFactor, starSizeFactor } from '@elite/sim'
 import { BODY_FADE, GALAXY_LAYER } from './config'
 
@@ -22,6 +23,16 @@ export function worldShrink(scale: number): number {
  */
 export function starRadiusFactor(scale: number): number {
   return starSizeFactor(scale)
+}
+
+/**
+ * Точка эффекта сооружения при ужатии мира: сооружение рисуется на своём месте, но меньше, —
+ * и его огонь, осколки, вспышки ужимаются к его центру `at` тем же множителем. Без этого на
+ * ×100 клубы висели на честном радиусе далеко вокруг базы-точки. Пишет в `out`.
+ */
+export function zoomAround(pos: Vector3, at: Vector3 | undefined, shrink: number, out: Vector3): Vector3 {
+  if (!at) return out.copy(pos)
+  return out.copy(pos).sub(at).multiplyScalar(shrink).add(at)
 }
 
 /**

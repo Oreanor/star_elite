@@ -2,9 +2,10 @@ import { Vector3 } from 'three'
 import type { LaserEffect } from '../../config/schema'
 import { COSMIC } from '../../config/weapons'
 import { raySphere } from '../../core/math'
+import { bodySizeFactor, bodyZoom } from '../scale/scale'
 import { commitFate, markCataclysmHit } from '../world/fates'
 import type { BodyEntity, PulseEntity, PulseKind, ShipEntity, WarBaseEntity, World } from '../world/entities'
-import { shatterWarBase } from './warBase'
+import { shatterWarBase, warBaseImpactFlash } from './warBase'
 
 /**
  * КОСМИЧЕСКИЕ ЛАЗЕРЫ: импульс жизни и разбивающий импульс. Бьют по НЕБЕСНЫМ телам — планете,
@@ -32,13 +33,15 @@ const _hit: BodyHit = { body: null, distance: 0 }
  * Первое небесное тело на луче в пределах `range` (станция — не небесное: сквозь неё).
  * Возвращает модульный объект: копировать, не хранить.
  */
-export function castBody(world: World, origin: Vector3, dir: Vector3, range: number): BodyHit {
+export function castBody(world: World, origin: Vector3, dir: Vector3, range: number, scale = 1): BodyHit {
   _hit.body = null
   _hit.distance = range
   for (const b of world.bodies) {
     if (b.kind === 'station') continue
-    if (b.pos.distanceToSquared(origin) > (range + b.radius) ** 2) continue
-    const t = raySphere(origin, dir, b.pos, b.radius)
+    // Сфера — та, что видна стрелку этого роста (закон зума): гигант бьёт в нарисованное тело.
+    const r = b.radius * bodyZoom(b, scale)
+    if (b.pos.distanceToSquared(origin) > (range + r) ** 2) continue
+    const t = raySphere(origin, dir, b.pos, r)
     if (t >= 0 && t < _hit.distance) {
       _hit.distance = t
       _hit.body = b
@@ -96,12 +99,12 @@ const _dir = new Vector3()
 let _baseHit = 0
 
 /** Первая живая военная база на луче ближе `range`; дистанция — в `_baseHit`. */
-function castWarBase(world: World, origin: Vector3, dir: Vector3, range: number): WarBaseEntity | null {
+function castWarBase(world: World, origin: Vector3, dir: Vector3, range: number, scale = 1): WarBaseEntity | null {
   let best: WarBaseEntity | null = null
   _baseHit = range
   for (const b of world.warBases) {
     if (!b.alive) continue
-    const t = raySphere(origin, dir, b.pos, b.radius)
+    const t = raySphere(origin, dir, b.pos, b.radius * bodySizeFactor(scale))
     if (t >= 0 && t < _baseHit) {
       _baseHit = t
       best = b
@@ -112,8 +115,17 @@ function castWarBase(world: World, origin: Vector3, dir: Vector3, range: number)
 
 /** Есть ли впереди на остатке пути то, во что импульс может попасть (тело; базы — для шара). */
 function aheadOf(world: World, p: PulseEntity): boolean {
-  if (castBody(world, p.pos, _dir, p.distanceLeft).body) return true
-  return p.kind === 'shatter' && castWarBase(world, p.pos, _dir, p.distanceLeft) !== null
+  const s = shooterScale(p)
+  if (castBody(world, p.pos, _dir, p.distanceLeft, s).body) return true
+  return p.kind === 'shatter' && castWarBase(world, p.pos, _dir, p.distanceLeft, s) !== null
+}
+
+/**
+ * Рост стрелка — по размеру шара (он растёт с бортом, `spawnPulse`): у зеркала стрелок бывает
+ * чужим, а шар у всех один и тот же. По нему меряется сфера цели — какой её видит стрелок.
+ */
+function shooterScale(p: PulseEntity): number {
+  return Math.max(1, p.radius / COSMIC.PULSE_RADIUS)
 }
 
 /**
@@ -138,8 +150,9 @@ export function stepPulses(world: World, dt: number): void {
       list.splice(i, 1)
       continue
     }
-    const hit = castBody(world, p.pos, _dir, step)
-    const base = p.kind === 'shatter' ? castWarBase(world, p.pos, _dir, hit.distance) : null
+    const s = shooterScale(p)
+    const hit = castBody(world, p.pos, _dir, step, s)
+    const base = p.kind === 'shatter' ? castWarBase(world, p.pos, _dir, hit.distance, s) : null
     if (base) {
       // База ближе тела на пути: шар гаснет в ней, и она рвётся очагами, а потом грохает вся.
       // Сносит хозяин системы — у остальных удар уходит ему, исход придёт от него.
@@ -147,7 +160,7 @@ export function stepPulses(world: World, dt: number): void {
       p.alive = false
       if (world.trafficRole === 'mirror') world.structHits.push({ kind: 'shatter', base: base.slot })
       else shatterWarBase(world, base, p.pos)
-      world.explosions.push({ pos: p.pos.clone(), vel: new Vector3(), born: world.time, scale: p.radius / 4 })
+      warBaseImpactFlash(world, base, p.pos)
     } else if (hit.body) {
       p.pos.addScaledVector(_dir, hit.distance)
       p.alive = false

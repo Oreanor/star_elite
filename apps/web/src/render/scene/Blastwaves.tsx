@@ -12,6 +12,7 @@ import {
 import { WARBASE, renderTime } from '@elite/sim'
 import { useSession } from '../../session/GameContext'
 import { PALETTE } from '../config'
+import { worldShrink } from '../worldShrink'
 
 /**
  * СФЕРИЧЕСКАЯ ВОЛНА сноса: прозрачный пузырь со светящимся краем, резко вжухающий из точки
@@ -108,16 +109,19 @@ export function Blastwaves() {
     const mesh = ref.current
     if (!mesh) return
     const now = renderTime(session.world)
+    // Волна сооружения ужата с ним (закон зума): у гиганта база — точка, и волна по ней.
+    const shrink = worldShrink(session.world.player.state.scale)
     let count = 0
 
     for (const wave of session.world.blastwaves) {
+      if (shrink <= 0) break
       if (count >= MAX_WAVES) break
       const age = (now - wave.born) / WARBASE.WAVE_LIFE
       // Ещё не «пухнуло» (волна ждёт конца каскада) или уже прошла.
       if (age < 0 || age > 1) continue
 
       // Вжух: почти весь путь — в первую треть жизни, дальше фронт выдыхается и тает.
-      const radius = wave.radius * (1 - (1 - age) ** 4)
+      const radius = wave.radius * shrink * (1 - (1 - age) ** 4)
       _dummy.position.copy(wave.pos)
       _dummy.scale.setScalar(Math.max(radius, 1))
       _dummy.updateMatrix()

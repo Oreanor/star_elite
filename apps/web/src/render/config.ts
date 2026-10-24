@@ -1324,6 +1324,28 @@ export const CORRIDOR = {
 } as const
 
 /**
+ * СВЕТ ЯДРА базы при сносе шаром (`WarBaseRays`). Размеры — в радиусах базы, времена — с.
+ *  REACH — насколько луч выходит за обшивку; HALF_ANGLE — полураствор конуса, рад;
+ *  GROW_TAU — прорыв; POP — вспышка в миг прорыва; FADE — гаснут после общего взрыва.
+ *  Ядро: CORE_MIN..CORE_MAX — свет сквозь корпус за разгар; BURST — вспышка общего взрыва.
+ */
+export const WARBASE_RAYS = {
+  COLOR: 0x9fd4ff,
+  REACH: 2.4,
+  HALF_ANGLE: 0.11,
+  GROW_TAU: 0.12,
+  GLOW: 1.6,
+  POP: 1.2,
+  FADE: 0.25,
+  CORE_MIN: 0.5,
+  CORE_MAX: 1.4,
+  CORE_GLOW: 0.9,
+  BURST: 3.2,
+  BURST_GLOW: 2.6,
+  BURST_TAU: 0.45,
+} as const
+
+/**
  * ГИБЕЛЬ МИРА — постановка по виду (`Cataclysms`). Радиусы — в радиусах погибшего тела,
  * времена — секунды. Жизнь целиком — `COSMIC.LIFE` домена (он же убирает событие).
  *  Миг разрыва — `COSMIC.BURST` домена (по нему же бьёт удар); shrink — насколько сожмётся;

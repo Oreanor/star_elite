@@ -1,6 +1,6 @@
 import { useFrame } from '@react-three/fiber'
 import { useEffect, useMemo, useRef } from 'react'
-import { Euler, InstancedMesh, Object3D, Quaternion, type Texture } from 'three'
+import { Euler, InstancedMesh, Object3D, Quaternion, Vector3, type Texture } from 'three'
 import { PHYSICS, renderTime, type WarShard, type World } from '@elite/sim'
 import { useSession } from '../../session/GameContext'
 import { WARBASE_FX } from '../config'
@@ -15,7 +15,7 @@ import {
   warBaseTrashMaterial,
   type DetailKey,
 } from '../geometry/warBaseGlb'
-import { worldShrink } from '../worldShrink'
+import { worldShrink, zoomAround } from '../worldShrink'
 import { PANEL_VARIANTS, panelVariantOf, warBasePanelGeometry, warBasePanelMaterial } from '../geometry/warBasePanels'
 import { WARBASE_TEXTURE_COUNT, loadWarBaseTexture, warBaseTextureOf } from '../materials/warBaseTextures'
 
@@ -28,9 +28,13 @@ import { WARBASE_TEXTURE_COUNT, loadWarBaseTexture, warBaseTextureOf } from '../
 
 const MAX_SHARDS = 512
 const _dummy = new Object3D()
+const _shardAt = new Vector3()
 /** Поза осколка между тактами: откат по скорости на недоделанную долю такта (как у шара). */
-function place(world: World, shard: WarShard, time: number, size: number, pre: Quaternion | null): void {
-  _dummy.position.copy(shard.pos).addScaledVector(shard.vel, -(1 - world.renderAlpha) * PHYSICS.FIXED_DT)
+function place(world: World, shard: WarShard, time: number, shrink: number, pre: Quaternion | null): void {
+  _shardAt.copy(shard.pos).addScaledVector(shard.vel, -(1 - world.renderAlpha) * PHYSICS.FIXED_DT)
+  // Ужат с базой: к её центру тем же множителем, что и она сама.
+  zoomAround(_shardAt, shard.zoomAt, shrink, _dummy.position)
+  const size = shard.size * shrink
   _dummy.quaternion.setFromAxisAngle(shard.axis, shard.spin * (time - shard.born))
   if (pre) _dummy.quaternion.multiply(pre)
   _dummy.scale.setScalar(size)
@@ -60,7 +64,7 @@ function DetailShards({ dkey }: { dkey: DetailKey }) {
     let count = 0
     for (const s of session.world.warShards) {
       if (s.kind !== 'detail' || detailKeyOf(s.model) !== dkey || count >= MAX_SHARDS) continue
-      place(session.world, s, time, s.size * shrink, pre)
+      place(session.world, s, time, shrink, pre)
       mesh.setMatrixAt(count++, _dummy.matrix)
     }
     mesh.count = count
@@ -88,7 +92,7 @@ function TrashShards({ variant }: { variant: number }) {
     let count = 0
     for (const s of session.world.warShards) {
       if (s.kind !== 'trash' || trashVariantOf(s.seed) !== variant || count >= MAX_SHARDS) continue
-      place(session.world, s, time, s.size * shrink, null)
+      place(session.world, s, time, shrink, null)
       mesh.setMatrixAt(count++, _dummy.matrix)
     }
     mesh.count = count
@@ -120,7 +124,7 @@ function PanelShards({ skin, variant }: { skin: number; variant: number }) {
       for (const s of session.world.warShards) {
         if (s.kind !== 'panel' || warBaseTextureOf(s.model) !== skin || panelVariantOf(s.seed) !== variant) continue
         if (count >= MAX_SHARDS) break
-        place(session.world, s, time, s.size * shrink, null)
+        place(session.world, s, time, shrink, null)
         mesh.setMatrixAt(count++, _dummy.matrix)
       }
     }

@@ -1,3 +1,4 @@
+import { Vector3 } from 'three'
 import { describe, expect, it } from 'vitest'
 import { GALAXY } from '../../config/galaxy'
 import { WARBASE } from '../../config/warbase'
@@ -59,7 +60,8 @@ describe('снос военной базы разрушающим шаром', (
     fireAtBase(world)
     const hit = world.time
     const S = WARBASE.SHATTER
-    const build = world.firePuffs.filter((f) => f.born < hit + S.BUILD)
+    // Клубы очагов — без жара; раскалённые (heat) — вспышка попадания, у неё своя короткая жизнь.
+    const build = world.firePuffs.filter((f) => f.born < hit + S.BUILD && f.heat === undefined)
     expect(build.length).toBeGreaterThanOrEqual(S.FOCI_MIN * S.PUFFS)
     // Клубы живут долго — клубятся, а не мелькают.
     expect(build.every((f) => f.life >= S.PUFF_LIFE_MIN)).toBe(true)
@@ -109,6 +111,9 @@ describe('снос военной базы разрушающим шаром', (
     fireAtBase(world)
     expect(world.warBases[0]!.alive).toBe(true)
     expect(world.structHits).toContainEqual({ kind: 'shatter', base: 0 })
+    // Вспышку попадания видит и он: прежде там был взрыв размером с шар — на базе не виден.
+    const base = world.warBases[0]!
+    expect(world.firePuffs.some((f) => f.size >= base.radius * WARBASE.SHATTER.IMPACT_SIZE * 0.5)).toBe(true)
   })
 
   it('удар из сети находит базу по месту в описании, даже когда снесённую уже вынесли', () => {
@@ -121,5 +126,32 @@ describe('снос военной базы разрушающим шаром', (
     expect(second.alive).toBe(false)
     expect(world.warBases.filter((b) => b.alive).length).toBe(world.warBases.length - 1)
   })
-})
 
+  it('лучи из ядра прорываются один за другим и все — до общего взрыва', () => {
+    const world = startWorld()
+    const base = world.warBases[0]!
+    fireAtBase(world)
+    const rays = base.rays ?? []
+    expect(rays.length).toBe(WARBASE.SHATTER.RAYS)
+    expect(new Set(rays.map((r) => r.at)).size).toBe(rays.length)
+    expect(Math.max(...rays.map((r) => r.at))).toBeLessThan(base.wreckAt! + base.wreckSpan!)
+  })
+
+  it('выросший стрелок бьёт в базу того размера, что видит, а не в невидимую полную сферу', () => {
+    // Пойманное: шар мерил честный радиус — на ×10 гигант сносил базу, пролетая мимо
+    // нарисованной (ужатой) сферы на её полном радиусе.
+    const world = startWorld()
+    const base = world.warBases[0]!
+    world.player.state.scale = 10
+    const dir = base.pos.clone().sub(world.player.state.pos).normalize()
+    const side = new Vector3(0, 1, 0).cross(dir).normalize()
+    // Мимо центра на полрадиуса: в полную сферу попал бы, в ужатую (R/10) — нет.
+    const from = base.pos.clone().addScaledVector(dir, -(base.radius + 5_000)).addScaledVector(side, base.radius * 0.5)
+    spawnPulse(world, world.player, from, dir, 1e9)
+    for (let i = 0; i < 120 * 30 && world.pulses.length > 0; i++) {
+      world.time += 1 / 120
+      stepPulses(world, 1 / 120)
+    }
+    expect(base.alive).toBe(true)
+  })
+})
