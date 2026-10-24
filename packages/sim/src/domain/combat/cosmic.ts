@@ -2,7 +2,7 @@ import { Vector3 } from 'three'
 import type { LaserEffect } from '../../config/schema'
 import { COSMIC } from '../../config/weapons'
 import { raySphere } from '../../core/math'
-import { commitFate } from '../world/fates'
+import { commitFate, markCataclysmHit } from '../world/fates'
 import type { BodyEntity, PulseEntity, PulseKind, ShipEntity, WarBaseEntity, World } from '../world/entities'
 import { shatterWarBase } from './warBase'
 
@@ -159,7 +159,7 @@ export function stepPulses(world: World, dt: number): void {
         if (mine && seedable(body)) commitFate(world, body, 'seed')
         else world.explosions.push({ pos: p.pos.clone(), vel: new Vector3(), born: world.time, scale: p.radius / 8 })
       } else {
-        if (mine && susceptible(body)) commitFate(world, body, 'shatter')
+        if (mine && susceptible(body) && commitFate(world, body, 'shatter')) markCataclysmHit(world, body, p.pos)
         world.explosions.push({ pos: p.pos.clone(), vel: new Vector3(), born: world.time, scale: p.radius / 4 })
       }
     } else {

@@ -701,6 +701,13 @@ function Shell({ onRestart }: { onRestart: () => void }) {
       // менять её из-под заставки. Escape выше — единственный выход, он уже обработан.
       if (menu) return
 
+      // L — та же клавиша, что стыкует: у причала она отчаливает. В полёте L ловит симуляция,
+      // но у причала клавиатура у консоли станции, и захвата нет — ловим здесь.
+      if (e.code === 'KeyL') {
+        if (docked && !talking && !chatWith && !dispatching && !copiloting) undockAndResume()
+        return
+      }
+
       // P — связь со вторым пилотом, как T с бортом. Приказы ему словами. Нет пилота — плашка.
       if (e.code === 'KeyP') {
         if (docked || tab !== null || talking || chatWith || dispatching || copiloting) return
@@ -873,7 +880,7 @@ function Shell({ onRestart }: { onRestart: () => void }) {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [session, over, docked, menu, tab, talking, dispatching, copiloting, chatWith, openConsole, closeConsole, closeTalk, closeChat, closeDispatch, closeCopilot, openCopilot, answer])
+  }, [session, over, docked, menu, tab, talking, dispatching, copiloting, chatWith, openConsole, closeConsole, closeTalk, closeChat, closeDispatch, closeCopilot, openCopilot, answer, undockAndResume])
 
   /**
    * Меню паузы — ОДНА панель на три случая: титул, пауза в полёте (курсор отпущен) и

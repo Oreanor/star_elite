@@ -2,7 +2,7 @@ import { Vector3 } from 'three'
 import { GRAVITY } from '../../config/bodies'
 import { SCALE } from '../../config/galaxy'
 import { orbitSec } from '../../config/time'
-import type { BodyEntity, OrbitDef, World } from './entities'
+import type { BodyEntity, OrbitDef, WarBaseEntity, World } from './entities'
 import { shiftTrail } from './poseTrail'
 import { translateNeighborhood, translatePlayer } from './frame'
 
@@ -23,6 +23,8 @@ const _bary = /* @__PURE__ */ new Vector3()
 const _offset = /* @__PURE__ */ new Vector3()
 const _stationShift = /* @__PURE__ */ new Vector3()
 const _playerReferenceShift = /* @__PURE__ */ new Vector3()
+const _baseBefore = /* @__PURE__ */ new Vector3()
+const _baseParent = /* @__PURE__ */ new Vector3()
 
 /**
  * Светило системы — звезда или дыра, вокруг которой (или вокруг барицентра пары) всё
@@ -172,16 +174,39 @@ function bodyShift(world: World, index: number, out: Vector3): Vector3 {
  * со своей орбитальной скоростью, недостижимой в локальном полёте. Камень опорой не бывает:
  * он сам часть окрестности и едет с той же опорой.
  */
-function playerFrameIndex(world: World, stationIndex: number): number {
+/**
+ * Опора игрока: тело (индекс в `world.bodies`) или военная база (её собственный ход — у базы
+ * со своей орбитой ни одно тело не едет так же). Ничего — `{ body: −1, base: null }`.
+ */
+interface PlayerFrame {
+  body: number
+  base: WarBaseEntity | null
+}
+const _frame: PlayerFrame = { body: -1, base: null }
+
+/** База едет с якорем, причалом или своей орбитой; опора на неё — то же, что опора на это. */
+function frameOfBase(world: World, base: WarBaseEntity, stationIndex: number): PlayerFrame {
+  _frame.base = null
+  _frame.body = -1
+  if (base.orbit) _frame.base = base
+  else {
+    const anchor = base.anchorId == null ? -1 : world.bodies.findIndex((b) => b.id === base.anchorId)
+    _frame.body = anchor >= 0 ? anchor : stationIndex
+  }
+  return _frame
+}
+
+function playerFrame(world: World, stationIndex: number): PlayerFrame {
   const landedId = world.player.landedOn?.bodyId ?? null
   if (landedId !== null) {
     const body = world.bodies.findIndex((b) => b.id === landedId)
-    if (body >= 0) return body
-    const base = world.warBases.find((r) => r.id === landedId)
-    if (base) {
-      const anchor = base.anchorId == null ? -1 : world.bodies.findIndex((b) => b.id === base.anchorId)
-      return anchor >= 0 ? anchor : stationIndex
+    if (body >= 0) {
+      _frame.body = body
+      _frame.base = null
+      return _frame
     }
+    const base = world.warBases.find((r) => r.id === landedId)
+    if (base) return frameOfBase(world, base, stationIndex)
   }
   let best = -1
   let bestSurface = Infinity
@@ -194,7 +219,20 @@ function playerFrameIndex(world: World, stationIndex: number): number {
       best = i
     }
   }
-  return best
+  // База ближе любого тела — опора она: у разбитой планеты её бывший причал ушёл на свою
+  // орбиту, и, держась его, игрок уезжал от базы, к которой летел.
+  let nearBase: WarBaseEntity | null = null
+  for (const base of world.warBases) {
+    const surface = base.pos.distanceTo(pos) - base.radius
+    if (surface < bestSurface) {
+      bestSurface = surface
+      nearBase = base
+    }
+  }
+  if (nearBase) return frameOfBase(world, nearBase, stationIndex)
+  _frame.body = best
+  _frame.base = null
+  return _frame
 }
 
 /**
@@ -215,7 +253,10 @@ export function stepOrbits(world: World, time = orbitTime(world)): void {
   while (_before.length < bodies.length) _before.push(new Vector3())
   for (let i = 0; i < bodies.length; i++) _before[i]!.copy(bodies[i]!.pos)
   const stationIndex = bodies.findIndex((b) => b.kind === 'station')
-  const frame = playerFrameIndex(world, stationIndex)
+  const frame = playerFrame(world, stationIndex)
+  const frameBody = frame.body
+  const frameBase = frame.base
+  if (frameBase) _baseBefore.copy(frameBase.pos)
 
   stepOrbitsOnBodies(bodies, world.originOffset, time)
 
@@ -224,12 +265,18 @@ export function stepOrbits(world: World, time = orbitTime(world)): void {
     bodyShift(world, stationIndex, _stationShift)
     if (_stationShift.lengthSq() >= 1e-12) {
       for (const monolith of world.monoliths) monolith.pos.add(_stationShift)
-      for (const rock of world.warBases) if (rock.anchorId == null) rock.pos.add(_stationShift)
+      for (const rock of world.warBases) if (rock.anchorId == null && !rock.orbit) rock.pos.add(_stationShift)
     }
   }
 
-  // Базы у планет — ходом своей планеты.
+  // Базы у планет — ходом своей планеты; базы разбитой планеты — по своей орбите.
   for (const rock of world.warBases) {
+    if (rock.orbit) {
+      const pid = rock.orbit.parentId
+      const parent = pid === null ? barycentre(world.originOffset) : bodies.find((b) => b.id === pid)?.pos
+      if (parent) orbitPoint(rock.orbit, _baseParent.copy(parent), time, rock.pos)
+      continue
+    }
     if (rock.anchorId == null) continue
     const anchor = bodies.findIndex((b) => b.id === rock.anchorId)
     if (anchor >= 0) rock.pos.add(bodyShift(world, anchor, _offset))
@@ -242,8 +289,10 @@ export function stepOrbits(world: World, time = orbitTime(world)): void {
     if (anchor >= 0) figurine.pos.add(bodyShift(world, anchor, _offset))
   }
 
-  if (frame < 0) return
-  const local = bodyShift(world, frame, _playerReferenceShift)
+  let local: Vector3
+  if (frameBase) local = _playerReferenceShift.copy(frameBase.pos).sub(_baseBefore)
+  else if (frameBody >= 0) local = bodyShift(world, frameBody, _playerReferenceShift)
+  else return
   if (local.lengthSq() < 1e-12) return
   /**
    * Перенос опорой — СМЕНА СИСТЕМЫ ОТСЧЁТА, а не ход: игрок и окрестность едут с опорой разом,

@@ -1,4 +1,5 @@
 import { Quaternion, Vector3 } from 'three'
+import { bodyZoom } from '../scale/scale'
 import { BEAM_HEAT } from '../../config/beams'
 import { clamp } from '../../core/math'
 import type { BodyEntity, ShipEntity, World } from './entities'
@@ -47,11 +48,15 @@ function hottestBeam(ship: ShipEntity, world: World): typeof _hot {
     if (!beams) continue
     _r.copy(ship.state.pos).sub(body.pos)
     beamDirection(body, world.time, _dir)
+    // Луч того размера, что виден борту (закон зума тела): выросшему он короче — не жжёт там,
+    // где на экране его давно нет.
+    const zoom = bodyZoom(body, ship.state.scale)
+    const radius = body.radius * zoom
     const along = _r.dot(_dir)
     const s = Math.abs(along) // оба луча: вдоль оси и против
-    if (s < body.radius || s > beams.length) continue
+    if (s < radius || s > beams.length * zoom) continue
     const perp = Math.sqrt(Math.max(0, _r.lengthSq() - along * along))
-    const width = body.radius + s * Math.tan(beams.halfAngle)
+    const width = radius + s * Math.tan(beams.halfAngle)
     const e = clamp(1 - perp / width, 0, 1) * BEAM_HEAT.CORE
     if (e > hottest) {
       hottest = e

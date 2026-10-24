@@ -5,8 +5,8 @@ import { COSMIC } from '../../config/weapons'
 import { orbitSec } from '../../config/time'
 import { pushEdit, type FateEdit } from '../galaxy/delta'
 import { makeAsteroidBelt } from './asteroidBelt'
-import type { BodyEntity, Cataclysm, OrbitDef, World } from './entities'
-import { orbitFromOffset, orbitTime, stepOrbitsOnBodies } from './orbits'
+import type { BodyEntity, Cataclysm, OrbitDef, WarBaseEntity, World } from './entities'
+import { orbitFromOffset, orbitPoint, orbitTime, stepOrbitsOnBodies } from './orbits'
 
 /**
  * СУДЬБЫ ТЕЛ — итог космических лазеров в мире: засеянный мир, разбитая планета, луна,
@@ -132,10 +132,14 @@ function shatter(world: World, body: BodyEntity, at: number, fresh: boolean): vo
   // застал взрыв. Одинаково у всех клиентов и при любом позднем входе (миг — из журнала).
   const off = world.originOffset
   const tAt = orbitSec(at)
+  // Базы у погибшего — смещение от него сейчас: на миг гибели они встанут на том же месте.
+  const anchored = world.warBases.filter((b) => b.anchorId === body.id)
+  const offsets = anchored.map((b) => b.pos.clone().sub(body.pos))
   stepOrbitsOnBodies(world.bodies, off, tAt)
 
   // Одиночная звезда уносит с собой сферу Дайсона.
   if (releaseOrphans(world.bodies, off, body, tAt)) world.dyson = null
+  releaseWarBases(world, body, anchored, offsets, tAt)
 
   if (kind === 'rock') addDebrisBelt(world, body, tAt)
   if (fresh) addCataclysm(world, body, kind)
@@ -144,7 +148,46 @@ function shatter(world: World, body: BodyEntity, at: number, fresh: boolean): vo
   forget(world, body.id)
   // Назад к настоящему моменту — уже без погибшего.
   stepOrbitsOnBodies(world.bodies, off, orbitTime(world))
+  placeOrbitingWarBases(world)
   world.bodiesRevision++
+}
+
+/**
+ * Базы погибшего — на свои орбиты вокруг его хозяина, с его ходом (Кеплер от его орбиты, как
+ * у `adoptOrphans`). Те, что уже летали по своей орбите вокруг погибшего (его звезда),
+ * — к хозяину звезды, прежним темпом, как планеты у `loseStar`. Миг — из журнала, поэтому у
+ * вошедшего позже база там же, где у стрелка.
+ */
+function releaseWarBases(world: World, dead: BodyEntity, anchored: WarBaseEntity[], offsets: Vector3[], t: number): void {
+  const off = world.originOffset
+  const grand = dead.orbit
+  const parentId = grand?.parentId ?? null
+  const parent = parentPos(world.bodies, off, parentId, _parentAt)
+  if (!parent) return
+  for (let i = 0; i < anchored.length; i++) {
+    const base = anchored[i]!
+    _childAt.copy(dead.pos).add(offsets[i]!)
+    const r = _childAt.distanceTo(parent)
+    const rate = grand && grand.radius > 0 && r > 0 ? grand.rate * (grand.radius / r) ** 1.5 : 0
+    base.orbit = orbitThrough(parentId, parent, _childAt, rate, t)
+    delete base.anchorId
+  }
+  for (const base of world.warBases) {
+    const orbit = base.orbit
+    if (!orbit || orbit.parentId !== dead.id) continue
+    orbitPoint(orbit, dead.pos, t, _childAt)
+    base.orbit = orbitThrough(parentId, parent, _childAt, orbit.rate, t)
+  }
+}
+
+/** Базы со своей орбитой — на настоящий миг (после возврата тел к нему). */
+function placeOrbitingWarBases(world: World): void {
+  const t = orbitTime(world)
+  for (const base of world.warBases) {
+    if (!base.orbit) continue
+    const parent = parentPos(world.bodies, world.originOffset, base.orbit.parentId, _parentAt)
+    if (parent) orbitPoint(base.orbit, parent, t, base.pos)
+  }
 }
 
 /** Детей погибшего — новым хозяевам. true — погибла одиночная звезда. */
@@ -285,7 +328,17 @@ function addCataclysm(world: World, body: BodyEntity, kind: Cataclysm['kind']): 
     color: body.color,
     axis: body.spinAxis.clone(),
     born: world.time,
+    face: { id: body.id, kind: body.kind, surface: body.surface, name: body.name, spin: body.spin },
   })
+}
+
+/**
+ * Пометить свежее зрелище гибели точкой удара — для вспышки попадания. Судьба идёт через
+ * журнал и о шаре не знает; точку знает лишь импульс, и он дописывает её следом.
+ */
+export function markCataclysmHit(world: World, body: BodyEntity, point: Vector3): void {
+  const c = world.cataclysms.find((e) => e.face.id === body.id && e.born === world.time)
+  if (c) c.hit = point.clone().sub(body.pos).normalize()
 }
 
 /** Зрелища гибели гаснут по возрасту — такт мира, не кадр. */

@@ -1,5 +1,5 @@
 import { Color, Vector3 } from 'three'
-import { renderTime, type BodyEntity, type Cataclysm, type World } from '@elite/sim'
+import { COSMIC, renderTime, type BodyEntity, type Cataclysm, type World } from '@elite/sim'
 import { CATACLYSM, LIGHT } from './config'
 
 /**
@@ -49,7 +49,7 @@ export function dyingStarLight(world: World, from: Vector3, out: { pos: Vector3;
   out.pos.copy(best.at).sub(world.originOffset)
   out.color = best.color
   const L = CATACLYSM.STAR_LIGHT
-  const implode = CATACLYSM.LOOK.star.implode
+  const implode = COSMIC.BURST.star
   const age = renderTime(world) - best.born
   if (age < implode) {
     const pre = Math.max(0, age) / implode

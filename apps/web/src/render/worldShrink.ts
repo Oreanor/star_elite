@@ -34,6 +34,16 @@ export function starWorldShrink(scale: number): number {
 }
 
 /**
+ * Ужатие ТЕЛА и всего, что от него: звезда — со своим отставанием (`starWorldShrink`), прочие —
+ * как тела (`worldShrink`). Тот же закон, что у тверди в домене (`bodyZoom`). Эффекты тела
+ * (джеты, поток пары, сфера Дайсона) ужимаются ЕГО множителем: прежде джет звезды сжимался
+ * как планета — быстрее самой звезды, — а поток пары ещё и укорачивал расстояние между ними.
+ */
+export function bodyWorldShrink(body: { kind: string }, scale: number): number {
+  return body.kind === 'star' ? starWorldShrink(scale) : worldShrink(scale)
+}
+
+/**
  * Радиус шара слоя в св.г его группы. Мировой размер = это × layerScale
  * = R·`starRadiusFactor`, не честный R.
  */

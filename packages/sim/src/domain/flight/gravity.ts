@@ -2,7 +2,7 @@ import { Vector3 } from 'three'
 import { GRAVITY } from '../../config/bodies'
 import { MIELOPHONE } from '../../config/mielophone'
 import { isPhased } from '../cruise/drive'
-import { effectiveRadius } from '../scale/scale'
+import { bodyZoom, effectiveRadius } from '../scale/scale'
 import type { BodyEntity, ShipEntity, World } from '../world/entities'
 
 /**
@@ -15,27 +15,30 @@ import type { BodyEntity, ShipEntity, World } from '../world/entities'
 const _delta = /* @__PURE__ */ new Vector3()
 const _pull = /* @__PURE__ */ new Vector3()
 
-/** Масса и зона — по звёздному масштабу B; «кора» для r — компактный горизонт. */
-function gravityMassRadius(body: BodyEntity): number {
-  if (body.kind === 'blackhole' && body.visualRadius) return body.visualRadius
-  return body.radius
+/**
+ * Масса и зона — по звёздному масштабу B; «кора» для r — компактный горизонт. `zoom` — закон
+ * зума (`bodyZoom`): выросшему борту тело меньше во всём, и в притяжении тоже.
+ */
+function gravityMassRadius(body: BodyEntity, zoom = 1): number {
+  if (body.kind === 'blackhole' && body.visualRadius) return body.visualRadius * zoom
+  return body.radius * zoom
 }
 
-function gravityHorizon(body: BodyEntity): number {
-  return body.radius
+function gravityHorizon(body: BodyEntity, zoom = 1): number {
+  return body.radius * zoom
 }
 
 /** Высота внешней границы притяжения над поверхностью, м. */
-export function gravityReach(body: BodyEntity): number {
+export function gravityReach(body: BodyEntity, zoom = 1): number {
   if (body.kind === 'station') return 0
   // Одна понятная зона для звёзд, дыр, планет и лун. Девять радиусов превращали
   // систему в сплошную гравитационную яму ещё до визуального сближения с телом.
-  return gravityMassRadius(body) * GRAVITY.REACH_RADII
+  return gravityMassRadius(body, zoom) * GRAVITY.REACH_RADII
 }
 
 /** Масса тела из радиуса и плотности — та же формула, что у орбит лун. */
-export function bodyMass(body: BodyEntity): number {
-  const r = gravityMassRadius(body)
+export function bodyMass(body: BodyEntity, zoom = 1): number {
+  const r = gravityMassRadius(body, zoom)
   const volume = (4 / 3) * Math.PI * r ** 3
   switch (body.kind) {
     case 'star':
@@ -54,14 +57,14 @@ export function bodyMass(body: BodyEntity): number {
 
 /** Ускорение притяжения к телу, м/с². У причала (station) — ноль. */
 export function gravityAccel(ship: ShipEntity, body: BodyEntity, out: Vector3): Vector3 {
-  return gravityAt(ship.state.pos, effectiveRadius(ship), body, out)
+  return gravityAt(ship.state.pos, effectiveRadius(ship), body, out, bodyZoom(body, ship.state.scale))
 }
 
 /**
  * Притяжение тела к точке с собственным радиусом `selfR`, м/с². Тот же закон и та же зона,
  * что у кораблей: кометы и камни падают по тем же правилам, другой физики для них нет.
  */
-export function gravityAt(pos: Vector3, selfR: number, body: BodyEntity, out: Vector3): Vector3 {
+export function gravityAt(pos: Vector3, selfR: number, body: BodyEntity, out: Vector3, zoom = 1): Vector3 {
   out.set(0, 0, 0)
   if (body.kind === 'station') return out
 
@@ -73,13 +76,13 @@ export function gravityAt(pos: Vector3, selfR: number, body: BodyEntity, out: Ve
   if (dist < 1e-3) return out
 
   const shipR = selfR
-  const horizon = gravityHorizon(body)
-  const altitude = dist - gravityMassRadius(body) - shipR
-  if (altitude > gravityReach(body)) return out
+  const horizon = gravityHorizon(body, zoom)
+  const altitude = dist - gravityMassRadius(body, zoom) - shipR
+  if (altitude > gravityReach(body, zoom)) return out
 
   const surfaceDist = horizon + shipR
   const r = Math.max(dist, surfaceDist)
-  const accel = (GRAVITY.G * bodyMass(body)) / (r * r)
+  const accel = (GRAVITY.G * bodyMass(body, zoom)) / (r * r)
   return out.copy(_delta).multiplyScalar(accel / dist)
 }
 

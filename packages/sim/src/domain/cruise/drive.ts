@@ -3,7 +3,7 @@ import { CRUISE } from '../../config/cruise'
 import { GRAVITY } from '../../config/bodies'
 import { isHostileTo } from '../ai/targeting'
 import { forward } from '../flight/axes'
-import { phasedOut, speedScaleFactor } from '../scale/scale'
+import { phasedOut, speedScaleFactor, bodyZoom } from '../scale/scale'
 import { MIELOPHONE } from '../../config/mielophone'
 import type { ShipEntity, World } from '../world/entities'
 
@@ -81,9 +81,12 @@ function starRequiresExit(ship: ShipEntity, world: World, alreadyBraking: boolea
     forward(ship.state.quat, _fwd)
     _out.copy(ship.state.pos).sub(body.pos)
     if (_fwd.dot(_out) > 0) continue
-    const altitude = body.pos.distanceTo(ship.state.pos) - body.radius
-    const gravityEdge = body.radius * GRAVITY.REACH_RADII
-    const minimumBuffer = body.radius * CRUISE.STAR_EXIT_BUFFER_RADII
+    // Звезда того размера, что видна борту (закон зума): гиганту зона притяжения меньше, и
+    // тормоз не держит его у светила, ставшего далёкой точкой.
+    const radius = body.radius * bodyZoom(body, ship.state.scale)
+    const altitude = body.pos.distanceTo(ship.state.pos) - radius
+    const gravityEdge = radius * GRAVITY.REACH_RADII
+    const minimumBuffer = radius * CRUISE.STAR_EXIT_BUFFER_RADII
     // При уже начатом выходе держим решение до полной расчётной зоны максимального
     // хода: уменьшающийся каждый шаг тормозной путь не должен включить привод обратно.
     const speed = alreadyBraking

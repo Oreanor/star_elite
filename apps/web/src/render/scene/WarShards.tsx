@@ -1,6 +1,6 @@
 import { useFrame } from '@react-three/fiber'
-import { useMemo, useRef } from 'react'
-import { Euler, InstancedMesh, Object3D, Quaternion } from 'three'
+import { useEffect, useMemo, useRef } from 'react'
+import { Euler, InstancedMesh, Object3D, Quaternion, type Texture } from 'three'
 import { PHYSICS, renderTime, type WarShard, type World } from '@elite/sim'
 import { useSession } from '../../session/GameContext'
 import { WARBASE_FX } from '../config'
@@ -16,6 +16,8 @@ import {
   type DetailKey,
 } from '../geometry/warBaseGlb'
 import { worldShrink } from '../worldShrink'
+import { PANEL_VARIANTS, panelVariantOf, warBasePanelGeometry, warBasePanelMaterial } from '../geometry/warBasePanels'
+import { WARBASE_TEXTURE_COUNT, loadWarBaseTexture, warBaseTextureOf } from '../materials/warBaseTextures'
 
 /**
  * ОСКОЛКИ военной базы, снесённой разрушающим шаром: уцелевшие турели летят целиком, а
@@ -97,6 +99,39 @@ function TrashShards({ variant }: { variant: number }) {
 
 const TRASH_KEYS = Array.from({ length: TRASH_VARIANTS }, (_, i) => i)
 
+/**
+ * Листы обшивки одной карты и одной формы — один InstancedMesh. Карта — та же, что на корпусе
+ * снесённой базы (`model` листа — облик корпуса); пока не пришла — матовый металл.
+ */
+function PanelShards({ skin, variant }: { skin: number; variant: number }) {
+  const session = useSession()
+  const ref = useRef<InstancedMesh>(null)
+  const texture = useRef<Texture | null>(null)
+  useEffect(() => loadWarBaseTexture(skin, (t) => (texture.current = t)), [skin])
+  useFrame(() => {
+    const mesh = ref.current
+    if (!mesh) return
+    const shrink = worldShrink(session.world.player.state.scale)
+    const m = warBasePanelMaterial(texture.current)
+    if (mesh.material !== m) mesh.material = m
+    const time = renderTime(session.world)
+    let count = 0
+    if (shrink > 0) {
+      for (const s of session.world.warShards) {
+        if (s.kind !== 'panel' || warBaseTextureOf(s.model) !== skin || panelVariantOf(s.seed) !== variant) continue
+        if (count >= MAX_SHARDS) break
+        place(session.world, s, time, s.size * shrink, null)
+        mesh.setMatrixAt(count++, _dummy.matrix)
+      }
+    }
+    mesh.count = count
+    mesh.instanceMatrix.needsUpdate = true
+  })
+  return <instancedMesh ref={ref} args={[warBasePanelGeometry(variant), undefined, MAX_SHARDS]} frustumCulled={false} />
+}
+
+const PANEL_KEYS = Array.from({ length: WARBASE_TEXTURE_COUNT * PANEL_VARIANTS }, (_, i) => i)
+
 export function WarShards() {
   return (
     <>
@@ -105,6 +140,9 @@ export function WarShards() {
       ))}
       {TRASH_KEYS.map((v) => (
         <TrashShards key={v} variant={v} />
+      ))}
+      {PANEL_KEYS.map((k) => (
+        <PanelShards key={k} skin={Math.floor(k / PANEL_VARIANTS)} variant={k % PANEL_VARIANTS} />
       ))}
     </>
   )

@@ -4,7 +4,7 @@ import { BufferAttribute, BufferGeometry, DynamicDrawUsage, Mesh, Quaternion, Ri
 import { renderPos, renderTime, type BodyEntity } from '@elite/sim'
 import { useSession } from '../../session/GameContext'
 import { createAccretionDiskMaterial, createStreamMaterial } from '../materials/massStream'
-import { worldShrink } from '../worldShrink'
+import { starWorldShrink } from '../worldShrink'
 
 /**
  * ПЕРЕТЕКАНИЕ ВЕЩЕСТВА в тесной паре (`BodyEntity.streamTo`): струя с ближнего бока донора
@@ -112,7 +112,8 @@ function Stream({ donor, accretor }: { donor: BodyEntity; accretor: BodyEntity }
     const mesh = ribbon.current
     if (!mesh) return
     const world = session.world
-    const shrink = worldShrink(world.player.state.scale)
+    // Звёзды пары ужимаются по закону звезды — с отставанием, как их шары.
+    const shrink = starWorldShrink(world.player.state.scale)
     mesh.visible = shrink > 0
     if (disk.current) disk.current.visible = ownDisk && shrink > 0
     if (shrink <= 0) return
@@ -132,7 +133,9 @@ function Stream({ donor, accretor }: { donor: BodyEntity; accretor: BodyEntity }
     const ra = accretor.radius * shrink
     const rim = ra * DISK_OUTER * 0.85
     const inner = ra * DISK_INNER * 1.05
-    const d = dist * shrink
+    // Расстояние между звёздами зум НЕ трогает: ужимаются размеры, а не места. Прежде длина
+    // потока ужималась вместе с ними — хвост кончался на полпути, и компаньон «выпадал из пары».
+    const d = dist
     // Всё в координатах донора. Дуга уходит с ближнего бока, загибается и входит в край диска.
     _a.copy(_u).multiplyScalar(d)
     // Почти прямо от точки донора, обращённой к компаньону, и плавный сдвиг вбок ровно на

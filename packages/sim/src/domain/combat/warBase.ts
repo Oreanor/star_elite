@@ -7,6 +7,8 @@ import type { WarBaseEntity, WarBaseFixture, WarShard, World } from '../world/en
 import { livingFixtures, warBaseFixtureWorldPos } from '../world/warBase'
 import { spawnBlastwave, spawnExplosion } from './effects'
 import { spawnRockDebrisPod } from './salvage'
+import { blastKick } from './blastKick'
+import { COSMIC } from '../../config/weapons'
 
 // Место детали — геометрия мира (`world/warBase`), но бой и его тесты привыкли брать её
 // отсюда: снаружи «деталь базы» одно понятие, а не два файла в соседних папках.
@@ -88,10 +90,15 @@ export function stepWarBaseWrecks(world: World): void {
     if (base.alive || base.scattered || base.wreckAt === null) continue
     if (world.time - base.wreckAt < wreckSpan(base)) continue
     base.scattered = true
-    // Осколки — зрелище, у всех свои (из сида разлёта); лом — общие контейнеры, его сыплет хозяин.
-    if (base.violent) flingShards(world, base)
-    if (world.trafficRole === 'mirror') continue
+    // Осколки и волна — зрелище, у всех свои; лом — общие контейнеры, его сыплет хозяин.
+    // Прежде и волна стояла за проверкой хозяина — у остальных игроков её не было вовсе.
+    if (base.violent) {
+      flingShards(world, base)
+      // Общий взрыв от разбивающего шара толкает и трясёт корабли вокруг — у каждого свой.
+      blastKick(world, base.pos, base.radius * COSMIC.KICK.BASE_REACH)
+    }
     spawnBlastwave(world, base.pos, base.radius * (base.violent ? WARBASE.SHATTER.WAVE_REACH : WARBASE.WAVE_REACH))
+    if (world.trafficRole === 'mirror') continue
     scatterScrap(world, base)
   }
 }
@@ -235,8 +242,20 @@ export function stepFirePuffs(world: World): void {
 
 const _shardDir = /* @__PURE__ */ new Vector3()
 
-/** Один осколок: из точки `from` наружу от центра базы, с разбросом скорости и вращения. */
-function shard(world: World, base: WarBaseEntity, from: Vector3, kind: WarShard['kind'], model: number, seed: number, size: number): void {
+/**
+ * Один осколок: из точки `from` наружу от центра базы, с разбросом скорости и вращения.
+ * `pace` — доля обычной скорости и вращения: тяжёлый кусок летит и крутится медленнее.
+ */
+function shard(
+  world: World,
+  base: WarBaseEntity,
+  from: Vector3,
+  kind: WarShard['kind'],
+  model: number,
+  seed: number,
+  size: number,
+  pace = 1,
+): void {
   const S = WARBASE.SHATTER
   const rng = world.rng
   _shardDir.copy(from).sub(base.pos)
@@ -245,12 +264,12 @@ function shard(world: World, base: WarBaseEntity, from: Vector3, kind: WarShard[
   // Не строго по радиали: лёгкий веер, иначе осколки летят идеальным ежом.
   _blastAt.set(rng() - 0.5, rng() - 0.5, rng() - 0.5).multiplyScalar(0.6)
   _shardDir.add(_blastAt).normalize()
-  const speed = base.radius * (S.SHARD_SPEED_MIN + rng() * (S.SHARD_SPEED_MAX - S.SHARD_SPEED_MIN))
+  const speed = pace * base.radius * (S.SHARD_SPEED_MIN + rng() * (S.SHARD_SPEED_MAX - S.SHARD_SPEED_MIN))
   world.warShards.push({
     pos: from.clone(),
     vel: _shardDir.clone().multiplyScalar(speed),
     axis: randomUnit(rng, new Vector3()),
-    spin: S.SHARD_SPIN * (0.4 + rng() * 0.8) * (rng() < 0.5 ? -1 : 1),
+    spin: pace * S.SHARD_SPIN * (0.4 + rng() * 0.8) * (rng() < 0.5 ? -1 : 1),
     kind,
     model,
     seed,
@@ -262,7 +281,7 @@ function shard(world: World, base: WarBaseEntity, from: Vector3, kind: WarShard[
 
 /**
  * Разлёт в миг общего взрыва: уцелевшие турели — целиком, рванувшие и сбитые — огрызками
- * оснований, и поверх — куски самой обшивки (тоже огрызки, крупнее).
+ * оснований, поверх — куски обшивки (тоже огрызки, крупнее) и гнутые листы самого корпуса.
  */
 function flingShards(world: World, base: WarBaseEntity): void {
   const S = WARBASE.SHATTER
@@ -275,6 +294,12 @@ function flingShards(world: World, base: WarBaseEntity): void {
     randomUnit(world.rng, _fixWorld).multiplyScalar(base.radius * 0.9).add(base.pos)
     const size = base.radius * (S.HULL_SHARD_MIN + world.rng() * (S.HULL_SHARD_MAX - S.HULL_SHARD_MIN))
     shard(world, base, _fixWorld, 'trash', 0, Math.floor(world.rng() * 1e6), size)
+  }
+  // Листы — с самой поверхности: корпус лопается и сбрасывает обшивку кусками.
+  for (let i = 0; i < S.PANELS; i++) {
+    randomUnit(world.rng, _fixWorld).multiplyScalar(base.radius).add(base.pos)
+    const size = base.radius * (S.PANEL_MIN + world.rng() * (S.PANEL_MAX - S.PANEL_MIN))
+    shard(world, base, _fixWorld, 'panel', base.shape, Math.floor(world.rng() * 1e6), size, S.PANEL_PACE)
   }
 }
 

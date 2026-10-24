@@ -118,7 +118,7 @@ export const FR: Record<keyof typeof RU, string> = {
   'key.tractor': 'C',
   'key.tractor.what': 'rayon tracteur : attirer le fret',
   'key.dock': 'L',
-  'key.dock.what': 'accostage auto',
+  'key.dock.what': 'accostage auto / départ',
   'key.flyto': 'J',
   'key.flyto.what': 'pilote auto vers la cible',
   'key.pause': 'Esc',

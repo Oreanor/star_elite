@@ -1,4 +1,5 @@
 import { useFrame } from '@react-three/fiber'
+import { starWorldShrink } from '../worldShrink'
 import { useMemo, useRef } from 'react'
 import { LineSegments, Mesh, Quaternion, Vector3 } from 'three'
 import { DYSON, renderPos, renderTime } from '@elite/sim'
@@ -40,7 +41,11 @@ function Structure({ variant, ruined }: { variant: number; ruined: boolean }) {
     renderPos(session.world, star, node.position)
     _spin.setFromAxisAngle(AXIS, DYSON.SPIN * renderTime(session.world))
     node.quaternion.copy(_spin)
-    node.scale.setScalar(star.radius * DYSON.SHELL_RADIUS)
+    // Сфера облегает звезду — и ужимается с ней (закон зума звезды); прежде оставалась
+    // настоящего размера вокруг съёжившегося светила.
+    const shrink = starWorldShrink(session.world.player.state.scale)
+    node.visible = shrink > 0
+    node.scale.setScalar(star.radius * DYSON.SHELL_RADIUS * Math.max(shrink, 1e-6))
   })
 
   // Каркас — отрезками, кольцо и рой — гранями: разные узлы, один активен.

@@ -184,6 +184,11 @@ describe('судьбы тел (космические лазеры)', () => {
     const edit = world.galaxyEditsOut.at(-1)?.edit as FateEdit | undefined
     expect(edit?.ref).toBe(planet.ref)
     expect(edit?.fate).toBe('shatter')
+    // Вспышка попадания — на стороне тела, обращённой к стрелку: прежде импульс гас без
+    // следа, взрыв размером с корабль на фоне планеты был не виден.
+    const hit = world.cataclysms.at(-1)?.hit
+    expect(hit).toBeDefined()
+    expect(hit!.dot(dir)).toBeLessThan(0)
   })
 })
 
@@ -496,5 +501,42 @@ describe('промах импульса', () => {
     }
     expect(world.pulses.length).toBe(0)
     expect(alive).toBeLessThanOrEqual(COSMIC.PULSE_MISS_LIFE + 0.1)
+  })
+})
+
+describe('военная база у разбитой планеты', () => {
+  const anchoredBase = (w: World): boolean => w.warBases.some((b) => b.anchorId != null)
+
+  it('летит дальше ходом планеты, и рядом с ней игрок едет с ней — её можно догнать', () => {
+    // Пойманное: база застывала на месте, а игрок ехал с бывшим причалом планеты, ушедшим на
+    // свою орбиту вокруг звезды, — базы «убегали» на десятки км/с, догнать их было нельзя.
+    const { world } = systemWhere(anchoredBase)
+    const base = world.warBases.find((b) => b.anchorId != null)!
+    const planet = world.bodies.find((b) => b.id === base.anchorId)!
+    commitFate(world, planet, 'shatter')
+    expect(base.anchorId).toBeUndefined()
+    expect(base.orbit).toBeDefined()
+    // Игрок у самой базы: с ней и едет.
+    world.player.state.pos.copy(base.pos).add(new Vector3(base.radius + 2_000, 0, 0))
+    const gap = world.player.state.pos.clone().sub(base.pos)
+    for (let i = 0; i < 600; i++) {
+      world.calendarTime += 1
+      stepOrbits(world)
+    }
+    expect(world.player.state.pos.clone().sub(base.pos).distanceTo(gap)).toBeLessThan(1)
+  })
+
+  it('у вошедшего позже база там же, где у стрелка', () => {
+    const { world, index } = systemWhere(anchoredBase)
+    const base = world.warBases.find((b) => b.anchorId != null)!
+    const planet = world.bodies.find((b) => b.id === base.anchorId)!
+    commitFate(world, planet, 'shatter')
+    const later = lateVisitor(world, index, 600)
+    world.calendarTime += 600
+    stepOrbits(world)
+    const twin = later.warBases.find((b) => b.slot === base.slot)!
+    const here = base.pos.clone().add(world.originOffset)
+    const there = twin.pos.clone().add(later.originOffset)
+    expect(here.distanceTo(there)).toBeLessThan(base.radius * 0.01)
   })
 })

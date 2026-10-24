@@ -1,6 +1,7 @@
 import { awardKillXp } from '../crew/rank'
 import { stepAsteroidBelt } from '../world/asteroidBelt'
 import { reconcileFates, stepCataclysms } from '../world/fates'
+import { stepBlastDrift, stepCataclysmKicks } from '../combat/blastKick'
 import { stepPulses } from '../combat/cosmic'
 import { stepDistress } from '../ai/help'
 import { beginRayHolds, releaseRayHolds } from '../combat/laserEffects'
@@ -287,6 +288,8 @@ function stepTick(world: World, helm: Helm, dt: number): void {
   stepFirePuffs(world)
   // Ударили мирного или игрока — зов на помощь: полиция и дружные знакомые идут на место.
   stepDistress(world, dt)
+  stepCataclysmKicks(world)
+  stepBlastDrift(world, dt)
   stepCataclysms(world)
   stepCollisions(world, dt)
   for (const gate of world.jumpGates) stepJumpGateCollision(world.player, gate)

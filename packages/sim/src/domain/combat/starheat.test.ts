@@ -4,6 +4,7 @@ import { STAR_HEAT } from '../../config/heat'
 import { MIELOPHONE } from '../../config/mielophone'
 import { type World } from '../world'
 import { starExposure, stepStarHeat } from './starheat'
+import { bodyZoom } from '../scale/scale'
 import { quietWorld } from '../../testkit'
 
 /**
@@ -66,20 +67,28 @@ describe('нагрев у звезды', () => {
     expect(bigger).toBeCloseTo(asIs, 5)
   })
 
-  it('в масштабе (миелофон) опасная зона съёживается пропорционально росту', () => {
-    // Гигант видит звезду в `scale` раз мельче, значит и жечь она должна с `scale` раз
-    // меньшей дистанции — иначе корпус калится там, где светило уже далёкая точка.
+  it('в масштабе (миелофон) корона — у ВИДИМОЙ звезды: той же доли её радиуса', () => {
+    // Гигант видит звезду меньше (закон зума `bodyZoom`), и корона меньше с ней: жжёт на той же
+    // доле ВИДИМОГО радиуса, а не настоящего.
     const world = quietWorld()
-
-    place(world, 0.1) // обычному кораблю тут почти максимум облучения
+    const star = world.bodies.find((b) => b.kind === 'star')!
+    world.player.state.scale = 100
+    const seen = star.radius * bodyZoom(star, 100)
+    world.player.state.pos.copy(star.pos).add(new Vector3(seen * 1.1, 0, 0))
     expect(starExposure(world.player, world)).toBeGreaterThan(0.9)
+    world.player.state.pos.copy(star.pos).add(new Vector3(seen * 3, 0, 0))
+    expect(starExposure(world.player, world)).toBe(0)
+  })
 
-    world.player.state.scale = 100 // вырос миелофоном
-    expect(starExposure(world.player, world)).toBe(0) // та же высота, но звезда далеко
-
-    // Чтобы жгло так же, гиганту надо подойти в ~scale раз ближе по доле радиуса.
-    place(world, 0.1 / 100)
-    expect(starExposure(world.player, world)).toBeGreaterThan(0.9)
+  it('выросший внутри НАСТОЯЩЕЙ сферы, но вдали от видимой — не горит', () => {
+    // Пойманный баг: высоту мерили от настоящей поверхности и лишь домножали на масштаб.
+    // Выросший рядом со звездой оказывался внутри её настоящего радиуса — высота отрицательна,
+    // жар максимальный, «корабль потерян» у светила, которое на экране было далёкой точкой.
+    const world = quietWorld()
+    const star = world.bodies.find((b) => b.kind === 'star')!
+    world.player.state.scale = 100
+    world.player.state.pos.copy(star.pos).add(new Vector3(star.radius * 0.6, 0, 0))
+    expect(starExposure(world.player, world)).toBe(0)
   })
 
   it('до самого порога корпус ЦЕЛ, а на пороге — мгновенная «потеря» (не постепенная течь)', () => {

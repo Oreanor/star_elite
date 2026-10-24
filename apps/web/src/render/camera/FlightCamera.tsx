@@ -426,6 +426,17 @@ export function FlightCamera() {
       camera.position.add(_shake.applyQuaternion(camera.quaternion))
     }
 
+    // Удар окончательного взрыва (разрыв мира, снос базы): толчок посчитал домен — корабль уже
+    // летит прочь; здесь лишь трясёт кабину по метке, затухая квадратом. Своего таймера нет.
+    const blastAge = (renderTime(session.world) - player.lastBlastAt) / CAMERA.BLAST_SHAKE_LIFE
+    if (blastAge >= 0 && blastAge < 1) {
+      const time = renderTime(session.world)
+      const length = 2 * player.spec.hull.radius * player.state.scale
+      const amp = CAMERA.BLAST_SHAKE_MAX * length * player.lastBlastPower * (1 - blastAge) ** 2
+      _shake.set(shakeAt(time, 2.3), shakeAt(time, 5.9), shakeAt(time, 7.7)).multiplyScalar(amp)
+      camera.position.add(_shake.applyQuaternion(camera.quaternion))
+    }
+
     const baseFov = RENDER.FOV_CHASE
     const wantFov = baseFov + RENDER.FOV_CRUISE_BOOST * cruiseFraction
     if (Math.abs(camera.fov - wantFov) > 0.01) {

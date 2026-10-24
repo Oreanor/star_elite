@@ -121,7 +121,7 @@ export const RU = {
   'key.tractor': 'C',
   'key.tractor.what': 'тяговый луч: притянуть груз',
   'key.dock': 'L',
-  'key.dock.what': 'автостыковка',
+  'key.dock.what': 'автостыковка / вылет',
   'key.flyto': 'J',
   'key.flyto.what': 'автопилот к цели',
   'key.pause': 'Esc',

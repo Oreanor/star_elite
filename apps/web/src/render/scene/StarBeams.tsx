@@ -11,7 +11,7 @@ import { beamDirection, quasarLook, renderPos, renderTime, type BodyEntity } fro
 import { useSession } from '../../session/GameContext'
 import { createStarBeamMaterial } from '../materials/starBeam'
 import { quasarPalette } from '../materials/quasarDisk'
-import { worldShrink } from '../worldShrink'
+import { bodyWorldShrink } from '../worldShrink'
 
 /**
  * ЛУЧИ СВЕТИЛ — джеты квазара и маяк пульсара (`BodyEntity.beams`). Пара конусов из центра
@@ -82,7 +82,8 @@ function BeamPair({ body }: { body: BodyEntity }) {
     const beams = body.beams
     const g = group.current
     if (!beams || !g) return
-    const shrink = worldShrink(session.world.player.state.scale)
+    // Джет — тело своей звезды: ужимается её законом (у звезды — с отставанием).
+    const shrink = bodyWorldShrink(body, session.world.player.state.scale)
     g.visible = shrink > 0
     if (shrink <= 0) return
 

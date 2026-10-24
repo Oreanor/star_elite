@@ -2,8 +2,8 @@ import { useFrame } from '@react-three/fiber'
 import { useEffect, useMemo, useRef } from 'react'
 import {
   AdditiveBlending,
-  CircleGeometry,
   Color,
+  IcosahedronGeometry,
   InstancedMesh,
   Object3D,
   ShaderMaterial,
@@ -14,12 +14,11 @@ import { useSession } from '../../session/GameContext'
 import { PALETTE } from '../config'
 
 /**
- * СФЕРИЧЕСКАЯ ВОЛНА сноса: круг с градиентным краем, расходящийся из точки взрыва.
- *
- * Это «пух» после каскада детонаций — тот удар, что разбрасывает лом. Билборд, всегда
- * лицом к камере: сфера, снятая с любой стороны, и есть круг, а плоское кольцо в мире
- * с ребра исчезало бы. Объём даёт градиент — яркая кромка и почти пустая середина, как
- * у настоящей ударной волны, где светится сжатый фронт, а не весь пузырь.
+ * СФЕРИЧЕСКАЯ ВОЛНА сноса: прозрачный пузырь со светящимся краем, резко вжухающий из точки
+ * взрыва и тающий быстрее огня. Настоящая сфера, а не круг-билборд: светится её КРАЙ (угол к
+ * глазу), середина почти пуста — так виден объём ударного фронта, и сквозь него — огонь.
+ * Прежде плоский круг с тонкой кромкой терялся под комом клубов. Рисуется поверх них
+ * (`renderOrder`): волна — самое быстрое в кадре, её нельзя заслонять.
  *
  * Волн в кадре единицы (снос базы — редкое событие), но пул фиксирован и живёт с монтажа:
  * в кадре меняются только матрицы и фаза, ни одной аллокации.
@@ -27,16 +26,18 @@ import { PALETTE } from '../config'
 
 /** Больше и не надо: две базы, снесённые разом, — уже небывалый случай. */
 const MAX_WAVES = 4
+/** Цвет фронта в первый миг — бело-голубой жар сжатого газа; к концу — в огонь. */
+const FRONT_HOT = 0xd8ecff
 
 const _dummy = new Object3D()
 
 /**
- * Единичный круг: диаметр задаётся масштабом инстанса. Геометрия — на компонент, а не на
+ * Единичная сфера: радиус задаётся масштабом инстанса. Геометрия — на компонент, а не на
  * модуль, и это не оплошность: она несёт поинстансную фазу волны, а сцен бывает две (своя
  * и мир за кольцом портала). Общая геометрия смешала бы фазы двух миров.
  */
-function waveGeometry(): CircleGeometry {
-  return new CircleGeometry(1, 48)
+function waveGeometry(): IcosahedronGeometry {
+  return new IcosahedronGeometry(1, 4)
 }
 
 let materialCache: ShaderMaterial | null = null
@@ -47,38 +48,43 @@ function waveMaterial(): ShaderMaterial {
 
 function createWaveMaterial(): ShaderMaterial {
   return new ShaderMaterial({
-    uniforms: { uColor: { value: new Color(PALETTE.EXPLOSION) } },
+    uniforms: { uHot: { value: new Color(FRONT_HOT) }, uCool: { value: new Color(PALETTE.EXPLOSION) } },
     vertexShader: /* glsl */ `
       #include <common>
       #include <logdepthbuf_pars_vertex>
       // Фаза 0..1 у каждой волны своя — оттого они могут идти внахлёст, не сливаясь.
       attribute float instancePhase;
-      varying vec2 vUv;
+      varying vec3 vN;
+      varying vec3 vV;
       varying float vPhase;
       void main() {
-        vUv = uv;
         vPhase = instancePhase;
-        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        vec4 mv = modelViewMatrix * instanceMatrix * vec4(position, 1.0);
+        vV = -mv.xyz;
+        vN = normalize(normalMatrix * mat3(instanceMatrix) * normal);
+        gl_Position = projectionMatrix * mv;
         #include <logdepthbuf_vertex>
       }
     `,
     fragmentShader: /* glsl */ `
       #include <common>
       #include <logdepthbuf_pars_fragment>
-      uniform vec3 uColor;
-      varying vec2 vUv;
+      uniform vec3 uHot;
+      uniform vec3 uCool;
+      varying vec3 vN;
+      varying vec3 vV;
       varying float vPhase;
       void main() {
         #include <logdepthbuf_fragment>
-        // r: 0 в центре, 1 у кромки круга.
-        float r = length(vUv - 0.5) * 2.0;
-        // Светится ФРОНТ — узкая полоса у самого края; к центру всё гаснет. Полоса тем
-        // тоньше, чем волна старше: фронт «раскатывается» и истончается, а не расплывается.
-        float width = mix(0.42, 0.12, vPhase);
-        float front = smoothstep(1.0, 1.0 - width, r) * smoothstep(1.02, 1.0, r);
-        // Общее затухание: к концу жизни волна уходит в ничто, а не обрывается.
-        float fade = 1.0 - vPhase * vPhase;
-        gl_FragColor = vec4(uColor * front * fade, 1.0) * front * fade;
+        float facing = abs(dot(normalize(vN), normalize(vV)));
+        // Светится КРАЙ пузыря: фронт виден ребром, середина почти пуста. Край тем тоньше,
+        // чем волна старше — фронт раскатывается и истончается.
+        float rim = pow(1.0 - facing, mix(2.0, 4.5, vPhase));
+        float glow = rim * 1.6 + 0.05;
+        // Тает к концу, а не обрывается; в первый миг — ярче всего.
+        float fade = pow(1.0 - vPhase, 1.2);
+        vec3 col = mix(uHot, uCool, smoothstep(0.2, 0.85, vPhase));
+        gl_FragColor = vec4(col * glow * fade, 1.0);
       }
     `,
     transparent: true,
@@ -98,7 +104,7 @@ export function Blastwaves() {
   // Фаза живёт в инстансном атрибуте: одна отрисовка на все волны кадра.
   const phases = useMemo(() => new Float32Array(MAX_WAVES), [])
 
-  useFrame(({ camera }) => {
+  useFrame(() => {
     const mesh = ref.current
     if (!mesh) return
     const now = renderTime(session.world)
@@ -110,10 +116,9 @@ export function Blastwaves() {
       // Ещё не «пухнуло» (волна ждёт конца каскада) или уже прошла.
       if (age < 0 || age > 1) continue
 
-      // Радиус растёт с замедлением: фронт бьёт резко, потом выдыхается.
-      const radius = wave.radius * Math.sqrt(age)
+      // Вжух: почти весь путь — в первую треть жизни, дальше фронт выдыхается и тает.
+      const radius = wave.radius * (1 - (1 - age) ** 4)
       _dummy.position.copy(wave.pos)
-      _dummy.quaternion.copy(camera.quaternion)
       _dummy.scale.setScalar(Math.max(radius, 1))
       _dummy.updateMatrix()
       mesh.setMatrixAt(count, _dummy.matrix)
@@ -128,7 +133,7 @@ export function Blastwaves() {
   })
 
   return (
-    <instancedMesh ref={ref} args={[geometry, material, MAX_WAVES]} frustumCulled={false}>
+    <instancedMesh ref={ref} args={[geometry, material, MAX_WAVES]} frustumCulled={false} renderOrder={3}>
       <instancedBufferAttribute attach="geometry-attributes-instancePhase" args={[phases, 1]} />
     </instancedMesh>
   )

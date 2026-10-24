@@ -3,6 +3,7 @@ import { clamp } from '../../core/math'
 import { MIELOPHONE } from '../../config/mielophone'
 import type { ShipEntity, World } from '../world/entities'
 import { applyDamage } from './damage'
+import { bodyZoom } from '../scale/scale'
 import { beamExposure, beamSourceName } from '../world/beams'
 
 /**
@@ -25,12 +26,13 @@ export function starExposure(ship: ShipEntity, world: World): number {
   let hottest = 0
   for (const body of world.bodies) {
     if (body.kind !== 'star') continue
-    const altitude = body.pos.distanceTo(ship.state.pos) - body.radius
-    // Высота — в радиусах звезды, но ДОМНОЖЕННАЯ на масштаб борта (миелофон). Гигант
-    // видит звезду в `scale` раз мельче (камера отъезжает / тела съёживаются за потолком),
-    // и опасная дистанция обязана съёжиться так же: иначе тебя жжёт там, где светило —
-    // далёкая точка. Для обычного корабля scale=1 — правило то же, что и было.
-    const ratio = (altitude / body.radius) * ship.state.scale
+    // Высота — в радиусах звезды ТОГО размера, что видна борту (закон зума `bodyZoom`): гиганту
+    // звезда меньше, и корона меньше с ней. Прежде высоту мерили от НАСТОЯЩЕЙ поверхности,
+    // лишь домножая на масштаб: выросший внутри настоящей сферы получал отрицательную высоту,
+    // максимальный жар и «корабль потерян» у звезды, которая на экране была далёкой точкой.
+    const radius = body.radius * bodyZoom(body, ship.state.scale)
+    const altitude = body.pos.distanceTo(ship.state.pos) - radius
+    const ratio = altitude / radius
     const e = clamp((STAR_HEAT.SAFE_RATIO - ratio) / (STAR_HEAT.SAFE_RATIO - STAR_HEAT.DANGER_RATIO), 0, 1)
     if (e > hottest) hottest = e
   }

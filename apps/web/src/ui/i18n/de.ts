@@ -119,7 +119,7 @@ export const DE: Record<keyof typeof RU, string> = {
   'key.tractor': 'C',
   'key.tractor.what': 'Traktorstrahl: Fracht ziehen',
   'key.dock': 'L',
-  'key.dock.what': 'Autodocken',
+  'key.dock.what': 'Autodocken / Abflug',
   'key.flyto': 'J',
   'key.flyto.what': 'Autopilot zum Ziel',
   'key.pause': 'Esc',

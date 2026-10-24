@@ -128,6 +128,9 @@ export function makeShip(
     lastLostHit: null,
     lastShieldHitAt: -1e9,
     lastHullHitAt: -1e9,
+    lastBlastAt: -1e9,
+    lastBlastPower: 0,
+    blastDrift: new Vector3(),
     energy: spec.power.capacity,
     ecmCooldown: 0,
     // Батарея доп-отсека заряжена с первого кадра — и у игрока, и у ботов (ПРО пирата

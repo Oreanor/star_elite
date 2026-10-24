@@ -85,6 +85,13 @@ describe('снос военной базы разрушающим шаром', (
     stepWarBaseWrecks(world)
     expect(world.warShards.some((s) => s.kind === 'detail')).toBe(true)
     expect(world.warShards.some((s) => s.kind === 'trash')).toBe(true)
+    // Листы обшивки — крупнее огрызков и летят медленнее мелочи: тяжёлое кувыркается широко.
+    const panels = world.warShards.filter((s) => s.kind === 'panel')
+    const trash = world.warShards.filter((s) => s.kind === 'trash')
+    expect(panels.length).toBeGreaterThan(0)
+    const mean = (l: typeof panels, f: (s: (typeof panels)[number]) => number) => l.reduce((a, s) => a + f(s), 0) / l.length
+    expect(mean(panels, (s) => s.size)).toBeGreaterThan(mean(trash, (s) => s.size))
+    expect(mean(panels, (s) => s.vel.length())).toBeLessThan(mean(trash, (s) => s.vel.length()))
     // Летят наружу от центра базы.
     const s = world.warShards[0]!
     const away = s.pos.clone().sub(base.pos).normalize().dot(s.vel.clone().normalize())
