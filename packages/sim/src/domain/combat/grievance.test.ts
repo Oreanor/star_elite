@@ -1,4 +1,5 @@
 import { Quaternion, Vector3 } from 'three'
+import { hostileToPlayer } from '../ai/targeting'
 import { describe, expect, it } from 'vitest'
 import { GRIEVANCE } from '../../config/ai'
 import { traderLoadout } from '../../config/loadouts'
@@ -71,7 +72,9 @@ describe('обида', () => {
 
     pokeApart(world, t, GRIEVANCE.FORGIVE_HITS + GRIEVANCE.HOSTILE_HITS)
 
-    expect(t.faction).toBe('hostile')
+    expect(hostileToPlayer(world, t)).toBe(true)
+    // Враг игроку ЛИЧНО, а не пират: фракция мирная (иначе его била бы полиция).
+    expect(t.faction).toBe('neutral')
     expect(hasGrievance(t)).toBe(false)
   })
 
@@ -110,7 +113,9 @@ describe('обида', () => {
     ai.strikeCount = 3
     world.time = 100 + GRIEVANCE.RETALIATE_TIME
     stepGrievances(world)
-    expect(t.faction).toBe('hostile')
+    expect(hostileToPlayer(world, t)).toBe(true)
+    // Враг игроку ЛИЧНО, а не пират: фракция мирная (иначе его била бы полиция).
+    expect(t.faction).toBe('neutral')
   })
 
   it('без извинения через несколько секунд после претензии — ответный огонь', () => {
@@ -123,7 +128,9 @@ describe('обида', () => {
     world.time = t.ai!.grievanceAt + GRIEVANCE.RETALIATE_TIME
     stepGrievances(world)
 
-    expect(t.faction).toBe('hostile')
+    expect(hostileToPlayer(world, t)).toBe(true)
+    // Враг игроку ЛИЧНО, а не пират: фракция мирная (иначе его била бы полиция).
+    expect(t.faction).toBe('neutral')
     expect(t.ai!.targetId).toBe(world.player.id)
   })
 

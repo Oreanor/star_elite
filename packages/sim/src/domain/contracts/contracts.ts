@@ -1,4 +1,5 @@
 import { CALENDAR_DAY, CONTRACTS } from '../../config/contracts'
+import { hostileToPlayer } from '../ai/targeting'
 import { DIALOGUE } from '../../config/dialogue'
 import { signed } from '../../core/math'
 import { isFoe } from '../ai/targeting'
@@ -402,7 +403,7 @@ function hailCandidate(world: World): ShipEntity | null {
   let best: ShipEntity | null = null
   let bestD: number = DIALOGUE.RANGE
   for (const s of world.ships) {
-    if (!s.alive || !s.offer || s.offer.revealed || s.faction === 'hostile' || s.warpDeparting) continue
+    if (!s.alive || !s.offer || s.offer.revealed || hostileToPlayer(world, s) || s.warpDeparting) continue
     if (!mayHailPlayer(s)) continue
     const d = s.state.pos.distanceTo(world.player.state.pos)
     if (d < bestD) {

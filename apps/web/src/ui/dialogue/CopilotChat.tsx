@@ -15,6 +15,25 @@ import { t, useLang } from '../i18n'
  * Модель распознаёт приказ, домен исполняет (`crew/copilot.ts`) и, если не вышло, говорит
  * правду голосом пилота. Окно — то же, что у диспетчера и бота: шапка-паспорт, лента, ввод.
  */
+/**
+ * ПАМЯТЬ разговора со вторым пилотом — вне окна: закрыл связь и открыл снова — разговор
+ * продолжается, а не начинается с «на связи». Прежде лента жила в состоянии окна и стиралась
+ * каждым закрытием. Живёт `LOG_KEEP_MS` с последней реплики и не длиннее `LOG_MAX` реплик;
+ * сменился пилот — память новая. Это интерфейс, не мир: часы браузера тут уместны.
+ */
+const LOG_KEEP_MS = 20 * 60_000
+const LOG_MAX = 60
+let log: { pilot: number; turns: ChatTurn[]; at: number } | null = null
+
+function recall(pilot: number): ChatTurn[] | null {
+  if (!log || log.pilot !== pilot || performance.now() - log.at > LOG_KEEP_MS) return null
+  return log.turns
+}
+
+function remember(pilot: number, turns: ChatTurn[]): void {
+  log = { pilot, turns: turns.slice(-LOG_MAX), at: performance.now() }
+}
+
 export function CopilotChat({
   world,
   onClose,
@@ -26,7 +45,16 @@ export function CopilotChat({
 }) {
   useLang()
   const copilot = world.copilot
-  const [turns, setTurns] = useState<ChatTurn[]>(() => [{ who: 'them', text: t('copilot.hello') }])
+  const pilotId = copilot?.acquaintanceId ?? -1
+  const [turns, setTurnsRaw] = useState<ChatTurn[]>(() => recall(pilotId) ?? [{ who: 'them', text: t('copilot.hello') }])
+  // Каждая смена ленты — и в память: ответ, пришедший уже после закрытия окна, тоже ляжет туда.
+  const setTurns = (next: ChatTurn[] | ((list: ChatTurn[]) => ChatTurn[])) => {
+    setTurnsRaw((list) => {
+      const value = typeof next === 'function' ? next(list) : next
+      remember(pilotId, value)
+      return value
+    })
+  }
   const [input, setInput] = useState('')
   const [busy, setBusy] = useState(false)
   const [, bump] = useState(0)

@@ -1,4 +1,5 @@
 import { BOMB } from '../../config/weapons'
+import { isFoe } from '../ai/targeting'
 import type { ShipEntity, World } from '../world/entities'
 import { applyDamage } from './damage'
 import { spawnExplosion, spawnShockwave } from './effects'
@@ -41,8 +42,8 @@ export function fireBomb(world: World, e: ShipEntity): boolean {
 
   for (const ship of world.ships) {
     if (!ship.alive || ship.faction === e.faction) continue
-    // Бомба — ответ на нападение. Мирные и полиция ей не по адресу.
-    if (ship.faction !== 'hostile') continue
+    // Бомба — ответ на нападение: бьёт врагов бросившего. Мирные и полиция ей не по адресу.
+    if (!isFoe(e, ship)) continue
     if (phasedOut(ship.state.scale)) continue
     if (ship.state.pos.distanceToSquared(e.state.pos) > radiusSq) continue
 

@@ -684,22 +684,25 @@ export const HOLD_RAY: LaserModule = {
  * КОСМИЧЕСКИЕ ЛАЗЕРЫ — орудия для миров (`combat/cosmic.ts`). Класс 1, чтобы встать на любой
  * корпус; не продаются и не снимаются с обломков: их итог — правка галактики для всех.
  */
-export const SEED_RAY: LaserModule = {
+/**
+ * ИМПУЛЬС ЖИЗНИ — та же механика, что у разбивающего: заряд удержанием, выстрел отпусканием,
+ * перегрев. Копится не шар, а яркая точка с четырьмя лучами; одно попадание в необитаемую
+ * твердь — и на ней зарождается жизнь. (id прежний: он в сейвах.)
+ */
+export const SEED_PULSE: LaserModule = {
   id: 'cosmic_seed',
-  name: 'Засевающий луч',
+  name: 'Импульс жизни',
   kind: 'laser',
   class: 1,
   mass: 1,
   cost: 500000,
   notSold: true,
   salvageChance: 0,
-  beam: true,
   damage: 0,
-  range: COSMIC.RANGE,
-  cooldown: 0,
-  // Засев — 3 с удержания (`COSMIC.SEED_TIME`): греется так, чтобы на один мир хватало с запасом.
-  heatPerShot: 0.08,
-  heatCool: 0.25,
+  range: COSMIC.PULSE_RANGE,
+  cooldown: 3,
+  heatPerShot: 1,
+  heatCool: 0.2,
   effect: 'seed',
 }
 
@@ -713,7 +716,7 @@ export const SHATTER_CANNON: LaserModule = {
   notSold: true,
   salvageChance: 0,
   damage: 0,
-  range: COSMIC.SHATTER_RANGE,
+  range: COSMIC.PULSE_RANGE,
   // Один шар — и перегрев (`fireLasers`): нагрев не долей, а на весь запас шкалы.
   cooldown: 3,
   heatPerShot: 1,
@@ -1991,7 +1994,7 @@ export const MODULE_CATALOGUE: readonly ShipModule[] = [
   BEAM_LASER_LIGHT, BEAM_LASER_2C, BEAM_LASER, BEAM_LASER_3C, BEAM_LASER_HEAVY,
   ROTARY_LASER, ROTARY_LASER_B, ROTARY_LASER_3,
   PLASMA_GUN_1, PLASMA_GUN, PLASMA_GUN_HEAVY,
-  MINING_LASER, SHRINK_RAY, GROW_RAY, HOLD_RAY, SEED_RAY, SHATTER_CANNON,
+  MINING_LASER, SHRINK_RAY, GROW_RAY, HOLD_RAY, SEED_PULSE, SHATTER_CANNON,
   MISSILE_STING, MISSILE_PYLON, MISSILE_WASP,
   MISSILE_SWARM, MISSILE_HOMING, MISSILE_HOUND,
   MISSILE_HAMMER_E, MISSILE_HEAVY, MISSILE_SLEDGE,

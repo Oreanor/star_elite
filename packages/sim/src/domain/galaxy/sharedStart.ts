@@ -20,7 +20,7 @@ const PREVIEW_PLANET = 'Сатурн'
 /** Радиус временного Сатурна, м. */
 const PREVIEW_RADIUS = 58_232_000
 
-function isSharedStart(index: number, galaxySeed: number): boolean {
+export function isSharedStart(index: number, galaxySeed: number): boolean {
   return index === SHARED_START_INDEX && galaxySeed === GALAXY.SEED
 }
 

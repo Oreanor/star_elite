@@ -759,12 +759,30 @@ export function Paused({
     window.setTimeout(onBoot, TREMBLE_LEAD_MS)
   }
 
+  /**
+   * Уходил ли игрок с вкладки, пока шла загрузка. В фоне браузер не рисует кадров, и сцена не
+   * строится: ждать там бесполезно, а по возвращении игрок уже дождался — дрожь, «секундочку»
+   * и «вжух» с паузой поверх постройки читались как зависание. Тогда переход — сразу.
+   */
+  const leftTab = useRef(false)
+  useEffect(() => {
+    if (!waiting) return
+    const note = () => {
+      if (document.hidden) leftTab.current = true
+    }
+    note()
+    document.addEventListener('visibilitychange', note)
+    return () => document.removeEventListener('visibilitychange', note)
+  }, [waiting])
+
   // Сцена готова — «вжух»: корабль срывается, и через секунду (небо пустеет) уходим в игру/док.
   // Ref-страж держит один раз: без него cleanup при смене `launched` убил бы таймер перехода.
+  // Уходил с вкладки — без «вжуха» и паузы: сразу затемнение и станция (или полёт).
   useEffect(() => {
     if (!ready || !waiting || resuming || fired.current) return
     fired.current = true
-    setLaunched(true)
+    const skip = leftTab.current
+    if (!skip) setLaunched(true)
     // eslint-disable-next-line react-hooks/exhaustive-deps
     window.setTimeout(() => {
       // Смена вида идёт под чёрной пеленой (затемнение→просветление), чтобы шов подмены
@@ -782,9 +800,10 @@ export function Paused({
           setStickSuspended(false)
         }
       }
+      // Затемнение — всегда: под ним Shell снимает титул и отмечает старт игры (`fadeIntoGame`).
       if (onFade) onFade(swap)
       else swap()
-    }, LAUNCH_HOLD_MS)
+    }, skip ? 0 : LAUNCH_HOLD_MS)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready, waiting, resuming])
 

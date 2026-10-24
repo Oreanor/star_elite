@@ -13,7 +13,8 @@ import { avoidBodies } from './maneuvers'
 import { occluded } from './perception'
 import { aiController } from './pilot'
 import { yieldChance } from './robbery'
-import { selectTarget } from './targeting'
+import { declareFoe, isFoe, selectTarget } from './targeting'
+import { stepDistress } from './help'
 import { assignVoyage, enqueueTask } from './tasks'
 
 /**
@@ -213,5 +214,71 @@ describe('грабёж', () => {
     run(world, 60, settled)
     expect(world.notices.some((n) => n.kind === 'demand')).toBe(true)
     expect(settled()).toBe(true)
+  })
+})
+
+describe('выбор цели', () => {
+  it('ближний безобидный уступает дальнему стрелку', () => {
+    // Прежде бот бил ближайшего врага, даже когда по нему стрелял другой, подальше.
+    const world = quietWorld([
+      { faction: 'police', at: [0, 0, 0] },
+      { faction: 'hostile', at: [900, 0, 0] },
+      { faction: 'hostile', at: [0, 0, -2_400] },
+    ])
+    const [police, near, shooter] = world.ships as [ShipEntity, ShipEntity, ShipEntity]
+    expect(selectTarget(police, world)?.id).toBe(near.id)
+    police.lastAttackerId = shooter.id
+    police.lastHitAt = world.time
+    police.ai!.targetId = null
+    expect(selectTarget(police, world)?.id).toBe(shooter.id)
+  })
+
+  it('почти добитого выгоднее добить, чем начинать с целым на той же дистанции', () => {
+    const world = quietWorld([
+      { faction: 'police', at: [0, 0, 0] },
+      { faction: 'hostile', at: [1_000, 0, 0] },
+      { faction: 'hostile', at: [-1_100, 0, 0] },
+    ])
+    const [police, , wounded] = world.ships as [ShipEntity, ShipEntity, ShipEntity]
+    wounded.shield = 0
+    wounded.hull = wounded.spec.hull.hull * 0.1
+    expect(selectTarget(police, world)?.id).toBe(wounded.id)
+  })
+})
+
+describe('зов на помощь', () => {
+  it('пират бьёт торговца, отказавшего в грузе, — полиция поблизости идёт на зов', () => {
+    // Прежде «торговец зовёт на помощь» было лишь строкой в эфире: никто не шёл.
+    const world = quietWorld([
+      { faction: 'neutral', at: [0, 0, 0] },
+      { faction: 'hostile', at: [600, 0, 0] },
+      { faction: 'police', at: [0, 0, -15_000] },
+    ])
+    const [trader, pirate, police] = world.ships as [ShipEntity, ShipEntity, ShipEntity]
+    declareFoe(pirate, trader)
+    declareFoe(trader, pirate)
+    trader.lastAttackerId = pirate.id
+    trader.lastHitAt = world.time
+    stepDistress(world, 1 / 60)
+    expect(isFoe(police, pirate)).toBe(true)
+    expect(police.ai!.tasks.some((t) => t.kind === 'goto')).toBe(true)
+  })
+
+  it('случайное попадание игрока в мирного полицию не зовёт, нападение после обиды — зовёт', () => {
+    const world = quietWorld([
+      { faction: 'neutral', at: [0, 0, 0] },
+      { faction: 'police', at: [0, 0, -15_000] },
+    ])
+    const [trader, police] = world.ships as [ShipEntity, ShipEntity]
+    trader.lastAttackerId = world.player.id
+    trader.lastHitAt = world.time
+    stepDistress(world, 1 / 60)
+    expect(isFoe(police, world.player)).toBe(false)
+    // Обиделся всерьёз — теперь игрок ему враг, и следующий удар — уже нападение.
+    declareFoe(trader, world.player)
+    world.time += 1
+    trader.lastHitAt = world.time
+    stepDistress(world, 1 / 60)
+    expect(isFoe(police, world.player)).toBe(true)
   })
 })

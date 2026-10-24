@@ -1,10 +1,10 @@
 import { useFrame } from '@react-three/fiber'
 import { useMemo, useRef } from 'react'
-import { AdditiveBlending, Color, IcosahedronGeometry, InstancedMesh, Object3D, Quaternion, ShaderMaterial, Vector3 } from 'three'
-import { PHYSICS, aimDirection, chargeBallCenter, chargeBallRadius, renderPos, renderTime, type ShipEntity, type World } from '@elite/sim'
+import { AdditiveBlending, Color, IcosahedronGeometry, InstancedMesh, Object3D, ShaderMaterial, Vector3 } from 'three'
+import { pulseFade, renderTime } from '@elite/sim'
 import { useSession } from '../../session/GameContext'
-import { GIANT_RENDER_CAP, LASER_SCHOOL_GLOW } from '../config'
-import { shownShipQuat } from '../shownPose'
+import { LASER_SCHOOL_GLOW } from '../config'
+import { placeCharge, shownPulse } from './pulseCharge'
 
 /**
  * ШАР РАЗБИВАЮЩЕГО ЛАЗЕРА — светящаяся сфера: белое ядро, сиреневая кромка, по поверхности
@@ -133,37 +133,6 @@ function haloMaterial(): ShaderMaterial {
 
 const _dummy = new Object3D()
 const _cam = new Vector3()
-const _shipAt = new Vector3()
-const _shipQ = new Quaternion()
-const _aim = new Vector3()
-
-/**
- * Шар заряда корабля в матрицу `_dummy`. false — шара нет. Свой корпус на экране зажат
- * потолком (`GIANT_RENDER_CAP`) — и шар с ним тем же множителем, иначе гигант держал бы
- * перед носом шар больше себя.
- */
-function placeCharge(world: World, ship: ShipEntity, now: number, clock: number): boolean {
-  const r = chargeBallRadius(ship, now)
-  if (r <= 0) return false
-  const own = ship === world.player
-  const scale = ship.state.scale
-  const shown = own ? Math.min(scale, GIANT_RENDER_CAP) / scale : 1
-  renderPos(world, ship.state, _shipAt)
-  shownShipQuat(world, ship, _shipQ)
-  aimDirection(_shipQ, 0, _aim)
-  // Готовый шар дрожит: энергия на пределе.
-  const ready = ship.pulseCharge?.level === 1 && ship.pulseCharge.cancelledAt === null
-  const rr = r * shown * (ready ? 1 + 0.05 * Math.sin(clock * 37) : 1)
-  chargeBallCenter(_shipAt, _aim, ship.spec.hull.radius * scale * shown, r * shown, _dummy.position)
-  _dummy.scale.setScalar(rr)
-  _dummy.updateMatrix()
-  return true
-}
-
-/** Шар между тактами: такт ушёл вперёд на долю шага — откатываем по скорости. */
-function shownPulse(world: World, pos: Vector3, vel: Vector3, out: Vector3): Vector3 {
-  return out.copy(pos).addScaledVector(vel, -(1 - world.renderAlpha) * PHYSICS.FIXED_DT)
-}
 
 export function Pulses() {
   const session = useSession()
@@ -180,21 +149,23 @@ export function Pulses() {
     halo.uniforms.uTime!.value = clock.elapsedTime
     camera.getWorldPosition(_cam)
     let n = 0
+    const now = renderTime(world)
     for (const p of world.pulses) {
       if (n >= MAX_PULSES) break
+      // Импульс жизни — точка с лучами (`LifePulses`), здесь только шары разбивающего.
+      if (p.kind !== 'shatter') continue
       shownPulse(world, p.pos, p.vel, _dummy.position)
-      const r = Math.max(p.radius, _dummy.position.distanceTo(_cam) * MIN_ANGULAR)
+      // Промахнувшийся тает: видимый размер уходит в ноль за последние секунды.
+      const r = Math.max(p.radius, _dummy.position.distanceTo(_cam) * MIN_ANGULAR) * pulseFade(p, now)
       _dummy.scale.setScalar(r)
       _dummy.updateMatrix()
       mesh.setMatrixAt(n++, _dummy.matrix)
     }
-    const now = renderTime(world)
-    if (n < MAX_PULSES && world.player.pulseCharge && placeCharge(world, world.player, now, clock.elapsedTime)) {
+    for (let i = -1; i < world.ships.length && n < MAX_PULSES; i++) {
+      const ship = i < 0 ? world.player : world.ships[i]!
+      if (ship.pulseCharge?.kind !== 'shatter' || !placeCharge(world, ship, now, clock.elapsedTime, _dummy)) continue
+      _dummy.updateMatrix()
       mesh.setMatrixAt(n++, _dummy.matrix)
-    }
-    for (const ship of world.ships) {
-      if (n >= MAX_PULSES) break
-      if (ship.pulseCharge && placeCharge(world, ship, now, clock.elapsedTime)) mesh.setMatrixAt(n++, _dummy.matrix)
     }
     mesh.count = n
     mesh.instanceMatrix.needsUpdate = true

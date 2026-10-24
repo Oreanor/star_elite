@@ -89,13 +89,19 @@ export function placeWarBases(world: World, def: SystemDef): void {
   for (let i = 0; i < bases.length; i++) {
     const b = bases[i]!
     const offset = new Vector3(...b.stationOffset)
-    const pos = station
-      ? station.pos.clone().add(offset)
-      : new Vector3(...def.star.pos).add(offset)
+    // У планеты — над её поверхностью по направлению смещения; планеты нет (разбита) — как все.
+    const planet = b.anchorPlanet != null ? world.bodies.find((x) => x.ref === `planet:${b.anchorPlanet}`) : undefined
+    // Без причала — от точки выхода из прыжка: у звезды база стояла бы в её короне.
+    const pos = planet
+      ? planet.pos.clone().addScaledVector(offset.clone().normalize(), planet.radius + offset.length())
+      : station
+        ? station.pos.clone().add(offset)
+        : new Vector3(...def.playerStart).sub(world.originOffset).add(offset)
     // Сид детерминирован по номеру базы в системе — расстановка деталей у всех одна.
     const seed = ((world.systemIndex * 131 + i * 977) ^ 0x7761726b) >>> 0
     world.warBases.push({
       id: world.ids.next(),
+      slot: i,
       kind: 'warbase',
       name: b.name,
       shape: b.model ?? 0,
@@ -107,6 +113,7 @@ export function placeWarBases(world: World, def: SystemDef): void {
       wreckAt: null,
       scattered: false,
       fixtures: layoutFixtures(world.ids, b.radius, makeRng(seed)),
+      ...(planet ? { anchorId: planet.id } : {}),
     })
   }
 }

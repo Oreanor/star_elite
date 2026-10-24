@@ -1,4 +1,5 @@
 import { Vector3 } from 'three'
+import { hostileToPlayer } from '../ai/targeting'
 import { MIELOPHONE } from '../../config/mielophone'
 import { PLANET_FOCUS } from '../../config/bodies'
 import { ASTEROID } from '../../config/world'
@@ -101,7 +102,7 @@ export function focusedPlanet(world: World): BodyEntity | null {
  * ни захватить, ни перебрать клавишей: правило видимости одно на всех.
  */
 export function hostilesOf(world: World): ShipEntity[] {
-  return world.ships.filter((s) => isVisible(s) && s.faction === 'hostile')
+  return world.ships.filter((s) => isVisible(s) && hostileToPlayer(world, s))
 }
 
 /**
@@ -672,4 +673,44 @@ export function softTargetPos(world: World, soft: { kind: 'pod' | 'asteroid' | '
   }
   const rock = world.asteroids.find((a) => a.id === soft.id && a.alive)
   return rock?.pos ?? null
+}
+
+/** Имя для сравнения: без кавычек и регистра, ё как е — модель пишет имена по-разному. */
+function plainName(name: string): string {
+  return name.toLowerCase().replace(/ё/g, 'е').replace(/[«»"'“”„]/g, '').replace(/\s+/g, ' ').trim()
+}
+
+/**
+ * Цель системы ПО ИМЕНИ — то, к чему ведёт автопилот: тело (станция, планета, луна, звезда),
+ * статуя, монолит, военная база. Сперва точное совпадение, потом вхождение (модель называет
+ * «Бастион» вместо «База «Бастион»»); при нескольких — ближайшая к игроку. null — нет такой.
+ */
+export function findNavByName(world: World, name: string): number | null {
+  const want = plainName(name)
+  if (!want) return null
+  const from = world.player.state.pos
+  const candidates: { id: number; name: string; pos: Vector3 }[] = [
+    ...world.bodies.map((b) => ({ id: b.id, name: b.name, pos: b.pos })),
+    ...world.monoliths.map((m) => ({ id: m.id, name: MONOLITH_NAMES[m.variant] ?? 'Монолит', pos: m.pos })),
+    ...world.figurines.filter((f) => f.alive).map((f) => ({ id: f.id, name: figurineDisplayName(f), pos: f.pos })),
+    ...world.warBases.filter((r) => r.alive).map((r) => ({ id: r.id, name: r.name, pos: r.pos })),
+  ]
+  const nearest = (list: typeof candidates): number | null => {
+    let best: number | null = null
+    let bestD = Infinity
+    for (const c of list) {
+      const d = c.pos.distanceToSquared(from)
+      if (d < bestD) {
+        bestD = d
+        best = c.id
+      }
+    }
+    return best
+  }
+  const exact = candidates.filter((c) => plainName(c.name) === want)
+  if (exact.length > 0) return nearest(exact)
+  return nearest(candidates.filter((c) => {
+    const have = plainName(c.name)
+    return have.includes(want) || want.includes(have)
+  }))
 }

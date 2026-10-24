@@ -21,7 +21,7 @@ export {
   shatter,
   splittable,
 } from './mining'
-export { destroyWarBase, damageWarBaseFixture, killWarBaseFixture, stepWarBaseWrecks, warBaseWreckDone } from './warBase'
+export { destroyWarBase, damageWarBaseFixture, killWarBaseFixture, shatterWarBase, stepFirePuffs, stepWarBaseWrecks, stepWarShards, warBaseStanding, warBaseWreckDone } from './warBase'
 export { stepWarBaseTurrets } from './warBaseGuns'
 export { stepMissiles } from './missiles'
 export {
@@ -71,4 +71,4 @@ export {
   settlePulseCharges,
   unholdPulseCharges,
 } from './weapons'
-export { chargeBallCenter, chargeBallRadius } from './cosmic'
+export { chargeBallCenter, chargeBallRadius, pulseFade } from './cosmic'

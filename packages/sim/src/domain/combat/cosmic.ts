@@ -3,12 +3,14 @@ import type { LaserEffect } from '../../config/schema'
 import { COSMIC } from '../../config/weapons'
 import { raySphere } from '../../core/math'
 import { commitFate } from '../world/fates'
-import type { BodyEntity, ShipEntity, World } from '../world/entities'
+import type { BodyEntity, PulseEntity, PulseKind, ShipEntity, WarBaseEntity, World } from '../world/entities'
+import { shatterWarBase } from './warBase'
 
 /**
- * КОСМИЧЕСКИЕ ЛАЗЕРЫ: засевающий луч и разбивающий импульс. Бьют только по НЕБЕСНЫМ телам —
- * планете, луне, звезде. Корабли, станции, военные базы, камни и ракеты для них прозрачны:
- * это орудие для миров, а не для боя, и сквозь причал луч доходит до планеты за ним.
+ * КОСМИЧЕСКИЕ ЛАЗЕРЫ: импульс жизни и разбивающий импульс. Бьют по НЕБЕСНЫМ телам — планете,
+ * луне, звезде; разбивающий шар ещё и сносит ВОЕННУЮ БАЗУ (`shatterWarBase`: очаги по обшивке
+ * и общий взрыв). Корабли, станции, камни и ракеты для них прозрачны: это орудие для миров, а
+ * не для боя, и сквозь причал луч доходит до планеты за ним.
  *
  * Итог попадания — не мутация мира на месте, а правка журнала галактики (`commitFate`):
  * её применяют все клиенты одной дорогой, и разбитое остаётся разбитым для всех.
@@ -51,30 +53,17 @@ function susceptible(body: BodyEntity): boolean {
 }
 
 /**
- * Засевающий луч держит мир `seconds`. Набрал `SEED_TIME` — правка галактики «жизнь».
- * Счёт копится тактами луча и забывается, если луч ушёл дольше `SEED_FORGET`: засев —
- * это удержание, а не сумма случайных касаний за вечер. Возвращает длину струи.
+ * Примет ли тело жизнь: необитаемая твердь каталога. Газ, звезда, живой мир, станция — нет.
+ * То же правило, что у применения судьбы (`seedLife`): импульс в неподходящий мир гаснет.
  */
-export function pourSeed(world: World, shooter: ShipEntity, origin: Vector3, dir: Vector3, range: number, seconds: number): BodyHit {
-  const hit = castBody(world, origin, dir, range)
-  const body = hit.body
-  // Засевает только игрок: правка галактики — поступок пилота, у ботов таких лучей нет.
-  if (!body || seconds <= 0 || shooter.id !== world.player.id) return hit
-  if (body.kind !== 'planet' || !susceptible(body) || body.settlement || body.surface === 'Газовый гигант') return hit
-  const seed = (body.lifeSeed ??= { seconds: 0, lastAt: world.time })
-  if (world.time - seed.lastAt > COSMIC.SEED_FORGET) seed.seconds = 0
-  seed.lastAt = world.time
-  seed.seconds += seconds
-  if (seed.seconds >= COSMIC.SEED_TIME) {
-    body.lifeSeed = undefined
-    commitFate(world, body, 'seed')
-  }
-  return hit
+function seedable(body: BodyEntity): boolean {
+  return body.kind === 'planet' && susceptible(body) && !body.settlement && body.surface !== 'Газовый гигант'
 }
 
 /**
- * Выпустить шар разбивающего лазера. Скорость стрелка шар НАСЛЕДУЕТ: старт у него медленный
- * (чтобы был виден отрыв), и без этого на ходу корабль обгонял собственный выстрел.
+ * Выпустить космический импульс (`kind`: разбивающий шар или импульс жизни). Скорость стрелка
+ * импульс НАСЛЕДУЕТ: старт у него медленный (чтобы был виден отрыв), и без этого на ходу
+ * корабль обгонял собственный выстрел.
  */
 export function spawnPulse(
   world: World,
@@ -83,10 +72,12 @@ export function spawnPulse(
   dir: Vector3,
   range: number,
   radius = COSMIC.PULSE_RADIUS * Math.max(1, shooter.state.scale),
+  kind: PulseKind = 'shatter',
 ): void {
   const scale = Math.max(1, shooter.state.scale)
   world.pulses.push({
     id: world.ids.next(),
+    kind,
     pos: origin.clone(),
     vel: dir.clone().multiplyScalar(COSMIC.PULSE_SPEED0 * scale).add(shooter.state.vel),
     dir: dir.clone(),
@@ -101,10 +92,34 @@ export function spawnPulse(
 }
 
 const _dir = new Vector3()
+/** Дистанция до попадания в базу (`castWarBase`), м. */
+let _baseHit = 0
+
+/** Первая живая военная база на луче ближе `range`; дистанция — в `_baseHit`. */
+function castWarBase(world: World, origin: Vector3, dir: Vector3, range: number): WarBaseEntity | null {
+  let best: WarBaseEntity | null = null
+  _baseHit = range
+  for (const b of world.warBases) {
+    if (!b.alive) continue
+    const t = raySphere(origin, dir, b.pos, b.radius)
+    if (t >= 0 && t < _baseHit) {
+      _baseHit = t
+      best = b
+    }
+  }
+  return best
+}
+
+/** Есть ли впереди на остатке пути то, во что импульс может попасть (тело; базы — для шара). */
+function aheadOf(world: World, p: PulseEntity): boolean {
+  if (castBody(world, p.pos, _dir, p.distanceLeft).body) return true
+  return p.kind === 'shatter' && castWarBase(world, p.pos, _dir, p.distanceLeft) !== null
+}
 
 /**
- * Полёт шаров: разгон e^(dt/τ), заметание отрезка шага по телам. Попал в тело каталога —
- * судьба «разбито» (от имени игрока); в дыру или тело вне каталога — гаснет вспышкой.
+ * Полёт импульсов: разгон e^(dt/τ), заметание отрезка шага по телам. Разбивающий: тело
+ * каталога — судьба «разбито», военная база — снос; импульс жизни: необитаемая твердь —
+ * судьба «жизнь» (базы и прочее ему прозрачны). Судьбу пишет только импульс игрока.
  */
 export function stepPulses(world: World, dt: number): void {
   const list = world.pulses
@@ -116,13 +131,37 @@ export function stepPulses(world: World, dt: number): void {
     const speed = p.vel.length()
     _dir.copy(p.vel).divideScalar(Math.max(speed, 1e-9))
     const step = Math.min(speed * dt, p.distanceLeft)
+    // Впереди пусто до конца дальности — промах: ещё немного полёта и таяние, а не десяток
+    // секунд неподвижной точкой на экране. Проверяем, пока промах не признан.
+    if (p.missBy === undefined && !aheadOf(world, p)) p.missBy = world.time + COSMIC.PULSE_MISS_LIFE
+    if (p.missBy !== undefined && world.time >= p.missBy) {
+      list.splice(i, 1)
+      continue
+    }
     const hit = castBody(world, p.pos, _dir, step)
-    if (hit.body) {
+    const base = p.kind === 'shatter' ? castWarBase(world, p.pos, _dir, hit.distance) : null
+    if (base) {
+      // База ближе тела на пути: шар гаснет в ней, и она рвётся очагами, а потом грохает вся.
+      // Сносит хозяин системы — у остальных удар уходит ему, исход придёт от него.
+      p.pos.addScaledVector(_dir, _baseHit)
+      p.alive = false
+      if (world.trafficRole === 'mirror') world.structHits.push({ kind: 'shatter', base: base.slot })
+      else shatterWarBase(world, base, p.pos)
+      world.explosions.push({ pos: p.pos.clone(), vel: new Vector3(), born: world.time, scale: p.radius / 4 })
+    } else if (hit.body) {
       p.pos.addScaledVector(_dir, hit.distance)
       p.alive = false
       const body = hit.body
-      if (p.ownerId === world.player.id && susceptible(body)) commitFate(world, body, 'shatter')
-      world.explosions.push({ pos: p.pos.clone(), vel: new Vector3(), born: world.time, scale: p.radius / 4 })
+      const mine = p.ownerId === world.player.id
+      if (p.kind === 'seed') {
+        // Жизнь: зрелище и весть даёт сама судьба (`seedLife`) — у всех, кто в системе.
+        // В неподходящий мир импульс гаснет искрой.
+        if (mine && seedable(body)) commitFate(world, body, 'seed')
+        else world.explosions.push({ pos: p.pos.clone(), vel: new Vector3(), born: world.time, scale: p.radius / 8 })
+      } else {
+        if (mine && susceptible(body)) commitFate(world, body, 'shatter')
+        world.explosions.push({ pos: p.pos.clone(), vel: new Vector3(), born: world.time, scale: p.radius / 4 })
+      }
     } else {
       p.pos.addScaledVector(_dir, step)
       p.distanceLeft -= step
@@ -134,13 +173,16 @@ export function stepPulses(world: World, dt: number): void {
 
 /**
  * Радиус шара заряда, м. Растёт быстро вначале и дотягивает к концу (level^0.6) — видно,
- * что копится, с первой же секунды. Отменённый схлопывается за `CHARGE_FIZZLE`.
+ * что копится, с первой же секунды. Отменённый схлопывается за `CHARGE_FIZZLE`; `fizzle =
+ * false` — радиус на миг отмены: по нему стоит центр, чтобы шар таял НА МЕСТЕ, а не съезжал
+ * к носу (центр — «корпус + радиус», и тающий радиус тянул его назад: с камеры — «вниз»).
  */
-export function chargeBallRadius(e: ShipEntity, now: number): number {
+export function chargeBallRadius(e: ShipEntity, now: number, fizzle = true): number {
   const c = e.pulseCharge
   if (!c) return 0
-  const grown = e.spec.hull.radius * e.state.scale * COSMIC.CHARGE_BALL * c.level ** 0.6
-  if (c.cancelledAt === null) return grown
+  const size = c.kind === 'seed' ? COSMIC.CHARGE_SEED : COSMIC.CHARGE_BALL
+  const grown = e.spec.hull.radius * e.state.scale * size * c.level ** 0.6
+  if (c.cancelledAt === null || !fizzle) return grown
   const k = Math.max(0, 1 - (now - c.cancelledAt) / COSMIC.CHARGE_FIZZLE)
   return grown * k * k
 }
@@ -152,4 +194,10 @@ export function chargeBallRadius(e: ShipEntity, now: number): number {
  */
 export function chargeBallCenter(pos: Vector3, aim: Vector3, shipRadius: number, ballRadius: number, out: Vector3): Vector3 {
   return out.copy(pos).addScaledVector(aim, shipRadius + ballRadius)
+}
+
+/** Видимая доля импульса: 1 — в деле, к нулю — тает после промаха (`PULSE_FADE` последних секунд). */
+export function pulseFade(p: PulseEntity, now: number): number {
+  if (p.missBy === undefined) return 1
+  return Math.max(0, Math.min(1, (p.missBy - now) / COSMIC.PULSE_FADE))
 }

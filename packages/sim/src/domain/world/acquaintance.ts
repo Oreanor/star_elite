@@ -1,4 +1,5 @@
 import type { Persona } from './persona'
+import { declareFoe } from '../ai/targeting'
 import type { SavedLoadout } from '../save/player'
 import { serializeLoadout } from '../save/player'
 import type { ContactPlan } from './contactPlan'
@@ -232,7 +233,8 @@ export function applyStance(world: World, ship: ShipEntity, stance: Relationship
   if (record) record.relationship = stance
 
   if (stance === 'hostile' && ship.faction === 'neutral') {
-    ship.faction = 'hostile'
+    // Враг ИГРОКУ лично, а не пират: фракция остаётся мирной (см. `hostileToPlayer`).
+    declareFoe(ship, world.player)
     if (ship.ai) {
       ship.ai.escortOf = null
       ship.ai.targetId = null

@@ -7,6 +7,7 @@ import {
   canEngageAutodock,
   autofightActive,
   canEngageFlyTo,
+  copilotJumpRoute,
   copilotRank,
   disengageAutofight,
   engageAutofight,
@@ -71,6 +72,8 @@ import { TORUS } from '../config'
 import { persistSave } from '../../session/save/saveStore'
 import { clearPresses, consumePress, input, isHeld, releaseLock } from '../../platform/input/input'
 import { gameTimeSec } from '../../session/net/worldClock'
+import { cancelTrip, stepCopilotTrip, tripActive, tripController, tripSteersStraight } from '../../session/copilotTrip'
+import { disposeJumpPortalWorld } from './jumpPortalWorld'
 import { clearWarnings, pushWarning, WARN_LIFE } from '../../session/warnings'
 
 /** Миелофон «есть у игрока», если он в аукс-слоте ИЛИ лежит в трюме: дев-выдача кладёт
@@ -99,6 +102,8 @@ function ownsMielophone(player: World['player']): boolean {
  * там — иначе, глянув карту, ты бы ронял их с полпути.
  */
 function helmController(session: Session, coasting: boolean): Controller {
+  // Рейс второго пилота у кольца: прямой штурвал — рули на нуле, чуть газа сквозь центр.
+  if (tripSteersStraight()) return tripController
   if (session.mode === 'autodock') return autodockController
   if (session.mode === 'flyto') return flyToController
   // На кусте манёвров нет — газ и осмотр мышью (`bushPilot`). Но в КОМНАТЕ МОНУМЕНТА полёт
@@ -298,6 +303,18 @@ function exitBushToMonument(session: Session): boolean {
   return true
 }
 
+/**
+ * J к звезде с карты: второй пилот ПРЫГАЕТ (рейс через кольцо), а не ползёт сквозь пустоту.
+ * true — рейс начат или прыжок невозможен (сказано плашкой); false — маршрута нет, J ведёт
+ * обычным автопилотом к цели в системе.
+ */
+function jumpByRoute(world: World): boolean {
+  const result = copilotJumpRoute(world)
+  if (result === null) return false
+  if (result !== 'ok') pushWarning('noJump', world.time, { repeat: 0 })
+  return true
+}
+
 /** Во скольких радиусах дыры выпадает корабль. Обоснование — в `exitBushInto`. */
 const BUSH_EXIT_RADII = 100
 
@@ -374,6 +391,9 @@ export function Simulation() {
       }
       session.onDockChange?.(world.docked)
     }
+    // Рейс второго пилота: у причала он сперва отчаливает — потому до ветки дока.
+    if (stepCopilotTrip(world)) disposeJumpPortalWorld()
+
     // В доке мир стоит, живёт только причал — это решает stepWorld. Курсор отпущен (экран
     // станции), поэтому зовём его здесь, до проверки захвата ниже.
     if (world.docked) {
@@ -520,9 +540,11 @@ export function Simulation() {
     // двойное нажатие не ругается, а просто летит.
     // Знак jTap: плюс — ждём, не будет ли второго нажатия; минус — глушим остаток дроби после отмены.
     const jPressed = consumePress('KeyJ')
-    const copilotFlying = session.mode === 'flyto' || autofightActive(world) || (session.bush.active && torusAutopilotActive())
+    const copilotFlying = session.mode === 'flyto' || autofightActive(world) || tripActive() || (session.bush.active && torusAutopilotActive())
     if (jPressed && copilotFlying) {
       jTap.current = -J_TAP_WINDOW
+      // Рейс снимается целиком: и раскрытое им кольцо, и штурвал.
+      if (tripActive() && cancelTrip(world)) disposeJumpPortalWorld()
       if (autofightActive(world)) disengageAutofight(world)
       if (session.mode === 'flyto') setPilot(session, 'manual')
       if (session.bush.active && torusAutopilotActive()) disengageTorusAutopilot()
@@ -534,8 +556,8 @@ export function Simulation() {
         } else if (engageAutofight(world)) {
           const ai = world.player.ai
           if (ai) ai.pilotRank = copilotRank(world.copilot)
-        } else if (canEngageFlyTo(world)) setPilot(session, 'flyto')
-        else pushWarning('noTarget', world.time)
+        } else if (!jumpByRoute(world) && canEngageFlyTo(world)) setPilot(session, 'flyto')
+        else if (!tripActive()) pushWarning('noTarget', world.time)
       }
     } else if (jPressed && jTap.current < 0) {
       jTap.current = 0
@@ -549,8 +571,8 @@ export function Simulation() {
         if (arming && world.copilot) {
           if (session.bush.active) {
             if (!toggleTorusAutopilot()) pushWarning('noTarget', world.time)
-          } else if (canEngageFlyTo(world)) setPilot(session, 'flyto')
-          else pushWarning('noTarget', world.time)
+          } else if (!jumpByRoute(world) && canEngageFlyTo(world)) setPilot(session, 'flyto')
+          else if (!tripActive()) pushWarning('noTarget', world.time)
         }
       } else if (!arming) jTap.current = -jTap.current
     }

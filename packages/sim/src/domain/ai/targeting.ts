@@ -1,4 +1,5 @@
-import { AI } from '../../config/ai'
+import { AI, PERCEPTION, TARGETING } from '../../config/ai'
+import { healthFraction } from '../combat/damage'
 import type { Faction, ShipEntity, World } from '../world/entities'
 import { knowsOf } from './perception'
 
@@ -29,6 +30,26 @@ export function isFoe(self: ShipEntity, other: ShipEntity): boolean {
   return (self.ai?.foes.includes(other.id) ?? false) || (other.ai?.foes.includes(self.id) ?? false)
 }
 
+/** Важность цели — множитель цены (`TARGETING`): меньше — желаннее. */
+function importance(self: ShipEntity, other: ShipEntity, patron: ShipEntity | null, now: number): number {
+  const shotMe = self.lastAttackerId === other.id && now - self.lastHitAt < PERCEPTION.FIRE_AWARE
+  const shotPatron = patron != null && patron.lastAttackerId === other.id && now - patron.lastHitAt < PERCEPTION.FIRE_AWARE
+  const threat = shotMe ? TARGETING.SHOT_ME : shotPatron ? TARGETING.SHOT_PATRON : other.ai?.targetId === self.id ? TARGETING.HUNTS_ME : 1
+  // Почти добитого добить: множитель от FINISH (на нуле) до 1 (целый).
+  return threat * (TARGETING.FINISH + (1 - TARGETING.FINISH) * healthFraction(other))
+}
+
+/**
+ * ВРАЖДЕБЕН ЛИ ИГРОКУ — одно понятие для всего, что смотрит со стороны игрока: метки HUD,
+ * тон разговора, бомба, «можно ли отлучиться». Пират — по фракции; обиженный мирный — лично
+ * (`ai.foes`), а его ФРАКЦИЯ остаётся мирной. Прежде обида переводила торговца во фракцию
+ * пиратов: его била полиция, пираты считали своим, он сам выходил грабить, а за его гибель
+ * платили награду, как за пирата.
+ */
+export function hostileToPlayer(world: World, s: ShipEntity): boolean {
+  return s !== world.player && (s.faction === 'hostile' || isFoe(s, world.player))
+}
+
 /** Записать личную вражду (без дублей). Вторая сторона узнает о ней через `isFoe`. */
 export function declareFoe(self: ShipEntity, other: ShipEntity): void {
   const foes = self.ai?.foes
@@ -36,12 +57,15 @@ export function declareFoe(self: ShipEntity, other: ShipEntity): void {
 }
 
 /**
- * Ближайший враг, о котором бот ЗНАЕТ (видит по прямой или только что получил от него).
- * Прилипание к текущей цели намеренное: бот, каждый кадр меняющий жертву,
- * не доводит ни одной атаки до конца.
+ * Цель — враг, о котором бот ЗНАЕТ (видит по прямой или только что получил от него), с
+ * наименьшей ЦЕНОЙ: дистанция × важность (`TARGETING`). Стрелок по мне или по нанимателю,
+ * охотник за мной, почти добитый — дешевле прочих. Прилипание к текущей цели намеренное:
+ * бот, каждый кадр меняющий жертву, не доводит ни одной атаки до конца.
  */
 export function selectTarget(self: ShipEntity, world: World): ShipEntity | null {
   const current = self.ai?.targetId ?? null
+  const patronId = self.ai?.escortOf ?? null
+  const patron = patronId == null ? null : patronId === world.player.id ? world.player : (world.ships.find((s) => s.id === patronId) ?? null)
 
   let best: ShipEntity | null = null
   let bestDistance = Infinity
@@ -59,10 +83,11 @@ export function selectTarget(self: ShipEntity, world: World): ShipEntity | null 
     // Стрелок, которого чувствуешь, может быть и за радиусом: от него не отмахиваются.
     const effective = Math.min(distance, AI.AWARENESS)
 
-    // Текущей цели даём фору: менять её стоит только ради заметно более близкой.
+    // Текущей цели даём фору: менять её стоит только ради заметно более важной.
     const bias = other.id === current ? AI.TARGET_STICKINESS : 1
-    if (effective * bias < bestDistance) {
-      bestDistance = effective * bias
+    const cost = effective * bias * importance(self, other, patron, world.time)
+    if (cost < bestDistance) {
+      bestDistance = cost
       best = other
     }
   }

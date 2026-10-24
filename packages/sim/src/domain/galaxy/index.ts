@@ -9,7 +9,7 @@ export {
 export { systemDefOf } from './bridge'
 export { quasarLook, quasarOf, type QuasarLook } from './quasar'
 export { SYSTEM_FEATURES, hasFeature, type SystemFeature } from './features'
-export { DIRECTORY, galaxyDirectory, type DirectoryEntry, type DirectoryNotable, type GalaxyDirectory } from './directory'
+export { DIRECTORY, findSystemByName, galaxyDirectory, type DirectoryEntry, type DirectoryNotable, type GalaxyDirectory } from './directory'
 export {
   commitPreparedJump,
   jump,
@@ -57,3 +57,4 @@ export {
   type StarSystem,
   type Station,
 } from './types'
+export { warBasesOf } from './warBases'

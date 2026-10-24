@@ -1,6 +1,6 @@
 import { Vector3 } from 'three'
 import type { Rng } from '../../core/math'
-import type { Task } from './tasks'
+import { taskPoint, type Task } from './tasks'
 import { createManoeuvre, type Manoeuvre } from '../flight/aerobatics'
 
 export type AIMode = 'patrol' | 'pursue' | 'attack' | 'break' | 'evade'
@@ -156,6 +156,12 @@ export interface AIState {
   dock: DockPhase
   /** Секунд у причала до отчаливания. Тикает только в фазе `berthed`. */
   dockTimer: number
+  /**
+   * К КАКОЙ станции стыкуется — запомнена в миг захода. Прежде станцию выбирали заново каждый
+   * такт как ближайшую к игроку, и заходящий бот разворачивался через всю систему к станции,
+   * у которой игрок оказался. null — ещё не выбрал (или не стыкуется).
+   */
+  dockStationId: number | null
 
   /**
    * Дремлет на палубе платформы-гнезда. Пока true — пилот не двигает корабль,
@@ -256,6 +262,7 @@ export function createAIState(home: Vector3, rng: Rng): AIState {
     chainFoes: false,
     dock: null,
     dockTimer: 0,
+    dockStationId: null,
     dormant: false,
     command: 'default',
     tasks: [],
@@ -277,9 +284,5 @@ export function shiftAIState(ai: AIState, shift: Vector3): void {
   ai.home.add(shift)
   ai.waypoint.add(shift)
   ai.lastSeenPos.add(shift)
-  for (const t of ai.tasks) {
-    if (t.kind === 'goto') t.point.add(shift)
-    else if (t.kind === 'collect-cargo') t.anchor.add(shift)
-    else if (t.kind === 'hold') t.anchor.add(shift)
-  }
+  for (const t of ai.tasks) taskPoint(t)?.add(shift)
 }

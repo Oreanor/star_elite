@@ -8,7 +8,7 @@ import type { BoltEntity, MissileEntity, ShipEntity, World } from '../world/enti
 import { applyRay, resolveLaserHit, strikeYield, type LaserStrike } from './bolts'
 import { isRayEffect } from './laserEffects'
 import { castLaser } from './raycast'
-import { chargeBallCenter, chargeBallRadius, isCosmic, pourSeed, spawnPulse } from './cosmic'
+import { chargeBallCenter, chargeBallRadius, isCosmic, spawnPulse } from './cosmic'
 
 const _fwd = new Vector3()
 const _right = new Vector3()
@@ -73,9 +73,9 @@ export function fireLasers(world: World, e: ShipEntity, hostile: boolean, dt: nu
   const heat = e.laserHeat
   if (heat.overheatUntil > world.time) return false
   const group = selectedLaser(e)
-  // Разбивающий среди выбранных — гашетка копит его шар, остальные стволы молчат: вся
-  // мощность уходит в заряд. Выстрел — по отпусканию (`settlePulseCharges`).
-  const charger = shatterMount(e, group)
+  // Импульс (разбивающий или жизни) среди стреляющих — гашетка копит его заряд, остальные
+  // стволы молчат: вся мощность уходит в заряд. Выстрел — по отпусканию (`settlePulseCharges`).
+  const charger = pulseMount(e, group)
   if (charger >= 0) return chargePulse(world, e, charger, dt)
   if (heat.heat >= 1) return false
   // Доля ствола в общей шкале: залп ВСЕМИ греет ровно как прежде каждый ствол свой, а
@@ -84,7 +84,7 @@ export function fireLasers(world: World, e: ShipEntity, hostile: boolean, dt: nu
 
   e.spec.mounts.forEach((mount, i) => {
     if (!isLaser(mount.weapon)) return
-    if (group !== null && i !== group) return
+    if (!firesIn(e, group, i)) return
     const gun = e.guns[i]
     if (!gun || heat.overheatUntil > world.time) return
 
@@ -116,8 +116,7 @@ export function fireLasers(world: World, e: ShipEntity, hostile: boolean, dt: nu
       // это время в луче, а не доля мощности.
       const beamNozzles = mount.hardpoint.nozzles ?? [mount.hardpoint.offset]
       for (const nozzle of beamNozzles) {
-        // Засев — удержание мира ВРЕМЕНЕМ: дула одной установки делят секунду, а не множат её.
-        const seconds = (amp > 0 ? dt : 0) / (laser.effect === 'seed' ? beamNozzles.length : 1)
+        const seconds = amp > 0 ? dt : 0
         pourBeam(world, e, laser, nozzle, hostile, tick ? (amp * GUNNERY.BEAM_TICK * bore) / beamNozzles.length : 0, bore, _convergence, seconds)
       }
       return
@@ -178,18 +177,6 @@ function pourBeam(
 ): void {
   offsetToWorld(e, nozzle, _muzzle)
   _dir.copy(convergence).sub(_muzzle).normalize()
-
-  // Засевающий: струя по линии прицела, сквозь корабли — до первого тела системы.
-  if (laser.effect === 'seed') {
-    aimDirection(e.state.quat, e.controls.aimPitch, _dir)
-    const reach = laser.range * Math.max(1, e.state.scale)
-    const seed = pourSeed(world, e, _muzzle, _dir, reach, stepSeconds)
-    world.beams.push({
-      shooterId: e.id, offset: nozzle, dir: _dir.clone(), length: seed.distance, hit: seed.body !== null,
-      weapon: laser.id, hostile, bore,
-    })
-    return
-  }
 
   _beamShooter.id = e.id
   _beamShooter.cloaked = e.cloaked
@@ -330,18 +317,59 @@ export function fireMissile(world: World, e: ShipEntity, targetId: number | null
   return true
 }
 
-/** Установка разбивающего лазера среди выбранных; −1 — нет. */
-function shatterMount(e: ShipEntity, group: number | null): number {
+/**
+ * БОЕВОЙ лазер — просто наносит урон: без переделки (рост, сжатие, удержание), без резки
+ * (горный — инструмент) и без инструментов бога (засев, разбиение).
+ */
+export function isCombatLaser(laser: LaserModule): boolean {
+  return laser.damage > 0 && (laser.effect === undefined || laser.effect === 'blast')
+}
+
+/**
+ * Стреляет ли установка `i` в текущем режиме. Выбран один лазер (X) — только он. Режим
+ * «ВСЕ БОЕВЫЕ» — только боевые: спецлучи (удержание, рост/сжатие, горный, засев, разбиение)
+ * стреляют лишь выбранными поодиночке, иначе залп смешивал эффекты — горный колол камень,
+ * который обычный рассыпает, удержание цепляло то, что жгут. Стоят только спецлучи — в
+ * «ВСЕ» стреляет первый из них: корабль с одним горным не должен молчать.
+ */
+function firesIn(e: ShipEntity, group: number | null, i: number): boolean {
+  if (group !== null) return i === group
+  const w = e.spec.mounts[i]?.weapon
+  if (!w || !isLaser(w)) return false
+  if (isCombatLaser(w)) return true
+  return !hasCombatLaser(e) && firstLaserMount(e) === i
+}
+
+function hasCombatLaser(e: ShipEntity): boolean {
+  return e.spec.mounts.some((m) => isLaser(m.weapon) && isCombatLaser(m.weapon))
+}
+
+function firstLaserMount(e: ShipEntity): number {
+  return e.spec.mounts.findIndex((m) => isLaser(m.weapon))
+}
+
+/**
+ * Сколько лазерных установок на борту — делитель общей шкалы: доля ствола одна и та же,
+ * стреляет он один или в залпе, поэтому один ствол греет шкалу медленнее залпа.
+ */
+function laserMountCount(e: ShipEntity): number {
+  let n = 0
+  for (const m of e.spec.mounts) if (isLaser(m.weapon)) n++
+  return n
+}
+
+/** Установка лазера-импульса (разбивающего или жизни) среди стреляющих в режиме; −1 — нет. */
+function pulseMount(e: ShipEntity, group: number | null): number {
   for (let i = 0; i < e.spec.mounts.length; i++) {
-    if (group !== null && i !== group) continue
+    if (!firesIn(e, group, i)) continue
     const w = e.spec.mounts[i]!.weapon
-    if (isLaser(w) && w.effect === 'shatter') return i
+    if (isLaser(w) && isCosmic(w.effect)) return i
   }
   return -1
 }
 
 /**
- * Такт удержания гашетки на разбивающем: набор растёт за `CHARGE_TIME`, шкала нагрева ведётся
+ * Такт удержания гашетки на импульсе (разбивающем или жизни): набор растёт за `CHARGE_TIME`, шкала нагрева ведётся
  * от начального значения к упору. Перегрев (и его отключку) набор НЕ вызывает: на полном
  * шар просто держится, сколько держат гашетку, — решать, стрелять ли, пилоту.
  */
@@ -351,7 +379,9 @@ function chargePulse(world: World, e: ShipEntity, mount: number, dt: number): bo
   const heat = e.laserHeat
   let c = e.pulseCharge
   if (!c || c.cancelledAt !== null || c.mount !== mount) {
-    c = e.pulseCharge = { mount, level: 0, startHeat: Math.min(heat.heat, 0.99), held: true, cancelledAt: null }
+    const weapon = e.spec.mounts[mount]!.weapon
+    const kind = isLaser(weapon) && weapon.effect === 'seed' ? 'seed' : 'shatter'
+    c = e.pulseCharge = { mount, kind, level: 0, startHeat: Math.min(heat.heat, 0.99), held: true, cancelledAt: null }
   }
   c.held = true
   c.level = Math.min(1, c.level + dt / COSMIC.CHARGE_TIME)
@@ -407,7 +437,7 @@ function releasePulse(world: World, e: ShipEntity, mount: number): void {
   const radius = chargeBallRadius(e, world.time)
   chargeBallCenter(e.state.pos, _pulseAim, e.spec.hull.radius * e.state.scale, radius, _pulseFrom)
   // Зеркалу шар не положен: правку галактики шлёт хозяин выстрела.
-  if (!e.kinematic) spawnPulse(world, e, _pulseFrom, _pulseAim, laser.range * Math.max(1, e.state.scale), radius)
+  if (!e.kinematic) spawnPulse(world, e, _pulseFrom, _pulseAim, laser.range * Math.max(1, e.state.scale), radius, laser.effect === 'seed' ? 'seed' : 'shatter')
   world.muzzleFlashes.push({ shooterId: e.id, offset: m.hardpoint.offset, weapon: laser.id, born: world.time, bore: m.hardpoint.bore ?? 1 })
 }
 
@@ -419,12 +449,6 @@ function addLaserHeat(e: ShipEntity, now: number, amount: number): void {
   if (heat.heat >= 1) heat.overheatUntil = now + GUNNERY.LASER_OVERHEAT_LOCK
 }
 
-/** Сколько лазерных установок на борту. */
-function laserMountCount(e: ShipEntity): number {
-  let n = 0
-  for (const m of e.spec.mounts) if (isLaser(m.weapon)) n++
-  return n
-}
 
 /** Выбранная установка — если она ещё лазер; иначе null («все»): оснастку могли сменить. */
 export function selectedLaser(e: ShipEntity): number | null {

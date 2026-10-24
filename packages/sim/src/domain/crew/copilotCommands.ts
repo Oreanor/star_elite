@@ -12,6 +12,7 @@ import {
   copilotRepairQuote,
   copilotSalary,
   copilotStop,
+  copilotTravel,
   requestDismiss,
   hireCopilot,
   type HireBlock,
@@ -61,6 +62,7 @@ const ORDER_FAIL: Record<Exclude<OrderResult, 'ok'>, Phrase | null> = {
   'no-foes': phrase('copilotNoFoes'),
   'no-pods': phrase('copilotNoPods'),
   'hold-full': phrase('copilotHoldFull'),
+  'no-jump': phrase('copilotNoJump'),
 }
 
 function orderOutcome(result: OrderResult, done: Phrase): Outcome | null {
@@ -115,6 +117,12 @@ export function copilotCommand(world: World, _ship: ShipEntity, payload: unknown
   switch (o.order) {
     case 'goto':
       return typeof o.id === 'number' ? orderOutcome(copilotGoto(world, o.id), phrase('copilotGoto')) : null
+    case 'travel': {
+      // Систему по имени нашёл клиент (каталог галактики у него); не нашёл — номера нет.
+      if (typeof o.system !== 'number') return { line: null, spoken: phrase('copilotNoTarget') }
+      const target = typeof o.target === 'string' && o.target.trim() ? o.target.trim() : null
+      return orderOutcome(copilotTravel(world, o.system, target), phrase('copilotTravel'))
+    }
     case 'approach':
       return typeof o.id === 'number' ? orderOutcome(copilotApproach(world, o.id), phrase('copilotApproach')) : null
     case 'attack': {

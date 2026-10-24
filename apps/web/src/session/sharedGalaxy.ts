@@ -1,5 +1,5 @@
-import { onChildAdded, push, ref, set } from 'firebase/database'
-import { pushEdit, type GalaxyEdit, type World } from '@elite/sim'
+import { onChildAdded, onValue, push, ref, set } from 'firebase/database'
+import { pushEdit, reconcileFates, type GalaxyEdit, type World } from '@elite/sim'
 import { currentUserId } from './net/account'
 import { rtdb } from './net/firebase'
 
@@ -24,7 +24,18 @@ function asEdit(raw: unknown): GalaxyEdit | null {
   return typeof op === 'string' && KNOWN_OPS.has(op) ? (raw as GalaxyEdit) : null
 }
 
+/** Кто ждёт загрузки журнала (консоль прячет вкладку планеты, пока журнал не пришёл). */
+const readyListeners = new Set<() => void>()
+
 class SharedGalaxy {
+  /**
+   * Журнал галактики ЗАГРУЖЕН: все записи, что были в сети на момент подписки, уже легли на
+   * дельту. До этого мир не знает, что разбито: консоль открывалась на вкладке целой планеты,
+   * а через миг та пропадала. Без сети и аккаунта журнала нет — готово сразу.
+   */
+  private loaded = false
+  /** Первый снимок пришёл; ляжет в дельту в ближайшем такте (вместе с его правками). */
+  private loadedPending = false
   private world: World | null = null
   private seed: number | null = null
   private unsub: (() => void) | null = null
@@ -58,6 +69,19 @@ class SharedGalaxy {
       world.galaxyEpoch++
     }
     this.incoming.length = 0
+    // Судьбы тел — сразу, а не в шаге мира: консоль узнает о загрузке журнала в этом же кадре
+    // и не должна успеть увидеть разбитую планету целой.
+    reconcileFates(world)
+    if (this.loadedPending) {
+      this.loadedPending = false
+      this.loaded = true
+      for (const l of readyListeners) l()
+    }
+  }
+
+  /** Журнал загружен (или его нет вовсе — офлайн). */
+  isReady(): boolean {
+    return !rtdb || !currentUserId() || this.loaded
   }
 
   private attach(world: World): void {
@@ -66,12 +90,36 @@ class SharedGalaxy {
     this.seed = world.galaxySeed
     this.applied.clear()
     this.incoming.length = 0
+    const wasLoaded = this.loaded
+    this.loaded = false
+    this.loadedPending = false
+    if (wasLoaded) for (const l of readyListeners) l()
     if (!rtdb) return
-    this.unsub = onChildAdded(ref(rtdb, `galaxy/${world.galaxySeed}/edits`), (snap) => {
+    const node = ref(rtdb, `galaxy/${world.galaxySeed}/edits`)
+    const offChild = onChildAdded(node, (snap) => {
       const edit = asEdit(snap.val())
       if (snap.key && edit) this.incoming.push({ key: snap.key, edit })
     })
+    // Firebase шлёт все стартовые child_added ДО первого value того же узла: value — знак, что
+    // снимок журнала целиком в очереди.
+    const offValue = onValue(node, () => {
+      this.loadedPending = true
+    }, { onlyOnce: true })
+    this.unsub = () => {
+      offChild()
+      offValue()
+    }
   }
 }
 
 export const sharedGalaxy = new SharedGalaxy()
+
+/** Загружен ли журнал галактики — для `useSyncExternalStore`. */
+export function galaxyJournalReady(): boolean {
+  return sharedGalaxy.isReady()
+}
+
+export function subscribeGalaxyJournal(listener: () => void): () => void {
+  readyListeners.add(listener)
+  return () => readyListeners.delete(listener)
+}

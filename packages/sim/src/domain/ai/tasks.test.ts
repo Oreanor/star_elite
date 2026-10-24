@@ -7,6 +7,8 @@ import { stepWorld } from '../sim'
 import { createWorld, STARTER_SYSTEM } from '../world'
 import type { ShipEntity, World } from '../world/entities'
 import { aiController } from './pilot'
+import { createAIState, shiftAIState } from './types'
+import { makeRng } from '../../core/math'
 import { assignApproach, assignCollectRun, assignRendezvous, clearTasks, enqueueTask, hasTask, stepTasks } from './tasks'
 
 /** Мир с одним ботом-компаньоном (эскорт игрока), готовым брать поручения. */
@@ -205,5 +207,17 @@ describe('очередь задач компаньона', () => {
     for (let i = 0; i < 60 * 40 && world.pods.length > 0; i++) stepWorld(world, 1 / 60, controllers)
 
     expect(bot.hold.items.length).toBeGreaterThan(before) // груз реально в трюме
+  })
+})
+
+describe('сдвиг начала координат', () => {
+  it('сдвигает точки всех поручений, включая «проводи меня»', () => {
+    // Пойманная дыра: список точек жил вручную, и точку `lead-jump` забыли — после
+    // перецентровки клиент держался за пустоту в десятках километров.
+    const ai = createAIState(new Vector3(), makeRng(1))
+    const anchor = new Vector3(100, 0, 0)
+    ai.tasks.push({ kind: 'lead-jump', toSystem: 2, toName: 'Икс', anchor, announceAt: 0, jumpAt: 1, announced: false })
+    shiftAIState(ai, new Vector3(-50, 0, 0))
+    expect(anchor.x).toBe(50)
   })
 })

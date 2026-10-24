@@ -1,4 +1,5 @@
 import { Quaternion, type Vector3 } from 'three'
+import { releaseBerth } from '../station/berth'
 import { playerStartLoadout } from '../../config/loadouts'
 import { createAIState } from '../ai/types'
 import { declareFoe } from '../ai/targeting'
@@ -7,7 +8,7 @@ import { rehydrateLoadout, type SavedLoadout } from '../save/player'
 import { makeShip } from './factory'
 import type { Faction, MissileEntity, PlatformEntity, ShipEntity, StructHit, World } from './entities'
 import { PLATFORM } from '../../config/platform'
-import { damageWarBaseFixture } from '../combat/warBase'
+import { damageWarBaseFixture, shatterWarBase } from '../combat/warBase'
 import type { MissileModule } from '../loadout'
 import type { Persona } from './persona'
 
@@ -147,7 +148,7 @@ export function yieldLocalTraffic(world: World): number[] {
   // заменит пояс хозяина.
   world.asteroids = world.asteroids.filter((a) => a.netId != null)
   world.titans = world.titans.filter((t) => t.netId != null)
-  if (world.dockOccupantId != null && removed.includes(world.dockOccupantId)) world.dockOccupantId = null
+  for (const id of removed) releaseBerth(world, id)
   return removed
 }
 
@@ -232,9 +233,14 @@ export function promoteMirrorPlatform(p: PlatformEntity): void {
  */
 export function applyStructHitAtHost(world: World, hit: StructHit): void {
   if (hit.kind === 'fixture') {
-    const base = world.warBases[hit.base]
+    const base = world.warBases.find((b) => b.slot === hit.base)
     const fix = base?.fixtures[hit.fixture]
     if (base && fix) damageWarBaseFixture(world, base, fix, 1)
+    return
+  }
+  if (hit.kind === 'shatter') {
+    const base = world.warBases.find((b) => b.slot === hit.base)
+    if (base) shatterWarBase(world, base)
     return
   }
   const p = world.platforms.find((x) => x.netId === hit.netId && x.alive && !x.kinematic)

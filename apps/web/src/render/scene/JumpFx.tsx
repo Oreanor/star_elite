@@ -20,6 +20,7 @@ import {
 import { clearSharedPortal, publishSharedPortal } from '../../session/net/portal'
 import { isHeld } from '../../platform/input/input'
 import { hlog } from '../../session/hyperLog'
+import { tripGrowHeld } from '../../session/copilotTrip'
 
 const _destPos = new Vector3()
 const _destQuat = new Quaternion()
@@ -39,7 +40,7 @@ export function JumpDirector() {
   const session = useSession()
   useFrame(({ camera }) => {
     if (!portalOpen()) return
-    const ev = tickPortal(session.world, isHeld('KeyH'), session.world.time)
+    const ev = tickPortal(session.world, isHeld('KeyH') || tripGrowHeld(), session.world.time)
     if (ev === 'close') {
       hlog('пара устьев снята, дальний мир выброшен')
       disposeJumpPortalWorld()

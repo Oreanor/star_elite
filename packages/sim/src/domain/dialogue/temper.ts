@@ -1,4 +1,5 @@
 import { DIALOGUE } from '../../config/dialogue'
+import { hostileToPlayer } from '../ai/targeting'
 import { WARP } from '../../config/ai'
 import { clamp } from '../../core/math'
 import { healthFraction, shieldFraction } from '../combat/damage'
@@ -94,7 +95,7 @@ export function reactionTo(world: World, ship: ShipEntity, act: SpeechAct): Reac
   // У причала ни драться, ни удирать некуда: станция под охраной, борт внутри.
   if (isBerthed(ship) || world.docked) return 'bristle'
   // Уже враг — угрозы ему не новость: он и так дерётся (или уже бежит).
-  if (ship.faction === 'hostile') return 'bristle'
+  if (hostileToPlayer(world, ship)) return 'bristle'
   return resolve(world, ship) >= 0 ? 'fight' : 'flee'
 }
 

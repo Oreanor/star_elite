@@ -1,5 +1,5 @@
 import type { CSSProperties } from 'react'
-import type { ShipEntity, World } from '@elite/sim'
+import { hostileToPlayer, type ShipEntity, type World } from '@elite/sim'
 
 /**
  * Портреты пилотов. Лица НЕ нарезаны на файлы: на каждую расу и эмоцию — один лист
@@ -120,7 +120,7 @@ export function pilotEmotion(ship: ShipEntity, world: World): Emotion {
   const mark = outcomeEmotion.get(ship.id)
   if (mark && world.time - mark.at >= 0 && world.time - mark.at < OUTCOME_TTL) return mark.emotion
   if (ship.ai?.mode === 'evade' || (ship.ai?.warpTimer ?? -1) >= 0) return 'fear'
-  if (ship.faction === 'hostile' || (ship.ai?.grievance ?? 0) > 0) return 'anger'
+  if (hostileToPlayer(world, ship) || (ship.ai?.grievance ?? 0) > 0) return 'anger'
   const rec = world.acquaintances.find((a) => a.id === ship.acquaintanceId)
   if (rec?.relationship === 'friendly') return 'joy'
   return 'neutral'

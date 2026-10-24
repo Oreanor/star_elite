@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { hostileToPlayer } from '../ai/targeting'
 import { createWorld, STARTER_SYSTEM, type World } from './index'
 import { applyStance, residentAcquaintances, rememberPilot } from './acquaintance'
 
@@ -85,7 +86,9 @@ describe('память знакомств', () => {
     rememberPilot(world, ship)
 
     applyStance(world, ship, 'hostile')
-    expect(ship.faction).toBe('hostile')
+    expect(hostileToPlayer(world, ship)).toBe(true)
+    // Враг игроку ЛИЧНО, а не пират: фракция мирная (иначе его била бы полиция).
+    expect(ship.faction).toBe('neutral')
     expect(world.acquaintances[0]!.relationship).toBe('hostile')
   })
 

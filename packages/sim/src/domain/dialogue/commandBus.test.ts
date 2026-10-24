@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { hostileToPlayer } from '../ai/targeting'
 import { veteranWorld } from '../../testkit'
 import { STARTER_SYSTEM, rememberPilot, type World } from '../world'
 import type { ShipEntity } from '../world/entities'
@@ -99,7 +100,9 @@ describe('шина команд боту', () => {
     // Озлобился: мирный борт по фракции становится враждебным (это уже дело боя, не слов).
     applyCommand(world, ship, { action: 'stance', payload: { stance: 'hostile' } })
     expect(rec.relationship).toBe('hostile')
-    expect(ship.faction).toBe('hostile')
+    expect(hostileToPlayer(world, ship)).toBe(true)
+    // Враг игроку ЛИЧНО, а не пират: фракция мирная (иначе его била бы полиция).
+    expect(ship.faction).toBe('neutral')
   })
 
   it('mapEdit — только богу: смертный карту не правит, бог правит (дельта + epoch)', () => {

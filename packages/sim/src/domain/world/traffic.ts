@@ -1,4 +1,5 @@
 import { botRank } from '../crew/rank'
+import { holdsBerth, pruneBerths, releaseBerth } from '../station/berth'
 import { Quaternion, Vector3 } from 'three'
 import { freighterLoadout, godLoadout, pirateLeaderLoadout, pirateLoadout, traderLoadout } from '../../config/loadouts'
 import { NPC_DOCK } from '../../config/station'
@@ -658,8 +659,9 @@ export function stepDockedBerth(world: World, dt: number): boolean {
     s.ai.dockTimer -= dt
     if (s.ai.dockTimer <= 0) {
       s.ai.dock = 'done'
+      s.ai.dockStationId = null
       s.clearance = false
-      if (world.dockOccupantId === s.id) world.dockOccupantId = null
+      releaseBerth(world, s.id)
       changed = true
     }
   }
@@ -749,19 +751,13 @@ function despawnDistant(world: World): void {
     if (s.ai?.dormant) return true
     // Стыкующегося у причала не бросаем: он привязан к станции, как захваченная цель.
     // Иначе улетевший к причалу игрок вернулся бы к пустому причалу с зависшей очередью.
-    if (s.ai?.dock === 'berthed' || s.ai?.dock === 'inbound' || s.id === world.dockOccupantId) return true
+    if (s.ai?.dock === 'berthed' || s.ai?.dock === 'inbound' || holdsBerth(world, s.id)) return true
     return s.state.pos.distanceToSquared(world.player.state.pos) <= limitSq
   })
 
   // Причал держит только живой стыкующийся. Погиб, ушёл или уже отчалил — освобождаем
   // место, иначе очередь встанет навсегда, а к причалу никто больше не подойдёт.
-  const occupant = world.dockOccupantId
-  if (occupant != null) {
-    const ship = world.ships.find((s) => s.id === occupant)
-    if (!ship || !ship.alive || ship.ai?.dock == null || ship.ai.dock === 'done') {
-      world.dockOccupantId = null
-    }
-  }
+  pruneBerths(world)
 }
 
 /**

@@ -82,7 +82,7 @@ export function fight(e: ShipEntity, ai: AIState, target: ShipEntity, world: Wor
 
   if (rethink) {
     remember(e, target, world.time)
-    decideMode(e, ai, target, distance)
+    decideMode(e, ai, target, distance, world)
     decideMissile(e, ai, world, distance)
     decideReversal(e, ai, distance, world.time)
   }
@@ -141,14 +141,14 @@ export function fight(e: ShipEntity, ai: AIState, target: ShipEntity, world: Wor
 }
 
 /** Зовётся только в момент «размышления»: между ними режим держится. */
-function decideMode(e: ShipEntity, ai: AIState, target: ShipEntity, distance: number): void {
+function decideMode(e: ShipEntity, ai: AIState, target: ShipEntity, distance: number, world: World): void {
   // Боевой дух: страх копится из своей слабости, силы врага и робости нрава, а
   // слабость врага его гасит. Перевалил порог — рвёт из боя, а не гибнет героически.
   // Гистерезис держит уже бегущего в бегстве, пока страх не спадёт заметно ниже.
   // Автобой игрока не бежит: бой — ПРИКАЗ, а не выбор пилота. Страх считался от нрава твоего
   // же персонажа и от просевшего щита — второй пилот «тут же» уходил вбок змейкой, лазер
   // молчал. Захочешь уйти — забери штурвал. Боевой дух — у ботов.
-  if (e.faction !== 'player' && wantsToFlee(e, target, ai.mode === 'evade')) {
+  if (e.faction !== 'player' && wantsToFlee(e, target, ai.mode === 'evade', world)) {
     setMode(ai, 'evade')
   } else if (ai.mode === 'break') {
     if (ai.modeTimer > AI.BREAK_TIME) setMode(ai, 'pursue')

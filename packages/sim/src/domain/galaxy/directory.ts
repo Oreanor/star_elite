@@ -25,6 +25,11 @@ export interface DirectoryEntry {
   /** Столица — самый населённый мир: её строй, экономика, раса. null — необитаема. */
   capital: { government: string; economy: string; species: string; populationM: number } | null
   features: SystemFeature[]
+  /**
+   * Самый развитый мир системы — ИМЕННО куда лететь: «планета покруче» называется по имени,
+   * с причалом, если он есть. null — обитаемых нет.
+   */
+  best: { planet: string; tech: number; station: string | null } | null
 }
 
 /** Ближайшая система с признаком — «где ближайший …». */
@@ -55,7 +60,13 @@ function entryOf(system: StarSystem, from: Spot3, galaxySeed: number): Directory
     gearClass = Math.max(gearClass, moduleClassAvailable(p))
   }
   const cap = capitalOf(system)
+  let best: DirectoryEntry['best'] = null
+  for (const p of system.planets) {
+    if (!isSettled(p) || (best && best.tech >= p.settlement.techLevel)) continue
+    best = { planet: p.name, tech: p.settlement.techLevel, station: p.station?.name ?? null }
+  }
   return {
+    best,
     index: system.index,
     name: system.name,
     ly: Math.round(distanceLy(from, system) * 10) / 10,
@@ -100,4 +111,34 @@ export function galaxyDirectory(systems: readonly StarSystem[], here: number, ga
     if (found) notable.push({ what, entry: entryOf(found.s, home, galaxySeed) })
   }
   return { near, notable }
+}
+
+/** Имя для сравнения: без кавычек и регистра, ё как е. */
+function plain(name: string): string {
+  return name.toLowerCase().replace(/ё/g, 'е').replace(/[«»"'“”„]/g, '').replace(/\s+/g, ' ').trim()
+}
+
+/**
+ * Система по ИМЕНИ, как её назвал второй пилот. Сперва точное совпадение, потом вхождение;
+ * имена в галактике повторяются — берём ближайшую к `here`. null — такой нет.
+ */
+export function findSystemByName(systems: readonly StarSystem[], name: string, here: number): number | null {
+  const want = plain(name)
+  if (!want) return null
+  const home = systems.find((s) => s.index === here)
+  const near = (list: readonly StarSystem[]): number | null => {
+    let best: StarSystem | null = null
+    let bestD = Infinity
+    for (const s of list) {
+      const d = home ? distanceLy(home, s) : 0
+      if (d < bestD) {
+        bestD = d
+        best = s
+      }
+    }
+    return best ? best.index : null
+  }
+  const exact = systems.filter((s) => plain(s.name) === want)
+  if (exact.length > 0) return near(exact)
+  return near(systems.filter((s) => plain(s.name).includes(want) || want.includes(plain(s.name))))
 }

@@ -19,11 +19,19 @@ import {
   copilotRepairQuote,
   copilotRepairLuck,
   copilotSalary,
+  copilotJumpRoute,
+  copilotStop,
+  copilotTravel,
   hireCopilot,
   stepCrew,
 } from './copilot'
 import { awardKillXp, botRank, killXp, rankOfXp, rankSkill, xpForRank } from './rank'
 import { copilotBriefing } from './briefing'
+import { jumpBlock } from '../galaxy/jump'
+import { findNavByName } from '../world/queries'
+import { findSystemByName } from '../galaxy/directory'
+import { generateGalaxy } from '../galaxy/generate'
+import { GALAXY } from '../../config/galaxy'
 
 /**
  * Второй пилот и ранги. Без рендера: найм, жалованье, ремонт и приказы — чистый домен.
@@ -278,3 +286,77 @@ describe('приказы словами', () => {
     expect(copilotBriefing(world)!.broken).toHaveLength(0)
   })
 })
+
+describe('рейс второго пилота', () => {
+  it('«летим туда» в другую систему — просьба рейса; привод не тянет — честный отказ', () => {
+    const world = hired()
+    world.player.jumpCharge = world.player.spec.jumpRange
+    const far = 2 + world.systemIndex
+    const reach = jumpBlock(world, far)
+    const result = copilotTravel(world, far, 'Бастион')
+    if (reach === null || reach === 'docked' || reach === 'cruising') {
+      expect(result).toBe('ok')
+      expect(world.tripRequest).toEqual({ system: far, target: 'Бастион' })
+    } else {
+      expect(result).toBe('no-jump')
+      expect(world.tripRequest).toBeNull()
+    }
+  })
+
+  it('в своей системе — просто курс на цель по имени', () => {
+    const world = hired()
+    const station = world.bodies.find((b) => b.kind === 'station')!
+    expect(copilotTravel(world, world.systemIndex, station.name.toUpperCase())).toBe('ok')
+    expect(world.navTargetId).toBe(station.id)
+    expect(world.helmRequest).toBe('flyto')
+    expect(world.tripRequest).toBeNull()
+  })
+
+  it('«стоп» снимает и рейс', () => {
+    const world = hired()
+    copilotStop(world)
+    expect(world.tripRequest).toBe('cancel')
+  })
+
+  it('цель по имени: без кавычек и регистра, «Бастион» находит «База «Бастион»»', () => {
+    const world = hired()
+    const station = world.bodies.find((b) => b.kind === 'station')!
+    const bare = station.name.replace(/[«»]/g, '').split(' ').at(-1)!
+    expect(findNavByName(world, bare.toLowerCase())).toBe(station.id)
+    expect(findNavByName(world, 'нет такого тела нигде')).toBeNull()
+  })
+
+  it('система по имени — из каталога, ближайшая при тёзках', () => {
+    const galaxy = generateGalaxy(GALAXY.SEED)
+    const some = galaxy[37]!
+    expect(findSystemByName(galaxy, some.name.toUpperCase(), 0)).not.toBeNull()
+    const found = galaxy.find((s) => s.index === findSystemByName(galaxy, some.name, 0))!
+    expect(found.name).toBe(some.name)
+    expect(findSystemByName(galaxy, 'Несуществующая', 0)).toBeNull()
+  })
+})
+
+describe('J по маршруту с карты', () => {
+  it('выбрана звезда, в системе цели нет — второй пилот прыгает, а не ползёт к ней', () => {
+    // Пойманный баг: J к звезде с карты вёл корабль автопилотом сквозь межзвёздную пустоту.
+    const world = hired()
+    world.player.jumpCharge = world.player.spec.jumpRange
+    const far = world.systemIndex + 2
+    world.jumpTargetIndex = far
+    world.jumpArrivalPlanet = 1
+    world.navTargetId = null
+    world.contactLock = null
+    const result = copilotJumpRoute(world)
+    expect(result).not.toBeNull()
+    if (result === 'ok') expect(world.tripRequest).toMatchObject({ system: far, arrivalPlanet: 1 })
+  })
+
+  it('есть цель в системе — J ведёт к ней обычным автопилотом', () => {
+    const world = hired()
+    world.jumpTargetIndex = world.systemIndex + 2
+    world.navTargetId = world.bodies.find((b) => b.kind === 'station')!.id
+    world.targetFocus = 'nav'
+    expect(copilotJumpRoute(world)).toBeNull()
+  })
+})
+

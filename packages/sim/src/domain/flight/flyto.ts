@@ -385,6 +385,14 @@ export const flyToController: Controller = {
 }
 
 /** Есть ли куда вести: есть цель в фокусе (или звезда галактики), игрок жив и не пристыкован. */
+/**
+ * Есть ли цель В СИСТЕМЕ (захват Tab / Shift+Tab): она сильнее маршрута с карты. Нет — J ведёт
+ * к звезде с карты; второй пилот туда не ползёт, а прыгает (`copilotJumpRoute`).
+ */
+export function flyToLocalTarget(world: World): boolean {
+  return world.player.state.scale < MIELOPHONE.GHOST_BODY_SCALE && lockDestination(world) !== null
+}
+
 export function canEngageFlyTo(world: World): boolean {
   if (!world.player.alive || world.docked) return false
   return destination(world) !== null

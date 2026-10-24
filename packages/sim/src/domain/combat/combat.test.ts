@@ -1,7 +1,7 @@
 import { Quaternion, Vector3 } from 'three'
 import { veteranWorld } from '../../testkit'
 import { describe, expect, it } from 'vitest'
-import { MISSILE_PYLON, MODULE_CATALOGUE } from '../../config/modules'
+import { MISSILE_PYLON, MODULE_CATALOGUE, PULSE_LASER } from '../../config/modules'
 import { ASTEROID } from '../../config/world'
 import { PHYSICS } from '../../config/physics'
 import { ATHENA, ATLAS, AURORA_ONE, HERMES, ICARUS, missileRackOf, ORION, PEGASUS, PERSEUS, SPIRITUS_SANCTUS, THESEUS } from '../../config/chassis'
@@ -247,6 +247,10 @@ describe('лазер', () => {
       const { world } = withOneEnemy()
       enemyAhead(world, 500)
       const p = world.player
+      // Залп «все» — только обычные лазеры (спецлучи стреляют лишь выбранными), поэтому
+      // на все лазерные точки ставим обычный: сравниваем один ствол с залпом из нескольких.
+      p.loadout = { ...p.loadout, weapons: p.loadout.weapons.map((w) => (w && w.kind === 'laser' ? PULSE_LASER : w)) }
+      refreshSpec(p)
       p.laserGroup = null
       if (single) cycleLaserGroup(p)
       fireLasers(world, p, false, PHYSICS.FIXED_DT)
@@ -255,6 +259,22 @@ describe('лазер', () => {
     const lasers = withOneEnemy().world.player.spec.mounts.filter((m) => isLaser(m.weapon)).length
     if (lasers < 2) return // стартовая сборка с одним лазером — выбирать нечего
     expect(heatAfterVolley(true)).toBeLessThan(heatAfterVolley(false))
+  })
+
+  it('залп «все» — только обычные лазеры; спецлуч стреляет лишь выбранным', () => {
+    // Смешанный залп складывал эффекты: горный колол камень, который обычный рассыпает.
+    const { world } = withOneEnemy()
+    enemyAhead(world, 500)
+    const p = world.player
+    const slots = p.loadout.weapons.map((w, i) => (w && w.kind === 'laser' ? i : -1)).filter((i) => i >= 0)
+    if (slots.length < 2) return
+    const mining = MODULE_CATALOGUE.find((m) => m.id === 'mining_1')!
+    p.loadout = { ...p.loadout, weapons: p.loadout.weapons.map((w, i) => (i === slots[0] ? mining : w && w.kind === 'laser' ? PULSE_LASER : w)) } as typeof p.loadout
+    refreshSpec(p)
+    p.laserGroup = null
+    fireLasers(world, p, false, PHYSICS.FIXED_DT)
+    expect(world.bolts.some((b) => b.weapon === 'mining_1')).toBe(false)
+    expect(world.bolts.some((b) => b.weapon === PULSE_LASER.id)).toBe(true)
   })
 
   it('X перебирает лазеры по кругу и возвращается к «все»', () => {

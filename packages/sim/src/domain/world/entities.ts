@@ -89,8 +89,10 @@ export interface GunState {
  * Отпустили на полном — шар летит; раньше — отмена (`cancelledAt`), шар схлопывается.
  */
 export interface PulseCharge {
-  /** Установка разбивающего лазера (индекс в `spec.mounts`). */
+  /** Установка лазера-импульса (индекс в `spec.mounts`). */
   mount: number
+  /** Что копится: шар разбивающего или точка импульса жизни. */
+  kind: PulseKind
   /** Набор 0..1; на единице импульс готов. */
   level: number
   /** Нагрев шкалы в миг начала: набор ведёт её от него к упору. */
@@ -116,6 +118,15 @@ export interface FallenBody {
   at: number
   /** Причалы, что кружили вокруг него, — теперь ничьи. */
   stations: string[]
+}
+
+/** Рейс второго пилота: система и цель в ней по имени (тело, станция, статуя, база). */
+export interface TripRequest {
+  system: number
+  /** Имя цели в системе прибытия; null — к причалу. */
+  target: string | null
+  /** Планета с причалом, у которой выйти (выбор на карте); null — у столицы. */
+  arrivalPlanet?: number | null
 }
 
 export interface LaserHeat {
@@ -237,6 +248,8 @@ export interface ShipEntity {
    */
   bountyOf: number | null
   lastAttackerId: number | null
+  /** Когда (`world.time`) борт последний раз звал на помощь (`stepDistress`). */
+  helpCalledAt?: number
   lastHitAt: number
   /**
    * Время последнего попадания, которое ПРИНЯЛ ЩИТ, и последнего, дошедшего до КОРПУСА.
@@ -625,8 +638,6 @@ export interface BodyEntity {
    * (`FateEdit.ref`). Нет поля — тело вне каталога (станция, Дверь): судьбе не подлежит.
    */
   ref?: string
-  /** Сколько секунд засевающий луч держит мир (сбрасывается, если луч ушёл). */
-  lifeSeed?: { seconds: number; lastAt: number }
 }
 
 /**
@@ -634,9 +645,14 @@ export interface BodyEntity {
  * по телам системы (планета, луна, звезда); корабли и камни проходит насквозь — он для
  * миров, не для боя. Координаты — ОКРЕСТНОСТИ (едут с опорой игрока, как болты).
  */
+/** Род космического импульса — по эффекту лазера. */
+export type PulseKind = 'shatter' | 'seed'
+
 export interface PulseEntity {
   id: number
   pos: Vector3
+  /** Чей импульс: разбивающий (шар) или жизни (точка с лучами) — разные итоги попадания. */
+  kind: PulseKind
   /** Полная скорость: свой разгон по `dir` плюс унаследованная `carry`. */
   vel: Vector3
   /** Направление выстрела, единичный. */
@@ -648,6 +664,8 @@ export interface PulseEntity {
   ownerId: number
   /** Осталось пути, м. */
   distanceLeft: number
+  /** Промах: мировое время, когда импульс растает (`COSMIC.PULSE_MISS_LIFE`). Нет — ещё в деле. */
+  missBy?: number
   /** Видимый радиус шара, м (растёт с масштабом стрелка). */
   radius: number
   born: number
@@ -762,6 +780,8 @@ export interface WarBaseFixture {
   hitsLeft: number
   /** Когда засчитано последнее попадание, с. Одновременные удары сливаются (`FIXTURE_HIT_MERGE`). */
   lastHitAt: number
+  /** Снос шаром: миг, когда рвётся ЭТА деталь (`world.time`); с него она — огрызок. */
+  blowAt?: number
   alive: boolean
 }
 
@@ -777,6 +797,12 @@ export interface WarBaseFixture {
  */
 export interface WarBaseEntity {
   id: number
+  /**
+   * Место базы в описании системы (`SystemDef.warBases`) — её АДРЕС в сети. Не номер в
+   * `world.warBases`: снесённую базу из списка выносят, номера остальных сдвигаются, и хозяин
+   * рассылал бы маску не той базе. Место в описании у всех клиентов одно и не меняется.
+   */
+  slot: number
   kind: 'warbase'
   /** Имя (для метки и подписи цели). */
   name: string
@@ -800,6 +826,15 @@ export interface WarBaseEntity {
   scattered: boolean
   /** Навесные детали — отстреливаются поштучно. Расставлены детерминированно по сиду. */
   fixtures: WarBaseFixture[]
+  /** Тело, с которым база едет по орбите (планета); нет — едет с причалом. */
+  anchorId?: number
+  /**
+   * Снесена РАЗРУШАЮЩИМ ШАРОМ: не каскад, а очаги по обшивке и общий взрыв. Пока идут очаги,
+   * корпус ещё стоит (`warBaseStanding`) — рвётся на глазах, а не исчезает в первый миг.
+   */
+  violent?: boolean
+  /** Сколько длится гибель от удара до общего взрыва, с (у каскада — своя константа). */
+  wreckSpan?: number
 }
 
 export interface TitanEntity {
@@ -869,8 +904,47 @@ export interface PlatformEntity {
  * Удар по сооружению у не-хозяина (деталь военной базы, ядро гнезда) — уходит хозяину.
  * База — по НОМЕРУ в `world.warBases`: базы ставятся от зерна системы и у всех в одном порядке.
  */
+/**
+ * КЛУБ ОГНЯ — мягкий объёмный шар очага: рождается, распухает и тает, остывая из жара в дым.
+ * Очаг — десяток таких вокруг одной точки со сдвигом во времени. Чистое зрелище.
+ */
+export interface FirePuff {
+  pos: Vector3
+  /** Миг рождения (`world.time`; может быть в будущем — ещё не зажёгся) и сколько живёт, с. */
+  born: number
+  life: number
+  /** Радиус в разгаре, м. */
+  size: number
+  /** Своё зерно шума: соседние клубы не одинаковы. */
+  seed: number
+  /** Жар: 1 — обычный клуб, больше — раскалённее и ярче (ядро общего взрыва). */
+  heat?: number
+}
+
+/**
+ * ОСКОЛОК военной базы, снесённой шаром: целая турель или огрызок основания, летящий прочь
+ * с вращением. Чистое зрелище — не цель, не твердь; гаснет через `life`.
+ */
+export interface WarShard {
+  pos: Vector3
+  vel: Vector3
+  /** Ось вращения, единичная, и угловая скорость, рад/с. */
+  axis: Vector3
+  spin: number
+  /** Целая деталь (облик `model` как у `WarBaseFixture`) или огрызок (облик от `seed`). */
+  kind: 'detail' | 'trash'
+  model: number
+  seed: number
+  /** Габарит, м. */
+  size: number
+  born: number
+  life: number
+}
+
+/** Удар по сооружению для хозяина системы. `base` — место базы (`WarBaseEntity.slot`). */
 export type StructHit =
   | { kind: 'fixture'; base: number; fixture: number }
+  | { kind: 'shatter'; base: number }
   | { kind: 'platform'; netId: string; damage: number }
 
 /** Мгновенный след лазера. Чисто визуальный, живёт доли секунды. */
@@ -1000,8 +1074,9 @@ export interface Notice {
    * `contract-done` / `contract-failed` — дело `other` от `name` закрыто или провалено.
    * `lead-jump` — клиент `name` прыгает к звезде `other` и зовёт за собой.
    * `copilot-quit` — второй пилот `name` ушёл: жалованье платить нечем.
+   * `life` — на планете `name` зародилась жизнь (импульс жизни, свой или чужой).
    */
-  kind: 'contact-lost' | 'player-left' | 'demand' | 'yielded' | 'refused' | 'contract-done' | 'contract-failed' | 'lead-jump' | 'copilot-quit'
+  kind: 'contact-lost' | 'player-left' | 'demand' | 'yielded' | 'refused' | 'contract-done' | 'contract-failed' | 'lead-jump' | 'copilot-quit' | 'life'
   /** Имя, которое игрок знал. Данные, не перевод: подставляется в шаблон HUD. */
   name: string
   /** Второе имя или подпись для вестей о двоих (эфир) и о делах. */
@@ -1136,6 +1211,10 @@ export interface World {
   rockClaims: PodClaim[]
   /** Удары по сооружениям у не-хозяина этого такта (см. `StructHit`). */
   structHits: StructHit[]
+  /** Осколки баз, снесённых шаром (`WarShard`). */
+  warShards: WarShard[]
+  /** Клубы огня очагов (`FirePuff`). */
+  firePuffs: FirePuff[]
   /** Дела игрока: активные и недавно закрытые (см. `domain/contracts`). */
   contracts: Contract[]
   /** До следующего вызова по связи с офертой, с (сами заговаривают по сроку). */
@@ -1277,11 +1356,11 @@ export interface World {
    */
   jumpArrivalPlanet: number | null
   /**
-   * Кто СЕЙЧАС занимает причал из трафика (не игрок). Причал один, и стыкуется
-   * по нему один корабль за раз: занявший держит место, пока не отчалит, остальные
-   * ждут в очереди. null — причал свободен. Игрок стыкуется своим путём (`docked`).
+   * Причалы трафика: станция → кто СЕЙЧАС её занимает (не игрок). По одному кораблю на
+   * станцию: занявший держит место, пока не отчалит, остальные ждут в очереди у той же
+   * станции. Игрок стыкуется своим путём (`docked`). Читать и писать — `station/berth.ts`.
    */
-  dockOccupantId: number | null
+  berths: Map<number, number>
   /**
    * Счётчик смен у причала, пока игрок в доке: пришёл новый борт, отстоявшийся отчалил.
    * Причал ведёт `stepWorld`, а экран станции лишь сверяет число — перерисовывается, когда
@@ -1358,6 +1437,12 @@ export interface World {
    * режимов сессии — их включает слой приложения, прочитав и сбросив эту просьбу.
    */
   helmRequest: 'flyto' | 'manual' | null
+  /**
+   * Просьба второго пилота о РЕЙСЕ в другую систему (`copilotTravel`) или его отмене. Рейс —
+   * отчалить, отойти, встать, раскрыть кольцо, войти, лететь к цели — ведёт слой приложения:
+   * кольцо прыжка живёт там. Он читает просьбу и сбрасывает её, как `helmRequest`.
+   */
+  tripRequest: TripRequest | 'cancel' | null
 
   /**
    * Реестр знакомых пилотов: с кем игрок говорил. Переживает и гибель бортов

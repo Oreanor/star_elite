@@ -124,3 +124,7 @@ export function warBaseDetailGeometry(key: DetailKey): BufferGeometry | null {
 export function warBaseDetailMaterial(key: DetailKey): Material | null {
   return detailCache.get(key)?.material ?? null
 }
+
+/** Облик детали по её `model`: 0 — башня, дальше — пушки/глаза/ангар. Данные, не ветка. */
+const FIXTURE_MODELS: readonly DetailKey[] = ['tower', 'gun1', 'gun2', 'eye1', 'pod']
+export const detailKeyOf = (model: number): DetailKey => FIXTURE_MODELS[model % FIXTURE_MODELS.length]!

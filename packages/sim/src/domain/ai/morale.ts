@@ -3,7 +3,10 @@ import { clamp } from '../../core/math'
 import { healthFraction, shieldFraction } from '../combat/damage'
 import { energyFraction } from '../combat/ecm'
 import type { Persona } from '../world/persona'
-import type { ShipEntity } from '../world/entities'
+import type { ShipEntity, World } from '../world/entities'
+import { isEngageable } from '../combat/engage'
+import { knowsOf } from './perception'
+import { isFoe } from './targeting'
 
 /**
  * Боевой дух: решает, пора ли боту бросить бой.
@@ -40,14 +43,37 @@ function strength(s: ShipEntity): number {
 }
 
 /**
+ * ПЕРЕВЕС СИЛ вокруг бота: враги, о которых он знает, против него самого и союзников рядом
+ * (тех, кому его цель тоже враг). Отношение минус один: 0 — поровну, +1 — врагов вдвое
+ * больше. Прежде страх мерил только свою цель: одиночка не боялся звена, а пират в стае —
+ * не смелел от своих. Без мира (`world` не дан) — один на один, как раньше.
+ */
+export function sideOdds(e: ShipEntity, target: ShipEntity, world?: World): number {
+  let foes = strength(target)
+  let friends = strength(e)
+  if (world) {
+    const r2 = MORALE.SIDE_RANGE * MORALE.SIDE_RANGE
+    for (let i = world.player.alive ? -1 : 0; i < world.ships.length; i++) {
+      const s = i < 0 ? world.player : world.ships[i]!
+      if (s === e || s === target || !s.alive || !isEngageable(s)) continue
+      if (s.state.pos.distanceToSquared(e.state.pos) > r2) continue
+      if (isFoe(e, s)) {
+        if (knowsOf(e, s, world)) foes += strength(s)
+      } else if (isFoe(s, target)) friends += strength(s)
+    }
+  }
+  return foes / Math.max(1, friends) - 1
+}
+
+/**
  * Уровень страха. Растёт с ослаблением, падает, когда враг сам при смерти. Порог
  * бегства — `MORALE.FLEE`; между ним и `FLEE − HYSTERESIS` бот, уже бегущий, бежит
  * дальше, а свежий ещё держится — так у порога нет дрожи «бегу-дерусь-бегу».
  */
-export function fearLevel(e: ShipEntity, target: ShipEntity): number {
+export function fearLevel(e: ShipEntity, target: ShipEntity, world?: World): number {
   const ownWeak =
     1 - MORALE.HULL_W * healthFraction(e) - MORALE.SHIELD_W * shieldFraction(e) - MORALE.ENERGY_W * energyFraction(e)
-  const enemyStr = clamp(strength(target) / Math.max(1, strength(e)) - 1, -0.5, MORALE.ENEMY_STR_CAP)
+  const enemyStr = clamp(sideOdds(e, target, world), -0.5, MORALE.ENEMY_STR_CAP)
   const coward = cowardice(e.persona)
   const enemyWeak = 1 - healthFraction(target)
 
@@ -61,7 +87,7 @@ export function fearLevel(e: ShipEntity, target: ShipEntity): number {
 }
 
 /** Пора ли рвать из боя. Свежий бот — по порогу; уже бегущий держит бегство по гистерезису. */
-export function wantsToFlee(e: ShipEntity, target: ShipEntity, alreadyFleeing: boolean): boolean {
+export function wantsToFlee(e: ShipEntity, target: ShipEntity, alreadyFleeing: boolean, world?: World): boolean {
   const threshold = alreadyFleeing ? MORALE.FLEE - MORALE.HYSTERESIS : MORALE.FLEE
-  return fearLevel(e, target) >= threshold
+  return fearLevel(e, target, world) >= threshold
 }

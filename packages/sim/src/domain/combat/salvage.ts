@@ -63,12 +63,13 @@ export function spawnRockDebrisPod(
   radius: number,
   units: number,
   kick: number,
+  commodity: Commodity = COMMODITIES.MINERALS,
 ): void {
   spawnPod(
     world,
     pos,
     vel,
-    { kind: 'commodity', commodity: COMMODITIES.MINERALS, units },
+    { kind: 'commodity', commodity, units },
     { debris: { shape, radius }, kick },
   )
 }

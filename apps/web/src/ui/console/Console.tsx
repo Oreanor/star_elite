@@ -37,6 +37,7 @@ import { useSession } from '../../session/GameContext'
 import { lastSaveFailed, subscribeSaveStatus } from '../../session/save/saveStore'
 import { UI } from '../theme'
 import { Locator } from '../map/Locator'
+import { galaxyJournalReady, subscribeGalaxyJournal } from '../../session/sharedGalaxy'
 import { useBodiesRevision } from '../useBodiesRevision'
 import { PlanetScreen } from '../planet/PlanetScreen'
 import { Reference } from '../reference/Reference'
@@ -157,7 +158,10 @@ export function Console({
   // У причала «где я» — планета ЭТОЙ станции. Станция не на орбите (монумент «Крест») —
   // вкладки ПЛАНЕТА нет. В полёте паспорт жив только внутри пузыря мира: перелёт
   // между планетами одной системы меняет вкладку, а в межпланетной пустоте она гаснет.
-  const planet = focusedPlanet(world)
+  // Пока журнал галактики не пришёл, мир не знает, что разбито: вкладки ПЛАНЕТА нет вовсе —
+  // иначе она открывалась на разбитой (целой до загрузки) и через миг пропадала.
+  const journal = useSyncExternalStore(subscribeGalaxyJournal, galaxyJournalReady)
+  const planet = journal ? focusedPlanet(world) : null
   const charted = inSystem(world)
   const giant = world.player.state.scale >= MIELOPHONE.PHASE_START
   // ПЛАНЕТА — вкладка «по умолчанию» у вызывающих; без мира под бортом (пустота,
@@ -170,12 +174,10 @@ export function Console({
   const tabs: { id: ConsoleTab; label: string; active?: boolean; disabled?: boolean }[] = [
     // У причала первая вкладка — СТАНЦИЯ (шапка места + кто пристыкован); в полёте
     // станции под тобой нет, и та же вкладка показывает паспорт мира — ПЛАНЕТА.
-    // Вне пузыря мира вкладка остаётся, но гаснет: иначе «пропала» и непонятно, куда делась.
-    ...(docked
-      ? planet
-        ? [{ id: 'planet' as const, label: t('station.nav.planet') }]
-        : []
-      : [{ id: 'planet' as const, label: t('station.nav.planet'), disabled: !planet }]),
+    // Нет мира — вкладка остаётся, но гаснет, и в полёте, и у причала: вне пузыря мира, у
+    // причала без хозяйки (разбита, монумент) и пока журнал галактики грузится. Пропадавшая и
+    // всплывавшая вкладка привлекала внимание: «пропала» — и непонятно, куда делась.
+    { id: 'planet' as const, label: t('station.nav.planet'), disabled: !planet },
     // ЛЮДИ — сразу за местом: кто здесь и с кем связаться. Есть и у причала, и в полёте.
     // У причала вкладка — про СТАНЦИЮ: кто здесь, диспетчер, Слово. В полёте станции под
     // тобой нет, и там это знакомые и игроки онлайн — ЛЮДИ.

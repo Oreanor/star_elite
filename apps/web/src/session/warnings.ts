@@ -64,6 +64,10 @@ export type WarnCode =
   | 'pulseCharging'
   | 'pulseReady'
   | 'pulseCancelled'
+  | 'tripStart'
+  | 'tripArrived'
+  | 'tripCancelled'
+  | 'lifeBorn'
 
 /**
  * Важность сигнала: при нескольких живых показывается плашка с бо́льшим числом.
@@ -123,6 +127,12 @@ const RANK: Record<WarnCode, number> = {
   pulseCancelled: 89,
   pulseReady: 88,
   pulseCharging: 87,
+  // Рейс второго пилота — весть о том, что он делает; ниже угроз, выше бытовых подсказок.
+  tripStart: 66,
+  tripArrived: 66,
+  tripCancelled: 66,
+  // Зародилась жизнь — событие масштаба мира: выше бытовых вестей, ниже угроз.
+  lifeBorn: 80,
 }
 
 /** Пара секунд на экране. */

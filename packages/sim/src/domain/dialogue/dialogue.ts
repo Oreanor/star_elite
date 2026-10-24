@@ -1,4 +1,5 @@
 import { DIALOGUE } from '../../config/dialogue'
+import { hostileToPlayer } from '../ai/targeting'
 import { phrase, type Phrase } from './phrase'
 import { roundMoney } from '../../core/math'
 import { createAIState } from '../ai/types'
@@ -66,7 +67,7 @@ export type Mood = 'warm' | 'neutral' | 'wary' | 'hostile'
  * отношением. Движок отношений живёт здесь, а не в настроении языковой модели.
  */
 export function moodTo(world: World, other: ShipEntity): Mood {
-  if (other.faction === 'hostile') return 'hostile'
+  if (hostileToPlayer(world, other)) return 'hostile'
   if ((other.ai?.grievance ?? 0) > 0) return 'wary'
   // Нагрубил или пригрозил словом — насторожён, пока разговор не остынет (`temper.ts`).
   if ((other.ai?.tension ?? 0) >= DIALOGUE.TENSION.WARY_AT) return 'wary'
@@ -87,7 +88,7 @@ export function moodTo(world: World, other: ShipEntity): Mood {
  * по фракции, а не «нейтральный» из пустой записи.
  */
 export function stanceTo(world: World, other: ShipEntity): Relationship {
-  if (other.faction === 'hostile') return 'hostile'
+  if (hostileToPlayer(world, other)) return 'hostile'
   const rec = other.acquaintanceId != null
     ? world.acquaintances.find((a) => a.id === other.acquaintanceId)
     : undefined
@@ -148,7 +149,7 @@ export function linesFor(world: World, other: ShipEntity): Line[] {
   if (other.mirror || other.peer) return []
 
   const all: Line[] = (() => {
-    if (other.faction === 'hostile') {
+    if (hostileToPlayer(world, other)) {
       return [
         {
           topic: 'surrender',

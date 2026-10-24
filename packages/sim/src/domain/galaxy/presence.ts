@@ -220,7 +220,7 @@ function stripToStar(world: World): void {
       s.clearance = false
     }
   }
-  world.dockOccupantId = null
+  world.berths.clear()
   world.asteroids = []
   world.asteroidBelts = []
   world.pulses = []
@@ -229,6 +229,8 @@ function stripToStar(world: World): void {
   world.monoliths = []
   world.figurines = []
   world.warBases = []
+  world.warShards = []
+  world.firePuffs = []
   world.dyson = null
   if (world.contactLock?.kind !== 'ship') world.contactLock = null
   // Маршрут на другую звезду уже цель: не вешать нав на оставшуюся свою —

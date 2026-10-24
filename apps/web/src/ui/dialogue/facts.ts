@@ -46,6 +46,7 @@ import {
   type Reaction,
   type SpeechAct,
   type LookupDigest,
+  hostileToPlayer,
 } from '@elite/sim'
 import { chassisName, economyName, governmentName, moduleName, professionName, properName, speciesName } from '../i18n/dataNames'
 import { godHearsOf, godVisitors } from '../../session/net/godMemory'
@@ -435,6 +436,8 @@ export interface NegotiatorReply {
   clarify?: boolean
   /** Выражение лица, которое бог Слово ВЫЗВАЛ этой репликой (одно из 8). null — не задано. */
   emotion?: string | null
+  /** Второй пилот просит справку о телах ДРУГОЙ системы — по её имени. */
+  survey?: string | null
 }
 
 export function digestLoaded(ctx: NegotiationContext, digest: ContextDigest): boolean {
@@ -556,6 +559,10 @@ function roleOf(other: ShipEntity, playerId: number): string {
     return occ === 'пират'
       ? 'пират, вышел на разбой'
       : `по ремеслу ${occ}, но сейчас враждебен и идёшь на разбой (себя-то ты знаешь)`
+  }
+  // Обиженный мирный — враг командиру лично, но не пират: на разбой он не выходит.
+  if (other.ai?.foes.includes(playerId)) {
+    return `${occ}, и сейчас ты враждебен командиру: он на тебя напал`
   }
   return `${occ}, мирный рейс`
 }
@@ -895,7 +902,7 @@ export function buildContext(
   const moons = world.bodies.filter((b) => b.kind === 'moon')
   const stations = world.bodies.filter((b) => b.kind === 'station')
 
-  const hostiles = world.ships.filter((s) => s.alive && s.faction === 'hostile').length
+  const hostiles = world.ships.filter((s) => s.alive && hostileToPlayer(world, s)).length
   const anarchy = /анарх/i.test(set.government)
   const danger =
     hostiles > 0
@@ -984,7 +991,7 @@ export function buildContext(
     theyObeyYou: commandableByPlayer(other, world.player.id),
     stance: stanceTo(world, other),
     grievanceLevel: other.ai?.grievance ?? 0,
-    combatEnemy: other.faction === 'hostile',
+    combatEnemy: hostileToPlayer(world, other),
     mood: moodTo(world, other),
     allowedIntents,
     // Узнаёт, если виделись РАНЬШЕ (встреча не первая) ИЛИ в журнале уже есть что-то

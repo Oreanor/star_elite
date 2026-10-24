@@ -144,7 +144,7 @@ export function resolveLaserHit(
     // Базы колет хозяин системы: у остальных удар уходит ему, гибель детали придёт от него.
     if (world.trafficRole === 'mirror') {
       const { base, fixture } = hit.warBaseFixture
-      if (damage > 0) world.structHits.push({ kind: 'fixture', base: world.warBases.indexOf(base), fixture: base.fixtures.indexOf(fixture) })
+      if (damage > 0) world.structHits.push({ kind: 'fixture', base: base.slot, fixture: base.fixtures.indexOf(fixture) })
     } else {
       damageWarBaseFixture(world, hit.warBaseFixture.base, hit.warBaseFixture.fixture, damage)
     }

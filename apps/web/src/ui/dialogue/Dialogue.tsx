@@ -13,6 +13,7 @@ import {
   stanceTo,
   type Command,
   type Topic,
+  hostileToPlayer,
 } from '@elite/sim'
 import { useSession } from '../../session/GameContext'
 import { Button, PilotPortrait } from '../station/chrome'
@@ -242,7 +243,7 @@ export function Dialogue({
   const offer = other.offer
   const jobBlock = offer?.revealed ? acceptBlock(world, other) : null
   // Спросить о работе можно любого мирного; враг и бог дел не раздают.
-  const canAskJob = !other.divine && other.faction !== 'hostile' && !offer?.revealed
+  const canAskJob = !other.divine && !hostileToPlayer(world, other) && !offer?.revealed
 
   // ─ Свободная реплика: модель ловит ТРИГГЕР и красит слова, а исход считает ДОМЕН.
   const deliverReply = (reply: NegotiatorReply) => {

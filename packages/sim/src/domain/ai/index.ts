@@ -13,7 +13,7 @@ export {
 export { breakWaypoint, leadPoint, patrolWaypoint } from './maneuvers'
 export { cowardice, fearLevel, wantsToFlee } from './morale'
 export { aiController } from './pilot'
-export { declareFoe, isFoe, isHostileTo, selectTarget } from './targeting'
+export { declareFoe, hostileToPlayer, isFoe, isHostileTo, selectTarget } from './targeting'
 export { knowsOf, occluded, sees } from './perception'
 export { choosePrey, yieldChance } from './robbery'
 export { traitsOf, type PilotTraits } from './traits'

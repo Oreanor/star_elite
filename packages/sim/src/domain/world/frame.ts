@@ -62,6 +62,8 @@ export function translateNeighborhood(world: World, shift: Vector3): void {
   // Устье гиперпортала открывается перед носом игрока и обязано ехать с ним: у планеты или в
   // открытом космосе иначе кольцо уносило разностью орбитальных скоростей — сотни метров за кадр.
   for (const gate of world.jumpGates) gate.pos.add(shift)
+  for (const s of world.warShards) s.pos.add(shift)
+  for (const f of world.firePuffs) f.pos.add(shift)
   for (const f of world.shieldFlashes) {
     f.pos.add(shift)
     f.center.add(shift)

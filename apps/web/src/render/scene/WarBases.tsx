@@ -12,11 +12,12 @@ import {
   type BufferGeometry,
   type Texture,
 } from 'three'
-import { WARBASE, warBaseFixtureWorldPos, renderTime, type WarBaseEntity } from '@elite/sim'
+import { WARBASE, warBaseFixtureWorldPos, warBaseStanding, renderTime, type WarBaseEntity, type WarBaseFixture } from '@elite/sim'
 import { useSession } from '../../session/GameContext'
 import { WARBASE_FX } from '../config'
 import {
   DETAIL_KEYS,
+  detailKeyOf as keyOf,
   TRASH_VARIANTS,
   trashVariantOf,
   warBaseDetailGeometry,
@@ -63,9 +64,6 @@ const _align = new Quaternion()
 const _roll = new Quaternion()
 const _UP = new Vector3(0, 1, 0)
 
-/** Облик детали по её `model`: 0 — башня, дальше — пушки/глаза/ангар. Данные, не ветка. */
-const FIXTURE_MODELS: readonly DetailKey[] = ['tower', 'gun1', 'gun2', 'eye1', 'pod']
-const keyOf = (model: number): DetailKey => FIXTURE_MODELS[model % FIXTURE_MODELS.length]!
 
 /**
  * Корпус базы — ГЛАДКИЙ ШАР (сфера + equirect-карта, как планета), а не гранёный GLB.
@@ -89,7 +87,8 @@ function Hull({ base }: { base: WarBaseEntity }) {
     const mesh = ref.current
     if (!mesh) return
     const shrink = worldShrink(session.world.player.state.scale)
-    if (shrink <= 0 || !base.alive) {
+    // Снесённая шаром стоит, пока рвутся очаги, — исчезает лишь в общем взрыве.
+    if (shrink <= 0 || !warBaseStanding(base, renderTime(session.world))) {
       mesh.visible = false
       return
     }
@@ -138,6 +137,9 @@ function bottomOf(g: BufferGeometry, pre: Quaternion): number {
   return b
 }
 
+/** Деталь цела в кадре: не сбита и (при сносе шаром) её очаг ещё не рванул. */
+const whole = (fix: WarBaseFixture, time: number): boolean => fix.alive && !(fix.blowAt !== undefined && fix.blowAt <= time)
+
 /** Все ЖИВЫЕ детали одного облика со всех баз — один InstancedMesh. */
 function DetailBatch({ dkey }: { dkey: DetailKey }) {
   const session = useSession()
@@ -163,9 +165,9 @@ function DetailBatch({ dkey }: { dkey: DetailKey }) {
     const time = renderTime(session.world)
     let count = 0
     for (const base of session.world.warBases) {
-      if (!base.alive) continue
+      if (!warBaseStanding(base, time)) continue
       for (const fix of base.fixtures) {
-        if (!fix.alive || keyOf(fix.model) !== dkey || count >= MAX_DETAILS) continue
+        if (!whole(fix, time) || keyOf(fix.model) !== dkey || count >= MAX_DETAILS) continue
         // Направление — то же, что видит луч (`warBaseFixtureWorldPos`). А высоту ставим по
         // НАСТОЯЩЕМУ дну модели: она нормирована по описанной сфере, и у широкой низкой пушки
         // дно выше «−0.5 габарита», на которое рассчитан центр в домене, — деталь парила.
@@ -222,9 +224,9 @@ function TrashBatch({ variant }: { variant: number }) {
     const time = renderTime(session.world)
     let count = 0
     for (const base of session.world.warBases) {
-      if (!base.alive) continue
+      if (!warBaseStanding(base, time)) continue
       for (const fix of base.fixtures) {
-        if (fix.alive || trashVariantOf(fix.id) !== variant || count >= MAX_DETAILS) continue
+        if (whole(fix, time) || trashVariantOf(fix.id) !== variant || count >= MAX_DETAILS) continue
         const size = fix.size * TRASH_SCALE
         warBaseFixtureWorldPos(base, fix, time, _pos)
         _dir.copy(_pos).sub(base.pos).normalize()

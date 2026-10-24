@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
-import { applyPilotProfile, offerHail, hailPoliceForFine, interlocutor, jumpBlock, lockShipContact, markPoliceFineHail, pendingHail, pendingPoliceFineHail, serializePlayer, stationInterlocutor, undock, type JumpBlock, type PilotProfile, type PlayerSave, type World } from '@elite/sim'
+import { applyPilotProfile, offerHail, hailPoliceForFine, interlocutor, jumpBlock, lockShipContact, markPoliceFineHail, pendingHail, pendingPoliceFineHail, serializePlayer, stationInterlocutor, undock, type JumpBlock, type PilotProfile, type PlayerSave, type World, hostileToPlayer } from '@elite/sim'
 import { GameProvider, useSession } from '../session/GameContext'
 import { closePortal, freshPortalKeyDown, jumpPortal, openPortal, portalActive, portalOpen } from '../session/jumpPortal'
 import { disposeJumpPortalWorld, resetJumpPortalWorlds } from '../render/scene/jumpPortalWorld'
@@ -163,7 +163,7 @@ const AWAY_BLOCK_RANGE = 20_000 // м
 function threatened(w: World): boolean {
   const p = w.player.state.pos
   return w.ships.some(
-    (s) => s.alive && (s.faction === 'hostile' || (s.ai?.grievance ?? 0) > 0) && s.state.pos.distanceTo(p) < AWAY_BLOCK_RANGE,
+    (s) => s.alive && (hostileToPlayer(w, s) || (s.ai?.grievance ?? 0) > 0) && s.state.pos.distanceTo(p) < AWAY_BLOCK_RANGE,
   )
 }
 

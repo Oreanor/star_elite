@@ -22,6 +22,7 @@ import {
   lockedShipId,
   lockedPodId,
   type World,
+  hostileToPlayer,
 } from '@elite/sim'
 import { bombFlash, bombRing } from '../../render/bombFeel'
 import { undocking } from '../../session/undockFx'
@@ -339,7 +340,7 @@ function drawOffscreenArrows(frame: HudFrame): void {
   for (const ship of world.ships) {
     if (!ship.alive || !isVisible(ship) || isStationBot(ship)) continue
     const locked = ship.id === lockedShipId(world)
-    if (ship.faction !== 'hostile' && !locked) continue
+    if (!hostileToPlayer(world, ship) && !locked) continue
     // Цвет = отношение; заливка = активный, контур = прочие. Иначе за кадром
     // два красных треугольника не скажут, какой выбран Tab'ом.
     offscreenArrow(frame, ship.state.pos, radarColor(ship, world), locked)

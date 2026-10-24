@@ -35,6 +35,8 @@ import { Figurines } from './Figurines'
 import { Monoliths } from './Monoliths'
 import { RockDebris } from './RockDebris'
 import { WarBases } from './WarBases'
+import { WarShards } from './WarShards'
+import { FirePuffs } from './FirePuffs'
 import { Drones, EnemyShips, PlayerShip } from './Ships'
 import { RigEditorMarks } from './RigEditorMarks'
 import { PlasmaBeams } from './PlasmaBeams'
@@ -48,6 +50,7 @@ import { useSession } from '../../session/GameContext'
 import { useBodiesRevision } from './useBodiesRevision'
 import { Cataclysms } from './Cataclysms'
 import { Pulses } from './Pulses'
+import { LifePulses } from './LifePulses'
 
 /**
  * Полное визуальное содержимое одного World без симуляции, камеры, HUD и postprocess.
@@ -105,6 +108,8 @@ export function WorldVisuals() {
         <Monoliths />
         <Figurines />
         <WarBases />
+        <WarShards />
+        <FirePuffs />
         <RockDebris />
         <Drones />
         <RemotePlayers />
@@ -122,6 +127,7 @@ export function WorldVisuals() {
         <ExplosionChunks />
         <Blastwaves />
         <Pulses />
+        <LifePulses />
         <Cataclysms />
         <WarpFlashes />
         <WarpArrivalPortals />

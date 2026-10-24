@@ -10,7 +10,7 @@ import { applyDelta, fateEdits, pushEdit, type FateEdit } from '../galaxy/delta'
 import { stepWorld } from '../sim/step'
 import { chargeBallRadius, stepPulses, spawnPulse } from '../combat/cosmic'
 import { coolGuns, fireLasers, laserOverheated, settlePulseCharges, unholdPulseCharges } from '../combat/weapons'
-import { SHATTER_CANNON } from '../../config/modules'
+import { SEED_PULSE, SHATTER_CANNON } from '../../config/modules'
 import type { LaserModule } from '../loadout'
 import { layoutSystemBodies, refreshSpec } from './factory'
 import { createWorld, enterSystem } from './index'
@@ -179,7 +179,7 @@ describe('судьбы тел (космические лазеры)', () => {
     const planet = world.bodies.filter((b) => b.kind === 'planet')
       .sort((x, y) => x.pos.distanceTo(me) - y.pos.distanceTo(me))[0]!
     const dir = planet.pos.clone().sub(world.player.state.pos).normalize()
-    spawnPulse(world, world.player, world.player.state.pos, dir, COSMIC.RANGE)
+    spawnPulse(world, world.player, world.player.state.pos, dir, 1e9)
     for (let i = 0; i < 120 * 30 && world.pulses.length > 0; i++) stepPulses(world, 1 / 120)
     const edit = world.galaxyEditsOut.at(-1)?.edit as FateEdit | undefined
     expect(edit?.ref).toBe(planet.ref)
@@ -263,7 +263,7 @@ describe('космические лазеры в стрельбе', () => {
     // Сквозь центр станции на центр её планеты.
     const from = new Vector3().copy(station.pos).addScaledVector(station.pos.clone().sub(planet.pos).normalize(), 20_000)
     const dir = planet.pos.clone().sub(from).normalize()
-    spawnPulse(world, world.player, from, dir, COSMIC.RANGE)
+    spawnPulse(world, world.player, from, dir, 1e9)
     for (let i = 0; i < 120 * 30 && world.pulses.length > 0; i++) stepPulses(world, 1 / 120)
     expect(world.bodies).toContain(station)
     expect(world.bodies).not.toContain(planet)
@@ -422,3 +422,79 @@ describe('шар на ходу', () => {
   })
 })
 
+
+describe('импульс жизни', () => {
+  /** Выпустить импульс жизни игрока в тело `body` с пяти километров и дать ему долететь. */
+  function seedAt(world: World, body: BodyEntity): void {
+    const dir = body.pos.clone().sub(world.player.state.pos).normalize()
+    const from = body.pos.clone().addScaledVector(dir, -(body.radius + 5_000))
+    spawnPulse(world, world.player, from, dir, 1e9, undefined, 'seed')
+    for (let i = 0; i < 120 * 30 && world.pulses.length > 0; i++) {
+      world.time += 1 / 120
+      stepPulses(world, 1 / 120)
+    }
+  }
+
+  it('одно попадание в необитаемую твердь — жизнь, вспышка и весть', () => {
+    const { world } = systemWhere((w) => w.bodies.some((b) => b.kind === 'planet' && !b.settlement && b.surface === 'Скалистая'))
+    const rock = world.bodies.find((b) => b.kind === 'planet' && !b.settlement && b.surface === 'Скалистая')!
+    seedAt(world, rock)
+    expect(rock.settlement?.species).toBe(FAUNA_SPECIES)
+    expect(world.cataclysms.at(-1)?.kind).toBe('seed')
+    expect(world.notices.at(-1)).toMatchObject({ kind: 'life', name: rock.name })
+  })
+
+  it('в газовый гигант и на луну импульс гаснет: жизни там не бывать', () => {
+    const { world } = systemWhere((w) => w.bodies.some((b) => b.surface === 'Газовый гигант') && w.bodies.some((b) => b.kind === 'moon'))
+    const giant = world.bodies.find((b) => b.surface === 'Газовый гигант')!
+    const moon = world.bodies.find((b) => b.kind === 'moon')!
+    seedAt(world, giant)
+    seedAt(world, moon)
+    expect(world.galaxyEditsOut.some(({ edit }) => edit.op === 'fate')).toBe(false)
+    expect(giant.settlement).toBeNull()
+    expect(moon.settlement).toBeNull()
+  })
+
+  it('заряд импульса жизни копит точку, а не шар; выстрел — по отпусканию', () => {
+    const { world } = systemWhere(rockyWithStationAndMoon)
+    const p = world.player
+    p.loadout = { ...p.loadout, weapons: p.loadout.weapons.map((w) => (w && w.kind === 'laser' ? SEED_PULSE : w)) }
+    refreshSpec(p)
+    p.laserHeat.heat = 0
+    p.laserHeat.overheatUntil = 0
+    for (let i = 0; i < 120 * (COSMIC.CHARGE_TIME + 0.2); i++) {
+      world.time += 1 / 120
+      unholdPulseCharges([p])
+      coolGuns(p, world.time, 1 / 120)
+      fireLasers(world, p, false, 1 / 120)
+      settlePulseCharges(world, [p])
+    }
+    expect(p.pulseCharge?.kind).toBe('seed')
+    // Точка мельче шара разбивающего на том же заряде.
+    expect(chargeBallRadius(p, world.time)).toBeLessThan(p.spec.hull.radius * COSMIC.CHARGE_BALL)
+    world.time += 1 / 120
+    unholdPulseCharges([p])
+    settlePulseCharges(world, [p])
+    expect(world.pulses.at(-1)?.kind).toBe('seed')
+    expect(laserOverheated(p, world.time)).toBe(true)
+  })
+})
+
+describe('промах импульса', () => {
+  it('впереди пусто — импульс тает через пару секунд, а не висит до конца дальности', () => {
+    // Пойманный баг: промахнувшийся летел десяток секунд до предела дальности и, уходя
+    // прямо от камеры, висел на экране неподвижной точкой.
+    const { world } = systemWhere(rockyWithStationAndMoon)
+    // Прочь от звезды и вверх — туда, где на пути нет ни одного тела.
+    const dir = new Vector3(0, 1, 0)
+    spawnPulse(world, world.player, world.player.state.pos.clone().add(new Vector3(0, 1e7, 0)), dir, 2e12, undefined, 'seed')
+    let alive = 0
+    for (let i = 0; i < 120 * 10 && world.pulses.length > 0; i++) {
+      world.time += 1 / 120
+      stepPulses(world, 1 / 120)
+      alive = i / 120
+    }
+    expect(world.pulses.length).toBe(0)
+    expect(alive).toBeLessThanOrEqual(COSMIC.PULSE_MISS_LIFE + 0.1)
+  })
+})

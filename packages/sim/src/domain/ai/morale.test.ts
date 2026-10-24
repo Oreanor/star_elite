@@ -103,3 +103,29 @@ describe('боевой дух', () => {
     expect(Number(fleeingKeepsFleeing)).toBeGreaterThanOrEqual(Number(freshHolds))
   })
 })
+
+describe('перевес сил', () => {
+  /** Пират у точки `at` во фракции `faction`, в мире (виден и учитывается). */
+  function placed(world: World, faction: 'hostile' | 'police', at: Vector3): ShipEntity {
+    const s = makeShip(world.ids, faction, 'Бот', pirateLoadout(), at.clone(), new Quaternion())
+    world.ships.push(s)
+    return s
+  }
+
+  it('звено пугает сильнее одиночки, а подмога возвращает смелость', () => {
+    // Прежде страх мерил только свою цель: подбитый не боялся четверых, а свои рядом
+    // не придавали ему смелости.
+    const world = createWorld({ ...STARTER_SYSTEM, belt: null, patrols: [] })
+    world.player.alive = false
+    const origin = world.player.state.pos.clone().add(new Vector3(0, 50_000, 0))
+    const e = placed(world, 'police', origin)
+    hurt(e, 0.5)
+    const target = placed(world, 'hostile', origin.clone().add(new Vector3(800, 0, 0)))
+    const alone = fearLevel(e, target, world)
+    for (let i = 1; i <= 3; i++) placed(world, 'hostile', origin.clone().add(new Vector3(800, i * 150, 0)))
+    const outnumbered = fearLevel(e, target, world)
+    expect(outnumbered).toBeGreaterThan(alone)
+    for (let i = 1; i <= 4; i++) placed(world, 'police', origin.clone().add(new Vector3(-300, i * 150, 0)))
+    expect(fearLevel(e, target, world)).toBeLessThan(outnumbered)
+  })
+})

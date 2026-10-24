@@ -3,10 +3,12 @@ import { onChildAdded, onValue, push, ref, remove, set } from 'firebase/database
 import {
   applyStructHitAtHost,
   killWarBaseFixture,
+  shatterWarBase,
   promoteMirrorPlatform,
   spawnMirrorPlatform,
   type PlatformEntity,
   type StructHit,
+  type WarBaseEntity,
   type World,
 } from '@elite/sim'
 import { currentUserId } from './net/account'
@@ -48,6 +50,11 @@ const _pos = new Vector3()
 const _quat = new Quaternion()
 
 const mask = (alive: readonly { alive: boolean }[]): string => alive.map((f) => (f.alive ? '1' : '0')).join('')
+/**
+ * Маска базы для рассылки: живые детали, а снесённая ШАРОМ — с меткой `X` впереди. Такую базу
+ * у остальных надо рвать так же (очаги и общий взрыв), а не каскадом по сбитой последней детали.
+ */
+const baseMask = (b: WarBaseEntity): string => (b.violent ? 'X' : '') + mask(b.fixtures)
 
 /** Владелец гнезда: из узла, а у старого узла без поля — из ключа. */
 const ownerOf = (netId: string, node?: PlatNode): string => node?.o ?? netId.slice(0, netId.indexOf(':'))
@@ -80,7 +87,7 @@ export class SharedStructs {
     for (const h of this.hits) applyStructHitAtHost(world, h)
     this.hits.length = 0
     for (const h of world.structHits) {
-      const to = h.kind === 'fixture' ? trafficSync.hostUid() : ownerOf(h.netId, this.plats[h.netId])
+      const to = h.kind === 'platform' ? ownerOf(h.netId, this.plats[h.netId]) : trafficSync.hostUid()
       if (to && to !== this.me) void push(ref(rtdb, `traffic/${key}/structhits/${to}`), { ...h, from: this.me }).catch(() => {})
     }
     world.structHits.length = 0
@@ -121,19 +128,20 @@ export class SharedStructs {
       onChildAdded(ref(rtdb, `traffic/${key}/structhits/${this.me}`), (snap) => {
         const v = snap.val() as (StructHit & { from?: string }) | null
         void remove(snap.ref).catch(() => {})
-        if (v && (v.kind === 'fixture' || v.kind === 'platform')) this.hits.push(v)
+        if (v && (v.kind === 'fixture' || v.kind === 'platform' || v.kind === 'shatter')) this.hits.push(v)
       }),
     )
   }
 
   private publish(world: World, key: string, host: boolean): void {
     if (host) {
-      world.warBases.forEach((b, i) => {
-        const m = mask(b.fixtures)
-        if (this.sentBases.get(i) === m) return
-        this.sentBases.set(i, m)
-        void set(ref(rtdb!, `traffic/${key}/bases/${i}`), m).catch(() => {})
-      })
+      // Ключ — место базы в описании системы (`slot`), не номер в списке: снесённую выносят.
+      for (const b of world.warBases) {
+        const m = baseMask(b)
+        if (this.sentBases.get(b.slot) === m) continue
+        this.sentBases.set(b.slot, m)
+        void set(ref(rtdb!, `traffic/${key}/bases/${b.slot}`), m).catch(() => {})
+      }
     }
     const o = world.originOffset
     const seen = new Set<string>()
@@ -166,8 +174,12 @@ export class SharedStructs {
   /** Погибшие у хозяина детали — погасить здесь (база рухнет сама, если деталь последняя). */
   private applyBases(world: World): void {
     for (const [index, m] of Object.entries(this.bases)) {
-      const base = world.warBases[Number(index)]
+      const base = world.warBases.find((b) => b.slot === Number(index))
       if (!base || typeof m !== 'string') continue
+      if (m.startsWith('X')) {
+        shatterWarBase(world, base)
+        continue
+      }
       base.fixtures.forEach((fix, j) => {
         if (m[j] === '0' && fix.alive) killWarBaseFixture(world, base, fix)
       })

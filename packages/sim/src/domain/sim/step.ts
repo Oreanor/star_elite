@@ -2,6 +2,7 @@ import { awardKillXp } from '../crew/rank'
 import { stepAsteroidBelt } from '../world/asteroidBelt'
 import { reconcileFates, stepCataclysms } from '../world/fates'
 import { stepPulses } from '../combat/cosmic'
+import { stepDistress } from '../ai/help'
 import { beginRayHolds, releaseRayHolds } from '../combat/laserEffects'
 import { stepCrew } from '../crew/copilot'
 import { Quaternion, Vector3 } from 'three'
@@ -47,6 +48,8 @@ import {
   stepBolts,
   stepWarBaseTurrets,
   stepWarBaseWrecks,
+  stepWarShards,
+  stepFirePuffs,
   warBaseWreckDone,
   surviveLethal,
   toggleCloak,
@@ -280,6 +283,10 @@ function stepTick(world: World, helm: Helm, dt: number): void {
   stepBolts(world, dt)
   // Импульсы разбивающего лазера — после тел и кораблей этого такта, как болты.
   stepPulses(world, dt)
+  stepWarShards(world, dt)
+  stepFirePuffs(world)
+  // Ударили мирного или игрока — зов на помощь: полиция и дружные знакомые идут на место.
+  stepDistress(world, dt)
   stepCataclysms(world)
   stepCollisions(world, dt)
   for (const gate of world.jumpGates) stepJumpGateCollision(world.player, gate)

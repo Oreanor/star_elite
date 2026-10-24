@@ -4,7 +4,7 @@ import { COPILOT, RANK } from '../../config/crew'
 import { SHOP } from '../../config/station'
 import { clamp, makeRng } from '../../core/math'
 import { autofightActive, disengageAutofight, engageAutofight } from '../ai/autofight'
-import { enqueueTask } from '../ai/tasks'
+import { enqueueTask, type Task } from '../ai/tasks'
 import { isFoe } from '../ai/targeting'
 import { createAIState } from '../ai/types'
 import { freeCapacity } from '../cargo/hold'
@@ -17,7 +17,9 @@ import { rememberPilot } from '../world/acquaintance'
 import type { ShipEntity, World } from '../world/entities'
 import { refreshSpec } from '../world/factory'
 import type { Persona } from '../world/persona'
-import { lockContact } from '../world/queries'
+import { findNavByName, lockContact, navTarget } from '../world/queries'
+import { jumpBlock } from '../galaxy/jump'
+import { flyToLocalTarget } from '../flight/flyto'
 import { beginWarpDeparture } from '../world/warp'
 import { spawnResidentContacts } from '../world/traffic'
 import { rankIndex, rankOfXp, xpForRank } from './rank'
@@ -167,7 +169,7 @@ function takeHelm(world: World, copilot: Copilot): NonNullable<ShipEntity['ai']>
   return ai
 }
 
-export type OrderResult = 'ok' | 'no-copilot' | 'docked' | 'no-target' | 'no-foes' | 'no-pods' | 'hold-full'
+export type OrderResult = 'ok' | 'no-copilot' | 'docked' | 'no-target' | 'no-foes' | 'no-pods' | 'hold-full' | 'no-jump'
 
 function ready(world: World): OrderResult | null {
   if (!world.copilot) return 'no-copilot'
@@ -176,14 +178,21 @@ function ready(world: World): OrderResult | null {
   return null
 }
 
-/** Лететь к телу системы (станция, планета, луна, звезда) по его id. */
+/**
+ * Лететь к цели системы по id: тело (станция, планета, луна, звезда), статуя, монолит,
+ * военная база — всё, к чему ведёт автопилот (`navTarget`).
+ */
 export function copilotGoto(world: World, bodyId: number): OrderResult {
   const block = ready(world)
   if (block) return block
-  if (!world.bodies.some((b) => b.id === bodyId)) return 'no-target'
+  const before = world.navTargetId
+  world.navTargetId = bodyId
+  if (!navTarget(world)) {
+    world.navTargetId = before
+    return 'no-target'
+  }
   if (autofightActive(world)) disengageAutofight(world)
   world.contactLock = null
-  world.navTargetId = bodyId
   world.targetFocus = 'nav'
   // Звезда галактики, выбранная на карте, перебивает цель в системе (`flyto.destination`).
   world.jumpTargetIndex = null
@@ -285,12 +294,65 @@ export function copilotFlee(world: World): OrderResult {
   return 'ok'
 }
 
-/** «Стоп» — снять всё: автобой, поручение, автопилот. Штурвал твой. */
+/**
+ * J по МАРШРУТУ С КАРТЫ: выбрана звезда, а в системе цели нет — второй пилот не ползёт к ней
+ * сквозь межзвёздную пустоту автопилотом, а прыгает (тот же рейс, что «летим туда»), выходя у
+ * причала, выбранного на карте. null — маршрута нет, или в системе есть цель (её ведёт J
+ * обычным автопилотом). Гиганту прыжок недоступен — его ведёт полёт по галактике.
+ */
+export function copilotJumpRoute(world: World): OrderResult | null {
+  const system = world.jumpTargetIndex
+  if (system == null || system === world.systemIndex || !world.copilot) return null
+  if (world.player.state.scale !== 1 || flyToLocalTarget(world)) return null
+  const result = copilotTravel(world, system, null)
+  if (result === 'ok' && world.tripRequest && world.tripRequest !== 'cancel') {
+    world.tripRequest.arrivalPlanet = world.jumpArrivalPlanet
+  }
+  return result
+}
+
+/** «Стоп» — снять всё: автобой, поручение, автопилот, рейс. Штурвал твой. */
 export function copilotStop(world: World): OrderResult {
   if (!world.copilot) return 'no-copilot'
   if (autofightActive(world)) disengageAutofight(world)
   world.helmRequest = 'manual'
+  world.tripRequest = 'cancel'
   return 'ok'
+}
+
+/**
+ * РЕЙС: «летим туда» — в систему `system` и к цели `target` в ней (по имени: планета, станция,
+ * статуя, база; null — к причалу). В этой же системе в полёте — просто курс на цель; у причала —
+ * тот же рейс без кольца (отчалить, отойти, курс). В другую —
+ * просьба к слою приложения (`tripRequest`): он отчалит, отойдёт, встанет, раскроет кольцо,
+ * войдёт и возьмёт курс на цель уже там. Док и крейсер рейсу не помеха — пилот с них сойдёт
+ * сам; не пускают привод, заряд и дальность — об этом и скажет.
+ */
+export function copilotTravel(world: World, system: number, target: string | null): OrderResult {
+  if (!world.copilot) return 'no-copilot'
+  if (!world.player.alive) return 'no-target'
+  if (system === world.systemIndex && !world.docked) {
+    const id = target ? findNavByName(world, target) : (world.bodies.find((b) => b.kind === 'station')?.id ?? null)
+    return id === null ? 'no-target' : copilotGoto(world, id)
+  }
+  const blocked = jumpBlock(world, system)
+  if (blocked !== null && blocked !== 'docked' && blocked !== 'cruising') return 'no-jump'
+  if (autofightActive(world)) disengageAutofight(world)
+  world.tripRequest = { system, target }
+  return 'ok'
+}
+
+/**
+ * Рейс ведёт ВТОРОЙ ПИЛОТ одной задачей за раз: режиссёр рейса (клиент — кольцо прыжка живёт
+ * там) меняет её по фазам — отойти от причала, встать, войти в кольцо. Срочная: по дороге в
+ * бой не ввязывается. false — вести нечем (нет пилота, корабль погиб или в доке).
+ */
+export function copilotSteer(world: World, task: Task): boolean {
+  if (!world.copilot || !world.player.alive || world.docked) return false
+  const ai = world.player.ai ?? takeHelm(world, world.copilot)
+  ai.tasks.length = 0
+  ai.tasks.push({ ...task, urgent: true })
+  return true
 }
 
 // ─── Ремонт в полёте ───────────────────────────────────────────────────────────

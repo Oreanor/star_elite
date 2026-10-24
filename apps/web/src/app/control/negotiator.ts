@@ -1,4 +1,4 @@
-import { copilotBriefing, findModule, galaxyDirectory, type DirectoryEntry, type DirectoryNotable, commodityBuyPrice, commoditySellPrice, commodityStock, dispatcherBriefing, dispatcherTraffic, extractModelJson, localFine, localSettlement, moduleFault, parseModelReply, priceOf, stationInterlocutor, stationStock, upgradeLevel, type DialogueRole, type DispatcherBriefing, type Persona, type ShipModule, type TrafficShip, type Topic, type World } from '@elite/sim'
+import { copilotBriefing, findModule, findSystemByName, galaxyDirectory, jumpDistance, systemDefFor, type Command, type DirectoryEntry, type DirectoryNotable, commodityBuyPrice, commoditySellPrice, commodityStock, dispatcherBriefing, dispatcherTraffic, extractModelJson, localFine, localSettlement, moduleFault, parseModelReply, priceOf, stationInterlocutor, stationStock, upgradeLevel, type DialogueRole, type DispatcherBriefing, type Persona, type ShipModule, type TrafficShip, type Topic, type World } from '@elite/sim'
 import { galaxyFor, type ChatTurn, type ContextDigest, type CopilotReply, type NegotiationContext, type NegotiatorReply } from '../../ui/dialogue/facts'
 import { currentLang, t, type Key } from '../../ui/i18n/i18n'
 import { chassisName, economyName, governmentName, moduleName, occupationName, properName, speciesName } from '../../ui/i18n/dataNames'
@@ -374,6 +374,7 @@ const FEATURE_WORD: Record<DirectoryEntry['features'][number] | 'topTech', [stri
   browndwarf: ['коричневый карлик', 'brown dwarf'],
   dyson: ['сфера Дайсона', 'Dyson sphere'],
   dysonRuin: ['руины сферы Дайсона', 'Dyson sphere ruin'],
+  warbase: ['военная база', 'war base'],
 }
 
 /** Одна система словами: где, какой тех и железо, кто правит, чем примечательна. */
@@ -386,7 +387,13 @@ function directoryLine(e: DirectoryEntry, english: boolean): string {
     : english ? 'uninhabited' : 'необитаема'
   const dock = e.canDock ? (english ? `station, gear up to class ${e.gearClass}` : `станция, железо до ${e.gearClass}-го класса`) : english ? 'no station' : 'станции нет'
   const marks = e.features.length > 0 ? `; ${e.features.map(word).join(', ')}` : ''
-  return `${properName(e.name)} — ${e.ly} ${english ? 'ly' : 'св.г.'}: ${life}; ${dock}${marks}`
+  // Лучший мир по имени — чтобы «летим туда» имело адрес: планета и её причал.
+  const best = e.best
+    ? english
+      ? `; best world ${properName(e.best.planet)} (tech ${e.best.tech}${e.best.station ? `, station ${properName(e.best.station)}` : ''})`
+      : `; лучший мир ${properName(e.best.planet)} (тех ${e.best.tech}${e.best.station ? `, станция ${properName(e.best.station)}` : ''})`
+    : ''
+  return `${properName(e.name)} — ${e.ly} ${english ? 'ly' : 'св.г.'}: ${life}; ${dock}${best}${marks}`
 }
 
 /**
@@ -411,6 +418,44 @@ Distances are from this system. Name only these systems and numbers.`
     : `БЛИЖАЙШИЕ СИСТЕМЫ: ${dir.near.map((e) => directoryLine(e, english)).join(' | ')}.
 БЛИЖАЙШИЕ ПО РОДУ: ${dir.notable.map(notable).join(' | ')}.${none}
 Расстояния — от этой системы. Называй только эти системы и числа.`
+}
+
+/**
+ * Рейс: система в приказе названа ИМЕНЕМ (модель номеров не помнит — справочник пересказан
+ * словами). Номер находим здесь, по каталогу галактики с правками бога; не нашли — оставляем
+ * имя, домен ответит «не вижу такой цели».
+ */
+function withSystemIndex(world: World, c: Command): Command {
+  const p = c.payload as Record<string, unknown> | undefined
+  if (c.action !== 'copilot' || p?.order !== 'travel' || typeof p.system !== 'string') return c
+  const index = findSystemByName(galaxyFor(world), p.system, world.systemIndex)
+  return index === null ? c : { ...c, payload: { ...p, system: index } }
+}
+
+/**
+ * Справка о ДРУГОЙ системе — её тела по каталогу: звезда, планеты (тех, причал), луны,
+ * военные базы. Статуй тут нет: их знают на месте. Цели рейса называются отсюда.
+ */
+function systemSurvey(world: World, name: string, english: boolean): string {
+  const systems = galaxyFor(world)
+  const index = findSystemByName(systems, name, world.systemIndex)
+  const s = index === null ? null : systems.find((x) => x.index === index)
+  if (!s) return english ? `No system named "${name}" in the directory.` : `Системы «${name}» в справочнике нет.`
+  const planets = s.planets.map((p) => {
+    if (p.remnant) return english ? `${properName(p.name)} — destroyed` : `${properName(p.name)} — уничтожена`
+    const life = p.settlement
+      ? english ? `tech ${p.settlement.techLevel}` : `тех ${p.settlement.techLevel}`
+      : english ? 'uninhabited' : 'необитаема'
+    const station = p.station ? (english ? `, station ${properName(p.station.name)}` : `, станция ${properName(p.station.name)}`) : ''
+    const moons = p.moons.filter((m) => !m.remnant).map((m) => properName(m.name))
+    const moonText = moons.length > 0 ? (english ? `, moons: ${moons.join(', ')}` : `, луны: ${moons.join(', ')}`) : ''
+    return `${properName(p.name)} (${p.type}, ${life}${station}${moonText})`
+  })
+  const bases = (systemDefFor(s.index, world.galaxySeed).warBases ?? []).map((b) => properName(b.name))
+  const ly = jumpDistance(world, s.index).toFixed(1)
+  return english
+    ? `SYSTEM ${properName(s.name)} (${ly} ly): star class ${s.star.class}; planets: ${planets.join('; ') || 'none'}; war bases: ${bases.join(', ') || 'none'}. Statues and small objects are only known on site.`
+    : `СИСТЕМА ${properName(s.name)} (${ly} св.г.): звезда класса ${s.star.class}; планеты: ${planets.join('; ') || 'нет'}; военные базы: ${bases.join(', ') || 'нет'}. Статуи и мелкие объекты знают только на месте.`
 }
 
 /**
@@ -504,10 +549,19 @@ function copilotSituation(world: World, english: boolean, helmFlyTo: boolean): s
     .join('; ')
   const helm = helmFlyTo ? 'cruise' : b.helm
   const none = english ? 'none' : 'нет'
+  // Звезда, выбранная на карте галактики: «прыгай туда» без имени — это она.
+  const routeIndex = world.jumpTargetIndex
+  const routeName = routeIndex == null || routeIndex === world.systemIndex ? null : (galaxyFor(world).find((s) => s.index === routeIndex)?.name ?? null)
+  const route = routeName
+    ? english
+      ? `JUMP TARGET on the galaxy map: system ${properName(routeName)} (${jumpDistance(world, routeIndex!).toFixed(1)} ly).`
+      : `ЦЕЛЬ ПРЫЖКА на карте галактики: система ${properName(routeName)} (${jumpDistance(world, routeIndex!).toFixed(1)} св.г.).`
+    : english ? 'JUMP TARGET on the galaxy map: none.' : 'ЦЕЛЬ ПРЫЖКА на карте галактики: нет.'
   return english
     ? [
         `YOU: ${properName(b.name)}, rank ${b.rank} (1 ace … 10 rookie), pay ${b.salary} cr/month. Commander rank ${b.playerRank}.`,
         `HELM NOW: ${helm}${b.docked ? ' (docked at station)' : ''}.`,
+        route,
         `BODIES (nearest first): ${bodies || none}.`,
         `SHIPS IN THE SYSTEM (nearest first; "on scanner" = within 20 km): ${contacts || 'no ships in the system'}. Canisters on scanner: ${b.pods}. The scanner WORKS — an empty list only means nobody is around.`,
         `SHIP: hull ${Math.round(b.hull.share * 100)}%${b.hull.repairPrice ? `, your hull repair ${b.hull.repairPrice} cr` : ''}. Broken parts: ${broken || none}.`,
@@ -515,6 +569,7 @@ function copilotSituation(world: World, english: boolean, helmFlyTo: boolean): s
     : [
         `ТЫ: ${properName(b.name)}, ранг ${b.rank} (1 — ас … 10 — новичок), жалованье ${b.salary} кр/мес. Ранг командира ${b.playerRank}.`,
         `ШТУРВАЛ СЕЙЧАС: ${helm}${b.docked ? ' (стоим у причала)' : ''}.`,
+        route,
         `ТЕЛА (ближние первыми): ${bodies || none}.`,
         `БОРТА В СИСТЕМЕ (ближние первыми; «на локаторе» — ближе 20 км): ${contacts || 'в системе ни одного борта'}. Контейнеров на локаторе: ${b.pods}. Локатор ИСПРАВЕН — пустой список значит лишь, что рядом никого.`,
         `КОРАБЛЬ: корпус ${Math.round(b.hull.share * 100)}%${b.hull.repairPrice ? `, твой ремонт корпуса ${b.hull.repairPrice} кр` : ''}. Сломано: ${broken || none}.`,
@@ -522,7 +577,7 @@ function copilotSituation(world: World, english: boolean, helmFlyTo: boolean): s
 }
 
 const COPILOT_SCHEMA =
-  '{"reply":"…","emotion":"neutral"|"joy"|"pain"|"anger"|"fear"|"sadness"|null,"goto":<body id>|null,"approach":<ship id>|null,"attack":"nearest"|"all"|<ship id>|null,"flee":true|null,"collect":true|null,"stop":true|null,"repair":"hull"|"all"|<part number>|null,"dismiss":true|null,"lookup":"market"|"traffic"|"worlds"|null,"clarify":true|false}'
+  '{"reply":"…","emotion":"neutral"|"joy"|"pain"|"anger"|"fear"|"sadness"|null,"goto":<body id>|null,"approach":<ship id>|null,"attack":"nearest"|"all"|<ship id>|null,"flee":true|null,"collect":true|null,"stop":true|null,"travel":{"system":"<star system name>","target":"<planet/station/statue/base name>"|null}|null,"survey":"<star system name>"|null,"repair":"hull"|"all"|<part number>|null,"dismiss":true|null,"lookup":"market"|"traffic"|"worlds"|"galaxy"|null,"clarify":true|false}'
 
 /**
  * Свободный чат со ВТОРЫМ ПИЛОТОМ. Это роль `copilot`: приказы из речи игрока модель кладёт
@@ -546,7 +601,10 @@ You fly, fight, repair and know what a dispatcher knows. Turn the commander's wo
 - "get us out of here, it is dangerous" → flee:true. "collect the canisters" → collect:true. "stop / I will take it / hands off" → stop:true.
 - Repair: you charge only for parts (prices above). If asked how much — name the price, no order. If he clearly asks to fix — repair: "hull", "all" or a broken part number.
 - Prices, market, who is flying around, other star systems (high tech, quasars, black holes): you do not know offhand — set lookup ("market", "traffic", "worlds" or "galaxy") and SAY you are calling the dispatcher (e.g. "Hold on, I will raise the dispatcher").
-- "stand down / cancel / belay that / never mind / stop" = stop:true (drop the current order). It is NOT firing you.
+- You CAN jump between star systems yourself: hyperjump / hyperspace / "jump to X" / "jump there" all mean travel (it opens the jump ring and flies through). "Jump there" with no name = the JUMP TARGET on the map.
+- "let's fly there / take us to system X (to planet / station / statue / war base Y)" → travel: {"system": system name, "target": name in that system or null for its station}. To another system you undock if needed, clear the station, stop, open the jump ring, fly through and set course to the target — say so briefly. Use names exactly as the dispatcher's directory or a survey gave them; the current system works too (then just a course).
+- What is in ANOTHER system (its planets, stations, war bases) → survey: that system's name, and say you are asking the dispatcher.
+- "stand down / cancel / belay that / never mind / stop" = stop:true (drop the current order, the trip too). It is NOT firing you.
 - dismiss:true ONLY if the commander explicitly fires you ("you're fired", "get off my ship"). The game will make you ask "are you sure?" first; set dismiss:true again only if he confirms.
 If you do not understand WHAT to do or WHOM he means — do not nod along: ask back, set clarify:true and no orders. Never invent ids, prices or ships absent above. Several orders at once are fine (stop + goto).
 Reply with one JSON object: ${COPILOT_SCHEMA}.`
@@ -559,7 +617,10 @@ ${situation}
 - «лети отсюда подальше, тут опасно» → flee:true. «собери контейнеры» → collect:true. «стоп / отставить / сам поведу» → stop:true.
 - Ремонт: берёшь только за детали (цены выше). Спросил «сколько» — назови цену, без приказа. Ясно попросил починить — repair: "hull", "all" или номер сломанной детали.
 - Цены, рынок, кто летает в системе, другие звёздные системы (высокий тех, квазары, чёрные дыры): на память не знаешь — ставь lookup ("market", "traffic", "worlds" или "galaxy") и СКАЖИ, что связываешься с диспетчером (например: «Ща свяжусь с диспетчером, узнаю»).
-- «отбой», «отставить», «отмена», «стоп», «ладно, не надо» = stop:true (снять текущий приказ). Это НЕ увольнение.
+- Прыгать между звёздными системами ты умеешь САМ: «гиперпрыжок», «гиперпереход», «прыгни к X», «прыгай туда», «давай прыжком» — всё это travel (рейс сам раскрывает кольцо прыжка и проходит его). «Прыгай туда» без имени — ЦЕЛЬ ПРЫЖКА с карты.
+- «летим туда / давай в систему X (к планете / станции / статуе / базе Y)» → travel: {"system": имя системы, "target": имя цели в ней или null — к её станции}. В другую систему: отчалишь, если стоим, отойдёшь от станции, встанешь, раскроешь кольцо, пролетишь и возьмёшь курс на цель — скажи об этом коротко. Имена — ровно как в справочнике диспетчера или в справке о системе; своя система тоже годится (тогда просто курс).
+- Что есть в ДРУГОЙ системе (планеты, станции, военные базы) → survey: имя системы, и скажи, что спрашиваешь диспетчера.
+- «отбой», «отставить», «отмена», «стоп», «ладно, не надо» = stop:true (снять текущий приказ, рейс тоже). Это НЕ увольнение.
 - dismiss:true — ТОЛЬКО если командир прямо тебя увольняет («ты уволен», «вали с моего корабля»). Игра сперва заставит тебя переспросить «точно?»; ставь dismiss:true снова, только если он подтвердил.
 Не понял, ЧТО делать или КОГО он имеет в виду, — не поддакивай: переспроси, поставь clarify:true и никаких приказов. Не выдумывай id, цены и борта, которых нет выше. Несколько приказов сразу можно (stop + goto).
 Ответь одним JSON: ${COPILOT_SCHEMA}.`
@@ -578,19 +639,23 @@ ${situation}
   }
   const first = await request(messages)
   if (!first) return noise()
-  const out: CopilotReply = { replies: [first.text], commands: [...first.commands], emotion: first.emotion ?? null, source: 'model' }
-  if (!first.lookup || first.clarify) return out
+  const out: CopilotReply = { replies: [first.text], commands: first.commands.map((c) => withSystemIndex(world, c)), emotion: first.emotion ?? null, source: 'model' }
+  if ((!first.lookup && !first.survey) || first.clarify) return out
 
   // Справочник диспетчера — со станции системы. Нет станции — связаться не с кем.
   const hasStation = world.bodies.some((b) => b.kind === 'station')
+  const parts: string[] = []
+  if (first.lookup) parts.push(dispatcherLookup(world, first.lookup, english))
+  if (first.survey) parts.push(systemSurvey(world, first.survey, english))
   const data = hasStation
-    ? dispatcherLookup(world, first.lookup, english)
+    ? parts.join('\n')
     : english ? 'No station in this system — no dispatcher to raise.' : 'В системе нет станции — диспетчера не достать.'
+  const asked = [first.lookup, first.survey].filter(Boolean).join(', ')
   const followUp: OutboundMessages = [...messages, { role: 'assistant', content: first.text }, {
     role: 'user',
     content: english
-      ? `DISPATCHER ANSWERED (${first.lookup}):\n${data}\nNow tell the commander what you learned, briefly. No orders, lookup:null.`
-      : `ДИСПЕТЧЕР ОТВЕТИЛ (${first.lookup}):\n${data}\nТеперь коротко перескажи командиру, что узнал. Без приказов, lookup:null.`,
+      ? `DISPATCHER ANSWERED (${asked}):\n${data}\nNow tell the commander what you learned, briefly, naming systems and targets exactly. No orders, lookup:null, survey:null.`
+      : `ДИСПЕТЧЕР ОТВЕТИЛ (${asked}):\n${data}\nТеперь коротко перескажи командиру, что узнал, называя системы и цели точно. Без приказов, lookup:null, survey:null.`,
   }]
   const second = await request(followUp)
   if (second) out.replies.push(second.text)

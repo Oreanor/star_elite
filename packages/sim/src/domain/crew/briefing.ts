@@ -3,6 +3,8 @@ import { isFoe } from '../ai/targeting'
 import { moduleFault } from '../station/moduleState'
 import { distanceToBody } from '../station/docking'
 import type { World } from '../world/entities'
+import { MONOLITH_NAMES } from '../world/queries'
+import { figurineDisplayName } from '../world/figurines'
 import { brokenModules, copilotRank, copilotRepairQuote, copilotSalary } from './copilot'
 import { xpToNextRank } from './rank'
 
@@ -53,6 +55,7 @@ export function copilotBriefing(world: World): CopilotBriefing | null {
   const pos = player.state.pos
   const range2 = COPILOT.SCAN_RANGE ** 2
   const rank = copilotRank(copilot)
+  const surface = (at: { distanceTo(v: typeof pos): number }, radius: number) => Math.round(Math.max(0, at.distanceTo(pos) - radius))
   const ai = player.ai
   const task = ai?.tasks[0]
   const helm: CopilotBriefing['helm'] = task
@@ -70,9 +73,13 @@ export function copilotBriefing(world: World): CopilotBriefing | null {
     docked: world.docked,
     helm,
     credits: world.credits,
-    bodies: world.bodies
-      .map((b) => ({ id: b.id, name: b.name, kind: b.kind, distanceM: Math.round(distanceToBody(world, b)), populated: b.population > 0 }))
-      .sort((a, b) => a.distanceM - b.distanceM),
+    // Тела и всё, к чему ведёт автопилот: статуи, монолиты, военные базы. Цель — по id.
+    bodies: [
+      ...world.bodies.map((b) => ({ id: b.id, name: b.name, kind: b.kind as string, distanceM: Math.round(distanceToBody(world, b)), populated: b.population > 0 })),
+      ...world.monoliths.map((m) => ({ id: m.id, name: MONOLITH_NAMES[m.variant] ?? 'Монолит', kind: 'monolith', distanceM: surface(m.pos, m.radius), populated: false })),
+      ...world.figurines.filter((f) => f.alive).map((f) => ({ id: f.id, name: figurineDisplayName(f), kind: 'statue', distanceM: surface(f.pos, f.radius), populated: false })),
+      ...world.warBases.filter((r) => r.alive).map((r) => ({ id: r.id, name: r.name, kind: 'war base', distanceM: surface(r.pos, r.radius), populated: false })),
+    ].sort((a, b) => a.distanceM - b.distanceM),
     contacts: world.ships
       .filter((s) => s.alive && !s.cloaked)
       .map((s) => ({

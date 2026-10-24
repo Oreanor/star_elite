@@ -95,6 +95,28 @@ type TaskBody =
 
 export type TaskKind = Task['kind']
 
+/**
+ * Неподвижная ТОЧКА задачи в мировых координатах, если она есть: её сдвигает перецентровка
+ * плавающего начала (`shiftAIState`). Перебор исчерпывающий — новая задача с точкой не
+ * соберётся, пока её точка не названа здесь. Прежде список жил в `shiftAIState` вручную, и
+ * точку «проводи меня» (`lead-jump`) забыли: после сдвига клиент держался за пустоту.
+ */
+export function taskPoint(task: Task): Vector3 | null {
+  switch (task.kind) {
+    case 'goto':
+      return task.point
+    case 'collect-cargo':
+    case 'hold':
+    case 'lead-jump':
+      return task.anchor
+    case 'approach-body':
+    case 'rendezvous':
+    case 'return-to-escort':
+    case 'depart':
+      return null
+  }
+}
+
 /** Намерение движения от текущей задачи: куда лететь и черпать ли груз по пути. */
 export interface MoveIntent {
   /** Точка, к которой ведём нос. */

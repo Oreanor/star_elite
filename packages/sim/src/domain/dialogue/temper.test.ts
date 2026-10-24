@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { hostileToPlayer } from '../ai/targeting'
 import { DIALOGUE } from '../../config/dialogue'
 import { createAIState } from '../ai/types'
 import type { ContractOffer } from '../contracts/types'
@@ -50,7 +51,7 @@ describe('нрав в разговоре', () => {
     const { world, other } = neutralShip()
     const reaction = react(world, other, 'threat')
     expect(['flee', 'fight']).toContain(reaction)
-    if (reaction === 'fight') expect(other.faction).toBe('hostile')
+    if (reaction === 'fight') expect(hostileToPlayer(world, other) && other.faction === 'neutral').toBe(true)
     else expect(other.ai!.mode).toBe('evade')
   })
 

@@ -1,6 +1,8 @@
 import type { StarClassId } from '../../config/galaxy'
 import { quasarOf } from './quasar'
 import type { StarSystem } from './types'
+import { warBasesOf } from './warBases'
+import { isSharedStart } from './sharedStart'
 
 /**
  * Чем примечательна система — то, за чем летят ИСКАТЬ: дыра, квазар, пульсар, пара звёзд,
@@ -19,6 +21,7 @@ export const SYSTEM_FEATURES = [
   'browndwarf',
   'dyson',
   'dysonRuin',
+  'warbase',
 ] as const
 
 export type SystemFeature = (typeof SYSTEM_FEATURES)[number]
@@ -50,5 +53,7 @@ export function hasFeature(system: StarSystem, feature: SystemFeature, galaxySee
       return system.dyson !== null && !system.dyson.ruined
     case 'dysonRuin':
       return system.dyson !== null && system.dyson.ruined
+    case 'warbase':
+      return isSharedStart(system.index, galaxySeed) || warBasesOf(system, galaxySeed).length > 0
   }
 }

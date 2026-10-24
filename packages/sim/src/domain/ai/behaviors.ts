@@ -3,7 +3,8 @@ import { AI, ESCORT, PERCEPTION, ROBBERY, UTILITY } from '../../config/ai'
 import { NPC_DOCK } from '../../config/station'
 import { TRAFFIC } from '../../config/world'
 import { findStation } from '../station/docking'
-import type { ShipEntity, World } from '../world/entities'
+import type { BodyEntity, ShipEntity, World } from '../world/entities'
+import { berthOccupant, claimBerth, releaseBerth } from '../station/berth'
 import { acquaintanceOf, advanceContactPlan, flyContactPlan } from '../world/plan'
 import { beginWarpDeparture } from '../world/warp'
 import { fight, fightSoft, setMode } from './dogfight'
@@ -276,8 +277,9 @@ const rejoin: Behavior = {
     if (!patron) return false
     // Сорвался из очереди к причалу — освободи причал, иначе он заперт навсегда.
     if (ai.dock === 'inbound') {
-      if (world.dockOccupantId === e.id) world.dockOccupantId = null
+      releaseBerth(world, e.id)
       ai.dock = null
+      ai.dockStationId = null
     }
     ai.home.copy(patron.state.pos)
     const gap = drive(e, world, patron.state.pos, driveOpts({ throttle: 1, boost: AI.ESCAPE_BOOST, arriveRadius: ESCORT.REJOIN_DONE }))
@@ -389,15 +391,29 @@ function patrol(e: ShipEntity, ai: AIState, world: World): void {
   quiet(ai)
 }
 
+/**
+ * Станция стыковки бота: запомненная, а при первом заходе — та, у которой игрок (трафик живёт
+ * вокруг него). Запомненной больше нет — выбираем заново.
+ */
+function dockStation(ai: AIState, world: World): BodyEntity | null {
+  const kept = ai.dockStationId == null ? null : world.bodies.find((b) => b.id === ai.dockStationId && b.kind === 'station')
+  if (kept) return kept
+  const station = findStation(world)
+  ai.dockStationId = station?.id ?? null
+  return station
+}
+
 /** Точка перед причальными воротами: заходят и швартуются здесь, а не в центре станции. */
 function berthPoint(stationPos: Vector3, radius: number, out: Vector3): Vector3 {
   return out.copy(_gate).multiplyScalar(radius + NPC_DOCK.BERTH_RANGE * 0.5).add(stationPos)
 }
 
 /**
- * Стыковка трафика к причалу — ПО ОДНОМУ. Причал держит `world.dockOccupantId`:
- * занявший его заходит и швартуется, остальные ждут на кольце ожидания и займут
- * место, едва оно освободится. Игрока это не касается: он стыкуется своим путём
+ * Стыковка трафика к причалу — ПО ОДНОМУ на станцию. Причал держит `world.berths`:
+ * занявший его заходит и швартуется, остальные ждут на кольце ожидания той же станции и
+ * займут место, едва оно освободится. Станция запоминается в миг захода (`dockStationId`):
+ * трафик стыкуется к станции, у которой игрок, но игрок улетел — бот к ней и идёт, а не
+ * разворачивается следом. Игрока это не касается: он стыкуется своим путём
  * (`docked` замораживает мир). Здесь мир живёт, поэтому «стоянка» — не остановка
  * мира, а корабль, гасящий ход у причала на несколько секунд.
  *
@@ -406,10 +422,11 @@ function berthPoint(stationPos: Vector3, radius: number, out: Vector3): Vector3 
  */
 function flyDock({ e, ai, world, dt }: BehaviorCtx): void {
   quiet(ai)
-  const station = findStation(world)
+  const station = dockStation(ai, world)
   if (!station) {
     // Стыковаться не к чему (прыгнули в систему без причала) — обычный полёт.
     ai.dock = null
+    ai.dockStationId = null
     patrol(e, ai, world)
     return
   }
@@ -421,9 +438,10 @@ function flyDock({ e, ai, world, dt }: BehaviorCtx): void {
     drive(e, world, _aim, driveOpts({ throttle: 0, separate: false }))
     e.controls.retro = e.state.vel.length() > 2 ? 1 : 0 // гасит остаточный ход у ворот
     if (ai.dockTimer <= 0) {
-      if (world.dockOccupantId === e.id) world.dockOccupantId = null
+      releaseBerth(world, e.id)
       e.clearance = false
       ai.dock = 'done'
+      ai.dockStationId = null
       // Уходит наружу от станции — прямо от своего места, чтобы не толкаться у причала.
       _depart.copy(e.state.pos).sub(station.pos)
       if (_depart.lengthSq() < 1) _depart.copy(_gate)
@@ -441,9 +459,10 @@ function flyDock({ e, ai, world, dt }: BehaviorCtx): void {
   }
 
   // inbound: занять причал, если свободен, иначе — в очередь.
-  const mine = world.dockOccupantId === e.id
-  if (world.dockOccupantId === null || mine) {
-    if (!mine) world.dockOccupantId = e.id
+  const occupant = berthOccupant(world, station.id)
+  const mine = occupant === e.id
+  if (occupant === null || mine) {
+    if (!mine) claimBerth(world, station.id, e.id)
     berthPoint(station.pos, station.radius, _aim)
     const toBerth = e.state.pos.distanceTo(_aim)
     // Ход тем меньше, чем ближе причал: влететь в кольцо на полном — таран.

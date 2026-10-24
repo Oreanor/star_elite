@@ -318,6 +318,11 @@ const copilotOrderAction: DialogueAction = {
     const order = (payload: Record<string, unknown>) => out.push({ action: 'copilot', payload })
     if (o.stop === true) order({ order: 'stop' })
     if (typeof o.goto === 'number') order({ order: 'goto', id: o.goto })
+    // Рейс: система по имени (номер подставит клиент по каталогу) и цель в ней по имени.
+    const travel = typeof o.travel === 'object' && o.travel !== null ? (o.travel as Record<string, unknown>) : null
+    if (travel && (typeof travel.system === 'string' || typeof travel.system === 'number')) {
+      order({ order: 'travel', system: travel.system, target: typeof travel.target === 'string' ? travel.target : null })
+    }
     if (typeof o.approach === 'number') order({ order: 'approach', id: o.approach })
     if (o.attack === 'nearest' || o.attack === 'all' || typeof o.attack === 'number') order({ order: 'attack', target: o.attack })
     if (o.collect === true) order({ order: 'collect' })

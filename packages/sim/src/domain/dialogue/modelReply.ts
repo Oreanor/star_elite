@@ -26,6 +26,8 @@ export interface ParsedModelReply {
   clarify?: boolean
   /** Выражение лица, которое модель ВЫЗВАЛА этой репликой. null — не задано. */
   emotion?: string | null
+  /** Второй пилот просит справку о телах ДРУГОЙ системы — по её имени. */
+  survey?: string | null
 }
 
 /** Проверить выражение лица против набора роли: у бога 8 эмоций, у смертного — 6. */
@@ -68,12 +70,13 @@ export function parseModelReply(
 
   const emotion = coerceEmotion(o.emotion, role)
   const lookup = coerceLookup(o.lookup)
+  const survey = typeof o.survey === 'string' && o.survey.trim() ? o.survey.trim() : null
 
   // Переводчик не понял поручение — только переспрос, никаких команд не собираем.
   if (coerceClarify(o.clarify)) {
-    return { text, commands: [], hangup: false, lookup, clarify: true, emotion }
+    return { text, commands: [], hangup: false, lookup, clarify: true, emotion, survey }
   }
 
   const commands = buildCommands(o, role, { allowedTopics, escortFee, fineAmount })
-  return { text, commands, hangup: o.hangup === true, lookup, emotion }
+  return { text, commands, hangup: o.hangup === true, lookup, emotion, survey }
 }

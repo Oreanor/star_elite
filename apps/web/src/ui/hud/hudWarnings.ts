@@ -262,6 +262,9 @@ export function gatherWarnings(frame: HudFrame): Plate | null {
       case 'copilot-quit':
         pushWarning('contactLost', now, { label: t('hud.copilotQuit', { name }) })
         break
+      case 'life':
+        pushWarning('lifeBorn', now, { label: t('hud.lifeBorn', { name }) })
+        break
     }
   }
 

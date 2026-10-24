@@ -96,6 +96,11 @@ export interface WarBaseDef {
   stationOffset: readonly [number, number, number]
   /** Индекс облика корпуса (реестр GLB в рендере). */
   model?: number
+  /**
+   * База у ПЛАНЕТЫ (номер в `planets`), а не у причала: `stationOffset` — тогда направление и
+   * высота над её поверхностью, и база едет с планетой по орбите.
+   */
+  anchorPlanet?: number
 }
 
 export interface SystemDef {

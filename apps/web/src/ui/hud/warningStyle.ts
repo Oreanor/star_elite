@@ -88,6 +88,12 @@ const STYLE: Record<WarnCode, Style> = {
   pulseCharging: { color: UI.WARN, hz: 2, key: 'hud.pulseCharging' },
   pulseReady: { color: UI.DANGER, hz: 3, key: 'hud.pulseReady' },
   pulseCancelled: { color: UI.WARN, hz: 0, key: 'hud.pulseCancelled' },
+  // Рейс второго пилота: голубые, ровные — он сообщает, что делает.
+  tripStart: { color: UI.PRIMARY, hz: 0, key: 'phrase.copilotTravel' },
+  tripArrived: { color: UI.PRIMARY, hz: 0, key: 'phrase.copilotTripArrived' },
+  tripCancelled: { color: UI.WARN, hz: 0, key: 'phrase.copilotTripCancelled' },
+  // Жизнь на планете — зелёная, ровная: добрая весть, не тревога.
+  lifeBorn: { color: UI.ALLY, hz: 0, key: 'hud.lifeBorn' },
 }
 
 /** Плашка на экране: сигнал, одетый в цвет и слова. */

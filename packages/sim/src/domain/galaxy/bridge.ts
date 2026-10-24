@@ -1,4 +1,5 @@
 import { MOON } from '../../config/bodies'
+import { warBasesOf } from './warBases'
 import { PLANET_COLORS, SCALE } from '../../config/galaxy'
 import { makeRng } from '../../core/math'
 import { STATION_RADIUS } from '../world/system'
@@ -259,6 +260,7 @@ export function systemDefOf(system: StarSystem, galaxySeed: number, seatOverride
     planets,
     station: stationDef,
     extraStations,
+    warBases: warBasesOf(system, galaxySeed),
     // Камни — встречи трафика, не хардкод-пояс у старта.
     belt: null,
     // Между внутренними планетами, а не за внешней границей системы.

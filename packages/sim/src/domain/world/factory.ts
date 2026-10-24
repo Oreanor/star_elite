@@ -785,6 +785,8 @@ export function enterVoid(world: World): void {
   world.monoliths = []
   world.figurines = []
   world.warBases = []
+  world.warShards = []
+  world.firePuffs = []
   world.platforms = []
   world.tracers = []
   world.explosions = []
@@ -800,7 +802,7 @@ export function enterVoid(world: World): void {
   world.navTargetId = null
   world.jumpTargetIndex = null
   world.docked = false
-  world.dockOccupantId = null
+  world.berths.clear()
   const player = world.player
   player.ai = null
   player.landedOn = null
@@ -848,6 +850,8 @@ export function enterSystem(
   world.pulses = []
   world.cataclysms = []
   world.fallen = []
+  world.warShards = []
+  world.firePuffs = []
   world.titans = []
   world.platforms = []
   world.tracers = []
@@ -904,7 +908,7 @@ export function enterSystem(
   world.docked = false
   world.dockArmed = true
   // Причал новой системы пуст: занявший его корабль остался в покинутой.
-  world.dockOccupantId = null
+  world.berths.clear()
 
   // Выходим из прыжка на ходу и с нулём в началe координат: плавающее начало
   // отсчёта считалось от прежней системы, и переносить его сюда бессмысленно.
@@ -980,6 +984,8 @@ export function createWorld(
     rockHits: [],
     rockClaims: [],
     structHits: [],
+    warShards: [],
+    firePuffs: [],
     contracts: [],
     offerHailTimer: CONTRACTS.FIRST_HAIL,
     offerHailShipId: null,
@@ -1017,7 +1023,7 @@ export function createWorld(
     jumpGates: [],
     docked: false,
     dockArmed: true,
-    dockOccupantId: null,
+    berths: new Map(),
     berthRevision: 0,
     contactLock: null,
     navTargetId: station?.id ?? null,
@@ -1054,6 +1060,7 @@ export function createWorld(
     pilotXp: 0,
     copilot: null,
     helmRequest: null,
+    tripRequest: null,
     score: 0,
   }
 

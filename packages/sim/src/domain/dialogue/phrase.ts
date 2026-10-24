@@ -30,7 +30,7 @@ export type PhraseKey =
   // Второй пилот: найм (строка ленты и отказы голосом) и исход приказов
   | 'copilotHired' | 'copilotDismissed' | 'copilotDismissConfirm'
   | 'hireTaken' | 'hireWary' | 'hireRank' | 'hireMoney'
-  | 'copilotGoto' | 'copilotApproach' | 'copilotAttack' | 'copilotAttackAll' | 'copilotCollect' | 'copilotFlee' | 'copilotStop'
+  | 'copilotGoto' | 'copilotTravel' | 'copilotNoJump' | 'copilotTripArrived' | 'copilotTripCancelled' | 'copilotApproach' | 'copilotAttack' | 'copilotAttackAll' | 'copilotCollect' | 'copilotFlee' | 'copilotStop'
   | 'copilotRepaired' | 'copilotRepairedPartial' | 'copilotRepairAgain' | 'copilotRepairShort' | 'copilotNothingToRepair' | 'copilotNoMoney'
   | 'copilotNoFoes' | 'copilotNoPods' | 'copilotHoldFull' | 'copilotDocked' | 'copilotNoTarget'
 

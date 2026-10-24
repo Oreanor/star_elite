@@ -10,6 +10,7 @@ import { shipWhereabouts } from '../galaxy/contacts'
 import type { Relationship } from '../world/acquaintance'
 import { localSettlement } from './trade'
 import { findStation } from './docking'
+import { berthOccupant } from './berth'
 import { lockedStationId } from '../world/queries'
 
 /**
@@ -105,8 +106,8 @@ export function dispatcherBriefing(world: World): DispatcherBriefing {
     }))
     .sort((a, b) => a.distanceKm - b.distanceKm)
 
-  const occupant = findShip(world, world.dockOccupantId)
   const station = findStation(world)
+  const occupant = findShip(world, station ? berthOccupant(world, station.id) : null)
   return {
     fallen: world.fallen.map((f) => ({
       name: f.name,

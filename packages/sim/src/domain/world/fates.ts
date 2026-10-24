@@ -103,7 +103,10 @@ function seedBody(body: BodyEntity): boolean {
 function seedLife(world: World, body: BodyEntity, fresh: boolean): void {
   if (!seedBody(body)) return
   world.bodiesRevision++
-  if (fresh) addCataclysm(world, body, 'seed')
+  if (!fresh) return
+  // Свежая — лёгкая вспышка и весть: «на планете такой-то появилась жизнь». У всех в системе.
+  addCataclysm(world, body, 'seed')
+  world.notices.push({ kind: 'life', name: body.name, at: world.time })
 }
 
 function shatterable(body: BodyEntity): boolean {

@@ -177,7 +177,11 @@ function playerFrameIndex(world: World, stationIndex: number): number {
   if (landedId !== null) {
     const body = world.bodies.findIndex((b) => b.id === landedId)
     if (body >= 0) return body
-    if (world.warBases.some((r) => r.id === landedId)) return stationIndex
+    const base = world.warBases.find((r) => r.id === landedId)
+    if (base) {
+      const anchor = base.anchorId == null ? -1 : world.bodies.findIndex((b) => b.id === base.anchorId)
+      return anchor >= 0 ? anchor : stationIndex
+    }
   }
   let best = -1
   let bestSurface = Infinity
@@ -220,8 +224,15 @@ export function stepOrbits(world: World, time = orbitTime(world)): void {
     bodyShift(world, stationIndex, _stationShift)
     if (_stationShift.lengthSq() >= 1e-12) {
       for (const monolith of world.monoliths) monolith.pos.add(_stationShift)
-      for (const rock of world.warBases) rock.pos.add(_stationShift)
+      for (const rock of world.warBases) if (rock.anchorId == null) rock.pos.add(_stationShift)
     }
+  }
+
+  // Базы у планет — ходом своей планеты.
+  for (const rock of world.warBases) {
+    if (rock.anchorId == null) continue
+    const anchor = bodies.findIndex((b) => b.id === rock.anchorId)
+    if (anchor >= 0) rock.pos.add(bodyShift(world, anchor, _offset))
   }
 
   // Статуэтки с якорем — ходом своего тела (это и есть их ход, его показ интерполирует след).

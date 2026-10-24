@@ -12,7 +12,8 @@ export {
 } from './aerobatics'
 export { aimDirection, forward, gunQuat, shipAxes } from './axes'
 export { bodyMass, gravityAccel, gravityReach, stepGravity } from './gravity'
-export { canEngageFlyTo, flyToArrived, flyToController } from './flyto'
+export { canEngageFlyTo,
+  flyToLocalTarget, flyToArrived, flyToController } from './flyto'
 export {
   armAutoland,
   canAutoland,

@@ -15,10 +15,12 @@ describe('dialogueFace', () => {
   })
 
   it('baseline: warm — радость, претензия не влияет на базу', () => {
-    const world = { acquaintances: [{ id: 1, relationship: 'friendly' as const }] } as Parameters<typeof dialogueBaseline>[0]
-    const warm = { faction: 'neutral' as const, acquaintanceId: 1, ai: { grievance: 0 } } as Parameters<typeof dialogueBaseline>[1]
+    // Игрок в подделке нужен: отношение смотрит и на личную вражду с ним (`hostileToPlayer`).
+    const player = { id: 0, faction: 'player' as const, ai: null }
+    const world = { player, acquaintances: [{ id: 1, relationship: 'friendly' as const }] } as unknown as Parameters<typeof dialogueBaseline>[0]
+    const warm = { faction: 'neutral' as const, acquaintanceId: 1, ai: { grievance: 0, foes: [] } } as unknown as Parameters<typeof dialogueBaseline>[1]
     expect(dialogueBaseline(world, warm)).toBe('joy')
-    const gripe = { faction: 'neutral' as const, acquaintanceId: 1, ai: { grievance: 2 } } as Parameters<typeof dialogueBaseline>[1]
+    const gripe = { faction: 'neutral' as const, acquaintanceId: 1, ai: { grievance: 2, foes: [] } } as unknown as Parameters<typeof dialogueBaseline>[1]
     expect(dialogueBaseline(world, gripe)).toBe('neutral')
   })
 })
