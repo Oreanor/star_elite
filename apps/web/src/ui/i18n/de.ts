@@ -206,7 +206,7 @@ export const DE: Record<keyof typeof RU, string> = {
   'unit.kmps': 'km/s',
   'unit.ly': 'Lj',
   'unit.t': 't',
-  'unit.rads': 'rad/s²',
+  'unit.degs': '°/s²',
   'unit.kn': 'kN',
   'unit.knm': 'kN·m',
   'unit.units': 'E.',
@@ -255,9 +255,9 @@ export const DE: Record<keyof typeof RU, string> = {
   'station.col.name': 'NAME',
   'station.col.price': 'PREIS',
   'station.col.mass': 'MASSE',
-  'station.col.unit': 'EINHEIT',
   'station.col.stock': 'LAGER',
   'station.col.market': 'MARKT',
+  'station.col.param': 'WERT',
   'station.col.profit': 'GEWINN',
 
   'station.market.title': 'WAREN',
@@ -273,6 +273,7 @@ export const DE: Record<keyof typeof RU, string> = {
   'station.trade.fined': 'HANDEL BIS ZUR ZAHLUNG DER STRAFE {amount} EINGESCHRÄNKT',
   'station.fine.title': 'STRAFE',
   'station.fine.issued': 'Für den Handel mit Schmuggelware wurde Ihnen eine Strafe von {amount} auferlegt. Der Handel ist bis zur Zahlung eingeschränkt.',
+  'station.contraband': 'Gesetzlich eingeschränkt: Transport erlaubt, Kauf oder Verkauf wird bestraft',
   'station.trade.line': '{mass} × {price}',
 
   'station.hold.title': 'FRACHT',
@@ -295,11 +296,7 @@ export const DE: Record<keyof typeof RU, string> = {
   'station.fitted': 'VERBAUT',
   'station.noHardpoint': 'KEINE HALTERUNG',
   'station.wrongSlot': 'FALSCHER SLOT',
-
-  'station.service.hullOk': 'Rumpf {cur} / {max} · kein Schaden',
-  'station.service.hullDmg': 'Rumpf {cur} / {max} · Reparatur {cost} Cr',
-  'station.service.repair': 'RUMPF REPARIEREN',
-  'station.service.hullWhole': 'RUMPF INTAKT',
+  'station.service.strength': 'RUMPF',
 
   'station.byCopy': 'mit einer Kopie',
 

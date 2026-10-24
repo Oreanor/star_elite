@@ -206,7 +206,7 @@ export const ES: Record<keyof typeof RU, string> = {
   'unit.kmps': 'km/s',
   'unit.ly': 'al',
   'unit.t': 't',
-  'unit.rads': 'rad/s²',
+  'unit.degs': '°/s²',
   'unit.kn': 'kN',
   'unit.knm': 'kN·m',
   'unit.units': 'u.',
@@ -255,9 +255,9 @@ export const ES: Record<keyof typeof RU, string> = {
   'station.col.name': 'NOMBRE',
   'station.col.price': 'PRECIO',
   'station.col.mass': 'MASA',
-  'station.col.unit': 'UNIDAD',
   'station.col.stock': 'EXISTENCIAS',
   'station.col.market': 'MERCADO',
+  'station.col.param': 'PARÁMETRO',
   'station.col.profit': 'GANANCIA',
 
   'station.market.title': 'MERCANCÍAS',
@@ -273,6 +273,7 @@ export const ES: Record<keyof typeof RU, string> = {
   'station.trade.fined': 'COMERCIO RESTRINGIDO HASTA PAGAR LA MULTA {amount}',
   'station.fine.title': 'MULTA',
   'station.fine.issued': 'Se le ha impuesto una multa de {amount} por comerciar con contrabando. El comercio queda restringido hasta el pago.',
+  'station.contraband': 'Restringido por ley: transportarlo está permitido, comprar o vender se multa',
   'station.trade.line': '{mass} × {price}',
 
   'station.hold.title': 'CARGA',
@@ -295,11 +296,7 @@ export const ES: Record<keyof typeof RU, string> = {
   'station.fitted': 'YA PUESTO',
   'station.noHardpoint': 'SIN SOPORTE',
   'station.wrongSlot': 'RANURA ERRADA',
-
-  'station.service.hullOk': 'Casco {cur} / {max} · sin daños',
-  'station.service.hullDmg': 'Casco {cur} / {max} · reparar {cost} cr',
-  'station.service.repair': 'REPARAR CASCO',
-  'station.service.hullWhole': 'CASCO INTACTO',
+  'station.service.strength': 'CASCO',
 
   'station.byCopy': 'con una copia',
 

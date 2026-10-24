@@ -22,7 +22,7 @@ import { refreshSpec } from '../world/factory'
 import { StatKey, hashModuleId, locateInstalled, minTechForClass, moduleFault, upgradeLevel, withUpgrade } from './moduleState'
 import { hullDamage } from './repair'
 import { localSettlement } from './trade'
-import { UpgradeError, canUpgrade, upgradeCashCost, upgradeCopyIndex } from './upgrade'
+import { UpgradeError, canUpgrade, isUpgradable, nextUpgradeLevel, upgradeCashCost, upgradeCopyIndex, upgradeSteps } from './upgrade'
 
 /**
  * Торговля и ремонт. Чистые правила: ни одного обращения к UI.
@@ -31,12 +31,20 @@ import { UpgradeError, canUpgrade, upgradeCashCost, upgradeCopyIndex } from './u
  * значило бы продавать время.
  */
 
+/**
+ * Цена покупки. Прокачанный экземпляр (с витрины) дороже ровно на вложенные ступени — по цене
+ * ступени у мастера (`upgradeCashCost`): купить готовый или докачать самому — одни деньги.
+ */
 export function priceOf(module: ShipModule): number {
-  return Math.ceil(module.cost * SHOP.MARKUP)
+  return Math.ceil(module.cost * SHOP.MARKUP) + upgradeSteps(module) * upgradeCashCost(module)
 }
 
+/**
+ * Выкуп модуля, вытесненного покупкой: растёт с прокачкой, как `moduleResaleValue`. Прежде
+ * прокачанный сдавался по цене стока — вложенные ступени пропадали.
+ */
 export function resaleOf(module: ShipModule): number {
-  return Math.floor(module.cost * SHOP.RESALE)
+  return Math.floor(module.cost * SHOP.RESALE * (1 + upgradeLevel(module)))
 }
 
 export type PurchaseError = 'no-money' | 'wrong-kind' | 'class-too-large' | 'no-hardpoint' | 'already-installed'
@@ -210,8 +218,22 @@ export function stationStock(world: World): readonly ShipModule[] {
     list.sort((a, b) => b.key - a.key)
     for (const x of list.slice(0, count)) out.push(x.m)
   }
-  // Порядок каталога: витрина читается так же, как и прежде.
-  return MODULE_CATALOGUE.filter((m) => out.includes(m))
+  // Порядок каталога: витрина читается так же, как и прежде. Часть — прокачанными экземплярами.
+  const maxSteps = Math.max(1, Math.round(SHOP.UPGRADE_MAX_STEPS * Math.min(1, settlement.techLevel / STOCK.TOP_TECH)))
+  return MODULE_CATALOGUE.filter((m) => out.includes(m)).map((m) => stockVariant(m, seed, maxSteps))
+}
+
+/**
+ * Экземпляр на витрине: заводской или уже с ступенями прокачки — из зерна системы и id модуля,
+ * поэтому у всех игроков в системе одна и та же витрина. Ракеты и дроны качают слотом, не штукой.
+ */
+function stockVariant(m: ShipModule, seed: number, maxSteps: number): ShipModule {
+  if (!isUpgradable(m) || isMunition(m)) return m
+  const rng = makeRng((seed ^ hashModuleId(m.id) ^ 0x75706772) >>> 0)
+  if (rng() >= STOCK.UPGRADED_SHARE) return m
+  // Квадрат — малые ступени чаще: «+1…+3» обычны, глубоко прокачанное — редкость.
+  const steps = Math.min(maxSteps, 1 + Math.floor(rng() ** 2 * maxSteps))
+  return withUpgrade(m, steps * SHOP.UPGRADE_STEP)
 }
 
 // ─── Перестановка железа: установить из трюма, сравнить с установленным ────────
@@ -505,8 +527,11 @@ export function upgradeMissiles(world: World, ship: ShipEntity, useCopy: boolean
   const error = canUpgrade(world, ship, module, useCopy)
   if (error) return error
 
-  const level = useCopy ? SHOP.UPGRADE_COPY_STEP : SHOP.UPGRADE_CASH_STEP
-  const upgraded = withUpgrade(module, level) as WeaponModule
+  // Ступени СКЛАДЫВАЮТСЯ с уже вложенными: прежде уровень ставился равным одной ступени, и
+  // вторая прокачка ракет не давала ничего сверх первой.
+  const upgraded = withUpgrade(module, nextUpgradeLevel(module, useCopy)) as WeaponModule
+  // Цена — ДО замены: доля цены модуля.
+  const cashCost = upgradeCashCost(module)
   for (const i of missilePylonIndices(ship)) {
     if (ship.loadout.weapons[i] && isMunition(ship.loadout.weapons[i]!)) ship.loadout.weapons[i] = upgraded
   }
@@ -514,7 +539,7 @@ export function upgradeMissiles(world: World, ship: ShipEntity, useCopy: boolean
     const idx = upgradeCopyIndex(ship, module)
     if (idx !== null) removeItem(ship.hold, idx)
   } else {
-    world.credits -= upgradeCashCost(module)
+    world.credits -= cashCost
   }
   refreshSpec(ship)
   return null

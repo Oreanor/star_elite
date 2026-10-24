@@ -205,7 +205,7 @@ export const FR: Record<keyof typeof RU, string> = {
   'unit.kmps': 'km/s',
   'unit.ly': 'al',
   'unit.t': 't',
-  'unit.rads': 'rad/s²',
+  'unit.degs': '°/s²',
   'unit.kn': 'kN',
   'unit.knm': 'kN·m',
   'unit.units': 'u.',
@@ -254,9 +254,9 @@ export const FR: Record<keyof typeof RU, string> = {
   'station.col.name': 'NOM',
   'station.col.price': 'PRIX',
   'station.col.mass': 'MASSE',
-  'station.col.unit': 'UNITÉ',
   'station.col.stock': 'STOCK',
   'station.col.market': 'MARCHÉ',
+  'station.col.param': 'PARAMÈTRE',
   'station.col.profit': 'PROFIT',
 
   'station.market.title': 'MARCHANDISES',
@@ -272,6 +272,7 @@ export const FR: Record<keyof typeof RU, string> = {
   'station.trade.fined': 'COMMERCE RESTREINT JUSQU’AU PAIEMENT DE L’AMENDE {amount}',
   'station.fine.title': 'AMENDE',
   'station.fine.issued': 'Une amende de {amount} vous a été infligée pour commerce de contrebande. Le commerce est restreint jusqu’au paiement.',
+  'station.contraband': 'Restreint par la loi : le transport est permis, l’achat ou la vente est sanctionné',
   'station.trade.line': '{mass} × {price}',
 
   'station.hold.title': 'CARGAISON',
@@ -294,11 +295,7 @@ export const FR: Record<keyof typeof RU, string> = {
   'station.fitted': 'DÉJÀ MONTÉ',
   'station.noHardpoint': 'PAS DE POINT D\'ANCRAGE',
   'station.wrongSlot': 'MAUVAIS EMPLACEMENT',
-
-  'station.service.hullOk': 'Coque {cur} / {max} · aucun dégât',
-  'station.service.hullDmg': 'Coque {cur} / {max} · réparation {cost} cr',
-  'station.service.repair': 'RÉPARER LA COQUE',
-  'station.service.hullWhole': 'COQUE INTACTE',
+  'station.service.strength': 'COQUE',
 
   'station.byCopy': 'avec une copie',
 

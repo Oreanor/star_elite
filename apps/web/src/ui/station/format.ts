@@ -19,11 +19,11 @@ export type StatId = StatKey | 'mass' | 'pitch' | 'yaw' | 'roll' | 'maneuver' | 
 /** Единица измерения на характеристику. Отсутствует — величина безразмерная (щит, урон, класс). */
 const STAT_UNIT: Partial<Record<StatId, Key>> = {
   speed: 'unit.mps',
-  turn: 'unit.rads',
-  pitch: 'unit.rads',
-  yaw: 'unit.rads',
-  roll: 'unit.rads',
-  maneuver: 'unit.rads',
+  turn: 'unit.degs',
+  pitch: 'unit.degs',
+  yaw: 'unit.degs',
+  roll: 'unit.degs',
+  maneuver: 'unit.degs',
   cargo: 'unit.t',
   mass: 'unit.t',
   jump: 'unit.ly',
@@ -35,15 +35,25 @@ const STAT_UNIT: Partial<Record<StatId, Key>> = {
   aux: 'unit.units',
 }
 
-/** Где доли важны: угловые ускорения и дальность прыжка. Прочее округляем — целое читается быстрее. */
-const STAT_DECIMALS: Partial<Record<StatId, number>> = { turn: 2, jump: 2, pitch: 2, yaw: 2, roll: 2, maneuver: 2 }
+/**
+ * Всё — ЦЕЛЫМИ: дробь в характеристике читается хуже и ничего не добавляет. Угловые ускорения
+ * в радианах — единицы (2.49 рад/с² округлилось бы в «2»), поэтому их показываем в градусах:
+ * 143 °/с² — то же самое, но целым.
+ */
+const STAT_SCALE: Partial<Record<StatId, number>> = {
+  turn: 180 / Math.PI,
+  pitch: 180 / Math.PI,
+  yaw: 180 / Math.PI,
+  roll: 180 / Math.PI,
+  maneuver: 180 / Math.PI,
+}
 
 /**
  * Только число характеристики, без единицы: левая часть «1.40 → 1.02 рад/с²», где единица
  * пишется один раз — в конце, у нового значения.
  */
-export function statNumber(id: StatId, value: number, decimals = STAT_DECIMALS[id] ?? 0): string {
-  return decimals > 0 ? value.toFixed(decimals) : String(Math.round(value))
+export function statNumber(id: StatId, value: number): string {
+  return String(Math.round(value * (STAT_SCALE[id] ?? 1)))
 }
 
 /**
@@ -51,8 +61,8 @@ export function statNumber(id: StatId, value: number, decimals = STAT_DECIMALS[i
  * @param decimals Знаков после запятой вместо принятых для характеристики — там, где
  *   сравнивают соседние строки (справочник: масса линий различается десятыми).
  */
-export function formatStat(id: StatId, value: number, decimals = STAT_DECIMALS[id] ?? 0): string {
-  const num = decimals > 0 ? value.toFixed(decimals) : String(Math.round(value))
+export function formatStat(id: StatId, value: number): string {
+  const num = statNumber(id, value)
   const unit = STAT_UNIT[id]
   return unit ? `${num} ${t(unit)}` : num
 }

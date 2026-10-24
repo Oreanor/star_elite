@@ -210,7 +210,7 @@ export const RU = {
   'unit.kmps': 'км/с',
   'unit.ly': 'св.г.',
   'unit.t': 'т',
-  'unit.rads': 'рад/с²',
+  'unit.degs': '°/с²',
   'unit.kn': 'кН',
   'unit.knm': 'кН·м',
   'unit.units': 'ед.',
@@ -264,9 +264,9 @@ export const RU = {
   'station.col.name': 'НАЗВАНИЕ',
   'station.col.price': 'ЦЕНА',
   'station.col.mass': 'МАССА',
-  'station.col.unit': 'ЕДИНИЦА',
   'station.col.stock': 'СКЛАД',
   'station.col.market': 'РЫНОК',
+  'station.col.param': 'ПАРАМЕТР',
   'station.col.profit': 'ВЫГОДА',
 
   // ─── Рынок ──────────────────────────────────────────────────────────────────
@@ -283,6 +283,7 @@ export const RU = {
   'station.trade.fined': 'ТОРГОВЛЯ ОГРАНИЧЕНА ДО ОПЛАТЫ ШТРАФА {amount}',
   'station.fine.title': 'ШТРАФ',
   'station.fine.issued': 'За торговлю запрещёнкой вам выписан штраф {amount}. Торговля ограничена до оплаты.',
+  'station.contraband': 'Торговля ограничена законом: перевозка разрешена, штрафуют за покупку или продажу',
   'station.trade.line': '{mass} × {price}',
 
   // ─── Грузовой отсек ─────────────────────────────────────────────────────────
@@ -310,10 +311,7 @@ export const RU = {
   'station.wrongSlot': 'НЕ ТОТ СЛОТ',
 
   // ─── Ремонт и боезапас ──────────────────────────────────────────────────────
-  'station.service.hullOk': 'Корпус {cur} / {max} · повреждений нет',
-  'station.service.hullDmg': 'Корпус {cur} / {max} · починка {cost} кр.',
-  'station.service.repair': 'ПОЧИНИТЬ КОРПУС',
-  'station.service.hullWhole': 'КОРПУС ЦЕЛ',
+  'station.service.strength': 'ПРОЧНОСТЬ',
 
   // ─── Улучшение модуля ───────────────────────────────────────────────────────
   'station.byCopy': 'копией',

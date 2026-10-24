@@ -93,6 +93,12 @@ export interface RepairInfo {
 }
 
 /**
+ * Ширина окна слота — постоянная: одна и та же, пуст отсек или в нём есть варианты, и не шире
+ * прежнего. Внутри — магазин и отсек поровну.
+ */
+const SLOT_MODAL_WIDTH = '62rem'
+
+/**
  * Стеклянная модалка по клику на плитку — поверх всего экрана. Никаких раскрытий и
  * колонки «купить»: сверху вид слота, под ним что стоит, ниже РЯД действий
  * (снять · починить · улучшить · продать), а в самом низу — варианты В ДВЕ КОЛОНКИ:
@@ -254,12 +260,12 @@ export function SlotModal({
     })
   }
 
-  // Улучшение — единственное действие с выбором дороги: копией (+50%, копия сгорает)
-  // или деньгами (+25%). Показываем обе доступные; ни одной — значит просто нет денег.
+  // Улучшение — единственное действие с выбором дороги: копией (две ступени, копия сгорает)
+  // или деньгами (одна ступень +5%). Показываем обе доступные; ни одной — значит нет денег.
   const askUpgrade = () => {
     if (!module) return
-    // «было → станет» по главной оси модуля. Копия (+50%) и деньги (+25%) дают разный
-    // прирост — показываем абсолютные числа в каждой кнопке, рядом с процентом.
+    // «было → станет» по главной оси модуля. Копия и деньги дают разный прирост —
+    // показываем абсолютные числа в каждой кнопке.
     const stat = moduleStat(module)
     const arrow = (useCopy: boolean) =>
       `${statNumber(stat.key, stat.value)} → ${formatStat(stat.key, upgradedStatValue(module, useCopy))}`
@@ -333,7 +339,7 @@ export function SlotModal({
   const holdColumns = moduleColumns(world, { hardpointIndex: slot.hardpointIndex, rows: holdModules })
 
   return (
-    <Modal onClose={onClose} fit>
+    <Modal onClose={onClose} width={SLOT_MODAL_WIDTH}>
         <ModalKicker>{t(('kind.' + labelKind) as Key).toUpperCase()}</ModalKicker>
 
         {/* Что стоит сейчас — крупно, без рамки. */}
@@ -380,8 +386,9 @@ export function SlotModal({
             )}
 
             {/* Варианты — ТЕ ЖЕ таблицы, что в торговле (`moduleColumns`): магазин слева, твой
-                трюм справа. Клик по строке сам спрашивает и ставит; заголовки сортируют. */}
-            <div className="grid grid-cols-[auto_auto] gap-x-10">
+                трюм справа, поровну. По содержимому (`auto`) магазин забирал почти всю ширину, а
+                отсек ужимался в узкую полоску. Клик по строке сам спрашивает и ставит. */}
+            <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-x-10">
             <OptionTable
               title={t('ship.col.shop')}
               empty={t('ship.noneShop')}
@@ -554,7 +561,7 @@ function OptionTable({
         {title}
       </h4>
       {rows.length > 0 ? (
-        <Table columns={columns} rows={rows} rowKey={(m, i) => `${m.id}-${i}`} onRowClick={onPick} />
+        <Table fixedLayout columns={columns} rows={rows} rowKey={(m, i) => `${m.id}-${i}`} onRowClick={onPick} />
       ) : (
         <p className="text-xs" style={{ color: DIM }}>
           {empty}

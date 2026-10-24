@@ -206,7 +206,7 @@ export const IT: Record<keyof typeof RU, string> = {
   'unit.kmps': 'km/s',
   'unit.ly': 'al',
   'unit.t': 't',
-  'unit.rads': 'rad/s²',
+  'unit.degs': '°/s²',
   'unit.kn': 'kN',
   'unit.knm': 'kN·m',
   'unit.units': 'u.',
@@ -255,9 +255,9 @@ export const IT: Record<keyof typeof RU, string> = {
   'station.col.name': 'NOME',
   'station.col.price': 'PREZZO',
   'station.col.mass': 'MASSA',
-  'station.col.unit': 'UNITÀ',
   'station.col.stock': 'SCORTA',
   'station.col.market': 'MERCATO',
+  'station.col.param': 'PARAMETRO',
   'station.col.profit': 'PROFITTO',
 
   'station.market.title': 'MERCI',
@@ -273,6 +273,7 @@ export const IT: Record<keyof typeof RU, string> = {
   'station.trade.fined': 'COMMERCIO LIMITATO FINO AL PAGAMENTO DELLA MULTA {amount}',
   'station.fine.title': 'MULTA',
   'station.fine.issued': 'Ti è stata inflitta una multa di {amount} per commercio di contrabbando. Il commercio è limitato fino al pagamento.',
+  'station.contraband': 'Limitato dalla legge: il trasporto è consentito, acquisto o vendita sono multati',
   'station.trade.line': '{mass} × {price}',
 
   'station.hold.title': 'CARICO',
@@ -295,11 +296,7 @@ export const IT: Record<keyof typeof RU, string> = {
   'station.fitted': 'GIÀ MONTATO',
   'station.noHardpoint': 'NIENTE ATTACCO',
   'station.wrongSlot': 'ALLOGGIO ERRATO',
-
-  'station.service.hullOk': 'Scafo {cur} / {max} · nessun danno',
-  'station.service.hullDmg': 'Scafo {cur} / {max} · riparazione {cost} cr',
-  'station.service.repair': 'RIPARA SCAFO',
-  'station.service.hullWhole': 'SCAFO INTEGRO',
+  'station.service.strength': 'SCAFO',
 
   'station.byCopy': 'con una copia',
 

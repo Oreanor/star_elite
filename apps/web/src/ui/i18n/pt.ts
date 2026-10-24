@@ -212,7 +212,7 @@ export const PT: Record<keyof typeof RU, string> = {
   'unit.kmps': 'km/s',
   'unit.ly': 'al',
   'unit.t': 't',
-  'unit.rads': 'rad/s²',
+  'unit.degs': '°/s²',
   'unit.kn': 'kN',
   'unit.knm': 'kN·m',
   'unit.units': 'un.',
@@ -266,9 +266,9 @@ export const PT: Record<keyof typeof RU, string> = {
   'station.col.name': 'NOME',
   'station.col.price': 'PREÇO',
   'station.col.mass': 'MASSA',
-  'station.col.unit': 'UNIDADE',
   'station.col.stock': 'ESTOQUE',
   'station.col.market': 'MERCADO',
+  'station.col.param': 'PARÂMETRO',
   'station.col.profit': 'LUCRO',
 
   // ─── Mercado ─────────────────────────────────────────────────────────────────
@@ -285,6 +285,7 @@ export const PT: Record<keyof typeof RU, string> = {
   'station.trade.fined': 'COMÉRCIO RESTRITO ATÉ PAGAR A MULTA {amount}',
   'station.fine.title': 'MULTA',
   'station.fine.issued': 'Você foi multado em {amount} por comercializar contrabando. O comércio fica restrito até o pagamento.',
+  'station.contraband': 'Restrito por lei: transportar é permitido, comprar ou vender gera multa',
   'station.trade.line': '{mass} × {price}',
 
   // ─── Porão de carga ──────────────────────────────────────────────────────────
@@ -312,10 +313,7 @@ export const PT: Record<keyof typeof RU, string> = {
   'station.wrongSlot': 'SLOT ERRADO',
 
   // ─── Reparo e munição ────────────────────────────────────────────────────────
-  'station.service.hullOk': 'Casco {cur} / {max} · sem dano',
-  'station.service.hullDmg': 'Casco {cur} / {max} · reparo {cost} cr',
-  'station.service.repair': 'REPARAR CASCO',
-  'station.service.hullWhole': 'CASCO INTACTO',
+  'station.service.strength': 'CASCO',
 
   // ─── Melhoria de módulo ──────────────────────────────────────────────────────
   'station.byCopy': 'com uma cópia',

@@ -110,7 +110,10 @@ export function Outfitter({ world, onChange }: { world: World; onChange: () => v
         lines: (
           <>
             <ModuleDetail world={world} module={m} />
-            <StatLine label={statLabel('mass')}>{formatStat('mass', m.mass, 1)}</StatLine>
+            {/* У аукс-устройств (РЭБ, бомба, заборник) главная строка — уже масса: не повторяем. */}
+            {(headlineCompare(world, m)?.key ?? moduleStat(m).key) !== 'mass' && (
+              <StatLine label={statLabel('mass')}>{formatStat('mass', m.mass)}</StatLine>
+            )}
             <StatLine label={t('station.col.price')}>
               <Money amount={priceOf(m)} />
             </StatLine>

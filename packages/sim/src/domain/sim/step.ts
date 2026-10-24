@@ -64,6 +64,7 @@ import { oreUnits } from '../combat/mining'
 import { MIELOPHONE } from '../../config/mielophone'
 import { bodySizeFactor, effectiveRadius, phasedOut, starSizeFactor, stepScale } from '../scale/scale'
 import { stepGalaxyPresence } from '../galaxy/presence'
+import { clearBodiesOnResize } from '../scale/resizeClear'
 import { gravityAt, stepGravity } from '../flight/gravity'
 import { stepJumpGateCollision } from '../flight/jumpGate'
 import {
@@ -341,8 +342,10 @@ function stepPhysics(world: World, dt: number): void {
       stepGravity(ship, world, dt)
       stepShip(ship.state, ship.controls, ship.spec.tuning, dt)
       // Миелофон: рост/усадка масштаба от сигнала. До столкновений — они считаются по
-      // свежему размеру этого шага.
+      // свежему размеру этого шага. Сменился рост — тела могли наехать: выталкиваем наружу.
+      const scaleBefore = ship.state.scale
       stepScale(ship, dt, world)
+      if (ship.state.scale !== scaleBefore) clearBodiesOnResize(world, ship)
     }
     // Нагрев звездой ДО регенерации щита: если корона течёт, `applyDamage`
     // пометит попадание, и щит в этом же шаге восстанавливаться не станет.
@@ -577,6 +580,16 @@ function bounceOffFixtures(world: World, ship: ShipEntity, base: WarBaseEntity, 
 
 /** Точка контакта корабля с полем станции — для вспышки. Горячий путь, без аллокаций. */
 const _shieldContact = /* @__PURE__ */ new Vector3()
+/**
+ * Тело, заметно меньшее выросшего корпуса, его не держит — корпус через него переступает.
+ * Тела ужимаются с ростом (закон зума), а корпус растёт: на ×1000 база в 3 км для пилота —
+ * точка в 3 м, а корпус — сфера в 12 км. Прежде такая невидимая точка отбрасывала гиганта
+ * целиком («что-то невидимое сталкивает»). На ×1 правило молчит: мелкий камень твёрд, как был.
+ */
+function tooSmallToBlock(ship: ShipEntity, radius: number): boolean {
+  return ship.state.scale > 1 && radius < effectiveRadius(ship) * MIELOPHONE.SOLID_MIN_SHARE
+}
+
 const _bodyPrev = /* @__PURE__ */ new Vector3()
 const _bodyDir = /* @__PURE__ */ new Vector3()
 
@@ -593,6 +606,7 @@ function hitsBodySphere(
   radius: number,
   dt: number,
 ): boolean {
+  if (tooSmallToBlock(ship, radius)) return false
   const reach = radius + effectiveRadius(ship)
   if (center.distanceToSquared(ship.state.pos) <= reach * reach) return true
 
@@ -664,6 +678,7 @@ function stepBodyCollisions(world: World, dt: number): void {
           // Допуск — билет сквозь поле: корабль идёт коридором на стыковку, поле молчит.
           if (ship.clearance) continue
           const shieldR = body.radius * k * SHIELD.RADIUS_FACTOR
+          if (tooSmallToBlock(ship, shieldR)) continue
           const reach = shieldR + effectiveRadius(ship)
           if (body.pos.distanceToSquared(ship.state.pos) > reach * reach) continue
           // Вспышка при любом касании поля (`impact >= 0`), но ЯРКОСТЬ — по силе удара:

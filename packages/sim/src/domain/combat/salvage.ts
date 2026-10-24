@@ -325,6 +325,25 @@ export function jettisonItem(world: World, ship: ShipEntity, index: number): boo
 }
 
 /**
+ * Выбросить `units` единиц товара контейнером по носу — сколько выставил пилот, как при
+ * продаже. Цена входа делится пропорционально: остаток хранит basis только своих единиц.
+ * Работает и у причала, и под местным штрафом: это не сделка, а избавление от груза —
+ * то, что нельзя продать (контрабанда), иначе было не сбыть. Возвращает выброшенное.
+ */
+export function jettisonCommodity(world: World, ship: ShipEntity, commodity: Commodity, units: number): number {
+  const index = ship.hold.items.findIndex((i) => i.kind === 'commodity' && i.commodity.id === commodity.id)
+  const stack = ship.hold.items[index]
+  if (!stack || stack.kind !== 'commodity' || units <= 0) return 0
+  const n = Math.min(units, stack.units)
+  if (n >= stack.units) return jettisonItem(world, ship, index) ? n : 0
+  if (stack.costBasis !== undefined) stack.costBasis = Math.round(stack.costBasis * ((stack.units - n) / stack.units))
+  stack.units -= n
+  spitPodAhead(world, ship, { kind: 'commodity', commodity, units: n })
+  refreshSpec(ship)
+  return n
+}
+
+/**
  * Выбросить весь груз за борт по носу.
  *
  * Пересобираем характеристики: груз имеет массу, масса — ускорения. Освободившийся

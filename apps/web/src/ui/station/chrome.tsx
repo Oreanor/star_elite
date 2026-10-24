@@ -292,6 +292,7 @@ export function Modal({
   wide,
   medium,
   fit,
+  width,
   z = 50,
 }: {
   onClose: () => void
@@ -301,6 +302,11 @@ export function Modal({
   medium?: boolean
   /** По содержимому: окно ровно такой ширины, чтобы таблицы влезли без переносов (до края экрана). */
   fit?: boolean
+  /**
+   * Постоянная ширина (CSS, до края экрана): окно не дышит от содержимого. Окно слота с
+   * таблицами «пополам» по содержимому раздувалось и меняло ширину, пуст отсек или нет.
+   */
+  width?: string
   z?: number
 }) {
   return (
@@ -310,9 +316,9 @@ export function Modal({
       onClick={onClose}
     >
       <div
-        className={`rounded-2xl border p-6 backdrop-blur-md ${fit ? 'max-h-[85vh] w-max max-w-[95vw] overflow-y-auto' : `w-full ${wide ? 'max-h-[85vh] max-w-6xl overflow-y-auto' : medium ? 'max-w-lg' : 'max-w-sm'}`}`}
+        className={`rounded-2xl border p-6 backdrop-blur-md ${width ? 'max-h-[85vh] w-full overflow-y-auto' : fit ? 'max-h-[85vh] w-max max-w-[95vw] overflow-y-auto' : `w-full ${wide ? 'max-h-[85vh] max-w-6xl overflow-y-auto' : medium ? 'max-w-lg' : 'max-w-sm'}`}`}
         onClick={(e) => e.stopPropagation()}
-        style={GLASS_PANEL}
+        style={width ? { ...GLASS_PANEL, maxWidth: `min(${width}, 95vw)` } : GLASS_PANEL}
       >
         {children}
       </div>

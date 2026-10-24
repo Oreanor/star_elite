@@ -5,7 +5,6 @@ import {
   copilotRepairQuote,
   hullPurchase,
   hullStatUpgradeCost,
-  hullStatPreview,
   hullDamage,
   HULL_STATS,
   repair,
@@ -18,8 +17,8 @@ import {
 } from '@elite/sim'
 import { t, useLang, type Key } from '../i18n'
 import { UI } from '../theme'
-import { ACCENT, Button, DIM, Modal, ModalActions, ModalKicker, ModalTitle } from '../station/chrome'
-import { formatStat, statLabel, statNumber } from '../station/format'
+import { ACCENT, Button, DIM, Modal, ModalActions, ModalKicker } from '../station/chrome'
+import { formatStat, statLabel } from '../station/format'
 import { chassisName } from '../i18n/dataNames'
 import { Money } from '../station/Money'
 import { cargoBudgetText } from './ShipSlots'
@@ -76,53 +75,52 @@ export function HullModal({
     }
   }
 
+  // Цвет прочности: цел — тусклым, как строка характеристики у оборудования; побит, на грани — цветом.
+  const share = hullMax > 0 ? hullCur / hullMax : 1
+  const hullColor = share >= 1 ? DIM : share > 0.4 ? UI.WARN : UI.DANGER
+  const canRepair = world.docked
+    ? dmg > 0 && quote.chance > 0 && world.credits >= quote.price
+    : copilotQuote !== null && dmg > 0 && world.credits >= copilotQuote.price
+  const repairPrice = world.docked ? quote.price : copilotQuote?.price ?? 0
+
   return (
     <Modal onClose={onClose}>
-      <ModalTitle>{chassisName(player.loadout.chassis.name)}</ModalTitle>
-
-      <p className="text-sm" style={{ color: DIM }}>
-        {dmg <= 0
-          ? t('station.service.hullOk', { cur: hullCur, max: hullMax })
-          : t('station.service.hullDmg', { cur: hullCur, max: hullMax, cost: quote.price })}
+      {/* Как окна оборудования (`SlotModal`): вид словом, имя, строка характеристики, за линией —
+          ряд кнопок с теми же подписями. Неактивная кнопка серая — без пояснений. */}
+      <ModalKicker>{statLabel('hull')}</ModalKicker>
+      <p className="text-base tracking-label">{chassisName(player.loadout.chassis.name)}</p>
+      <p className="text-sm tabular-nums" style={{ color: hullColor }}>
+        {t('station.service.strength')} {hullCur} / {hullMax}
       </p>
-      <div className="mt-3">
-        {world.docked ? (
-          <Button small variant="primary" disabled={dmg <= 0 || quote.chance <= 0 || world.credits < quote.price} onClick={doRepair}>
-            {dmg <= 0 ? t('station.service.hullWhole') : t('station.service.repair')}
-          </Button>
-        ) : copilotQuote ? (
-          // В полёте корпус латает ВТОРОЙ ПИЛОТ — за детали, без броска мастера.
-          <Button small variant="primary" disabled={world.credits < copilotQuote.price} onClick={doCopilotRepair}>
-            {t('station.service.repair')} · <Money amount={copilotQuote.price} />
-          </Button>
-        ) : null}
-      </div>
 
-      <div className="mt-5 space-y-1">
-        {HULL_STATS.map((stat) => {
-          const error = canUpgradeHullStat(world, player, stat)
-          const done = error === 'already'
-          const active = error === null
-          // Что улучшится — числом: «ОТСЕК 22 → 27 т», а не «укрепить ось». Усилено — итог с галкой.
-          const { from, to } = hullStatPreview(player, stat)
-          return (
-            <button
-              key={stat}
-              type="button"
-              disabled={!active}
-              onClick={() => doUpgrade(stat)}
-              className={`flex w-full items-center justify-between border px-4 py-2 text-sm tracking-label transition-colors ${
-                active ? 'cursor-pointer ui-btn' : 'cursor-not-allowed opacity-40'
-              }`}
-              style={{ borderColor: done ? DIM : ACCENT, color: done ? DIM : ACCENT }}
-            >
-              <span>
-                {statLabel(stat)}: {done ? `${formatStat(stat, from)} ✓` : `${statNumber(stat, from)} → ${formatStat(stat, to)}`}
-              </span>
-              <span>{done ? null : <Money amount={cost} />}</span>
-            </button>
-          )
-        })}
+      <div className="mt-4 flex flex-wrap gap-2 border-t pt-4" style={{ borderColor: DIM }}>
+        {(world.docked || copilotQuote) && (
+          // В полёте корпус латает ВТОРОЙ ПИЛОТ — за детали, без броска мастера.
+          <Button small variant="primary" disabled={!canRepair} onClick={world.docked ? doRepair : doCopilotRepair}>
+            {t('station.repairModule')}
+            {dmg > 0 && (
+              <>
+                {' · '}
+                <Money amount={repairPrice} />
+              </>
+            )}
+          </Button>
+        )}
+        {world.docked &&
+          HULL_STATS.map((stat) => {
+            const error = canUpgradeHullStat(world, player, stat)
+            return (
+              <Button key={stat} small variant="primary" disabled={error !== null} onClick={() => doUpgrade(stat)}>
+                {t('station.upgrade')}
+                {error !== 'already' && (
+                  <>
+                    {' · '}
+                    <Money amount={cost} />
+                  </>
+                )}
+              </Button>
+            )
+          })}
       </div>
 
       {note && (

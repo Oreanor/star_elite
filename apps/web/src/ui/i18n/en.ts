@@ -204,7 +204,7 @@ export const EN: Record<keyof typeof RU, string> = {
   'unit.kmps': 'km/s',
   'unit.ly': 'ly',
   'unit.t': 't',
-  'unit.rads': 'rad/s²',
+  'unit.degs': '°/s²',
   'unit.kn': 'kN',
   'unit.knm': 'kN·m',
   'unit.units': 'u.',
@@ -253,9 +253,9 @@ export const EN: Record<keyof typeof RU, string> = {
   'station.col.name': 'NAME',
   'station.col.price': 'PRICE',
   'station.col.mass': 'MASS',
-  'station.col.unit': 'UNIT',
   'station.col.stock': 'STOCK',
   'station.col.market': 'MARKET',
+  'station.col.param': 'STAT',
   'station.col.profit': 'PROFIT',
 
   'station.market.title': 'GOODS',
@@ -271,6 +271,7 @@ export const EN: Record<keyof typeof RU, string> = {
   'station.trade.fined': 'TRADE RESTRICTED UNTIL FINE {amount} IS PAID',
   'station.fine.title': 'FINE',
   'station.fine.issued': 'You have been fined {amount} for trading contraband. Trade is restricted until it is paid.',
+  'station.contraband': 'Restricted by law: carrying is allowed, buying or selling is fined',
   'station.trade.line': '{mass} × {price}',
 
   'station.hold.title': 'CARGO',
@@ -293,11 +294,7 @@ export const EN: Record<keyof typeof RU, string> = {
   'station.fitted': 'FITTED',
   'station.noHardpoint': 'NO MOUNT',
   'station.wrongSlot': 'WRONG SLOT',
-
-  'station.service.hullOk': 'Hull {cur} / {max} · no damage',
-  'station.service.hullDmg': 'Hull {cur} / {max} · repair {cost} cr',
-  'station.service.repair': 'REPAIR HULL',
-  'station.service.hullWhole': 'HULL INTACT',
+  'station.service.strength': 'HULL',
 
   'station.byCopy': 'with a copy',
 

@@ -3,6 +3,7 @@ import { refreshSpec } from '../world/factory'
 import { veteranWorld } from '../../testkit'
 import { AURORA_ONE, HERMES } from '../../config/chassis'
 import {
+  findModule,
   BOMB_UNIT,
   CARGO_LARGE,
   CLOAK_FIELD,
@@ -18,8 +19,9 @@ import { addCommodity, addItem } from '../cargo/hold'
 import { COMMODITIES } from '../cargo/items'
 import { createLoadout, hasBomb, hasEcm, type Loadout } from '../loadout'
 import { STARTER_SYSTEM } from '../world'
-import { canBuy, fitDeltas, fitFromHold, stationStock } from './shop'
-import { withUpgrade } from './moduleState'
+import { canBuy, fitDeltas, fitFromHold, priceOf, stationStock } from './shop'
+import { isUpgradable, upgradeCashCost, upgradeSteps } from './upgrade'
+import { upgradeLevel, withUpgrade } from './moduleState'
 
 /**
  * Перестановка железа из трюма. Проверяем СВОЙСТВА: установка меняет корабль,
@@ -218,3 +220,27 @@ describe('сравнение «было → станет» с усиленной
     expect(hull).toBeUndefined()
   })
 })
+
+describe('прокачанное железо на витрине', () => {
+  it('часть товаров продаётся с ступенями — дороже стока ровно на вложенные ступени', () => {
+    // Витрины нескольких систем: в каждой своя, а у всех игроков одной системы — одна.
+    const world = veteranWorld()
+    let upgraded = 0
+    for (let index = 1; index <= 12; index++) {
+      world.systemIndex = index
+      const stock = stationStock(world)
+      const again = stationStock(world)
+      stock.forEach((m, i) => {
+        expect(upgradeLevel(again[i]!)).toBe(upgradeLevel(m)) // детерминизм
+        const steps = upgradeSteps(m)
+        if (steps === 0) return
+        upgraded++
+        expect(isUpgradable(m)).toBe(true)
+        const base = findModule(m.id)!
+        expect(priceOf(m)).toBe(priceOf(base) + steps * upgradeCashCost(m))
+      })
+    }
+    expect(upgraded).toBeGreaterThan(0)
+  })
+})
+

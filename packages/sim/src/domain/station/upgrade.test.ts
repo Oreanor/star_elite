@@ -6,6 +6,7 @@ import { addItem } from '../cargo/hold'
 import { isMissile, isShield, type LaserModule, type MissileModule, type ShieldModule } from '../loadout'
 import { createWorld } from '../world'
 import { canUpgrade, upgradeCashCost, upgradeModule } from './upgrade'
+import { SHOP } from '../../config/station'
 import { upgradeLevel } from './moduleState'
 
 /**
@@ -21,7 +22,7 @@ function playerShield(world: ReturnType<typeof createWorld>): ShieldModule {
 }
 
 describe('прокачка модуля', () => {
-  it('копия из трюма усиливает щит на +50% и сама расходуется', () => {
+  it('копия из трюма даёт две ступени разом и сама расходуется', () => {
     const world = createWorld()
     const before = world.player.spec.hull.shield
     const copy = findModule(playerShield(world).id)
@@ -31,23 +32,26 @@ describe('прокачка модуля', () => {
 
     expect(upgradeModule(world, world.player, playerShield(world), true)).toBeNull()
 
-    // Защита выросла примерно в полтора раза — считается через spec, не назначается.
-    expect(world.player.spec.hull.shield).toBe(Math.round(before * 1.5))
+    // Копия сильнее денег: две ступени сразу. Защита — через spec, не назначается.
+    const level = SHOP.UPGRADE_COPY_STEPS * SHOP.UPGRADE_STEP
+    expect(upgradeLevel(playerShield(world))).toBeCloseTo(level, 5)
+    expect(Math.abs(world.player.spec.hull.shield - before * (1 + level))).toBeLessThanOrEqual(1)
     // Копия ушла из трюма: ею и заплатили.
     expect(world.player.hold.items.length).toBe(holdBefore - 1)
-    expect(upgradeLevel(playerShield(world))).toBeCloseTo(0.5, 5)
   })
 
-  it('без копии качает слабее (+25%) и списывает кредиты', () => {
+  it('за деньги — одна ступень и списывается цена ступени', () => {
     const world = createWorld()
     world.credits = 1_000_000 // денежная дорога платная — на неё нужны кредиты
     const before = world.player.spec.hull.shield
     const money = world.credits
+    const cost = upgradeCashCost(playerShield(world))
 
     expect(upgradeModule(world, world.player, playerShield(world), false)).toBeNull()
 
-    expect(world.player.spec.hull.shield).toBe(Math.round(before * 1.25))
-    expect(world.credits).toBeLessThan(money)
+    expect(upgradeLevel(playerShield(world))).toBeCloseTo(SHOP.UPGRADE_STEP, 5)
+    expect(world.player.spec.hull.shield).toBeGreaterThan(before)
+    expect(world.credits).toBe(money - cost)
   })
 
   it('прокачка не трогает массу: усиливается заявленная ось, а не манёвренность тайком', () => {
@@ -62,21 +66,21 @@ describe('прокачка модуля', () => {
     expect(canUpgrade(world, world.player, playerShield(world), true)).toBe('no-copy')
   })
 
-  it('улучшать можно трижды: шаги складываются, дорожают, четвёртый отклонён', () => {
+  it('ступени до потолка: складываются от стока, цена ступени одна, лишняя отклонена', () => {
     const world = createWorld()
-    world.credits = 10_000_000
+    world.credits = 100_000_000
     const base = playerShield(world).capacity
-    const costs: number[] = []
-    for (let i = 0; i < 3; i++) {
-      costs.push(upgradeCashCost(playerShield(world)))
-      expect(upgradeModule(world, world.player, playerShield(world), false), `шаг ${i + 1}`).toBeNull()
+    const costs = new Set<number>()
+    for (let i = 0; i < SHOP.UPGRADE_MAX_STEPS; i++) {
+      costs.add(upgradeCashCost(playerShield(world)))
+      expect(upgradeModule(world, world.player, playerShield(world), false), `ступень ${i + 1}`).toBeNull()
     }
-    // Три денежных шага по +25% — от стока, а не процент от процента.
-    expect(playerShield(world).capacity).toBe(Math.round(base * 1.75))
-    // Каждый следующий шаг дороже предыдущего.
-    expect(costs[1]!).toBeGreaterThan(costs[0]!)
-    expect(costs[2]!).toBeGreaterThan(costs[1]!)
-    // Четвёртый раз — ни за деньги, ни копией.
+    // Ступени — от стока, а не процент от процента: на потолке ровно base × (1 + 20·5%).
+    const top = SHOP.UPGRADE_MAX_STEPS * SHOP.UPGRADE_STEP
+    expect(Math.abs(playerShield(world).capacity - base * (1 + top))).toBeLessThanOrEqual(1)
+    // Цена ступени не растёт: доля цены модуля.
+    expect(costs.size).toBe(1)
+    // Сверх потолка — ни за деньги, ни копией.
     expect(canUpgrade(world, world.player, playerShield(world), false)).toBe('maxed')
     expect(canUpgrade(world, world.player, playerShield(world), true)).toBe('maxed')
     expect(upgradeModule(world, world.player, playerShield(world), false)).toBe('maxed')
@@ -104,9 +108,13 @@ describe('прокачка модуля', () => {
     if (!missile) throw new Error('у заводского «Тесея» есть ракетные пилоны')
     const ammoBefore = missile.ammo
     const damageBefore = missile.damage
-    world.credits = 10_000_000
+    world.credits = 100_000_000
 
-    expect(upgradeModule(world, world.player, missile, false)).toBeNull()
+    // Заряды штучные: +5% от горстки ракет округляется, поэтому меряем после нескольких ступеней.
+    for (let i = 0; i < 6; i++) {
+      const cur = world.player.loadout.weapons.find((w): w is MissileModule => w != null && isMissile(w))!
+      expect(upgradeModule(world, world.player, cur, false)).toBeNull()
+    }
 
     const upgraded = world.player.loadout.weapons.find((w): w is MissileModule => w != null && isMissile(w))!
     expect(upgraded.ammo).toBeGreaterThan(ammoBefore) // заряда стало больше
@@ -142,18 +150,19 @@ describe('маневровые', () => {
     return laser
   }
 
-  it('горный лазер качается и в резку, и в добычу — каждый шаг что-то даёт', () => {
+  it('горный лазер качается в резку: урон растёт, КПД добычи не превышает целого камня', () => {
     // Прежде рос один КПД добычи (с потолком 1), а окно показывало урон: «5 → 5», и
-    // третий шаг не давал ничего вовсе.
+    // прокачка не давала ничего вовсе. Урон целый — растёт рывками через несколько ступеней.
     const world = createWorld()
-    world.credits = 10_000_000
+    world.credits = 100_000_000
     let laser = mountLaser(world, 'mining_1')
-    for (let i = 0; i < 3; i++) {
-      const before = laser.damage
-      expect(upgradeModule(world, world.player, laser, false), `шаг ${i + 1}`).toBeNull()
+    const before = laser.damage
+    for (let i = 0; i < SHOP.UPGRADE_MAX_STEPS; i++) {
+      expect(upgradeModule(world, world.player, laser, false), `ступень ${i + 1}`).toBeNull()
       laser = world.player.loadout.weapons.find((w) => w?.id === 'mining_1') as LaserModule
-      expect(laser.damage, `шаг ${i + 1}`).toBeGreaterThan(before)
     }
+    expect(laser.damage).toBeGreaterThan(before)
+    expect(Number.isInteger(laser.damage)).toBe(true)
     expect(laser.oreYield).toBe(1)
   })
 

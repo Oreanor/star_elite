@@ -10,7 +10,7 @@ import type { PatrolDef } from '../world/system'
 import { applyDamage } from './damage'
 import { addItem } from '../cargo/hold'
 import { COMMODITIES } from '../cargo/items'
-import { canScoopAt, jettisonItem, scoopBlock, scoopReadiness, spawnWreckage, tryScoop } from './salvage'
+import { canScoopAt, jettisonCommodity, jettisonItem, scoopBlock, scoopReadiness, spawnWreckage, tryScoop } from './salvage'
 
 /**
  * Мир без пояса, но с одним пиратом: астероиды тут только мешают, а обломок
@@ -406,6 +406,22 @@ describe('выброс из трюма', () => {
     // Со стоящего борта — тот же разлёт kick'ом, что у контейнера с обломка.
     expect(pod.vel.length()).toBeGreaterThan(1)
     expect(pod.spin.length()).toBeGreaterThan(0)
+  })
+
+  it('часть стопки — выбрасывается выставленное, остаток остаётся в трюме', () => {
+    // Окно сделки у причала: то, что нельзя продать (рабы — контрабанда), выбрасывают
+    // ползунком, как продают. Под штрафом торговля закрыта, а избавиться от груза можно.
+    const world = quiet()
+    const ship = world.player
+    addItem(ship.hold, { kind: 'commodity', commodity: COMMODITIES.SLAVES, units: 5, costBasis: 500 })
+    const pods = world.pods.length
+    expect(jettisonCommodity(world, ship, COMMODITIES.SLAVES, 2)).toBe(2)
+    const left = ship.hold.items.find((i) => i.kind === 'commodity' && i.commodity.id === COMMODITIES.SLAVES.id)
+    expect(left && left.kind === 'commodity' ? left.units : 0).toBe(3)
+    expect(left?.costBasis).toBe(300)
+    expect(world.pods).toHaveLength(pods + 1)
+    expect(jettisonCommodity(world, ship, COMMODITIES.SLAVES, 99)).toBe(3)
+    expect(ship.hold.items.some((i) => i.kind === 'commodity' && i.commodity.id === COMMODITIES.SLAVES.id)).toBe(false)
   })
 
   it('руда выплёвывается осколком, не ящиком', () => {

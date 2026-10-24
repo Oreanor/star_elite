@@ -134,6 +134,9 @@ let _blocked = false
  * увести аим вбок за его зазор. Модульная функция, а не замыкание: обход зовётся каждый кадр.
  */
 function avoidSphere(pos: Vector3, dist: number, center: Vector3, radius: number, shipRadius: number, out: Vector3): void {
+  // Мельче доли корпуса — не преграда: корпус через неё переступает (`tooSmallToBlock` в такте),
+  // и огибать невидимую точку незачем — автопилот вилял бы на пустом месте.
+  if (radius < shipRadius * MIELOPHONE.SOLID_MIN_SHARE) return
   _toBody.copy(center).sub(pos)
   const along = _toBody.dot(_dir)
   if (along <= 0 || along >= dist) return // препятствие позади борта или дальше цели

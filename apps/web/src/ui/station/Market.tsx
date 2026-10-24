@@ -16,6 +16,8 @@ import { trend, UI } from '../theme'
 import { t, useLang } from '../i18n'
 import { ACCENT, Button, Column, DIM, Modal, ModalActions, ModalTitle, Table } from './chrome'
 import { Hold } from './Hold'
+import { dumpUnits } from './jettison'
+import { ContrabandMark } from './ContrabandMark'
 import { Outfitter } from './Outfitter'
 import { formatStat } from './format'
 import { commodityName } from '../i18n/dataNames'
@@ -46,22 +48,12 @@ export function Market({ world, onChange }: { world: World; onChange: () => void
       cell: (c) => (
         <span>
           {commodityName(c)}
-          {c.contraband && (
-            <span className="ml-2 cursor-help" title="Торговля ограничена законом: перевозка разрешена, штрафуют за покупку или продажу" aria-label="Торговля ограничена законом: перевозка разрешена, штрафуют за покупку или продажу">
-              ⚠
-            </span>
-          )}
+          {c.contraband && <ContrabandMark />}
         </span>
       ),
     },
-    // Порядок: что, в чём меряется, почём, сколько есть, как цена против обычной.
-    {
-      key: 'mass',
-      header: t('station.col.unit'),
-      align: 'right',
-      sortValue: (c) => c.unitMass,
-      cell: (c) => <span style={{ color: DIM }}>{commodityMass(c)}</span>,
-    },
+    // Порядок: что, почём, сколько есть, как цена против обычной. Столбца «единица» нет: у
+    // всех товаров она тонна (у статуэтки — штука), и он стоял сплошными «1 т».
     {
       key: 'price',
       header: t('station.col.price'),
@@ -78,7 +70,7 @@ export function Market({ world, onChange }: { world: World; onChange: () => void
       header: t('station.col.stock'),
       align: 'right',
       sortValue: (c) => commodityStockAt(world, c),
-      cell: (c) => <span style={{ color: DIM }}>{commodityStockAt(world, c)}</span>,
+      cell: (c) => <span style={{ color: DIM }}>{stockText(c, commodityStockAt(world, c))}</span>,
     },
     {
       key: 'market',
@@ -167,6 +159,11 @@ export function Market({ world, onChange }: { world: World; onChange: () => void
 function tradeLimits(world: World, c: Commodity): { buyMax: number; held: number } {
   // Предел покупки — доменный (`buyLimit`): тот же, по которому `buyCommodity` отдаёт товар.
   return { buyMax: buyLimit(world, world.player, c), held: commodityHeld(world.player, c) }
+}
+
+/** Склад — сразу в тоннах («23 т»); товар без массы (статуэтки) — штуками. */
+function stockText(c: Commodity, units: number): string {
+  return c.unitMass > 0 ? formatStat('mass', units * c.unitMass) : String(units)
 }
 
 /** Масса единицы товара — всегда в тоннах: на вес в игре меряют только тоннами, не килограммами. */
@@ -263,7 +260,10 @@ function TradeModal({
 
   return (
     <Modal onClose={onClose}>
-      <ModalTitle>{commodity.contraband ? `${commodityName(commodity)} ⚠` : commodityName(commodity)}</ModalTitle>
+      <ModalTitle>
+        {commodityName(commodity)}
+        {commodity.contraband && <ContrabandMark />}
+      </ModalTitle>
 
       {/* Товар — в тоннах: «3 т × цена тонны». Единица любого товара — тонна, дробных тонн нет. */}
       <div className="mt-6 flex flex-col gap-2 text-center tabular-nums" style={{ color: ACCENT }}>
@@ -304,6 +304,22 @@ function TradeModal({
         <Button small variant="primary" disabled={disabled} onClick={act}>
           {t(selling ? 'station.trade.sell' : 'station.trade.buy')}
         </Button>
+        {/* Выбросить выставленное — рядом с «Продать». Под штрафом и для контрабанды тоже:
+            это не сделка, а избавление от груза, который иначе не сбыть (рабы). */}
+        {selling && (
+          <Button
+            small
+            disabled={value === 0}
+            onClick={() => {
+              if (dumpUnits(world, commodity, units) > 0) {
+                onChange()
+                onClose()
+              }
+            }}
+          >
+            {t('ship.jettison')}
+          </Button>
+        )}
         <Button small variant="secondary" onClick={onClose}>
           {t('ship.cancel')}
         </Button>

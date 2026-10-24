@@ -1,8 +1,7 @@
 import { SHOP } from '../../config/station'
 import { roundMoney } from '../../core/math'
-import { cargoMass, removeItem } from '../cargo/hold'
+import { removeItem } from '../cargo/hold'
 import {
-  deriveShipSpec,
   factoryHullUp,
   hullUpFor,
   isAux,
@@ -16,35 +15,44 @@ import { isCosmic } from '../combat/cosmic'
 
 /**
  * Прокачка: модуля (копией из трюма или деньгами) и собственных характеристик корпуса.
- * Модуль улучшают до `SHOP.UPGRADE_MAX_STEPS` раз, шаги складываются.
+ * Модуль качают ступенями по `SHOP.UPGRADE_STEP` до `SHOP.UPGRADE_MAX_STEPS`, шаги складываются.
  */
 
-/** Сколько раз модуль уже улучшали. Старые сейвы без счётчика: прокачан — значит один раз. */
+/**
+ * Сколько ступеней уже вложено — ВЫВОДИТСЯ из уровня, а не хранится рядом: два владельца одного
+ * факта расходились бы при любой смене ступени. Старые +75% (три шага по 25%) — это «+15».
+ */
 export function upgradeSteps(module: ShipModule): number {
-  return module.upgrades ?? (upgradeLevel(module) > 1e-6 ? 1 : 0)
+  return Math.round(upgradeLevel(module) / SHOP.UPGRADE_STEP)
 }
 
 export type UpgradeError = 'maxed' | 'no-copy' | 'no-money' | 'low-tech'
 
 /**
  * Индекс копии этого модуля в трюме — по тому же `id` (прокачка id не меняет).
- * Ею и качают на +50%: копия честнее денег, оттого и сильнее. null — копии нет.
+ * Ею качают на две ступени разом: копия честнее денег, оттого и сильнее. null — копии нет.
  */
 export function upgradeCopyIndex(ship: ShipEntity, module: ShipModule): number | null {
   const i = ship.hold.items.findIndex((it) => it.kind === 'module' && it.module.id === module.id)
   return i >= 0 ? i : null
 }
 
-/**
- * Цена СЛЕДУЮЩЕГО денежного шага прокачки: каждый следующий дороже предыдущего (×1, ×2, ×3
- * доли цены модуля) — последний процент силы стоит дороже первого. С копией денег не берут.
- */
+/** Цена денежной ступени — доля цены модуля, одна и та же на любой ступени. С копией денег не берут. */
 export function upgradeCashCost(module: ShipModule): number {
-  const base = Math.max(module.cost, SHOP.UPGRADE_MIN_BASE) * SHOP.UPGRADE_CASH_FRACTION
-  // Сумма по-человечески («10 000», а не «10 133»), как у наград за дела.
-  return roundMoney(base * (upgradeSteps(module) + 1))
+  // Сумма по-человечески («1 500», а не «1 517»), как у наград за дела.
+  return roundMoney(Math.max(module.cost, SHOP.UPGRADE_MIN_BASE) * SHOP.UPGRADE_CASH_FRACTION)
 }
 
+
+/**
+ * Качается ли модуль вообще. Аукс-устройства — нет: каждое работает по-своему, «+5% к ECM»
+ * бессмыслен. Космические лучи — нет: бьют миры, а не корабли, урона у них нет («0 → 0»).
+ * Одно правило для верфи и для витрины (прокачанные экземпляры в продаже).
+ */
+export function isUpgradable(module: ShipModule): boolean {
+  if (isAux(module)) return false
+  return !(module.kind === 'laser' && isCosmic(module.effect))
+}
 
 /** Проверка БЕЗ побочных эффектов: ею UI гасит кнопку, ею же `upgradeModule` решает. */
 export function canUpgrade(
@@ -53,11 +61,8 @@ export function canUpgrade(
   module: ShipModule,
   useCopy: boolean,
 ): UpgradeError | null {
-  // Аукс-устройства не прокачиваются: каждое работает по-своему, «+25% к ECM» бессмыслен.
-  // Гасим как «предельный» — отдельного кода в UI заводить незачем.
-  if (isAux(module)) return 'maxed'
-  // Космические лучи бьют миры, а не корабли: урона у них нет, «0 → 0» качать нечего.
-  if (module.kind === 'laser' && isCosmic(module.effect)) return 'maxed'
+  // Не качается вовсе — гасим как «предельный»: отдельного кода в UI заводить незачем.
+  if (!isUpgradable(module)) return 'maxed'
   // Не больше UPGRADE_MAX_STEPS шагов на экземпляр.
   if (upgradeSteps(module) >= SHOP.UPGRADE_MAX_STEPS) return 'maxed'
   // Мир не тянет этот класс — прокачать его здесь негде (тот же потолок, что и у витрины).
@@ -67,17 +72,18 @@ export function canUpgrade(
 }
 
 /**
- * Значение главной характеристики ПОСЛЕ прокачки (копией +50% / деньгами +25%) — для
+ * Значение главной характеристики ПОСЛЕ прокачки (копией +10% / деньгами +5%) — для
  * предпросмотра «было → станет» в верфи. Считает ровно тем путём, что и сама прокачка,
  * поэтому число в окне не разойдётся с делом.
  */
 export function upgradedStatValue(module: ShipModule, useCopy: boolean): number {
-  return moduleStat(withUpgrade(module, nextLevel(module, useCopy))).value
+  return moduleStat(withUpgrade(module, nextUpgradeLevel(module, useCopy))).value
 }
 
-/** Уровень после следующего шага: шаги СКЛАДЫВАЮТСЯ (+25% деньгами, +50% копией). */
-function nextLevel(module: ShipModule, useCopy: boolean): number {
-  return upgradeLevel(module) + (useCopy ? SHOP.UPGRADE_COPY_STEP : SHOP.UPGRADE_CASH_STEP)
+/** Уровень после следующего шага: ступени СКЛАДЫВАЮТСЯ (деньгами одна, копией две), до потолка. */
+export function nextUpgradeLevel(module: ShipModule, useCopy: boolean): number {
+  const gain = useCopy ? SHOP.UPGRADE_COPY_STEPS : 1
+  return Math.min(SHOP.UPGRADE_MAX_STEPS, upgradeSteps(module) + gain) * SHOP.UPGRADE_STEP
 }
 
 /**
@@ -99,8 +105,7 @@ export function upgradeModule(
 
   // Цена шага — ДО прокачки: она растёт с числом уже сделанных шагов.
   const cashCost = upgradeCashCost(module)
-  const upgraded = withUpgrade(module, nextLevel(module, useCopy))
-  upgraded.upgrades = upgradeSteps(module) + 1
+  const upgraded = withUpgrade(module, nextUpgradeLevel(module, useCopy))
   const maxHullBefore = ship.spec.hull.hull
 
   const wi = ship.loadout.weapons.findIndex((w) => w === module)
@@ -149,21 +154,6 @@ export type HullUpgradeError = 'no-money' | 'already'
 /** Цена прокачки одной оси рамы — доля цены корпуса. Одна на все оси: рама одна. */
 export function hullStatUpgradeCost(ship: ShipEntity): number {
   return Math.ceil(SHOP.HULL_STAT_COST_FRACTION * ship.loadout.chassis.cost)
-}
-
-/**
- * Что даст усиление оси: значение сейчас и после, в единицах характеристики (HP, т, ед.).
- * Считается тем же `deriveShipSpec`, что и сам корабль, — кнопка не обещает чужих чисел.
- */
-export function hullStatPreview(ship: ShipEntity, stat: HullStat): { from: number; to: number } {
-  const pick = (spec: ReturnType<typeof deriveShipSpec>) =>
-    stat === 'hull' ? spec.hull.hull : stat === 'cargo' ? spec.cargoCapacity : spec.power.auxCapacity
-  const mass = cargoMass(ship.hold)
-  const id = ship.loadout.chassis.id
-  const current = hullUpFor(ship.hullUp, id)
-  const from = pick(deriveShipSpec(ship.loadout, mass, current))
-  const to = pick(deriveShipSpec(ship.loadout, mass, { ...current, chassis: id, [stat]: true }))
-  return { from, to }
 }
 
 /** Проверка без побочных эффектов: уже усилена — 'already', не хватает денег — 'no-money'. */

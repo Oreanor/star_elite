@@ -41,6 +41,7 @@ export {
   clearTractorMarks,
   expirePods,
   jettisonCargo,
+  jettisonCommodity,
   jettisonItem,
   jettisonWeapons,
   spawnOrePod,

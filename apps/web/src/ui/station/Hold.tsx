@@ -1,14 +1,11 @@
 import { useState } from 'react'
 import {
-  COMMODITIES,
   cargoMass,
   itemMass,
   itemName,
   itemSellValue,
-  jettisonItem,
   moduleFault,
   moduleStat,
-  placeFigurineFromHold,
   sellItem,
   type CargoItem,
   type Commodity,
@@ -16,13 +13,14 @@ import {
 } from '@elite/sim'
 import { trend, UI } from '../theme'
 import { t, useLang } from '../i18n'
-import { pushWarning } from '../../session/warnings'
 import { Button, Column, DIM, Modal, ModalActions, Panel, Table } from './chrome'
 import { formatStat, statLabel } from './format'
 import { displayName } from './Equipment'
 import { itemDisplayName } from '../i18n/dataNames'
 import { Money } from './Money'
 import { ItemSheet, StatLine } from './ItemSheet'
+import { dumpAll, dumpItem } from './jettison'
+import { ContrabandMark } from './ContrabandMark'
 
 /**
  * Груз — ОДИН компонент и в магазине станции, и на вкладке груза корабля.
@@ -30,47 +28,9 @@ import { ItemSheet, StatLine } from './ItemSheet'
  * статуэтка — исполин в 3–5 км по носу (пересечение режем, тесный зазор — жёлтый пуш).
  *
  * Клик по строке открывает карточку предмета: что это, вес, цена продажи здесь,
- * выгода и — у снятого железа — степень поломки. Сделка/выброс — в карточке,
- * чтобы строка не была тесной от кнопок.
+ * выгода и — у снятого железа — степень поломки; у причала товар — окно продажи.
+ * Выброс — в тех же окнах, рядом с «Продать»: то, что не продать (контрабанда), иначе не сбыть.
  */
-
-function isFigurine(item: CargoItem): boolean {
-  return item.kind === 'commodity' && item.commodity.id === COMMODITIES.FIGURINE.id
-}
-
-/** Одна статуэтка по носу; `no-room` → жёлтый пуш. Пересечение — молча. */
-function dumpFigurine(world: World, index: number): boolean {
-  const result = placeFigurineFromHold(world, world.player, index)
-  if (result === 'no-room') pushWarning('noRoom', world.time)
-  return result === 'ok'
-}
-
-/**
- * Весь трюм за борт. Статуэтки — по одной по носу (пока место есть);
- * остальное — контейнерами. При отказе выкладки статуэтки стопка остаётся, идём дальше.
- */
-function dumpAllInFlight(world: World): boolean {
-  let changed = false
-  let i = 0
-  while (i < world.player.hold.items.length) {
-    const item = world.player.hold.items[i]!
-    if (isFigurine(item)) {
-      // Одна единица за проход; при ok индекс может остаться тем же (стопка).
-      if (dumpFigurine(world, i)) {
-        changed = true
-        continue
-      }
-      i++
-      continue
-    }
-    if (jettisonItem(world, world.player, i)) {
-      changed = true
-      continue
-    }
-    i++
-  }
-  return changed
-}
 
 export function Hold({
   world,
@@ -108,7 +68,12 @@ export function Hold({
       sortValue: (item) => (item.kind === 'module' ? displayName(item.module) : itemDisplayName(item)),
       cell: (item) => {
         const name = item.kind === 'module' ? displayName(item.module) : itemDisplayName(item)
-        return <span className="block truncate" title={name}>{name}</span>
+        return (
+          <span className="block truncate" title={name}>
+            {name}
+            {item.kind === 'commodity' && item.commodity.contraband && <ContrabandMark />}
+          </span>
+        )
       },
     },
     {
@@ -159,7 +124,7 @@ export function Hold({
         {hold.items.length > 0 && (
           <Button
             onClick={() => {
-              if (dumpAllInFlight(world)) onChange()
+              if (dumpAll(world)) onChange()
             }}
           >
             {t('ship.jettisonAll')}
@@ -213,7 +178,10 @@ function ItemModal({
             {formatStat(moduleStat(item.module).key, moduleStat(item.module).value)}
           </StatLine>
         )}
-        <StatLine label={statLabel('mass')}>{formatStat('mass', itemMass(item), 1)}</StatLine>
+        {/* У аукс-устройств (РЭБ, бомба, заборник) главная строка — уже масса: не повторяем. */}
+        {(item.kind !== 'module' || moduleStat(item.module).key !== 'mass') && (
+          <StatLine label={statLabel('mass')}>{formatStat('mass', itemMass(item))}</StatLine>
+        )}
         <StatLine label={t('station.col.price')}>
           <span className="inline-flex items-baseline gap-3">
             <Money amount={value} />
@@ -227,7 +195,7 @@ function ItemModal({
       </ItemSheet>
 
       <ModalActions>
-        {atStation ? (
+        {atStation && (
           <Button
             small
             variant="primary"
@@ -240,27 +208,18 @@ function ItemModal({
           >
             {t('station.sell')}
           </Button>
-        ) : (
-          <Button
-            small
-            variant="primary"
-            onClick={() => {
-              const index = world.player.hold.items.indexOf(item)
-              if (index < 0) {
-                onClose()
-                return
-              }
-              if (isFigurine(item)) {
-                if (dumpFigurine(world, index)) onChange()
-              } else if (jettisonItem(world, world.player, index)) {
-                onChange()
-              }
-              onClose()
-            }}
-          >
-            {t('ship.jettison')}
-          </Button>
         )}
+        {/* Выбросить — и у причала рядом с «Продать»: что не продать, то не застрянет в трюме. */}
+        <Button
+          small
+          variant={atStation ? 'secondary' : 'primary'}
+          onClick={() => {
+            if (dumpItem(world, item)) onChange()
+            onClose()
+          }}
+        >
+          {t('ship.jettison')}
+        </Button>
         <Button small variant="secondary" onClick={onClose}>
           {t('ship.close')}
         </Button>

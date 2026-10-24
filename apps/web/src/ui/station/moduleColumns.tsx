@@ -20,10 +20,49 @@ export function moduleColumns(
 ): Column<ShipModule>[] {
   const compareOf = (m: ShipModule) => headlineCompare(world, m, opts.hardpointIndex)
   // Шапка сравнения — САМА характеристика («ЩИТ», «УРОН»). У смешанного списка (доп.
-  // оборудование: ECM, бомба, маскировка) одной на всех нет — тогда она в каждой ячейке.
+  // оборудование, весь магазин) одной на всех нет — тогда она в каждой ячейке, а шапка —
+  // «ПАРАМЕТР»: пустой заголовок читался как колонка ни о чём.
   const keys = new Set((opts.rows ?? []).map((m) => compareOf(m)?.key ?? moduleStat(m).key))
   const mixed = keys.size !== 1
-  const compareHeader = mixed ? '' : statLabel([...keys][0]!)
+  const compareHeader = mixed ? t('station.col.param') : statLabel([...keys][0]!)
+  // Только характеристика этого железа и стрелка: зелёная — лучше стоящего, красная — хуже.
+  // «156 → 135» в колонке не пишем: это и был горизонтальный скролл.
+  const compare: Column<ShipModule> = {
+    key: 'compare',
+    width: '11rem',
+    header: compareHeader,
+    align: 'right',
+    sortValue: (m) => compareOf(m)?.to ?? moduleStat(m).value,
+    cell: (m) => {
+      const cmp = compareOf(m)
+      if (!cmp) {
+        const own = moduleStat(m)
+        return (
+          <span className="inline-flex w-full items-baseline justify-end gap-1 whitespace-nowrap" style={{ color: DIM }}>
+            <span>
+              {mixed && `${statLabel(own.key)} `}
+              {formatStat(own.key, own.value)}
+            </span>
+            <span className="inline-block w-[1em] shrink-0" />
+          </span>
+        )
+      }
+      const tone = trend(cmp.better)
+      const changed = cmp.to !== cmp.from
+      return (
+        <span className="inline-flex w-full items-baseline justify-end gap-1 whitespace-nowrap">
+          <span style={{ color: DIM }}>
+            {mixed && `${statLabel(cmp.key)} `}
+            {formatStat(cmp.key, cmp.to)}
+          </span>
+          {/* Слот стрелки одной ширины на всех строках: цифры прижаты вправо, стрелки — столбиком. */}
+          <span className="inline-block w-[1em] shrink-0 text-center" style={{ color: changed ? tone.color : 'transparent' }}>
+            {changed ? tone.mark : '▲'}
+          </span>
+        </span>
+      )
+    },
+  }
   const columns: Column<ShipModule>[] = [
     // Имя забирает остаток и обрезается: полное «было → станет» раздувало таблицу вбок.
     {
@@ -35,51 +74,13 @@ export function moduleColumns(
       },
       sortValue: (m) => displayName(m),
     },
-    // Только характеристика этого железа и стрелка: зелёная — лучше стоящего, красная — хуже.
-    // «156 → 135» в колонке не пишем: это и был горизонтальный скролл.
-    {
-      key: 'compare',
-      width: '11rem',
-      header: compareHeader,
-      align: 'right',
-      sortValue: (m) => compareOf(m)?.to ?? moduleStat(m).value,
-      cell: (m) => {
-        const cmp = compareOf(m)
-        if (!cmp) {
-          const own = moduleStat(m)
-          return (
-            <span className="inline-flex w-full items-baseline justify-end gap-1 whitespace-nowrap" style={{ color: DIM }}>
-              <span>
-                {mixed && `${statLabel(own.key)} `}
-                {formatStat(own.key, own.value)}
-              </span>
-              <span className="inline-block w-[1em] shrink-0" />
-            </span>
-          )
-        }
-        const tone = trend(cmp.better)
-        const changed = cmp.to !== cmp.from
-        return (
-          <span className="inline-flex w-full items-baseline justify-end gap-1 whitespace-nowrap">
-            <span style={{ color: DIM }}>
-              {mixed && `${statLabel(cmp.key)} `}
-              {formatStat(cmp.key, cmp.to)}
-            </span>
-            {/* Слот стрелки одной ширины на всех строках: цифры прижаты вправо, стрелки — столбиком. */}
-            <span className="inline-block w-[1em] shrink-0 text-center" style={{ color: changed ? tone.color : 'transparent' }}>
-              {changed ? tone.mark : '▲'}
-            </span>
-          </span>
-        )
-      },
-    },
     {
       key: 'mass',
       width: '4.5rem',
       header: t('station.col.mass'),
       align: 'right',
       sortValue: (m) => m.mass,
-      cell: (m) => <span className="whitespace-nowrap" style={{ color: DIM }}>{formatStat('mass', m.mass, 1)}</span>,
+      cell: (m) => <span className="whitespace-nowrap" style={{ color: DIM }}>{formatStat('mass', m.mass)}</span>,
     },
   ]
   if (opts.price) {
@@ -93,5 +94,7 @@ export function moduleColumns(
       cell: opts.price,
     })
   }
+  // Параметр — последним, как «рынок» у товаров: сперва что, сколько весит и почём.
+  columns.push(compare)
   return columns
 }
