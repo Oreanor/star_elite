@@ -60,8 +60,6 @@ export const FIGURINE_TITLES = [
 
 
 
-export type FigurineTitleId = (typeof FIGURINE_TITLES)[number]['id']
-
 
 
 export const FIGURINE = {

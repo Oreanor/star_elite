@@ -7,7 +7,6 @@ export {
   createHold,
   freeCapacity,
   removeItem,
-  setCapacity,
   takeCommodity,
   usedCapacityOf,
   type CargoHold,

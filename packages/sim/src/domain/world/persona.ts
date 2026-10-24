@@ -202,7 +202,6 @@ function makeSpecies(rng: Rng): string {
  * входят — они выбираются, но очков не стоят.
  */
 export const BUYABLE_TRAITS = ['intellect', 'charisma', 'willpower', 'agility', 'accuracy'] as const
-export type BuyableTrait = (typeof BUYABLE_TRAITS)[number]
 
 /** Сколько очков стоит персона сверх базы, с учётом коэффициентов трат. */
 export function personaPointsSpent(p: Persona): number {

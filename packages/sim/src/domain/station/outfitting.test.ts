@@ -16,9 +16,9 @@ import {
 } from '../../config/modules'
 import { addCommodity, addItem } from '../cargo/hold'
 import { COMMODITIES } from '../cargo/items'
-import { canInstallInternal, createLoadout, hasBomb, hasEcm } from '../loadout'
+import { createLoadout, hasBomb, hasEcm, type Loadout } from '../loadout'
 import { STARTER_SYSTEM } from '../world'
-import { fitDeltas, fitFromHold, stationStock } from './shop'
+import { canBuy, fitDeltas, fitFromHold, stationStock } from './shop'
 import { withUpgrade } from './moduleState'
 
 /**
@@ -93,33 +93,44 @@ describe('перестановка железа из трюма', () => {
  * какой бы слот под него ни был. Груз — бесклассовый и лезет всегда. «Ника»
  * класса 2 — на ней это и проверяем: дорогие рамы класс 3 уже принимают.
  */
+/** Борт с этой сборкой и деньгами на что угодно — проверяем правило верфи (`canBuy`). */
+function shipWith(loadout: Loadout) {
+  const world = veteranWorld()
+  world.credits = 1e9
+  world.player.loadout = loadout
+  refreshSpec(world.player)
+  return world
+}
+
 describe('класс корпуса ограничивает железо', () => {
   it('модуль класса выше корпуса — отказ, свой класс и ниже — встаёт', () => {
-    const bare = createLoadout(AURORA_ONE, [], [])
+    const world = shipWith(createLoadout(AURORA_ONE, [], []))
     // SHIELD_STANDARD класса 2 — ровно по корпусу, слот щита есть.
-    expect(canInstallInternal(bare, SHIELD_STANDARD)).toBeNull()
+    expect(canBuy(world, world.player, SHIELD_STANDARD)).toBeNull()
     // SHIELD_HEAVY класса 3 — выше «Ники», не по корпусу.
-    expect(canInstallInternal(bare, SHIELD_HEAVY)).toBe('class-too-large')
+    expect(canBuy(world, world.player, SHIELD_HEAVY)).toBe('class-too-large')
   })
 
   it('груз бесклассовый — крупный контейнер лезет и в корпус низкого класса', () => {
-    const bare = createLoadout(HERMES, [], [])
+    const world = shipWith(createLoadout(HERMES, [], []))
     // CARGO_LARGE вместимости 50 т — «класс 1», значит любой корпус его тянет.
-    expect(canInstallInternal(bare, CARGO_LARGE)).toBeNull()
+    expect(canBuy(world, world.player, CARGO_LARGE)).toBeNull()
   })
 })
 
 /**
  * Аукс-слот делят РАЗНЫЕ виды (маскировка/ECM/бомба/…), и занятость считается по всей
- * КАТЕГОРИИ, а не по виду. Иначе примерка ошибётся: бомба «не заметит» клоак,
- * занявшую аукс-ячейку, и решит, что место есть. У любого корпуса — один аукс-слот.
+ * КАТЕГОРИИ, а не по виду. У любого корпуса — один аукс-слот: новое устройство встаёт
+ * ЗАМЕНОЙ занявшего его (верфь меняет, а не отказывает), второе рядом не появится.
  */
 describe('аукс-слот: занятость по категории', () => {
-  it('занятый аукс не пускает второе устройство той же категории', () => {
+  it('занятый аукс принимает другое устройство заменой, а не вторым рядом', () => {
     // Рама с аукс-слотом класса 3 — маскировка третьего класса (у стартовой «Ники» аукс 2-го).
-    const one = createLoadout(HERMES, [CLOAK_FIELD], [])
-    expect(canInstallInternal(one, ECM_UNIT)).toBe('no-free-slot')
-    expect(canInstallInternal(one, BOMB_UNIT)).toBe('no-free-slot')
+    const world = shipWith(createLoadout(HERMES, [CLOAK_FIELD], []))
+    expect(canBuy(world, world.player, ECM_UNIT)).toBeNull()
+    expect(canBuy(world, world.player, BOMB_UNIT)).toBeNull()
+    // Та же маскировка ещё раз — ничего не добавит: верфь её не продаст.
+    expect(canBuy(world, world.player, CLOAK_FIELD)).toBe('already-installed')
   })
 })
 

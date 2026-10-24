@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { createWorld, STARTER_SYSTEM } from '../world'
-import { cycleCelestial, targetableStationsOf } from '../world/queries'
+import { cycleCelestial } from '../world/queries'
 import { dispatcherBriefing, dispatcherPersona, dispatcherTraffic, stationInterlocutor } from './dispatcher'
 import { localSettlement } from './trade'
 import { lockContact, lockedShipId, lockedStationId } from '../world/queries'
@@ -12,7 +12,7 @@ function world() {
 describe('диспетчер станции', () => {
   it('персона детерминирована от станции и говорит расой округа', () => {
     const w = world()
-    const station = targetableStationsOf(w)[0]
+    const station = w.bodies.find((b) => b.kind === 'station')
     if (!station) throw new Error('в стартовой системе нет станции')
 
     const a = dispatcherPersona(w, station)
@@ -34,7 +34,7 @@ describe('диспетчер станции', () => {
 
   it('небесный круг берёт станцию на связь и гасит старый контакт', () => {
     const w = world()
-    const station = targetableStationsOf(w)[0]!
+    const station = w.bodies.find((b) => b.kind === 'station')!
 
     // Был захват борта — Shift+Tab на станцию обязан его сбросить (один фокус).
     lockContact(w, 'ship', 42)

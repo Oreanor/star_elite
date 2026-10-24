@@ -540,7 +540,4 @@ export function meanHeat(e: ShipEntity): number {
   return e.laserHeat.heat
 }
 
-/** Сколько ракет ещё на борту — в трюме, вместе со стойкой. Пуск смотрит `missileReady`. */
-export function missileAmmo(e: ShipEntity): number {
-  return missileStock(e)
-}
+

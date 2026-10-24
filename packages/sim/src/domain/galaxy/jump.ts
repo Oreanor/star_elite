@@ -85,11 +85,6 @@ export function jumpBlock(world: World, index: number): JumpBlock | null {
   return null
 }
 
-/** Системы, до которых достаёт привод. Их и подсвечивает карта. */
-export function reachableSystems(world: World, indices: readonly number[]): number[] {
-  return indices.filter((i) => jumpBlock(world, i) === null)
-}
-
 /**
  * В пределах модели привода (заряд / круиз / док не смотрим).
  * Метка jumpTarget живёт только пока цель в этой сфере — иначе отваливается.

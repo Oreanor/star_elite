@@ -105,6 +105,22 @@ export function nearestSystemIndex(
   return best
 }
 
+const _bary = new Vector3()
+
+/**
+ * Борт ещё среди собственных тел системы — в СИСТЕМНЫХ метрах: дальше самой дальней орбиты
+ * не более чем в `SYSTEM_EXTENT_MARGIN` раз. Пузырь в св.г. ужимается с ростом (световой год в
+ * метрах — L/scale), а орбиты собранной системы — нет: на ×500 пузырь у звезды с дальними
+ * лунами (2000+ св.с) проходил ВНУТРИ системы, и она выгружалась у пилота под носом — с радара
+ * пропадало всё, цель сбрасывалась, а полёт в «пустоте» на сжатии растягивался в межзвёздный.
+ */
+function insideOwnSystem(world: World): boolean {
+  galaxyAnchorLocal(world, _bary)
+  let extent = 0
+  for (const b of world.bodies) extent = Math.max(extent, b.pos.distanceTo(_bary) + b.radius)
+  return world.player.state.pos.distanceTo(_bary) < extent * GALAXY_FLIGHT.SYSTEM_EXTENT_MARGIN
+}
+
 function adoptCurrent(world: World, index: number): void {
   if (world.systemIndex === index) return
   world.systemIndex = index
@@ -277,7 +293,7 @@ export function stepGalaxyPresence(world: World, oldScale: number): void {
     && world.galaxyFrameIndex === world.systemIndex
   ) {
     const here = distanceLy(ly, placeSystem(world.systemIndex, world.galaxySeed))
-    if (here < GALAXY_FLIGHT.BUBBLE_LY) return
+    if (here < GALAXY_FLIGHT.BUBBLE_LY || insideOwnSystem(world)) return
   }
   let nearest = nearestSystemIndex(world, ly, newScale >= ghost)
   let dist = distanceLy(ly, placeSystem(nearest, world.galaxySeed))

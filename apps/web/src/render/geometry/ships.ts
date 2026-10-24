@@ -470,51 +470,14 @@ export function chassisGeometry(id: string): BufferGeometry {
   return placeholderGeometry() // GLB ещё грузится
 }
 
-/**
- * ЖИВАЯ ПРАВКА из редактора оснастки (клавиша K). Дев-инструмент пишет сюда, рендер читает —
- * и струи, меш и маркеры меняются в тот же кадр, без пересборки реестра. Подобранные числа
- * игрок переносит руками в конфиг; правка живёт до перезагрузки.
- */
-const nozzleOverrides = new Map<string, readonly Nozzle[]>()
-/** Множитель ВИЗУАЛЬНОГО размера корпуса поверх запечённого масштаба меша. Дефолт — 1. */
-const sizeOverrides = new Map<string, number>()
-
-export function setNozzleOverride(id: string, nozzles: readonly Nozzle[]): void {
-  nozzleOverrides.set(id, nozzles)
-}
-
-export function clearNozzleOverride(id: string): void {
-  nozzleOverrides.delete(id)
-}
-
-/** Живой множитель размера корпуса (редактор). Читают PlayerShip, факел и маркеры. */
-export function setSizeOverride(id: string, mul: number): void {
-  sizeOverrides.set(id, mul)
-}
-
-export function clearSizeOverride(id: string): void {
-  sizeOverrides.delete(id)
-}
-
-export function chassisSizeMul(id: string): number {
-  return sizeOverrides.get(id) ?? 1
-}
-
-/** Запечённый масштаб меша корпуса из реестра — редактору, чтобы напечатать новый `scale`. */
-export function chassisMeshScale(id: string): number {
-  return GLB_HULLS.find((h) => h.id === id)?.scale ?? GLB_SCALE
-}
-
-/** Срезы сопел корпуса по id шасси. Правка редактора важнее реестра; дальше GLB и процедуры. */
 /** Размер ракет на подвесах корпуса (множитель к игле), 1 — заводской. */
 export function chassisMissileScale(id: string): number {
   // Записанное редактором оснастки (`rig.json`) важнее строки корпуса здесь.
   return rigOf(id)?.missileScale ?? GLB_HULLS.find((d) => d.id === id)?.missileScale ?? 1
 }
 
+/** Срезы сопел корпуса по id шасси: записанное редактором (`rig.json`), дальше GLB и процедуры. */
 export function chassisNozzles(id: string): readonly Nozzle[] {
-  const override = nozzleOverrides.get(id)
-  if (override) return override
   // Сопла из редактора оснастки (`rig.json`) — важнее заводских и угаданных по габариту.
   const rigged = rigOf(id)?.nozzles
   if (rigged) return rigged

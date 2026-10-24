@@ -76,9 +76,7 @@ export function pickVariant(look: PlanetLook, seed: number): number {
 }
 
 /** Один выбор для поверхности, колец, портрета и прогрева текстур. */
-export function planetVariant(body: Pick<BodyEntity, 'id' | 'name' | 'surface'>): number {
-  // ВРЕМЕННО: у демонстрационного Сатурна в Люриларе золотистая полосатая карта gas/0.
-  if (body.surface === 'Газовый гигант' && body.name === 'Сатурн') return 0
+export function planetVariant(body: Pick<BodyEntity, 'id' | 'surface'>): number {
   return pickVariant(planetLook(body.surface), planetSeed(body.id))
 }
 

@@ -28,6 +28,5 @@ export {
   stepTasks,
   type MoveIntent,
   type Task,
-  type TaskKind,
 } from './tasks'
 export { createAIState, type AIMode, type AICommand, type AIState, type BehaviorId } from './types'

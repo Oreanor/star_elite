@@ -26,12 +26,6 @@ export function damp(value: number, rate: number, dt: number): number {
   return value * Math.exp(-rate * dt)
 }
 
-/** Приводит угол в (-π, π]. */
-export function wrapAngle(a: number): number {
-  const t = (a + Math.PI) % (Math.PI * 2)
-  return (t < 0 ? t + Math.PI * 2 : t) - Math.PI
-}
-
 /**
  * Ближайший к `center` представитель `value` по решётке с шагом `box`:
  * результат всегда лежит в [center − box/2, center + box/2].

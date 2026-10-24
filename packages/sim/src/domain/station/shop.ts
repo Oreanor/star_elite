@@ -376,7 +376,7 @@ export function fitDeltas(ship: ShipEntity, module: ShipModule, hardpointIndex?:
     const prev = loadout.internals.find((m) => m.kind === 'thrusters')
     const from = prev && prev.kind === 'thrusters' ? prev.torque[0] : 0
     const to = stock.torque[0]
-    return from === to ? [] : [{ key: 'torque', from, to, higherBetter: true }]
+    return from === to ? [] : [{ key: 'torque', from, to, higherBetter: statHigherBetter('torque') }]
   }
   if (isWeapon(stock)) {
     // Сравниваем с тем, что стоит В ОТКРЫТОЙ точке подвески. Прежде брали точку, которую
@@ -386,7 +386,7 @@ export function fitDeltas(ship: ShipEntity, module: ShipModule, hardpointIndex?:
     const prev = slot !== undefined ? loadout.weapons[slot] : null
     const from = prev && 'damage' in prev ? prev.damage : 0
     const to = 'damage' in stock ? stock.damage : 0
-    return from === to ? [] : [{ key: 'damage', from, to, higherBetter: true }]
+    return from === to ? [] : [{ key: 'damage', from, to, higherBetter: statHigherBetter('damage') }]
   }
 
   // С усилениями ЭТОЙ рамы (`hullUp`): без них «после» считалось на голой раме, и любой модуль
@@ -398,7 +398,7 @@ export function fitDeltas(ship: ShipEntity, module: ShipModule, hardpointIndex?:
   for (const f of SPEC_FIELDS) {
     const from = f.get(before)
     const to = f.get(after)
-    if (Math.abs(to - from) > 1e-3) out.push({ key: f.key, from, to, higherBetter: true })
+    if (Math.abs(to - from) > 1e-3) out.push({ key: f.key, from, to, higherBetter: statHigherBetter(f.key) })
   }
   return out
 }

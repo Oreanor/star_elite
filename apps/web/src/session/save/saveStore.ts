@@ -3,7 +3,7 @@ import { online } from '../net/firebase'
 import { writeServerSave } from '../net/account'
 
 /**
- * Хранилище сейва игрока. ОНЛАЙН (настроен Supabase) — источник правды сервер, сюда
+ * Хранилище сейва игрока. ОНЛАЙН (настроен Firebase) — источник правды сервер, сюда
  * автосейв идёт через `writeServerSave`. ОФЛАЙН (ключей нет) — кэш в localStorage,
  * чтобы игра и master-ветка работали без сети. Ветвится в `persistSave` по `online`.
  *
@@ -35,7 +35,7 @@ export function persistSave(save: PlayerSave): void {
 /**
  * Исход последней записи сейва. Прежде сбой уходил лишь в консоль браузера — игрок узнавал
  * о нём после рефреша, по откатившимся деньгам. Сейв пишется у причала, поэтому и сигнал
- * показывает экран станции (`useSaveFailed`), а не плашка полёта.
+ * показывает экран станции (`subscribeSaveStatus`), а не плашка полёта.
  */
 let saveFailed = false
 const saveListeners = new Set<() => void>()

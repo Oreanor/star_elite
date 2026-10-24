@@ -30,13 +30,6 @@ export function localSettlement(world: World): Settlement {
   return host?.settlement ?? capitalBody(world)?.settlement ?? NEUTRAL_MARKET
 }
 
-/** Номинальная стоимость трюма по каталогу — грубая прикидка, без учёта рынка. */
-export function cargoValue(ship: ShipEntity): number {
-  let total = 0
-  for (const item of ship.hold.items) total += itemValue(item)
-  return total
-}
-
 /** Прилавок станции. Каталог без коллекционных статуэток — их только находят в системе. */
 export function commodityStock(): readonly Commodity[] {
   return Object.values(COMMODITIES).filter((c) => c.id !== COMMODITIES.FIGURINE.id)
@@ -94,18 +87,20 @@ export function holdSellValue(world: World, ship: ShipEntity): number {
   return total
 }
 
-export type TradeError = 'no-money' | 'no-room' | 'local-fine'
-
 /**
- * Проверка покупки БЕЗ побочных эффектов — ею UI гасит кнопку, ею же `buyCommodity`
- * решает, продавать ли. Две независимые проверки однажды разошлись бы.
+ * Сколько единиц можно купить ЗДЕСЬ И СЕЙЧАС — меньшее из денег, места и склада. Без побочных
+ * эффектов: ею рынок ставит предел ползунка и гасит строку, ею же `buyCommodity` решает, сколько
+ * отдать. Местный штраф сюда не входит: покупка проверяет его сама, а рынок под штрафом строку
+ * не гасит — в окне сделки пилот читает, почему торговля закрыта. Прежде рынок держал свою копию — и для товара без
+ * массы (статуэтки) при полном отсеке делил 0 на 0: предел выходил `NaN`.
  */
-export function canBuyCommodity(world: World, ship: ShipEntity, commodity: Commodity): TradeError | null {
-  if (localFine(world)) return 'local-fine'
-  if (world.credits < commodityBuyPrice(world, commodity)) return 'no-money'
+export function buyLimit(world: World, ship: ShipEntity, commodity: Commodity): number {
+  const price = commodityBuyPrice(world, commodity)
+  if (price <= 0) return 0
+  const affordable = Math.floor(world.credits / price)
   // Масса 0 (статуэтки) места не занимает.
-  if (commodity.unitMass > 0 && freeCapacity(ship.hold) < commodity.unitMass) return 'no-room'
-  return null
+  const fits = commodity.unitMass <= 0 ? Infinity : Math.floor(freeCapacity(ship.hold) / commodity.unitMass)
+  return Math.max(0, Math.min(affordable, fits, commodityStockAt(world, commodity)))
 }
 
 /**
@@ -130,13 +125,8 @@ export function buyCommodity(world: World, ship: ShipEntity, commodity: Commodit
     return 0
   }
 
-  const affordable = Math.floor(world.credits / price)
-  const fits =
-    commodity.unitMass <= 0
-      ? units
-      : Math.floor(freeCapacity(ship.hold) / commodity.unitMass)
   // Больше, чем лежит на складе, не продадут: выкупил — пусто, пока не подвезут.
-  const taken = Math.min(units, affordable, fits, commodityStockAt(world, commodity))
+  const taken = Math.min(units, buyLimit(world, ship, commodity))
   if (taken <= 0) return 0
 
   const added = addCommodity(ship.hold, commodity, taken)

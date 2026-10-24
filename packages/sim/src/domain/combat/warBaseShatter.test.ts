@@ -3,7 +3,6 @@ import { describe, expect, it } from 'vitest'
 import { GALAXY } from '../../config/galaxy'
 import { WARBASE } from '../../config/warbase'
 import { systemDefFor } from '../galaxy/jump'
-import { SHARED_START_INDEX } from '../galaxy/sharedStart'
 import { createWorld, enterSystem } from '../world/index'
 import type { World } from '../world/entities'
 import { spawnPulse, stepPulses } from './cosmic'
@@ -15,10 +14,15 @@ import { stepWarBaseWrecks, stepWarShards, warBaseStanding, warBaseWreckDone } f
  * разлёт турелей с огрызками. Держим порядок событий, а не числа: корпус стоит, пока рвутся
  * очаги, детали рвутся по очереди, осколки — только в миг общего взрыва.
  */
+/** Система, где генерация поставила хотя бы две базы; игрок — у первой из них. */
 function startWorld(): World {
-  const def = { ...systemDefFor(SHARED_START_INDEX, GALAXY.SEED), patrols: [] }
+  let index = 1
+  while ((systemDefFor(index, GALAXY.SEED).warBases ?? []).length < 2) index++
+  const def = { ...systemDefFor(index, GALAXY.SEED), patrols: [] }
   const world = createWorld({ ...def, belt: null })
-  enterSystem(world, def, SHARED_START_INDEX)
+  enterSystem(world, def, index)
+  const base = world.warBases[0]!
+  world.player.state.pos.copy(base.pos).add(new Vector3(0, 0, base.radius + 20_000))
   return world
 }
 

@@ -110,8 +110,3 @@ export function removeItem(hold: CargoHold, index: number): CargoItem | null {
   const [removed] = hold.items.splice(index, 1)
   return removed ?? null
 }
-
-/** Пересобрать вместимость после смены грузовых контейнеров. */
-export function setCapacity(hold: CargoHold, capacity: number): void {
-  hold.capacity = capacity
-}

@@ -1,4 +1,4 @@
-import type { IUniform, Texture } from 'three'
+import type { Texture } from 'three'
 
 /**
  * Радиальный ripple на зуме миелофона: кольца от центра. Идёт поверх zoom-blur.
@@ -49,14 +49,4 @@ void main() {
   gl_FragColor = texture2D(tDiffuse, uv);
 }
 `,
-}
-
-export type ZoomRippleUniforms = {
-  tDiffuse: IUniform<Texture | null>
-  strength: IUniform<number>
-  amount: IUniform<number>
-  freq: IUniform<number>
-  speed: IUniform<number>
-  fall: IUniform<number>
-  time: IUniform<number>
 }

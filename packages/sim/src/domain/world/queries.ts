@@ -1,5 +1,4 @@
 import { Vector3 } from 'three'
-import { hostileToPlayer } from '../ai/targeting'
 import { MIELOPHONE } from '../../config/mielophone'
 import { PLANET_FOCUS } from '../../config/bodies'
 import { ASTEROID } from '../../config/world'
@@ -98,14 +97,6 @@ export function focusedPlanet(world: World): BodyEntity | null {
 }
 
 /**
- * Враги, которых видно. Замаскированного в этом списке нет, поэтому его нельзя
- * ни захватить, ни перебрать клавишей: правило видимости одно на всех.
- */
-export function hostilesOf(world: World): ShipEntity[] {
-  return world.ships.filter((s) => isVisible(s) && hostileToPlayer(world, s))
-}
-
-/**
  * Бот, сидящий ВНУТРИ станции, а не борт в пространстве.
  *
  * Бог Слово живёт в двух ипостасях, и путать их нельзя. В Крестах он приклеен к причалу
@@ -135,38 +126,6 @@ const _fwd = new Vector3()
 const _right = new Vector3()
 const _up = new Vector3()
 const _toTarget = new Vector3()
-
-/**
- * Следующая цель для захвата: ближайшая к оси прицела, а не просто ближайшая.
- * Игрок ждёт, что Tab возьмёт того, на кого он смотрит.
- */
-export function cycleTarget(world: World, currentId: number | null): number | null {
-  const candidates = targetablesOf(world)
-  if (candidates.length === 0) return null
-
-  shipAxes(world.player.state.quat, _fwd, _right, _up)
-
-  const scored = candidates
-    .map((ship) => {
-      _toTarget.copy(ship.state.pos).sub(world.player.state.pos)
-      const distance = _toTarget.length()
-      _toTarget.divideScalar(Math.max(distance, 1e-6))
-      // Угол к оси прицела важнее дистанции: сначала те, кто перед носом.
-      return { id: ship.id, angle: Math.acos(Math.max(-1, Math.min(1, _fwd.dot(_toTarget)))), distance }
-    })
-    .sort((a, b) => a.angle - b.angle || a.distance - b.distance)
-
-  if (currentId === null) return scored[0]?.id ?? null
-
-  const index = scored.findIndex((s) => s.id === currentId)
-  // Не нашли текущую (погибла) — берём лучшую. Иначе циклим по кругу.
-  return scored[(index + 1) % scored.length]?.id ?? scored[0]?.id ?? null
-}
-
-/** Станции системы — цели для СВЯЗИ (T), не для атаки. Обычно одна, но перебор общий. */
-export function targetableStationsOf(world: World): BodyEntity[] {
-  return world.bodies.filter((b) => b.kind === 'station')
-}
 
 /**
  * Пауза дольше этого — новый перебор: снова с видимых (перед носом) и ближайших.

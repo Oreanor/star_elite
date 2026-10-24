@@ -484,3 +484,27 @@ describe('зум в пустоте ниже GHOST', () => {
     expect(distanceLy(playerGalaxyLy(world, s), at)).toBeLessThan(1e-6)
   })
 })
+
+describe('своя система при росте ниже GHOST', () => {
+  it('у дальних лун система не выгружается от роста: пузырь в св.г. ужимается, орбиты — нет', () => {
+    // Пойманное: на ×500 у звезды с лунами на 2000+ св.с пузырь проходил внутри системы — она
+    // выгружалась у пилота под носом: радар пустел, цель сбрасывалась на звезду.
+    const world = createWorld()
+    const star = world.bodies.find((b) => b.kind === 'star')!
+    const dir = world.player.state.pos.clone().sub(star.pos).normalize()
+    // Дальняя луна на 2400 св.с (как у Праира), борт — рядом с ней, на 2500 св.с.
+    const LS = 299_792_458
+    const moon = world.bodies.find((x) => x.kind !== 'star')!
+    moon.pos.copy(star.pos).addScaledVector(dir, 2400 * LS)
+    world.player.state.pos.copy(star.pos).addScaledVector(dir, 2500 * LS)
+    const bodies = world.bodies.length
+    for (const s of [100, 500, 1000, 2000, 4000]) {
+      const old = world.player.state.scale
+      world.player.state.scale = s
+      stepGalaxyPresence(world, old)
+      expect(world.systemStellarOnly).toBe(false)
+      expect(world.bodies.length).toBe(bodies)
+    }
+  })
+})
+

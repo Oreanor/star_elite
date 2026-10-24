@@ -8,10 +8,8 @@ import {
   isEngine,
   isHyperdrive,
   isMielophone,
-  isScoop,
   isShield,
   isThrusters,
-  slotCategoryOf,
   type ArmourModule,
   type CargoModule,
   type CloakModule,
@@ -22,7 +20,6 @@ import {
   type ShieldModule,
   type ShipModule,
   type ThrusterModule,
-  type WeaponModule,
 } from './modules'
 
 // Форма сборки и её конструктор — часть схемы каталога (`config/schema`): они ничего
@@ -75,9 +72,6 @@ export function findEcm(l: Loadout): EcmModule | null {
 export function hasBomb(l: Loadout): boolean {
   return l.internals.some(isBomb)
 }
-export function hasScoop(l: Loadout): boolean {
-  return l.internals.some(isScoop)
-}
 
 /** Снаряжённая масса: корпус + все модули. Груз добавляется отдельно, он меняется в полёте. */
 export function dryMass(l: Loadout): number {
@@ -87,50 +81,11 @@ export function dryMass(l: Loadout): number {
   return m
 }
 
-export function totalCost(l: Loadout): number {
-  let c = l.chassis.cost
-  for (const mod of l.internals) c += mod.cost
-  for (const w of l.weapons) if (w) c += w.cost
-  return c
-}
-
 /** Все установленные модули одним списком — нужно трофеям и торговле. */
 export function allModules(l: Loadout): ShipModule[] {
   const out: ShipModule[] = [...l.internals]
   for (const w of l.weapons) if (w) out.push(w)
   return out
-}
-
-export type InstallError = 'no-free-slot' | 'class-too-large' | 'wrong-kind' | 'no-hardpoint'
-
-/** Ракета живёт на пилоне, ствол — в орудийной точке. Перепутать нельзя. */
-function fits(hardpointKind: 'gun' | 'pylon', weaponKind: WeaponModule['kind']): boolean {
-  // Пилон несёт и ракету, и контейнер БПЛА: и то и другое сходит с подвески.
-  return hardpointKind === 'pylon' ? weaponKind !== 'laser' : weaponKind === 'laser'
-}
-
-/** Проверка перед установкой. Возвращает null, если модуль влезает. */
-export function canInstallInternal(l: Loadout, mod: ShipModule): InstallError | null {
-  // Категория, а НЕ вид: аукс-слот делят разные устройства, и занятость считается
-  // по всей категории. Иначе бомба «не увидит» клоак, занявший ту же аукс-ячейку.
-  const cat = slotCategoryOf(mod.kind)
-  const candidates = l.chassis.slots.filter((s) => s.kind === cat)
-  if (candidates.length === 0) return 'wrong-kind'
-
-  // Класс гейтит корпус, не слот (груз — бесклассовый, class 1, лезет всегда).
-  if (mod.class > l.chassis.class) return 'class-too-large'
-
-  const occupied = l.internals.filter((m) => slotCategoryOf(m.kind) === cat).length
-  if (occupied >= candidates.length) return 'no-free-slot'
-  return null
-}
-
-export function canInstallWeapon(l: Loadout, mod: WeaponModule, hardpointIndex: number): InstallError | null {
-  const hp = l.chassis.hardpoints[hardpointIndex]
-  if (!hp) return 'no-hardpoint'
-  if (!fits(hp.kind, mod.kind)) return 'wrong-kind'
-  if (mod.class > l.chassis.class) return 'class-too-large'
-  return null
 }
 
 /** Индексы точек подвески заданного вида. Нужно рендеру: он рисует ракеты на пилонах. */

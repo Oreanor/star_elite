@@ -471,11 +471,6 @@ function stepMirrorRescueHails(world: World): void {
   }
 }
 
-/** Знакомый-заказчик, если есть запись. Для экрана «ДЕЛА». */
-export function contractGiver(world: World, c: Contract): Acquaintance | null {
-  return recordOf(world, c.giverId) ?? null
-}
-
 /** Дела, которые переживают прыжок и сейв: те, что не привязаны к целям в этой системе. */
 export function isPortable(c: Contract): boolean {
   return c.terms.kind === 'deliver' || c.terms.kind === 'fetch' || c.terms.kind === 'escort'

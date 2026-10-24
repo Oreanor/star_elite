@@ -74,9 +74,6 @@ export function isLandableWarBase(rock: WarBaseEntity, ship: ShipEntity): boolea
   )
 }
 
-/** @deprecated имя для старых импортов — то же, что `isLandableBody`. */
-export const isLandable = isLandableBody
-
 /** Высота корабля над поверхностью, м (габарит борта учтён). Может быть отрицательной. */
 export function surfaceAltitude(
   ship: ShipEntity,
@@ -266,8 +263,8 @@ export function armAutoland(world: World): boolean {
  * ПОСТАВИТЬ борт брюхом к поверхности: нос в касательной, крен нулевой.
  *
  * Зовётся один раз, в момент касания режима (вход в ховер, автозаход): сажают ровно, как
- * на шасси, в какой бы позе борт ни подошёл. Дальше крен принадлежит пилоту и держится
- * шаговым `keepNoseTangent` — там мы его уже не трогаем.
+ * на шасси, в какой бы позе борт ни подошёл. Дальше крен принадлежит пилоту: шаг ховера
+ * (`stepLanding`) его уже не трогает.
  */
 function levelBelly(ship: ShipEntity, normal: Vector3): void {
   shipAxes(ship.state.quat, _forward, _right, _up)
@@ -335,11 +332,6 @@ export function enterSurfaceFlight(
   ship.cruise.engaged = false
   ship.controls.cruise = 1
   return true
-}
-
-/** @deprecated имя — то же, что `enterSurfaceFlight` (ховер, не касание грунта). */
-export function landOnSurface(ship: ShipEntity, surface: LandableSurface): boolean {
-  return enterSurfaceFlight(ship, surface)
 }
 
 /** Ховер над телом мира (планета/луна). */

@@ -6,7 +6,7 @@ export { ASTEROID, COMET, DEBRIS, SCORE, TRAFFIC, WORLD } from './world'
 export { TITAN } from './titans'
 export { MONOLITH } from './monoliths'
 export { WARBASE, WARBASE_GEN } from './warbase'
-export { FIGURINE, FIGURINE_TITLES, type FigurineTitleId } from './figurines'
+export { FIGURINE, FIGURINE_TITLES } from './figurines'
 export { PLATFORM } from './platform'
 export {
   ARRIVAL,

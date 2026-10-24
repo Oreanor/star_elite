@@ -39,7 +39,6 @@ import { WarBaseRays } from './WarBaseRays'
 import { WarShards } from './WarShards'
 import { FirePuffs } from './FirePuffs'
 import { Drones, EnemyShips, PlayerShip } from './Ships'
-import { RigEditorMarks } from './RigEditorMarks'
 import { PlasmaBeams } from './PlasmaBeams'
 import { RemotePlayers } from './RemotePlayers'
 import { BushShips } from './BushShips'
@@ -85,7 +84,6 @@ export function WorldVisuals() {
       <BushShips />
       <PlayerShip />
       {/* Маркеры оснастки (K). Вне группы мира — как и сам корабль: правку видно и на кусте. */}
-      <RigEditorMarks />
 
       <group ref={worldRef}>
         <Sky galaxyIndex={skyIndex} />

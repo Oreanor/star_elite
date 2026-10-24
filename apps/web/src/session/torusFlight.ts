@@ -9,7 +9,6 @@ import {
 import { TORUS_FLIGHT } from './config'
 import { isHeld } from '../platform/input/input'
 import { disengageTorusAutopilot, finishTorusApproach, torusAutopilotActive, torusNav } from './torusAutopilot'
-import { inputCaptured } from './inputCapture'
 
 /**
  * ПОЛЁТ ПО ГИПЕРТОРУ. Корабль стоит в центре стереопроекции и вертится мышью (это делает
@@ -81,7 +80,7 @@ export function stepTorusFlight(shipQuat: Quaternion, dt: number): void {
 
   // Ctrl — РУЧНИК, как в обычном полёте: ход в ноль сразу, без сброса темпом сектора.
   // Автопилот снимается тоже: иначе он в следующем же такте снова дал бы газ на цель.
-  if (!inputCaptured() && (isHeld('ControlLeft') || isHeld('ControlRight'))) {
+  if (isHeld('ControlLeft') || isHeld('ControlRight')) {
     if (torusAutopilotActive()) disengageTorusAutopilot()
     throttle = 0
     return

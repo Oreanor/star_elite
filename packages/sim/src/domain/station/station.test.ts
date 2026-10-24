@@ -14,7 +14,7 @@ import { buy } from './shop'
 import { masterClass, repair, repairChance, repairCost } from './repair'
 import {
   buyCommodity,
-  canBuyCommodity,
+  buyLimit,
   commodityBuyPrice,
   commoditySellPrice,
   sellItem,
@@ -367,9 +367,20 @@ describe('торговля товаром', () => {
     world.credits = 10_000
     world.player.hold.capacity = 0
 
-    expect(canBuyCommodity(world, world.player, FOOD)).toBe('no-room')
+    expect(buyLimit(world, world.player, FOOD)).toBe(0)
     expect(buyCommodity(world, world.player, FOOD, 1)).toBe(0)
     expect(world.credits).toBe(10_000)
+  })
+
+  it('предел покупки товара без массы в полном отсеке — число, а не NaN', () => {
+    // Пойманное: рынок держал свою копию предела и для статуэтки (масса 0) при полном отсеке
+    // делил 0 на 0 — ползунок покупки получал NaN. Предел один, доменный (`buyLimit`).
+    const world = quietWorld()
+    world.credits = 1_000_000
+    world.player.hold.capacity = 0
+    const limit = buyLimit(world, world.player, COMMODITIES.FIGURINE)
+    expect(Number.isFinite(limit)).toBe(true)
+    expect(limit).toBeGreaterThanOrEqual(0)
   })
 
   /**

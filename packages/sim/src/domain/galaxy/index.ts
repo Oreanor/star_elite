@@ -16,7 +16,6 @@ export {
   jumpBlock,
   jumpDistance,
   jumpInDriveRange,
-  reachableSystems,
   systemDefFor,
   type JumpBlock,
   type JumpOptions,
@@ -39,7 +38,6 @@ export { galaxyName, moonName, planetName, systemName } from './names'
 export { distanceLy, galaxyShape, placeSystem, placeSystemRaw, type Spot3 } from './shape'
 export {
   canDock,
-  canRefuel,
   capitalOf,
   isInhabited,
   isSettled,
@@ -47,7 +45,6 @@ export {
   settledPlanets,
   stationsOf,
   systemLife,
-  totalPopulation,
   type LifeLevel,
   type Moon,
   type Planet,

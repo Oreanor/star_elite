@@ -67,21 +67,6 @@ export function registerPlayerHit(world: World, victim: ShipEntity): void {
   }
 }
 
-export function provoke(world: World, victim: ShipEntity, weight = 1): void {
-  if (!canResent(victim)) return
-  const ai = victim.ai!
-
-  if (world.time - ai.grievanceAt > GRIEVANCE.COOLDOWN) resetEpisode(ai)
-
-  beginGrievance(ai, world.time)
-  ai.grievance += weight
-  ai.grievanceAt = world.time
-
-  if (ai.grievance >= GRIEVANCE.HOSTILE_HITS) {
-    escalateToHostile(world, victim)
-  }
-}
-
 export function hasGrievance(ship: ShipEntity): boolean {
   return canResent(ship) && (ship.ai?.grievance ?? 0) > 0
 }

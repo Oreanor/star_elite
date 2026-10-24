@@ -1,4 +1,4 @@
-import type { IUniform, Texture } from 'three'
+import type { Texture } from 'three'
 
 /**
  * Zoom-blur: несколько сэмплов к центру кадра. На зуме миелофона идёт ПЕРЕД ripple.
@@ -40,10 +40,4 @@ void main() {
   gl_FragColor = color / w;
 }
 `,
-}
-
-export type ZoomBlurUniforms = {
-  tDiffuse: IUniform<Texture | null>
-  strength: IUniform<number>
-  amount: IUniform<number>
 }

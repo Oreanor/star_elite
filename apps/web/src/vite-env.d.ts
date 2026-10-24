@@ -2,7 +2,7 @@
 
 /**
  * Типы env-переменных сборки. Vite подставляет их на этапе бандла (`import.meta.env`).
- * Обе — опциональны: без них игра идёт офлайн (localStorage), см. `app/net/supabase.ts`.
+ * Все — опциональны: без них игра идёт офлайн (localStorage), см. `session/net/firebase.ts`.
  */
 interface ImportMetaEnv {
   readonly VITE_FIREBASE_API_KEY?: string

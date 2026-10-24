@@ -8,7 +8,6 @@ import { EXHAUST, GIANT_RENDER_CAP } from '../config'
 import { flameGeometry } from '../geometry/flame'
 import { chassisNozzles, MISSILE_NOZZLE, type Nozzle } from '../geometry/ships'
 import { nearestStar, starTintHex } from '../starLight'
-import { rigEditorActive } from '../dev/rigEditor'
 import { FRONT_FX_LAYER } from '../post/frontFxPass'
 
 /**
@@ -172,10 +171,7 @@ function Flames({ cone }: { cone: Cone }) {
       }
       // Плавное гашение к HIDE_SCALE: конус сходит в ноль у сопла, а не отваливается рывком.
       const fade = clamp((EXHAUST.HIDE_SCALE - ship.state.scale) / (EXHAUST.HIDE_SCALE - EXHAUST.FADE_START), 0, 1)
-      // В редакторе сопел держим факел игрока открытым на месте: без газа его не видно, а
-      // править устья вслепую — то же, что дула без луча. Демо-тяга, физику не трогаем.
-      const editing = rigEditorActive() && ship === world.player
-      const throttle = editing ? EXHAUST.EDITOR_THROTTLE : throttleOf(ship)
+      const throttle = throttleOf(ship)
       const surge = updateSurge(surges, ship, throttle, step)
       if (throttle < 0.02 && surge < 0.02) return
 

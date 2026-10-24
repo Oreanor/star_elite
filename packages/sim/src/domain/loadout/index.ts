@@ -13,8 +13,6 @@ export {
 } from './derive'
 export {
   allModules,
-  canInstallInternal,
-  canInstallWeapon,
   createLoadout,
   dryMass,
   findArmour,
@@ -29,9 +27,6 @@ export {
   hardpointIndices,
   hasBomb,
   hasEcm,
-  hasScoop,
-  totalCost,
-  type InstallError,
   type Loadout,
 } from './loadout'
 export {

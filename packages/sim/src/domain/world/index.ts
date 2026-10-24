@@ -32,7 +32,6 @@ export {
   type Tracer,
   type WarpFlash,
   type WarpPortal,
-  type WarpArrivalPortal,
   type JumpGate,
   type World,
 } from './entities'
@@ -45,7 +44,6 @@ export {
   type PilotProfile,
   type Disposition,
   type Profession,
-  type BuyableTrait,
   type FigurineHobby,
   DISPOSITIONS,
   PROFESSIONS,
@@ -77,7 +75,7 @@ export {
   markContactLost,
 } from './acquaintance'
 export type { ContactPlan, PlanStep, PlanPosture, RawPlanStep } from './contactPlan'
-export { emptyPlan, EMPTY_PLAN } from './contactPlan'
+export { emptyPlan } from './contactPlan'
 export {
   acquaintanceOf,
   advanceContactPlan,
@@ -113,7 +111,6 @@ export {
 export { adoptShip, captureHandoff, isBoundShip, peerHitYields, releaseShip, type ShipHandoff } from './handoff'
 export { pickFreeSpawn, isFreeSpawn } from './spawn'
 export {
-  cycleTarget,
   cycleContact,
   lockShipContact,
   lockedContactId,
@@ -139,7 +136,6 @@ export {
   inSystem,
   focusedPlanet,
   findShip,
-  hostilesOf,
   isStationBot,
   incomingMissile,
   nearestPod,
@@ -148,7 +144,6 @@ export {
   MONOLITH_NAMES,
   NAV_ASTEROID_NAME,
   type NavTarget,
-  targetableStationsOf,
 } from './queries'
 export {
   jumpOut,

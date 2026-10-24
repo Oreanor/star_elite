@@ -16,8 +16,9 @@ import { createWorld, enterVoid } from '.'
 describe('пустота за горизонтом', () => {
   it('в пустоте нет ни тел, ни трафика: борт стоит, не гибнет и не уезжает', () => {
     const world = createWorld({ ...systemDefFor(SHARED_START_INDEX, GALAXY.SEED), patrols: [] })
-    const hole = world.bodies.find((b) => b.kind === 'blackhole')!
-    world.player.state.pos.copy(hole.pos).add(new Vector3(0, 0, hole.radius * 0.5))
+    // Борт внутри тела в миг ухода в пустоту: тело пропадает, и толкать его некому.
+    const body = world.bodies.find((b) => b.kind === 'star')!
+    world.player.state.pos.copy(body.pos).add(new Vector3(0, 0, body.radius * 0.5))
     enterVoid(world)
     expect(world.bodies).toHaveLength(0)
 

@@ -144,12 +144,6 @@ export function capitalOf(s: StarSystem): SettledPlanet | null {
   return best
 }
 
-export function totalPopulation(s: StarSystem): number {
-  let total = 0
-  for (const p of settledPlanets(s)) total += p.settlement.population
-  return Math.round(total * 100) / 100
-}
-
 /**
  * Ступень жизни в системе — по САМОМУ развитому её миру. На карте важно не «сколько
  * тут людей», а «до чего они дошли»: анклав рудокопов и звёздная метрополия — разные
@@ -179,11 +173,6 @@ export function stationsOf(s: StarSystem): { planet: Planet; station: Station }[
 
 export function canDock(s: StarSystem): boolean {
   return s.planets.some((p) => p.station !== null)
-}
-
-/** Где можно дозаправиться. Система без заправки — ловушка на маршруте. */
-export function canRefuel(s: StarSystem): boolean {
-  return s.star.scoopable || canDock(s)
 }
 
 /**

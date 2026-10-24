@@ -47,7 +47,6 @@ import { cycleGalaxyStar, galaxyRadar, retargetNearestGalaxyStar } from './galax
 import { syncControllers, useSession, type Session } from '../../session/GameContext'
 import { coastController } from '../../session/playerController'
 import { stepCameraView } from '../../session/cameraView'
-import { cycleHull, rigEditorActive, stepRigEditor, toggleRigEditor } from '../dev/rigEditor'
 import { stepWarBaseEditor } from '../dev/warBaseEditor'
 import { resetTorusFlight, stepTorusFlight } from '../../session/torusFlight'
 import { resetBushTraffic, stepBushTraffic } from '../../session/bushTraffic'
@@ -125,9 +124,8 @@ function setPilot(session: Session, mode: Session['mode']): void {
 /**
  * Дверь на куст — чёрная дыра. Влетел внутрь её сферы → едешь по вселенной.
  *
- * По замыслу дверь одна на галактику и стоит в ЯДРЕ; шарик у причала в Люриларе —
- * временный вход для разработки. Поэтому ищем любое тело `blackhole`, а не конкретное:
- * уедет временный — правило не поменяется.
+ * Дверь одна на галактику и стоит в ЯДРЕ (временный шарик у причала Люрилара убран). Ищем
+ * любое тело `blackhole`, а не конкретное: правило не зависит от того, где дыра стоит.
  */
 function touchedDoor(world: World): boolean {
   for (const body of world.bodies) {
@@ -143,7 +141,7 @@ function touchedDoor(world: World): boolean {
  * Вход в ГИПЕРТОР и удержание в нём.
  *
  * Перемещение между галактиками показано как полёт сквозь замкнутую решётку-S³ (стереопроекция).
- * Двигается игрок ПО-НАСТОЯЩЕМУ, но не здесь: позу пилота в S³ копит `stepTorusNav` от WASD+мыши,
+ * Двигается игрок ПО-НАСТОЯЩЕМУ, но не здесь: позу пилота в S³ копит `stepTorusFlight` от WASD+мыши,
  * а применяет её слой рендера. Домену остаётся лишь ввести в режим и держать корабль недвижным
  * (он стоит в начале координат — едет вся вселенная).
  */
@@ -374,9 +372,6 @@ export function Simulation() {
     if (world.docked !== session.dockedShown) {
       session.dockedShown = world.docked
       if (world.docked) {
-        // Редактор сопел держит правку выхлопа в реестре рендера — на стыковке закрываем его,
-        // чтобы дев-раскладка не пережила заход на станцию незамеченной.
-        if (rigEditorActive()) toggleRigEditor(world)
         if (session.mode === 'autodock') setPilot(session, 'manual')
         releaseLock()
         // Плашки полёта на станцию не переходят: их время встало бы вместе с миром.
@@ -494,17 +489,9 @@ export function Simulation() {
       else retargetNearestContact(world)
     }
 
-    // Дев-редакторы — только в дев-сборке: у игрока «0» был бесплатной сменой корпуса мимо
-    // верфи и класса, а «8» сносил базу без боя, вынимая из неё детали.
+    // Дев-редактор — только в дев-сборке: у игрока «8» сносил базу без боя, вынимая из неё
+    // детали. Оснастку кораблей правят отдельной страницей (`rig.html`), не в игре.
     if (import.meta.env.DEV) {
-      // O — редактор ОСНАСТКИ: дула, сопла и размер корпуса за один обход. Двигаем модификатором
-      // со стрелками, лазер и факел показывают правку вживую. Здесь же, у прочих тумблеров, —
-      // без захваченного курсора править нечего.
-      if (consumePress('KeyO')) toggleRigEditor(world)
-      // 0 — следующий корпус из каталога: рама, габарит и меш меняются целиком.
-      // Обойти все модели за один заход, не летая на верфь.
-      if (consumePress('Digit0')) console.log('корпус:', cycleHull(world))
-
       // 5–9 — редактор ВОЕННОЙ БАЗЫ, что сейчас в нав-цели: диаметр, набивка деталями и
       // печать готового конфига. Без выбранной базы молчит, поэтому режима не заводим.
       stepWarBaseEditor(world)
@@ -512,9 +499,7 @@ export function Simulation() {
 
     // Пользовательский ракурс: облёт (←/→) и наезд (↑/↓), V — сброс. Чистая камера,
     // мир не трогает. Здесь, до clearPresses, чтобы тап V сработал.
-    // Стрелки С МОДИФИКАТОРОМ забирает редактор оснастки — облёт остаётся на голых стрелках,
-    // иначе точки пришлось бы ставить, не видя их сбоку.
-    if (!stepRigEditor(dt)) stepCameraView(dt)
+    stepCameraView(dt)
 
     if (consumePress('KeyL')) {
       /**

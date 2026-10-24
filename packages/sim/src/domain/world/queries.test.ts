@@ -2,7 +2,7 @@ import { Quaternion, Vector3 } from 'three'
 import { describe, expect, it } from 'vitest'
 import { MIELOPHONE } from '../../config/mielophone'
 import { createWorld, makeShip, STARTER_SYSTEM, type World } from '.'
-import { cycleCelestial, cycleTarget, focusedPlanet, jumpIsRoute, pruneGiantScaleLocks, targetablesOf } from './queries'
+import { cycleCelestial, cycleContact, focusedPlanet, jumpIsRoute, pruneGiantScaleLocks, targetablesOf } from './queries'
 import { lockContact, lockedShipId, lockedStationId } from './queries'
 
 /** Мир с пиратом и нейтралом перед носом игрока. */
@@ -30,12 +30,13 @@ describe('захват цели берёт любую фракцию', () => {
     const factions = targetablesOf(world).map((s) => s.faction).sort()
     expect(factions).toEqual(['hostile', 'neutral'])
 
-    // Обход по кругу обязан посетить обе фракции за два нажатия.
-    const first = cycleTarget(world, null)
-    const second = cycleTarget(world, first)
-    const visited = new Set([first, second].map((id) => {
-      return world.ships.find((s) => s.id === id)?.faction
-    }))
+    // Обход по кругу (тот же, что Tab в игре) обязан посетить обе фракции за два нажатия.
+    const ids: (number | undefined)[] = []
+    for (let i = 0; i < 2; i++) {
+      cycleContact(world)
+      ids.push(world.contactLock?.id)
+    }
+    const visited = new Set(ids.map((id) => world.ships.find((s) => s.id === id)?.faction))
     expect(visited.has('neutral')).toBe(true)
     expect(visited.has('hostile')).toBe(true)
   })

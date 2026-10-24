@@ -39,8 +39,6 @@ export interface ContactPlan {
   patronId: number | null
 }
 
-export const EMPTY_PLAN: ContactPlan = { queue: [], posture: 'idle', patronId: null }
-
 export function emptyPlan(): ContactPlan {
   return { queue: [], posture: 'idle', patronId: null }
 }

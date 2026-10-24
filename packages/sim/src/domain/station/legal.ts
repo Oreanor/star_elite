@@ -1,5 +1,4 @@
 import { findStation, stationHost } from './docking'
-import type { Commodity } from '../cargo/items'
 import type { FineRecord, ShipEntity, World } from '../world/entities'
 import { DIALOGUE } from '../../config/dialogue'
 
@@ -68,14 +67,4 @@ export function hailPoliceForFine(world: World): ShipEntity | null {
 
 export function markPoliceFineHail(world: World): void {
   world.policeFineHailEpoch = world.epoch
-}
-
-/** Суммарная масса товара с ограниченной торговлей; сама перевозка законна. */
-export function illegalCargoUnits(world: World, illegal: readonly Commodity[]): number {
-  let units = 0
-  for (const item of world.player.hold.items) {
-    if (item.kind !== 'commodity' || !illegal.some((commodity) => commodity.id === item.commodity.id)) continue
-    units += item.units
-  }
-  return units
 }

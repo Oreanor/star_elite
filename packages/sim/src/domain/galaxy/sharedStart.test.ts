@@ -7,22 +7,6 @@ import { systemDefFor } from './jump'
 import { SHARED_START_INDEX } from './sharedStart'
 
 describe('онлайн-старт Люрилар', () => {
-  it('временный Сатурн остаётся у причала при смене календаря', () => {
-    const def = systemDefFor(SHARED_START_INDEX, GALAXY.SEED)
-    const world = createWorld({ ...def, patrols: [], belt: null })
-    const planet = world.bodies.find((b) => b.name === 'Сатурн')!
-    const station = world.bodies.find((b) => b.kind === 'station')!
-    const offset = planet.pos.clone().sub(station.pos)
-    expect(planet.surface).toBe('Газовый гигант')
-    expect(offset.length()).toBeGreaterThan(planet.radius * 3)
-    // Обычная солнечная орбита унесла бы витрину от движущегося причала.
-    for (const time of [0, 3_600, 86_400]) {
-      world.calendarTime = time
-      stepOrbits(world)
-      expect(planet.pos.clone().sub(station.pos).distanceTo(offset)).toBeLessThan(0.01)
-    }
-  })
-
   it('индекс 1 при родном зерне — общая точка спавна', () => {
     expect(SHARED_START_INDEX).toBe(WORLD.SHARED_START_INDEX)
   })
@@ -38,7 +22,7 @@ describe('онлайн-старт Люрилар', () => {
    * НИКАКОЙ ЧЁРНОЙ ДЫРЫ у общего старта: новичок появляется здесь, и падать ему в неё
    * с первой секунды незачем.
    */
-  it('у общего старта звезда не чёрная дыра, но есть «Дверь»', () => {
+  it('у общего старта нет ни одной чёрной дыры', () => {
     const def = systemDefFor(SHARED_START_INDEX, GALAXY.SEED)
     expect(def.name).toBe('Люрилар')
     // ЗВЕЗДА дырой быть не должна: новичок появляется здесь, падать ему некуда.
@@ -48,13 +32,9 @@ describe('онлайн-старт Люрилар', () => {
     const stars = world.bodies.filter((b) => b.kind === 'star')
     expect(stars.length).toBeGreaterThanOrEqual(1)
 
-    // А вот ДВЕРЬ — отдельное тело и обязана быть: это единственный вход на куст галактик,
-    // и стоит она в общем старте, а не в тестовом STARTER_SYSTEM (там её игра не увидит).
-    const door = world.bodies.find((b) => b.kind === 'blackhole')
-    expect(door?.name).toBe('Дверь')
-    const station = world.bodies.find((b) => b.kind === 'station')!
-    // Далеко от причала: рядом она возмущала бы гравитацией стартовую зону.
-    expect(door!.pos.distanceTo(station.pos)).toBeGreaterThan(10_000)
+    // Отдельной дыры у причала тоже нет: временная «Дверь» (быстрый вход на куст) убрана —
+    // вход живёт в ядре галактики, а новичку под боком падать некуда.
+    expect(world.bodies.some((b) => b.kind === 'blackhole')).toBe(false)
 
     // Если зерно всё же дало двойную — разнос держится на всех отметках времени: орбита
     // двойной не декорация. Одиночной звезде проверять нечего, и это НЕ повод падать.
@@ -86,18 +66,16 @@ describe('онлайн-старт Люрилар', () => {
     expect(station?.stationStyle).not.toBe('cross')
   })
 
-  it('Дверь у причала и тесные пары — не светила: якорь галактики стоит на солнце', () => {
-    // Слой склеивал солнце с любой дырой мира в «пару» и ставил барицентр на полпути
-    // к причалу: на пороге ×5000 своя звезда прыгала за спину.
+  it('ручных витрин у старта нет: состав — из зерна, как у всех', () => {
+    // Здесь жили временные тела — Сатурн для осмотра колец, «Дверь» у причала, две тесные
+    // пары и четыре базы двора. Они меняли мир у всех игроков разом; правка старта — только имя.
     const def = systemDefFor(SHARED_START_INDEX, GALAXY.SEED)
+    expect(def.planets.some((p) => p.name === 'Сатурн')).toBe(false)
+    expect(def.blackHoles ?? []).toHaveLength(0)
+    expect(def.streamPairs ?? []).toHaveLength(0)
     const world = createWorld({ ...def, patrols: [], belt: null })
-    expect(world.bodies.some((b) => b.kind === 'blackhole')).toBe(true)
     const sun = luminary(world.bodies, 0)
     expect(sun?.kind).toBe('star')
     expect(sun?.faint).toBeFalsy()
-    // Компаньон — только если система двойная по каталогу, но не Дверь и не декорация.
-    const companion = luminary(world.bodies, 1)
-    expect(companion?.name).not.toBe('Дверь')
-    expect(companion?.faint).toBeFalsy()
   })
 })

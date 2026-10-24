@@ -1,4 +1,4 @@
-export { approach, clamp, damp, deadzoneScale, lerp, smoothstep, wrapAngle, wrapAround } from './scalar'
+export { approach, clamp, damp, deadzoneScale, lerp, smoothstep, wrapAround } from './scalar'
 export { interceptTime, raySphere } from './intersect'
 export { chanceWithin, makeRng, randomUnit, range, signed, weightedPick, type Rng } from './random'
 export { roundMoney } from './money'

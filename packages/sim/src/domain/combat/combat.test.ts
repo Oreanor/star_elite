@@ -16,7 +16,7 @@ import { stepBolts } from './bolts'
 import { applyDamage, regenShield } from './damage'
 import { fireEcm, regenEnergy } from './ecm'
 import { stepMissiles } from './missiles'
-import { coolGuns, cycleLaserGroup, fireLasers, fireMissile, missileAmmo, selectedLaser, volleyAllowed } from './weapons'
+import { coolGuns, cycleLaserGroup, fireLasers, fireMissile, selectedLaser, volleyAllowed } from './weapons'
 import { addCommodity } from '../cargo/hold'
 import { issueFactoryMissiles, missileCommodity, missileStock } from './ordnance'
 import { quietWorld } from '../../testkit'
@@ -407,13 +407,13 @@ describe('ракеты на пилонах', () => {
     expect(launchers.length).toBeGreaterThan(0)
     const ammo = fittedMissileAmmo(world.player)
     // Паспорт модуля, но не больше отсека: тонна за штуку, и лишнее с завода не кладут.
-    expect(missileAmmo(world.player)).toBe(Math.min(launchers.length * ammo, world.player.hold.capacity))
+    expect(missileStock(world.player)).toBe(Math.min(launchers.length * ammo, world.player.hold.capacity))
 
     // Один вызов — одна ракета, независимо от того, сколько их на пилоне.
-    const before = missileAmmo(world.player)
+    const before = missileStock(world.player)
     expect(fireMissile(world, world.player, enemy.id)).toBe(true)
     expect(world.missiles.length).toBe(1)
-    expect(missileAmmo(world.player)).toBe(before - 1)
+    expect(missileStock(world.player)).toBe(before - 1)
   })
 
   /**
@@ -425,7 +425,7 @@ describe('ракеты на пилонах', () => {
   it('залп идёт с разных пусковых, пока они свободны', () => {
     const { world, enemy } = withOneEnemy(true)
     const launchers = launcherIndices(world.player)
-    const before = missileAmmo(world.player)
+    const before = missileStock(world.player)
 
     // Ни одного шага мира: перезарядка не тикает, значит каждый пуск — новая пусковая.
     for (let i = 0; i < launchers.length; i++) {
@@ -438,8 +438,8 @@ describe('ракеты на пилонах', () => {
     expect(world.missiles.length).toBe(launchers.length)
 
     // Запас при этом остался: отстрелили по одной с пусковой, остальное лежит в трюме.
-    expect(missileAmmo(world.player)).toBe(before - launchers.length)
-    expect(missileAmmo(world.player)).toBeGreaterThan(0)
+    expect(missileStock(world.player)).toBe(before - launchers.length)
+    expect(missileStock(world.player)).toBeGreaterThan(0)
   })
 
   /**

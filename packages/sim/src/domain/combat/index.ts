@@ -1,9 +1,9 @@
 export { canCloak, hasCloak, isBerthed, isVisible, stepCloak, toggleCloak } from './cloak'
 export { activeDrones, droneAmmo, expireDrones, isDroneShip, launchDrone } from './drones'
 export { bombReady, fireBomb } from './bomb'
-export { bounceOffShield, bounceOffSolid, resolveShipVsShip, resolveShipVsSphere } from './collision'
+export { bounceOffShield, bounceOffSolid, resolveShipVsSphere } from './collision'
 export { applyDamage, healthFraction, regenShield, shieldFraction, surviveLethal } from './damage'
-export { defuseGrievance, hasGrievance, pendingHail, provoke, registerPlayerHit, stepGrievances } from './grievance'
+export { defuseGrievance, hasGrievance, pendingHail, registerPlayerHit, stepGrievances } from './grievance'
 export { auxFraction, energyFraction, fireEcm, regenAux, regenEnergy } from './ecm'
 export { spawnBlastwave, spawnExplosion, spawnShieldFlash, spawnShockwave, spawnTracer } from './effects'
 export { chargeHyperdrive, scooping, starExposure, stepStarHeat } from './starheat'
@@ -64,7 +64,6 @@ export {
   cycleLaserGroup,
   selectedLaser,
   volleyAllowed,
-  missileAmmo,
   muzzleWorldPos,
   peakHeat,
   meanHeat,

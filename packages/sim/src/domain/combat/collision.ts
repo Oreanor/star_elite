@@ -61,59 +61,6 @@ export function resolveShipVsSphere(
   return rawImpact
 }
 
-const _cdelta = new Vector3()
-const _cnormal = new Vector3()
-const _crel = new Vector3()
-
-/**
- * Столкновение двух КОРАБЛЕЙ — нужно миелофону: гигант давит мелочь, сам почти цел.
- *
- * Обычные корабли (масштаб ~1) сквозные, как и были: этот резолвер вызывается лишь для
- * пар, где есть выросший борт (см. `stepShipCollisions`). Импульс и раздвижка — по массе
- * (куб масштаба), поэтому лёгкого отбрасывает, а гигант не шелохнётся. Урон каждому — по
- * ОТНОШЕНИЮ размеров: кого ударило БОЛЬШЕЕ, тому смертельно; большому — почти ничто.
- */
-export function resolveShipVsShip(a: ShipEntity, b: ShipEntity, time: number): void {
-  _cdelta.copy(a.state.pos).sub(b.state.pos)
-  const distance = _cdelta.length()
-  const minDistance = effectiveRadius(a) + effectiveRadius(b)
-  if (distance >= minDistance || distance < 1e-6) return
-
-  _cnormal.copy(_cdelta).divideScalar(distance)
-
-  const mA = effectiveMass(a)
-  const mB = effectiveMass(b)
-  const total = mA + mB
-  const overlap = minDistance - distance
-
-  // Кинематический борт (чужой игрок по сети) НЕПОДВИЖЕН: его позу ведёт интерполятор,
-  // физике его двигать нельзя — иначе дрожь и «прилипание» (толкнули, сеть вернула назад).
-  // Раздвижку и импульс он не получает, но для ДРУГОГО служит стеной с полной массой:
-  // оттого гигант для мелкого — солидная преграда, а мелочь для гиганта незаметна (mass ratio).
-  if (!a.kinematic) a.state.pos.addScaledVector(_cnormal, overlap * (mB / total))
-  if (!b.kinematic) b.state.pos.addScaledVector(_cnormal, -overlap * (mA / total))
-
-  const closing = _crel.copy(a.state.vel).sub(b.state.vel).dot(_cnormal)
-  if (closing >= 0) return // уже расходятся — только развели позиции
-
-  // Отталкивание с восстановлением, обоим обратно массе (кинематического не трогаем).
-  const j = -closing * (1 + IMPACT.RESTITUTION)
-  if (!a.kinematic) a.state.vel.addScaledVector(_cnormal, j * (mB / total))
-  if (!b.kinematic) b.state.vel.addScaledVector(_cnormal, -j * (mA / total))
-
-  // Урон по отношению размеров — только между ДВУМЯ локальными бортами. С чужим игроком
-  // (kinematic) — лишь твёрдый отскок, без урона: его HP живут на его клиенте, а сетевого
-  // боя-по-столкновению пока нет. Выросший (миелофон) сам неуязвим (scale>1).
-  const localPair = !a.kinematic && !b.kinematic
-  const base = Math.abs(closing) * IMPACT.RAM_DAMAGE_PER_SPEED
-  if (localPair && a.state.scale <= 1) {
-    applyDamage(a, base * (b.state.scale / a.state.scale), time, { kind: 'impact', name: b.name })
-  }
-  if (localPair && b.state.scale <= 1) {
-    applyDamage(b, base * (a.state.scale / b.state.scale), time, { kind: 'impact', name: a.name })
-  }
-}
-
 const _sdelta = new Vector3()
 const _snormal = new Vector3()
 const _solidPrev = new Vector3()

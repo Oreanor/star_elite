@@ -15,7 +15,7 @@ import { useSession } from '../../session/GameContext'
 import { shownShipQuat } from '../shownPose'
 import { jumpPortal, portalOpen } from '../../session/jumpPortal'
 import { GIANT_RENDER_CAP } from '../config'
-import { chassisGeometry, chassisSizeMul, droneGeometry, placeholderGeometry } from '../geometry/ships'
+import { chassisGeometry, droneGeometry, placeholderGeometry } from '../geometry/ships'
 import { cloakMaterial, hullMaterial, hullMaterialFor } from '../materials/materials'
 import { usePortalRenderSide } from './portalRenderContext'
 
@@ -79,8 +79,8 @@ export function PlayerShip() {
     renderPos(session.world, player.state, mesh.position)
 
     // Свой корпус виден на всём пути роста, до потолка: прятать его у верха зума читалось
-    // как «корабль уехал». Живой множитель размера из редактора оснастки (клавиша K): дефолт 1.
-    mesh.scale.setScalar(capped * chassisSizeMul(player.loadout.chassis.id))
+    // как «корабль уехал».
+    mesh.scale.setScalar(capped)
     // Корабль исчезает, канув в кольцо прыжка: с этого мига его в старой системе уже нет.
     mesh.visible = player.alive
 

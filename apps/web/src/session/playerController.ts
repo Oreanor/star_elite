@@ -19,7 +19,6 @@ import {
 import { consumePress, input, isHeld } from '../platform/input/input'
 import { pushWarning } from './warnings'
 import { undocking } from './undockFx'
-import { inputCaptured } from './inputCapture'
 
 /**
  * Игрок. Реализует тот же `Controller`, что и бот: заполняет ShipControls.
@@ -353,7 +352,7 @@ export function createPlayerController(intent: PlayerIntent): Controller {
       /**
        * НАД ПОВЕРХНОСТЬЮ Shift+W/S — это ВЫСОТА, а не газ. Полёт над телом полярный по
        * смыслу: мышь смотрит и рыскает, W/S ведут ход вдоль поверхности, а «вверх» —
-       * отдельная координата, которую держит рельс сферы (`stepHoverAltitude` в домене).
+       * отдельная координата, которую держит рельс сферы (`stepLanding` в домене).
        * Пилот выбирает эшелон, а не борется тягой с притяжением.
        */
       const hoverAltitudeKeys = ship.landedOn !== null && isHeld('ShiftLeft')
@@ -436,7 +435,7 @@ export function createPlayerController(intent: PlayerIntent): Controller {
       /**
        * НАД ПОВЕРХНОСТЬЮ высоту ведёт Shift+W/S, а не нос: мышь там только смотрит и
        * рыскает. Полёт над телом — полярный по смыслу, и «вверх» у него не направление
-       * тяги, а отдельная координата (домен ведёт её `strafeUp`, см. `stepHoverAltitude`).
+       * тяги, а отдельная координата (домен ведёт её `strafeUp`, см. `stepLanding`).
        *
        * Тем же нажатием рукоять газа НЕ двигаем — иначе набор высоты разгонял бы борт.
        */
@@ -461,7 +460,7 @@ export function createPlayerController(intent: PlayerIntent): Controller {
       c.boost = input.throttleUp ? boostMult(ship.loadout) : 1
       // В редакторе сопел Ctrl — модификатор сдвига вдоль корпуса, а не тормоз: иначе каждая
       // правка глубины дёргала бы корабль, и подстраивать устье приходилось бы на торможении.
-      c.retro = !inputCaptured() && (isHeld('ControlLeft') || isHeld('ControlRight')) ? 1 : 0
+      c.retro = isHeld('ControlLeft') || isHeld('ControlRight') ? 1 : 0
 
       // X — какой лазер стреляет: [все боевые →] первый → … → по новой. Выбор живёт в домене (`laserGroup`),
       // плашку о нём рисует HUD, заметив смену.

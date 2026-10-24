@@ -87,8 +87,7 @@ export {
 export { upgradeLevel } from './moduleState'
 export {
   buyCommodity,
-  canBuyCommodity,
-  cargoValue,
+  buyLimit,
   commodityBuyPrice,
   commodityHeld,
   commoditySellPrice,
@@ -100,14 +99,12 @@ export {
   localSettlement,
   sellCargo,
   sellItem,
-  type TradeError,
 } from './trade'
 export {
   issueFine,
   localFine,
   localAuthorityId,
   payLocalFine,
-  illegalCargoUnits,
   pendingPoliceFineHail,
   hailPoliceForFine,
   markPoliceFineHail,

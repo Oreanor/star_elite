@@ -1,9 +1,10 @@
 import { useFrame } from '@react-three/fiber'
 import { useEffect, useMemo, useRef } from 'react'
-import { Euler, InstancedMesh, Object3D, Quaternion, Vector3, type Texture } from 'three'
+import { Euler, InstancedMesh, Object3D, PlaneGeometry, Quaternion, Vector3, type InstancedBufferAttribute, type Texture } from 'three'
 import { PHYSICS, renderTime, type WarShard, type World } from '@elite/sim'
 import { useSession } from '../../session/GameContext'
-import { WARBASE_FX } from '../config'
+import { SHARD_EMBER, WARBASE_FX } from '../config'
+import { shardEmberMaterial } from '../materials/shardEmber'
 import {
   DETAIL_KEYS,
   TRASH_VARIANTS,
@@ -136,6 +137,52 @@ function PanelShards({ skin, variant }: { skin: number; variant: number }) {
 
 const PANEL_KEYS = Array.from({ length: WARBASE_TEXTURE_COUNT * PANEL_VARIANTS }, (_, i) => i)
 
+/**
+ * Накал осколков — ореол на каждый кусок, остывающий за `SHARD_EMBER.COOL`. Все — один
+ * InstancedMesh билбордов лицом к камере; поверх клубов огня (`renderOrder`), чтобы куски
+ * читались и в самом коме.
+ */
+function ShardEmbers() {
+  const session = useSession()
+  const ref = useRef<InstancedMesh>(null)
+  const material = useMemo(shardEmberMaterial, [])
+  const plane = useMemo(() => new PlaneGeometry(2, 2), [])
+  const heat = useMemo(() => new Float32Array(MAX_SHARDS), [])
+  useEffect(() => () => plane.dispose(), [plane])
+  useFrame(({ camera }) => {
+    const mesh = ref.current
+    if (!mesh) return
+    const world = session.world
+    const shrink = worldShrink(world.player.state.scale)
+    const time = renderTime(world)
+    let count = 0
+    if (shrink > 0) {
+      for (const s of world.warShards) {
+        if (count >= MAX_SHARDS) break
+        // Жар — от возраста; у каждого куска свой темп (по зерну): одни гаснут раньше других.
+        const h = Math.exp(-(time - s.born) / (SHARD_EMBER.COOL * (0.7 + 0.6 * ((s.seed % 97) / 97))))
+        if (h < 0.03) continue
+        place(world, s, time, shrink, null)
+        _dummy.quaternion.copy(camera.quaternion)
+        _dummy.scale.setScalar(s.size * shrink * SHARD_EMBER.SIZE)
+        _dummy.updateMatrix()
+        mesh.setMatrixAt(count, _dummy.matrix)
+        heat[count] = h
+        count++
+      }
+    }
+    mesh.count = count
+    mesh.instanceMatrix.needsUpdate = true
+    const attr = mesh.geometry.getAttribute('instanceHeat') as InstancedBufferAttribute | undefined
+    if (attr) attr.needsUpdate = true
+  })
+  return (
+    <instancedMesh ref={ref} args={[plane, material, MAX_SHARDS]} frustumCulled={false} renderOrder={2}>
+      <instancedBufferAttribute attach="geometry-attributes-instanceHeat" args={[heat, 1]} />
+    </instancedMesh>
+  )
+}
+
 export function WarShards() {
   return (
     <>
@@ -148,6 +195,7 @@ export function WarShards() {
       {PANEL_KEYS.map((k) => (
         <PanelShards key={k} skin={Math.floor(k / PANEL_VARIANTS)} variant={k % PANEL_VARIANTS} />
       ))}
+      <ShardEmbers />
     </>
   )
 }

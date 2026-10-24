@@ -3,7 +3,7 @@ import { veteranWorld } from '../../testkit'
 import { describe, expect, it } from 'vitest'
 import { selectTarget } from '../ai/targeting'
 import { createAIState } from '../ai'
-import { cycleTarget } from '../world/queries'
+import { cycleContact } from '../world/queries'
 import { STARTER_SYSTEM, type World } from '../world'
 import type { ShipEntity } from '../world/entities'
 import { canCloak, hasCloak, isVisible, stepCloak, toggleCloak } from './cloak'
@@ -106,9 +106,14 @@ describe('невидимку никто не видит', () => {
 
   it('замаскированного нельзя захватить', () => {
     const { world, pirate } = withPirate()
-    expect(cycleTarget(world, null)).toBe(pirate.id)
+    // Захват — тем же перебором, что Tab в игре (`cycleContact`).
+    const lockedId = (): number | undefined => world.contactLock?.id
+    cycleContact(world)
+    expect(lockedId()).toBe(pirate.id)
 
     pirate.cloaked = true
-    expect(cycleTarget(world, null)).toBeNull()
+    world.contactLock = null
+    cycleContact(world)
+    expect(lockedId()).not.toBe(pirate.id)
   })
 })

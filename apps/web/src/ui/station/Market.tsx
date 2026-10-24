@@ -2,7 +2,7 @@ import { useState } from 'react'
 import {
   localFine,
   buyCommodity,
-  cargoMass,
+  buyLimit,
   commodityBuyPrice,
   commodityHeld,
   commoditySellPrice,
@@ -165,13 +165,8 @@ export function Market({ world, onChange }: { world: World; onChange: () => void
  * и для границ ползунка в модалке — чтобы они не разошлись.
  */
 function tradeLimits(world: World, c: Commodity): { buyMax: number; held: number } {
-  const hold = world.player.hold
-  const buyPrice = commodityBuyPrice(world, c)
-  const affordable = buyPrice > 0 ? Math.floor(world.credits / buyPrice) : 0
-  const freeUnits = Math.floor((hold.capacity - cargoMass(hold)) / c.unitMass)
-  const stock = commodityStockAt(world, c)
-  const buyMax = Math.max(0, Math.min(affordable, freeUnits, stock))
-  return { buyMax, held: commodityHeld(world.player, c) }
+  // Предел покупки — доменный (`buyLimit`): тот же, по которому `buyCommodity` отдаёт товар.
+  return { buyMax: buyLimit(world, world.player, c), held: commodityHeld(world.player, c) }
 }
 
 /** Масса единицы товара — всегда в тоннах: на вес в игре меряют только тоннами, не килограммами. */
