@@ -88,20 +88,25 @@ void main() {
   // Не modelMatrix: группа на пилоте, буфер — от дома. Считаем от локуса в ly.
   vec3 relLy = position - uPlayerLy;
   vec3 worldPos = uPlayer + relLy * uLayerScale;
-  float dist = length(relLy) * uLayerScale;
-  vT = clamp((uRadius - dist) / max(uEdge, 1.0), 0.0, 1.0);
   vec4 world = vec4(worldPos, 1.0);
   vec4 mv = viewMatrix * world;
+  float camDist = max(length(mv.xyz), 1.0);
+  // Дальше шара (он упирается в дальнюю плоскость) звезду НЕ выбрасываем, а придвигаем
+  // вдоль луча на его границу: направление на экране то же, размер ниже — по истинной
+  // дальности. Раньше здесь был срез: галактика издали не виднелась вовсе и «проявлялась
+  // из ничего», когда подлетал к ней на дальность плоскости. Глубина у слоя не пишется
+  // (аддитив), так что сдвиг вдоль луча ничего не перекрывает.
+  if (camDist > uRadius) mv.xyz *= uRadius / camDist;
+  vT = 1.0;
   gl_Position = projectionMatrix * mv;
   #include <logdepthbuf_vertex>
 
-  if (lod > 0.5 || vT <= 0.0) {
+  if (lod > 0.5) {
     gl_PointSize = 0.0;
     return;
   }
 
   float rRender = size * uSizeMul * uLayerScale;
-  float camDist = max(length(mv.xyz), 1.0);
   float diamPx = 2.0 * uProj * rRender / camDist;
   float sizeMul = mix(uCalmSize, uActiveSize, boost);
   float discPx = diamPx * sizeMul;
