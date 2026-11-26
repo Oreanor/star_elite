@@ -1,3 +1,4 @@
+import { asset } from '../../config/asset'
 import { useState } from 'react'
 import { resetPassword, signIn, signUp } from '../../session/net/account'
 import { t, useLang } from '../i18n'
@@ -56,7 +57,7 @@ export function AuthScreen() {
   return (
     <div
       className="absolute inset-0 overflow-y-auto bg-black bg-cover bg-center font-mono text-[#7fd6ff]"
-      style={{ backgroundImage: 'url(/bg.webp)' }}
+      style={{ backgroundImage: `url(${asset('/bg.webp')})` }}
     >
       <div className="absolute inset-0 bg-black/60" />
 

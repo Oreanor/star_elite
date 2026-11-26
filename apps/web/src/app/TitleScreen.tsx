@@ -247,8 +247,8 @@ function TitleLogo({
           aria-hidden
           className="pointer-events-none absolute inset-0"
           style={{
-            WebkitMaskImage: 'url(/logo.webp)',
-            maskImage: 'url(/logo.webp)',
+            WebkitMaskImage: `url(${asset('/logo.webp')})`,
+            maskImage: `url(${asset('/logo.webp')})`,
             WebkitMaskSize: '100% 100%',
             maskSize: '100% 100%',
             WebkitMaskRepeat: 'no-repeat',
@@ -557,8 +557,8 @@ function TitleShip({ trembling, launched }: { trembling: boolean; launched: bool
             <div
               className="pointer-events-none absolute inset-0 mix-blend-overlay"
               style={{
-                WebkitMaskImage: 'url(/ship.webp)',
-                maskImage: 'url(/ship.webp)',
+                WebkitMaskImage: `url(${asset('/ship.webp')})`,
+                maskImage: `url(${asset('/ship.webp')})`,
                 WebkitMaskSize: '100% 100%',
                 maskSize: '100% 100%',
                 WebkitMaskRepeat: 'no-repeat',
@@ -576,8 +576,8 @@ function TitleShip({ trembling, launched }: { trembling: boolean; launched: bool
               ref={shineRef}
               className="pointer-events-none absolute inset-0 mix-blend-overlay"
               style={{
-                WebkitMaskImage: 'url(/ship.webp)',
-                maskImage: 'url(/ship.webp)',
+                WebkitMaskImage: `url(${asset('/ship.webp')})`,
+                maskImage: `url(${asset('/ship.webp')})`,
                 WebkitMaskSize: '100% 100%',
                 maskSize: '100% 100%',
                 WebkitMaskRepeat: 'no-repeat',
@@ -839,7 +839,7 @@ export function Paused({
         <div
           className="absolute inset-0 cursor-default overflow-hidden bg-black bg-cover bg-center"
           style={{
-            backgroundImage: 'url(/bg.webp)',
+            backgroundImage: `url(${asset('/bg.webp')})`,
             animation: 'title-fade-in 0.35s ease-out both',
           }}
         >

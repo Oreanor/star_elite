@@ -1,3 +1,4 @@
+import { asset } from '../config/asset'
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { applyPilotProfile, offerHail, hailPoliceForFine, interlocutor, jumpBlock, lockShipContact, markPoliceFineHail, pendingHail, pendingPoliceFineHail, serializePlayer, stationInterlocutor, undock, type JumpBlock, type PilotProfile, type PlayerSave, type World, hostileToPlayer } from '@elite/sim'
 import { GameProvider, useSession } from '../session/GameContext'
@@ -77,7 +78,7 @@ function BootSplash({ label }: { label: string }) {
   return (
     <div
       className="absolute inset-0 flex items-center justify-center bg-black bg-cover bg-center font-mono text-[#7fd6ff]"
-      style={{ backgroundImage: 'url(/bg.webp)' }}
+      style={{ backgroundImage: `url(${asset('/bg.webp')})` }}
     >
       <div className="absolute inset-0 bg-black/60" />
       <div className="relative text-sm uppercase tracking-title">{label}</div>
