@@ -1,3 +1,4 @@
+import { commitInstances } from '../gpuUpload'
 import { useFrame } from '@react-three/fiber'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
@@ -652,13 +653,21 @@ export function GalaxyLayer() {
         const wx = player.x + (lx - plx) * layerScale
         const wy = player.y + (ly - ply) * layerScale
         const wz = player.z + (lz - plz) * layerScale
-        const dist = Math.hypot(lx - plx, ly - ply, lz - plz) * layerScale
+        // sqrt, а не Math.hypot: цикл идёт по всем звёздам каждый кадр, а hypot с переменным
+        // числом аргументов в V8 в разы медленнее. Величины далеки от переполнения квадрата.
+        const dx = lx - plx
+        const dy = ly - ply
+        const dz = lz - plz
+        const dist = Math.sqrt(dx * dx + dy * dy + dz * dz) * layerScale
         const edgeT = (radiusM - dist) / Math.max(edgeM, 1)
         if (edgeT <= 0) continue
 
         const rLy = sizeLy(data.radiusUnits[i]!, FADE_SCALE) * starMul
         const rRender = rLy * layerScale
-        const camDist = Math.hypot(wx - cam.position.x, wy - cam.position.y, wz - cam.position.z)
+        const cx = wx - cam.position.x
+        const cy = wy - cam.position.y
+        const cz = wz - cam.position.z
+        const camDist = Math.sqrt(cx * cx + cy * cy + cz * cz)
         // Тот же множитель метки, что у точки в шейдере: иначе на переходе точка → меш
         // выбранная звезда скачком съёживается в 2.2 раза.
         const sizeMul = data.boost[i]! > 0.5 ? GALAXY_LAYER.ACTIVE_SIZE_MUL : GALAXY_LAYER.CALM_SIZE_MUL
@@ -743,12 +752,8 @@ export function GalaxyLayer() {
         shellCount++
       }
 
-      disc.count = discCount
-      shell.count = shellCount
-      disc.instanceMatrix.needsUpdate = true
-      shell.instanceMatrix.needsUpdate = true
-      if (disc.instanceColor) disc.instanceColor.needsUpdate = true
-      if (shell.instanceColor) shell.instanceColor.needsUpdate = true
+      commitInstances(disc, discCount, true)
+      commitInstances(shell, shellCount, true)
       disc.visible = discCount > 0
       shell.visible = shellCount > 0
     } else if (disc && shell) {

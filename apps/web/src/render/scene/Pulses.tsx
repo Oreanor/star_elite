@@ -1,3 +1,4 @@
+import { commitInstances } from '../gpuUpload'
 import { useFrame } from '@react-three/fiber'
 import { useMemo, useRef } from 'react'
 import { AdditiveBlending, Color, IcosahedronGeometry, InstancedMesh, Object3D, ShaderMaterial, Vector3 } from 'three'
@@ -167,14 +168,12 @@ export function Pulses() {
       _dummy.updateMatrix()
       mesh.setMatrixAt(n++, _dummy.matrix)
     }
-    mesh.count = n
-    mesh.instanceMatrix.needsUpdate = true
+    commitInstances(mesh, n)
     // Ореол — те же матрицы: копия массива, без пересборки.
     const haloMesh = haloRef.current
     if (haloMesh) {
       haloMesh.instanceMatrix.array.set(mesh.instanceMatrix.array)
-      haloMesh.count = n
-      haloMesh.instanceMatrix.needsUpdate = true
+      commitInstances(haloMesh, n)
     }
   })
 

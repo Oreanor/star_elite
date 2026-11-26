@@ -1,8 +1,9 @@
 import { useFrame, useThree } from '@react-three/fiber'
-import { useRef } from 'react'
-import { Color, DirectionalLight, Vector3 } from 'three'
+import { useLayoutEffect, useRef } from 'react'
+import { Color, DirectionalLight, HemisphereLight, Vector3 } from 'three'
 import { useSession } from '../../session/GameContext'
 import { GALAXY_LAYER, LIGHT } from '../config'
+import { FRONT_FX_LAYER } from '../post/frontFxPass'
 import { dyingStarLight, nearestStar, tintedSunColor } from '../starLight'
 
 /**
@@ -31,6 +32,19 @@ export function Lighting() {
 
   const sunRef = useRef<DirectionalLight>(null)
   const fillRef = useRef<DirectionalLight>(null)
+  const hemiRef = useRef<HemisphereLight>(null)
+
+  /**
+   * Свет живёт и на слое переднего плана (`FrontFxPass`). Тот рендерит ту же сцену второй раз,
+   * глядя только на свой слой, — и без этого не видел бы ни одного источника. Для three это
+   * смена набора света: 3 → 0 → 3 за кадр поднимает версию освещения, и КАЖДЫЙ освещённый
+   * материал основного прохода заново выводит параметры и ключ программы. Замер: треть
+   * времени отрисовки на ЦП уходила в `setProgram → getProgram`. Светить переднему плану
+   * свет не будет (выхлоп неосвещённый) — важно лишь, чтобы набор в обоих проходах совпадал.
+   */
+  useLayoutEffect(() => {
+    for (const light of [sunRef.current, fillRef.current, hemiRef.current]) light?.layers.enable(FRONT_FX_LAYER)
+  }, [])
 
   useFrame(() => {
     const player = session.world.player.state.pos
@@ -81,7 +95,7 @@ export function Lighting() {
        */}
       <directionalLight ref={sunRef} intensity={LIGHT.SUN_INTENSITY} color={LIGHT.SUN_BASE} />
       <directionalLight ref={fillRef} intensity={LIGHT.FILL_INTENSITY} color={LIGHT.FILL_COLOR} />
-      <hemisphereLight args={[LIGHT.HEMI_SKY, LIGHT.HEMI_GROUND, LIGHT.HEMI_INTENSITY]} />
+      <hemisphereLight ref={hemiRef} args={[LIGHT.HEMI_SKY, LIGHT.HEMI_GROUND, LIGHT.HEMI_INTENSITY]} />
     </>
   )
 }

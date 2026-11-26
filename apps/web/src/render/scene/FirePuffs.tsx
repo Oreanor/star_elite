@@ -1,3 +1,4 @@
+import { commitInstances } from '../gpuUpload'
 import { useFrame } from '@react-three/fiber'
 import { useMemo, useRef } from 'react'
 import { Color, IcosahedronGeometry, InstancedMesh, Object3D } from 'three'
@@ -47,9 +48,7 @@ export function FirePuffs() {
         n++
       }
     }
-    mesh.count = n
-    mesh.instanceMatrix.needsUpdate = true
-    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true
+    commitInstances(mesh, n, true)
   })
 
   return <instancedMesh ref={ref} args={[geometry, material, MAX]} frustumCulled={false} />

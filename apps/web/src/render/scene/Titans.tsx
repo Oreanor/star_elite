@@ -1,3 +1,4 @@
+import { commitInstances } from '../gpuUpload'
 import { useFrame } from '@react-three/fiber'
 import { useMemo, useRef } from 'react'
 import { InstancedMesh, Object3D, Quaternion, Vector3 } from 'three'
@@ -61,8 +62,7 @@ export function Titans() {
       count++
     }
 
-    mesh.count = count
-    mesh.instanceMatrix.needsUpdate = true
+    commitInstances(mesh, count)
   })
 
   // Отсечение по пирамиде выключено: матрицы инстансов three не учитывает в

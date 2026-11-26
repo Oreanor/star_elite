@@ -1,3 +1,4 @@
+import { commitInstances } from '../gpuUpload'
 import { useFrame } from '@react-three/fiber'
 import { useEffect, useMemo, useRef } from 'react'
 import { InstancedMesh, Object3D, Vector3 } from 'three'
@@ -213,10 +214,8 @@ export function BushShips() {
       }
     }
 
-    ships.count = ns
-    gods.count = ng
-    ships.instanceMatrix.needsUpdate = true
-    gods.instanceMatrix.needsUpdate = true
+    commitInstances(ships, ns)
+    commitInstances(gods, ng)
   })
 
   return (

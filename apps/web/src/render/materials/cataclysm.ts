@@ -216,6 +216,9 @@ export function veilMaterial(): ShaderMaterial {
     transparent: true,
     depthWrite: false,
     side: DoubleSide,
+    // Аддитив без записи глубины от порядка граней не зависит: без этого three рисует
+    // двусторонний прозрачный объект ДВУМЯ проходами и дважды за кадр пересобирает параметры программы.
+    forceSinglePass: true,
   })
 }
 
@@ -296,6 +299,9 @@ export function ringMaterial(): ShaderMaterial {
     transparent: true,
     depthWrite: false,
     side: DoubleSide,
+    // Аддитив без записи глубины от порядка граней не зависит: без этого three рисует
+    // двусторонний прозрачный объект ДВУМЯ проходами и дважды за кадр пересобирает параметры программы.
+    forceSinglePass: true,
   })
 }
 

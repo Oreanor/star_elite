@@ -119,6 +119,9 @@ export function createStreamMaterial(fromColor: number): ShaderMaterial {
     blending: AdditiveBlending,
     depthWrite: false,
     side: DoubleSide,
+    // Аддитив без записи глубины от порядка граней не зависит: без этого three рисует
+    // двусторонний прозрачный объект ДВУМЯ проходами и дважды за кадр пересобирает параметры программы.
+    forceSinglePass: true,
     toneMapped: false,
   })
 }
@@ -140,6 +143,9 @@ export function createAccretionDiskMaterial(fromColor: number, inner: number, ou
     blending: AdditiveBlending,
     depthWrite: false,
     side: DoubleSide,
+    // Аддитив без записи глубины от порядка граней не зависит: без этого three рисует
+    // двусторонний прозрачный объект ДВУМЯ проходами и дважды за кадр пересобирает параметры программы.
+    forceSinglePass: true,
     toneMapped: false,
   })
 }

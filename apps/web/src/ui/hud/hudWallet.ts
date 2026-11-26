@@ -33,8 +33,31 @@ function rem(): number {
   return remPx
 }
 
+/**
+ * Плашка меняется раз в игровые сутки или когда двигаются деньги, а рисовалась каждый кадр:
+ * два замера текста, четыре смены шрифта, скруглённая рамка, два fillText — заметная доля
+ * HUD в профиле кадра. Теперь она рисуется в свой холст лишь при смене текста или кегля,
+ * а в кадре только копируется. Координаты целые, поэтому пиксели те же, что прежде.
+ */
+let plate: HTMLCanvasElement | null = null
+let plateKey = ''
+
 export function drawWallet({ ctx, world }: HudFrame): void {
   const r = rem()
+  const date = currentGameDate()
+  const money = moneyNumber(world.credits)
+  const key = `${date}|${money}|${r}`
+  if (!plate || key !== plateKey) {
+    plate = paintPlate(date, money, r)
+    plateKey = key
+  }
+  // Поля — РОВНЫЕ сверху и слева, чуть шире отступа самой плашки.
+  const margin = Math.round(1.25 * r)
+  ctx.drawImage(plate, margin, margin)
+}
+
+function paintPlate(date: string, money: string, r: number): HTMLCanvasElement {
+  const canvas = document.createElement('canvas')
   const fontPx = 0.875 * r // text-sm
   const lineH = 1.25 * r // line-height text-sm
   const padX = 1 * r // px-4
@@ -43,12 +66,9 @@ export function drawWallet({ ctx, world }: HudFrame): void {
   const coinW = 0.68 * fontPx
   const coinH = 0.95 * fontPx
   const coinGap = 0.5 * r // gap-2 у Money
-  // Поля — РОВНЫЕ сверху и слева, чуть шире отступа самой плашки.
-  const margin = 1.25 * r
-
-  const date = currentGameDate()
-  const money = moneyNumber(world.credits)
-  const saved = { font: ctx.font, spacing: ctx.letterSpacing, align: ctx.textAlign, base: ctx.textBaseline }
+  // Замер — на холсте плашки: размер холста и зависит от ширины текста.
+  let ctx = canvas.getContext('2d')
+  if (!ctx) return canvas
 
   ctx.letterSpacing = `${(0.1 * fontPx).toFixed(2)}px` // tracking-meta
   ctx.font = `${fontPx}px ${FONT_FAMILY}`
@@ -56,12 +76,18 @@ export function drawWallet({ ctx, world }: HudFrame): void {
   ctx.font = `600 ${fontPx}px ${FONT_FAMILY}` // font-semibold
   const moneyW = ctx.measureText(money).width
 
-  const x = Math.round(margin)
-  const y = Math.round(margin)
+  const x = 0
+  const y = 0
   // +2 — рамка в 1 px с каждой стороны: в вёрстке она прибавляется к размеру блока.
   const w = Math.round(padX + dateW + gap + 1 + gap + coinW + coinGap + moneyW + padX + 2)
   const h = Math.round(padY * 2 + lineH + 2)
   const mid = y + h / 2
+  // +2 — штрих рамки в полпикселя за край с каждой стороны.
+  canvas.width = w + 2
+  canvas.height = h + 2
+  // Смена размера сбрасывает состояние холста — разрядку букв ставим заново.
+  ctx = canvas.getContext('2d')!
+  ctx.letterSpacing = `${(0.1 * fontPx).toFixed(2)}px`
 
   ctx.beginPath()
   ctx.roundRect(x + 0.5, y + 0.5, w, h, 0.5 * r) // rounded-lg
@@ -103,8 +129,5 @@ export function drawWallet({ ctx, world }: HudFrame): void {
   ctx.fillStyle = MONEY_TONE
   ctx.fillText(money, cx, mid)
 
-  ctx.font = saved.font
-  ctx.letterSpacing = saved.spacing
-  ctx.textAlign = saved.align
-  ctx.textBaseline = saved.base
+  return canvas
 }

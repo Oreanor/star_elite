@@ -133,6 +133,10 @@ function rigSave(): Plugin {
 export default defineConfig(async () => ({
   plugins: [react(), tailwindcss(), rigSave()],
   server: { port: 5173 },
+  // `vite preview` — стенд замеров боевой сборки. Заголовок открывает странице JS Self-Profiling
+  // API (`new Profiler`): профиль по функциям снимается из самой страницы, без DevTools.
+  // На сервер не уходит — Caddy отдаёт dist сам, этот конфиг там не участвует.
+  preview: { headers: { 'Document-Policy': 'js-profiling' } },
   // Env читаем из КОРНЯ монорепо, а не из папки пакета: ключ модели один на весь
   // проект (его же подхватит будущий apps/server), и хранится в одном `.env.local`.
   envDir: '../../',

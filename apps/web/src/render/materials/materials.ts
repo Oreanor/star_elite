@@ -158,6 +158,9 @@ export function corridorMaterial(): MeshBasicMaterial {
     transparent: true,
     depthWrite: false,
     side: DoubleSide,
+    // Аддитив без записи глубины от порядка граней не зависит: без этого three рисует
+    // двусторонний прозрачный объект ДВУМЯ проходами и дважды за кадр пересобирает параметры программы.
+    forceSinglePass: true,
   })
   return corridor
 }
@@ -478,6 +481,9 @@ export function shieldBubbleMaterial(): MeshBasicMaterial {
     blending: AdditiveBlending,
     depthWrite: false,
     side: DoubleSide,
+    // Аддитив без записи глубины от порядка граней не зависит: без этого three рисует
+    // двусторонний прозрачный объект ДВУМЯ проходами и дважды за кадр пересобирает параметры программы.
+    forceSinglePass: true,
     fog: false,
   })
   return shieldBubble
@@ -592,6 +598,9 @@ export function dustNeonMaterial(): ShaderMaterial {
     blending: AdditiveBlending,
     depthWrite: false,
     side: DoubleSide,
+    // Аддитив без записи глубины от порядка граней не зависит: без этого three рисует
+    // двусторонний прозрачный объект ДВУМЯ проходами и дважды за кадр пересобирает параметры программы.
+    forceSinglePass: true,
     fog: false,
   })
   return dustNeon

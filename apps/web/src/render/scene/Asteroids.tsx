@@ -1,3 +1,4 @@
+import { commitInstances, uploadFirst } from '../gpuUpload'
 import { useFrame } from '@react-three/fiber'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { BufferAttribute, BufferGeometry, InstancedMesh, Object3D, PointsMaterial, type Texture } from 'three'
@@ -74,8 +75,7 @@ function RockMeshes() {
     for (let i = 0; i < list.length; i++) {
       const mesh = list[i]
       if (!mesh) continue
-      mesh.count = _counts[i]!
-      mesh.instanceMatrix.needsUpdate = true
+      commitInstances(mesh, _counts[i]!)
     }
   })
 
@@ -134,15 +134,18 @@ function BeltDots() {
       const v = dots.drift
 
       // Ближайшая точка дуги — начало спада (у каждого пояса своя).
-      let near: number = BELT.VISIBLE_RANGE
+      // Минимум ищем по квадратам и корень берём раз: цикл идёт по тысячам точек каждый
+      // кадр, а Math.hypot в V8 в разы медленнее sqrt (оттуда же — sqrt ниже).
+      let near2: number = BELT.VISIBLE_RANGE * BELT.VISIBLE_RANGE
       for (let i = 0; i < dots.count; i++) {
         const o = i * 3
         const x = p[o]! + v[o]! * dt - off.x - player.x
         const y = p[o + 1]! + v[o + 1]! * dt - off.y - player.y
         const z = p[o + 2]! + v[o + 2]! * dt - off.z - player.z
-        const d = Math.hypot(x, y, z)
-        if (d < near) near = d
+        const d2 = x * x + y * y + z * z
+        if (d2 < near2) near2 = d2
       }
+      const near = Math.sqrt(near2)
       const reach = Math.max(1, BELT.VISIBLE_RANGE * BELT.VISIBLE_RANGE - near * near)
 
       for (let i = 0; i < dots.count; i++) {
@@ -150,7 +153,10 @@ function BeltDots() {
         const x = p[o]! + v[o]! * dt - off.x
         const y = p[o + 1]! + v[o + 1]! * dt - off.y
         const z = p[o + 2]! + v[o + 2]! * dt - off.z
-        const d = Math.hypot(x - player.x, y - player.y, z - player.z)
+        const px = x - player.x
+        const py = y - player.y
+        const pz = z - player.z
+        const d = Math.sqrt(px * px + py * py + pz * pz)
         if (d >= BELT.VISIBLE_RANGE) continue
         pos.setXYZ(n, x, y, z)
         const along = Math.max(0, d * d - near * near)
@@ -165,7 +171,8 @@ function BeltDots() {
       }
     }
     geometry.setDrawRange(0, n)
-    pos.needsUpdate = color.needsUpdate = true
+    uploadFirst(pos, n)
+    uploadFirst(color, n)
   })
   return <points geometry={geometry} material={dotMaterial} frustumCulled={false} />
 }

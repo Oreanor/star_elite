@@ -1,3 +1,4 @@
+import { commitInstances } from '../gpuUpload'
 import { useFrame } from '@react-three/fiber'
 import { useMemo, useRef } from 'react'
 import { AdditiveBlending, Color, InstancedMesh, Object3D, PlaneGeometry, ShaderMaterial, Vector3 } from 'three'
@@ -198,12 +199,9 @@ export function LifePulses() {
         m++
       }
     }
-    mesh.count = n
-    mesh.instanceMatrix.needsUpdate = true
+    commitInstances(mesh, n)
     if (field) {
-      field.count = m
-      field.instanceMatrix.needsUpdate = true
-      if (field.instanceColor) field.instanceColor.needsUpdate = true
+      commitInstances(field, m, true)
     }
   })
 

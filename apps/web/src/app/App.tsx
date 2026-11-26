@@ -178,6 +178,13 @@ const VEIL_HOLD_MS = 500
  * быть — пелена уже чёрная, анимации выключены, — и без страховки игра не стартовала бы.
  */
 const VEIL_SWAP_FALLBACK_MS = 2_000
+/**
+ * Страховка готовности сцены, мс: прогрев ждёт загрузки до 6 с (`WarmUp`) и компиляцию,
+ * поэтому порог с запасом сверху — он ловит лишь поломку, а не медленную сеть.
+ */
+const WARM_FALLBACK_MS = 12_000
+/** Фоновая догрузка корпусов и портретов — после старта, когда пелена уже сошла, мс. */
+const PRELOAD_AFTER_START_MS = VEIL_HOLD_MS + VEIL_FADE_MS + 600
 
 function Shell({ onRestart }: { onRestart: () => void }) {
   const session = useSession()
@@ -254,28 +261,22 @@ function Shell({ onRestart }: { onRestart: () => void }) {
    * ещё нет), и кнопка сама повторяет запрос, пока сцена не встанет.
    */
   const [booted, setBooted] = useState(resume !== null)
-  // Сцена реально ПОСТРОЕНА — по этому сигналу титул даёт «вжух». `booted` лишь запускает
-  // сборку (тяжёлый рендер сцены), а этот эффект срабатывает уже ПОСЛЕ её коммита: два кадра
-  // rAF гарантируют, что сцена собрана и отрисована, а не «помечена к сборке». Надёжнее, чем
-  // useFrame внутри Canvas (тот мог не тикать до захвата курсора) — оттого «вжуха» и не было.
+  // Сцена ПРОГРЕТА — по этому сигналу титул даёт «вжух». `booted` лишь запускает сборку,
+  // а прогрев (`WarmUp` внутри канвы) дожидается моделей, компилирует шейдеры, заливает
+  // текстуры и рисует пару кадров. Раньше сигналом были два rAF после коммита сборки — и
+  // компиляция с заливкой (~2 с главного потока) приходились ровно на срыв корабля.
   const [sceneReady, setSceneReady] = useState(false)
+  const onWarm = useCallback(() => {
+    setSceneReady(true)
+    // Экрану загрузки — тот же сигнал «сцена показалась»: кадры уже настоящие.
+    markFirstFrame()
+  }, [])
   useEffect(() => {
     if (!booted) return
-    let raf = requestAnimationFrame(() => {
-      raf = requestAnimationFrame(() => {
-        setSceneReady(true)
-        // Экрану загрузки — тот же сигнал «сцена собрана»: кадровый цикл канвы до захвата
-        // курсора может не тикать, и зонд в сцене (`SceneReadyProbe`) тогда молчал бы.
-        markFirstFrame()
-      })
-    })
-    // Подстраховка: если rAF почему-то не отработал (был заморожен сборкой и т.п.), всё равно
-    // объявляем готовность — иначе «вжуха» и перехода не будет вовсе («не улетает»).
-    const fallback = window.setTimeout(() => setSceneReady(true), 2000)
-    return () => {
-      cancelAnimationFrame(raf)
-      window.clearTimeout(fallback)
-    }
+    // Подстраховка: прогрев не отчитался (исключение, заморозка) — объявляем готовность сами,
+    // иначе «вжуха» и перехода не будет вовсе («не улетает»).
+    const fallback = window.setTimeout(() => setSceneReady(true), WARM_FALLBACK_MS)
+    return () => window.clearTimeout(fallback)
   }, [booted])
 
   // ЭКРАН ЗАГРУЗКИ и очередь загрузок. Свой корпус — первым, сразу: без него сцену не
@@ -286,11 +287,18 @@ function Shell({ onRestart }: { onRestart: () => void }) {
   useEffect(() => {
     preloadHull(session.world.player.loadout.chassis.id)
   }, [session])
+  // И не раньше, чем игра началась и сошла пелена: готовность сцены теперь и есть миг срыва
+  // корабля на титуле, а разбор девяти мегабайт моделей и декодирование двух десятков
+  // портретов 1254² занимают те же потоки растеризации, что и анимации «вжуха». Замер:
+  // пауза после срыва 0.7 с с догрузкой против 0.2 с без неё.
   useEffect(() => {
-    if (!loadingDone) return
-    preloadHulls()
-    preloadPortraits()
-  }, [loadingDone])
+    if (!loadingDone || !started) return
+    const id = window.setTimeout(() => {
+      preloadHulls()
+      preloadPortraits()
+    }, PRELOAD_AFTER_START_MS)
+    return () => window.clearTimeout(id)
+  }, [loadingDone, started])
 
   /**
    * Новичок только что слепил пилота и запускается: Paused проигрывает флориш взлёта
@@ -931,7 +939,7 @@ function Shell({ onRestart }: { onRestart: () => void }) {
     <div className="relative h-screen w-screen overflow-hidden bg-black">
       {/* Канвас — всегда: захвату курсора нужен готовый канвас уже на первом жесте.
           Тяжёлую сцену он строит только по `booted` (после нажатия СТАРТ). */}
-      <Game ready={booted} />
+      <Game ready={booted} onWarm={onWarm} />
       {/* Обновил вкладку у причала: станция уже на экране, но сцена ещё грузится — кликать
           бесполезно. Закрываем интерфейс, пока она не готова (`session/sceneReady`). */}
       {booted && docked && !loadingDone && <LoadingVeil progress={loadingProgress} />}

@@ -173,6 +173,9 @@ export function crossNeonLampMaterial(): ShaderMaterial {
     depthWrite: false,
     depthTest: true,
     side: DoubleSide,
+    // Аддитив без записи глубины от порядка граней не зависит: без этого three рисует
+    // двусторонний прозрачный объект ДВУМЯ проходами и дважды за кадр пересобирает параметры программы.
+    forceSinglePass: true,
     fog: false,
     toneMapped: false,
   })

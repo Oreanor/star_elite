@@ -1,3 +1,4 @@
+import { commitInstances } from '../gpuUpload'
 import { useFrame } from '@react-three/fiber'
 import { useEffect, useMemo, useRef } from 'react'
 import {
@@ -87,8 +88,7 @@ export function WarBaseRays() {
       const m = cores.current[i]
       if (m) m.visible = false
     }
-    mesh.count = n
-    mesh.instanceMatrix.needsUpdate = true
+    commitInstances(mesh, n)
     const attr = mesh.geometry.getAttribute('instanceGlow') as InstancedBufferAttribute | undefined
     if (attr) attr.needsUpdate = true
   })

@@ -1,3 +1,4 @@
+import { commitInstances } from '../gpuUpload'
 import { useFrame } from '@react-three/fiber'
 import { useMemo, useRef } from 'react'
 import { InstancedMesh, Object3D, Quaternion, Vector3 } from 'three'
@@ -78,8 +79,7 @@ export function WingMissiles() {
       count++
     }
 
-    mesh.count = count
-    mesh.instanceMatrix.needsUpdate = true
+    commitInstances(mesh, count)
   })
 
   return <instancedMesh ref={ref} args={[geometry, material, MAX_PYLONS]} frustumCulled={false} />

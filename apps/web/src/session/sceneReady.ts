@@ -65,6 +65,11 @@ export function markFirstFrame(): void {
   setTimeout(check, MAX_WAIT_MS + 50)
 }
 
+/** Загрузчики three ещё везут файлы (модели, текстуры). */
+export function loadsPending(): boolean {
+  return loaded < total
+}
+
 export function sceneReady(): boolean {
   return ready
 }

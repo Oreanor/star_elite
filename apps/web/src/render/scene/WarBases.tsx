@@ -1,3 +1,4 @@
+import { commitInstances } from '../gpuUpload'
 import { useFrame } from '@react-three/fiber'
 import { useEffect, useMemo, useRef } from 'react'
 import {
@@ -186,8 +187,7 @@ function DetailBatch({ dkey }: { dkey: DetailKey }) {
         count++
       }
     }
-    mesh.count = count
-    mesh.instanceMatrix.needsUpdate = true
+    commitInstances(mesh, count)
   })
 
   return <instancedMesh ref={ref} args={[undefined, undefined, MAX_DETAILS]} frustumCulled={false} />
@@ -244,8 +244,7 @@ function TrashBatch({ variant }: { variant: number }) {
         count++
       }
     }
-    mesh.count = count
-    mesh.instanceMatrix.needsUpdate = true
+    commitInstances(mesh, count)
   })
 
   return <instancedMesh ref={ref} args={[undefined, undefined, MAX_DETAILS]} frustumCulled={false} />

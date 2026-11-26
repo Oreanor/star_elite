@@ -1,3 +1,4 @@
+import { commitInstances } from '../gpuUpload'
 import { useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef } from 'react'
 import { InstancedMesh, Mesh, Object3D, Plane, type Material } from 'three'
@@ -143,8 +144,7 @@ export function Drones() {
       count++
     }
 
-    mesh.count = count
-    mesh.instanceMatrix.needsUpdate = true
+    commitInstances(mesh, count)
   })
 
   return <instancedMesh ref={ref} args={[geometry, material, MAX_DRONES]} frustumCulled={false} />
@@ -192,8 +192,7 @@ function BotChassisBatch({ chassisId }: { chassisId: string }) {
       count++
     }
 
-    mesh.count = count
-    mesh.instanceMatrix.needsUpdate = true
+    commitInstances(mesh, count)
   })
 
   return (

@@ -1,3 +1,4 @@
+import { commitInstances } from '../gpuUpload'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useFrame } from '@react-three/fiber'
 import { InstancedMesh, MeshLambertMaterial, Object3D, type Material, type Texture } from 'three'
@@ -51,8 +52,7 @@ function DebrisBatch({ shapeIndex, meshIndex }: { shapeIndex: number; meshIndex:
       mesh.setMatrixAt(count, _dummy.matrix)
       count++
     }
-    mesh.count = count
-    mesh.instanceMatrix.needsUpdate = true
+    commitInstances(mesh, count)
   })
 
   return <instancedMesh ref={ref} args={[geometry, fallback, MAX_DEBRIS]} frustumCulled={false} />

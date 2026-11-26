@@ -24,9 +24,21 @@ export function Coin() {
   )
 }
 
+/**
+ * Форматтеры — по одному на язык, а не на вызов: `toLocaleString(locale)` строит
+ * `Intl.NumberFormat` заново при каждом обращении, а кошелёк HUD зовёт это каждый кадр.
+ */
+const formats = new Map<string, Intl.NumberFormat>()
+
 /** Число с разбивкой разрядов по языку интерфейса. */
 export function moneyNumber(amount: number): string {
-  return Math.round(amount).toLocaleString(currentLang() === 'ru' ? 'ru' : 'en-US')
+  const locale = currentLang() === 'ru' ? 'ru' : 'en-US'
+  let format = formats.get(locale)
+  if (!format) {
+    format = new Intl.NumberFormat(locale)
+    formats.set(locale, format)
+  }
+  return format.format(Math.round(amount))
 }
 
 /** Сумма: монетка и число. Не переносится — «монетка / 52 000» на двух строках читалось бы как два значения. */

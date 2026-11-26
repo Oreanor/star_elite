@@ -1,3 +1,4 @@
+import { commitInstances } from '../gpuUpload'
 import { useFrame } from '@react-three/fiber'
 import { useLayoutEffect, useMemo, useRef } from 'react'
 import { AdditiveBlending, InstancedMesh, MeshBasicMaterial, Object3D, Quaternion, Vector3 } from 'three'
@@ -220,8 +221,7 @@ function Flames({ cone }: { cone: Cone }) {
       emit(renderPos(world, m, _shownAt), renderQuat(world, m, _shownQuat), MISSILE_FLAME, length)
     }
 
-    mesh.count = count
-    mesh.instanceMatrix.needsUpdate = true
+    commitInstances(mesh, count)
   })
 
   // Свой слой: факел дорисовывается после линз чёрных дыр (`FrontFxPass`), не в основном проходе.

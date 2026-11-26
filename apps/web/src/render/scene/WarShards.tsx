@@ -1,3 +1,4 @@
+import { commitInstances } from '../gpuUpload'
 import { useFrame } from '@react-three/fiber'
 import { useEffect, useMemo, useRef } from 'react'
 import { Euler, InstancedMesh, Object3D, PlaneGeometry, Quaternion, Vector3, type InstancedBufferAttribute, type Texture } from 'three'
@@ -68,8 +69,7 @@ function DetailShards({ dkey }: { dkey: DetailKey }) {
       place(session.world, s, time, shrink, pre)
       mesh.setMatrixAt(count++, _dummy.matrix)
     }
-    mesh.count = count
-    mesh.instanceMatrix.needsUpdate = true
+    commitInstances(mesh, count)
   })
   return <instancedMesh ref={ref} args={[undefined, undefined, MAX_SHARDS]} frustumCulled={false} />
 }
@@ -96,8 +96,7 @@ function TrashShards({ variant }: { variant: number }) {
       place(session.world, s, time, shrink, null)
       mesh.setMatrixAt(count++, _dummy.matrix)
     }
-    mesh.count = count
-    mesh.instanceMatrix.needsUpdate = true
+    commitInstances(mesh, count)
   })
   return <instancedMesh ref={ref} args={[undefined, undefined, MAX_SHARDS]} frustumCulled={false} />
 }
@@ -129,8 +128,7 @@ function PanelShards({ skin, variant }: { skin: number; variant: number }) {
         mesh.setMatrixAt(count++, _dummy.matrix)
       }
     }
-    mesh.count = count
-    mesh.instanceMatrix.needsUpdate = true
+    commitInstances(mesh, count)
   })
   return <instancedMesh ref={ref} args={[warBasePanelGeometry(variant), undefined, MAX_SHARDS]} frustumCulled={false} />
 }
@@ -171,8 +169,7 @@ function ShardEmbers() {
         count++
       }
     }
-    mesh.count = count
-    mesh.instanceMatrix.needsUpdate = true
+    commitInstances(mesh, count)
     const attr = mesh.geometry.getAttribute('instanceHeat') as InstancedBufferAttribute | undefined
     if (attr) attr.needsUpdate = true
   })

@@ -1,3 +1,4 @@
+import { commitInstances } from '../gpuUpload'
 import { useFrame } from '@react-three/fiber'
 import { useEffect, useMemo, useRef } from 'react'
 import {
@@ -130,8 +131,7 @@ export function Blastwaves() {
       count++
     }
 
-    mesh.count = count
-    mesh.instanceMatrix.needsUpdate = true
+    commitInstances(mesh, count)
     const attr = mesh.geometry.getAttribute('instancePhase') as InstancedBufferAttribute | undefined
     if (attr) attr.needsUpdate = true
   })

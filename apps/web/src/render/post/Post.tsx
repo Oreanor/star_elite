@@ -13,6 +13,7 @@ import { JumpPortalPass } from './portalPass'
 import { BlackHolePass } from './blackHolePass'
 import { FrontFxPass } from './frontFxPass'
 import { activeWorldRenderScene } from '../scene/jumpPortalWorld'
+import { renderHeld } from '../renderGate'
 
 /**
  * Свечение + zoom-fx + stencil-портал прыжка.
@@ -113,6 +114,8 @@ export function Post() {
 
     gl.localClippingEnabled = true
     renderPass.scene = activeWorldRenderScene(scene, session.world)
+    // Кадр закрыт титулом (прогрев, флориш) — не рисуем: см. renderGate.
+    if (renderHeld()) return
     composer.render()
   }, 1)
 

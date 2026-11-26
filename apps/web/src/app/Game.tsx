@@ -13,6 +13,8 @@ import { UndockDirector } from '../render/scene/UndockFx'
 import { WorldVisuals } from '../render/scene/WorldVisuals'
 import { promotedJumpPortalWorld } from '../render/scene/jumpPortalWorld'
 import { Dust } from '../render/scene/Dust'
+import { WarmUp } from '../render/scene/WarmUp'
+import { renderHeld } from '../render/renderGate'
 import { attachInput } from '../platform/input/input'
 import { Hud } from '../ui/hud/Hud'
 import { RemotePortalDirector } from './RemotePortalDirector'
@@ -22,7 +24,7 @@ import { RemotePortalDirector } from './RemotePortalDirector'
  * шагает мир на -100, портал синхронизирует устье на -90, Post рисует на 1.
  * Порядок JSX остаётся смысловым и не является скрытой синхронизацией.
  */
-function Scene({ epoch }: { epoch: number }) {
+function Scene({ epoch, onWarm }: { epoch: number; onWarm: () => void }) {
   const hasPromotedWorld = promotedJumpPortalWorld(useSession().world) !== null
   return (
     <>
@@ -43,6 +45,7 @@ function Scene({ epoch }: { epoch: number }) {
       {/* После композера: счётчики рендерера читаются, когда кадр уже нарисован. F3. */}
       <Probe />
       <SceneReadyProbe />
+      <WarmUp onWarm={onWarm} />
     </>
   )
 }
@@ -58,7 +61,8 @@ const READY_AFTER_FRAMES = 20
 function SceneReadyProbe() {
   const frames = useRef(0)
   useFrame(() => {
-    if (frames.current > READY_AFTER_FRAMES) return
+    // Кадр на паузе (прогрев, флориш) не нарисован — не считаем его показанным.
+    if (frames.current > READY_AFTER_FRAMES || renderHeld()) return
     frames.current++
     if (frames.current === READY_AFTER_FRAMES) markFirstFrame()
   })
@@ -74,7 +78,7 @@ function SceneReadyProbe() {
  * а полумиллионное небо и геометрия планет строятся уже под нажатием — там это
  * читается как загрузка, а не как поломка.
  */
-export function Game({ ready }: { ready: boolean }) {
+export function Game({ ready, onWarm }: { ready: boolean; /** Сцена прогрета: шейдеры собраны, текстуры в видеокарте. */ onWarm: () => void }) {
   const hostRef = useRef<HTMLDivElement>(null)
   const session = useSession()
 
@@ -118,7 +122,7 @@ export function Game({ ready }: { ready: boolean }) {
             Постановщик прыжка — ВНЕ ключа: подмена мира не должна его размонтировать. */}
         {ready && (
           <>
-            <Scene epoch={epoch} />
+            <Scene epoch={epoch} onWarm={onWarm} />
             {/* Приоритет -90: уже после Simulation (-100), но до объектов сцены (0)
                 и Post (1). Поэтому collider, клип и кольцо видят одну позу кадра. */}
             <JumpDirector />

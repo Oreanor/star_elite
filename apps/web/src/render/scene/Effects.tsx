@@ -1,3 +1,4 @@
+import { commitInstances, uploadFirst } from '../gpuUpload'
 import { useFrame, useThree } from '@react-three/fiber'
 import { Fragment, useEffect, useMemo, useRef } from 'react'
 import {
@@ -132,8 +133,7 @@ function TracerBatch({
       count++
     }
 
-    mesh.count = count
-    mesh.instanceMatrix.needsUpdate = true
+    commitInstances(mesh, count)
   })
 
   return (
@@ -271,9 +271,7 @@ export function MuzzleFlashes() {
       count++
     }
 
-    mesh.count = count
-    mesh.instanceMatrix.needsUpdate = true
-    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true
+    commitInstances(mesh, count, true)
   })
 
   return <instancedMesh ref={ref} args={[geometry, material, MAX_MUZZLE]} frustumCulled={false} />
@@ -342,9 +340,8 @@ export function Explosions() {
       count++
     }
 
-    mesh.count = count
-    mesh.instanceMatrix.needsUpdate = true
-    tints.needsUpdate = true
+    commitInstances(mesh, count)
+    uploadFirst(tints, count)
   })
 
   return <instancedMesh ref={ref} args={[geometry, material, MAX_EXPLOSIONS]} frustumCulled={false} />
@@ -409,9 +406,7 @@ export function ExplosionChunks() {
       }
     }
 
-    mesh.count = count
-    mesh.instanceMatrix.needsUpdate = true
-    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true
+    commitInstances(mesh, count, true)
   })
 
   return <instancedMesh ref={ref} args={[geometry, material, EXPLOSION.MAX_CHUNKS]} frustumCulled={false} />
@@ -476,9 +471,7 @@ export function WarpFlashes() {
       count++
     }
 
-    mesh.count = count
-    mesh.instanceMatrix.needsUpdate = true
-    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true
+    commitInstances(mesh, count, true)
   })
 
   return <instancedMesh ref={ref} args={[geometry, material, WARP_FLASH.MAX]} frustumCulled={false} />
@@ -541,9 +534,7 @@ export function StationShields() {
       count++
     }
 
-    mesh.count = count
-    mesh.instanceMatrix.needsUpdate = true
-    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true
+    commitInstances(mesh, count, true)
   })
 
   return <instancedMesh ref={ref} args={[geometry, material, SHIELD_FLASH.MAX]} frustumCulled={false} />
@@ -569,8 +560,7 @@ export function CargoPods() {
       count++
     }
 
-    mesh.count = count
-    mesh.instanceMatrix.needsUpdate = true
+    commitInstances(mesh, count)
   })
 
   return <instancedMesh ref={ref} args={[podGeometry(), podMaterial(), MAX_PODS]} frustumCulled={false} />
@@ -595,8 +585,7 @@ export function Missiles() {
       count++
     }
 
-    mesh.count = count
-    mesh.instanceMatrix.needsUpdate = true
+    commitInstances(mesh, count)
   })
 
   return (
@@ -655,9 +644,7 @@ export function MissileGlows() {
       mesh.setColorAt(count, _missileTint)
       count++
     }
-    mesh.count = count
-    mesh.instanceMatrix.needsUpdate = true
-    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true
+    commitInstances(mesh, count, true)
   })
 
   return <instancedMesh ref={ref} args={[geometry, material, MAX_MISSILES]} frustumCulled={false} />
@@ -710,7 +697,7 @@ export function TractorBeam() {
     }
 
     mesh.geometry.setDrawRange(0, count * 2)
-    attribute.needsUpdate = true
+    uploadFirst(attribute, count * 2)
   })
 
   return <lineSegments ref={ref} geometry={geometry} material={tractorMaterial()} frustumCulled={false} />

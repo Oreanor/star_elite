@@ -7,6 +7,7 @@ import { setLang, t, useLang, type Key, type Lang } from '../ui/i18n'
 import { Tabs } from '../ui/station/chrome'
 import { preloadTitleAssets, redecodeTitleAssets, titleAssetsReady } from '../ui/preload'
 import { preloadSystemSurfaces } from '../render/materials/surfacePreload'
+import { holdRender } from '../render/renderGate'
 
 /**
  * Титульный экран: заставка, пауза, настройки и экран гибели. Отдельно от App —
@@ -671,6 +672,8 @@ export function Paused({
   // При возврате с паузы захват размонтирует Paused сразу. На титуле компонент живёт
   // до конца флориша, но его poll всё равно должен уйти вместе с ним.
   useEffect(() => () => void (timer.current !== null && window.clearTimeout(timer.current)), [])
+  // Флориш оборвался вместе с титулом (переход, сдача) — 3D не должна остаться на паузе.
+  useEffect(() => () => holdRender('flourish', false), [])
 
   /**
    * Точка схода пыли и варп-штрихов — центр ЗВЕЗДЫ логотипа. По X это центр экрана (лого
@@ -708,6 +711,7 @@ export function Paused({
       if (performance.now() >= deadline) {
         setWaiting(false) // сдались — пусть кнопка снова принимает нажатие
         setLaunched(false) // и корабль обратно на место (не «улетевший») к следующей попытке
+        holdRender('flourish', false)
         fired.current = false // разрешаем флоришу сыграть заново на следующей попытке
         // Под пеленой Shell уже снял Paused (`enterPlay`) — без колбэка титул не вернётся.
         onLockFailed?.()
@@ -783,12 +787,19 @@ export function Paused({
     if (!ready || !waiting || resuming || fired.current) return
     fired.current = true
     const skip = leftTab.current
-    if (!skip) setLaunched(true)
+    if (!skip) {
+      setLaunched(true)
+      // На срыв и улёт 3D не рисуется: кадр закрыт титулом, а первые показы догрузившегося
+      // (заливка текстур, шейдеры) рвали бы анимации, которые ведёт главный поток. Пауза
+      // снимается под чёрной пеленой — там рывок не виден.
+      holdRender('flourish', true)
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
     window.setTimeout(() => {
       // Смена вида идёт под чёрной пеленой (затемнение→просветление), чтобы шов подмены
       // дерева не мелькнул. Небо к этому моменту уже секунду постояло пустым (LAUNCH_HOLD_MS).
       const swap = () => {
+        holdRender('flourish', false)
         flourishRef.current = false // флориш кончился — станция снова вправе всплывать
         // Куда переходим — по фактическому состоянию мира: пристыкован (новичок ИЛИ сейв у
         // причала) → станция; в полёте → дожимаем захват. Так «продолжить» тоже улетает.

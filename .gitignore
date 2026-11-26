@@ -27,3 +27,4 @@ docs/*
 
 *.tsbuildinfo
 coverage/
+scratch/perf/out/

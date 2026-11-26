@@ -1,3 +1,4 @@
+import { commitInstances } from '../gpuUpload'
 import { useFrame } from '@react-three/fiber'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Color, InstancedMesh, Object3D, Quaternion, Vector3, type Texture } from 'three'
@@ -117,8 +118,7 @@ function MoonGroup({ shape, moons }: { shape: number; moons: readonly BodyEntity
       mesh.setMatrixAt(i, _dummy.matrix)
     }
 
-    mesh.count = moons.length
-    mesh.instanceMatrix.needsUpdate = true
+    commitInstances(mesh, moons.length)
   })
 
   // Отсечение по пирамиде выключено: границы инстансов мы не считаем, а сфера

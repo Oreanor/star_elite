@@ -1,3 +1,4 @@
+import { commitInstances } from '../gpuUpload'
 import { useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef } from 'react'
 import { Color, InstancedBufferAttribute, InstancedMesh, Object3D, PlaneGeometry, Vector3 } from 'three'
@@ -72,9 +73,7 @@ export function ShieldBubbles() {
     consider(world.player)
     for (const ship of world.ships) consider(ship)
 
-    mesh.count = count
-    mesh.instanceMatrix.needsUpdate = true
-    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true
+    commitInstances(mesh, count, true)
   })
 
   return <instancedMesh ref={ref} args={[geometry, material, SHIELD_BUBBLE.MAX]} frustumCulled={false} />
