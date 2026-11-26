@@ -1,3 +1,4 @@
+import { asset } from '../config/asset'
 import type { CSSProperties } from 'react'
 import { hostileToPlayer, type ShipEntity, type World } from '@elite/sim'
 
@@ -53,7 +54,7 @@ export function speciesAsset(species: string): string {
  * это фотографические портреты, им сжатие с потерями показано.
  */
 export function portraitSheet(species: string, emotion: Emotion): string {
-  return `/portraits/${speciesAsset(species)}/${EMOTION_FILE[emotion]}.webp`
+  return asset(`/portraits/${speciesAsset(species)}/${EMOTION_FILE[emotion]}.webp`)
 }
 
 /** Хеш строки в 32 бита: разные имена — разные лица, но детерминированно. */
@@ -164,7 +165,7 @@ export function emotionToDivine(e: Emotion): DivineEmotion {
 }
 
 /** Лист бога: 8 кадров в ряд, `public/portraits/dude.webp`. */
-export const DUDE_SHEET = '/portraits/dude.webp'
+export const DUDE_SHEET = asset('/portraits/dude.webp')
 const DUDE_COLS = 8
 const DUDE_ORDER: readonly DivineEmotion[] = [
   'neutral', 'smile', 'laugh', 'tired', 'confusion', 'surprise', 'frown', 'angry',
@@ -218,10 +219,10 @@ export function preloadPortraits(): void {
   const assets = [...new Set(Object.values(SPECIES_ASSET))]
   // Нейтральные — первым проходом: это лицо по умолчанию в списках, контактах и на
   // создании персонажа. Эмоции нужны лишь в разговоре, их догружаем следом.
-  for (const asset of assets) loadSheet(`/portraits/${asset}/${EMOTION_FILE.neutral}.webp`)
-  for (const asset of assets) {
+  for (const dir of assets) loadSheet(asset(`/portraits/${dir}/${EMOTION_FILE.neutral}.webp`))
+  for (const dir of assets) {
     for (const num of Object.values(EMOTION_FILE)) {
-      if (num !== EMOTION_FILE.neutral) loadSheet(`/portraits/${asset}/${num}.webp`)
+      if (num !== EMOTION_FILE.neutral) loadSheet(asset(`/portraits/${dir}/${num}.webp`))
     }
   }
 }

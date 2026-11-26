@@ -1,3 +1,4 @@
+import { asset } from '../config/asset'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useSession } from '../session/GameContext'
 import { TitleStars } from './TitleStars'
@@ -238,7 +239,7 @@ function TitleLogo({
   return (
     <div className="pointer-events-none absolute inset-x-0 top-[6vh] mx-auto w-full max-w-[54rem] px-8">
       <div className="relative">
-        <img ref={imgRef} src="/logo.webp" alt="STAR ELITE" onLoad={onReady} decoding="sync" className="block w-full" />
+        <img ref={imgRef} src={asset('/logo.webp')} alt="STAR ELITE" onLoad={onReady} decoding="sync" className="block w-full" />
         {/* Вспышка старта — БЕЛАЯ НАКЛАДКА по форме букв с анимацией OPACITY (не filter):
             opacity идёт на композиторе и НЕ замирает под блокирующей сборкой сцены — иначе
             вспышка застывала на полусвете. Гаснет в ноль (`forwards`). */}
@@ -525,21 +526,21 @@ function TitleShip({ trembling, launched }: { trembling: boolean; launched: bool
             Центральная струя возвращена на осевую линию арта (left-1/2, привязана к носу корабля,
             а не к боковым), поэтому расклад — тот же, что и на боевом корабле: центр + две крыльевые. */}
         <img
-          src="/flame_left.webp"
+          src={asset('/flame_left.webp')}
           alt=""
           aria-hidden
           className="absolute bottom-[82%] left-[calc(39.8%_+_8px)] w-[13%] origin-bottom mix-blend-screen"
           style={{ animation: 'title-flame-left 1.5s ease-in-out infinite, flame-flicker 0.42s linear infinite' }}
         />
         <img
-          src="/flame_right.webp"
+          src={asset('/flame_right.webp')}
           alt=""
           aria-hidden
           className="absolute bottom-[82%] left-[calc(60.2%_-_8px)] w-[13%] origin-bottom mix-blend-screen"
           style={{ animation: 'title-flame-right 1.5s ease-in-out infinite, flame-flicker 0.35s linear infinite' }}
         />
         <img
-          src="/flame_center.webp"
+          src={asset('/flame_center.webp')}
           alt=""
           aria-hidden
           className="absolute bottom-[80%] left-1/2 w-[9%] origin-bottom mix-blend-screen"
@@ -549,7 +550,7 @@ function TitleShip({ trembling, launched }: { trembling: boolean; launched: bool
             {/* `decoding="sync"`: распаковать ДО первой отрисовки. Прогрев был давно (вход, создание
                 пилота), браузер успел выбросить распакованный мегабайт из кэша, и большая картинка
                 шла асинхронно — первые кадры взлёта корабля не было, видны одни струи. */}
-            <img src="/ship.webp" alt="" aria-hidden decoding="sync" className="block w-full" />
+            <img src={asset('/ship.webp')} alt="" aria-hidden decoding="sync" className="block w-full" />
             {/* Вертикальная растушёвка корпуса: верх чуть темнее, низ чуть светлее — пара
                 процентов объёма. Режим overlay: над чёрным даёт чёрное (тени целы), а средние
                 тона гнёт — тёмный верх гасит, светлый низ поднимает. Статична, маска по силуэту. */}

@@ -1,3 +1,4 @@
+import { asset } from '../../config/asset'
 import { BufferGeometry, Matrix4, type Material, type Mesh } from 'three'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { HERMES_SIZE, rigOf } from '@elite/sim'
@@ -249,33 +250,33 @@ const GLB_HULLS: readonly GlbHullDef[] = [
   // Сопел у него НЕТ вовсе — пустой список, а не отсутствующее поле: `?? tailNozzles(...)`
   // иначе развёл бы автоматическую пару по габаритам, и корпус получил бы факелы обратно.
   // Тангаж: прямой угол (меш экспортирован носом вверх) минус 20° — подобрано глазами.
-  { id: 'spiritus_sanctus', url: '/models/ships/spiritus.glb', scale: GLB_SCALE,
+  { id: 'spiritus_sanctus', url: asset('/models/ships/spiritus.glb'), scale: GLB_SCALE,
     yaw: GLB_YAW - Math.PI / 2, pitch: GLB_PITCH + Math.PI / 2 - Math.PI / 9, roll: GLB_ROLL,
     nozzles: [] },
   // «Аврора One»: выхлоп из ДВУХ центральных движков (тёмные тубусы). Сопла придвинуты к устьям,
   // а не на концы крыла, куда их уносит авто-разнос по габариту.
-  { id: 'aurora_one', url: '/models/ships/aurora_one.glb', scale: GLB_SCALE, yaw: GLB_YAW, pitch: GLB_PITCH, roll: GLB_ROLL,
+  { id: 'aurora_one', url: asset('/models/ships/aurora_one.glb'), scale: GLB_SCALE, yaw: GLB_YAW, pitch: GLB_PITCH, roll: GLB_ROLL,
     nozzles: [{ offset: [-1.39, -0.61, 7.5], radius: 1 }, { offset: [1.39, -0.61, 7.5], radius: 1 }] },
   // «Гермес» — тяжёлый военный, втрое крупнее истребителей. Сопла сняты редактором оснастки:
   // авто по габариту сажало их на внешние гондолы, а выхлоп бьёт из центральной пары.
-  { id: 'hermes', url: '/models/ships/hermes.glb', scale: GLB_SCALE * HERMES_SIZE, yaw: GLB_YAW, pitch: GLB_PITCH, roll: GLB_ROLL,
+  { id: 'hermes', url: asset('/models/ships/hermes.glb'), scale: GLB_SCALE * HERMES_SIZE, yaw: GLB_YAW, pitch: GLB_PITCH, roll: GLB_ROLL,
     nozzles: [{ offset: [-2.81, -0.94, 24.28], radius: 2.09 }, { offset: [2.81, -0.94, 24.28], radius: 2.09 }] },
   // «Персей»: сопла сняты редактором, авто по габариту сажало их мимо движков.
-  { id: 'perseus', url: '/models/ships/perseus.glb', scale: GLB_SCALE, yaw: GLB_YAW, pitch: GLB_PITCH, roll: GLB_ROLL,
+  { id: 'perseus', url: asset('/models/ships/perseus.glb'), scale: GLB_SCALE, yaw: GLB_YAW, pitch: GLB_PITCH, roll: GLB_ROLL,
     nozzles: [{ offset: [-1.03, -0.62, 8], radius: 0.54 }, { offset: [1.03, -0.62, 8], radius: 0.54 }] },
-  { id: 'pegasus', url: '/models/ships/pegasus.glb', scale: GLB_SCALE, yaw: GLB_YAW, pitch: GLB_PITCH, roll: GLB_ROLL,
+  { id: 'pegasus', url: asset('/models/ships/pegasus.glb'), scale: GLB_SCALE, yaw: GLB_YAW, pitch: GLB_PITCH, roll: GLB_ROLL,
     nozzles: [{ offset: [-0.82, -0.74, 7.37], radius: 0.68 }, { offset: [0.82, -0.74, 7.37], radius: 0.68 }] },
-  { id: 'orion', url: '/models/ships/orion.glb', scale: GLB_SCALE, yaw: GLB_YAW, pitch: GLB_PITCH, roll: GLB_ROLL,
+  { id: 'orion', url: asset('/models/ships/orion.glb'), scale: GLB_SCALE, yaw: GLB_YAW, pitch: GLB_PITCH, roll: GLB_ROLL,
     nozzles: [{ offset: [-1.15, -0.64, 7.9], radius: 0.63 }, { offset: [1.15, -0.64, 7.9], radius: 0.63 }] },
   // «Тесей» — лёгкий истребитель (933 тришки).
-  { id: 'theseus', url: '/models/ships/theseus.glb', scale: GLB_SCALE, yaw: GLB_YAW, pitch: GLB_PITCH, roll: GLB_ROLL,
+  { id: 'theseus', url: asset('/models/ships/theseus.glb'), scale: GLB_SCALE, yaw: GLB_YAW, pitch: GLB_PITCH, roll: GLB_ROLL,
     nozzles: [{ offset: [-0.98, -0.27, 6.74], radius: 0.62 }, { offset: [0.98, -0.27, 6.74], radius: 0.62 }] },
   // «Афина» и «Икар» — свежие серийные корпуса. Разворот общий; если меш приедет носом
   // не туда, правится он здесь одной строкой, а не в домене.
-  { id: 'athena', url: '/models/ships/athena.glb', scale: GLB_SCALE, yaw: GLB_YAW, pitch: GLB_PITCH, roll: GLB_ROLL,
+  { id: 'athena', url: asset('/models/ships/athena.glb'), scale: GLB_SCALE, yaw: GLB_YAW, pitch: GLB_PITCH, roll: GLB_ROLL,
     nozzles: [{ offset: [-1.05, 0.53, 8.07], radius: 1.01 }, { offset: [1.05, 0.53, 8.07], radius: 1.01 }] },
   // «Икар» экспортирован КОРМОЙ вперёд: развернули на 180° — иначе летел задом, сопла на носу.
-  { id: 'icarus', url: '/models/ships/icarus.glb', scale: GLB_SCALE, yaw: GLB_YAW + Math.PI, pitch: GLB_PITCH, roll: GLB_ROLL,
+  { id: 'icarus', url: asset('/models/ships/icarus.glb'), scale: GLB_SCALE, yaw: GLB_YAW + Math.PI, pitch: GLB_PITCH, roll: GLB_ROLL,
     nozzles: [{ offset: [-2.67, -1.14, 13.59], radius: 1.36 }, { offset: [2.67, -1.14, 13.59], radius: 1.36 }] },
   /**
    * «Атлас» — КОРАБЛЬ ПОКОЛЕНИЙ, и масштаб у него не «побольше прочих», а другого порядка:
@@ -286,7 +287,7 @@ const GLB_HULLS: readonly GlbHullDef[] = [
    * они — лучи пойдут сквозь борт, не задев. Растишь одно — расти и второе.
    */
   // Сопла ковчега не зеркальны: корпус кривой, и пара по ±x села бы мимо гондол.
-  { id: 'atlas', url: '/models/ships/atlas.glb', scale: 120, yaw: GLB_YAW, pitch: GLB_PITCH, roll: GLB_ROLL,
+  { id: 'atlas', url: asset('/models/ships/atlas.glb'), scale: 120, yaw: GLB_YAW, pitch: GLB_PITCH, roll: GLB_ROLL,
     nozzles: [{ offset: [-11.75, -8.71, 55.8], radius: 5.17 }, { offset: [10.69, -10.09, 56.26], radius: 5.17 }] },
 ]
 

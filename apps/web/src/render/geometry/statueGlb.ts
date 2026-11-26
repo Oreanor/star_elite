@@ -1,3 +1,4 @@
+import { asset } from '../../config/asset'
 import { BufferGeometry, Matrix4, type Material, type Mesh, type MeshStandardMaterial, type Object3D } from 'three'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 
@@ -17,9 +18,9 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
  * Гигабайт таких «про запас» уже стоил нам половины кадров (см. шапку `GLB_HULLS` в `ships.ts`).
  */
 const STATUE_URLS: readonly string[] = [
-  '/models/statues/lucifer.glb',
-  '/models/statues/shiva.glb',
-  '/models/statues/tut.glb',
+  asset('/models/statues/lucifer.glb'),
+  asset('/models/statues/shiva.glb'),
+  asset('/models/statues/tut.glb'),
 ]
 
 /** Сколько обликов статуй. Домен берёт индекс по модулю этого числа. */

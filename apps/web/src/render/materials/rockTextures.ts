@@ -1,3 +1,4 @@
+import { asset } from '../../config/asset'
 import type { Texture } from 'three'
 import { loadSurfaceTexture } from './surfaceTexture'
 
@@ -37,7 +38,7 @@ export function rockTextureOf(id: number): number {
  * различает полную карту, а HUD её ещё и читает попиксельно (`textureBall`).
  */
 export function rockTextureUrl(shape: number, quality: 'full' | 'lo' = 'full'): string {
-  return quality === 'lo' ? `/textures/asteroids/lo/${shape}.webp` : `/textures/asteroids/${shape}.webp`
+  return quality === 'lo' ? asset(`/textures/asteroids/lo/${shape}.webp`) : asset(`/textures/asteroids/${shape}.webp`)
 }
 
 /**

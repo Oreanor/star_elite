@@ -1,3 +1,4 @@
+import { asset } from '../../config/asset'
 import {
   AdditiveBlending,
   LinearFilter,
@@ -37,7 +38,7 @@ export function explosionSheetMaterial(): ShaderMaterial {
   }
 
   new TextureLoader().load(
-    '/textures/fx/explosion.webp',
+    asset('/textures/fx/explosion.webp'),
     (texture) => {
       texture.colorSpace = SRGBColorSpace
       texture.minFilter = LinearFilter

@@ -1,3 +1,4 @@
+import { asset } from '../../config/asset'
 import {
   BufferGeometry,
   Matrix4,
@@ -22,11 +23,11 @@ export const DETAIL_KEYS = ['tower', 'gun1', 'gun2', 'eye1', 'pod'] as const
 export type DetailKey = (typeof DETAIL_KEYS)[number]
 
 const DETAIL_URLS: Record<DetailKey, string> = {
-  tower: '/models/warbase/tower.glb',
-  gun1: '/models/warbase/gun1.glb',
-  gun2: '/models/warbase/gun2.glb',
-  eye1: '/models/warbase/eye1.glb',
-  pod: '/models/warbase/pod.glb',
+  tower: asset('/models/warbase/tower.glb'),
+  gun1: asset('/models/warbase/gun1.glb'),
+  gun2: asset('/models/warbase/gun2.glb'),
+  eye1: asset('/models/warbase/eye1.glb'),
+  pod: asset('/models/warbase/pod.glb'),
 }
 
 interface Loaded {
@@ -89,7 +90,7 @@ for (const key of DETAIL_KEYS) {
  *
  * Свечение гасим сильнее, чем у целой детали: обломок мёртв, ему незачем светиться.
  */
-const TRASH_URLS = ['/models/warbase/trash/0.glb', '/models/warbase/trash/1.glb', '/models/warbase/trash/2.glb']
+const TRASH_URLS = [asset('/models/warbase/trash/0.glb'), asset('/models/warbase/trash/1.glb'), asset('/models/warbase/trash/2.glb')]
 
 export const TRASH_VARIANTS = TRASH_URLS.length
 

@@ -1,3 +1,4 @@
+import { asset } from '../../config/asset'
 import { EquirectangularReflectionMapping, SRGBColorSpace, TextureLoader, type Texture } from 'three'
 import { nebulaTexture } from './nebula'
 
@@ -21,7 +22,7 @@ function normalizedSkyIndex(galaxyIndex: number): number {
 }
 
 function skyUrl(index: number): string {
-  return `/textures/sky/${index}.webp`
+  return asset(`/textures/sky/${index}.webp`)
 }
 
 function configure(texture: Texture): Texture {

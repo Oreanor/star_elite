@@ -1,3 +1,4 @@
+import { asset } from '../../config/asset'
 import { BufferGeometry, Matrix4, type Material, type Mesh, type Object3D, type MeshStandardMaterial } from 'three'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { MATERIAL } from '../config'
@@ -13,11 +14,11 @@ import { MATERIAL } from '../config'
  */
 
 const STATION_URLS: readonly string[] = [
-  '/models/stations/station_1.glb',
-  '/models/stations/station_2.glb',
-  '/models/stations/station_3.glb',
-  '/models/stations/station_4.glb',
-  '/models/stations/station_5.glb',
+  asset('/models/stations/station_1.glb'),
+  asset('/models/stations/station_2.glb'),
+  asset('/models/stations/station_3.glb'),
+  asset('/models/stations/station_4.glb'),
+  asset('/models/stations/station_5.glb'),
 ]
 
 /** Сколько обликов станций. Домен берёт индекс по модулю этого числа. */

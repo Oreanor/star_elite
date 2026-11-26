@@ -1,3 +1,4 @@
+import { asset } from '../../config/asset'
 import { localSettlement, type World } from '@elite/sim'
 
 /**
@@ -13,7 +14,7 @@ import { localSettlement, type World } from '@elite/sim'
  */
 function stationImage(techLevel: number): string {
   const idx = Math.max(0, Math.min(9, Math.round(((techLevel - 1) / 14) * 9)))
-  return `/stations/station${idx}.webp`
+  return asset(`/stations/station${idx}.webp`)
 }
 
 export { stationImage }

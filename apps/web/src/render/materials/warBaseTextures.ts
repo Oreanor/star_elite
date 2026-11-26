@@ -1,3 +1,4 @@
+import { asset } from '../../config/asset'
 import { SRGBColorSpace, TextureLoader, type Texture } from 'three'
 
 /**
@@ -36,7 +37,7 @@ export function loadWarBaseTexture(shape: number, onLoaded: (texture: Texture) =
 
   let cancelled = false
   new TextureLoader().load(
-    `/textures/warbase/${key}.webp`,
+    asset(`/textures/warbase/${key}.webp`),
     (texture) => {
       texture.colorSpace = SRGBColorSpace
       texture.anisotropy = 16 // база видна вскользь у лимба — иначе мыло; three зажмёт до макс

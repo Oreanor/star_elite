@@ -1,13 +1,14 @@
+import { asset } from '../config/asset'
 import { loadSheet, sheetReady } from './portrait'
 
 /** PNG титульной заставки: фон, лого, корабль и три струи. */
 export const TITLE_ASSETS = [
-  '/bg.webp',
-  '/logo.webp',
-  '/ship.webp',
-  '/flame_left.webp',
-  '/flame_right.webp',
-  '/flame_center.webp',
+  asset('/bg.webp'),
+  asset('/logo.webp'),
+  asset('/ship.webp'),
+  asset('/flame_left.webp'),
+  asset('/flame_right.webp'),
+  asset('/flame_center.webp'),
 ] as const
 
 let titlePreload: Promise<void> | null = null

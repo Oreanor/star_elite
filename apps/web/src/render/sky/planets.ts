@@ -1,3 +1,4 @@
+import { asset } from '../../config/asset'
 import type { Texture } from 'three'
 import { loadSurfaceTexture } from '../materials/surfaceTexture'
 import type { BodyEntity, PlanetType } from '@elite/sim'
@@ -96,7 +97,7 @@ export function planetTextureUrl(
   quality: PlanetTextureQuality = 'full',
 ): string {
   const dir = quality === 'lo' ? `planets/lo/${look}` : `planets/${look}`
-  return `/textures/${dir}/${variant}.webp`
+  return asset(`/textures/${dir}/${variant}.webp`)
 }
 
 /**
